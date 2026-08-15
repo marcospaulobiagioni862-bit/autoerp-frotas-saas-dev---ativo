@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-app: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-elevated: #f1f5f9;
+    --border-color: #e2e8f0;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    --brand: #2563eb;
+    --brand-hover: #1d4ed8;
+    --brand-subtle: #eff6ff;
+
+    --income: #16a34a;
+    --income-subtle: #f0fdf4;
+
+    --expense: #dc2626;
+    --expense-subtle: #fef2f2;
+
+    --warning: #d97706;
+    --warning-subtle: #fffbeb;
+
+    --info: #0284c7;
+    --info-subtle: #f0f9ff;
+  }
+
+  .dark {
+    --bg-app: #0f172a;
+    --bg-surface: #1e293b;
+    --bg-elevated: #334155;
+    --border-color: #334155;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #64748b;
+
+    --brand: #3b82f6;
+    --brand-hover: #60a5fa;
+    --brand-subtle: #1e3a8a;
+
+    --income: #22c55e;
+    --income-subtle: #14532d;
+
+    --expense: #ef4444;
+    --expense-subtle: #7f1d1d;
+
+    --warning: #f59e0b;
+    --warning-subtle: #78350f;
+
+    --info: #38bdf8;
+    --info-subtle: #0c4a6e;
+  }
+
+  body {
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+}
+

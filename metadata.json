@@ -1,0 +1,6 @@
+{
+  "name": "AutoERP - Gestão de Frota e Locação",
+  "description": "ERP profissional para gestão de frota e locação de veículos para motoristas de aplicativos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

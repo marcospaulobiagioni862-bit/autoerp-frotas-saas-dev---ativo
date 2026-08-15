@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786675772666,
+      "tag": "0000_milky_invisible_woman",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786677020690,
+      "tag": "0001_rls_and_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786689000000,
+      "tag": "0002_phase1_final_hardening",
+      "breakpoints": true
+    }
+  ]
+}
