@@ -3,6 +3,7 @@
 import { StorageAdapter } from '../adapters/storageAdapter';
 import {
   FilterOptions,
+  TenantFilterOptions,
   IBaseRepository,
   IVehicleRepository,
   IDriverRepository,
@@ -82,38 +83,19 @@ export class BaseRepository<T extends { id: string; companyId?: string }> implem
 
   constructor(protected collectionName: string) {}
 
+  /**
+   * Validates that companyId is provided, non-empty, and valid for tenant scoping.
+   */
+  protected assertCompanyId(companyId: string): void {
+    if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
+      throw new Error('companyId is required for tenant-scoped repository operation');
+    }
+  }
+
+  // --- LEGACY / UNSCOPED METHODS (Preserved for compatibility pending caller migration) ---
+
   async findById(id: string): Promise<T | null> {
     return this.storage.getItem<T>(this.collectionName, id);
-  }
-
-  async findByIdForCompany(id: string, companyId: string): Promise<T | null> {
-    const item = await this.findById(id);
-    if (!item) return null;
-    if (!item.companyId || item.companyId !== companyId) {
-      return null;
-    }
-    return item;
-  }
-
-  async updateForCompany(id: string, companyId: string, partialItem: Partial<T>): Promise<T> {
-    const existing = await this.findById(id);
-    if (!existing || !existing.companyId || existing.companyId !== companyId) {
-      throw new Error(`Item with id ${id} not found or tenant mismatch in ${this.collectionName}`);
-    }
-    const updated = {
-      ...existing,
-      ...partialItem,
-      updatedAt: new Date().toISOString(),
-    };
-    return this.storage.saveItem<T>(this.collectionName, updated as T);
-  }
-
-  async deleteForCompany(id: string, companyId: string): Promise<boolean> {
-    const existing = await this.findById(id);
-    if (!existing || !existing.companyId || existing.companyId !== companyId) {
-      throw new Error(`Item with id ${id} not found or tenant mismatch in ${this.collectionName}`);
-    }
-    return this.storage.removeItem(this.collectionName, id);
   }
 
   async findAll(filters?: FilterOptions): Promise<T[]> {
@@ -178,6 +160,74 @@ export class BaseRepository<T extends { id: string; companyId?: string }> implem
     const items = await this.findAll(filters);
     return items.length;
   }
+
+  // --- TENANT-SAFE EXPLICIT METHODS ---
+
+  async findByIdForCompany(id: string, companyId: string): Promise<T | null> {
+    this.assertCompanyId(companyId);
+    const item = await this.findById(id);
+    if (!item) return null;
+    if (!item.companyId || item.companyId !== companyId) {
+      return null;
+    }
+    return item;
+  }
+
+  async findAllForCompany(companyId: string, filters?: TenantFilterOptions): Promise<T[]> {
+    this.assertCompanyId(companyId);
+    const fullFilters: FilterOptions = {
+      ...filters,
+      companyId,
+    };
+    const items = await this.findAll(fullFilters);
+    // Strict isolation: strictly require item.companyId === companyId (never return orphan or other tenant records)
+    return items.filter((item) => item.companyId === companyId);
+  }
+
+  async createForCompany(companyId: string, item: T): Promise<T> {
+    this.assertCompanyId(companyId);
+    if (!item || !item.companyId || typeof item.companyId !== 'string' || item.companyId.trim() === '') {
+      throw new Error('Item companyId is required and cannot be empty in createForCompany');
+    }
+    if (item.companyId !== companyId) {
+      throw new Error('Item companyId does not match repository tenant scope');
+    }
+    return this.create(item);
+  }
+
+  async updateForCompany(id: string, companyId: string, partialItem: Partial<T>): Promise<T> {
+    this.assertCompanyId(companyId);
+    const existing = await this.findById(id);
+    if (!existing || !existing.companyId || existing.companyId !== companyId) {
+      throw new Error(`Item with id ${id} not found or tenant mismatch in ${this.collectionName}`);
+    }
+    if (partialItem.companyId !== undefined) {
+      if (!partialItem.companyId || typeof partialItem.companyId !== 'string' || partialItem.companyId.trim() === '' || partialItem.companyId !== companyId) {
+        throw new Error('Cannot change companyId or set empty companyId during updateForCompany');
+      }
+    }
+    const updated = {
+      ...existing,
+      ...partialItem,
+      companyId, // Preserve verified tenant
+      updatedAt: new Date().toISOString(),
+    };
+    return this.storage.saveItem<T>(this.collectionName, updated as T);
+  }
+
+  async deleteForCompany(id: string, companyId: string): Promise<boolean> {
+    this.assertCompanyId(companyId);
+    const existing = await this.findById(id);
+    if (!existing || !existing.companyId || existing.companyId !== companyId) {
+      throw new Error(`Item with id ${id} not found or tenant mismatch in ${this.collectionName}`);
+    }
+    return this.storage.removeItem(this.collectionName, id);
+  }
+
+  async countForCompany(companyId: string, filters?: TenantFilterOptions): Promise<number> {
+    const items = await this.findAllForCompany(companyId, filters);
+    return items.length;
+  }
 }
 
 export class VehicleRepository extends BaseRepository<Vehicle> implements IVehicleRepository {
@@ -196,8 +246,18 @@ export class VehicleRepository extends BaseRepository<Vehicle> implements IVehic
   }
 
   async getAvailableVehicles(companyId: string): Promise<Vehicle[]> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     return items.filter((v) => v.status === VehicleStatus.AVAILABLE && !v.isArchived);
+  }
+
+  async findByPlateForCompany(companyId: string, plate: string): Promise<Vehicle | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((v) => v.plate.toUpperCase() === plate.toUpperCase()) || null;
+  }
+
+  async findByRenavamForCompany(companyId: string, renavam: string): Promise<Vehicle | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((v) => v.renavam === renavam) || null;
   }
 }
 
@@ -217,6 +277,18 @@ export class DriverRepository extends BaseRepository<Driver> implements IDriverR
     const items = await this.findAll();
     return items.find((d) => d.cnhNumber.replace(/\D/g, '') === cleanCnh) || null;
   }
+
+  async findByCpfForCompany(companyId: string, cpf: string): Promise<Driver | null> {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    const items = await this.findAllForCompany(companyId);
+    return items.find((d) => d.cpf.replace(/\D/g, '') === cleanCpf) || null;
+  }
+
+  async findByCnhForCompany(companyId: string, cnh: string): Promise<Driver | null> {
+    const cleanCnh = cnh.replace(/\D/g, '');
+    const items = await this.findAllForCompany(companyId);
+    return items.find((d) => d.cnhNumber.replace(/\D/g, '') === cleanCnh) || null;
+  }
 }
 
 export class ContractRepository extends BaseRepository<Contract> implements IContractRepository {
@@ -233,6 +305,16 @@ export class ContractRepository extends BaseRepository<Contract> implements ICon
     const items = await this.findAll({ driverId });
     return items.find((c) => c.status === ContractStatus.ACTIVE && !c.isArchived) || null;
   }
+
+  async findActiveByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<Contract | null> {
+    const items = await this.findAllForCompany(companyId, { vehicleId });
+    return items.find((c) => c.status === ContractStatus.ACTIVE && !c.isArchived) || null;
+  }
+
+  async findActiveByDriverIdForCompany(companyId: string, driverId: string): Promise<Contract | null> {
+    const items = await this.findAllForCompany(companyId, { driverId });
+    return items.find((c) => c.status === ContractStatus.ACTIVE && !c.isArchived) || null;
+  }
 }
 
 export class FinancialAccountRepository extends BaseRepository<FinancialAccount> implements IFinancialAccountRepository {
@@ -246,6 +328,14 @@ export class FinancialAccountRepository extends BaseRepository<FinancialAccount>
 
     const newBalance = acc.currentBalance + delta;
     return this.update(accountId, { currentBalance: newBalance });
+  }
+
+  async updateBalanceForCompany(companyId: string, accountId: string, delta: number): Promise<FinancialAccount> {
+    const acc = await this.findByIdForCompany(accountId, companyId);
+    if (!acc) throw new Error(`Financial account ${accountId} not found in company ${companyId}`);
+
+    const newBalance = acc.currentBalance + delta;
+    return this.updateForCompany(accountId, companyId, { currentBalance: newBalance });
   }
 }
 
@@ -275,13 +365,31 @@ export class AccountReceivableRepository extends BaseRepository<AccountReceivabl
   }
 
   async findOverdue(companyId: string): Promise<AccountReceivable[]> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     const today = new Date().toISOString().split('T')[0];
     return items.filter(
       (r) =>
         (r.status === ObligationStatus.PENDING || r.status === ObligationStatus.PARTIALLY_PAID) &&
         r.dueDate < today
     );
+  }
+
+  async findByIdempotencyKeyForCompany(companyId: string, key: string): Promise<AccountReceivable | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((r) => r.idempotencyKey === key) || null;
+  }
+
+  async findByContractIdForCompany(companyId: string, contractId: string): Promise<AccountReceivable[]> {
+    const items = await this.findAllForCompany(companyId);
+    return items.filter((r) => r.contractId === contractId);
+  }
+
+  async findByDriverIdForCompany(companyId: string, driverId: string): Promise<AccountReceivable[]> {
+    return this.findAllForCompany(companyId, { driverId });
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<AccountReceivable[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
   }
 }
 
@@ -304,13 +412,26 @@ export class AccountPayableRepository extends BaseRepository<AccountPayable> imp
   }
 
   async findOverdue(companyId: string): Promise<AccountPayable[]> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     const today = new Date().toISOString().split('T')[0];
     return items.filter(
       (p) =>
         (p.status === ObligationStatus.PENDING || p.status === ObligationStatus.PARTIALLY_PAID) &&
         p.dueDate < today
     );
+  }
+
+  async findByIdempotencyKeyForCompany(companyId: string, key: string): Promise<AccountPayable | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((p) => p.idempotencyKey === key) || null;
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<AccountPayable[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
+
+  async findBySupplierIdForCompany(companyId: string, supplierId: string): Promise<AccountPayable[]> {
+    return this.findAllForCompany(companyId, { supplierId });
   }
 }
 
@@ -332,6 +453,20 @@ export class FinancialTransactionRepository extends BaseRepository<FinancialTran
   async findByVehicleId(vehicleId: string): Promise<FinancialTransaction[]> {
     return this.findAll({ vehicleId });
   }
+
+  async findByReceivableIdForCompany(companyId: string, receivableId: string): Promise<FinancialTransaction[]> {
+    const items = await this.findAllForCompany(companyId);
+    return items.filter((t) => t.receivableId === receivableId && !t.isReversed);
+  }
+
+  async findByPayableIdForCompany(companyId: string, payableId: string): Promise<FinancialTransaction[]> {
+    const items = await this.findAllForCompany(companyId);
+    return items.filter((t) => t.payableId === payableId && !t.isReversed);
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<FinancialTransaction[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
 }
 
 export class SecurityDepositRepository extends BaseRepository<SecurityDeposit> implements ISecurityDepositRepository {
@@ -347,6 +482,15 @@ export class SecurityDepositRepository extends BaseRepository<SecurityDeposit> i
   async findByDriverId(driverId: string): Promise<SecurityDeposit[]> {
     return this.findAll({ driverId });
   }
+
+  async findByContractIdForCompany(companyId: string, contractId: string): Promise<SecurityDeposit | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((s) => s.contractId === contractId) || null;
+  }
+
+  async findByDriverIdForCompany(companyId: string, driverId: string): Promise<SecurityDeposit[]> {
+    return this.findAllForCompany(companyId, { driverId });
+  }
 }
 
 export class SecurityDepositMovementRepository extends BaseRepository<SecurityDepositMovement> implements ISecurityDepositMovementRepository {
@@ -358,6 +502,11 @@ export class SecurityDepositMovementRepository extends BaseRepository<SecurityDe
     const items = await this.findAll();
     return items.filter((m) => m.securityDepositId === depositId);
   }
+
+  async findByDepositIdForCompany(companyId: string, depositId: string): Promise<SecurityDepositMovement[]> {
+    const items = await this.findAllForCompany(companyId);
+    return items.filter((m) => m.securityDepositId === depositId);
+  }
 }
 
 export class MaintenanceRepository extends BaseRepository<Maintenance> implements IMaintenanceRepository {
@@ -367,6 +516,10 @@ export class MaintenanceRepository extends BaseRepository<Maintenance> implement
 
   async findByVehicleId(vehicleId: string): Promise<Maintenance[]> {
     return this.findAll({ vehicleId });
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<Maintenance[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
   }
 }
 
@@ -387,6 +540,19 @@ export class TrafficTicketRepository extends BaseRepository<TrafficTicket> imple
     const items = await this.findAll();
     return items.find((t) => t.autoNumber.toUpperCase() === autoNumber.toUpperCase()) || null;
   }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<TrafficTicket[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
+
+  async findByDriverIdForCompany(companyId: string, driverId: string): Promise<TrafficTicket[]> {
+    return this.findAllForCompany(companyId, { driverId });
+  }
+
+  async findByAutoNumberForCompany(companyId: string, autoNumber: string): Promise<TrafficTicket | null> {
+    const items = await this.findAllForCompany(companyId);
+    return items.find((t) => t.autoNumber.toUpperCase() === autoNumber.toUpperCase()) || null;
+  }
 }
 
 export class VehicleDocumentRepository extends BaseRepository<VehicleDocument> implements IVehicleDocumentRepository {
@@ -399,7 +565,7 @@ export class VehicleDocumentRepository extends BaseRepository<VehicleDocument> i
   }
 
   async findExpiring(companyId: string, daysAhead: number): Promise<VehicleDocument[]> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     const today = new Date();
     const futureLimit = new Date();
     futureLimit.setDate(today.getDate() + daysAhead);
@@ -408,6 +574,10 @@ export class VehicleDocumentRepository extends BaseRepository<VehicleDocument> i
     const futureStr = futureLimit.toISOString().split('T')[0];
 
     return items.filter((d) => d.expirationDate >= todayStr && d.expirationDate <= futureStr);
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<VehicleDocument[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
   }
 }
 
@@ -419,6 +589,10 @@ export class DriverDocumentRepository extends BaseRepository<DriverDocument> imp
   async findByDriverId(driverId: string): Promise<DriverDocument[]> {
     return this.findAll({ driverId });
   }
+
+  async findByDriverIdForCompany(companyId: string, driverId: string): Promise<DriverDocument[]> {
+    return this.findAllForCompany(companyId, { driverId });
+  }
 }
 
 export class InsuranceRepository extends BaseRepository<Insurance> implements IInsuranceRepository {
@@ -429,6 +603,10 @@ export class InsuranceRepository extends BaseRepository<Insurance> implements II
   async findByVehicleId(vehicleId: string): Promise<Insurance[]> {
     return this.findAll({ vehicleId });
   }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<Insurance[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
 }
 
 export class TrackerRepository extends BaseRepository<Tracker> implements ITrackerRepository {
@@ -438,6 +616,11 @@ export class TrackerRepository extends BaseRepository<Tracker> implements ITrack
 
   async findByVehicleId(vehicleId: string): Promise<Tracker | null> {
     const items = await this.findAll({ vehicleId });
+    return items.find((t) => t.status === 'ACTIVE') || items[0] || null;
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<Tracker | null> {
+    const items = await this.findAllForCompany(companyId, { vehicleId });
     return items.find((t) => t.status === 'ACTIVE') || items[0] || null;
   }
 }
@@ -454,6 +637,16 @@ export class KmRecordRepository extends BaseRepository<KmRecord> implements IKmR
 
   async getLatestForVehicle(vehicleId: string): Promise<KmRecord | null> {
     const records = await this.findByVehicleId(vehicleId);
+    return records[0] || null;
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<KmRecord[]> {
+    const items = await this.findAllForCompany(companyId, { vehicleId });
+    return items.sort((a, b) => new Date(b.recordDate).getTime() - new Date(a.recordDate).getTime());
+  }
+
+  async getLatestForVehicleForCompany(companyId: string, vehicleId: string): Promise<KmRecord | null> {
+    const records = await this.findByVehicleIdForCompany(companyId, vehicleId);
     return records[0] || null;
   }
 }
@@ -475,6 +668,9 @@ export class WorkOrderRepository extends BaseRepository<WorkOrder> implements IW
   async findByVehicleId(vehicleId: string): Promise<WorkOrder[]> {
     return this.findAll({ vehicleId });
   }
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<WorkOrder[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
 }
 
 export class OilChangeRepository extends BaseRepository<OilChangeRecord> implements IOilChangeRepository {
@@ -482,12 +678,18 @@ export class OilChangeRepository extends BaseRepository<OilChangeRecord> impleme
   async findByVehicleId(vehicleId: string): Promise<OilChangeRecord[]> {
     return this.findAll({ vehicleId });
   }
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<OilChangeRecord[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
+  }
 }
 
 export class TireRepository extends BaseRepository<TireRecord> implements ITireRepository {
   constructor() { super('tires'); }
   async findByVehicleId(vehicleId: string): Promise<TireRecord[]> {
     return this.findAll({ vehicleId });
+  }
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<TireRecord[]> {
+    return this.findAllForCompany(companyId, { vehicleId });
   }
 }
 
@@ -541,15 +743,15 @@ export class NotificationRepository extends BaseRepository<Notification> impleme
   }
 
   async getUnreadCount(companyId: string): Promise<number> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     return items.filter((n) => !n.read).length;
   }
 
   async markAllAsRead(companyId: string): Promise<void> {
-    const items = await this.findAll({ companyId });
+    const items = await this.findAllForCompany(companyId);
     const unread = items.filter((n) => !n.read);
     for (const item of unread) {
-      await this.update(item.id, { read: true });
+      await this.updateForCompany(item.id, companyId, { read: true });
     }
   }
 }
@@ -573,6 +775,12 @@ export class CommunicationLogRepository extends BaseRepository<CommunicationLog>
 
   async findByDriverId(driverId: string): Promise<CommunicationLog[]> {
     const logs = await this.findAll();
+    return logs.filter((l) => l.driverId === driverId)
+      .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
+  }
+
+  async findByDriverIdForCompany(companyId: string, driverId: string): Promise<CommunicationLog[]> {
+    const logs = await this.findAllForCompany(companyId);
     return logs.filter((l) => l.driverId === driverId)
       .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime());
   }
