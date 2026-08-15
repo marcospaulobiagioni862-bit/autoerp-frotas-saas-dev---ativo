@@ -24,8 +24,11 @@ declare global {
 
 async function startServer() {
   if (process.env.NODE_ENV === 'production') {
+    if (process.env.ALLOW_MOCK_AUTH === 'true') {
+      throw new Error('FATAL: ALLOW_MOCK_AUTH cannot be true in production environment.');
+    }
     if (!process.env.JWT_SECRET || !process.env.JWT_ISSUER || !process.env.JWT_AUDIENCE) {
-      console.warn('[AI Studio] Running without JWT secrets configured. Set JWT_SECRET, JWT_ISSUER, and JWT_AUDIENCE if required.');
+      throw new Error('FATAL: Production environment requires valid JWT_SECRET, JWT_ISSUER, and JWT_AUDIENCE.');
     }
   }
 

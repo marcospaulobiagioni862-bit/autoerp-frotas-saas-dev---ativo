@@ -1,55 +1,33 @@
 import * as schema from './schema';
+import * as dotenv from 'dotenv';
+import { createRequire } from 'module';
 
-if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
-  try {
-    const dotenv = require('dotenv');
-    dotenv.config();
-  } catch {
-    // ignore in environments where dotenv cannot load
-  }
-}
+const require = createRequire(import.meta.url);
+dotenv.config();
 
 let dbInstance: any;
 
-const isBrowser = typeof window !== 'undefined';
-
-if (!isBrowser) {
-  try {
-    if (typeof process !== 'undefined' && process.env.DATABASE_URL) {
-      const { drizzle } = require('drizzle-orm/node-postgres');
-      const pgPkg = require('pg');
-      const { Pool } = pgPkg;
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-      dbInstance = drizzle(pool, { schema });
-    } else {
-      // Default to PGlite in-memory when DATABASE_URL is not provided
-      const { PGlite } = require('@electric-sql/pglite');
-      const { drizzle } = require('drizzle-orm/pglite');
-      const client = new PGlite();
-      dbInstance = drizzle(client, { schema });
-    }
-  } catch (err) {
-    console.warn('[AI Studio] Database init warning, falling back to proxy mock:', err);
+if (process.env.NODE_ENV === 'production') {
+  if (process.env.USE_PGLITE === 'true' || !process.env.DATABASE_URL) {
+    throw new Error('FATAL: Production environment requires valid DATABASE_URL and USE_PGLITE must be false.');
   }
 }
 
-if (!dbInstance) {
-  const noOp = {
-    findMany: async () => [],
-    findFirst: async () => null,
-    findUnique: async () => null,
-    create: async (d: any) => d?.data ?? {},
-    update: async (d: any) => d?.data ?? {},
-    delete: async () => ({}),
-  };
-  dbInstance = new Proxy({}, {
-    get: (_, prop) => {
-      if (prop === 'query') return new Proxy({}, { get: () => noOp });
-      if (prop === 'execute') return async () => ({ rows: [] });
-      if (prop === 'transaction') return async (cb: any) => cb({ execute: async () => ({ rows: [] }) });
-      return async () => [];
-    },
-  });
+if (process.env.USE_PGLITE === 'true' || (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production')) {
+  const { PGlite } = require('@electric-sql/pglite');
+  const { drizzle } = require('drizzle-orm/pglite');
+  const client = new PGlite();
+  dbInstance = drizzle(client, { schema });
+} else {
+  const { drizzle } = require('drizzle-orm/node-postgres');
+  const pgPkg = require('pg');
+  const { Pool } = pgPkg;
+  const connectionString = process.env.DATABASE_URL || (process.env.NODE_ENV === 'test' ? 'postgres://ai_studio_app_user:@localhost:5432/autoerp_phase1_test' : undefined);
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required.');
+  }
+  const pool = new Pool({ connectionString });
+  dbInstance = drizzle(pool, { schema });
 }
 
 export const db = dbInstance;
