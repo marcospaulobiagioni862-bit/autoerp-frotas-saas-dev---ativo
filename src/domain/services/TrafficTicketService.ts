@@ -1,6 +1,6 @@
 import { TrafficTicketRepository, VehicleRepository, DriverRepository, ContractRepository, AccountReceivableRepository, AccountPayableRepository, FinancialTransactionRepository, AuditLogRepository } from '../../persistence/repositories/localRepositories';
 import { TrafficTicket } from '../../types/entities';
-import { TicketResponsibility, TicketStatus, OriginType, AuditAction, ObligationStatus } from '../../types/enums';
+import { TicketResponsibility, TicketStatus, OriginType, AuditAction, ObligationStatus, ContractStatus } from '../../types/enums';
 import { FinanceEngine } from '../finance/FinanceEngine';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -61,6 +61,10 @@ export class TrafficTicketService {
       throw new Error('Veículo informado não foi encontrado.');
     }
 
+    if (vehicle.companyId !== dto.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
     if (!dto.autoNumber || dto.autoNumber.trim() === '') {
       throw new Error('Número do auto de infração é obrigatório.');
     }
@@ -69,7 +73,10 @@ export class TrafficTicketService {
       throw new Error('Valor da multa deve ser maior que zero.');
     }
 
-    const existingAuto = await this.ticketRepo.findByAutoNumber(dto.autoNumber.trim());
+    // Unicidade de auto de infração escopada por tenant
+    const companyTickets = await this.ticketRepo.findAll({ companyId: dto.companyId });
+    const normalizedAuto = dto.autoNumber.trim().toUpperCase();
+    const existingAuto = companyTickets.find((t) => t.autoNumber.toUpperCase() === normalizedAuto);
     if (existingAuto) {
       throw new Error(`Auto de infração ${dto.autoNumber} já cadastrado no sistema.`);
     }
@@ -82,18 +89,37 @@ export class TrafficTicketService {
       if (!driver) {
         throw new Error('Motorista informado não foi encontrado.');
       }
+      if (driver.companyId !== dto.companyId) {
+        throw new Error('Motorista não pertence à empresa da operação.');
+      }
     } else {
-      // Buscar contrato ativo/histórico do veículo na data da infração
-      const contracts = await this.contractRepo.findAll({ vehicleId: dto.vehicleId });
+      // Buscar contrato ativo/histórico do veículo na data da infração estritamente dentro do mesmo tenant
+      const contracts = await this.contractRepo.findAll({
+        companyId: dto.companyId,
+        vehicleId: dto.vehicleId,
+      });
       const matchingContracts = contracts.filter((c) => {
         const start = c.startDate;
         const end = c.endDate || '9999-12-31';
-        return dto.infractionDate >= start && dto.infractionDate <= end && c.status !== 'CANCELLED';
+        return (
+          c.companyId === dto.companyId &&
+          dto.infractionDate >= start &&
+          dto.infractionDate <= end &&
+          c.status !== ContractStatus.CANCELLED &&
+          c.status !== ContractStatus.DRAFT &&
+          c.status !== ContractStatus.AWAITING_SIGNATURE &&
+          c.status !== ContractStatus.ARCHIVED &&
+          !c.isArchived
+        );
       });
 
       if (matchingContracts.length === 1) {
-        assignedContractId = matchingContracts[0].id;
-        assignedDriverId = matchingContracts[0].driverId;
+        const candidateDriverId = matchingContracts[0].driverId;
+        const candidateDriver = await this.driverRepo.findById(candidateDriverId);
+        if (candidateDriver && candidateDriver.companyId === dto.companyId) {
+          assignedContractId = matchingContracts[0].id;
+          assignedDriverId = candidateDriverId;
+        }
       } else if (matchingContracts.length > 1) {
         // Conflito de contratos sobrepostos: não atribuir arbitrariamente
         assignedContractId = undefined;
@@ -166,6 +192,26 @@ export class TrafficTicketService {
         throw new Error('Multa não encontrada.');
       }
 
+      // Validar isolamento de tenant para entidades vinculadas
+      const vehicle = await this.vehicleRepo.findById(ticket.vehicleId);
+      if (!vehicle || vehicle.companyId !== ticket.companyId) {
+        throw new Error('Veículo não pertence à empresa da operação.');
+      }
+
+      if (ticket.driverId) {
+        const driver = await this.driverRepo.findById(ticket.driverId);
+        if (!driver || driver.companyId !== ticket.companyId) {
+          throw new Error('Motorista não pertence à empresa da operação.');
+        }
+      }
+
+      if (ticket.contractId) {
+        const contract = await this.contractRepo.findById(ticket.contractId);
+        if (contract && contract.companyId !== ticket.companyId) {
+          throw new Error('Contrato não pertence à empresa da operação.');
+        }
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
       const useDiscount =
         ticket.discountedAmount &&
@@ -183,8 +229,13 @@ export class TrafficTicketService {
         // Evitar duplicidade se já houver receivableId ativo
         if (ticket.receivableId) {
           const existingRec = await this.receivableRepo.findById(ticket.receivableId);
-          if (existingRec && existingRec.status !== ObligationStatus.CANCELLED) {
-            return ticket;
+          if (existingRec) {
+            if (existingRec.companyId !== ticket.companyId) {
+              throw new Error('Conta a receber vinculada pertence a outra empresa.');
+            }
+            if (existingRec.status !== ObligationStatus.CANCELLED) {
+              return ticket;
+            }
           }
         }
 
@@ -214,8 +265,13 @@ export class TrafficTicketService {
         // Evitar duplicidade se já houver payableId ativo
         if (ticket.payableId) {
           const existingPay = await this.payableRepo.findById(ticket.payableId);
-          if (existingPay && existingPay.status !== ObligationStatus.CANCELLED) {
-            return ticket;
+          if (existingPay) {
+            if (existingPay.companyId !== ticket.companyId) {
+              throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+            }
+            if (existingPay.status !== ObligationStatus.CANCELLED) {
+              return ticket;
+            }
           }
         }
 
@@ -265,97 +321,141 @@ export class TrafficTicketService {
       if (!driver) {
         throw new Error('Motorista não encontrado.');
       }
+      if (driver.companyId !== ticket.companyId) {
+        throw new Error('Motorista não pertence à empresa da operação.');
+      }
     }
 
-    // 1. Tratar vínculo de RECEIVABLE anterior (se houver)
+    // Pré-validação de isolamento de tenant de todas as obrigações e transações financeiras ANTES de qualquer mutação
+    let recToProcess: { rec: any; txs: any[] } | null = null;
     if (ticket.receivableId) {
       const rec = await this.receivableRepo.findById(ticket.receivableId);
       if (rec && rec.status !== ObligationStatus.CANCELLED) {
-        // Se já possui valores recebidos / baixa parcial ou total, estornar transações financeiras
-        if (rec.paidAmount > 0 || rec.status === ObligationStatus.PAID || rec.status === ObligationStatus.PARTIALLY_PAID) {
-          const txs = await this.transactionRepo.findByReceivableId(rec.id);
-          for (const tx of txs) {
-            if (!tx.isReversed) {
-              await FinanceEngine.reverseTransaction(
-                ticket.companyId,
-                tx.id,
-                tx.amount,
-                `Alteração de responsabilidade da multa ${ticket.autoNumber}`,
-                userId,
-                userName
-              );
-            }
+        if (rec.companyId !== ticket.companyId) {
+          throw new Error('Conta a receber vinculada pertence a outra empresa.');
+        }
+        const txs = await this.transactionRepo.findByReceivableId(rec.id);
+        for (const tx of txs) {
+          if (tx.companyId !== ticket.companyId) {
+            throw new Error('Transação financeira vinculada pertence a outra empresa.');
           }
         }
-        await FinanceEngine.cancelReceivable(
-          ticket.companyId,
-          ticket.receivableId,
-          'Alteração de responsabilidade da multa',
-          userId,
-          userName
-        );
+        recToProcess = { rec, txs };
       }
-      ticket.receivableId = undefined;
     }
 
-    // 2. Tratar vínculo de PAYABLE anterior (se houver)
+    let payToProcess: { pay: any; txs: any[] } | null = null;
     if (ticket.payableId) {
       const pay = await this.payableRepo.findById(ticket.payableId);
       if (pay && pay.status !== ObligationStatus.CANCELLED) {
-        // Se já possui valores pagos / baixa parcial ou total, estornar transações financeiras
-        if (pay.paidAmount > 0 || pay.status === ObligationStatus.PAID || pay.status === ObligationStatus.PARTIALLY_PAID) {
-          const txs = await this.transactionRepo.findByPayableId(pay.id);
-          for (const tx of txs) {
-            if (!tx.isReversed) {
-              await FinanceEngine.reverseTransaction(
-                ticket.companyId,
-                tx.id,
-                tx.amount,
-                `Alteração de responsabilidade da multa ${ticket.autoNumber}`,
-                userId,
-                userName
-              );
-            }
+        if (pay.companyId !== ticket.companyId) {
+          throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+        }
+        const txs = await this.transactionRepo.findByPayableId(pay.id);
+        for (const tx of txs) {
+          if (tx.companyId !== ticket.companyId) {
+            throw new Error('Transação financeira vinculada pertence a outra empresa.');
           }
         }
-        await FinanceEngine.cancelPayable(
-          ticket.companyId,
-          ticket.payableId,
-          'Alteração de responsabilidade da multa',
-          userId,
-          userName
-        );
+        payToProcess = { pay, txs };
       }
-      ticket.payableId = undefined;
     }
 
-    // 3. Tratar vínculo de NIC PAYABLE anterior (se houver)
+    let nicPayToProcess: { nicPay: any; txs: any[] } | null = null;
     if (ticket.nicPayableId) {
       const nicPay = await this.payableRepo.findById(ticket.nicPayableId);
       if (nicPay && nicPay.status !== ObligationStatus.CANCELLED) {
-        if (nicPay.paidAmount > 0 || nicPay.status === ObligationStatus.PAID || nicPay.status === ObligationStatus.PARTIALLY_PAID) {
-          const txs = await this.transactionRepo.findByPayableId(nicPay.id);
-          for (const tx of txs) {
-            if (!tx.isReversed) {
-              await FinanceEngine.reverseTransaction(
-                ticket.companyId,
-                tx.id,
-                tx.amount,
-                `Identificação de condutor em multa NIC ${ticket.autoNumber}`,
-                userId,
-                userName
-              );
-            }
+        if (nicPay.companyId !== ticket.companyId) {
+          throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+        }
+        const txs = await this.transactionRepo.findByPayableId(nicPay.id);
+        for (const tx of txs) {
+          if (tx.companyId !== ticket.companyId) {
+            throw new Error('Transação financeira vinculada pertence a outra empresa.');
           }
         }
-        await FinanceEngine.cancelPayable(
-          ticket.companyId,
-          ticket.nicPayableId,
-          'Condutor identificado dentro do prazo',
-          userId,
-          userName
-        );
+        nicPayToProcess = { nicPay, txs };
       }
+    }
+
+    // 1. Executar estornos e cancelamento de RECEIVABLE anterior
+    if (recToProcess) {
+      const { rec, txs } = recToProcess;
+      if (rec.paidAmount > 0 || rec.status === ObligationStatus.PAID || rec.status === ObligationStatus.PARTIALLY_PAID) {
+        for (const tx of txs) {
+          if (!tx.isReversed) {
+            await FinanceEngine.reverseTransaction(
+              ticket.companyId,
+              tx.id,
+              tx.amount,
+              `Alteração de responsabilidade da multa ${ticket.autoNumber}`,
+              userId,
+              userName
+            );
+          }
+        }
+      }
+      await FinanceEngine.cancelReceivable(
+        ticket.companyId,
+        ticket.receivableId!,
+        'Alteração de responsabilidade da multa',
+        userId,
+        userName
+      );
+      ticket.receivableId = undefined;
+    }
+
+    // 2. Executar estornos e cancelamento de PAYABLE anterior
+    if (payToProcess) {
+      const { pay, txs } = payToProcess;
+      if (pay.paidAmount > 0 || pay.status === ObligationStatus.PAID || pay.status === ObligationStatus.PARTIALLY_PAID) {
+        for (const tx of txs) {
+          if (!tx.isReversed) {
+            await FinanceEngine.reverseTransaction(
+              ticket.companyId,
+              tx.id,
+              tx.amount,
+              `Alteração de responsabilidade da multa ${ticket.autoNumber}`,
+              userId,
+              userName
+            );
+          }
+        }
+      }
+      await FinanceEngine.cancelPayable(
+        ticket.companyId,
+        ticket.payableId!,
+        'Alteração de responsabilidade da multa',
+        userId,
+        userName
+      );
+      ticket.payableId = undefined;
+    }
+
+    // 3. Executar estornos e cancelamento de NIC PAYABLE anterior
+    if (nicPayToProcess) {
+      const { nicPay, txs } = nicPayToProcess;
+      if (nicPay.paidAmount > 0 || nicPay.status === ObligationStatus.PAID || nicPay.status === ObligationStatus.PARTIALLY_PAID) {
+        for (const tx of txs) {
+          if (!tx.isReversed) {
+            await FinanceEngine.reverseTransaction(
+              ticket.companyId,
+              tx.id,
+              tx.amount,
+              `Identificação de condutor em multa NIC ${ticket.autoNumber}`,
+              userId,
+              userName
+            );
+          }
+        }
+      }
+      await FinanceEngine.cancelPayable(
+        ticket.companyId,
+        ticket.nicPayableId!,
+        'Condutor identificado dentro do prazo',
+        userId,
+        userName
+      );
       ticket.nicPayableId = undefined;
     }
 
@@ -442,6 +542,9 @@ export class TrafficTicketService {
     if (ticket.receivableId) {
       const rec = await this.receivableRepo.findById(ticket.receivableId);
       if (rec && rec.status !== ObligationStatus.CANCELLED) {
+        if (rec.companyId !== ticket.companyId) {
+          throw new Error('Conta a receber vinculada pertence a outra empresa.');
+        }
         if (rec.paidAmount > 0 || rec.status === ObligationStatus.PAID || rec.status === ObligationStatus.PARTIALLY_PAID) {
           throw new Error('Não é possível cancelar diretamente uma multa com valores já recebidos. Realize o estorno dos recebimentos ou alteração de responsabilidade primeiro.');
         }
@@ -458,12 +561,34 @@ export class TrafficTicketService {
     if (ticket.payableId) {
       const pay = await this.payableRepo.findById(ticket.payableId);
       if (pay && pay.status !== ObligationStatus.CANCELLED) {
+        if (pay.companyId !== ticket.companyId) {
+          throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+        }
         if (pay.paidAmount > 0 || pay.status === ObligationStatus.PAID || pay.status === ObligationStatus.PARTIALLY_PAID) {
           throw new Error('Não é possível cancelar diretamente uma multa com valores já pagos. Realize o estorno dos pagamentos ou alteração de responsabilidade primeiro.');
         }
         await FinanceEngine.cancelPayable(
           ticket.companyId,
           ticket.payableId,
+          `Multa cancelada: ${reason}`,
+          userId,
+          userName
+        );
+      }
+    }
+
+    if (ticket.nicPayableId) {
+      const nicPay = await this.payableRepo.findById(ticket.nicPayableId);
+      if (nicPay && nicPay.status !== ObligationStatus.CANCELLED) {
+        if (nicPay.companyId !== ticket.companyId) {
+          throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+        }
+        if (nicPay.paidAmount > 0 || nicPay.status === ObligationStatus.PAID || nicPay.status === ObligationStatus.PARTIALLY_PAID) {
+          throw new Error('Não é possível cancelar diretamente uma multa com penalidade NIC já paga. Realize o estorno dos pagamentos primeiro.');
+        }
+        await FinanceEngine.cancelPayable(
+          ticket.companyId,
+          ticket.nicPayableId,
           `Multa cancelada: ${reason}`,
           userId,
           userName
@@ -505,8 +630,10 @@ export class TrafficTicketService {
     const prev = { ...ticket };
 
     if (dto.autoNumber && dto.autoNumber.trim().toUpperCase() !== ticket.autoNumber) {
-      const existing = await this.ticketRepo.findByAutoNumber(dto.autoNumber.trim());
-      if (existing && existing.id !== ticket.id) {
+      const companyTickets = await this.ticketRepo.findAll({ companyId: ticket.companyId });
+      const norm = dto.autoNumber.trim().toUpperCase();
+      const existing = companyTickets.find((t) => t.autoNumber.toUpperCase() === norm && t.id !== ticket.id);
+      if (existing) {
         throw new Error(`Auto de infração ${dto.autoNumber} já cadastrado.`);
       }
       ticket.autoNumber = dto.autoNumber.trim().toUpperCase();
@@ -556,7 +683,7 @@ export class TrafficTicketService {
       throw new Error('Multa não encontrada.');
     }
 
-    const hasFinancials = ticket.receivableId || ticket.payableId;
+    const hasFinancials = ticket.receivableId || ticket.payableId || ticket.nicPayableId;
 
     if (hasFinancials) {
       ticket.status = TicketStatus.CANCELLED;
@@ -605,6 +732,12 @@ export class TrafficTicketService {
         throw new Error('Multa não encontrada.');
       }
 
+      // Validar isolamento de tenant para o veículo associado à multa
+      const vehicle = await this.vehicleRepo.findById(ticket.vehicleId);
+      if (!vehicle || vehicle.companyId !== ticket.companyId) {
+        throw new Error('Veículo não pertence à empresa da operação.');
+      }
+
       if (ticket.responsibility === TicketResponsibility.DRIVER && ticket.driverId) {
         throw new Error('Multa com condutor identificado não é elegível para penalidade NIC.');
       }
@@ -616,8 +749,13 @@ export class TrafficTicketService {
       // Check idempotency: if nicPayableId exists and is valid, return ticket
       if (ticket.nicPayableId) {
         const existingNicPay = await this.payableRepo.findById(ticket.nicPayableId);
-        if (existingNicPay && existingNicPay.status !== ObligationStatus.CANCELLED) {
-          return ticket;
+        if (existingNicPay) {
+          if (existingNicPay.companyId !== ticket.companyId) {
+            throw new Error('Conta a pagar vinculada pertence a outra empresa.');
+          }
+          if (existingNicPay.status !== ObligationStatus.CANCELLED) {
+            return ticket;
+          }
         }
       }
 

@@ -125,24 +125,32 @@ export class ContractService {
     vehicleId: string,
     startDate: string,
     endDate?: string,
-    excludeContractId?: string
+    excludeContractId?: string,
+    companyId?: string
   ): Promise<{ available: boolean; reason?: string }> {
     const vehicle = await this.vehicleRepo.findById(vehicleId);
     if (!vehicle) {
       return { available: false, reason: 'Veículo não encontrado' };
     }
 
+    if (companyId && vehicle.companyId !== companyId) {
+      return { available: false, reason: 'Veículo não pertence à empresa da operação.' };
+    }
+
     if (vehicle.status === VehicleStatus.INACTIVE || vehicle.status === VehicleStatus.SOLD || vehicle.isArchived) {
       return { available: false, reason: `Veículo está com status ${vehicle.status} ou arquivado` };
     }
 
-    // Verificar contratos ativos concorrentes
-    const contracts = await this.contractRepo.findAll({ vehicleId });
+    // Verificar contratos ativos concorrentes (escopados por companyId quando informado)
+    const contracts = companyId
+      ? await this.contractRepo.findAll({ companyId, vehicleId })
+      : await this.contractRepo.findAll({ vehicleId });
     const activeContracts = contracts.filter(
       (c) =>
         c.id !== excludeContractId &&
         c.status === ContractStatus.ACTIVE &&
-        !c.isArchived
+        !c.isArchived &&
+        (!companyId || c.companyId === companyId)
     );
 
     for (const activeC of activeContracts) {
@@ -170,11 +178,16 @@ export class ContractService {
     driverId: string,
     startDate: string,
     endDate?: string,
-    excludeContractId?: string
+    excludeContractId?: string,
+    companyId?: string
   ): Promise<{ eligible: boolean; reason?: string }> {
     const driver = await this.driverRepo.findById(driverId);
     if (!driver) {
       return { eligible: false, reason: 'Motorista não encontrado' };
+    }
+
+    if (companyId && driver.companyId !== companyId) {
+      return { eligible: false, reason: 'Motorista não pertence à empresa da operação.' };
     }
 
     if (driver.status === DriverStatus.INACTIVE || driver.status === DriverStatus.BLOCKED || driver.isArchived) {
@@ -187,13 +200,16 @@ export class ContractService {
       return { eligible: false, reason: 'CNH do motorista está vencida' };
     }
 
-    // Checar sobreposição de contratos ativos do motorista
-    const contracts = await this.contractRepo.findAll({ driverId });
+    // Checar sobreposição de contratos ativos do motorista (escopados por companyId quando informado)
+    const contracts = companyId
+      ? await this.contractRepo.findAll({ companyId, driverId })
+      : await this.contractRepo.findAll({ driverId });
     const activeContracts = contracts.filter(
       (c) =>
         c.id !== excludeContractId &&
         c.status === ContractStatus.ACTIVE &&
-        !c.isArchived
+        !c.isArchived &&
+        (!companyId || c.companyId === companyId)
     );
 
     for (const activeC of activeContracts) {
@@ -230,6 +246,24 @@ export class ContractService {
       throw new Error('A data inicial não pode ser maior que a data final');
     }
 
+    // Validação estrita de tenant para Veículo
+    const vehicle = await this.vehicleRepo.findById(params.vehicleId);
+    if (!vehicle) {
+      throw new Error('Veículo não encontrado');
+    }
+    if (vehicle.companyId !== params.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
+    // Validação estrita de tenant para Motorista
+    const driver = await this.driverRepo.findById(params.driverId);
+    if (!driver) {
+      throw new Error('Motorista não encontrado');
+    }
+    if (driver.companyId !== params.companyId) {
+      throw new Error('Motorista não pertence à empresa da operação.');
+    }
+
     // Gerar número de contrato se não informado
     let contractNumber = params.contractNumber?.trim();
     if (!contractNumber) {
@@ -247,13 +281,25 @@ export class ContractService {
 
     const requestedStatus = params.status || ContractStatus.DRAFT;
 
-    // Se criar diretamente como ACTIVE, fazer validações completas
+    // Se criar diretamente como ACTIVE, fazer validações completas escopadas por companyId
     if (requestedStatus === ContractStatus.ACTIVE) {
-      const vehCheck = await this.validateVehicleAvailability(params.vehicleId, params.startDate, params.endDate);
+      const vehCheck = await this.validateVehicleAvailability(
+        params.vehicleId,
+        params.startDate,
+        params.endDate,
+        undefined,
+        params.companyId
+      );
       if (!vehCheck.available) {
         throw new Error(vehCheck.reason);
       }
-      const drvCheck = await this.validateDriverEligibility(params.driverId, params.startDate, params.endDate);
+      const drvCheck = await this.validateDriverEligibility(
+        params.driverId,
+        params.startDate,
+        params.endDate,
+        undefined,
+        params.companyId
+      );
       if (!drvCheck.eligible) {
         throw new Error(drvCheck.reason);
       }
@@ -318,6 +364,28 @@ export class ContractService {
       throw new Error(`Não é possível editar um contrato com status ${contract.status}`);
     }
 
+    // Se vehicleId for alterado, validar tenant do novo veículo
+    if (params.vehicleId !== undefined) {
+      const vehicle = await this.vehicleRepo.findById(params.vehicleId);
+      if (!vehicle) {
+        throw new Error('Veículo não encontrado');
+      }
+      if (vehicle.companyId !== contract.companyId) {
+        throw new Error('Veículo não pertence à empresa da operação.');
+      }
+    }
+
+    // Se driverId for alterado, validar tenant do novo motorista
+    if (params.driverId !== undefined) {
+      const driver = await this.driverRepo.findById(params.driverId);
+      if (!driver) {
+        throw new Error('Motorista não encontrado');
+      }
+      if (driver.companyId !== contract.companyId) {
+        throw new Error('Motorista não pertence à empresa da operação.');
+      }
+    }
+
     const previousState = { ...contract };
     const updates: Partial<Contract> = {
       updatedAt: new Date().toISOString(),
@@ -363,6 +431,10 @@ export class ContractService {
       throw new Error('Contrato não encontrado');
     }
 
+    if (contract.companyId !== params.companyId) {
+      throw new Error('Contrato não pertence à empresa da operação.');
+    }
+
     if (contract.status === ContractStatus.ACTIVE) {
       return contract; // Já está ativo
     }
@@ -371,23 +443,35 @@ export class ContractService {
       throw new Error(`Contrato com status ${contract.status} não pode ser ativado`);
     }
 
-    // 1. Validar Veículo
+    // 1. Validar Veículo e Tenant
+    const vehicle = await this.vehicleRepo.findById(contract.vehicleId);
+    if (!vehicle || vehicle.companyId !== params.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
     const vehCheck = await this.validateVehicleAvailability(
       contract.vehicleId,
       contract.startDate,
       contract.endDate,
-      contract.id
+      contract.id,
+      params.companyId
     );
     if (!vehCheck.available) {
       throw new Error(`Não é possível ativar contrato: ${vehCheck.reason}`);
     }
 
-    // 2. Validar Motorista
+    // 2. Validar Motorista e Tenant
+    const driver = await this.driverRepo.findById(contract.driverId);
+    if (!driver || driver.companyId !== params.companyId) {
+      throw new Error('Motorista não pertence à empresa da operação.');
+    }
+
     const drvCheck = await this.validateDriverEligibility(
       contract.driverId,
       contract.startDate,
       contract.endDate,
-      contract.id
+      contract.id,
+      params.companyId
     );
     if (!drvCheck.eligible) {
       throw new Error(`Não é possível ativar contrato: ${drvCheck.reason}`);
@@ -434,6 +518,17 @@ export class ContractService {
     userName: string,
     generateInitialCharge: boolean = true
   ): Promise<void> {
+    // Validar integridade de tenant das entidades relacionadas antes de mutações
+    const vehicle = await this.vehicleRepo.findById(contract.vehicleId);
+    if (!vehicle || vehicle.companyId !== contract.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
+    const driver = await this.driverRepo.findById(contract.driverId);
+    if (!driver || driver.companyId !== contract.companyId) {
+      throw new Error('Motorista não pertence à empresa da operação.');
+    }
+
     // 1. Veículo -> RENTED
     await this.vehicleRepo.update(contract.vehicleId, {
       status: VehicleStatus.RENTED,
@@ -506,6 +601,10 @@ export class ContractService {
       throw new Error('Contrato não encontrado');
     }
 
+    if (contract.companyId !== params.companyId) {
+      throw new Error('Contrato não pertence à empresa da operação.');
+    }
+
     if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) {
       return contract;
     }
@@ -520,24 +619,30 @@ export class ContractService {
       updatedAt: new Date().toISOString(),
     });
 
-    // 1. Liberar Veículo para AVAILABLE se não houver outro contrato ativo
-    const vehContracts = await this.contractRepo.findAll({ vehicleId: contract.vehicleId });
+    // 1. Liberar Veículo para AVAILABLE se não houver outro contrato ativo no mesmo tenant
+    const vehContracts = await this.contractRepo.findAll({
+      companyId: contract.companyId,
+      vehicleId: contract.vehicleId,
+    });
     const otherActive = vehContracts.filter(
       (c) => c.id !== contract.id && c.status === ContractStatus.ACTIVE && !c.isArchived
     );
 
     if (otherActive.length === 0) {
-      await this.vehicleRepo.update(contract.vehicleId, {
-        status: VehicleStatus.AVAILABLE,
-        currentDriverId: undefined,
-        currentContractId: undefined,
-        updatedAt: new Date().toISOString(),
-      });
+      const veh = await this.vehicleRepo.findById(contract.vehicleId);
+      if (veh && veh.companyId === contract.companyId) {
+        await this.vehicleRepo.update(contract.vehicleId, {
+          status: VehicleStatus.AVAILABLE,
+          currentDriverId: undefined,
+          currentContractId: undefined,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
 
     // 2. Limpar vínculo do Motorista
     const driver = await this.driverRepo.findById(contract.driverId);
-    if (driver && driver.currentContractId === contract.id) {
+    if (driver && driver.companyId === contract.companyId && driver.currentContractId === contract.id) {
       await this.driverRepo.update(contract.driverId, {
         currentVehicleId: undefined,
         currentContractId: undefined,
@@ -595,14 +700,17 @@ export class ContractService {
     });
 
     // Liberar Veículo
-    const vehContracts = await this.contractRepo.findAll({ vehicleId: contract.vehicleId });
+    const vehContracts = await this.contractRepo.findAll({
+      companyId: contract.companyId,
+      vehicleId: contract.vehicleId,
+    });
     const otherActive = vehContracts.filter(
       (c) => c.id !== contract.id && c.status === ContractStatus.ACTIVE && !c.isArchived
     );
 
     if (otherActive.length === 0) {
       const veh = await this.vehicleRepo.findById(contract.vehicleId);
-      if (veh && veh.currentContractId === contract.id) {
+      if (veh && veh.companyId === contract.companyId && veh.currentContractId === contract.id) {
         await this.vehicleRepo.update(contract.vehicleId, {
           status: VehicleStatus.AVAILABLE,
           currentDriverId: undefined,
@@ -614,7 +722,7 @@ export class ContractService {
 
     // Limpar Motorista
     const driver = await this.driverRepo.findById(contract.driverId);
-    if (driver && driver.currentContractId === contract.id) {
+    if (driver && driver.companyId === contract.companyId && driver.currentContractId === contract.id) {
       await this.driverRepo.update(contract.driverId, {
         currentVehicleId: undefined,
         currentContractId: undefined,
@@ -653,6 +761,21 @@ export class ContractService {
     const oldContract = await this.contractRepo.findById(params.oldContractId);
     if (!oldContract) {
       throw new Error('Contrato original não encontrado');
+    }
+
+    if (oldContract.companyId !== params.companyId) {
+      throw new Error('Contrato não pertence à empresa da operação.');
+    }
+
+    // Validar integridade de tenant de Veículo e Motorista contra params.companyId
+    const vehicle = await this.vehicleRepo.findById(oldContract.vehicleId);
+    if (!vehicle || vehicle.companyId !== params.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
+    const driver = await this.driverRepo.findById(oldContract.driverId);
+    if (!driver || driver.companyId !== params.companyId) {
+      throw new Error('Motorista não pertence à empresa da operação.');
     }
 
     // 1. Encerrar o contrato antigo
@@ -707,6 +830,17 @@ export class ContractService {
       throw new Error(`Contrato deve estar ACTIVE para gerar cobrança recorrente. Status atual: ${contract.status}`);
     }
 
+    // Validar integridade de tenant das entidades vinculadas
+    const vehicle = await this.vehicleRepo.findById(contract.vehicleId);
+    if (!vehicle || vehicle.companyId !== contract.companyId) {
+      throw new Error('Veículo não pertence à empresa da operação.');
+    }
+
+    const driver = await this.driverRepo.findById(contract.driverId);
+    if (!driver || driver.companyId !== contract.companyId) {
+      throw new Error('Motorista não pertence à empresa da operação.');
+    }
+
     const periodRef = calculatePeriodRef(contract.billingPeriodicity, dueDate);
 
     return FinanceEngine.createReceivable({
@@ -735,8 +869,10 @@ export class ContractService {
       throw new Error('Contrato não encontrado');
     }
 
-    const receivables = await this.receivableRepo.findByContractId(contractId);
-    const deposit = await this.depositRepo.findByContractId(contractId);
+    const allReceivables = await this.receivableRepo.findByContractId(contractId);
+    const receivables = allReceivables.filter((r) => r.companyId === contract.companyId);
+    const rawDeposit = await this.depositRepo.findByContractId(contractId);
+    const deposit = rawDeposit && rawDeposit.companyId === contract.companyId ? rawDeposit : null;
 
     let totalBilled = 0;
     let totalPaid = 0;
@@ -775,9 +911,14 @@ export class ContractService {
    * Histórico de Auditoria do Contrato
    */
   async getContractHistory(contractId: string): Promise<AuditLog[]> {
+    const contract = await this.contractRepo.findById(contractId);
     const allLogs = await this.auditRepo.findAll();
     return allLogs
-      .filter((log) => log.entityId === contractId || (log.entityName === 'Contract' && log.entityId === contractId))
+      .filter(
+        (log) =>
+          (!contract || log.companyId === contract.companyId) &&
+          (log.entityId === contractId || (log.entityName === 'Contract' && log.entityId === contractId))
+      )
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
@@ -794,8 +935,9 @@ export class ContractService {
       throw new Error('Contrato não encontrado');
     }
 
-    // Verificar se possui recebíveis vinculados
-    const receivables = await this.receivableRepo.findByContractId(contractId);
+    // Verificar se possui recebíveis vinculados do mesmo tenant
+    const allReceivables = await this.receivableRepo.findByContractId(contractId);
+    const receivables = allReceivables.filter((r) => r.companyId === contract.companyId);
     const hasFinancials = receivables.length > 0;
 
     if (hasFinancials) {

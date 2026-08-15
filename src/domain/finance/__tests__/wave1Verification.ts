@@ -18,6 +18,7 @@ import {
   FinancialAccountRepository,
   FinancialTransactionRepository,
 } from '../../../persistence/repositories/localRepositories';
+import { StorageAdapter } from '../../../persistence/adapters/storageAdapter';
 import { IdempotencyService } from '../../services/IdempotencyService';
 import { SettlementService } from '../SettlementService';
 import { TransferService } from '../TransferService';
@@ -39,6 +40,18 @@ export class Wave1VerificationRunner {
 
     const companyA = 'company-A';
     const companyB = 'company-B';
+
+    const storage = StorageAdapter.getInstance();
+    await storage.saveItem('users', {
+      id: 'usr-1',
+      companyId: companyA,
+      name: 'Test User',
+      email: 'usr-1@test.com',
+      role: 'ADMIN',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
 
     // MT-FIN-01A: tenant correto consegue ler registro financeiro
     try {
