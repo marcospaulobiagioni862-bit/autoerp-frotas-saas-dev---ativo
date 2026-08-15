@@ -3,6 +3,7 @@ import { AccountPayableRepository } from '../../persistence/repositories/localRe
 import { AccountPayable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { useAuth } from '../../hooks/useAuth';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
 import { FolderOpen } from 'lucide-react';
@@ -13,6 +14,7 @@ interface PayablesViewProps {
 }
 
 export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }) => {
+  const { user } = useAuth();
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -44,7 +46,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const loadPayables = async () => {
     setLoading(true);
     const repo = new AccountPayableRepository();
-    const list = await repo.findAll();
+    const list = await repo.findAll({ companyId: user.companyId });
     setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     setLoading(false);
   };
@@ -58,7 +60,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     setCreateLoading(true);
     try {
       await FinanceEngine.createPayable({
-        companyId: 'comp-1',
+        companyId: user.companyId,
         originType: OriginType.MANUAL,
         originId: 'manual-' + Date.now(),
         categoryId,
@@ -71,8 +73,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         driverId: driverId.trim() || undefined,
         vehicleId: vehicleId.trim() || undefined,
         contractId: contractId.trim() || undefined,
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva'
+        userId: user.userId,
+        userName: user.name,
       });
       setActionMessage('Nova obrigação a pagar criada com sucesso!');
       setIsCreateOpen(false);
@@ -99,12 +101,18 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const confirmCancel = async () => {
     if (!cancelTargetId) return;
     try {
+      const item = payables.find((p) => p.id === cancelTargetId);
+      if (!item || item.companyId !== user.companyId) {
+        alert('Erro de tenant: O título a pagar não pertence à empresa da sessão atual.');
+        setCancelTargetId(null);
+        return;
+      }
       await FinanceEngine.cancelPayable(
-        'comp-1',
+        user.companyId,
         cancelTargetId,
         'Cancelamento manual via interface',
-        'usr-admin-1',
-        'Carlos Silva'
+        user.userId,
+        user.name
       );
       setActionMessage('Título a pagar cancelado com sucesso.');
       setCancelTargetId(null);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AccountPayable, FinancialAccount, PaymentMethod } from '../../types/entities';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
 import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
+import { useAuth } from '../../hooks/useAuth';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
 
 interface PaymentModalProps {
@@ -12,6 +13,7 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, payable, onSuccess }) => {
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -33,8 +35,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const loadOptions = async () => {
     const accRepo = new FinancialAccountRepository();
     const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAll();
-    const pmList = await pmRepo.findAll();
+    const accList = await accRepo.findAll({ companyId: user.companyId });
+    const pmList = await pmRepo.findAll({ companyId: user.companyId });
     setAccounts(accList);
     setMethods(pmList);
 
@@ -46,6 +48,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (payable.companyId !== user.companyId) {
+      setError('Erro de isolamento de tenant: O título a pagar não pertence à sua empresa.');
+      return;
+    }
     if (amount <= 0) {
       setError('O valor a pagar deve ser maior que zero.');
       return;
@@ -67,8 +73,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Pagamento efetuado via portal operacional',
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva',
+        userId: user.userId,
+        userName: user.name,
       });
 
       onSuccess();

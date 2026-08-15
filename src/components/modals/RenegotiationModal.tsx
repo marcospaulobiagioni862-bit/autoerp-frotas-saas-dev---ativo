@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { useAuth } from '../../hooks/useAuth';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface RenegotiationModalProps {
@@ -11,6 +12,7 @@ interface RenegotiationModalProps {
 }
 
 export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, onClose, receivables, onSuccess }) => {
+  const { user } = useAuth();
   const [installments, setInstallments] = useState<number>(2);
   const [newDueDate, setNewDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [recurrenceInterval, setRecurrenceInterval] = useState<number>(7);
@@ -28,11 +30,26 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
     e.preventDefault();
 
     try {
+      // 1. Confirm that ALL receivables belong to user.companyId
+      const anyNonSession = receivables.some((r) => r.companyId !== user.companyId);
+      if (anyNonSession) {
+        setError('Erro de isolamento de tenant: Um ou mais títulos selecionados não pertencem à sua empresa.');
+        return;
+      }
+
+      // 2. Confirm that all belong to the SAME companyId
+      const firstCompanyId = receivables[0].companyId;
+      const anyMixedCompany = receivables.some((r) => r.companyId !== firstCompanyId);
+      if (anyMixedCompany) {
+        setError('Erro de isolamento de tenant: Não é permitido renegociar títulos de empresas distintas em uma mesma operação.');
+        return;
+      }
+
       setIsSubmitting(true);
       setError(null);
 
       await FinanceEngine.renegociate({
-        companyId: receivables[0].companyId,
+        companyId: user.companyId,
         obligationIds: receivables.map((r) => r.id),
         type: 'RECEIVABLE',
         newTotalAmount: Math.max(0, totalOriginalBalance - discountAmount + interestAmount),
@@ -40,8 +57,8 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
         firstDueDate: newDueDate,
         categoryId: receivables[0].categoryId || 'cat-rec-1',
         description: notes || 'Renegociação de títulos em atraso',
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva',
+        userId: user.userId,
+        userName: user.name,
       });
 
       onSuccess();

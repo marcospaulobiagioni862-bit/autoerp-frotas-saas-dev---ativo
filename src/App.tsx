@@ -47,6 +47,7 @@ import { RenegotiationModal } from './components/modals/RenegotiationModal';
 
 import { AccountReceivable, AccountPayable } from './types/entities';
 import { seedAutoERPTestData } from './persistence/seed/seedData';
+import { useAuth } from './hooks/useAuth';
 import {
   AccountReceivableRepository,
   AccountPayableRepository,
@@ -64,6 +65,7 @@ import { ObligationStatus } from './types/enums';
 import { generateOperationalPendings } from './domain/operations/OperationalPendingService';
 
 export default function App() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
   const [testStatus, setTestStatus] = useState<{ passed: number; total: number; failed: number } | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -105,17 +107,17 @@ export default function App() {
     const trackRepo = new TrackerRepository();
 
     const [recs, pays, vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
-      recRepo.findAll(),
-      payRepo.findAll(),
-      vehRepo.findAll(),
-      contractRepo.findAll(),
-      maintRepo.findAll(),
-      vehDocRepo.findAll(),
-      drvDocRepo.findAll(),
-      ticketRepo.findAll(),
-      drvRepo.findAll(),
-      insRepo.findAll(),
-      trackRepo.findAll(),
+      recRepo.findAll({ companyId: user.companyId }),
+      payRepo.findAll({ companyId: user.companyId }),
+      vehRepo.findAll({ companyId: user.companyId }),
+      contractRepo.findAll({ companyId: user.companyId }),
+      maintRepo.findAll({ companyId: user.companyId }),
+      vehDocRepo.findAll({ companyId: user.companyId }),
+      drvDocRepo.findAll({ companyId: user.companyId }),
+      ticketRepo.findAll({ companyId: user.companyId }),
+      drvRepo.findAll({ companyId: user.companyId }),
+      insRepo.findAll({ companyId: user.companyId }),
+      trackRepo.findAll({ companyId: user.companyId }),
     ]);
 
     const pendingRecs = recs.filter((r) => r.status === ObligationStatus.PENDING || r.status === ObligationStatus.PARTIALLY_PAID);
@@ -208,7 +210,7 @@ export default function App() {
           {activeTab === 'executive' && (
             <div className="p-4 sm:p-6">
               <ExecutiveDashboardView
-                companyId="company-main-uuid"
+                companyId={user.companyId}
                 onNavigate={(tab) => setActiveTab(tab as any)}
               />
             </div>
@@ -217,7 +219,7 @@ export default function App() {
           {activeTab === 'governance' && (
             <div className="p-4 sm:p-6">
               <GovernanceCenterView
-                companyId="company-main-uuid"
+                companyId={user.companyId}
               />
             </div>
           )}
@@ -243,11 +245,11 @@ export default function App() {
           )}
 
           {activeTab === 'system-integrity' && (
-            <SystemIntegrityAuditView companyId="company-main-uuid" />
+            <SystemIntegrityAuditView companyId={user.companyId} />
           )}
 
           {activeTab === 'enterprise-consolidation' && (
-            <EnterpriseConsolidationView companyId="company-main-uuid" />
+            <EnterpriseConsolidationView companyId={user.companyId} />
           )}
 
           {activeTab === 'workflow-center' && (
@@ -260,34 +262,34 @@ export default function App() {
 
           {activeTab === 'system-health' && (
             <div className="p-4 sm:p-6">
-              <SystemHealthCenterView companyId="company-main-uuid" />
+              <SystemHealthCenterView companyId={user.companyId} />
             </div>
           )}
 
           {activeTab === 'operacao-diaria' && (
             <DailyOperationsView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
 
           {activeTab === 'ciclo-locacao' && (
             <RentalLifecycleView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
 
           {activeTab === 'central-controle' && (
             <RentalControlCenterView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
 
           {activeTab === 'central-incidentes' && (
             <OperationalIncidentCenterView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
@@ -295,7 +297,7 @@ export default function App() {
           {activeTab === 'central-tarefas' && (
             <div className="p-4 sm:p-6">
               <OperationalTasksView
-                companyId="company-main-uuid"
+                companyId={user.companyId}
                 onNavigate={(tab) => setActiveTab(tab as any)}
               />
             </div>
@@ -304,7 +306,7 @@ export default function App() {
           {activeTab === 'produtividade' && (
             <div className="p-4 sm:p-6">
               <OperationalProductivityView
-                companyId="company-main-uuid"
+                companyId={user.companyId}
               />
             </div>
           )}
@@ -312,7 +314,7 @@ export default function App() {
           {activeTab === 'metas' && (
             <div className="p-4 sm:p-6">
               <ManagementGoalsView
-                companyId="company-main-uuid"
+                companyId={user.companyId}
               />
             </div>
           )}
@@ -320,14 +322,14 @@ export default function App() {
           {activeTab === 'documentos' && <DocumentCenter />}
           {activeTab === 'pendencias' && (
             <PendingCenterView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
 
           {activeTab === 'relatorios' && (
             <ManagementReportsView
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onNavigate={(tab) => setActiveTab(tab as any)}
             />
           )}
@@ -339,23 +341,23 @@ export default function App() {
           {activeTab === 'drivers' && (
             <div className="p-4 sm:p-6">
               <DriversManagement
-                companyId="company-main-uuid"
+                companyId={user.companyId}
                 onSelectVehicle={() => setActiveTab('fleet')}
               />
             </div>
           )}
 
           {activeTab === 'contracts' && (
-            <ContractsManagement companyId="company-main-uuid" />
+            <ContractsManagement companyId={user.companyId} />
           )}
 
           {activeTab === 'trafficTickets' && (
-            <TrafficTicketsManagement companyId="company-main-uuid" />
+            <TrafficTicketsManagement companyId={user.companyId} />
           )}
 
           {activeTab === 'maintenance' && (
             <MaintenanceManagement
-              companyId="company-main-uuid"
+              companyId={user.companyId}
               onOpenPaymentModal={(pay) => setSelectedPayableForPayment(pay)}
             />
           )}

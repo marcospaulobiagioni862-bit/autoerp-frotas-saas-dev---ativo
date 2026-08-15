@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AccountReceivable, FinancialAccount, PaymentMethod } from '../../types/entities';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
 import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
+import { useAuth } from '../../hooks/useAuth';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface ReceiptModalProps {
@@ -12,6 +13,7 @@ interface ReceiptModalProps {
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, receivable, onSuccess }) => {
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -33,8 +35,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const loadOptions = async () => {
     const accRepo = new FinancialAccountRepository();
     const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAll();
-    const pmList = await pmRepo.findAll();
+    const accList = await accRepo.findAll({ companyId: user.companyId });
+    const pmList = await pmRepo.findAll({ companyId: user.companyId });
     setAccounts(accList);
     setMethods(pmList);
 
@@ -46,6 +48,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (receivable.companyId !== user.companyId) {
+      setError('Erro de isolamento de tenant: O título a receber não pertence à sua empresa.');
+      return;
+    }
     if (amount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
@@ -67,8 +73,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva',
+        userId: user.userId,
+        userName: user.name,
       });
 
       onSuccess();

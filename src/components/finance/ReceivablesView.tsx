@@ -3,6 +3,7 @@ import { AccountReceivableRepository } from '../../persistence/repositories/loca
 import { AccountReceivable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { useAuth } from '../../hooks/useAuth';
 import {
   TrendingUp,
   Search,
@@ -24,6 +25,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   onOpenReceiptModal,
   onOpenRenegotiationModal,
 }) => {
+  const { user } = useAuth();
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -55,7 +57,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const loadReceivables = async () => {
     setLoading(true);
     const repo = new AccountReceivableRepository();
-    const list = await repo.findAll();
+    const list = await repo.findAll({ companyId: user.companyId });
     setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     setLoading(false);
   };
@@ -69,7 +71,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
     setCreateLoading(true);
     try {
       await FinanceEngine.createReceivable({
-        companyId: 'comp-1',
+        companyId: user.companyId,
         originType: OriginType.MANUAL,
         originId: 'manual-' + Date.now(),
         categoryId,
@@ -81,8 +83,8 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
         driverId: driverId.trim() || undefined,
         vehicleId: vehicleId.trim() || undefined,
         contractId: contractId.trim() || undefined,
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva'
+        userId: user.userId,
+        userName: user.name,
       });
       setActionMessage('Novo título a receber criado com sucesso!');
       setIsCreateOpen(false);
@@ -109,13 +111,17 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
     if (!cancelTargetId) return;
     try {
       const item = receivables.find((r) => r.id === cancelTargetId);
-      const companyId = item?.companyId || 'comp-1';
+      if (!item || item.companyId !== user.companyId) {
+        alert('Erro de tenant: O título a receber não pertence à empresa da sessão atual.');
+        setCancelTargetId(null);
+        return;
+      }
       await FinanceEngine.cancelReceivable(
-        companyId,
+        user.companyId,
         cancelTargetId,
         'Cancelamento via interface',
-        'usr-admin-1',
-        'Carlos Silva'
+        user.userId,
+        user.name
       );
       setActionMessage('Título a receber cancelado com sucesso.');
       setCancelTargetId(null);

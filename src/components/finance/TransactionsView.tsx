@@ -6,6 +6,7 @@ import {
 import { FinancialAccount, FinancialTransaction } from '../../types/entities';
 import { TransactionType } from '../../types/enums';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { useAuth } from '../../hooks/useAuth';
 import {
   ArrowRightLeft,
   Wallet,
@@ -20,6 +21,7 @@ interface TransactionsViewProps {
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransferModal }) => {
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
@@ -39,7 +41,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     const accRepo = new FinancialAccountRepository();
     const txRepo = new FinancialTransactionRepository();
 
-    const [accList, txList] = await Promise.all([accRepo.findAll(), txRepo.findAll()]);
+    const [accList, txList] = await Promise.all([
+      accRepo.findAll({ companyId: user.companyId }),
+      txRepo.findAll({ companyId: user.companyId }),
+    ]);
 
     setAccounts(accList);
     setTransactions(txList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -50,13 +55,19 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     if (!reversalTargetTx) return;
 
     try {
+      if (reversalTargetTx.companyId !== user.companyId) {
+        alert('Erro de tenant: A transação não pertence à empresa da sessão atual.');
+        setReversalTargetTx(null);
+        return;
+      }
+
       await FinanceEngine.reverseTransaction(
-        reversalTargetTx.companyId || 'company-main-uuid',
+        user.companyId,
         reversalTargetTx.id,
         reversalTargetTx.amount,
         'Estorno operacional solicitado via extrato',
-        'usr-admin-1',
-        'Carlos Silva'
+        user.userId,
+        user.name
       );
 
       setMessage('Transação estornada com sucesso!');

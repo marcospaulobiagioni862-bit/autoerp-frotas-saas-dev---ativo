@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FinancialAccount, PaymentMethod } from '../../types/entities';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
 import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
+import { useAuth } from '../../hooks/useAuth';
 import { X, ArrowRightLeft, AlertCircle } from 'lucide-react';
 
 interface TransferModalProps {
@@ -11,6 +12,7 @@ interface TransferModalProps {
 }
 
 export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [sourceAccountId, setSourceAccountId] = useState<string>('');
@@ -32,8 +34,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
   const loadOptions = async () => {
     const accRepo = new FinancialAccountRepository();
     const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAll();
-    const pmList = await pmRepo.findAll();
+    const accList = await accRepo.findAll({ companyId: user.companyId });
+    const pmList = await pmRepo.findAll({ companyId: user.companyId });
     setAccounts(accList);
     setMethods(pmList);
 
@@ -67,15 +69,15 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
       setError(null);
 
       await FinanceEngine.transferFunds({
-        companyId: 'company-main-uuid',
+        companyId: user.companyId,
         sourceAccountId,
         destinationAccountId,
         amount,
         transferDate,
         paymentMethodId: methodId,
         description: description || 'Transferência entre contas financeiras',
-        userId: 'usr-admin-1',
-        userName: 'Carlos Silva',
+        userId: user.userId,
+        userName: user.name,
       });
 
       onSuccess();

@@ -3,6 +3,7 @@ import { VehicleRepository } from '../../persistence/repositories/localRepositor
 import { VehicleService } from '../../domain/services/VehicleService';
 import { Vehicle } from '../../types/entities';
 import { VehicleStatus } from '../../types/enums';
+import { useAuth } from '../../hooks/useAuth';
 import {
   Car,
   Search,
@@ -24,6 +25,7 @@ import { RecordKmModal } from './RecordKmModal';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 
 export const FleetManagement: React.FC = () => {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -43,8 +45,6 @@ export const FleetManagement: React.FC = () => {
   const [targetStatus, setTargetStatus] = useState<VehicleStatus | null>(null);
   const [isConfirmingStatus, setIsConfirmingStatus] = useState<boolean>(false);
 
-  const companyId = 'company-main-uuid';
-
   useEffect(() => {
     loadVehicles();
   }, []);
@@ -53,7 +53,7 @@ export const FleetManagement: React.FC = () => {
     setLoading(true);
     try {
       const repo = new VehicleRepository();
-      const list = await repo.findAll();
+      const list = await repo.findAll({ companyId: user.companyId });
       setVehicles(list.filter((v) => !v.isArchived));
     } catch (err) {
       console.error('Erro ao carregar veículos:', err);
@@ -100,8 +100,8 @@ export const FleetManagement: React.FC = () => {
         vehicleForStatusChange.id,
         targetStatus,
         reason,
-        'user-admin-1',
-        'Gestor de Frota'
+        user.userId,
+        user.name
       );
       await loadVehicles();
     } catch (err: any) {
@@ -367,7 +367,7 @@ export const FleetManagement: React.FC = () => {
         }}
         onSuccess={loadVehicles}
         vehicleToEdit={vehicleToEdit}
-        companyId={companyId}
+        companyId={user.companyId}
       />
 
       <VehicleDetailsModal
