@@ -46,7 +46,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const loadPayables = async () => {
     setLoading(true);
     const repo = new AccountPayableRepository();
-    const list = await repo.findAll({ companyId: user.companyId });
+    const list = await repo.findAllForCompany(user.companyId);
     setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     setLoading(false);
   };

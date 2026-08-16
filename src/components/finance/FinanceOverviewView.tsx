@@ -3,6 +3,7 @@ import { Card, Button } from '../ui';
 import { TrendingUp, CreditCard, ArrowRightLeft, PieChart, ShieldAlert, ArrowRight, Wallet } from 'lucide-react';
 import { AccountReceivableRepository, AccountPayableRepository, FinancialAccountRepository, FinancialTransactionRepository } from '../../persistence/repositories/localRepositories';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { useAuth } from '../../hooks/useAuth';
 
 interface FinanceOverviewViewProps {
   onSelectSubTab: (tab: 'overview' | 'receivables' | 'payables' | 'transactions' | 'dre') => void;
@@ -13,6 +14,7 @@ export const FinanceOverviewView: React.FC<FinanceOverviewViewProps> = ({ onSele
   const [totalPayable, setTotalPayable] = useState(0);
   const [totalBalance, setTotalBalance] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadSummary();
@@ -25,9 +27,9 @@ export const FinanceOverviewView: React.FC<FinanceOverviewViewProps> = ({ onSele
       const accRepo = new FinancialAccountRepository();
 
       const [recs, pays, accs] = await Promise.all([
-        recRepo.findAll(),
-        payRepo.findAll(),
-        accRepo.findAll(),
+        recRepo.findAllForCompany(user.companyId),
+        payRepo.findAllForCompany(user.companyId),
+        accRepo.findAllForCompany(user.companyId),
       ]);
 
       const recSum = recs

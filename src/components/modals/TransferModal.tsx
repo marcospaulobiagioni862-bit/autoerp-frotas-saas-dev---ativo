@@ -34,8 +34,8 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
   const loadOptions = async () => {
     const accRepo = new FinancialAccountRepository();
     const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAll({ companyId: user.companyId });
-    const pmList = await pmRepo.findAll({ companyId: user.companyId });
+    const accList = await accRepo.findAllForCompany(user.companyId);
+    const pmList = await pmRepo.findAllForCompany(user.companyId);
     setAccounts(accList);
     setMethods(pmList);
 

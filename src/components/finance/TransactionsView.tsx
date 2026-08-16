@@ -42,8 +42,8 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     const txRepo = new FinancialTransactionRepository();
 
     const [accList, txList] = await Promise.all([
-      accRepo.findAll({ companyId: user.companyId }),
-      txRepo.findAll({ companyId: user.companyId }),
+      accRepo.findAllForCompany(user.companyId),
+      txRepo.findAllForCompany(user.companyId),
     ]);
 
     setAccounts(accList);

@@ -6,6 +6,7 @@ import { AccountingRegime } from '../../types/enums';
 import { DREReport, VehicleProfitabilityReport } from '../../types/reports/index';
 import { PieChart, Calendar, Car } from 'lucide-react';
 import { Card, Select, Skeleton } from '../ui';
+import { useAuth } from '../../hooks/useAuth';
 
 export const DREReportView: React.FC = () => {
   const [regime, setRegime] = useState<AccountingRegime>(AccountingRegime.CASH);
@@ -16,6 +17,7 @@ export const DREReportView: React.FC = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
   const [vehicleProfit, setVehicleProfit] = useState<VehicleProfitabilityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadReports();
@@ -30,7 +32,7 @@ export const DREReportView: React.FC = () => {
       setDreReport(dre);
 
       const vehRepo = new VehicleRepository();
-      const vehList = await vehRepo.findAll();
+      const vehList = await vehRepo.findAllForCompany(companyId);
       setVehicles(vehList);
 
       if (vehList.length > 0) {

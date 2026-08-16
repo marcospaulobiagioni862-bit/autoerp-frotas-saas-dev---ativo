@@ -57,7 +57,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const loadReceivables = async () => {
     setLoading(true);
     const repo = new AccountReceivableRepository();
-    const list = await repo.findAll({ companyId: user.companyId });
+    const list = await repo.findAllForCompany(user.companyId);
     setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     setLoading(false);
   };
