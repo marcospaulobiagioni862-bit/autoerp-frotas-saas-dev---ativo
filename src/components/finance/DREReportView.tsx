@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
 import { VehicleRepository } from '../../persistence/repositories/localRepositories';
 import { Vehicle } from '../../types/entities';
@@ -18,11 +18,22 @@ export const DREReportView: React.FC = () => {
   const [vehicleProfit, setVehicleProfit] = useState<VehicleProfitabilityReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const { user } = useAuth();
+  const lastCompanyIdRef = useRef<string | undefined>(user?.companyId);
 
   useEffect(() => {
     let isActive = true;
 
     const loadReports = async () => {
+      let isSwitchingTenant = false;
+      if (lastCompanyIdRef.current !== user?.companyId) {
+        setDreReport(null);
+        setVehicles([]);
+        setVehicleProfit(null);
+        setSelectedVehicleId('');
+        lastCompanyIdRef.current = user?.companyId;
+        isSwitchingTenant = true;
+      }
+
       if (!user?.companyId) {
         setDreReport(null);
         setVehicles([]);
@@ -40,12 +51,15 @@ export const DREReportView: React.FC = () => {
         const vehList = await vehRepo.findAllForCompany(companyId);
         
         let vProfit = null;
-        let finalSelectedVehicleId = selectedVehicleId;
+        let finalSelectedVehicleId = isSwitchingTenant ? '' : selectedVehicleId;
 
         if (vehList.length > 0) {
-          const vId = selectedVehicleId || vehList[0].id;
+          const isVehicleValid = finalSelectedVehicleId && vehList.some(v => v.id === finalSelectedVehicleId);
+          const vId = isVehicleValid ? finalSelectedVehicleId : vehList[0].id;
           finalSelectedVehicleId = vId;
           vProfit = await FinanceEngine.getVehicleProfitability(companyId, vId, startDate, endDate, regime);
+        } else {
+          finalSelectedVehicleId = '';
         }
 
         if (isActive) {
@@ -59,6 +73,10 @@ export const DREReportView: React.FC = () => {
       } catch (err) {
         if (isActive) {
           console.error('Erro ao gerar DRE/Rentabilidade:', err);
+          setDreReport(null);
+          setVehicles([]);
+          setVehicleProfit(null);
+          setSelectedVehicleId('');
         }
       } finally {
         if (isActive) {
