@@ -76,7 +76,7 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       const payRepo = new AccountPayableRepository();
       const auditRepo = new AuditLogRepository();
 
-      const t = await ticketRepo.findById(ticketId);
+      const t = await ticketRepo.findByIdForCompany(ticketId, companyId);
       if (!t) {
         setError('Multa não encontrada.');
         setLoading(false);
@@ -87,34 +87,34 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       setNewResponsibility(t.responsibility);
 
       if (t.vehicleId) {
-        const v = await vehicleRepo.findById(t.vehicleId);
+        const v = await vehicleRepo.findByIdForCompany(t.vehicleId, companyId);
         setVehicle(v);
       }
 
       if (t.driverId) {
-        const d = await driverRepo.findById(t.driverId);
+        const d = await driverRepo.findByIdForCompany(t.driverId, companyId);
         setDriver(d);
       }
 
       if (t.contractId) {
-        const c = await contractRepo.findById(t.contractId);
+        const c = await contractRepo.findByIdForCompany(t.contractId, companyId);
         setContract(c);
       }
 
       if (t.receivableId) {
-        const r = await recRepo.findById(t.receivableId);
+        const r = await recRepo.findByIdForCompany(t.receivableId, companyId);
         setReceivable(r);
       }
 
       if (t.payableId) {
-        const p = await payRepo.findById(t.payableId);
+        const p = await payRepo.findByIdForCompany(t.payableId, companyId);
         setPayable(p);
       }
 
-      const driversList = await driverRepo.findAll({ companyId });
+      const driversList = await driverRepo.findAllForCompany(companyId);
       setAllDrivers(driversList);
 
-      const logs = await auditRepo.findAll();
+      const logs = await auditRepo.findAllForCompany(companyId);
       const ticketLogs = logs.filter((l) => l.entityId === ticketId);
       setAuditLogs(ticketLogs);
     } catch (err: any) {

@@ -98,7 +98,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       const ticketRepo = new TrafficTicketRepository();
       const contractService = new ContractService();
 
-      const c = await contractRepo.findById(contractId);
+      const c = await contractRepo.findByIdForCompany(contractId, companyId);
       if (!c) {
         setError('Contrato não encontrado');
         setLoading(false);
@@ -108,12 +108,12 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       setContract(c);
 
       const [v, d, sum, recs, dep, allTks, hist] = await Promise.all([
-        vehicleRepo.findById(c.vehicleId),
-        driverRepo.findById(c.driverId),
+        vehicleRepo.findByIdForCompany(c.vehicleId, companyId),
+        driverRepo.findByIdForCompany(c.driverId, companyId),
         contractService.getContractFinancialSummary(c.id),
-        receivableRepo.findByContractId(c.id),
-        depositRepo.findByContractId(c.id),
-        ticketRepo.findAll(),
+        receivableRepo.findByContractIdForCompany(companyId, c.id),
+        depositRepo.findByContractIdForCompany(companyId, c.id),
+        ticketRepo.findAllForCompany(companyId),
         contractService.getContractHistory(c.id),
       ]);
 

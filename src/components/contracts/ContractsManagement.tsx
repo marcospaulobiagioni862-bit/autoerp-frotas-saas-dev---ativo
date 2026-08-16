@@ -75,6 +75,12 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
 
   const loadData = async () => {
     setLoading(true);
+    if (!companyId) {
+      setContracts([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const contractRepo = new ContractRepository();
       const vehicleRepo = new VehicleRepository();
@@ -82,9 +88,9 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       const receivableRepo = new AccountReceivableRepository();
 
       const [allContracts, allVehicles, allDrivers] = await Promise.all([
-        contractRepo.findAll({ companyId }),
-        vehicleRepo.findAll({ companyId }),
-        driverRepo.findAll({ companyId }),
+        contractRepo.findAllForCompany(companyId),
+        vehicleRepo.findAllForCompany(companyId),
+        driverRepo.findAllForCompany(companyId),
       ]);
 
       const vMap: Record<string, Vehicle> = {};
@@ -571,7 +577,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         onRefresh={loadData}
         onOpenReceiptModal={async (receivableId) => {
           const receivableRepo = new AccountReceivableRepository();
-          const rec = await receivableRepo.findById(receivableId);
+          const rec = await receivableRepo.findByIdForCompany(receivableId, companyId);
           if (rec) {
             setSelectedReceivable(rec);
             setIsReceiptModalOpen(true);

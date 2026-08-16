@@ -1,3 +1,4 @@
+import { useAuth } from '../../hooks/useAuth';
 import React, { useEffect, useState } from 'react';
 import { 
   ContractRepository, 
@@ -22,6 +23,7 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
   receivables: initialReceivables,
   payables: initialPayables,
 }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState<boolean>(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles || []);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -30,6 +32,14 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
 
   useEffect(() => {
     async function fetchData() {
+      if (!user?.companyId) {
+        setVehicles([]);
+        setContracts([]);
+        setReceivables([]);
+        setPayables([]);
+        setLoading(false);
+        return;
+      }
       try {
         const vehRepo = new VehicleRepository();
         const contractRepo = new ContractRepository();
@@ -37,10 +47,10 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
         const payRepo = new AccountPayableRepository();
 
         const [vehList, contractList, recList, payList] = await Promise.all([
-          initialVehicles && initialVehicles.length > 0 ? Promise.resolve(initialVehicles) : vehRepo.findAll(),
-          contractRepo.findAll(),
-          initialReceivables && initialReceivables.length > 0 ? Promise.resolve(initialReceivables) : recRepo.findAll(),
-          initialPayables && initialPayables.length > 0 ? Promise.resolve(initialPayables) : payRepo.findAll(),
+          initialVehicles && initialVehicles.length > 0 ? Promise.resolve(initialVehicles) : vehRepo.findAllForCompany(user.companyId),
+          contractRepo.findAllForCompany(user.companyId),
+          initialReceivables && initialReceivables.length > 0 ? Promise.resolve(initialReceivables) : recRepo.findAllForCompany(user.companyId),
+          initialPayables && initialPayables.length > 0 ? Promise.resolve(initialPayables) : payRepo.findAllForCompany(user.companyId),
         ]);
 
         setVehicles(vehList);
@@ -55,7 +65,7 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
     }
 
     fetchData();
-  }, [initialVehicles, initialReceivables, initialPayables]);
+  }, [initialVehicles, initialReceivables, initialPayables, user?.companyId]);
 
   if (loading) {
     return (

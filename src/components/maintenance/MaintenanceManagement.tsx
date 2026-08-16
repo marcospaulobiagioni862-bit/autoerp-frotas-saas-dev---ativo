@@ -35,7 +35,7 @@ interface MaintenanceManagementProps {
 }
 
 export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
-  companyId = 'company-main-uuid',
+  companyId,
   onOpenPaymentModal,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'workOrders' | 'suppliers' | 'parts' | 'oilTires'>('workOrders');
@@ -79,9 +79,19 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [companyId]);
 
   const loadData = async () => {
+    setIsLoading(true);
+    if (!companyId) {
+      setWorkOrders([]);
+      setSuppliers([]);
+      setParts([]);
+      setVehicles([]);
+      setPayables([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const woRepo = new WorkOrderRepository();
@@ -91,11 +101,11 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       const payRepo = new AccountPayableRepository();
 
       const [woList, supList, partList, vehList, payList] = await Promise.all([
-        woRepo.findAll({ companyId }),
-        supRepo.findAll({ companyId }),
-        partRepo.findAll({ companyId }),
-        vehRepo.findAll({ companyId }),
-        payRepo.findAll({ companyId }),
+        woRepo.findAllForCompany(companyId),
+        supRepo.findAllForCompany(companyId),
+        partRepo.findAllForCompany(companyId),
+        vehRepo.findAllForCompany(companyId),
+        payRepo.findAllForCompany(companyId),
       ]);
 
       setWorkOrders(woList);

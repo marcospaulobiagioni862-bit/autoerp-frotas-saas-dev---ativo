@@ -1,3 +1,4 @@
+import { useAuth } from '../../hooks/useAuth';
 import React, { useEffect, useState } from 'react';
 import {
   AccountReceivableRepository,
@@ -56,6 +57,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   onOpenTransferModal,
   onOpenTestRunner,
 }) => {
+  const { user } = useAuth();
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
@@ -68,9 +70,22 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [user?.companyId]);
 
   const loadDashboardData = async () => {
+    setLoading(true);
+    if (!user?.companyId) {
+      setReceivables([]);
+      setPayables([]);
+      setAccounts([]);
+      setTransactions([]);
+      setVehicles([]);
+      setDrivers([]);
+      setContracts([]);
+      setPendings([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const recRepo = new AccountReceivableRepository();
     const payRepo = new AccountPayableRepository();
@@ -87,19 +102,19 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     const trackRepo = new TrackerRepository();
 
     const [recList, payList, accList, txList, vehList, contractList, maintList, vehDocs, drvDocs, tickets, drvList, insurances, trackers] = await Promise.all([
-      recRepo.findAll(),
-      payRepo.findAll(),
-      accRepo.findAll(),
-      txRepo.findAll(),
-      vehRepo.findAll(),
-      contractRepo.findAll(),
-      maintRepo.findAll(),
-      vehDocRepo.findAll(),
-      drvDocRepo.findAll(),
-      ticketRepo.findAll(),
-      drvRepo.findAll(),
-      insRepo.findAll(),
-      trackRepo.findAll(),
+      recRepo.findAllForCompany(user.companyId),
+      payRepo.findAllForCompany(user.companyId),
+      accRepo.findAllForCompany(user.companyId),
+      txRepo.findAllForCompany(user.companyId),
+      vehRepo.findAllForCompany(user.companyId),
+      contractRepo.findAllForCompany(user.companyId),
+      maintRepo.findAllForCompany(user.companyId),
+      vehDocRepo.findAllForCompany(user.companyId),
+      drvDocRepo.findAllForCompany(user.companyId),
+      ticketRepo.findAllForCompany(user.companyId),
+      drvRepo.findAllForCompany(user.companyId),
+      insRepo.findAllForCompany(user.companyId),
+      trackRepo.findAllForCompany(user.companyId),
     ]);
 
     setReceivables(recList);

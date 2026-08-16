@@ -83,7 +83,7 @@ export default function App() {
 
   useEffect(() => {
     initApp();
-  }, []);
+  }, [user?.companyId]);
 
   const initApp = async () => {
     // 1. Seed database if empty (non-destructive)
@@ -94,6 +94,12 @@ export default function App() {
   };
 
   const refreshBadges = async () => {
+    if (!user?.companyId) {
+      setPendingReceivablesCount(0);
+      setPendingPayablesCount(0);
+      setPendingPendingsCount(0);
+      return;
+    }
     const recRepo = new AccountReceivableRepository();
     const payRepo = new AccountPayableRepository();
     const vehRepo = new VehicleRepository();
@@ -107,17 +113,17 @@ export default function App() {
     const trackRepo = new TrackerRepository();
 
     const [recs, pays, vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
-      recRepo.findAll({ companyId: user.companyId }),
-      payRepo.findAll({ companyId: user.companyId }),
-      vehRepo.findAll({ companyId: user.companyId }),
-      contractRepo.findAll({ companyId: user.companyId }),
-      maintRepo.findAll({ companyId: user.companyId }),
-      vehDocRepo.findAll({ companyId: user.companyId }),
-      drvDocRepo.findAll({ companyId: user.companyId }),
-      ticketRepo.findAll({ companyId: user.companyId }),
-      drvRepo.findAll({ companyId: user.companyId }),
-      insRepo.findAll({ companyId: user.companyId }),
-      trackRepo.findAll({ companyId: user.companyId }),
+      recRepo.findAllForCompany(user.companyId),
+      payRepo.findAllForCompany(user.companyId),
+      vehRepo.findAllForCompany(user.companyId),
+      contractRepo.findAllForCompany(user.companyId),
+      maintRepo.findAllForCompany(user.companyId),
+      vehDocRepo.findAllForCompany(user.companyId),
+      drvDocRepo.findAllForCompany(user.companyId),
+      ticketRepo.findAllForCompany(user.companyId),
+      drvRepo.findAllForCompany(user.companyId),
+      insRepo.findAllForCompany(user.companyId),
+      trackRepo.findAllForCompany(user.companyId),
     ]);
 
     const pendingRecs = recs.filter((r) => r.status === ObligationStatus.PENDING || r.status === ObligationStatus.PARTIALLY_PAID);
