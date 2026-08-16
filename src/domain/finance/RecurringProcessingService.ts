@@ -172,7 +172,7 @@ export class RecurringProcessingService {
     const userId = params.userId || 'system-recurring';
     const userName = params.userName || 'Motor de Recorrência';
 
-    const allRules = await this.ruleRepo.findAll({ companyId });
+    const allRules = await this.ruleRepo.findAllForCompany(companyId);
     const eligibleRules = allRules.filter(
       (r) =>
         r.companyId === companyId &&
@@ -204,7 +204,7 @@ export class RecurringProcessingService {
         if (rule.endDate && rule.nextGenerationDate > rule.endDate) {
           rule.status = 'COMPLETED';
           rule.updatedAt = new Date().toISOString();
-          await this.ruleRepo.update(rule.id, rule);
+          await this.ruleRepo.updateForCompany(rule.id, companyId, rule);
           break;
         }
 
@@ -222,11 +222,11 @@ export class RecurringProcessingService {
             break;
           }
 
-          const contract = await this.contractRepo.findById(rule.originId);
-          if (!contract || contract.companyId !== companyId) {
+          const contract = await this.contractRepo.findByIdForCompany(rule.originId, companyId);
+          if (!contract) {
             rule.status = 'CANCELLED';
             rule.updatedAt = new Date().toISOString();
-            await this.ruleRepo.update(rule.id, rule);
+            await this.ruleRepo.updateForCompany(rule.id, companyId, rule);
             skippedCount++;
             details.push({
               ruleId: rule.id,
@@ -263,7 +263,7 @@ export class RecurringProcessingService {
           ) {
             rule.status = 'COMPLETED';
             rule.updatedAt = new Date().toISOString();
-            await this.ruleRepo.update(rule.id, rule);
+            await this.ruleRepo.updateForCompany(rule.id, companyId, rule);
             skippedCount++;
             details.push({
               ruleId: rule.id,
@@ -288,11 +288,11 @@ export class RecurringProcessingService {
             break;
           }
 
-          const tracker = await this.trackerRepo.findById(rule.originId);
-          if (!tracker || tracker.companyId !== companyId || tracker.status !== 'ACTIVE') {
+          const tracker = await this.trackerRepo.findByIdForCompany(rule.originId, companyId);
+          if (!tracker || tracker.status !== 'ACTIVE') {
             rule.status = 'COMPLETED';
             rule.updatedAt = new Date().toISOString();
-            await this.ruleRepo.update(rule.id, rule);
+            await this.ruleRepo.updateForCompany(rule.id, companyId, rule);
             skippedCount++;
             details.push({
               ruleId: rule.id,
@@ -414,7 +414,7 @@ export class RecurringProcessingService {
           rule.lastGeneratedReference = periodRef;
           rule.nextGenerationDate = advanceNextGenerationDate(rule.nextGenerationDate, rule.frequency);
           rule.updatedAt = new Date().toISOString();
-          await this.ruleRepo.update(rule.id, rule);
+          await this.ruleRepo.updateForCompany(rule.id, companyId, rule);
 
           generationsCount++;
         } catch (err: any) {

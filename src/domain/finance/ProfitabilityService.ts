@@ -21,7 +21,7 @@ export class ProfitabilityService {
     periodEnd: string,
     regime: AccountingRegime = AccountingRegime.CASH
   ): Promise<VehicleProfitabilityReport> {
-    const vehicle = await this.vehicleRepo.findById(vehicleId);
+    const vehicle = await this.vehicleRepo.findByIdForCompany(vehicleId, companyId);
 
     let rentalIncome = 0;
     let kmExcessIncome = 0;
@@ -42,16 +42,15 @@ export class ProfitabilityService {
     };
 
     if (regime === AccountingRegime.CASH) {
-      const allTx = await this.txRepo.findByVehicleId(vehicleId);
-      const allPayables = await this.payRepo.findByVehicleId(vehicleId);
-      const allReceivables = await this.recRepo.findByVehicleId(vehicleId);
+      const allTx = await this.txRepo.findByVehicleIdForCompany(vehicleId, companyId);
+      const allPayables = await this.payRepo.findByVehicleIdForCompany(vehicleId, companyId);
+      const allReceivables = await this.recRepo.findByVehicleIdForCompany(vehicleId, companyId);
 
       const payMap = new Map(allPayables.map((p) => [p.id, p]));
       const recMap = new Map(allReceivables.map((r) => [r.id, r]));
 
       const periodTx = allTx.filter(
         (t) =>
-          (!companyId || t.companyId === companyId) &&
           t.vehicleId === vehicleId &&
           !t.isReversed &&
           t.transactionDate >= periodStart &&
@@ -102,12 +101,11 @@ export class ProfitabilityService {
       }
     } else {
       // ACCRUAL REGIME
-      const receivables = await this.recRepo.findByVehicleId(vehicleId);
-      const payables = await this.payRepo.findByVehicleId(vehicleId);
+      const receivables = await this.recRepo.findByVehicleIdForCompany(vehicleId, companyId);
+      const payables = await this.payRepo.findByVehicleIdForCompany(vehicleId, companyId);
 
       const periodRec = receivables.filter(
         (r) =>
-          (!companyId || r.companyId === companyId) &&
           r.vehicleId === vehicleId &&
           r.status !== ObligationStatus.CANCELLED &&
           r.competenceDate >= periodStart &&
@@ -127,7 +125,6 @@ export class ProfitabilityService {
 
       const periodPay = payables.filter(
         (p) =>
-          (!companyId || p.companyId === companyId) &&
           p.vehicleId === vehicleId &&
           p.status !== ObligationStatus.CANCELLED &&
           p.competenceDate >= periodStart &&

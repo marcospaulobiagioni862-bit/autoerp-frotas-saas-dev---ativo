@@ -30,7 +30,12 @@ export class ReversalService {
   ): Promise<FinancialTransaction> {
     await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_REVERSAL');
 
-    const originalTx = await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).findById(transactionId);
+    let originalTx: FinancialTransaction | null;
+    if (txContext) {
+      originalTx = await txContext.getTransactionRepo().findById(transactionId);
+    } else {
+      originalTx = await this.transactionRepo.findByIdForCompany(transactionId, companyId);
+    }
     if (!originalTx) throw new Error('Transação não encontrada');
     if (originalTx.companyId && originalTx.companyId !== companyId) {
       throw new Error('Acesso negado: Transação pertence a outra empresa');
@@ -40,7 +45,12 @@ export class ReversalService {
     await FinancialPeriodService.assertDateOpen(companyId, originalTx.transactionDate);
     await FinancialPeriodService.assertDateOpen(companyId, new Date().toISOString().split('T')[0]);
 
-    const allTxs = await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).findAll({ companyId });
+    let allTxs: FinancialTransaction[];
+    if (txContext) {
+      allTxs = await txContext.getTransactionRepo().findAll({ companyId });
+    } else {
+      allTxs = await this.transactionRepo.findAllForCompany(companyId);
+    }
     const previousReversals = allTxs.filter(
       (t) => t.type === TransactionType.REVERSAL && t.reversalTransactionId === originalTx.id
     );
@@ -55,9 +65,15 @@ export class ReversalService {
 
     const totalReversedAfter = roundCurrency(reversedAmount + reversalAmount);
     const isFullReversal = Math.abs(totalReversedAfter - originalTx.amount) < 0.01;
-    await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).update(originalTx.id, {
-      isReversed: isFullReversal,
-    });
+    if (txContext) {
+      await txContext.getTransactionRepo().update(originalTx.id, {
+        isReversed: isFullReversal,
+      });
+    } else {
+      await this.transactionRepo.updateForCompany(originalTx.id, companyId, {
+        isReversed: isFullReversal,
+      });
+    }
 
     const reversalTx: FinancialTransaction = {
       id: generateUUID(),
@@ -81,38 +97,73 @@ export class ReversalService {
       updatedAt: new Date().toISOString(),
     };
 
-    const savedReversal = await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).create(reversalTx);
+    let savedReversal: FinancialTransaction;
+    if (txContext) {
+      savedReversal = await txContext.getTransactionRepo().create(reversalTx);
+    } else {
+      savedReversal = await this.transactionRepo.createForCompany(companyId, reversalTx);
+    }
 
     // Balance Delta: Reversing an Income reduces cash; reversing an Expense adds cash back
     const balanceDelta = originalTx.type === TransactionType.INCOME ? -reversalAmount : reversalAmount;
-    await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(originalTx.financialAccountId, balanceDelta);
+    if (txContext) {
+      await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, balanceDelta);
+    } else {
+      await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, balanceDelta);
+    }
 
     // Update Receivable / Payable
     if (originalTx.receivableId) {
-      const rec = await (txContext ? txContext.getReceivableRepo() : this.receivableRepo).findById(originalTx.receivableId);
-      if (rec) {
-        const newPaid = Math.max(0, rec.paidAmount - reversalAmount);
-        const newBalance = roundCurrency(rec.updatedAmount - newPaid);
-        const newStatus = newBalance >= rec.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-
-        await (txContext ? txContext.getReceivableRepo() : this.receivableRepo).update(rec.id, {
-          paidAmount: newPaid,
-          balanceAmount: newBalance,
-          status: newStatus,
-        });
+      if (txContext) {
+        const rec = await txContext.getReceivableRepo().findById(originalTx.receivableId);
+        if (rec) {
+          const newPaid = Math.max(0, rec.paidAmount - reversalAmount);
+          const newBalance = roundCurrency(rec.updatedAmount - newPaid);
+          const newStatus = newBalance >= rec.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          await txContext.getReceivableRepo().update(rec.id, {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            status: newStatus,
+          });
+        }
+      } else {
+        const rec = await this.receivableRepo.findByIdForCompany(originalTx.receivableId, companyId);
+        if (rec) {
+          const newPaid = Math.max(0, rec.paidAmount - reversalAmount);
+          const newBalance = roundCurrency(rec.updatedAmount - newPaid);
+          const newStatus = newBalance >= rec.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          await this.receivableRepo.updateForCompany(rec.id, companyId, {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            status: newStatus,
+          });
+        }
       }
     } else if (originalTx.payableId) {
-      const pay = await (txContext ? txContext.getPayableRepo() : this.payableRepo).findById(originalTx.payableId);
-      if (pay) {
-        const newPaid = Math.max(0, pay.paidAmount - reversalAmount);
-        const newBalance = roundCurrency(pay.updatedAmount - newPaid);
-        const newStatus = newBalance >= pay.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-
-        await (txContext ? txContext.getPayableRepo() : this.payableRepo).update(pay.id, {
-          paidAmount: newPaid,
-          balanceAmount: newBalance,
-          status: newStatus,
-        });
+      if (txContext) {
+        const pay = await txContext.getPayableRepo().findById(originalTx.payableId);
+        if (pay) {
+          const newPaid = Math.max(0, pay.paidAmount - reversalAmount);
+          const newBalance = roundCurrency(pay.updatedAmount - newPaid);
+          const newStatus = newBalance >= pay.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          await txContext.getPayableRepo().update(pay.id, {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            status: newStatus,
+          });
+        }
+      } else {
+        const pay = await this.payableRepo.findByIdForCompany(originalTx.payableId, companyId);
+        if (pay) {
+          const newPaid = Math.max(0, pay.paidAmount - reversalAmount);
+          const newBalance = roundCurrency(pay.updatedAmount - newPaid);
+          const newStatus = newBalance >= pay.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          await this.payableRepo.updateForCompany(pay.id, companyId, {
+            paidAmount: newPaid,
+            balanceAmount: newBalance,
+            status: newStatus,
+          });
+        }
       }
     }
 

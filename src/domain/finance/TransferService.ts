@@ -3,7 +3,7 @@ import {
   FinancialTransactionRepository,
   FinancialAccountRepository,
 } from '../../persistence/repositories/localRepositories';
-import { FinancialTransaction } from '../../types/entities';
+    import { FinancialTransaction, FinancialAccount } from '../../types/entities';
 import { TransactionType, AuditAction } from '../../types/enums';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -39,8 +39,16 @@ export class TransferService {
       throw new Error('Valor da transferência deve ser maior que zero');
     }
 
-    const sourceAcc = await (txContext ? txContext.getAccountRepo() : this.accountRepo).findById(params.sourceAccountId);
-    const destAcc = await (txContext ? txContext.getAccountRepo() : this.accountRepo).findById(params.destinationAccountId);
+    let sourceAcc: FinancialAccount | null;
+    let destAcc: FinancialAccount | null;
+
+    if (txContext) {
+      sourceAcc = await txContext.getAccountRepo().findById(params.sourceAccountId);
+      destAcc = await txContext.getAccountRepo().findById(params.destinationAccountId);
+    } else {
+      sourceAcc = await this.accountRepo.findByIdForCompany(params.sourceAccountId, params.companyId);
+      destAcc = await this.accountRepo.findByIdForCompany(params.destinationAccountId, params.companyId);
+    }
 
     if (!sourceAcc || !destAcc) {
       throw new Error('Conta financeira de origem ou destino não encontrada');
@@ -57,8 +65,13 @@ export class TransferService {
     }
 
     // Execute balance updates
-    await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.sourceAccountId, -params.amount);
-    await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.destinationAccountId, params.amount);
+    if (txContext) {
+      await txContext.getAccountRepo().updateBalance(params.sourceAccountId, -params.amount);
+      await txContext.getAccountRepo().updateBalance(params.destinationAccountId, params.amount);
+    } else {
+      await this.accountRepo.updateBalanceForCompany(params.companyId, params.sourceAccountId, -params.amount);
+      await this.accountRepo.updateBalanceForCompany(params.companyId, params.destinationAccountId, params.amount);
+    }
 
     try {
       const transaction: FinancialTransaction = {
@@ -78,7 +91,12 @@ export class TransferService {
         updatedAt: new Date().toISOString(),
       };
 
-      const savedTx = await (txContext ? txContext.getTransactionRepo() : this.txRepo).create(transaction);
+      let savedTx: FinancialTransaction;
+      if (txContext) {
+        savedTx = await txContext.getTransactionRepo().create(transaction);
+      } else {
+        savedTx = await this.txRepo.createForCompany(params.companyId, transaction);
+      }
 
       await AuditLogger.logAction(
         params.companyId,
@@ -94,8 +112,13 @@ export class TransferService {
       return savedTx;
     } catch (error) {
       // Rollback balances on failure
-      await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.sourceAccountId, params.amount);
-      await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.destinationAccountId, -params.amount);
+      if (txContext) {
+        await txContext.getAccountRepo().updateBalance(params.sourceAccountId, params.amount);
+        await txContext.getAccountRepo().updateBalance(params.destinationAccountId, -params.amount);
+      } else {
+        await this.accountRepo.updateBalanceForCompany(params.companyId, params.sourceAccountId, params.amount);
+        await this.accountRepo.updateBalanceForCompany(params.companyId, params.destinationAccountId, -params.amount);
+      }
       throw error;
     }
   }

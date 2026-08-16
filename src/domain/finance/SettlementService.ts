@@ -5,7 +5,7 @@ import {
   FinancialTransactionRepository,
   FinancialAccountRepository,
 } from '../../persistence/repositories/localRepositories';
-import { AccountReceivable, AccountPayable, FinancialTransaction } from '../../types/entities';
+import { AccountReceivable, AccountPayable, FinancialTransaction, FinancialAccount } from '../../types/entities';
 import { ObligationStatus, TransactionType, AuditAction } from '../../types/enums';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
@@ -43,13 +43,25 @@ export class SettlementService {
 
     await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate);
 
-    const receivable = await (txContext ? txContext.getReceivableRepo() : this.receivableRepo).findById(params.obligationId);
+    let receivable: AccountReceivable | null;
+    if (txContext) {
+      receivable = await txContext.getReceivableRepo().findById(params.obligationId);
+    } else {
+      receivable = await this.receivableRepo.findByIdForCompany(params.obligationId, params.companyId);
+    }
+
     if (!receivable) throw new Error('Conta a Receber não encontrada');
     if (!receivable.companyId || receivable.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta a Receber pertence a outra empresa ou tenant inválido');
     }
 
-    const account = await (txContext ? txContext.getAccountRepo() : this.accountRepo).findById(params.financialAccountId);
+    let account: FinancialAccount | null;
+    if (txContext) {
+      account = await txContext.getAccountRepo().findById(params.financialAccountId);
+    } else {
+      account = await this.accountRepo.findByIdForCompany(params.financialAccountId, params.companyId);
+    }
+
     if (!account) throw new Error('Conta financeira não encontrada');
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
@@ -85,7 +97,8 @@ export class SettlementService {
 
     const previousState = { ...receivable };
 
-    const updatedReceivable = await (txContext ? txContext.getReceivableRepo() : this.receivableRepo).update(receivable.id, {
+    let updatedReceivable: AccountReceivable;
+    const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
       discountAmount: newDiscountAmount,
@@ -93,7 +106,13 @@ export class SettlementService {
       paidAmount: effectivePaid,
       balanceAmount,
       status: newStatus,
-    });
+    };
+
+    if (txContext) {
+      updatedReceivable = await txContext.getReceivableRepo().update(receivable.id, updateData);
+    } else {
+      updatedReceivable = await this.receivableRepo.updateForCompany(receivable.id, params.companyId, updateData);
+    }
 
     try {
       const transaction: FinancialTransaction = {
@@ -115,8 +134,14 @@ export class SettlementService {
         updatedAt: new Date().toISOString(),
       };
 
-      const savedTransaction = await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).create(transaction);
-      await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.financialAccountId, params.paymentAmount);
+      let savedTransaction: FinancialTransaction;
+      if (txContext) {
+        savedTransaction = await txContext.getTransactionRepo().create(transaction);
+        await txContext.getAccountRepo().updateBalance(params.financialAccountId, params.paymentAmount);
+      } else {
+        savedTransaction = await this.transactionRepo.createForCompany(params.companyId, transaction);
+        await this.accountRepo.updateBalanceForCompany(params.companyId, params.financialAccountId, params.paymentAmount);
+      }
 
       await AuditLogger.logAction(
         params.companyId,
@@ -131,7 +156,11 @@ export class SettlementService {
 
       return { receivable: updatedReceivable, transaction: savedTransaction };
     } catch (error) {
-      await (txContext ? txContext.getReceivableRepo() : this.receivableRepo).update(receivable.id, previousState);
+      if (txContext) {
+        await txContext.getReceivableRepo().update(receivable.id, previousState);
+      } else {
+        await this.receivableRepo.updateForCompany(receivable.id, params.companyId, previousState);
+      }
       throw error;
     }
   }
@@ -144,13 +173,25 @@ export class SettlementService {
 
     await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate);
 
-    const payable = await (txContext ? txContext.getPayableRepo() : this.payableRepo).findById(params.obligationId);
+    let payable: AccountPayable | null;
+    if (txContext) {
+      payable = await txContext.getPayableRepo().findById(params.obligationId);
+    } else {
+      payable = await this.payableRepo.findByIdForCompany(params.obligationId, params.companyId);
+    }
+
     if (!payable) throw new Error('Conta a Pagar não encontrada');
     if (!payable.companyId || payable.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta a Pagar pertence a outra empresa ou tenant inválido');
     }
 
-    const account = await (txContext ? txContext.getAccountRepo() : this.accountRepo).findById(params.financialAccountId);
+    let account: FinancialAccount | null;
+    if (txContext) {
+      account = await txContext.getAccountRepo().findById(params.financialAccountId);
+    } else {
+      account = await this.accountRepo.findByIdForCompany(params.financialAccountId, params.companyId);
+    }
+
     if (!account) throw new Error('Conta financeira não encontrada');
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
@@ -186,7 +227,8 @@ export class SettlementService {
 
     const previousState = { ...payable };
 
-    const updatedPayable = await (txContext ? txContext.getPayableRepo() : this.payableRepo).update(payable.id, {
+    let updatedPayable: AccountPayable;
+    const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
       discountAmount: newDiscountAmount,
@@ -194,7 +236,13 @@ export class SettlementService {
       paidAmount: effectivePaid,
       balanceAmount,
       status: newStatus,
-    });
+    };
+
+    if (txContext) {
+      updatedPayable = await txContext.getPayableRepo().update(payable.id, updateData);
+    } else {
+      updatedPayable = await this.payableRepo.updateForCompany(payable.id, params.companyId, updateData);
+    }
 
     try {
       const transaction: FinancialTransaction = {
@@ -217,8 +265,14 @@ export class SettlementService {
         updatedAt: new Date().toISOString(),
       };
 
-      const savedTransaction = await (txContext ? txContext.getTransactionRepo() : this.transactionRepo).create(transaction);
-      await (txContext ? txContext.getAccountRepo() : this.accountRepo).updateBalance(params.financialAccountId, -params.paymentAmount);
+      let savedTransaction: FinancialTransaction;
+      if (txContext) {
+        savedTransaction = await txContext.getTransactionRepo().create(transaction);
+        await txContext.getAccountRepo().updateBalance(params.financialAccountId, -params.paymentAmount);
+      } else {
+        savedTransaction = await this.transactionRepo.createForCompany(params.companyId, transaction);
+        await this.accountRepo.updateBalanceForCompany(params.companyId, params.financialAccountId, -params.paymentAmount);
+      }
 
       await AuditLogger.logAction(
         params.companyId,
@@ -233,7 +287,11 @@ export class SettlementService {
 
       return { payable: updatedPayable, transaction: savedTransaction };
     } catch (error) {
-      await (txContext ? txContext.getPayableRepo() : this.payableRepo).update(payable.id, previousState);
+      if (txContext) {
+        await txContext.getPayableRepo().update(payable.id, previousState);
+      } else {
+        await this.payableRepo.updateForCompany(payable.id, params.companyId, previousState);
+      }
       throw error;
     }
   }

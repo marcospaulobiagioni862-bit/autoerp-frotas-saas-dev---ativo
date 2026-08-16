@@ -67,10 +67,10 @@ export class PayableService {
 
       const savedItem = await IdempotencyService.executeWithLock(idempotencyKey, async () => {
         // Check Idempotency
-        let existing = await this.repo.findByIdempotencyKey(idempotencyKey);
+        let existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, idempotencyKey);
         if (!existing) {
-          const legacyItem = await this.repo.findByIdempotencyKey(legacyKey);
-          if (legacyItem && legacyItem.companyId === params.companyId) {
+          const legacyItem = await this.repo.findByIdempotencyKeyForCompany(params.companyId, legacyKey);
+          if (legacyItem) {
             existing = legacyItem;
           }
         }
@@ -107,7 +107,7 @@ export class PayableService {
           updatedAt: new Date().toISOString(),
         };
 
-        const saved = await this.repo.create(item);
+        const saved = await this.repo.createForCompany(params.companyId, item);
 
         await AuditLogger.logAction(
           params.companyId,
@@ -129,12 +129,12 @@ export class PayableService {
     return createdList;
   }
 
-  public static async getById(id: string): Promise<AccountPayable | null> {
-    return this.repo.findById(id);
+  public static async getById(companyId: string, id: string): Promise<AccountPayable | null> {
+    return this.repo.findByIdForCompany(id, companyId);
   }
 
-  public static async getAll(): Promise<AccountPayable[]> {
-    return this.repo.findAll();
+  public static async getAll(companyId: string): Promise<AccountPayable[]> {
+    return this.repo.findAllForCompany(companyId);
   }
 
   public static async cancelPayable(
@@ -146,7 +146,7 @@ export class PayableService {
   ): Promise<AccountPayable> {
     await FinancialAuthorizationService.authorize(userId, companyId, 'PAYABLE_CANCEL');
 
-    const payable = await this.repo.findById(payableId);
+    const payable = await this.repo.findByIdForCompany(payableId, companyId);
     if (!payable) {
       throw new Error('Conta a Pagar não encontrada');
     }
@@ -161,7 +161,7 @@ export class PayableService {
 
     const previousState = { ...payable };
 
-    const updatedPayable = await this.repo.update(payableId, {
+    const updatedPayable = await this.repo.updateForCompany(payableId, companyId, {
       status: ObligationStatus.CANCELLED,
       updatedAt: new Date().toISOString(),
     });

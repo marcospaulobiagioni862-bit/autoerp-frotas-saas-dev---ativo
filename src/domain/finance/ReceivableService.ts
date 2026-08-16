@@ -65,10 +65,10 @@ export class ReceivableService {
 
       const savedItem = await IdempotencyService.executeWithLock(idempotencyKey, async () => {
         // Check Idempotency
-        let existing = await this.repo.findByIdempotencyKey(idempotencyKey);
+        let existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, idempotencyKey);
         if (!existing) {
-          const legacyItem = await this.repo.findByIdempotencyKey(legacyKey);
-          if (legacyItem && legacyItem.companyId === params.companyId) {
+          const legacyItem = await this.repo.findByIdempotencyKeyForCompany(params.companyId, legacyKey);
+          if (legacyItem) {
             existing = legacyItem;
           }
         }
@@ -104,7 +104,7 @@ export class ReceivableService {
           updatedAt: new Date().toISOString(),
         };
 
-        const saved = await this.repo.create(item);
+        const saved = await this.repo.createForCompany(params.companyId, item);
 
         await AuditLogger.logAction(
           params.companyId,
@@ -126,12 +126,12 @@ export class ReceivableService {
     return createdList;
   }
 
-  public static async getById(id: string): Promise<AccountReceivable | null> {
-    return this.repo.findById(id);
+  public static async getById(companyId: string, id: string): Promise<AccountReceivable | null> {
+    return this.repo.findByIdForCompany(id, companyId);
   }
 
-  public static async getAll(): Promise<AccountReceivable[]> {
-    return this.repo.findAll();
+  public static async getAll(companyId: string): Promise<AccountReceivable[]> {
+    return this.repo.findAllForCompany(companyId);
   }
 
   public static async cancelReceivable(
@@ -143,7 +143,7 @@ export class ReceivableService {
   ): Promise<AccountReceivable> {
     await FinancialAuthorizationService.authorize(userId, companyId, 'RECEIVABLE_CANCEL');
 
-    const receivable = await this.repo.findById(receivableId);
+    const receivable = await this.repo.findByIdForCompany(receivableId, companyId);
     if (!receivable) {
       throw new Error('Conta a Receber não encontrada');
     }
@@ -158,7 +158,7 @@ export class ReceivableService {
 
     const previousState = { ...receivable };
 
-    const updatedReceivable = await this.repo.update(receivableId, {
+    const updatedReceivable = await this.repo.updateForCompany(receivableId, companyId, {
       status: ObligationStatus.CANCELLED,
       updatedAt: new Date().toISOString(),
     });

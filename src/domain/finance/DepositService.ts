@@ -29,10 +29,10 @@ export class DepositService {
     userId: string,
     userName: string
   ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
-    let deposit = await this.depositRepo.findByContractId(contractId);
+    let deposit = await this.depositRepo.findByContractIdForCompany(companyId, contractId);
 
     if (!deposit) {
-      deposit = await this.depositRepo.create({
+      deposit = await this.depositRepo.createForCompany(companyId, {
         id: generateUUID(),
         companyId,
         contractId,
@@ -49,6 +49,12 @@ export class DepositService {
     }
 
     const previousState = { ...deposit };
+
+    // Validate account belongs to company
+    const account = await this.accountRepo.findByIdForCompany(financialAccountId, companyId);
+    if (!account) {
+      throw new Error('Conta financeira não encontrada ou pertence a outra empresa');
+    }
 
     // Register financial receipt transaction
     const tx: FinancialTransaction = {
@@ -69,19 +75,19 @@ export class DepositService {
       updatedAt: new Date().toISOString(),
     };
 
-    const savedTx = await this.transactionRepo.create(tx);
-    await this.accountRepo.updateBalance(financialAccountId, amount);
+    const savedTx = await this.transactionRepo.createForCompany(companyId, tx);
+    await this.accountRepo.updateBalanceForCompany(companyId, financialAccountId, amount);
 
     const newReceived = roundCurrency(deposit.receivedAmount + amount);
     const newStatus = newReceived >= deposit.originalAmount ? SecurityDepositStatus.RECEIVED : SecurityDepositStatus.PENDING;
 
-    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+    const updatedDeposit = await this.depositRepo.updateForCompany(deposit.id, companyId, {
       receivedAmount: newReceived,
       status: newStatus,
       receivedAt: new Date().toISOString(),
     });
 
-    const movement = await this.depositMovementRepo.create({
+    const movement = await this.depositMovementRepo.createForCompany(companyId, {
       id: generateUUID(),
       securityDepositId: deposit.id,
       companyId,
@@ -118,8 +124,14 @@ export class DepositService {
     userId: string,
     userName: string
   ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
-    const deposit = await this.depositRepo.findById(depositId);
+    const deposit = await this.depositRepo.findByIdForCompany(depositId, companyId);
     if (!deposit) throw new Error('Caução não encontrada');
+
+    // Validate account belongs to company
+    const account = await this.accountRepo.findByIdForCompany(financialAccountId, companyId);
+    if (!account) {
+      throw new Error('Conta financeira não encontrada ou pertence a outra empresa');
+    }
 
     const availableToReturn = deposit.receivedAmount - deposit.usedAmount - deposit.returnedAmount;
     if (returnAmount > availableToReturn) {
@@ -147,22 +159,22 @@ export class DepositService {
       updatedAt: new Date().toISOString(),
     };
 
-    const savedTx = await this.transactionRepo.create(tx);
-    await this.accountRepo.updateBalance(financialAccountId, -returnAmount);
+    const savedTx = await this.transactionRepo.createForCompany(companyId, tx);
+    await this.accountRepo.updateBalanceForCompany(companyId, financialAccountId, -returnAmount);
 
     const newReturned = roundCurrency(deposit.returnedAmount + returnAmount);
     const newStatus = (newReturned + deposit.usedAmount) >= deposit.receivedAmount 
       ? SecurityDepositStatus.RETURNED 
       : SecurityDepositStatus.PARTIALLY_USED;
 
-    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+    const updatedDeposit = await this.depositRepo.updateForCompany(deposit.id, companyId, {
       returnedAmount: newReturned,
       status: newStatus,
       returnedAt: new Date().toISOString(),
       notes,
     });
 
-    const movement = await this.depositMovementRepo.create({
+    const movement = await this.depositMovementRepo.createForCompany(companyId, {
       id: generateUUID(),
       securityDepositId: deposit.id,
       companyId,
@@ -198,7 +210,7 @@ export class DepositService {
     userId: string,
     userName: string
   ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
-    const deposit = await this.depositRepo.findById(depositId);
+    const deposit = await this.depositRepo.findByIdForCompany(depositId, companyId);
     if (!deposit) throw new Error('Caução não encontrada');
 
     const availableToUse = deposit.receivedAmount - deposit.usedAmount - deposit.returnedAmount;
@@ -212,13 +224,13 @@ export class DepositService {
     const isFullyUsed = (newUsed + deposit.returnedAmount) >= deposit.receivedAmount;
     const newStatus = isFullyUsed ? SecurityDepositStatus.USED : SecurityDepositStatus.PARTIALLY_USED;
 
-    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+    const updatedDeposit = await this.depositRepo.updateForCompany(deposit.id, companyId, {
       usedAmount: newUsed,
       status: newStatus,
       notes: notes ? `${deposit.notes || ''} | ${notes}` : deposit.notes,
     });
 
-    const movement = await this.depositMovementRepo.create({
+    const movement = await this.depositMovementRepo.createForCompany(companyId, {
       id: generateUUID(),
       securityDepositId: deposit.id,
       companyId,
@@ -233,18 +245,20 @@ export class DepositService {
 
     // Settle associated receivable via compensation without creating duplicate bank cash movement
     if (receivableId) {
-      const receivable = await this.recRepo.findById(receivableId);
-      if (receivable && receivable.companyId === companyId) {
-        const effectivePaid = roundCurrency(receivable.paidAmount + compensationAmount);
-        const balanceAmount = roundCurrency(Math.max(0, receivable.updatedAmount - effectivePaid));
-        const recStatus = balanceAmount <= 0.01 ? ObligationStatus.PAID : ObligationStatus.PARTIALLY_PAID;
-        await this.recRepo.update(receivable.id, {
-          paidAmount: effectivePaid,
-          balanceAmount,
-          status: recStatus,
-          updatedAt: new Date().toISOString(),
-        });
+      const receivable = await this.recRepo.findByIdForCompany(receivableId, companyId);
+      if (!receivable) {
+        throw new Error('Conta a receber não encontrada ou pertence a outra empresa');
       }
+      
+      const effectivePaid = roundCurrency(receivable.paidAmount + compensationAmount);
+      const balanceAmount = roundCurrency(Math.max(0, receivable.updatedAmount - effectivePaid));
+      const recStatus = balanceAmount <= 0.01 ? ObligationStatus.PAID : ObligationStatus.PARTIALLY_PAID;
+      await this.recRepo.updateForCompany(receivable.id, companyId, {
+        paidAmount: effectivePaid,
+        balanceAmount,
+        status: recStatus,
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     await AuditLogger.logAction(

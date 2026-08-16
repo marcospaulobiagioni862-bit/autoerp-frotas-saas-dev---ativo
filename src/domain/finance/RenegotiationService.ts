@@ -40,11 +40,32 @@ export class RenegotiationService {
     const remainderCents = totalCents - (baseCentsPerInstallment * params.installmentsCount);
 
     if (params.type === 'RECEIVABLE') {
-      // 1. Mark original receivables as CANCELLED (Renegotiated)
+      // 1. Pre-validate all original receivables to ensure atomicity locally
       for (const id of params.obligationIds) {
-        const item = await (txContext ? txContext.getReceivableRepo() : this.recRepo).findById(id);
-        if (item) {
-          await (txContext ? txContext.getReceivableRepo() : this.recRepo).update(id, {
+        if (txContext) {
+          const item = await txContext.getReceivableRepo().findById(id);
+          if (!item) {
+            throw new Error(`Título a receber ${id} não encontrado ou pertence a outra empresa.`);
+          }
+        } else {
+          const item = await this.recRepo.findByIdForCompany(id, params.companyId);
+          if (!item) {
+            throw new Error(`Título a receber ${id} não encontrado ou pertence a outra empresa.`);
+          }
+        }
+      }
+
+      // 2. Mark original receivables as CANCELLED (Renegotiated)
+      for (const id of params.obligationIds) {
+        if (txContext) {
+          await txContext.getReceivableRepo().update(id, {
+            status: ObligationStatus.CANCELLED,
+            cancelledAt: new Date().toISOString(),
+            cancelReason: `Renegociado através do lote ${renegotiationId}`,
+            renegotiationId,
+          });
+        } else {
+          await this.recRepo.updateForCompany(id, params.companyId, {
             status: ObligationStatus.CANCELLED,
             cancelledAt: new Date().toISOString(),
             cancelReason: `Renegociado através do lote ${renegotiationId}`,
@@ -53,7 +74,7 @@ export class RenegotiationService {
         }
       }
 
-      // 2. Create new consolidated receivables with exact centavos
+      // 3. Create new consolidated receivables with exact centavos
       const createdList = [];
 
       for (let i = 1; i <= params.installmentsCount; i++) {
@@ -66,7 +87,7 @@ export class RenegotiationService {
         if (i > 1) dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
         const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
 
-        const item = await (txContext ? txContext.getReceivableRepo() : this.recRepo).create({
+        const createPayload = {
           id: generateUUID(),
           companyId: params.companyId,
           originType: OriginType.RENEGOTIATION,
@@ -89,7 +110,14 @@ export class RenegotiationService {
           idempotencyKey,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        let item;
+        if (txContext) {
+          item = await txContext.getReceivableRepo().create(createPayload);
+        } else {
+          item = await this.recRepo.createForCompany(params.companyId, createPayload);
+        }
 
         createdList.push(item);
       }
@@ -109,10 +137,32 @@ export class RenegotiationService {
       return createdList;
     } else {
       // PAYABLE
+      // 1. Pre-validate all original payables to ensure atomicity locally
       for (const id of params.obligationIds) {
-        const item = await (txContext ? txContext.getPayableRepo() : this.payRepo).findById(id);
-        if (item) {
-          await (txContext ? txContext.getPayableRepo() : this.payRepo).update(id, {
+        if (txContext) {
+          const item = await txContext.getPayableRepo().findById(id);
+          if (!item) {
+            throw new Error(`Título a pagar ${id} não encontrado ou pertence a outra empresa.`);
+          }
+        } else {
+          const item = await this.payRepo.findByIdForCompany(id, params.companyId);
+          if (!item) {
+            throw new Error(`Título a pagar ${id} não encontrado ou pertence a outra empresa.`);
+          }
+        }
+      }
+
+      // 2. Mark original payables as CANCELLED (Renegotiated)
+      for (const id of params.obligationIds) {
+        if (txContext) {
+          await txContext.getPayableRepo().update(id, {
+            status: ObligationStatus.CANCELLED,
+            cancelledAt: new Date().toISOString(),
+            cancelReason: `Renegociado através do lote ${renegotiationId}`,
+            renegotiationId,
+          });
+        } else {
+          await this.payRepo.updateForCompany(id, params.companyId, {
             status: ObligationStatus.CANCELLED,
             cancelledAt: new Date().toISOString(),
             cancelReason: `Renegociado através do lote ${renegotiationId}`,
@@ -121,6 +171,7 @@ export class RenegotiationService {
         }
       }
 
+      // 3. Create new consolidated payables with exact centavos
       const createdList = [];
 
       for (let i = 1; i <= params.installmentsCount; i++) {
@@ -133,7 +184,7 @@ export class RenegotiationService {
         if (i > 1) dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
         const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
 
-        const item = await (txContext ? txContext.getPayableRepo() : this.payRepo).create({
+        const createPayload = {
           id: generateUUID(),
           companyId: params.companyId,
           originType: OriginType.RENEGOTIATION,
@@ -156,7 +207,14 @@ export class RenegotiationService {
           idempotencyKey,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        let item;
+        if (txContext) {
+          item = await txContext.getPayableRepo().create(createPayload);
+        } else {
+          item = await this.payRepo.createForCompany(params.companyId, createPayload);
+        }
 
         createdList.push(item);
       }
