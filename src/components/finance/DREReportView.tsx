@@ -20,38 +20,59 @@ export const DREReportView: React.FC = () => {
   const { user } = useAuth();
 
   useEffect(() => {
-    loadReports();
-  }, [regime, startDate, endDate, selectedVehicleId, user?.companyId]);
+    let isActive = true;
 
-  const loadReports = async () => {
-    setLoading(true);
-    if (!user?.companyId) {
-      setLoading(false);
-      return;
-    }
-    const companyId = user.companyId;
-
-    try {
-      const dre = await FinanceEngine.getDREReport(companyId, startDate, endDate, regime);
-      setDreReport(dre);
-
-      const vehRepo = new VehicleRepository();
-      const vehList = await vehRepo.findAllForCompany(companyId);
-      setVehicles(vehList);
-
-      if (vehList.length > 0) {
-        const vId = selectedVehicleId || vehList[0].id;
-        if (!selectedVehicleId) setSelectedVehicleId(vId);
-
-        const vProfit = await FinanceEngine.getVehicleProfitability(companyId, vId, startDate, endDate, regime);
-        setVehicleProfit(vProfit);
+    const loadReports = async () => {
+      if (!user?.companyId) {
+        setDreReport(null);
+        setVehicles([]);
+        setVehicleProfit(null);
+        setSelectedVehicleId('');
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error('Erro ao gerar DRE/Rentabilidade:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      
+      setLoading(true);
+      const companyId = user.companyId;
+      try {
+        const dre = await FinanceEngine.getDREReport(companyId, startDate, endDate, regime);
+        const vehRepo = new VehicleRepository();
+        const vehList = await vehRepo.findAllForCompany(companyId);
+        
+        let vProfit = null;
+        let finalSelectedVehicleId = selectedVehicleId;
+
+        if (vehList.length > 0) {
+          const vId = selectedVehicleId || vehList[0].id;
+          finalSelectedVehicleId = vId;
+          vProfit = await FinanceEngine.getVehicleProfitability(companyId, vId, startDate, endDate, regime);
+        }
+
+        if (isActive) {
+          setDreReport(dre);
+          setVehicles(vehList);
+          if (finalSelectedVehicleId !== selectedVehicleId) {
+            setSelectedVehicleId(finalSelectedVehicleId);
+          }
+          setVehicleProfit(vProfit);
+        }
+      } catch (err) {
+        if (isActive) {
+          console.error('Erro ao gerar DRE/Rentabilidade:', err);
+        }
+      } finally {
+        if (isActive) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadReports();
+
+    return () => {
+      isActive = false;
+    };
+  }, [regime, startDate, endDate, selectedVehicleId, user?.companyId]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
