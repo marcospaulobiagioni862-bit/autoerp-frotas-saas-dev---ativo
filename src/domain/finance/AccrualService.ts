@@ -22,12 +22,12 @@ export class AccrualService {
     periodStart: string,
     periodEnd: string
   ): Promise<AccrualSummary> {
-    const receivables = await this.recRepo.findAll();
-    const payables = await this.payRepo.findAll();
+    const receivables = await this.recRepo.findAllForCompany(companyId);
+    const payables = await this.payRepo.findAllForCompany(companyId);
 
     const periodRec = receivables.filter(
       (r) =>
-        r.companyId === companyId &&
+        
         r.status !== ObligationStatus.CANCELLED &&
         r.competenceDate >= periodStart &&
         r.competenceDate <= periodEnd
@@ -35,7 +35,7 @@ export class AccrualService {
 
     const periodPay = payables.filter(
       (p) =>
-        p.companyId === companyId &&
+        
         p.status !== ObligationStatus.CANCELLED &&
         p.competenceDate >= periodStart &&
         p.competenceDate <= periodEnd

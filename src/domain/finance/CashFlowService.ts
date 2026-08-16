@@ -19,17 +19,17 @@ export class CashFlowService {
     periodStart: string,
     periodEnd: string
   ): Promise<CashFlowReport> {
-    const allAccounts = await this.accountRepo.findAll();
+    const allAccounts = await this.accountRepo.findAllForCompany(companyId);
     const accounts = allAccounts.filter((a) => a.companyId === companyId);
     const currentCashBalance = accounts.reduce((acc, a) => acc + a.currentBalance, 0);
 
-    const allTx = await this.txRepo.findAll();
+    const allTx = await this.txRepo.findAllForCompany(companyId);
     const periodTx = allTx.filter(
-      (t) => t.companyId === companyId && t.transactionDate >= periodStart && t.transactionDate <= periodEnd && !t.isReversed
+      (t) =>  t.transactionDate >= periodStart && t.transactionDate <= periodEnd && !t.isReversed
     );
 
     const afterPeriodTx = allTx.filter(
-      (t) => t.companyId === companyId && t.transactionDate > periodEnd && !t.isReversed
+      (t) =>  t.transactionDate > periodEnd && !t.isReversed
     );
 
     let totalRealizedIncomes = 0;
@@ -76,10 +76,10 @@ export class CashFlowService {
     }
 
     // Add predictions from pending receivables/payables
-    const pendingRec = await this.recRepo.findAll();
+    const pendingRec = await this.recRepo.findAllForCompany(companyId);
     for (const r of pendingRec) {
       if (
-        r.companyId === companyId &&
+        
         r.status !== ObligationStatus.PAID &&
         r.status !== ObligationStatus.CANCELLED &&
         r.dueDate >= periodStart &&
@@ -104,10 +104,10 @@ export class CashFlowService {
       }
     }
 
-    const pendingPay = await this.payRepo.findAll();
+    const pendingPay = await this.payRepo.findAllForCompany(companyId);
     for (const p of pendingPay) {
       if (
-        p.companyId === companyId &&
+        
         p.status !== ObligationStatus.PAID &&
         p.status !== ObligationStatus.CANCELLED &&
         p.dueDate >= periodStart &&

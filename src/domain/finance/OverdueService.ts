@@ -60,7 +60,7 @@ export class OverdueService {
     await FinancialAuthorizationService.authorize(userId, companyId, 'RECEIPT_REGISTER');
 
     // 2. Fetch all receivables for the company
-    const allReceivables = await this.receivableRepo.findAll();
+    const allReceivables = await this.receivableRepo.findAllForCompany(companyId);
     const companyReceivables = allReceivables.filter((r) => r.companyId === companyId);
 
     const updatedReceivables: AccountReceivable[] = [];
@@ -110,7 +110,7 @@ export class OverdueService {
         const updatedAmount = roundCurrency(r.originalAmount + fineAmount + interestAmount - r.discountAmount);
         const balanceAmount = roundCurrency(Math.max(0, updatedAmount - r.paidAmount));
 
-        const updated = await this.receivableRepo.update(r.id, {
+        const updated = await this.receivableRepo.updateForCompany(r.id, companyId, {
           status: newStatus,
           fineAmount,
           interestAmount,
@@ -137,7 +137,7 @@ export class OverdueService {
     // 1. RBAC check using PAYMENT_REGISTER permission
     await FinancialAuthorizationService.authorize(userId, companyId, 'PAYMENT_REGISTER');
 
-    const allPayables = await this.payableRepo.findAll();
+    const allPayables = await this.payableRepo.findAllForCompany(companyId);
     const companyPayables = allPayables.filter((p) => p.companyId === companyId);
 
     const updatedPayables: AccountPayable[] = [];
@@ -183,7 +183,7 @@ export class OverdueService {
         const updatedAmount = roundCurrency(p.originalAmount + fineAmount + interestAmount - p.discountAmount);
         const balanceAmount = roundCurrency(Math.max(0, updatedAmount - p.paidAmount));
 
-        const updated = await this.payableRepo.update(p.id, {
+        const updated = await this.payableRepo.updateForCompany(p.id, companyId, {
           status: newStatus,
           fineAmount,
           interestAmount,
@@ -202,7 +202,7 @@ export class OverdueService {
     companyId: string,
     processingDate: string
   ): Promise<DelinquentReceivable[]> {
-    const allReceivables = await this.receivableRepo.findAll();
+    const allReceivables = await this.receivableRepo.findAllForCompany(companyId);
     const companyReceivables = allReceivables.filter((r) => r.companyId === companyId);
 
     const delinquentList: DelinquentReceivable[] = [];
@@ -257,9 +257,9 @@ export class OverdueService {
     let u90_plus = 0;
 
     if (type === 'RECEIVABLE') {
-      const allReceivables = await this.receivableRepo.findAll();
+      const allReceivables = await this.receivableRepo.findAllForCompany(companyId);
       const companyReceivables = allReceivables.filter(
-        (r) => r.companyId === companyId && r.status !== ObligationStatus.CANCELLED && r.status !== ObligationStatus.PAID && r.balanceAmount > 0
+        (r) =>  r.status !== ObligationStatus.CANCELLED && r.status !== ObligationStatus.PAID && r.balanceAmount > 0
       );
 
       for (const r of companyReceivables) {
@@ -281,9 +281,9 @@ export class OverdueService {
         }
       }
     } else {
-      const allPayables = await this.payableRepo.findAll();
+      const allPayables = await this.payableRepo.findAllForCompany(companyId);
       const companyPayables = allPayables.filter(
-        (p) => p.companyId === companyId && p.status !== ObligationStatus.CANCELLED && p.status !== ObligationStatus.PAID && p.balanceAmount > 0
+        (p) =>  p.status !== ObligationStatus.CANCELLED && p.status !== ObligationStatus.PAID && p.balanceAmount > 0
       );
 
       for (const p of companyPayables) {

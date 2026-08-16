@@ -25,8 +25,8 @@ export class DREService {
     let financialResultAmount = 0;
 
     if (regime === AccountingRegime.ACCRUAL) {
-      const recs = await this.recRepo.findAll();
-      const pays = await this.payRepo.findAll();
+      const recs = await this.recRepo.findAllForCompany(companyId);
+      const pays = await this.payRepo.findAllForCompany(companyId);
 
       const isDeposit = (desc?: string, origin?: string) => {
         const text = (desc || '').toLowerCase();
@@ -35,7 +35,7 @@ export class DREService {
 
       const periodRecs = recs.filter(
         (r) =>
-          r.companyId === companyId &&
+          
           r.status !== ObligationStatus.CANCELLED &&
           r.competenceDate >= periodStart &&
           r.competenceDate <= periodEnd &&
@@ -44,7 +44,7 @@ export class DREService {
 
       const periodPays = pays.filter(
         (p) =>
-          p.companyId === companyId &&
+          
           p.status !== ObligationStatus.CANCELLED &&
           p.competenceDate >= periodStart &&
           p.competenceDate <= periodEnd &&
@@ -61,7 +61,7 @@ export class DREService {
       }
     } else {
       // CASH REGIME
-      const txs = await this.txRepo.findAll();
+      const txs = await this.txRepo.findAllForCompany(companyId);
       const isDepositTx = (desc?: string) => {
         const text = (desc || '').toLowerCase();
         return text.includes('caução') || text.includes('caucao');
@@ -69,7 +69,7 @@ export class DREService {
 
       const periodTxs = txs.filter(
         (t) =>
-          t.companyId === companyId &&
+          
           !t.isReversed &&
           t.transactionDate >= periodStart &&
           t.transactionDate <= periodEnd &&

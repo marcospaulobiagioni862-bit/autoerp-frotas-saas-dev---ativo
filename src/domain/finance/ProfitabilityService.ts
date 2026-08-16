@@ -42,9 +42,9 @@ export class ProfitabilityService {
     };
 
     if (regime === AccountingRegime.CASH) {
-      const allTx = await this.txRepo.findByVehicleIdForCompany(vehicleId, companyId);
-      const allPayables = await this.payRepo.findByVehicleIdForCompany(vehicleId, companyId);
-      const allReceivables = await this.recRepo.findByVehicleIdForCompany(vehicleId, companyId);
+      const allTx = await this.txRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const allPayables = await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const allReceivables = await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const payMap = new Map(allPayables.map((p) => [p.id, p]));
       const recMap = new Map(allReceivables.map((r) => [r.id, r]));
@@ -101,8 +101,8 @@ export class ProfitabilityService {
       }
     } else {
       // ACCRUAL REGIME
-      const receivables = await this.recRepo.findByVehicleIdForCompany(vehicleId, companyId);
-      const payables = await this.payRepo.findByVehicleIdForCompany(vehicleId, companyId);
+      const receivables = await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const payables = await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const periodRec = receivables.filter(
         (r) =>
