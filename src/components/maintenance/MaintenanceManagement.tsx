@@ -39,14 +39,16 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   onOpenPaymentModal,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'workOrders' | 'suppliers' | 'parts' | 'oilTires'>('workOrders');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
+
+
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [payables, setPayables] = useState<AccountPayable[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
 
   // Modals state
   const [isNewWoOpen, setIsNewWoOpen] = useState(false);
@@ -78,17 +80,29 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   const [partStock, setPartStock] = useState('10');
 
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+    setWorkOrders([]);
+    setSuppliers([]);
+    setParts([]);
+    setVehicles([]);
+    setPayables([]);
+    setWoVehicleId("");
+    setWoSupplierId("");
+    setWoPartId("");
+    setCompleteWoTarget(null);
+    setExitKmInput('');
+
+    loadData(isMounted);
+
+    return () => {
+      isMounted = false;
+    };
   }, [companyId]);
 
-  const loadData = async () => {
+  const loadData = async (isMounted: boolean = true) => {
+    const currentCompanyId = companyId;
     setIsLoading(true);
     if (!companyId) {
-      setWorkOrders([]);
-      setSuppliers([]);
-      setParts([]);
-      setVehicles([]);
-      setPayables([]);
       setIsLoading(false);
       return;
     }
@@ -101,12 +115,14 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       const payRepo = new AccountPayableRepository();
 
       const [woList, supList, partList, vehList, payList] = await Promise.all([
-        woRepo.findAllForCompany(companyId),
-        supRepo.findAllForCompany(companyId),
-        partRepo.findAllForCompany(companyId),
-        vehRepo.findAllForCompany(companyId),
-        payRepo.findAllForCompany(companyId),
+        woRepo.findAllForCompany(currentCompanyId),
+        supRepo.findAllForCompany(currentCompanyId),
+        partRepo.findAllForCompany(currentCompanyId),
+        vehRepo.findAllForCompany(currentCompanyId),
+        payRepo.findAllForCompany(currentCompanyId),
       ]);
+      
+      if (!isMounted || companyId !== currentCompanyId) return;
 
       setWorkOrders(woList);
       setSuppliers(supList);
@@ -114,11 +130,11 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setVehicles(vehList);
       setPayables(payList);
 
-      if (vehList.length > 0 && !woVehicleId) {
+      if (vehList.length > 0) {
         setWoVehicleId(vehList[0].id);
         setWoEntryKm(vehList[0].currentKm?.toString() || '10000');
       }
-      if (supList.length > 0 && !woSupplierId) {
+      if (supList.length > 0) {
         setWoSupplierId(supList[0].id);
       }
     } catch (err) {
@@ -151,7 +167,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
 
       setIsNewWoOpen(false);
       setWoDescription('');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao criar OS: ' + err.message);
     }
@@ -160,7 +176,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   const handleStartWo = async (id: string) => {
     try {
       await MaintenanceService.startWorkOrder(id, 'user-admin-1', 'Gestor da Frota');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao iniciar OS: ' + err.message);
     }
@@ -180,7 +196,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       });
       setCompleteWoTarget(null);
       setExitKmInput('');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao concluir OS: ' + err.message);
     }
@@ -191,7 +207,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
     if (!reason) return;
     try {
       await MaintenanceService.cancelWorkOrder(id, reason, 'user-admin-1', 'Gestor da Frota');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao cancelar OS: ' + err.message);
     }
@@ -212,7 +228,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setSupName('');
       setSupDoc('');
       setSupPhone('');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao criar fornecedor: ' + err.message);
     }
@@ -236,7 +252,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setPartCode('');
       setPartName('');
       setPartCost('');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert('Erro ao cadastrar peça: ' + err.message);
     }

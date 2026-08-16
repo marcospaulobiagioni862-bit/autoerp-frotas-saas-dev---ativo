@@ -69,10 +69,26 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    loadDashboardData();
+    let isMounted = true;
+    
+    // Clear state immediately on tenant change
+    setReceivables([]);
+    setPayables([]);
+    setAccounts([]);
+    setTransactions([]);
+    setVehicles([]);
+    setDrivers([]);
+    setContracts([]);
+    setPendings([]);
+    
+    loadDashboardData(isMounted);
+    
+    return () => {
+      isMounted = false;
+    };
   }, [user?.companyId]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (isMounted: boolean = true) => {
     setLoading(true);
     if (!user?.companyId) {
       setReceivables([]);
@@ -86,7 +102,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const currentCompanyId = user.companyId;
+
     const recRepo = new AccountReceivableRepository();
     const payRepo = new AccountPayableRepository();
     const accRepo = new FinancialAccountRepository();
@@ -102,20 +119,24 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     const trackRepo = new TrackerRepository();
 
     const [recList, payList, accList, txList, vehList, contractList, maintList, vehDocs, drvDocs, tickets, drvList, insurances, trackers] = await Promise.all([
-      recRepo.findAllForCompany(user.companyId),
-      payRepo.findAllForCompany(user.companyId),
-      accRepo.findAllForCompany(user.companyId),
-      txRepo.findAllForCompany(user.companyId),
-      vehRepo.findAllForCompany(user.companyId),
-      contractRepo.findAllForCompany(user.companyId),
-      maintRepo.findAllForCompany(user.companyId),
-      vehDocRepo.findAllForCompany(user.companyId),
-      drvDocRepo.findAllForCompany(user.companyId),
-      ticketRepo.findAllForCompany(user.companyId),
-      drvRepo.findAllForCompany(user.companyId),
-      insRepo.findAllForCompany(user.companyId),
-      trackRepo.findAllForCompany(user.companyId),
+      recRepo.findAllForCompany(currentCompanyId),
+      payRepo.findAllForCompany(currentCompanyId),
+      accRepo.findAllForCompany(currentCompanyId),
+      txRepo.findAllForCompany(currentCompanyId),
+      vehRepo.findAllForCompany(currentCompanyId),
+      contractRepo.findAllForCompany(currentCompanyId),
+      maintRepo.findAllForCompany(currentCompanyId),
+      vehDocRepo.findAllForCompany(currentCompanyId),
+      drvDocRepo.findAllForCompany(currentCompanyId),
+      ticketRepo.findAllForCompany(currentCompanyId),
+      drvRepo.findAllForCompany(currentCompanyId),
+      insRepo.findAllForCompany(currentCompanyId),
+      trackRepo.findAllForCompany(currentCompanyId),
     ]);
+
+    if (!isMounted || user?.companyId !== currentCompanyId) {
+      return;
+    }
 
     setReceivables(recList);
     setPayables(payList);

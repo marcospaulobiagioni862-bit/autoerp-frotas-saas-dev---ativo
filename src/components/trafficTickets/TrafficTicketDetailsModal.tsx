@@ -56,16 +56,38 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
   const [cancelReason, setCancelReason] = useState<string>('');
 
   useEffect(() => {
-    if (isOpen && ticketId) {
-      loadDetails();
-    }
-  }, [isOpen, ticketId]);
+    let isMounted = true;
+    
+    // Clear state on companyId change or modal open
+    setTicket(null);
+    setVehicle(null);
+    setDriver(null);
+    setContract(null);
+    setReceivable(null);
+    setPayable(null);
+    setAllDrivers([]);
+    setAuditLogs([]);
+    setNewDriverId('');
+    setNewResponsibility(TicketResponsibility.DRIVER);
+    setAppealNotes('');
+    setCancelReason('');
 
-  const loadDetails = async () => {
-    if (!ticketId) return;
+    if (isOpen && ticketId) {
+      loadDetails(isMounted);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, ticketId, companyId]);
+
+  const loadDetails = async (isMounted: boolean = true) => {
+    if (!ticketId || !companyId) return;
     setLoading(true);
     setError(null);
     setSuccessMsg(null);
+
+    const currentCompanyId = companyId;
 
     try {
       const ticketRepo = new TrafficTicketRepository();
@@ -76,47 +98,39 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       const payRepo = new AccountPayableRepository();
       const auditRepo = new AuditLogRepository();
 
-      const t = await ticketRepo.findByIdForCompany(ticketId, companyId);
+      const t = await ticketRepo.findByIdForCompany(ticketId, currentCompanyId);
+      
       if (!t) {
+        if (!isMounted || companyId !== currentCompanyId) return;
         setError('Multa não encontrada.');
         setLoading(false);
         return;
       }
+
+      const [v, d, c, r, p, driversList, logs] = await Promise.all([
+        t.vehicleId ? vehicleRepo.findByIdForCompany(t.vehicleId, currentCompanyId) : Promise.resolve(null),
+        t.driverId ? driverRepo.findByIdForCompany(t.driverId, currentCompanyId) : Promise.resolve(null),
+        t.contractId ? contractRepo.findByIdForCompany(t.contractId, currentCompanyId) : Promise.resolve(null),
+        t.receivableId ? recRepo.findByIdForCompany(t.receivableId, currentCompanyId) : Promise.resolve(null),
+        t.payableId ? payRepo.findByIdForCompany(t.payableId, currentCompanyId) : Promise.resolve(null),
+        driverRepo.findAllForCompany(currentCompanyId),
+        auditRepo.findAllForCompany(currentCompanyId),
+      ]);
+
+      if (!isMounted || companyId !== currentCompanyId) return;
+
       setTicket(t);
       setNewDriverId(t.driverId || '');
       setNewResponsibility(t.responsibility);
+      
+      if (v) setVehicle(v);
+      if (d) setDriver(d);
+      if (c) setContract(c);
+      if (r) setReceivable(r);
+      if (p) setPayable(p);
 
-      if (t.vehicleId) {
-        const v = await vehicleRepo.findByIdForCompany(t.vehicleId, companyId);
-        setVehicle(v);
-      }
-
-      if (t.driverId) {
-        const d = await driverRepo.findByIdForCompany(t.driverId, companyId);
-        setDriver(d);
-      }
-
-      if (t.contractId) {
-        const c = await contractRepo.findByIdForCompany(t.contractId, companyId);
-        setContract(c);
-      }
-
-      if (t.receivableId) {
-        const r = await recRepo.findByIdForCompany(t.receivableId, companyId);
-        setReceivable(r);
-      }
-
-      if (t.payableId) {
-        const p = await payRepo.findByIdForCompany(t.payableId, companyId);
-        setPayable(p);
-      }
-
-      const driversList = await driverRepo.findAllForCompany(companyId);
       setAllDrivers(driversList);
-
-      const logs = await auditRepo.findAllForCompany(companyId);
-      const ticketLogs = logs.filter((l) => l.entityId === ticketId);
-      setAuditLogs(ticketLogs);
+      setAuditLogs(logs.filter((l) => l.entityId === ticketId));
     } catch (err: any) {
       setError(err.message || 'Erro ao carregar detalhes da multa.');
     } finally {

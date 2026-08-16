@@ -31,40 +31,60 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
   const [payables, setPayables] = useState<AccountPayable[]>(initialPayables || []);
 
   useEffect(() => {
+    let isMounted = true;
+    
+    // Clear state on tenant switch before loading
+    setVehicles([]);
+    setContracts([]);
+    setReceivables([]);
+    setPayables([]);
+
     async function fetchData() {
       if (!user?.companyId) {
-        setVehicles([]);
-        setContracts([]);
-        setReceivables([]);
-        setPayables([]);
         setLoading(false);
         return;
       }
+      const currentCompanyId = user.companyId;
+
       try {
         const vehRepo = new VehicleRepository();
         const contractRepo = new ContractRepository();
         const recRepo = new AccountReceivableRepository();
         const payRepo = new AccountPayableRepository();
 
+        // Tenant validation for initial data
+        const useInitialVehicles = initialVehicles && initialVehicles.length > 0 && initialVehicles.every(v => v.companyId === currentCompanyId);
+        const useInitialReceivables = initialReceivables && initialReceivables.length > 0 && initialReceivables.every(r => r.companyId === currentCompanyId);
+        const useInitialPayables = initialPayables && initialPayables.length > 0 && initialPayables.every(p => p.companyId === currentCompanyId);
+
         const [vehList, contractList, recList, payList] = await Promise.all([
-          initialVehicles && initialVehicles.length > 0 ? Promise.resolve(initialVehicles) : vehRepo.findAllForCompany(user.companyId),
-          contractRepo.findAllForCompany(user.companyId),
-          initialReceivables && initialReceivables.length > 0 ? Promise.resolve(initialReceivables) : recRepo.findAllForCompany(user.companyId),
-          initialPayables && initialPayables.length > 0 ? Promise.resolve(initialPayables) : payRepo.findAllForCompany(user.companyId),
+          useInitialVehicles ? Promise.resolve(initialVehicles) : vehRepo.findAllForCompany(currentCompanyId),
+          contractRepo.findAllForCompany(currentCompanyId),
+          useInitialReceivables ? Promise.resolve(initialReceivables) : recRepo.findAllForCompany(currentCompanyId),
+          useInitialPayables ? Promise.resolve(initialPayables) : payRepo.findAllForCompany(currentCompanyId),
         ]);
+
+        if (!isMounted || user?.companyId !== currentCompanyId) {
+          return;
+        }
 
         setVehicles(vehList);
         setContracts(contractList);
         setReceivables(recList);
         setPayables(payList);
       } catch (err) {
+        if (!isMounted) return;
         console.error('Failed to load performance metrics data:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [initialVehicles, initialReceivables, initialPayables, user?.companyId]);
 
   if (loading) {

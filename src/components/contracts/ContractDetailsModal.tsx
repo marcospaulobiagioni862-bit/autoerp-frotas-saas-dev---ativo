@@ -79,12 +79,30 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    
+    setContract(null);
+    setVehicle(null);
+    setDriver(null);
+    setSummary(null);
+    setReceivables([]);
+    setDeposit(null);
+    setTickets([]);
+    setHistory([]);
+    setAttachmentEntity(null);
+    setError(null);
+    setSuccessMsg(null);
+
     if (!isOpen || !contractId) return;
 
-    loadDetails();
+    loadDetails(isMounted);
+    return () => {
+      isMounted = false;
+    };
   }, [isOpen, contractId, companyId]);
 
-  const loadDetails = async () => {
+  const loadDetails = async (isMounted: boolean = true) => {
+    const currentCompanyId = companyId;
     if (!contractId) return;
     setLoading(true);
     setError(null);
@@ -99,6 +117,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       const contractService = new ContractService();
 
       const c = await contractRepo.findByIdForCompany(contractId, companyId);
+      if (!isMounted || companyId !== currentCompanyId) return;
       if (!c) {
         setError('Contrato não encontrado');
         setLoading(false);
@@ -116,6 +135,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         ticketRepo.findAllForCompany(companyId),
         contractService.getContractHistory(c.id),
       ]);
+
+      if (!isMounted || companyId !== currentCompanyId) return;
 
       const contractTickets = allTks.filter((t) => t.contractId === c.id);
 
@@ -150,7 +171,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       });
 
       setSuccessMsg('Contrato ativado com sucesso!');
-      await loadDetails();
+      await loadDetails(true);
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao ativar contrato.');
@@ -178,7 +199,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       });
 
       setSuccessMsg('Contrato encerrado e veículo liberado!');
-      await loadDetails();
+      await loadDetails(true);
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao encerrar contrato.');
@@ -201,7 +222,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       await contractService.cancelContract(contract.id, reason, 'usr-admin', 'Administrador');
 
       setSuccessMsg('Contrato cancelado com sucesso.');
-      await loadDetails();
+      await loadDetails(true);
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao cancelar contrato.');
@@ -232,7 +253,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         setSuccessMsg('Cobrança já processada para esta competência.');
       }
 
-      await loadDetails();
+      await loadDetails(true);
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao faturar aluguel.');
@@ -268,7 +289,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       );
 
       setSuccessMsg('Caução recebida e registrada com sucesso!');
-      await loadDetails();
+      await loadDetails(true);
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao receber caução.');

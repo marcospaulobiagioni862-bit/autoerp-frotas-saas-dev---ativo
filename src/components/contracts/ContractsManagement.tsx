@@ -70,17 +70,36 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+    setContracts([]);
+    setVehiclesMap({});
+    setDriversMap({});
+    setReceivablesMap({});
+    setSelectedContractId(null);
+    setSelectedReceivable(null);
+    setContractToEdit(null);
+    setIsFormModalOpen(false);
+    setIsDetailsModalOpen(false);
+    setIsReceiptModalOpen(false);
+    loadData(isMounted);
+    return () => {
+      isMounted = false;
+    };
   }, [companyId]);
 
-  const loadData = async () => {
+  const loadData = async (isMounted: boolean = true) => {
     setLoading(true);
     if (!companyId) {
-      setContracts([]);
+      if (isMounted) {
+        setContracts([]);
+        setVehiclesMap({});
+        setDriversMap({});
+        setReceivablesMap({});
+      }
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const currentCompanyId = companyId;
     try {
       const contractRepo = new ContractRepository();
       const vehicleRepo = new VehicleRepository();
@@ -88,9 +107,9 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       const receivableRepo = new AccountReceivableRepository();
 
       const [allContracts, allVehicles, allDrivers] = await Promise.all([
-        contractRepo.findAllForCompany(companyId),
-        vehicleRepo.findAllForCompany(companyId),
-        driverRepo.findAllForCompany(companyId),
+        contractRepo.findAllForCompany(currentCompanyId),
+        vehicleRepo.findAllForCompany(currentCompanyId),
+        driverRepo.findAllForCompany(currentCompanyId),
       ]);
 
       const vMap: Record<string, Vehicle> = {};
@@ -102,9 +121,11 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       // Mapear recebíveis de cada contrato
       const recMap: Record<string, AccountReceivable[]> = {};
       for (const c of allContracts) {
-        const recs = await receivableRepo.findByContractId(c.id);
+        const recs = await receivableRepo.findByContractIdForCompany(currentCompanyId, c.id);
         recMap[c.id] = recs;
       }
+
+      if (!isMounted || companyId !== currentCompanyId) return;
 
       setContracts(allContracts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setVehiclesMap(vMap);

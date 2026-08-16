@@ -82,24 +82,38 @@ export default function App() {
   const [pendingPendingsCount, setPendingPendingsCount] = useState<number>(0);
 
   useEffect(() => {
-    initApp();
+    let isMounted = true;
+    setPendingReceivablesCount(0);
+    setPendingPayablesCount(0);
+    setPendingPendingsCount(0);
+    const init = async () => {
+      await seedAutoERPTestData(false);
+      if (isMounted) await refreshBadges(isMounted);
+    };
+    init();
+    return () => {
+      isMounted = false;
+    };
   }, [user?.companyId]);
-
   const initApp = async () => {
     // 1. Seed database if empty (non-destructive)
     await seedAutoERPTestData(false);
-
     // 2. Load counts for badges
-    await refreshBadges();
+    if (true) {
+      await refreshBadges();
+    }
   };
 
-  const refreshBadges = async () => {
+  const refreshBadges = async (isMounted: boolean = true) => {
     if (!user?.companyId) {
-      setPendingReceivablesCount(0);
-      setPendingPayablesCount(0);
-      setPendingPendingsCount(0);
+      if (isMounted) {
+        setPendingReceivablesCount(0);
+        setPendingPayablesCount(0);
+        setPendingPendingsCount(0);
+      }
       return;
     }
+    const currentCompanyId = user.companyId;
     const recRepo = new AccountReceivableRepository();
     const payRepo = new AccountPayableRepository();
     const vehRepo = new VehicleRepository();
@@ -113,18 +127,22 @@ export default function App() {
     const trackRepo = new TrackerRepository();
 
     const [recs, pays, vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
-      recRepo.findAllForCompany(user.companyId),
-      payRepo.findAllForCompany(user.companyId),
-      vehRepo.findAllForCompany(user.companyId),
-      contractRepo.findAllForCompany(user.companyId),
-      maintRepo.findAllForCompany(user.companyId),
-      vehDocRepo.findAllForCompany(user.companyId),
-      drvDocRepo.findAllForCompany(user.companyId),
-      ticketRepo.findAllForCompany(user.companyId),
-      drvRepo.findAllForCompany(user.companyId),
-      insRepo.findAllForCompany(user.companyId),
-      trackRepo.findAllForCompany(user.companyId),
+      recRepo.findAllForCompany(currentCompanyId),
+      payRepo.findAllForCompany(currentCompanyId),
+      vehRepo.findAllForCompany(currentCompanyId),
+      contractRepo.findAllForCompany(currentCompanyId),
+      maintRepo.findAllForCompany(currentCompanyId),
+      vehDocRepo.findAllForCompany(currentCompanyId),
+      drvDocRepo.findAllForCompany(currentCompanyId),
+      ticketRepo.findAllForCompany(currentCompanyId),
+      drvRepo.findAllForCompany(currentCompanyId),
+      insRepo.findAllForCompany(currentCompanyId),
+      trackRepo.findAllForCompany(currentCompanyId),
     ]);
+
+    if (!isMounted || user?.companyId !== currentCompanyId) {
+      return;
+    }
 
     const pendingRecs = recs.filter((r) => r.status === ObligationStatus.PENDING || r.status === ObligationStatus.PARTIALLY_PAID);
     const pendingPays = pays.filter((p) => p.status === ObligationStatus.PENDING || p.status === ObligationStatus.PARTIALLY_PAID);
