@@ -21,11 +21,15 @@ export const DREReportView: React.FC = () => {
 
   useEffect(() => {
     loadReports();
-  }, [regime, startDate, endDate, selectedVehicleId]);
+  }, [regime, startDate, endDate, selectedVehicleId, user?.companyId]);
 
   const loadReports = async () => {
     setLoading(true);
-    const companyId = 'company-main-uuid';
+    if (!user?.companyId) {
+      setLoading(false);
+      return;
+    }
+    const companyId = user.companyId;
 
     try {
       const dre = await FinanceEngine.getDREReport(companyId, startDate, endDate, regime);
