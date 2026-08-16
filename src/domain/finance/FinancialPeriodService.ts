@@ -43,8 +43,13 @@ export class FinancialPeriodService {
     // Normalize date to YYYY-MM-DD
     const dateStr = date.split('T')[0];
 
-    const repo = txContext ? txContext.getFinancialPeriodRepo() : this.repo;
-    const periods = await repo.findAll({ companyId });
+    let periods: FinancialPeriod[];
+    if (txContext) {
+      periods = await txContext.getFinancialPeriodRepo().findAll({ companyId });
+    } else {
+      periods = await this.repo.findAllForCompany(companyId);
+    }
+
     const closedPeriod = periods.find(
       (p) =>
         p.companyId === companyId &&
@@ -78,8 +83,13 @@ export class FinancialPeriodService {
       throw new Error('startDate não pode ser posterior a endDate');
     }
 
-    const repo = txContext ? txContext.getFinancialPeriodRepo() : this.repo;
-    const periods = await repo.findAll({ companyId });
+    let periods: FinancialPeriod[];
+    if (txContext) {
+      periods = await txContext.getFinancialPeriodRepo().findAll({ companyId });
+    } else {
+      periods = await this.repo.findAllForCompany(companyId);
+    }
+
     let existing = periods.find(
       (p) => p.companyId === companyId && p.startDate === startDate && p.endDate === endDate
     );
@@ -94,7 +104,13 @@ export class FinancialPeriodService {
       existing.closedAt = now;
       existing.closedBy = userName;
       existing.updatedAt = now;
-      const updated = await repo.update(existing.id, existing);
+
+      let updated: FinancialPeriod;
+      if (txContext) {
+        updated = await txContext.getFinancialPeriodRepo().update(existing.id, existing);
+      } else {
+        updated = await this.repo.updateForCompany(existing.id, companyId, existing);
+      }
 
       await AuditLogger.logAction(
         companyId,
@@ -107,7 +123,6 @@ export class FinancialPeriodService {
         updated,
         txContext
       );
-
       return updated;
     } else {
       const newPeriod: FinancialPeriod = {
@@ -124,7 +139,12 @@ export class FinancialPeriodService {
         updatedAt: now,
       };
 
-      const created = await repo.create(newPeriod);
+      let created: FinancialPeriod;
+      if (txContext) {
+        created = await txContext.getFinancialPeriodRepo().create(newPeriod);
+      } else {
+        created = await this.repo.createForCompany(companyId, newPeriod);
+      }
 
       await AuditLogger.logAction(
         companyId,
@@ -137,7 +157,6 @@ export class FinancialPeriodService {
         created,
         txContext
       );
-
       return created;
     }
   }
@@ -149,26 +168,34 @@ export class FinancialPeriodService {
 
     await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_PERIOD_REOPEN', txContext);
 
-    const repo = txContext ? txContext.getFinancialPeriodRepo() : this.repo;
-    const period = await repo.findById(periodId);
+    let period: FinancialPeriod | null;
+    if (txContext) {
+      period = await txContext.getFinancialPeriodRepo().findById(periodId);
+    } else {
+      period = await this.repo.findByIdForCompany(periodId, companyId);
+    }
+
     if (!period) {
       throw new Error('Período financeiro não encontrado');
     }
-
     if (period.companyId !== companyId) {
       throw new Error('Descompasso de tenant no período financeiro');
     }
 
     const now = new Date().toISOString();
     const previousState = { ...period };
-
     period.status = FinancialPeriodStatus.OPEN;
     period.reopenedAt = now as any;
     period.reopenedBy = userName;
     period.reopenReason = reason;
     period.updatedAt = now;
 
-    const updated = await repo.update(periodId, period);
+    let updated: FinancialPeriod;
+    if (txContext) {
+      updated = await txContext.getFinancialPeriodRepo().update(periodId, period);
+    } else {
+      updated = await this.repo.updateForCompany(periodId, companyId, period);
+    }
 
     await AuditLogger.logAction(
       companyId,
@@ -181,13 +208,14 @@ export class FinancialPeriodService {
       updated,
       txContext
     );
-
     return updated;
   }
 
   public static async getPeriods(companyId: string, txContext?: ITransactionContext): Promise<FinancialPeriod[]> {
     if (!companyId) return [];
-    const repo = txContext ? txContext.getFinancialPeriodRepo() : this.repo;
-    return repo.findAll({ companyId });
+    if (txContext) {
+      return txContext.getFinancialPeriodRepo().findAll({ companyId });
+    }
+    return this.repo.findAllForCompany(companyId);
   }
 }

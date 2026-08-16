@@ -61,12 +61,12 @@ export class BankReconciliationService {
 
     await FinancialAuthorizationService.authorize(userId, companyId, 'BANK_RECONCILIATION_MATCH');
 
-    const account = await this.accountRepo.findById(financialAccountId);
+    const account = await this.accountRepo.findByIdForCompany(financialAccountId, companyId);
     if (!account || account.companyId !== companyId) {
       throw new Error('Conta financeira não encontrada ou de outro tenant');
     }
 
-    const existingEntries = await this.entryRepo.findAll({ companyId });
+    const existingEntries = await this.entryRepo.findAllForCompany(companyId);
     const imported: BankStatementEntry[] = [];
     let skippedDuplicates = 0;
 
@@ -115,7 +115,7 @@ export class BankReconciliationService {
         updatedAt: new Date().toISOString(),
       };
 
-      const created = await this.entryRepo.create(newEntry);
+      const created = await this.entryRepo.createForCompany(companyId, newEntry);
       existingEntries.push(created);
       imported.push(created);
 
@@ -146,7 +146,7 @@ export class BankReconciliationService {
 
     if (!companyId) throw new Error('companyId é obrigatório para conciliação');
 
-    const entry = await this.entryRepo.findById(statementEntryId);
+    const entry = await this.entryRepo.findByIdForCompany(statementEntryId, companyId);
     if (!entry || entry.companyId !== companyId) {
       throw new Error('Entrada de extrato não encontrada ou pertence a outra empresa');
     }
@@ -155,7 +155,7 @@ export class BankReconciliationService {
       throw new Error('Entrada de extrato já está conciliada. Desconcilie primeiro.');
     }
 
-    const tx = await this.txRepo.findById(transactionId);
+    const tx = await this.txRepo.findByIdForCompany(transactionId, companyId);
     if (!tx || tx.companyId !== companyId) {
       throw new Error('Transação financeira não encontrada ou pertence a outra empresa');
     }
@@ -192,7 +192,7 @@ export class BankReconciliationService {
     }
 
     // Prevent duplicate reconciliation of same transaction
-    const allEntries = await this.entryRepo.findAll({ companyId });
+    const allEntries = await this.entryRepo.findAllForCompany(companyId);
     const alreadyMatched = allEntries.some(
       (e) =>
         e.id !== entry.id &&
@@ -213,7 +213,7 @@ export class BankReconciliationService {
     entry.matchedBy = userName;
     entry.updatedAt = now;
 
-    const updated = await this.entryRepo.update(entry.id, entry);
+    const updated = await this.entryRepo.updateForCompany(entry.id, companyId, entry);
 
     await AuditLogger.logAction(
       companyId,
@@ -241,7 +241,7 @@ export class BankReconciliationService {
 
     if (!companyId) throw new Error('companyId é obrigatório para desconciliação');
 
-    const entry = await this.entryRepo.findById(statementEntryId);
+    const entry = await this.entryRepo.findByIdForCompany(statementEntryId, companyId);
     if (!entry || entry.companyId !== companyId) {
       throw new Error('Entrada de extrato não encontrada ou pertence a outra empresa');
     }
@@ -259,7 +259,7 @@ export class BankReconciliationService {
     entry.matchedBy = undefined;
     entry.updatedAt = now;
 
-    const updated = await this.entryRepo.update(entry.id, entry);
+    const updated = await this.entryRepo.updateForCompany(entry.id, companyId, entry);
 
     await AuditLogger.logAction(
       companyId,
@@ -286,7 +286,7 @@ export class BankReconciliationService {
 
     if (!companyId) throw new Error('companyId é obrigatório');
 
-    const entry = await this.entryRepo.findById(statementEntryId);
+    const entry = await this.entryRepo.findByIdForCompany(statementEntryId, companyId);
     if (!entry || entry.companyId !== companyId) {
       throw new Error('Entrada de extrato não encontrada ou pertence a outra empresa');
     }
@@ -297,7 +297,7 @@ export class BankReconciliationService {
     entry.status = StatementEntryStatus.IGNORED;
     entry.updatedAt = now;
 
-    const updated = await this.entryRepo.update(entry.id, entry);
+    const updated = await this.entryRepo.updateForCompany(entry.id, companyId, entry);
 
     await AuditLogger.logAction(
       companyId,
@@ -319,7 +319,7 @@ export class BankReconciliationService {
   ): Promise<MatchSuggestion[]> {
     if (!companyId || !financialAccountId) return [];
 
-    const entries = await this.entryRepo.findAll({ companyId });
+    const entries = await this.entryRepo.findAllForCompany(companyId);
     const unmatchedEntries = entries.filter(
       (e) =>
         e.companyId === companyId &&
@@ -333,7 +333,7 @@ export class BankReconciliationService {
         .map((e) => e.matchedTransactionId!)
     );
 
-    const allTxs = await this.txRepo.findAll({ companyId });
+    const allTxs = await this.txRepo.findAllForCompany(companyId);
     const eligibleTxs = allTxs.filter(
       (tx) =>
         tx.companyId === companyId &&
@@ -407,7 +407,7 @@ export class BankReconciliationService {
     status?: StatementEntryStatus
   ): Promise<BankStatementEntry[]> {
     if (!companyId) return [];
-    const items = await this.entryRepo.findAll({ companyId });
+    const items = await this.entryRepo.findAllForCompany(companyId);
     return items.filter((e) => {
       if (e.companyId !== companyId) return false;
       if (financialAccountId && e.financialAccountId !== financialAccountId) return false;
