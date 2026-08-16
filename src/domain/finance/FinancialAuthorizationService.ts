@@ -98,6 +98,10 @@ export class FinancialAuthorizationService {
     requiredPermission: string,
     txContext?: ITransactionContext
   ): Promise<User> {
+    if (!companyId || typeof companyId !== 'string' || companyId.trim() === '') {
+      throw new Error('Acesso negado: companyId é obrigatório');
+    }
+
     if (!userId) {
       throw new Error('Acesso negado: Usuário não informado');
     }
@@ -116,14 +120,14 @@ export class FinancialAuthorizationService {
       throw new Error(`Acesso negado: Usuário não encontrado (${userId})`);
     }
 
-    if (!user.active) {
-      await this.logDeniedAttempt(userId, companyId, requiredPermission, txContext);
-      throw new Error('Acesso negado: Usuário inativo ou suspenso');
-    }
-
     if (!user.companyId || user.companyId !== companyId) {
       await this.logDeniedAttempt(userId, companyId, requiredPermission, txContext);
       throw new Error('Acesso negado: Tenant incorreto ou descompasso de empresa');
+    }
+
+    if (!user.active) {
+      await this.logDeniedAttempt(userId, companyId, requiredPermission, txContext);
+      throw new Error('Acesso negado: Usuário inativo ou suspenso');
     }
 
     const role = user.role ? String(user.role).toUpperCase() : '';
@@ -144,10 +148,9 @@ export class FinancialAuthorizationService {
     txContext?: ITransactionContext
   ): Promise<void> {
     try {
-      const auditRepo = txContext ? txContext.getAuditLogRepo() : new AuditLogRepository();
-      await auditRepo.create({
+      const auditItem = {
         id: generateUUID(),
-        companyId: companyId || 'unknown-company',
+        companyId: companyId,
         entityName: 'SECURITY',
         entityId: 'AUTHORIZATION_FAILURE',
         action: 'FINANCIAL_PERMISSION_DENIED' as any,
@@ -155,7 +158,15 @@ export class FinancialAuthorizationService {
         userName: userId || 'unknown-user',
         timestamp: new Date().toISOString(),
         newState: JSON.stringify({ operation: requiredPermission }),
-      });
+      };
+
+      if (txContext) {
+        const auditRepo = txContext.getAuditLogRepo();
+        await auditRepo.create(auditItem);
+      } else {
+        const auditRepo = new AuditLogRepository();
+        await auditRepo.createForCompany(companyId, auditItem);
+      }
     } catch {
       // Non-blocking
     }
