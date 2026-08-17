@@ -1,5 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   AccountReceivableRepository,
   AccountPayableRepository,
@@ -58,6 +58,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   onOpenTestRunner,
 }) => {
   const { user } = useAuth();
+  const requestVersionRef = useRef(0);
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
@@ -68,10 +69,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const [pendings, setPendings] = useState<OperationalPendingItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    let isMounted = true;
-    
-    // Clear state immediately on tenant change
+  const dashboardRequestVersionRef = useRef(0);
+  const activeCompanyIdRef = useRef<string | undefined>(user?.companyId);
+  activeCompanyIdRef.current = user?.companyId;
+
+  const clearDashboardState = () => {
     setReceivables([]);
     setPayables([]);
     setAccounts([]);
@@ -80,88 +82,126 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     setDrivers([]);
     setContracts([]);
     setPendings([]);
-    
-    loadDashboardData(isMounted);
-    
+  };
+
+  useEffect(() => {
+    const requestVersion = ++dashboardRequestVersionRef.current;
+    const companyIdSnapshot = user?.companyId;
+
+    clearDashboardState();
+
+    if (!companyIdSnapshot) {
+      setLoading(false);
+
+      return () => {
+        dashboardRequestVersionRef.current += 1;
+      };
+    }
+
+    setLoading(true);
+    void loadDashboardData(companyIdSnapshot, requestVersion);
+
     return () => {
-      isMounted = false;
+      dashboardRequestVersionRef.current += 1;
     };
   }, [user?.companyId]);
 
-  const loadDashboardData = async (isMounted: boolean = true) => {
-    setLoading(true);
-    if (!user?.companyId) {
-      setReceivables([]);
-      setPayables([]);
-      setAccounts([]);
-      setTransactions([]);
-      setVehicles([]);
-      setDrivers([]);
-      setContracts([]);
-      setPendings([]);
-      setLoading(false);
-      return;
+  const loadDashboardData = async (
+    companyIdSnapshot: string,
+    requestVersion: number
+  ) => {
+    try {
+      const recRepo = new AccountReceivableRepository();
+      const payRepo = new AccountPayableRepository();
+      const accountRepo = new FinancialAccountRepository();
+      const transactionRepo = new FinancialTransactionRepository();
+      const vehicleRepo = new VehicleRepository();
+      const driverRepo = new DriverRepository();
+      const contractRepo = new ContractRepository();
+      
+      const maintRepo = new MaintenanceRepository();
+      const vehDocRepo = new VehicleDocumentRepository();
+      const drvDocRepo = new DriverDocumentRepository();
+      const ticketRepo = new TrafficTicketRepository();
+      const insRepo = new InsuranceRepository();
+      const trackRepo = new TrackerRepository();
+
+      const [
+        recs,
+        pays,
+        accs,
+        trans,
+        vehs,
+        drvs,
+        conts,
+        maintenances,
+        vehicleDocuments,
+        driverDocuments,
+        tickets,
+        insurances,
+        trackers,
+      ] = await Promise.all([
+        recRepo.findAllForCompany(companyIdSnapshot),
+        payRepo.findAllForCompany(companyIdSnapshot),
+        accountRepo.findAllForCompany(companyIdSnapshot),
+        transactionRepo.findAllForCompany(companyIdSnapshot),
+        vehicleRepo.findAllForCompany(companyIdSnapshot),
+        driverRepo.findAllForCompany(companyIdSnapshot),
+        contractRepo.findAllForCompany(companyIdSnapshot),
+        
+        maintRepo.findAllForCompany(companyIdSnapshot),
+        vehDocRepo.findAllForCompany(companyIdSnapshot),
+        drvDocRepo.findAllForCompany(companyIdSnapshot),
+        ticketRepo.findAllForCompany(companyIdSnapshot),
+        insRepo.findAllForCompany(companyIdSnapshot),
+        trackRepo.findAllForCompany(companyIdSnapshot),
+      ]);
+
+      if (
+        requestVersion !== dashboardRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot
+      ) {
+        return;
+      }
+
+      setReceivables(recs);
+      setPayables(pays);
+      setAccounts(accs);
+      setTransactions(trans);
+      setVehicles(vehs);
+      setDrivers(drvs);
+      setContracts(conts);
+      
+      const opPendings = generateOperationalPendings({
+        vehicles: vehs,
+        contracts: conts,
+        maintenances,
+        vehicleDocuments,
+        driverDocuments,
+        tickets,
+        drivers: drvs,
+        insurances,
+        trackers,
+      });
+
+      setPendings(opPendings);
+
+    } catch (err) {
+      if (
+        requestVersion === dashboardRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot
+      ) {
+        console.error('Failed to load dashboard data:', err);
+      }
+    } finally {
+      if (
+        requestVersion === dashboardRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot
+      ) {
+        setLoading(false);
+      }
     }
-    const currentCompanyId = user.companyId;
-
-    const recRepo = new AccountReceivableRepository();
-    const payRepo = new AccountPayableRepository();
-    const accRepo = new FinancialAccountRepository();
-    const txRepo = new FinancialTransactionRepository();
-    const vehRepo = new VehicleRepository();
-    const contractRepo = new ContractRepository();
-    const maintRepo = new MaintenanceRepository();
-    const vehDocRepo = new VehicleDocumentRepository();
-    const drvDocRepo = new DriverDocumentRepository();
-    const ticketRepo = new TrafficTicketRepository();
-    const drvRepo = new DriverRepository();
-    const insRepo = new InsuranceRepository();
-    const trackRepo = new TrackerRepository();
-
-    const [recList, payList, accList, txList, vehList, contractList, maintList, vehDocs, drvDocs, tickets, drvList, insurances, trackers] = await Promise.all([
-      recRepo.findAllForCompany(currentCompanyId),
-      payRepo.findAllForCompany(currentCompanyId),
-      accRepo.findAllForCompany(currentCompanyId),
-      txRepo.findAllForCompany(currentCompanyId),
-      vehRepo.findAllForCompany(currentCompanyId),
-      contractRepo.findAllForCompany(currentCompanyId),
-      maintRepo.findAllForCompany(currentCompanyId),
-      vehDocRepo.findAllForCompany(currentCompanyId),
-      drvDocRepo.findAllForCompany(currentCompanyId),
-      ticketRepo.findAllForCompany(currentCompanyId),
-      drvRepo.findAllForCompany(currentCompanyId),
-      insRepo.findAllForCompany(currentCompanyId),
-      trackRepo.findAllForCompany(currentCompanyId),
-    ]);
-
-    if (!isMounted || user?.companyId !== currentCompanyId) {
-      return;
-    }
-
-    setReceivables(recList);
-    setPayables(payList);
-    setAccounts(accList);
-    setTransactions(txList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    setVehicles(vehList);
-    setDrivers(drvList);
-    setContracts(contractList);
-
-    const operationalPendings = generateOperationalPendings({
-      vehicles: vehList,
-      contracts: contractList,
-      maintenances: maintList,
-      vehicleDocuments: vehDocs,
-      driverDocuments: drvDocs,
-      tickets,
-      drivers: drvList,
-      insurances,
-      trackers,
-    });
-    setPendings(operationalPendings);
-
-    setLoading(false);
   };
-
   const totalAccountBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
 
   const pendingReceivables = receivables.filter(

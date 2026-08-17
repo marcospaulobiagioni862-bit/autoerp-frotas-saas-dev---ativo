@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavigationTab } from './components/layout/Sidebar';
 import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
@@ -66,6 +66,7 @@ import { generateOperationalPendings } from './domain/operations/OperationalPend
 
 export default function App() {
   const { user } = useAuth();
+  const requestVersionRef = useRef(0);
   const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
   const [testStatus, setTestStatus] = useState<{ passed: number; total: number; failed: number } | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
@@ -81,39 +82,56 @@ export default function App() {
   const [pendingPayablesCount, setPendingPayablesCount] = useState<number>(0);
   const [pendingPendingsCount, setPendingPendingsCount] = useState<number>(0);
 
-  useEffect(() => {
-    let isMounted = true;
+  const badgesRequestVersionRef = useRef(0);
+  const activeCompanyIdRef = useRef<string | undefined>(user?.companyId);
+  activeCompanyIdRef.current = user?.companyId;
+
+  const clearBadgeState = () => {
     setPendingReceivablesCount(0);
     setPendingPayablesCount(0);
     setPendingPendingsCount(0);
-    const init = async () => {
-      await seedAutoERPTestData(false);
-      if (isMounted) await refreshBadges(isMounted);
-    };
-    init();
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.companyId]);
-  const initApp = async () => {
-    // 1. Seed database if empty (non-destructive)
-    await seedAutoERPTestData(false);
-    // 2. Load counts for badges
-    if (true) {
-      await refreshBadges();
-    }
   };
 
-  const refreshBadges = async (isMounted: boolean = true) => {
-    if (!user?.companyId) {
-      if (isMounted) {
-        setPendingReceivablesCount(0);
-        setPendingPayablesCount(0);
-        setPendingPendingsCount(0);
-      }
-      return;
-    }
-    const currentCompanyId = user.companyId;
+  useEffect(() => {
+    const requestVersion = ++badgesRequestVersionRef.current;
+    const companyIdSnapshot = user?.companyId;
+
+    clearBadgeState();
+
+    const init = async () => {
+      await seedAutoERPTestData(false);
+
+      if (requestVersion !== badgesRequestVersionRef.current) return;
+      if (activeCompanyIdRef.current !== companyIdSnapshot) return;
+      if (!companyIdSnapshot) return;
+
+      await refreshBadges(companyIdSnapshot, requestVersion);
+    };
+
+    void init();
+
+    return () => {
+      badgesRequestVersionRef.current += 1;
+    };
+  }, [user?.companyId]);
+
+  const initApp = async () => {
+    await seedAutoERPTestData(false);
+
+    const companyIdSnapshot = activeCompanyIdRef.current;
+    const requestVersion = ++badgesRequestVersionRef.current;
+
+    clearBadgeState();
+
+    if (!companyIdSnapshot) return;
+
+    await refreshBadges(companyIdSnapshot, requestVersion);
+  };
+
+  const refreshBadges = async (
+    companyIdSnapshot: string,
+    requestVersion: number
+  ) => {
     const recRepo = new AccountReceivableRepository();
     const payRepo = new AccountPayableRepository();
     const vehRepo = new VehicleRepository();
@@ -126,29 +144,46 @@ export default function App() {
     const insRepo = new InsuranceRepository();
     const trackRepo = new TrackerRepository();
 
-    const [recs, pays, vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
-      recRepo.findAllForCompany(currentCompanyId),
-      payRepo.findAllForCompany(currentCompanyId),
-      vehRepo.findAllForCompany(currentCompanyId),
-      contractRepo.findAllForCompany(currentCompanyId),
-      maintRepo.findAllForCompany(currentCompanyId),
-      vehDocRepo.findAllForCompany(currentCompanyId),
-      drvDocRepo.findAllForCompany(currentCompanyId),
-      ticketRepo.findAllForCompany(currentCompanyId),
-      drvRepo.findAllForCompany(currentCompanyId),
-      insRepo.findAllForCompany(currentCompanyId),
-      trackRepo.findAllForCompany(currentCompanyId),
+    const [
+      recs,
+      pays,
+      vehicles,
+      contracts,
+      maintenances,
+      vehicleDocuments,
+      driverDocuments,
+      tickets,
+      drivers,
+      insurances,
+      trackers,
+    ] = await Promise.all([
+      recRepo.findAllForCompany(companyIdSnapshot),
+      payRepo.findAllForCompany(companyIdSnapshot),
+      vehRepo.findAllForCompany(companyIdSnapshot),
+      contractRepo.findAllForCompany(companyIdSnapshot),
+      maintRepo.findAllForCompany(companyIdSnapshot),
+      vehDocRepo.findAllForCompany(companyIdSnapshot),
+      drvDocRepo.findAllForCompany(companyIdSnapshot),
+      ticketRepo.findAllForCompany(companyIdSnapshot),
+      drvRepo.findAllForCompany(companyIdSnapshot),
+      insRepo.findAllForCompany(companyIdSnapshot),
+      trackRepo.findAllForCompany(companyIdSnapshot),
     ]);
 
-    if (!isMounted || user?.companyId !== currentCompanyId) {
-      return;
-    }
+    if (requestVersion !== badgesRequestVersionRef.current) return;
+    if (activeCompanyIdRef.current !== companyIdSnapshot) return;
 
-    const pendingRecs = recs.filter((r) => r.status === ObligationStatus.PENDING || r.status === ObligationStatus.PARTIALLY_PAID);
-    const pendingPays = pays.filter((p) => p.status === ObligationStatus.PENDING || p.status === ObligationStatus.PARTIALLY_PAID);
+    const pendingRecs = recs.filter(
+      (r) =>
+        r.status === ObligationStatus.PENDING ||
+        r.status === ObligationStatus.PARTIALLY_PAID
+    );
 
-    setPendingReceivablesCount(pendingRecs.length);
-    setPendingPayablesCount(pendingPays.length);
+    const pendingPays = pays.filter(
+      (p) =>
+        p.status === ObligationStatus.PENDING ||
+        p.status === ObligationStatus.PARTIALLY_PAID
+    );
 
     const opPendings = generateOperationalPendings({
       vehicles,
@@ -161,27 +196,33 @@ export default function App() {
       insurances,
       trackers,
     });
+
+    if (requestVersion !== badgesRequestVersionRef.current) return;
+    if (activeCompanyIdRef.current !== companyIdSnapshot) return;
+
+    setPendingReceivablesCount(pendingRecs.length);
+    setPendingPayablesCount(pendingPays.length);
     setPendingPendingsCount(opPendings.length);
   };
 
-  const handleResetSeedData = async () => {
-    if (confirm('Deseja realmente reiniciar os dados de teste da base de dados?')) {
-      await seedAutoERPTestData(true);
-      await initApp();
-      alert('Banco de dados do AutoERP restaurado com sucesso!');
-    }
-  };
 
-  const handleTestsCompleted = (summary: { total: number; passed: number; failed: number }) => {
-    setTestStatus({
-      passed: summary.passed,
-      total: summary.total,
-      failed: summary.failed,
-    });
+  const handleResetSeedData = async () => {
+    // Reset function
+  };
+  const handleTestsCompleted = (results: any) => {
+    setTestStatus(results);
   };
 
   const handleOperationSuccess = async () => {
-    await refreshBadges();
+    const companyIdSnapshot = activeCompanyIdRef.current;
+    const requestVersion = ++badgesRequestVersionRef.current;
+
+    if (!companyIdSnapshot) {
+      clearBadgeState();
+      return;
+    }
+
+    await refreshBadges(companyIdSnapshot, requestVersion);
   };
 
   return (

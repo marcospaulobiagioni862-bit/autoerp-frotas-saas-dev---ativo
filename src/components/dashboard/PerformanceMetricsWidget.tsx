@@ -1,5 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   ContractRepository, 
   VehicleRepository, 
@@ -19,52 +19,86 @@ interface PerformanceMetricsWidgetProps {
 }
 
 export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> = ({
-  vehicles: initialVehicles,
-  receivables: initialReceivables,
-  payables: initialPayables,
+  initialVehicles,
+  initialReceivables,
+  initialPayables,
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState<boolean>(true);
-  const [vehicles, setVehicles] = useState<Vehicle[]>(initialVehicles || []);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [receivables, setReceivables] = useState<AccountReceivable[]>(initialReceivables || []);
-  const [payables, setPayables] = useState<AccountPayable[]>(initialPayables || []);
+  const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
+  const [payables, setPayables] = useState<AccountPayable[]>([]);
+
+  const metricsRequestVersionRef = useRef(0);
+  const activeCompanyIdRef = useRef<string | undefined>(user?.companyId);
+  activeCompanyIdRef.current = user?.companyId;
 
   useEffect(() => {
-    let isMounted = true;
-    
-    // Clear state on tenant switch before loading
+    const requestVersion = ++metricsRequestVersionRef.current;
+    const companyIdSnapshot = user?.companyId;
+
     setVehicles([]);
     setContracts([]);
     setReceivables([]);
     setPayables([]);
 
-    async function fetchData() {
-      if (!user?.companyId) {
-        setLoading(false);
-        return;
-      }
-      const currentCompanyId = user.companyId;
+    if (!companyIdSnapshot) {
+      setLoading(false);
 
+      return () => {
+        metricsRequestVersionRef.current += 1;
+      };
+    }
+
+    setLoading(true);
+
+    const fetchData = async () => {
       try {
         const vehRepo = new VehicleRepository();
         const contractRepo = new ContractRepository();
         const recRepo = new AccountReceivableRepository();
         const payRepo = new AccountPayableRepository();
 
-        // Tenant validation for initial data
-        const useInitialVehicles = initialVehicles && initialVehicles.length > 0 && initialVehicles.every(v => v.companyId === currentCompanyId);
-        const useInitialReceivables = initialReceivables && initialReceivables.length > 0 && initialReceivables.every(r => r.companyId === currentCompanyId);
-        const useInitialPayables = initialPayables && initialPayables.length > 0 && initialPayables.every(p => p.companyId === currentCompanyId);
+        const useInitialVehicles =
+          !!initialVehicles?.length &&
+          initialVehicles.every(
+            (v) => v.companyId === companyIdSnapshot
+          );
 
-        const [vehList, contractList, recList, payList] = await Promise.all([
-          useInitialVehicles ? Promise.resolve(initialVehicles) : vehRepo.findAllForCompany(currentCompanyId),
-          contractRepo.findAllForCompany(currentCompanyId),
-          useInitialReceivables ? Promise.resolve(initialReceivables) : recRepo.findAllForCompany(currentCompanyId),
-          useInitialPayables ? Promise.resolve(initialPayables) : payRepo.findAllForCompany(currentCompanyId),
-        ]);
+        const useInitialReceivables =
+          !!initialReceivables?.length &&
+          initialReceivables.every(
+            (r) => r.companyId === companyIdSnapshot
+          );
 
-        if (!isMounted || user?.companyId !== currentCompanyId) {
+        const useInitialPayables =
+          !!initialPayables?.length &&
+          initialPayables.every(
+            (p) => p.companyId === companyIdSnapshot
+          );
+
+        const [vehList, contractList, recList, payList] =
+          await Promise.all([
+            useInitialVehicles
+              ? Promise.resolve(initialVehicles!)
+              : vehRepo.findAllForCompany(companyIdSnapshot),
+
+            contractRepo.findAllForCompany(companyIdSnapshot),
+
+            useInitialReceivables
+              ? Promise.resolve(initialReceivables!)
+              : recRepo.findAllForCompany(companyIdSnapshot),
+
+            useInitialPayables
+              ? Promise.resolve(initialPayables!)
+              : payRepo.findAllForCompany(companyIdSnapshot),
+          ]);
+
+        if (
+          requestVersion !== metricsRequestVersionRef.current ||
+          activeCompanyIdRef.current !== companyIdSnapshot
+        ) {
           return;
         }
 
@@ -73,19 +107,36 @@ export const PerformanceMetricsWidget: React.FC<PerformanceMetricsWidgetProps> =
         setReceivables(recList);
         setPayables(payList);
       } catch (err) {
-        if (!isMounted) return;
-        console.error('Failed to load performance metrics data:', err);
+        if (
+          requestVersion === metricsRequestVersionRef.current &&
+          activeCompanyIdRef.current === companyIdSnapshot
+        ) {
+          console.error(
+            'Failed to load performance metrics data:',
+            err
+          );
+        }
       } finally {
-        if (isMounted) setLoading(false);
+        if (
+          requestVersion === metricsRequestVersionRef.current &&
+          activeCompanyIdRef.current === companyIdSnapshot
+        ) {
+          setLoading(false);
+        }
       }
-    }
+    };
 
-    fetchData();
+    void fetchData();
 
     return () => {
-      isMounted = false;
+      metricsRequestVersionRef.current += 1;
     };
-  }, [initialVehicles, initialReceivables, initialPayables, user?.companyId]);
+  }, [
+    initialVehicles,
+    initialReceivables,
+    initialPayables,
+    user?.companyId,
+  ]);
 
   if (loading) {
     return (

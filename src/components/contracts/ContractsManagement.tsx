@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   FileText,
   Plus,
@@ -48,6 +48,24 @@ interface ContractsManagementProps {
 }
 
 export const ContractsManagement: React.FC<ContractsManagementProps> = ({ companyId }) => {
+  const dataRequestVersionRef = useRef(0);
+  const activeCompanyIdRef = useRef<string | undefined>(
+    companyId || undefined
+  );
+  activeCompanyIdRef.current = companyId || undefined;
+
+  const clearTenantState = () => {
+    setContracts([]);
+    setVehiclesMap({});
+    setDriversMap({});
+    setReceivablesMap({});
+    setSelectedContractId(null);
+    setSelectedReceivable(null);
+    setContractToEdit(null);
+    setIsFormModalOpen(false);
+    setIsDetailsModalOpen(false);
+    setIsReceiptModalOpen(false);
+  };
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [vehiclesMap, setVehiclesMap] = useState<Record<string, Vehicle>>({});
   const [driversMap, setDriversMap] = useState<Record<string, Driver>>({});
@@ -70,74 +88,110 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    setContracts([]);
-    setVehiclesMap({});
-    setDriversMap({});
-    setReceivablesMap({});
-    setSelectedContractId(null);
-    setSelectedReceivable(null);
-    setContractToEdit(null);
-    setIsFormModalOpen(false);
-    setIsDetailsModalOpen(false);
-    setIsReceiptModalOpen(false);
-    loadData(isMounted);
+    const requestVersion = ++dataRequestVersionRef.current;
+    const companyIdSnapshot = companyId || undefined;
+
+    clearTenantState();
+
+    if (!companyIdSnapshot) {
+      setLoading(false);
+
+      return () => {
+        dataRequestVersionRef.current += 1;
+      };
+    }
+
+    setLoading(true);
+    void loadData(companyIdSnapshot, requestVersion);
+
     return () => {
-      isMounted = false;
+      dataRequestVersionRef.current += 1;
     };
   }, [companyId]);
 
-  const loadData = async (isMounted: boolean = true) => {
-    setLoading(true);
-    if (!companyId) {
-      if (isMounted) {
-        setContracts([]);
-        setVehiclesMap({});
-        setDriversMap({});
-        setReceivablesMap({});
-      }
-      setLoading(false);
-      return;
-    }
-    const currentCompanyId = companyId;
+  const loadData = async (
+    companyIdSnapshot: string,
+    requestVersion: number
+  ) => {
     try {
       const contractRepo = new ContractRepository();
       const vehicleRepo = new VehicleRepository();
       const driverRepo = new DriverRepository();
       const receivableRepo = new AccountReceivableRepository();
 
-      const [allContracts, allVehicles, allDrivers] = await Promise.all([
-        contractRepo.findAllForCompany(currentCompanyId),
-        vehicleRepo.findAllForCompany(currentCompanyId),
-        driverRepo.findAllForCompany(currentCompanyId),
+      const [cList, vList, dList] = await Promise.all([
+        contractRepo.findAllForCompany(companyIdSnapshot),
+        vehicleRepo.findAllForCompany(companyIdSnapshot),
+        driverRepo.findAllForCompany(companyIdSnapshot),
       ]);
 
-      const vMap: Record<string, Vehicle> = {};
-      allVehicles.forEach((v) => (vMap[v.id] = v));
-
-      const dMap: Record<string, Driver> = {};
-      allDrivers.forEach((d) => (dMap[d.id] = d));
-
-      // Mapear recebíveis de cada contrato
-      const recMap: Record<string, AccountReceivable[]> = {};
-      for (const c of allContracts) {
-        const recs = await receivableRepo.findByContractIdForCompany(currentCompanyId, c.id);
-        recMap[c.id] = recs;
+      if (
+        requestVersion !== dataRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot
+      ) {
+        return;
       }
 
-      if (!isMounted || companyId !== currentCompanyId) return;
+      const vMap: Record<string, Vehicle> = {};
+      vList.forEach((v) => (vMap[v.id] = v));
 
-      setContracts(allContracts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      const dMap: Record<string, any> = {};
+      dList.forEach((d) => (dMap[d.id] = d));
+
+      const rMap: Record<string, AccountReceivable[]> = {};
+      for (const c of cList) {
+        const recs = await receivableRepo.findByContractIdForCompany(
+          companyIdSnapshot,
+          c.id
+        );
+        
+        if (
+          requestVersion !== dataRequestVersionRef.current ||
+          activeCompanyIdRef.current !== companyIdSnapshot
+        ) {
+          return;
+        }
+        
+        rMap[c.id] = recs;
+      }
+
+      if (
+        requestVersion !== dataRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot
+      ) {
+        return;
+      }
+
+      setContracts(cList);
       setVehiclesMap(vMap);
       setDriversMap(dMap);
-      setReceivablesMap(recMap);
-    } catch (err) {
-      console.error('Erro ao carregar dados de contratos:', err);
+      setReceivablesMap(rMap);
+    } catch (error) {
+      console.error('Failed to load contracts data', error);
     } finally {
-      setLoading(false);
+      if (
+        requestVersion === dataRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot
+      ) {
+        setLoading(false);
+      }
     }
   };
 
+  const reloadData = async () => {
+    const companyIdSnapshot = activeCompanyIdRef.current;
+
+    if (!companyIdSnapshot) {
+      clearTenantState();
+      setLoading(false);
+      return;
+    }
+
+    const requestVersion = ++dataRequestVersionRef.current;
+    setLoading(true);
+
+    await loadData(companyIdSnapshot, requestVersion);
+  };
   const handleActivateContract = async (contractId: string) => {
     setActionLoadingId(contractId);
     try {
@@ -148,7 +202,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         userId: 'usr-admin',
         userName: 'Administrador',
       });
-      await loadData();
+      await reloadData();
     } catch (err: any) {
       alert(`Erro ao ativar contrato: ${err.message}`);
     } finally {
@@ -172,7 +226,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       } else {
         alert('Cobrança para a competência de hoje já havia sido gerada.');
       }
-      await loadData();
+      await reloadData();
     } catch (err: any) {
       alert(`Erro ao faturar aluguel: ${err.message}`);
     } finally {
@@ -192,7 +246,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         userId: 'usr-admin',
         userName: 'Administrador',
       });
-      await loadData();
+      await reloadData();
     } catch (err: any) {
       alert(`Erro ao encerrar contrato: ${err.message}`);
     } finally {
@@ -207,7 +261,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       const contractService = new ContractService();
       const res = await contractService.deleteOrArchiveContract(contractId, 'usr-admin', 'Administrador');
       alert(res.action === 'archived' ? 'Contrato arquivado por possuir histórico financeiro.' : 'Contrato excluído com sucesso.');
-      await loadData();
+      await reloadData();
     } catch (err: any) {
       alert(`Erro: ${err.message}`);
     } finally {
@@ -586,7 +640,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         contractToEdit={contractToEdit}
         companyId={companyId}
         onSuccess={() => {
-          loadData();
+          reloadData();
         }}
       />
 
@@ -595,7 +649,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         onClose={() => setIsDetailsModalOpen(false)}
         contractId={selectedContractId}
         companyId={companyId}
-        onRefresh={loadData}
+        onRefresh={reloadData}
         onOpenReceiptModal={async (receivableId) => {
           const receivableRepo = new AccountReceivableRepository();
           const rec = await receivableRepo.findByIdForCompany(receivableId, companyId);
@@ -611,7 +665,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         onClose={() => setIsReceiptModalOpen(false)}
         receivable={selectedReceivable}
         onSuccess={() => {
-          loadData();
+          reloadData();
           if (selectedContractId) {
             // refresh details modal if open
           }

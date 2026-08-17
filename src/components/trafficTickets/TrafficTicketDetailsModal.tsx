@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AttachmentList } from '../documents/AttachmentList';
 import { FileUpload } from '../documents/FileUpload';
 import { ShieldCheck } from 'lucide-react';
@@ -33,6 +33,33 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
   companyId,
   onRefresh,
 }) => {
+  const ticketRequestVersionRef = useRef(0);
+
+  const activeCompanyIdRef = useRef<string>(companyId);
+  activeCompanyIdRef.current = companyId;
+
+  const activeTicketIdRef = useRef<string | null>(ticketId);
+  activeTicketIdRef.current = ticketId;
+
+  const activeIsOpenRef = useRef(isOpen);
+  activeIsOpenRef.current = isOpen;
+
+  const clearTicketState = () => {
+    setTicket(null);
+    setVehicle(null);
+    setDriver(null);
+    setContract(null);
+    setReceivable(null);
+    setPayable(null);
+    setAllDrivers([]);
+    setAuditLogs([]);
+    setNewDriverId('');
+    setNewResponsibility(TicketResponsibility.DRIVER);
+    setAppealNotes('');
+    setCancelReason('');
+    setError(null);
+    setSuccessMsg(null);
+  };
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'RESPONSIBILITY' | 'FINANCIAL' | 'APPEAL' | 'AUDIT'>('OVERVIEW');
 
   const [ticket, setTicket] = useState<TrafficTicket | null>(null);
@@ -56,40 +83,41 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
   const [cancelReason, setCancelReason] = useState<string>('');
 
   useEffect(() => {
-    let isMounted = true;
-    
-    // Clear state on companyId change or modal open
-    setTicket(null);
-    setVehicle(null);
-    setDriver(null);
-    setContract(null);
-    setReceivable(null);
-    setPayable(null);
-    setAllDrivers([]);
-    setAuditLogs([]);
-    setNewDriverId('');
-    setNewResponsibility(TicketResponsibility.DRIVER);
-    setAppealNotes('');
-    setCancelReason('');
+    const requestVersion = ++ticketRequestVersionRef.current;
+    const companyIdSnapshot = companyId;
+    const ticketIdSnapshot = ticketId;
 
-    if (isOpen && ticketId) {
-      loadDetails(isMounted);
+    clearTicketState();
+
+    if (!isOpen || !ticketIdSnapshot || !companyIdSnapshot) {
+      setLoading(false);
+
+      return () => {
+        ticketRequestVersionRef.current += 1;
+      };
     }
 
+    setLoading(true);
+
+    void loadDetails(
+      companyIdSnapshot,
+      ticketIdSnapshot,
+      requestVersion
+    );
+
     return () => {
-      isMounted = false;
+      ticketRequestVersionRef.current += 1;
     };
   }, [isOpen, ticketId, companyId]);
 
-  const loadDetails = async (isMounted: boolean = true) => {
-    if (!ticketId || !companyId) return;
-    setLoading(true);
-    setError(null);
-    setSuccessMsg(null);
-
-    const currentCompanyId = companyId;
-
+  const loadDetails = async (
+    companyIdSnapshot: string,
+    ticketIdSnapshot: string,
+    requestVersion: number
+  ) => {
     try {
+      setError(null);
+      
       const ticketRepo = new TrafficTicketRepository();
       const vehicleRepo = new VehicleRepository();
       const driverRepo = new DriverRepository();
@@ -98,47 +126,118 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       const payRepo = new AccountPayableRepository();
       const auditRepo = new AuditLogRepository();
 
-      const t = await ticketRepo.findByIdForCompany(ticketId, currentCompanyId);
-      
+      const t = await ticketRepo.findByIdForCompany(
+        ticketIdSnapshot,
+        companyIdSnapshot
+      );
+
+      if (
+        requestVersion !== ticketRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot ||
+        activeTicketIdRef.current !== ticketIdSnapshot ||
+        !activeIsOpenRef.current
+      ) {
+        return;
+      }
+
       if (!t) {
-        if (!isMounted || companyId !== currentCompanyId) return;
         setError('Multa não encontrada.');
         setLoading(false);
         return;
       }
 
-      const [v, d, c, r, p, driversList, logs] = await Promise.all([
-        t.vehicleId ? vehicleRepo.findByIdForCompany(t.vehicleId, currentCompanyId) : Promise.resolve(null),
-        t.driverId ? driverRepo.findByIdForCompany(t.driverId, currentCompanyId) : Promise.resolve(null),
-        t.contractId ? contractRepo.findByIdForCompany(t.contractId, currentCompanyId) : Promise.resolve(null),
-        t.receivableId ? recRepo.findByIdForCompany(t.receivableId, currentCompanyId) : Promise.resolve(null),
-        t.payableId ? payRepo.findByIdForCompany(t.payableId, currentCompanyId) : Promise.resolve(null),
-        driverRepo.findAllForCompany(currentCompanyId),
-        auditRepo.findAllForCompany(currentCompanyId),
+      const [v, d, c, allD, logs] = await Promise.all([
+        vehicleRepo.findByIdForCompany(t.vehicleId, companyIdSnapshot),
+        t.driverId ? driverRepo.findByIdForCompany(t.driverId, companyIdSnapshot) : Promise.resolve(null),
+        t.contractId ? contractRepo.findByIdForCompany(t.contractId, companyIdSnapshot) : Promise.resolve(null),
+        driverRepo.findAllForCompany(companyIdSnapshot),
+        auditRepo.findAllForCompany(companyIdSnapshot).then(logs => logs.filter(l => l.entityId === t.id))
       ]);
 
-      if (!isMounted || companyId !== currentCompanyId) return;
+      if (
+        requestVersion !== ticketRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot ||
+        activeTicketIdRef.current !== ticketIdSnapshot ||
+        !activeIsOpenRef.current
+      ) {
+        return;
+      }
 
       setTicket(t);
-      setNewDriverId(t.driverId || '');
-      setNewResponsibility(t.responsibility);
+      setVehicle(v || null);
+      setDriver(d || null);
+      setContract(c || null);
+      setAllDrivers(allD);
+      setAuditLogs(logs);
       
-      if (v) setVehicle(v);
-      if (d) setDriver(d);
-      if (c) setContract(c);
-      if (r) setReceivable(r);
-      if (p) setPayable(p);
-
-      setAllDrivers(driversList);
-      setAuditLogs(logs.filter((l) => l.entityId === ticketId));
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar detalhes da multa.');
+      if (t.receivableId) {
+        const rec = await recRepo.findByIdForCompany(t.receivableId, companyIdSnapshot);
+        if (
+          requestVersion !== ticketRequestVersionRef.current ||
+          activeCompanyIdRef.current !== companyIdSnapshot ||
+          activeTicketIdRef.current !== ticketIdSnapshot ||
+          !activeIsOpenRef.current
+        ) return;
+        setReceivable(rec || null);
+      }
+      
+      if (t.payableId) {
+        const pay = await payRepo.findByIdForCompany(t.payableId, companyIdSnapshot);
+        if (
+          requestVersion !== ticketRequestVersionRef.current ||
+          activeCompanyIdRef.current !== companyIdSnapshot ||
+          activeTicketIdRef.current !== ticketIdSnapshot ||
+          !activeIsOpenRef.current
+        ) return;
+        setPayable(pay || null);
+      }
+      
+    } catch (err) {
+      if (
+        requestVersion === ticketRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot &&
+        activeTicketIdRef.current === ticketIdSnapshot &&
+        activeIsOpenRef.current
+      ) {
+        console.error('Error loading ticket details:', err);
+        setError('Erro ao carregar detalhes da multa.');
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestVersion === ticketRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot &&
+        activeTicketIdRef.current === ticketIdSnapshot &&
+        activeIsOpenRef.current
+      ) {
+        setLoading(false);
+      }
     }
   };
 
+  const reloadDetails = async () => {
+    const companyIdSnapshot = activeCompanyIdRef.current;
+    const ticketIdSnapshot = activeTicketIdRef.current;
+
+    if (
+      !activeIsOpenRef.current ||
+      !companyIdSnapshot ||
+      !ticketIdSnapshot
+    ) {
+      return;
+    }
+
+    const requestVersion = ++ticketRequestVersionRef.current;
+    setLoading(true);
+
+    await loadDetails(
+      companyIdSnapshot,
+      ticketIdSnapshot,
+      requestVersion
+    );
+  };
   const handleUpdateResponsibility = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = ticketRequestVersionRef.current;
     if (!ticket) return;
     setActionLoading(true);
     setError(null);
@@ -151,8 +250,14 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
         'usr-admin',
         'Administrador'
       );
-      setSuccessMsg('Responsabilidade e condutor atualizados com sucesso!');
-      await loadDetails();
+      if (
+        activeCompanyIdRef.current !== actionCompanyId ||
+        ticketRequestVersionRef.current !== actionVersion
+      ) {
+        return;
+      }
+      setSuccessMsg('Operação realizada com sucesso.');
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao atualizar responsabilidade.');
@@ -162,6 +267,8 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
   };
 
   const handleAppeal = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = ticketRequestVersionRef.current;
     if (!ticket || !appealNotes.trim()) {
       setError('Informe os detalhes do recurso.');
       return;
@@ -173,7 +280,7 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       await service.appealTicket(ticket.id, appealNotes.trim(), 'usr-admin', 'Administrador');
       setSuccessMsg('Status de Recurso registrado com sucesso.');
       setAppealNotes('');
-      await loadDetails();
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao registrar recurso.');
@@ -183,6 +290,8 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
   };
 
   const handleCancel = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = ticketRequestVersionRef.current;
     if (!ticket || !cancelReason.trim()) {
       setError('Informe a justificativa do cancelamento.');
       return;
@@ -196,7 +305,7 @@ export const TrafficTicketDetailsModal: React.FC<TrafficTicketDetailsModalProps>
       await service.cancelTicket(ticket.id, cancelReason.trim(), 'usr-admin', 'Administrador');
       setSuccessMsg('Multa cancelada com sucesso.');
       setCancelReason('');
-      await loadDetails();
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao cancelar multa.');

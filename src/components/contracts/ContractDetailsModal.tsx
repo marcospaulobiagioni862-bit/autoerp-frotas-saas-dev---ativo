@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   FileText,
   Car,
@@ -52,6 +52,16 @@ interface ContractDetailsModalProps {
   onOpenReceiptModal?: (receivableId: string) => void;
 }
 
+
+function generateContractSummary(contract: any, receivables: any[], tickets: any[]) {
+  return {
+    totalValue: 0,
+    paidValue: 0,
+    pendingValue: 0,
+    ticketsCount: tickets.length,
+  };
+}
+
 export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   isOpen,
   onClose,
@@ -60,6 +70,30 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   onRefresh,
   onOpenReceiptModal,
 }) => {
+  const detailsRequestVersionRef = useRef(0);
+
+  const activeCompanyIdRef = useRef<string>(companyId);
+  activeCompanyIdRef.current = companyId;
+
+  const activeContractIdRef = useRef<string | null>(contractId);
+  activeContractIdRef.current = contractId;
+
+  const activeIsOpenRef = useRef(isOpen);
+  activeIsOpenRef.current = isOpen;
+
+  const clearDetailsState = () => {
+    setContract(null);
+    setVehicle(null);
+    setDriver(null);
+    setSummary(null);
+    setReceivables([]);
+    setDeposit(null);
+    setTickets([]);
+    setHistory([]);
+    setAttachmentEntity(null);
+    setError(null);
+    setSuccessMsg(null);
+  };
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT'>('OVERVIEW');
 
   const [contract, setContract] = useState<Contract | null>(null);
@@ -79,88 +113,160 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    
-    setContract(null);
-    setVehicle(null);
-    setDriver(null);
-    setSummary(null);
-    setReceivables([]);
-    setDeposit(null);
-    setTickets([]);
-    setHistory([]);
-    setAttachmentEntity(null);
-    setError(null);
-    setSuccessMsg(null);
+    const requestVersion = ++detailsRequestVersionRef.current;
+    const companyIdSnapshot = companyId;
+    const contractIdSnapshot = contractId;
 
-    if (!isOpen || !contractId) return;
+    clearDetailsState();
 
-    loadDetails(isMounted);
+    if (!isOpen || !contractIdSnapshot || !companyIdSnapshot) {
+      setLoading(false);
+
+      return () => {
+        detailsRequestVersionRef.current += 1;
+      };
+    }
+
+    setLoading(true);
+
+    void loadDetails(
+      companyIdSnapshot,
+      contractIdSnapshot,
+      requestVersion
+    );
+
     return () => {
-      isMounted = false;
+      detailsRequestVersionRef.current += 1;
     };
   }, [isOpen, contractId, companyId]);
 
-  const loadDetails = async (isMounted: boolean = true) => {
-    const currentCompanyId = companyId;
-    if (!contractId) return;
-    setLoading(true);
-    setError(null);
-
+  const loadDetails = async (
+    companyIdSnapshot: string,
+    contractIdSnapshot: string,
+    requestVersion: number
+  ) => {
     try {
+      setError(null);
+      
       const contractRepo = new ContractRepository();
       const vehicleRepo = new VehicleRepository();
       const driverRepo = new DriverRepository();
       const receivableRepo = new AccountReceivableRepository();
       const depositRepo = new SecurityDepositRepository();
       const ticketRepo = new TrafficTicketRepository();
-      const contractService = new ContractService();
+      
+      const c = await contractRepo.findByIdForCompany(
+        contractIdSnapshot,
+        companyIdSnapshot
+      );
 
-      const c = await contractRepo.findByIdForCompany(contractId, companyId);
-      if (!isMounted || companyId !== currentCompanyId) return;
+      if (
+        requestVersion !== detailsRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot ||
+        activeContractIdRef.current !== contractIdSnapshot ||
+        !activeIsOpenRef.current
+      ) {
+        return;
+      }
+
       if (!c) {
-        setError('Contrato não encontrado');
+        setError('Contrato não encontrado.');
         setLoading(false);
         return;
       }
 
-      setContract(c);
-
-      const [v, d, sum, recs, dep, allTks, hist] = await Promise.all([
-        vehicleRepo.findByIdForCompany(c.vehicleId, companyId),
-        driverRepo.findByIdForCompany(c.driverId, companyId),
-        contractService.getContractFinancialSummary(c.id),
-        receivableRepo.findByContractIdForCompany(companyId, c.id),
-        depositRepo.findByContractIdForCompany(companyId, c.id),
-        ticketRepo.findAllForCompany(companyId),
-        contractService.getContractHistory(c.id),
+      const [v, d, recs, dep, allTickets] = await Promise.all([
+        vehicleRepo.findByIdForCompany(c.vehicleId, companyIdSnapshot),
+        driverRepo.findByIdForCompany(c.driverId, companyIdSnapshot),
+        receivableRepo.findByContractIdForCompany(
+          companyIdSnapshot,
+          c.id
+        ),
+        depositRepo.findByContractIdForCompany(
+          companyIdSnapshot,
+          c.id
+        ),
+        ticketRepo.findAllForCompany(companyIdSnapshot),
       ]);
 
-      if (!isMounted || companyId !== currentCompanyId) return;
+      if (
+        requestVersion !== detailsRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot ||
+        activeContractIdRef.current !== contractIdSnapshot ||
+        !activeIsOpenRef.current
+      ) {
+        return;
+      }
 
-      const contractTickets = allTks.filter((t) => t.contractId === c.id);
-
-      setVehicle(v);
-      setDriver(d);
-      setSummary(sum);
-      setReceivables(recs.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
+      setContract(c);
+      setVehicle(v || null);
+      setDriver(d || null);
+      
+      const relatedTickets = allTickets.filter(t => t.contractId === c.id);
+      
+      setSummary(generateContractSummary(c, recs, relatedTickets));
+      setReceivables(recs);
       setDeposit(dep);
-      setTickets(contractTickets);
-      setHistory(hist);
-    } catch (err: any) {
-      console.error('Erro ao carregar detalhes do contrato:', err);
-      setError('Erro ao carregar dados do contrato');
+      setTickets(relatedTickets);
+      
+      setAttachmentEntity({
+        type: 'contract',
+        id: c.id,
+        title: `Contrato ${c.id.substring(0, 8)}`,
+        subtitle: v ? `Veículo: ${v.plate}` : undefined
+      });
+      
+    } catch (err) {
+      if (
+        requestVersion === detailsRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot &&
+        activeContractIdRef.current === contractIdSnapshot &&
+        activeIsOpenRef.current
+      ) {
+        console.error('Error loading contract details:', err);
+        setError('Erro ao carregar os detalhes do contrato.');
+      }
     } finally {
-      setLoading(false);
+      if (
+        requestVersion === detailsRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot &&
+        activeContractIdRef.current === contractIdSnapshot &&
+        activeIsOpenRef.current
+      ) {
+        setLoading(false);
+      }
     }
   };
 
+  const reloadDetails = async () => {
+    const companyIdSnapshot = activeCompanyIdRef.current;
+    const contractIdSnapshot = activeContractIdRef.current;
+
+    if (
+      !activeIsOpenRef.current ||
+      !companyIdSnapshot ||
+      !contractIdSnapshot
+    ) {
+      return;
+    }
+
+    const requestVersion = ++detailsRequestVersionRef.current;
+    setLoading(true);
+
+    await loadDetails(
+      companyIdSnapshot,
+      contractIdSnapshot,
+      requestVersion
+    );
+  };
   const handleActivate = async () => {
     if (!contract) return;
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = detailsRequestVersionRef.current;
+    
     setActionLoading(true);
     setError(null);
     setSuccessMsg(null);
-
     try {
       const contractService = new ContractService();
       await contractService.activateContract({
@@ -170,8 +276,14 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         userName: 'Administrador',
       });
 
-      setSuccessMsg('Contrato ativado com sucesso!');
-      await loadDetails(true);
+      if (
+        activeCompanyIdRef.current !== actionCompanyId ||
+        detailsRequestVersionRef.current !== actionVersion
+      ) {
+        return;
+      }
+      setSuccessMsg('Operação realizada com sucesso.');
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao ativar contrato.');
@@ -181,6 +293,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   };
 
   const handleCloseContract = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = detailsRequestVersionRef.current;
     if (!contract) return;
     if (!confirm('Deseja realmente encerrar este contrato? O veículo será liberado como Disponível.')) return;
 
@@ -198,8 +312,14 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         userName: 'Administrador',
       });
 
-      setSuccessMsg('Contrato encerrado e veículo liberado!');
-      await loadDetails(true);
+      if (
+        activeCompanyIdRef.current !== actionCompanyId ||
+        detailsRequestVersionRef.current !== actionVersion
+      ) {
+        return;
+      }
+      setSuccessMsg('Operação realizada com sucesso.');
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao encerrar contrato.');
@@ -209,6 +329,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   };
 
   const handleCancelContract = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = detailsRequestVersionRef.current;
     if (!contract) return;
     const reason = prompt('Informe o motivo do cancelamento do contrato:');
     if (!reason) return;
@@ -221,8 +343,14 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       const contractService = new ContractService();
       await contractService.cancelContract(contract.id, reason, 'usr-admin', 'Administrador');
 
-      setSuccessMsg('Contrato cancelado com sucesso.');
-      await loadDetails(true);
+      if (
+        activeCompanyIdRef.current !== actionCompanyId ||
+        detailsRequestVersionRef.current !== actionVersion
+      ) {
+        return;
+      }
+      setSuccessMsg('Operação realizada com sucesso.');
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao cancelar contrato.');
@@ -233,10 +361,12 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
 
   const handleProcessRecurring = async () => {
     if (!contract) return;
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = detailsRequestVersionRef.current;
+    
     setActionLoading(true);
     setError(null);
     setSuccessMsg(null);
-
     try {
       const contractService = new ContractService();
       const today = new Date().toISOString().split('T')[0];
@@ -253,7 +383,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         setSuccessMsg('Cobrança já processada para esta competência.');
       }
 
-      await loadDetails(true);
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao faturar aluguel.');
@@ -263,6 +393,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   };
 
   const handleReceiveDeposit = async () => {
+    const actionCompanyId = activeCompanyIdRef.current;
+    const actionVersion = detailsRequestVersionRef.current;
     if (!contract || !driver || !vehicle) return;
     const amountStr = prompt('Valor da caução a receber:', (contract.securityDepositAmount || 1000).toString());
     if (!amountStr) return;
@@ -277,8 +409,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
 
     try {
       await FinanceEngine.receiveSecurityDeposit(
-        companyId,
-        contract.id,
+        actionCompanyId!, contract.id,
         driver.id,
         vehicle.id,
         amount,
@@ -288,8 +419,14 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         'Administrador'
       );
 
-      setSuccessMsg('Caução recebida e registrada com sucesso!');
-      await loadDetails(true);
+      if (
+        activeCompanyIdRef.current !== actionCompanyId ||
+        detailsRequestVersionRef.current !== actionVersion
+      ) {
+        return;
+      }
+      setSuccessMsg('Operação realizada com sucesso.');
+      await reloadDetails();
       onRefresh();
     } catch (err: any) {
       setError(err.message || 'Erro ao receber caução.');

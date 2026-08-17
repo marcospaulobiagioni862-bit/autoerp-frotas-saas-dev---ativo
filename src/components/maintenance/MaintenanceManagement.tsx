@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Wrench,
   FileText,
@@ -38,6 +38,23 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   companyId,
   onOpenPaymentModal,
 }) => {
+  const maintenanceRequestVersionRef = useRef(0);
+
+  const activeCompanyIdRef = useRef<string | undefined>(companyId);
+  activeCompanyIdRef.current = companyId;
+
+  const clearMaintenanceTenantState = () => {
+    setWorkOrders([]);
+    setSuppliers([]);
+    setParts([]);
+    setVehicles([]);
+    setPayables([]);
+    setWoVehicleId('');
+    setWoSupplierId('');
+    setWoPartId('');
+    setCompleteWoTarget(null);
+    setExitKmInput('');
+  };
   const [activeSubTab, setActiveSubTab] = useState<'workOrders' | 'suppliers' | 'parts' | 'oilTires'>('workOrders');
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -80,33 +97,32 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   const [partStock, setPartStock] = useState('10');
 
   useEffect(() => {
-    let isMounted = true;
-    setWorkOrders([]);
-    setSuppliers([]);
-    setParts([]);
-    setVehicles([]);
-    setPayables([]);
-    setWoVehicleId("");
-    setWoSupplierId("");
-    setWoPartId("");
-    setCompleteWoTarget(null);
-    setExitKmInput('');
+    const requestVersion = ++maintenanceRequestVersionRef.current;
+    const companyIdSnapshot = companyId;
 
-    loadData(isMounted);
+    clearMaintenanceTenantState();
+
+    if (!companyIdSnapshot) {
+      setIsLoading(false);
+
+      return () => {
+        maintenanceRequestVersionRef.current += 1;
+      };
+    }
+
+    setIsLoading(true);
+
+    void loadData(companyIdSnapshot, requestVersion);
 
     return () => {
-      isMounted = false;
+      maintenanceRequestVersionRef.current += 1;
     };
   }, [companyId]);
 
-  const loadData = async (isMounted: boolean = true) => {
-    const currentCompanyId = companyId;
-    setIsLoading(true);
-    if (!companyId) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
+  const loadData = async (
+    companyIdSnapshot: string,
+    requestVersion: number
+  ) => {
     try {
       const woRepo = new WorkOrderRepository();
       const supRepo = new SupplierRepository();
@@ -114,15 +130,21 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       const vehRepo = new VehicleRepository();
       const payRepo = new AccountPayableRepository();
 
-      const [woList, supList, partList, vehList, payList] = await Promise.all([
-        woRepo.findAllForCompany(currentCompanyId),
-        supRepo.findAllForCompany(currentCompanyId),
-        partRepo.findAllForCompany(currentCompanyId),
-        vehRepo.findAllForCompany(currentCompanyId),
-        payRepo.findAllForCompany(currentCompanyId),
-      ]);
-      
-      if (!isMounted || companyId !== currentCompanyId) return;
+      const [woList, supList, partList, vehList, payList] =
+        await Promise.all([
+          woRepo.findAllForCompany(companyIdSnapshot),
+          supRepo.findAllForCompany(companyIdSnapshot),
+          partRepo.findAllForCompany(companyIdSnapshot),
+          vehRepo.findAllForCompany(companyIdSnapshot),
+          payRepo.findAllForCompany(companyIdSnapshot),
+        ]);
+
+      if (
+        requestVersion !== maintenanceRequestVersionRef.current ||
+        activeCompanyIdRef.current !== companyIdSnapshot
+      ) {
+        return;
+      }
 
       setWorkOrders(woList);
       setSuppliers(supList);
@@ -130,20 +152,47 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setVehicles(vehList);
       setPayables(payList);
 
-      if (vehList.length > 0) {
-        setWoVehicleId(vehList[0].id);
-        setWoEntryKm(vehList[0].currentKm?.toString() || '10000');
-      }
-      if (supList.length > 0) {
-        setWoSupplierId(supList[0].id);
+      setWoVehicleId(vehList[0]?.id ?? '');
+      setWoSupplierId(supList[0]?.id ?? '');
+
+      if (vehList[0]) {
+        setWoEntryKm(
+          vehList[0].currentKm?.toString() || '10000'
+        );
       }
     } catch (err) {
-      console.error('Error loading maintenance data:', err);
+      if (
+        requestVersion === maintenanceRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot
+      ) {
+        console.error('Error loading maintenance data:', err);
+      }
     } finally {
-      setIsLoading(false);
+      if (
+        requestVersion === maintenanceRequestVersionRef.current &&
+        activeCompanyIdRef.current === companyIdSnapshot
+      ) {
+        setIsLoading(false);
+      }
     }
   };
 
+  const reloadData = async () => {
+    const companyIdSnapshot = activeCompanyIdRef.current;
+
+    if (!companyIdSnapshot) {
+      clearMaintenanceTenantState();
+      setIsLoading(false);
+      return;
+    }
+
+    const requestVersion =
+      ++maintenanceRequestVersionRef.current;
+
+    setIsLoading(true);
+
+    await loadData(companyIdSnapshot, requestVersion);
+  };
   const handleCreateWorkOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -167,7 +216,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
 
       setIsNewWoOpen(false);
       setWoDescription('');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao criar OS: ' + err.message);
     }
@@ -176,7 +225,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
   const handleStartWo = async (id: string) => {
     try {
       await MaintenanceService.startWorkOrder(id, 'user-admin-1', 'Gestor da Frota');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao iniciar OS: ' + err.message);
     }
@@ -196,7 +245,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       });
       setCompleteWoTarget(null);
       setExitKmInput('');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao concluir OS: ' + err.message);
     }
@@ -207,7 +256,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
     if (!reason) return;
     try {
       await MaintenanceService.cancelWorkOrder(id, reason, 'user-admin-1', 'Gestor da Frota');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao cancelar OS: ' + err.message);
     }
@@ -228,7 +277,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setSupName('');
       setSupDoc('');
       setSupPhone('');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao criar fornecedor: ' + err.message);
     }
@@ -252,7 +301,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
       setPartCode('');
       setPartName('');
       setPartCost('');
-      await loadData(true);
+      await reloadData();
     } catch (err: any) {
       alert('Erro ao cadastrar peça: ' + err.message);
     }
