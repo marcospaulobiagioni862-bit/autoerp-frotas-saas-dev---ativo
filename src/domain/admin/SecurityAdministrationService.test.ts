@@ -1,12 +1,14 @@
 // src/domain/admin/SecurityAdministrationService.test.ts
-import { SecurityAdministrationService } from './SecurityAdministrationService';
+import {
+  resolveSecurityAdministrationMockMode,
+  SecurityAdministrationService,
+} from './SecurityAdministrationService';
 import { UserRole } from '../../types/enums';
 
 export class SecurityAdministrationTestRunner {
   public static async runAllTests(): Promise<{ total: number; passed: number; failed: number; results: any[] }> {
     const results: any[] = [];
     const companyId = 'test-company-security';
-    const developmentOptions = { allowDevelopmentMockData: true };
 
     // Test 1: RBAC Permission Matrix Validation
     try {
@@ -23,48 +25,38 @@ export class SecurityAdministrationTestRunner {
       results.push({ id: 'sec-01', name: 'Matriz de Permissões RBAC (ADMIN vs. GESTOR)', passed: false, message: err?.message });
     }
 
-    // Test 2: Explicit development session simulation remains tenant-scoped
+    // Test 2: Only a development runtime may resolve mock mode
     try {
-      const sessions = SecurityAdministrationService.listActiveSessions(companyId, developmentOptions);
-      const passed = Array.isArray(sessions) && sessions.length > 0 && sessions.every(s => s.companyId === companyId);
+      const developmentEnabled = resolveSecurityAdministrationMockMode(true) === true;
+      const productionDisabled = resolveSecurityAdministrationMockMode(false) === false;
+      const passed = developmentEnabled && productionDisabled;
       results.push({
         id: 'sec-02',
-        name: 'Simulação de sessões somente em desenvolvimento e isolada por tenant',
+        name: 'Mocks administrativos só podem ser habilitados pelo runtime de desenvolvimento',
         passed,
-        message: passed ? `${sessions.length} sessões simuladas explicitamente em desenvolvimento` : 'Falha no isolamento da simulação de sessões',
+        message: passed ? 'DEV habilita simulação e produção permanece fail-closed' : 'Falha na resolução do modo de simulação',
       });
     } catch (err: any) {
-      results.push({ id: 'sec-02', name: 'Simulação de sessões somente em desenvolvimento e isolada por tenant', passed: false, message: err?.message });
+      results.push({ id: 'sec-02', name: 'Mocks administrativos só podem ser habilitados pelo runtime de desenvolvimento', passed: false, message: err?.message });
     }
 
-    // Test 3: Development mock user status update remains RBAC protected
-    try {
-      const users = SecurityAdministrationService.listUsers(companyId, developmentOptions);
-      const targetUser = users[0];
-      const updateRes = await SecurityAdministrationService.updateUserStatus(
-        companyId,
-        targetUser.id,
-        'SUSPENDED',
-        'admin-id',
-        UserRole.ADMIN,
-        'corr-security-admin-dev-test',
-        developmentOptions
-      );
-      const passed = updateRes.success;
-      results.push({
-        id: 'sec-03',
-        name: 'Alteração de status simulada com trava RBAC em desenvolvimento',
-        passed,
-        message: passed ? 'Status de usuário simulado alterado com autorização explícita' : 'Falha na alteração simulada de status',
-      });
-    } catch (err: any) {
-      results.push({ id: 'sec-03', name: 'Alteração de status simulada com trava RBAC em desenvolvimento', passed: false, message: err?.message });
-    }
-
-    // Test 4: Production/default mode must never fabricate users or sessions
+    // Test 3: Node/non-Vite runtime represents production fail-closed behavior
     try {
       const users = SecurityAdministrationService.listUsers(companyId);
       const sessions = SecurityAdministrationService.listActiveSessions(companyId);
+      const passed = users.length === 0 && sessions.length === 0;
+      results.push({
+        id: 'sec-03',
+        name: 'Modo não-DEV não fabrica usuários ou sessões administrativas',
+        passed,
+        message: passed ? 'Nenhum usuário/sessão mock foi exposto' : 'Modo não-DEV expôs telemetria simulada',
+      });
+    } catch (err: any) {
+      results.push({ id: 'sec-03', name: 'Modo não-DEV não fabrica usuários ou sessões administrativas', passed: false, message: err?.message });
+    }
+
+    // Test 4: Local user mutation must also fail closed outside DEV
+    try {
       const updateRes = await SecurityAdministrationService.updateUserStatus(
         companyId,
         'usr-admin-test',
@@ -72,17 +64,15 @@ export class SecurityAdministrationTestRunner {
         'admin-id',
         UserRole.ADMIN
       );
-      const passed = users.length === 0 && sessions.length === 0 && updateRes.success === false;
+      const passed = updateRes.success === false;
       results.push({
         id: 'sec-04',
-        name: 'Modo padrão/produção falha fechado sem telemetria administrativa fabricada',
+        name: 'Modo não-DEV rejeita alteração local de usuário administrativo',
         passed,
-        message: passed
-          ? 'Nenhum usuário/sessão mock foi exposto e escrita local foi rejeitada'
-          : 'Modo padrão expôs ou alterou dados administrativos simulados',
+        message: passed ? 'Escrita local simulada rejeitada' : 'Escrita local simulada foi aceita fora de DEV',
       });
     } catch (err: any) {
-      results.push({ id: 'sec-04', name: 'Modo padrão/produção falha fechado sem telemetria administrativa fabricada', passed: false, message: err?.message });
+      results.push({ id: 'sec-04', name: 'Modo não-DEV rejeita alteração local de usuário administrativo', passed: false, message: err?.message });
     }
 
     const passed = results.filter(r => r.passed).length;
