@@ -1,5 +1,6 @@
 name: SECURITY-2A validation
 
+# CI trigger branch: source outside .github must remain byte-for-byte equal to candidate.
 on:
   push:
     branches:
