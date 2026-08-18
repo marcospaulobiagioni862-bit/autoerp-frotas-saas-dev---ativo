@@ -376,6 +376,44 @@ async function startServer() {
     res.json({ user: req.principal });
   });
 
+  // SECURITY-2G7A: finance overview is server-authoritative and tenant-scoped.
+  app.get('/api/finance/overview', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const summary = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const accountRepo = txContext.getAccountRepo();
+        if (!accountRepo.findAll) {
+          throw new Error('Financial account listing is unavailable');
+        }
+
+        const [receivables, payables, accounts] = await Promise.all([
+          txContext.getReceivableRepo().findAll(),
+          txContext.getPayableRepo().findAll(),
+          accountRepo.findAll(),
+        ]);
+
+        const totalReceivable = receivables
+          .filter((item) => item.status === 'PENDING' || item.status === 'PARTIALLY_PAID')
+          .reduce((sum, item) => sum + Number(item.balanceAmount || 0), 0);
+
+        const totalPayable = payables
+          .filter((item) => item.status === 'PENDING' || item.status === 'PARTIALLY_PAID')
+          .reduce((sum, item) => sum + Number(item.balanceAmount || 0), 0);
+
+        const totalBalance = accounts
+          .reduce((sum, account) => sum + Number(account.currentBalance || 0), 0);
+
+        return { totalReceivable, totalPayable, totalBalance };
+      });
+
+      res.json(summary);
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
   // SECURITY-2G6: receivable renegotiation is server-authoritative.
   app.post('/api/finance/receivables/renegotiate', async (req: Request, res: Response) => {
     const principal = requireFinancePrincipal(req, res);
