@@ -1,18 +1,16 @@
-import { jwtVerify } from 'jose';
 import { FinanceEngine } from './src/domain/finance/FinanceEngine';
 import { UnitOfWork } from './src/db/uow';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { db } from './src/db/index';
+import { PostgresUserRepository } from './src/db/repositories/postgresRepositories';
 import { sql } from 'drizzle-orm';
 import { createServer as createViteServer } from 'vite';
-
-export interface AuthenticatedPrincipal {
-  userId: string;
-  companyId: string;
-  role: string;
-}
+import {
+  authenticateBearerPrincipal,
+  AuthenticatedPrincipal,
+} from './src/server/auth';
 
 declare global {
   namespace Express {
@@ -38,6 +36,7 @@ async function startServer() {
   const app = express();
   app.use(express.json());
   const PORT = 3000;
+  const userRepo = new PostgresUserRepository();
 
   // Middleware for injecting tenant context securely
   app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
@@ -45,44 +44,49 @@ async function startServer() {
       const tenantId = req.headers['x-company-id'] as string;
       const userId = req.headers['x-user-id'] as string || 'test-user-1';
       if (tenantId) {
-        req.principal = { companyId: tenantId, userId: userId, role: 'ADMIN' };
+        req.principal = {
+          companyId: tenantId,
+          userId,
+          name: 'Test User',
+          role: 'ADMIN',
+          permissions: ['*'],
+        };
       }
       return next();
     }
-    
-    // SERVER_SIDE_TENANT_AUTHORITY: Real production middleware
-    const authHeader = req.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-       res.status(401).json({ error: 'Unauthorized: Missing or invalid Bearer token' });
-       return;
-    }
-    const token = authHeader.split(' ')[1];
-    
-        // REAL JWT VERIFICATION
-    try {
-      if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'test') {
-        throw new Error('JWT_SECRET is not configured');
-      }
-      // If we don't have a secret and we are in test mode, we might fail closed unless we have one.
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'default-test-secret-do-not-use-in-prod');
-      
-      const { payload } = await jwtVerify(token, secret, {
-        issuer: process.env.JWT_ISSUER,
-        audience: process.env.JWT_AUDIENCE,
-      });
 
-      if (!payload.companyId || !payload.userId) throw new Error('Missing claims');
-      
-      req.principal = {
-        companyId: payload.companyId as string,
-        userId: payload.userId as string,
-        role: (payload.role as string) || 'USER',
-      };
+    // SERVER_SIDE_TENANT_AUTHORITY: JWT proves the authentication event, while
+    // the current user record remains authoritative for active status, tenant,
+    // role and permissions.
+    try {
+      const authHeader = typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined;
+
+      req.principal = await authenticateBearerPrincipal(
+        authHeader,
+        {
+          secret: process.env.JWT_SECRET || '',
+          issuer: process.env.JWT_ISSUER || '',
+          audience: process.env.JWT_AUDIENCE || '',
+        },
+        async (userId) => await userRepo.findById(userId)
+      );
       next();
-    } catch (e) {
-      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    } catch {
+      res.status(401).json({ error: 'Unauthorized: Invalid or inactive authentication' });
       return;
     }
+  });
+
+  // Trusted authenticated principal endpoint for the frontend session layer.
+  app.get('/api/auth/me', (req: Request, res: Response) => {
+    if (!req.principal) {
+      res.status(401).json({ error: 'Unauthorized: Authentication required' });
+      return;
+    }
+
+    res.json({ user: req.principal });
   });
 
   // DB Test endpoint
