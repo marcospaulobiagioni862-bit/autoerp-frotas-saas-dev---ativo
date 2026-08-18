@@ -42,7 +42,7 @@ export interface ITransactionFinancialTransactionRepository {
 
 export interface ITransactionFinancialAccountRepository {
   findById(id: string): Promise<FinancialAccount | null>;
-  findAll(filters?: TransactionFilterOptions): Promise<FinancialAccount[]>;
+  findAll?(filters?: TransactionFilterOptions): Promise<FinancialAccount[]>;
   updateBalance(accountId: string, delta: number): Promise<FinancialAccount>;
 }
 
@@ -71,7 +71,7 @@ export interface ITransactionContext {
   getPayableRepo(): ITransactionPayableRepository;
   getTransactionRepo(): ITransactionFinancialTransactionRepository;
   getAccountRepo(): ITransactionFinancialAccountRepository;
-  getPaymentMethodRepo(): ITransactionPaymentMethodRepository;
+  getPaymentMethodRepo?(): ITransactionPaymentMethodRepository;
   getAuditLogRepo(): ITransactionAuditLogRepository;
   getUserRepo(): ITransactionUserRepository;
   getFinancialPeriodRepo(): ITransactionFinancialPeriodRepository;
