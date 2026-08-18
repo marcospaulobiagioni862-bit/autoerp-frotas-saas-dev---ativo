@@ -207,9 +207,13 @@ export default function App() {
 
 
   const handleResetSeedData = async () => {
-    // Reset function
+    if (confirm('Deseja realmente reiniciar os dados de teste da base de dados?')) {
+      await seedAutoERPTestData(true);
+      await initApp();
+      alert('Banco de dados do AutoERP restaurado com sucesso!');
+    }
   };
-  const handleTestsCompleted = (results: any) => {
+  const handleTestsCompleted = (results: { passed: number; total: number; failed: number }) => {
     setTestStatus(results);
   };
 

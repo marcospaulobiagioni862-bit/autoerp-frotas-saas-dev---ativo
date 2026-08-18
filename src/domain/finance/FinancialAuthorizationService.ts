@@ -1,6 +1,5 @@
 import { ITransactionContext } from './ITransactionContext';
-import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
-import { StorageAdapter } from '../../persistence/adapters/storageAdapter';
+import { AuditLogRepository, BaseRepository } from '../../persistence/repositories/localRepositories';
 import { User } from '../../types/entities';
 import { generateUUID } from '../../shared/utils/uuid';
 
@@ -111,8 +110,8 @@ export class FinancialAuthorizationService {
       const userRepo = txContext.getUserRepo();
       user = await userRepo.findById(userId);
     } else {
-      const storage = StorageAdapter.getInstance();
-      user = await storage.getItem<User>('users', userId);
+      const userRepo = new BaseRepository<User>('users');
+      user = await userRepo.findByIdForCompany(userId, companyId);
     }
 
     if (!user) {

@@ -53,15 +53,6 @@ interface ContractDetailsModalProps {
 }
 
 
-function generateContractSummary(contract: any, receivables: any[], tickets: any[]) {
-  return {
-    totalValue: 0,
-    paidValue: 0,
-    pendingValue: 0,
-    ticketsCount: tickets.length,
-  };
-}
-
 export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
   isOpen,
   onClose,
@@ -175,9 +166,11 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
         return;
       }
 
-      const [v, d, recs, dep, allTickets] = await Promise.all([
+      const contractService = new ContractService();
+      const [v, d, summaryRes, recs, dep, allTickets, historyRes] = await Promise.all([
         vehicleRepo.findByIdForCompany(c.vehicleId, companyIdSnapshot),
         driverRepo.findByIdForCompany(c.driverId, companyIdSnapshot),
+        contractService.getContractFinancialSummary(c.id),
         receivableRepo.findByContractIdForCompany(
           companyIdSnapshot,
           c.id
@@ -187,6 +180,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
           c.id
         ),
         ticketRepo.findAllForCompany(companyIdSnapshot),
+        contractService.getContractHistory(c.id)
       ]);
 
       if (
@@ -203,11 +197,13 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       setDriver(d || null);
       
       const relatedTickets = allTickets.filter(t => t.contractId === c.id);
+      const sortedRecs = [...recs].sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
       
-      setSummary(generateContractSummary(c, recs, relatedTickets));
-      setReceivables(recs);
+      setSummary(summaryRes);
+      setReceivables(sortedRecs);
       setDeposit(dep);
       setTickets(relatedTickets);
+      setHistory(historyRes);
       
       setAttachmentEntity({
         type: 'contract',
