@@ -2,6 +2,8 @@ import { FinanceEngine } from './src/domain/finance/FinanceEngine';
 import { ReceivableService } from './src/domain/finance/ReceivableService';
 import { PayableService } from './src/domain/finance/PayableService';
 import { SettlementService } from './src/domain/finance/SettlementService';
+import { TransferService } from './src/domain/finance/TransferService';
+import { ReversalService } from './src/domain/finance/ReversalService';
 import { UnitOfWork } from './src/db/uow';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -371,6 +373,77 @@ async function startServer() {
     }
 
     res.json({ user: req.principal });
+  });
+
+  // SECURITY-2G5: transaction history, transfers and reversals are server-authoritative.
+  // Tenant and audit identity are derived exclusively from the authenticated principal.
+  app.get('/api/finance/transactions', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await txContext.getTransactionRepo().findAll({ companyId: principal.companyId })
+      );
+      res.json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/transfers', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const item = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await TransferService.transferFunds(
+            {
+              companyId: principal.companyId,
+              sourceAccountId: req.body?.sourceAccountId,
+              destinationAccountId: req.body?.destinationAccountId,
+              amount: Number(req.body?.amount),
+              transferDate: req.body?.transferDate,
+              paymentMethodId: req.body?.paymentMethodId,
+              description: typeof req.body?.description === 'string' ? req.body.description : '',
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
+      );
+      res.status(201).json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/transactions/:id/reverse', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const item = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await ReversalService.reverseTransaction(
+            principal.companyId,
+            req.params.id,
+            Number(req.body?.reversalAmount),
+            typeof req.body?.reason === 'string' ? req.body.reason : '',
+            principal.userId,
+            principal.name,
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
+      );
+      res.status(201).json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
   });
 
   // SECURITY-2G4: settlement options and settlement commands are server-authoritative.

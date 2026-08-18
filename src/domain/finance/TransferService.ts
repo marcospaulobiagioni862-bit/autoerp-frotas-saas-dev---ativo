@@ -3,7 +3,7 @@ import {
   FinancialTransactionRepository,
   FinancialAccountRepository,
 } from '../../persistence/repositories/localRepositories';
-    import { FinancialTransaction, FinancialAccount } from '../../types/entities';
+import { FinancialTransaction, FinancialAccount } from '../../types/entities';
 import { TransactionType, AuditAction } from '../../types/enums';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -27,17 +27,26 @@ export class TransferService {
   private static txRepo = new FinancialTransactionRepository();
 
   public static async transferFunds(params: TransferParams, txContext?: ITransactionContext): Promise<FinancialTransaction> {
-    await FinancialAuthorizationService.authorize(params.userId, params.companyId, 'FINANCIAL_TRANSFER');
+    await FinancialAuthorizationService.authorize(
+      params.userId,
+      params.companyId,
+      'FINANCIAL_TRANSFER',
+      txContext
+    );
 
-    await FinancialPeriodService.assertDateOpen(params.companyId, params.transferDate);
+    if (!params.sourceAccountId || !params.destinationAccountId || !params.paymentMethodId || !params.transferDate) {
+      throw new Error('Conta de origem, conta de destino, forma de pagamento e data são obrigatórias');
+    }
 
     if (params.sourceAccountId === params.destinationAccountId) {
       throw new Error('Conta de origem e destino devem ser diferentes');
     }
 
-    if (params.amount <= 0) {
+    if (!Number.isFinite(params.amount) || params.amount <= 0) {
       throw new Error('Valor da transferência deve ser maior que zero');
     }
+
+    await FinancialPeriodService.assertDateOpen(params.companyId, params.transferDate, txContext);
 
     let sourceAcc: FinancialAccount | null;
     let destAcc: FinancialAccount | null;
@@ -64,7 +73,21 @@ export class TransferService {
       throw new Error('Acesso negado: Transferência entre contas de empresas diferentes ou não autorizadas');
     }
 
-    // Execute balance updates
+    if (txContext) {
+      const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+      if (!paymentMethodRepo) {
+        throw new Error('Forma de pagamento indisponível no contexto transacional');
+      }
+      const paymentMethod = await paymentMethodRepo.findById(params.paymentMethodId);
+      if (!paymentMethod) throw new Error('Forma de pagamento não encontrada');
+      if (!paymentMethod.companyId || paymentMethod.companyId !== params.companyId) {
+        throw new Error('Acesso negado: Forma de pagamento pertence a outra empresa ou tenant inválido');
+      }
+      if (paymentMethod.active === false) {
+        throw new Error('Forma de pagamento inativa');
+      }
+    }
+
     if (txContext) {
       await txContext.getAccountRepo().updateBalance(params.sourceAccountId, -params.amount);
       await txContext.getAccountRepo().updateBalance(params.destinationAccountId, params.amount);
@@ -84,7 +107,7 @@ export class TransferService {
         paymentMethodId: params.paymentMethodId,
         transactionDate: params.transferDate,
         competenceDate: params.transferDate,
-        description: params.description,
+        description: params.description || 'Transferência entre contas financeiras',
         isReversed: false,
         createdById: params.userId,
         createdAt: new Date().toISOString(),
@@ -106,12 +129,12 @@ export class TransferService {
         params.userId,
         params.userName,
         null,
-        savedTx
+        savedTx,
+        txContext
       );
 
       return savedTx;
     } catch (error) {
-      // Rollback balances on failure
       if (txContext) {
         await txContext.getAccountRepo().updateBalance(params.sourceAccountId, params.amount);
         await txContext.getAccountRepo().updateBalance(params.destinationAccountId, -params.amount);

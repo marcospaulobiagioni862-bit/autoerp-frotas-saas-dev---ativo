@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FinancialAccount, PaymentMethod } from '../../types/entities';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
-import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
-import { useAuth } from '../../hooks/useAuth';
+import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import type {
+  SettlementAccountOption,
+  SettlementPaymentMethodOption,
+} from '../../api/financeSettlementClient';
 import { X, ArrowRightLeft, AlertCircle } from 'lucide-react';
 
 interface TransferModalProps {
@@ -12,9 +13,8 @@ interface TransferModalProps {
 }
 
 export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { user } = useAuth();
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
+  const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [sourceAccountId, setSourceAccountId] = useState<string>('');
   const [destinationAccountId, setDestinationAccountId] = useState<string>('');
   const [methodId, setMethodId] = useState<string>('');
@@ -32,22 +32,30 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
   }, [isOpen]);
 
   const loadOptions = async () => {
-    const accRepo = new FinancialAccountRepository();
-    const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAllForCompany(user.companyId);
-    const pmList = await pmRepo.findAllForCompany(user.companyId);
-    setAccounts(accList);
-    setMethods(pmList);
+    try {
+      const options = await FinanceTransactionClient.getOptions();
+      setAccounts(options.accounts);
+      setMethods(options.paymentMethods);
 
-    if (accList.length >= 2) {
-      setSourceAccountId(accList[0].id);
-      setDestinationAccountId(accList[1].id);
-    } else if (accList.length === 1) {
-      setSourceAccountId(accList[0].id);
-    }
+      if (options.accounts.length >= 2) {
+        setSourceAccountId(options.accounts[0].id);
+        setDestinationAccountId(options.accounts[1].id);
+      } else if (options.accounts.length === 1) {
+        setSourceAccountId(options.accounts[0].id);
+        setDestinationAccountId('');
+      } else {
+        setSourceAccountId('');
+        setDestinationAccountId('');
+      }
 
-    if (pmList.length > 0) {
-      setMethodId(pmList[0].id);
+      setMethodId(options.paymentMethods[0]?.id || '');
+    } catch (err) {
+      setAccounts([]);
+      setMethods([]);
+      setSourceAccountId('');
+      setDestinationAccountId('');
+      setMethodId('');
+      setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
     }
   };
 
@@ -59,6 +67,10 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
       setError('O valor da transferência deve ser maior que zero.');
       return;
     }
+    if (!sourceAccountId || !destinationAccountId || !methodId || !transferDate) {
+      setError('Conta de origem, conta de destino, forma de pagamento e data são obrigatórias.');
+      return;
+    }
     if (sourceAccountId === destinationAccountId) {
       setError('A conta de origem e de destino devem ser diferentes.');
       return;
@@ -68,22 +80,19 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
       setIsSubmitting(true);
       setError(null);
 
-      await FinanceEngine.transferFunds({
-        companyId: user.companyId,
+      await FinanceTransactionClient.transfer({
         sourceAccountId,
         destinationAccountId,
         amount,
         transferDate,
         paymentMethodId: methodId,
         description: description || 'Transferência entre contas financeiras',
-        userId: user.userId,
-        userName: user.name,
       });
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao realizar transferência.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao realizar transferência.');
     } finally {
       setIsSubmitting(false);
     }
@@ -133,6 +142,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
+                <option value="" disabled>Selecione</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name} (R$ {acc.currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
@@ -151,6 +161,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
+                <option value="" disabled>Selecione</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name} (R$ {acc.currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
@@ -186,6 +197,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
+                <option value="" disabled>Selecione</option>
                 {methods.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}

@@ -28,7 +28,16 @@ export class ReversalService {
     userName: string,
     txContext?: ITransactionContext
   ): Promise<FinancialTransaction> {
-    await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_REVERSAL');
+    await FinancialAuthorizationService.authorize(
+      userId,
+      companyId,
+      'FINANCIAL_REVERSAL',
+      txContext
+    );
+
+    if (!Number.isFinite(reversalAmount) || reversalAmount <= 0) {
+      throw new Error('Valor de estorno inválido');
+    }
 
     let originalTx: FinancialTransaction | null;
     if (txContext) {
@@ -40,10 +49,17 @@ export class ReversalService {
     if (originalTx.companyId && originalTx.companyId !== companyId) {
       throw new Error('Acesso negado: Transação pertence a outra empresa');
     }
+    if (originalTx.type === TransactionType.REVERSAL) {
+      throw new Error('Transação do tipo REVERSAL não pode ser estornada');
+    }
     if (originalTx.isReversed) throw new Error('Transação já foi estornada');
 
-    await FinancialPeriodService.assertDateOpen(companyId, originalTx.transactionDate);
-    await FinancialPeriodService.assertDateOpen(companyId, new Date().toISOString().split('T')[0]);
+    await FinancialPeriodService.assertDateOpen(companyId, originalTx.transactionDate, txContext);
+    await FinancialPeriodService.assertDateOpen(
+      companyId,
+      new Date().toISOString().split('T')[0],
+      txContext
+    );
 
     let allTxs: FinancialTransaction[];
     if (txContext) {
@@ -52,19 +68,20 @@ export class ReversalService {
       allTxs = await this.transactionRepo.findAllForCompany(companyId);
     }
     const previousReversals = allTxs.filter(
-      (t) => t.type === TransactionType.REVERSAL && t.reversalTransactionId === originalTx.id
+      (t) => t.type === TransactionType.REVERSAL && t.reversalTransactionId === originalTx!.id
     );
     const reversedAmount = roundCurrency(
-      previousReversals.reduce((sum, r) => sum + r.amount, 0)
+      previousReversals.reduce((sum, r) => sum + Number(r.amount), 0)
     );
-    const reversibleRemaining = roundCurrency(originalTx.amount - reversedAmount);
+    const originalAmount = Number(originalTx.amount);
+    const reversibleRemaining = roundCurrency(originalAmount - reversedAmount);
 
-    if (reversalAmount <= 0 || roundCurrency(reversalAmount) > roundCurrency(reversibleRemaining)) {
+    if (roundCurrency(reversalAmount) > roundCurrency(reversibleRemaining)) {
       throw new Error(`Valor de estorno inválido (Disponível para estorno: R$ ${reversibleRemaining})`);
     }
 
     const totalReversedAfter = roundCurrency(reversedAmount + reversalAmount);
-    const isFullReversal = Math.abs(totalReversedAfter - originalTx.amount) < 0.01;
+    const isFullReversal = Math.abs(totalReversedAfter - originalAmount) < 0.01;
     if (txContext) {
       await txContext.getTransactionRepo().update(originalTx.id, {
         isReversed: isFullReversal,
@@ -79,6 +96,7 @@ export class ReversalService {
       id: generateUUID(),
       companyId,
       financialAccountId: originalTx.financialAccountId,
+      destinationAccountId: originalTx.destinationAccountId,
       receivableId: originalTx.receivableId,
       payableId: originalTx.payableId,
       type: TransactionType.REVERSAL,
@@ -104,22 +122,47 @@ export class ReversalService {
       savedReversal = await this.transactionRepo.createForCompany(companyId, reversalTx);
     }
 
-    // Balance Delta: Reversing an Income reduces cash; reversing an Expense adds cash back
-    const balanceDelta = originalTx.type === TransactionType.INCOME ? -reversalAmount : reversalAmount;
-    if (txContext) {
-      await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, balanceDelta);
+    if (originalTx.type === TransactionType.TRANSFER) {
+      if (!originalTx.destinationAccountId) {
+        throw new Error('Transferência original sem conta de destino');
+      }
+
+      if (txContext) {
+        const source = await txContext.getAccountRepo().findById(originalTx.financialAccountId);
+        const destination = await txContext.getAccountRepo().findById(originalTx.destinationAccountId);
+        if (!source || !destination) throw new Error('Conta financeira de origem ou destino não encontrada');
+        if (
+          source.companyId !== companyId ||
+          destination.companyId !== companyId ||
+          source.companyId !== destination.companyId
+        ) {
+          throw new Error('Acesso negado: Transferência pertence a contas de outro tenant');
+        }
+        await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, reversalAmount);
+        await txContext.getAccountRepo().updateBalance(originalTx.destinationAccountId, -reversalAmount);
+      } else {
+        const source = await this.accountRepo.findByIdForCompany(originalTx.financialAccountId, companyId);
+        const destination = await this.accountRepo.findByIdForCompany(originalTx.destinationAccountId, companyId);
+        if (!source || !destination) throw new Error('Conta financeira de origem ou destino não encontrada');
+        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, reversalAmount);
+        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.destinationAccountId, -reversalAmount);
+      }
     } else {
-      await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, balanceDelta);
+      const balanceDelta = originalTx.type === TransactionType.INCOME ? -reversalAmount : reversalAmount;
+      if (txContext) {
+        await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, balanceDelta);
+      } else {
+        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, balanceDelta);
+      }
     }
 
-    // Update Receivable / Payable
     if (originalTx.receivableId) {
       if (txContext) {
         const rec = await txContext.getReceivableRepo().findById(originalTx.receivableId);
         if (rec) {
-          const newPaid = Math.max(0, rec.paidAmount - reversalAmount);
-          const newBalance = roundCurrency(rec.updatedAmount - newPaid);
-          const newStatus = newBalance >= rec.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          const newPaid = Math.max(0, Number(rec.paidAmount) - reversalAmount);
+          const newBalance = roundCurrency(Number(rec.updatedAmount) - newPaid);
+          const newStatus = newBalance >= Number(rec.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
           await txContext.getReceivableRepo().update(rec.id, {
             paidAmount: newPaid,
             balanceAmount: newBalance,
@@ -129,9 +172,9 @@ export class ReversalService {
       } else {
         const rec = await this.receivableRepo.findByIdForCompany(originalTx.receivableId, companyId);
         if (rec) {
-          const newPaid = Math.max(0, rec.paidAmount - reversalAmount);
-          const newBalance = roundCurrency(rec.updatedAmount - newPaid);
-          const newStatus = newBalance >= rec.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          const newPaid = Math.max(0, Number(rec.paidAmount) - reversalAmount);
+          const newBalance = roundCurrency(Number(rec.updatedAmount) - newPaid);
+          const newStatus = newBalance >= Number(rec.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
           await this.receivableRepo.updateForCompany(rec.id, companyId, {
             paidAmount: newPaid,
             balanceAmount: newBalance,
@@ -143,9 +186,9 @@ export class ReversalService {
       if (txContext) {
         const pay = await txContext.getPayableRepo().findById(originalTx.payableId);
         if (pay) {
-          const newPaid = Math.max(0, pay.paidAmount - reversalAmount);
-          const newBalance = roundCurrency(pay.updatedAmount - newPaid);
-          const newStatus = newBalance >= pay.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          const newPaid = Math.max(0, Number(pay.paidAmount) - reversalAmount);
+          const newBalance = roundCurrency(Number(pay.updatedAmount) - newPaid);
+          const newStatus = newBalance >= Number(pay.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
           await txContext.getPayableRepo().update(pay.id, {
             paidAmount: newPaid,
             balanceAmount: newBalance,
@@ -155,9 +198,9 @@ export class ReversalService {
       } else {
         const pay = await this.payableRepo.findByIdForCompany(originalTx.payableId, companyId);
         if (pay) {
-          const newPaid = Math.max(0, pay.paidAmount - reversalAmount);
-          const newBalance = roundCurrency(pay.updatedAmount - newPaid);
-          const newStatus = newBalance >= pay.updatedAmount ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
+          const newPaid = Math.max(0, Number(pay.paidAmount) - reversalAmount);
+          const newBalance = roundCurrency(Number(pay.updatedAmount) - newPaid);
+          const newStatus = newBalance >= Number(pay.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
           await this.payableRepo.updateForCompany(pay.id, companyId, {
             paidAmount: newPaid,
             balanceAmount: newBalance,
@@ -175,7 +218,8 @@ export class ReversalService {
       userId,
       userName,
       originalTx,
-      savedReversal
+      savedReversal,
+      txContext
     );
 
     return savedReversal;
