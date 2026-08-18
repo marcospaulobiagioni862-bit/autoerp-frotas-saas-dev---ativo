@@ -28,6 +28,7 @@ import {
 } from '../../../types/enums';
 import { seedAutoERPTestData } from '../../../persistence/seed/seedData';
 import {
+  AccountReceivableRepository,
   ContractRepository,
   KmRecordRepository,
   VehicleRepository,
@@ -522,23 +523,50 @@ export class FinanceTestRunner {
 
     // 17. Compensar caução parcialmente
     await test(17, '17. Compensar caução parcialmente', async () => {
+      const receivableRepo = new AccountReceivableRepository();
+      const damageReceivable = await FinanceEngine.createReceivable({
+        companyId,
+        originType: OriginType.MANUAL,
+        originId: 'damage-compensation-17',
+        categoryId: defaultCategory,
+        description: 'Avaria em para-choque',
+        totalAmount: 600,
+        dueDate: '2026-08-30',
+        userId,
+        userName,
+      });
+
       const res = await FinanceEngine.compensateSecurityDeposit(
         companyId,
         sharedDepositId,
         300,
-        'rec-damage-01',
+        damageReceivable[0].id,
         'Avaria em para-choque',
         userId,
         userName
       );
-      if (res.deposit.usedAmount === 300 && res.deposit.status === SecurityDepositStatus.PARTIALLY_USED) {
-        return { passed: true, message: 'Compensação parcial de R$ 300 realizada. Novo status: PARTIALLY_USED', details: res.deposit };
+      const compensatedReceivable = await receivableRepo.findByIdForCompany(damageReceivable[0].id, companyId);
+
+      if (
+        res.deposit.usedAmount === 300 &&
+        res.deposit.status === SecurityDepositStatus.PARTIALLY_USED &&
+        res.movement.receivableId === damageReceivable[0].id &&
+        compensatedReceivable?.status === ObligationStatus.PARTIALLY_PAID &&
+        compensatedReceivable.paidAmount === 300 &&
+        compensatedReceivable.balanceAmount === 300
+      ) {
+        return {
+          passed: true,
+          message: 'Compensação parcial de R$ 300 realizada contra recebível real. Caução PARTIALLY_USED e recebível PARTIALLY_PAID com saldo de R$ 300.',
+          details: { deposit: res.deposit, receivable: compensatedReceivable },
+        };
       }
-      return { passed: false, message: 'Falha na compensação parcial de caução' };
+      return { passed: false, message: 'Falha na compensação parcial de caução/recebível' };
     });
 
     // 18. Compensar caução integralmente
     await test(18, '18. Compensar caução integralmente', async () => {
+      const receivableRepo = new AccountReceivableRepository();
       const dep = await FinanceEngine.receiveSecurityDeposit(
         companyId,
         'cnt-dep-18',
@@ -550,19 +578,45 @@ export class FinanceTestRunner {
         userId,
         userName
       );
+      const debtReceivable = await FinanceEngine.createReceivable({
+        companyId,
+        originType: OriginType.TRAFFIC_TICKET_DRIVER,
+        originId: 'traffic-ticket-compensation-18',
+        driverId: 'drv-1',
+        vehicleId: 'veh-1',
+        categoryId: 'cat-fine-inc',
+        description: 'Multa pendente para compensação integral de caução',
+        totalAmount: 500,
+        dueDate: '2026-08-30',
+        userId,
+        userName,
+      });
       const res = await FinanceEngine.compensateSecurityDeposit(
         companyId,
         dep.deposit.id,
         500,
-        'rec-debt-01',
+        debtReceivable[0].id,
         'Quitação de multas pendentes',
         userId,
         userName
       );
-      if (res.deposit.usedAmount === 500 && res.deposit.status === SecurityDepositStatus.USED) {
-        return { passed: true, message: 'Compensação integral de R$ 500 realizada. Novo status: USED', details: res.deposit };
+      const compensatedReceivable = await receivableRepo.findByIdForCompany(debtReceivable[0].id, companyId);
+
+      if (
+        res.deposit.usedAmount === 500 &&
+        res.deposit.status === SecurityDepositStatus.USED &&
+        res.movement.receivableId === debtReceivable[0].id &&
+        compensatedReceivable?.status === ObligationStatus.PAID &&
+        compensatedReceivable.paidAmount === 500 &&
+        compensatedReceivable.balanceAmount === 0
+      ) {
+        return {
+          passed: true,
+          message: 'Compensação integral de R$ 500 realizada contra recebível real. Caução USED e recebível PAID com saldo zero.',
+          details: { deposit: res.deposit, receivable: compensatedReceivable },
+        };
       }
-      return { passed: false, message: 'Falha na compensação integral de caução' };
+      return { passed: false, message: 'Falha na compensação integral de caução/recebível' };
     });
 
     // 19. Devolver caução
