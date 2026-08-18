@@ -1,0 +1,79 @@
+name: SECURITY-2G7A implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2g7a
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2g7a-finance-overview-server-authority
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2g7a
+          path: .ci-control
+          sparse-checkout: |
+            ci/security-2g7a-apply.py
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2G7A patch
+        run: python .ci-control/ci/security-2g7a-apply.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          {
+            git diff --name-only
+            git ls-files --others --exclude-standard | grep -v '^.ci-control/' || true
+          } | sort -u > /tmp/changed.txt
+          cat >/tmp/expected.txt <<'EOF'
+          server.ts
+          src/api/__tests__/financeOverviewClientTestRunner.ts
+          src/api/financeOverviewClient.ts
+          src/components/finance/FinanceOverviewView.tsx
+          EOF
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+          ! grep -Eq 'localRepositories|useAuth' src/components/finance/FinanceOverviewView.tsx
+          grep -F "app.get('/api/finance/overview'" server.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/financeOverviewClient.ts >/dev/null
+
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Finance overview client tests
+        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+      - name: Diff safety
+        run: git diff --check
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name "chatgpt-codex-connector"
+          git config user.email "noreply@openai.com"
+          git add server.ts src/api/financeOverviewClient.ts src/api/__tests__/financeOverviewClientTestRunner.ts src/components/finance/FinanceOverviewView.tsx
+          git diff --cached --check
+          git commit -m "feat(security): move finance overview to server authority"
+          git push origin HEAD:security-2g7a-finance-overview-server-authority
