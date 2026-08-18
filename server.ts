@@ -7,6 +7,7 @@ import { ReversalService } from './src/domain/finance/ReversalService';
 import { RenegotiationService } from './src/domain/finance/RenegotiationService';
 import { DREService } from './src/domain/finance/DREService';
 import { ProfitabilityService } from './src/domain/finance/ProfitabilityService';
+import { DepositService } from './src/domain/finance/DepositService';
 import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime } from './src/types/enums';
 import express from 'express';
@@ -484,6 +485,69 @@ async function startServer() {
         )
       );
       res.json({ report });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  // SECURITY-2G8: security-deposit read/receipt are server-authoritative.
+  app.get('/api/finance/security-deposits/by-contract/:contractId', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+    const contractId = typeof req.params.contractId === 'string' ? req.params.contractId.trim() : '';
+    if (!contractId) {
+      res.status(400).json({ error: 'Invalid security deposit request' });
+      return;
+    }
+
+    try {
+      const deposit = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await DepositService.getSecurityDepositByContract(
+          principal.companyId,
+          contractId,
+          principal.userId,
+          txContext
+        )
+      );
+      res.json({ deposit });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/security-deposits/receive', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const contractId = typeof req.body?.contractId === 'string' ? req.body.contractId.trim() : '';
+    const amount = Number(req.body?.amount);
+    const financialAccountId = typeof req.body?.financialAccountId === 'string' ? req.body.financialAccountId.trim() : '';
+    const paymentMethodId = typeof req.body?.paymentMethodId === 'string' ? req.body.paymentMethodId.trim() : '';
+
+    if (!contractId || !Number.isFinite(amount) || amount <= 0 || !financialAccountId || !paymentMethodId) {
+      res.status(400).json({ error: 'Invalid security deposit request' });
+      return;
+    }
+
+    try {
+      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const contract = await txContext.getContractRepo().findById(contractId);
+        if (!contract) throw new Error('Contrato não encontrado');
+
+        return await DepositService.receiveSecurityDeposit(
+          principal.companyId,
+          contract.id,
+          contract.driverId,
+          contract.vehicleId,
+          amount,
+          financialAccountId,
+          paymentMethodId,
+          principal.userId,
+          principal.name,
+          txContext
+        );
+      });
+      res.status(201).json(result);
     } catch (error) {
       sendFinanceCommandError(res, error);
     }

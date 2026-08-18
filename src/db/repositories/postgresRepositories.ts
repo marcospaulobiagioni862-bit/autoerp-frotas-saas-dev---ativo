@@ -1,10 +1,11 @@
 import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
-  financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods
+  financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods,
+  securityDeposits, securityDepositMovements
 } from '../schema';
 import { eq, and, sql, lt } from 'drizzle-orm';
-import { AuditLog } from '../../types/entities';
+import { AuditLog, SecurityDeposit, SecurityDepositMovement } from '../../types/entities';
 
 // Basic wrapper around Drizzle ORM to satisfy IBaseRepository requirements
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
@@ -162,4 +163,127 @@ export class PostgresContractRepository extends PostgresBaseRepository<any> {
 
 export class PostgresFinancialPeriodRepository extends PostgresBaseRepository<any> {
   constructor(tx?: any) { super(financialPeriods, tx); }
+}
+
+
+export class PostgresSecurityDepositRepository {
+  private tx: any;
+  constructor(tx?: any) { this.tx = tx || db; }
+
+  private map(row: any): SecurityDeposit {
+    return {
+      id: row.id,
+      companyId: row.companyId,
+      contractId: row.contractId,
+      driverId: row.driverId,
+      vehicleId: row.vehicleId || '',
+      originalAmount: Number(row.originalAmount ?? row.amount ?? 0),
+      receivedAmount: Number(row.receivedAmount ?? 0),
+      usedAmount: Number(row.usedAmount ?? 0),
+      returnedAmount: Number(row.returnedAmount ?? 0),
+      status: row.status,
+      receivedAt: row.receivedAt || undefined,
+      returnedAt: row.returnedAt || undefined,
+      notes: row.notes || undefined,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt || row.createdAt,
+    } as SecurityDeposit;
+  }
+
+  async lockContract(companyId: string, contractId: string): Promise<void> {
+    const key = `${companyId}:${contractId}`;
+    await this.tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key})::bigint)`);
+  }
+
+  async findById(id: string): Promise<SecurityDeposit | null> {
+    const rows = await this.tx.select().from(securityDeposits).where(eq(securityDeposits.id, id)).limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async findByContractId(contractId: string): Promise<SecurityDeposit | null> {
+    const rows = await this.tx.select().from(securityDeposits).where(eq(securityDeposits.contractId, contractId)).limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async create(item: SecurityDeposit): Promise<SecurityDeposit> {
+    const rows = await this.tx.insert(securityDeposits).values({
+      id: item.id,
+      companyId: item.companyId,
+      contractId: item.contractId,
+      driverId: item.driverId,
+      vehicleId: item.vehicleId || null,
+      amount: item.originalAmount,
+      originalAmount: item.originalAmount,
+      receivedAmount: item.receivedAmount,
+      usedAmount: item.usedAmount,
+      returnedAmount: item.returnedAmount,
+      status: item.status,
+      receivedAt: item.receivedAt || null,
+      returnedAt: item.returnedAt || null,
+      notes: item.notes || null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }).returning();
+    return this.map(rows[0]);
+  }
+
+  async update(id: string, item: Partial<SecurityDeposit>): Promise<SecurityDeposit> {
+    const values: any = {};
+    if (item.contractId !== undefined) values.contractId = item.contractId;
+    if (item.driverId !== undefined) values.driverId = item.driverId;
+    if (item.vehicleId !== undefined) values.vehicleId = item.vehicleId || null;
+    if (item.originalAmount !== undefined) {
+      values.originalAmount = item.originalAmount;
+      values.amount = item.originalAmount;
+    }
+    if (item.receivedAmount !== undefined) values.receivedAmount = item.receivedAmount;
+    if (item.usedAmount !== undefined) values.usedAmount = item.usedAmount;
+    if (item.returnedAmount !== undefined) values.returnedAmount = item.returnedAmount;
+    if (item.status !== undefined) values.status = item.status;
+    if (item.receivedAt !== undefined) values.receivedAt = item.receivedAt || null;
+    if (item.returnedAt !== undefined) values.returnedAt = item.returnedAt || null;
+    if (item.notes !== undefined) values.notes = item.notes || null;
+    if (item.updatedAt !== undefined) values.updatedAt = item.updatedAt;
+    const rows = await this.tx.update(securityDeposits).set(values).where(eq(securityDeposits.id, id)).returning();
+    if (!rows[0]) throw new Error('Caução não encontrada');
+    return this.map(rows[0]);
+  }
+}
+
+export class PostgresSecurityDepositMovementRepository {
+  private tx: any;
+  constructor(tx?: any) { this.tx = tx || db; }
+
+  private map(row: any): SecurityDepositMovement {
+    return {
+      id: row.id,
+      securityDepositId: row.depositId,
+      companyId: row.companyId,
+      type: row.type,
+      amount: Number(row.amount || 0),
+      date: row.date,
+      financialTransactionId: row.financialTransactionId || undefined,
+      receivableId: row.receivableId || undefined,
+      description: row.description || '',
+      createdById: row.createdById || '',
+      createdAt: row.createdAt,
+    } as SecurityDepositMovement;
+  }
+
+  async create(item: SecurityDepositMovement): Promise<SecurityDepositMovement> {
+    const rows = await this.tx.insert(securityDepositMovements).values({
+      id: item.id,
+      companyId: item.companyId,
+      depositId: item.securityDepositId,
+      type: item.type,
+      amount: item.amount,
+      date: item.date,
+      financialTransactionId: item.financialTransactionId || null,
+      receivableId: item.receivableId || null,
+      description: item.description || null,
+      createdById: item.createdById,
+      createdAt: item.createdAt,
+    }).returning();
+    return this.map(rows[0]);
+  }
 }

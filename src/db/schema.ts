@@ -242,9 +242,20 @@ export const securityDeposits = pgTable('security_deposits', {
   companyId: text('company_id').notNull(),
   contractId: text('contract_id').notNull(),
   driverId: text('driver_id').notNull(),
+  vehicleId: text('vehicle_id'),
+  // Legacy amount is retained for backward-compatible persistence; new writes
+  // keep it equal to originalAmount.
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  originalAmount: numeric('original_amount', { precision: 12, scale: 2 }).notNull(),
+  receivedAmount: numeric('received_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  usedAmount: numeric('used_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  returnedAmount: numeric('returned_amount', { precision: 12, scale: 2 }).notNull().default('0'),
   status: text('status').notNull(),
+  receivedAt: timestamp('received_at', { mode: 'string' }),
+  returnedAt: timestamp('returned_at', { mode: 'string' }),
+  notes: text('notes'),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
 export const securityDepositMovements = pgTable('security_deposit_movements', {
@@ -254,7 +265,11 @@ export const securityDepositMovements = pgTable('security_deposit_movements', {
   type: text('type').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   date: timestamp('date', { mode: 'string' }).notNull(),
+  financialTransactionId: text('financial_transaction_id'),
+  receivableId: text('receivable_id'),
   description: text('description'),
+  createdById: text('created_by_id'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
 export const recurringRules = pgTable('recurring_rules', {
