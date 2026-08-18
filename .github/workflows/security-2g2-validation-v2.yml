@@ -1,0 +1,160 @@
+name: SECURITY-2G2 validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g2-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 2483c94bc04206707ee764f420561948a1a5a9e5 -- . ':(exclude).github/**'
+
+      - name: Finance-only principal authority gate
+        shell: bash
+        run: |
+          finance_block="$(sed -n '/SECURITY-2G2: finance obligation commands/,/DB Test endpoint/p' server.ts)"
+          test -n "$finance_block"
+          echo "$finance_block" | grep -F "app.post('/api/finance/receivables'" >/dev/null
+          echo "$finance_block" | grep -F "app.post('/api/finance/receivables/:id/cancel'" >/dev/null
+          echo "$finance_block" | grep -F "app.post('/api/finance/payables'" >/dev/null
+          echo "$finance_block" | grep -F "app.post('/api/finance/payables/:id/cancel'" >/dev/null
+          echo "$finance_block" | grep -F 'UnitOfWork.run(principal.companyId' >/dev/null
+          echo "$finance_block" | grep -F 'companyId: principal.companyId' >/dev/null
+          echo "$finance_block" | grep -F 'userId: principal.userId' >/dev/null
+          echo "$finance_block" | grep -F 'userName: principal.name' >/dev/null
+          if echo "$finance_block" | grep -E 'companyId: req\.body.*companyId|userId: req\.body.*userId|userName: req\.body.*userName'; then
+            echo 'Finance route consumes client identity fields' >&2
+            exit 1
+          fi
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g2-seed.ts <<'EOF'
+          import fs from 'node:fs'; import {Pool} from 'pg'; import {hashPassword} from '../src/server/password';
+          const p=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!});
+          async function main(){
+            for(const f of ['drizzle/0000_milky_invisible_woman.sql','drizzle/0001_rls_and_audit.sql','drizzle/0002_phase1_final_hardening.sql','drizzle/0003_auth_credentials.sql']) await p.query(fs.readFileSync(f,'utf8'));
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES ('company-g2-a','11111111000111','Tenant A','ACTIVE'),('company-g2-b','22222222000122','Tenant B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES ('g2-admin-a','company-g2-a','Admin G2 A','admin-a@g2.test','ADMIN',true,ARRAY['*']),('g2-readonly-a','company-g2-a','Readonly G2 A','readonly-a@g2.test','READONLY',true,ARRAY[]::text[]),('g2-admin-b','company-g2-b','Admin G2 B','admin-b@g2.test','ADMIN',true,ARRAY['*'])`);
+            const hs=await Promise.all(['StrongPass123!','StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES ($1,$2,$3),($4,$5,$6),($7,$8,$9)`,['company-g2-a','g2-admin-a',hs[0],'company-g2-a','g2-readonly-a',hs[1],'company-g2-b','g2-admin-b',hs[2]]);
+            await p.query(`CREATE ROLE autoerp_g2_app LOGIN PASSWORD 'autoerp_g2_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g2_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,financial_periods TO autoerp_g2_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON account_receivables,account_payables TO autoerp_g2_app`);
+            await p.query(`GRANT SELECT,INSERT ON audit_logs TO autoerp_g2_app`);
+            await p.end();
+          } main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g2-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g2_app:autoerp_g2_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g2-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production HTTP trust-boundary integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          cat > .ci-tmp/g2-http.ts <<'EOF'
+          import {Pool} from 'pg'; const db=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!}); const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function post(path:string,cookie:string|null,body:any){return fetch(base+path,{method:'POST',headers:{'content-type':'application/json',...(cookie?{cookie}:{})},body:JSON.stringify(body)})}
+          async function main(){
+            let r=await post('/api/finance/receivables',null,{}); if(r.status!==401)throw Error(`no-session ${r.status}`); console.log('G2_NO_SESSION=PASS');
+            const ca=await login('11111111000111','admin-a@g2.test'), cb=await login('22222222000122','admin-b@g2.test'), cr=await login('11111111000111','readonly-a@g2.test'); console.log('G2_LOGIN=PASS');
+            const arp={companyId:'company-g2-b',userId:'g2-admin-b',userName:'FORGED',originType:'MANUAL',originId:'g2-ar-main',categoryId:'cat-income',description:'G2 AR',totalAmount:610,dueDate:'2026-09-10',competenceDate:'2026-09-01'};
+            r=await post('/api/finance/receivables',ca,arp); if(r.status!==201)throw Error(`AR ${r.status} ${await r.text()}`); let j:any=await r.json(); const ar=j.items[0]; if(ar.companyId!=='company-g2-a')throw Error('AR forged tenant accepted');
+            let q=await db.query(`SELECT a.company_id,l.user_id,l.changes FROM account_receivables a JOIN audit_logs l ON l.entity_id=a.id AND l.action='CREATE' WHERE a.id=$1`,[ar.id]);let ch=JSON.parse(q.rows[0].changes);if(q.rows[0].company_id!=='company-g2-a'||q.rows[0].user_id!=='g2-admin-a'||ch.userName!=='Admin G2 A')throw Error('AR principal authority failed');console.log('G2_AR_AUTHORITY=PASS');
+            r=await post('/api/finance/receivables',ca,arp); j=await r.json(); if(r.status!==201||j.items[0].id!==ar.id)throw Error('AR idempotency response'); q=await db.query(`SELECT count(*)::int c FROM account_receivables WHERE origin_id='g2-ar-main'`);if(q.rows[0].c!==1)throw Error('AR duplicate');console.log('G2_AR_IDEMPOTENCY=PASS');
+            const app={companyId:'company-g2-b',userId:'g2-admin-b',userName:'FORGED',originType:'MANUAL',originId:'g2-ap-main',categoryId:'cat-expense',description:'G2 AP',totalAmount:470,dueDate:'2026-09-12',competenceDate:'2026-09-01',idempotencyKey:'g2-ap-key'};
+            r=await post('/api/finance/payables',ca,app);if(r.status!==201)throw Error(`AP ${r.status} ${await r.text()}`);j=await r.json();const ap=j.items[0];if(ap.companyId!=='company-g2-a')throw Error('AP forged tenant accepted');q=await db.query(`SELECT l.user_id,l.changes FROM audit_logs l WHERE l.entity_id=$1 AND l.action='CREATE'`,[ap.id]);ch=JSON.parse(q.rows[0].changes);if(q.rows[0].user_id!=='g2-admin-a'||ch.userName!=='Admin G2 A')throw Error('AP principal authority failed');console.log('G2_AP_AUTHORITY=PASS');
+            r=await post('/api/finance/payables',ca,app);j=await r.json();if(r.status!==201||j.items[0].id!==ap.id)throw Error('AP idempotency response');q=await db.query(`SELECT count(*)::int c FROM account_payables WHERE origin_id='g2-ap-main'`);if(q.rows[0].c!==1)throw Error('AP duplicate');console.log('G2_AP_IDEMPOTENCY=PASS');
+            r=await post('/api/finance/receivables',cr,{...arp,originId:'readonly-denied'});if(r.status!==403)throw Error(`readonly ${r.status} ${await r.text()}`);q=await db.query(`SELECT count(*)::int c FROM account_receivables WHERE origin_id='readonly-denied'`);if(q.rows[0].c!==0)throw Error('readonly mutated');console.log('G2_READONLY=PASS');
+            r=await post('/api/finance/receivables',cb,{...arp,originId:'g2-ar-b'});if(r.status!==201)throw Error(`B create ${r.status}`);j=await r.json();const bar=j.items[0];r=await post(`/api/finance/receivables/${bar.id}/cancel`,ca,{reason:'attack',companyId:'company-g2-b'});if(r.status!==404)throw Error(`cross cancel ${r.status}`);q=await db.query(`SELECT status FROM account_receivables WHERE id=$1`,[bar.id]);if(q.rows[0].status!=='PENDING')throw Error('cross cancel mutated');console.log('G2_CROSS_TENANT=PASS');
+            r=await post(`/api/finance/receivables/${ar.id}/cancel`,ca,{reason:'ok',userId:'g2-admin-b'});if(r.status!==200)throw Error(`AR cancel ${r.status}`);r=await post(`/api/finance/payables/${ap.id}/cancel`,ca,{reason:'ok',userName:'FORGED'});if(r.status!==200)throw Error(`AP cancel ${r.status}`);q=await db.query(`SELECT user_id,changes FROM audit_logs WHERE entity_id=ANY($1::text[]) AND action='CANCEL'`,[[ar.id,ap.id]]);if(q.rowCount!==2||q.rows.some(x=>x.user_id!=='g2-admin-a'||JSON.parse(x.changes).userName!=='Admin G2 A'))throw Error('cancel audit identity');console.log('G2_CANCEL_AUDIT=PASS'); await db.end();
+          } main().catch(e=>{console.error('G2_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g2-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g2-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G2_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G2_CI_REPORT_V2',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=2483c94bc04206707ee764f420561948a1a5a9e5','STRICT_ACCEPTANCE=Production server+PostgreSQL16; no-session 401; real login; principal tenant/audit identity authoritative; AR/AP idempotency; READONLY 403; cross-tenant cancel blocked; cancel audit identity; AuthSession 8/8; Bootstrap 5/5; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability'].join('\n');await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
