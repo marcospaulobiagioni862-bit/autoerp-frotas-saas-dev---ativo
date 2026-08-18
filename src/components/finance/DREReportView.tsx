@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { FinanceReportingClient } from '../../api/financeReportingClient';
 import { VehicleRepository } from '../../persistence/repositories/localRepositories';
 import { Vehicle } from '../../types/entities';
 import { AccountingRegime } from '../../types/enums';
@@ -46,7 +47,7 @@ export const DREReportView: React.FC = () => {
       setLoading(true);
       const companyId = user.companyId;
       try {
-        const dre = await FinanceEngine.getDREReport(companyId, startDate, endDate, regime);
+        const dre = await FinanceReportingClient.getDRE(startDate, endDate, regime);
         const vehRepo = new VehicleRepository();
         const vehList = await vehRepo.findAllForCompany(companyId);
         

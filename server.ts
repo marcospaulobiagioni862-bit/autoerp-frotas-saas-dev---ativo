@@ -5,7 +5,9 @@ import { SettlementService } from './src/domain/finance/SettlementService';
 import { TransferService } from './src/domain/finance/TransferService';
 import { ReversalService } from './src/domain/finance/ReversalService';
 import { RenegotiationService } from './src/domain/finance/RenegotiationService';
+import { DREService } from './src/domain/finance/DREService';
 import { UnitOfWork } from './src/db/uow';
+import { AccountingRegime } from './src/types/enums';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -409,6 +411,41 @@ async function startServer() {
       });
 
       res.json(summary);
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  // SECURITY-2G7B1: DRE is server-authoritative and tenant-scoped.
+  app.get('/api/finance/reports/dre', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const periodStart = typeof req.query.start === 'string' ? req.query.start : '';
+    const periodEnd = typeof req.query.end === 'string' ? req.query.end : '';
+    const regime = req.query.regime === AccountingRegime.CASH
+      ? AccountingRegime.CASH
+      : req.query.regime === AccountingRegime.ACCRUAL
+        ? AccountingRegime.ACCRUAL
+        : null;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (!datePattern.test(periodStart) || !datePattern.test(periodEnd) || periodStart > periodEnd || !regime) {
+      res.status(400).json({ error: 'Invalid DRE report parameters' });
+      return;
+    }
+
+    try {
+      const report = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await DREService.getDREReport(
+          principal.companyId,
+          periodStart,
+          periodEnd,
+          regime,
+          txContext
+        )
+      );
+      res.json({ report });
     } catch (error) {
       sendFinanceCommandError(res, error);
     }
