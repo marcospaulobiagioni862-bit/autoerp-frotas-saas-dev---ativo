@@ -1,0 +1,91 @@
+name: SECURITY-2G8 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g8
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 26d824618682babb622cefe5f6bfad1a9959f650 -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G8 authority and migration gate
+        shell: bash
+        run: |
+          grep -F '0006_security_deposit_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'tenant_access_security_deposits' drizzle/0006_security_deposit_authority.sql >/dev/null
+          grep -F 'tenant_access_security_deposit_movements' drizzle/0006_security_deposit_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0006_security_deposit_authority.sql >/dev/null
+          grep -F 'getSecurityDepositRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'getSecurityDepositMovementRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'getContractRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F "'RECEIPT_REGISTER'" src/domain/finance/DepositService.ts >/dev/null
+          grep -F 'pg_advisory_xact_lock' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F "app.post('/api/finance/security-deposits/receive'" server.ts >/dev/null
+          grep -F "app.get('/api/finance/security-deposits/by-contract/:contractId'" server.ts >/dev/null
+          grep -F 'getContractRepo().findById(contractId)' server.ts >/dev/null
+          grep -F 'FinanceDepositClient.getByContract' src/components/contracts/ContractDetailsModal.tsx >/dev/null
+          grep -F 'FinanceDepositClient.receive' src/components/contracts/ContractDetailsModal.tsx >/dev/null
+          ! grep -F 'FinanceEngine.receiveSecurityDeposit' src/components/contracts/ContractDetailsModal.tsx
+          ! grep -F 'SecurityDepositRepository' src/components/contracts/ContractDetailsModal.tsx
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:|driverId[[:space:]]*:|vehicleId[[:space:]]*:' src/api/financeDepositClient.ts
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Deposit and prior finance transport tests
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: PostgreSQL 16 + session/RLS + atomic deposit validation
+        run: npx tsx .ci/g8-validation.ts
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G8_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=26d824618682babb622cefe5f6bfad1a9959f650','FinanceDepositClient=6/6 required','PostgreSQL16/session/RLS deposit read+receipt required','Partial+second receipt+no duplicate+cross-tenant+READONLY+rollback required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
