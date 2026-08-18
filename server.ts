@@ -1,4 +1,6 @@
 import { FinanceEngine } from './src/domain/finance/FinanceEngine';
+import { ReceivableService } from './src/domain/finance/ReceivableService';
+import { PayableService } from './src/domain/finance/PayableService';
 import { UnitOfWork } from './src/db/uow';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -50,6 +52,38 @@ function getJwtConfig(): JwtAuthenticationConfig {
 
 function isSecureCookieRuntime(): boolean {
   return process.env.NODE_ENV === 'production';
+}
+
+function requireFinancePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  if (!req.principal) {
+    res.status(401).json({ error: 'Unauthorized: Authentication required' });
+    return null;
+  }
+  return req.principal;
+}
+
+function sendFinanceCommandError(res: Response, error: unknown): void {
+  const message = error instanceof Error ? error.message : '';
+
+  if (message.startsWith('Acesso negado:')) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  if (message.includes('não encontrada') || message.includes('não encontrado')) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (
+    message.includes('já se encontra') ||
+    message.includes('Não é possível cancelar') ||
+    message.includes('período financeiro') ||
+    message.includes('Período')
+  ) {
+    res.status(409).json({ error: 'Finance command conflict' });
+    return;
+  }
+
+  res.status(400).json({ error: 'Invalid finance command' });
 }
 
 async function startServer() {
@@ -336,6 +370,119 @@ async function startServer() {
     }
 
     res.json({ user: req.principal });
+  });
+
+  // SECURITY-2G2: finance obligation commands cross the server trust boundary.
+  // Tenant and audit identity come only from the authenticated principal; client
+  // supplied companyId/userId/userName fields are intentionally not consumed.
+  app.post('/api/finance/receivables', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await ReceivableService.create(
+          {
+            companyId: principal.companyId,
+            originType: req.body?.originType,
+            originId: req.body?.originId,
+            vehicleId: req.body?.vehicleId,
+            driverId: req.body?.driverId,
+            contractId: req.body?.contractId,
+            categoryId: req.body?.categoryId,
+            description: req.body?.description,
+            totalAmount: req.body?.totalAmount,
+            dueDate: req.body?.dueDate,
+            competenceDate: req.body?.competenceDate,
+            installmentsCount: req.body?.installmentsCount,
+            recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
+            userId: principal.userId,
+            userName: principal.name,
+          },
+          txContext
+        )
+      );
+      res.status(201).json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/receivables/:id/cancel', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await ReceivableService.cancelReceivable(
+          principal.companyId,
+          req.params.id,
+          typeof req.body?.reason === 'string' ? req.body.reason : '',
+          principal.userId,
+          principal.name,
+          txContext
+        )
+      );
+      res.json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/payables', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await PayableService.create(
+          {
+            companyId: principal.companyId,
+            originType: req.body?.originType,
+            originId: req.body?.originId,
+            vehicleId: req.body?.vehicleId,
+            supplierId: req.body?.supplierId,
+            driverId: req.body?.driverId,
+            contractId: req.body?.contractId,
+            categoryId: req.body?.categoryId,
+            description: req.body?.description,
+            totalAmount: req.body?.totalAmount,
+            dueDate: req.body?.dueDate,
+            competenceDate: req.body?.competenceDate,
+            installmentsCount: req.body?.installmentsCount,
+            recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
+            idempotencyKey: req.body?.idempotencyKey,
+            userId: principal.userId,
+            userName: principal.name,
+          },
+          txContext
+        )
+      );
+      res.status(201).json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/payables/:id/cancel', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await PayableService.cancelPayable(
+          principal.companyId,
+          req.params.id,
+          typeof req.body?.reason === 'string' ? req.body.reason : '',
+          principal.userId,
+          principal.name,
+          txContext
+        )
+      );
+      res.json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
   });
 
   // DB Test endpoint
