@@ -1,0 +1,94 @@
+name: SECURITY-2G4 implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2g4
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2g4-settlement-server-authority
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout CI control
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2g4
+          path: .ci-control
+          sparse-checkout: |
+            ci/security-2g4-apply.py
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply controlled G4 patch
+        run: python .ci-control/ci/security-2g4-apply.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          {
+            git diff --name-only origin/main
+            git ls-files --others --exclude-standard | grep -v '^.ci-control/' || true
+          } | sort -u > /tmp/changed.txt
+          cat >/tmp/expected.txt <<'EOF'
+          server.ts
+          src/api/__tests__/financeSettlementClientTestRunner.ts
+          src/api/financeSettlementClient.ts
+          src/components/modals/PaymentModal.tsx
+          src/components/modals/ReceiptModal.tsx
+          src/db/repositories/postgresRepositories.ts
+          src/db/uow.ts
+          src/domain/finance/ITransactionContext.ts
+          src/domain/finance/SettlementService.ts
+          EOF
+          sort -o /tmp/expected.txt /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/modals/PaymentModal.tsx
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/modals/ReceiptModal.tsx
+          grep -F "credentials: 'include'" src/api/financeSettlementClient.ts >/dev/null
+          grep -F "app.post('/api/finance/receivables/:id/receipt'" server.ts >/dev/null
+          grep -F "app.post('/api/finance/payables/:id/payment'" server.ts >/dev/null
+          grep -F "app.get('/api/finance/settlement-options'" server.ts >/dev/null
+
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Settlement client tests
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+      - name: Diff safety
+        run: git diff --check
+
+      - name: Publish validated patch to production candidate
+        shell: bash
+        run: |
+          git config user.name "chatgpt-codex-connector"
+          git config user.email "noreply@openai.com"
+          git add server.ts \
+            src/domain/finance/SettlementService.ts \
+            src/api/financeSettlementClient.ts \
+            src/api/__tests__/financeSettlementClientTestRunner.ts \
+            src/components/modals/PaymentModal.tsx \
+            src/components/modals/ReceiptModal.tsx
+          git diff --cached --check
+          git commit -m "feat(security): move payment and receipt to server authority"
+          git push origin HEAD:security-2g4-settlement-server-authority
