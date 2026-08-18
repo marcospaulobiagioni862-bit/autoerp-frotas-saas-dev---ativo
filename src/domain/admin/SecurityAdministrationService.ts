@@ -10,6 +10,22 @@ export interface SecurityAdministrationDataOptions {
 export class SecurityAdministrationService {
   private static USER_STORAGE_KEY_PREFIX = '__autoerp_admin_users_v1_';
 
+  private static isDevelopmentMockDataEnabled(
+    options: SecurityAdministrationDataOptions
+  ): boolean {
+    if (options.allowDevelopmentMockData !== undefined) {
+      return options.allowDevelopmentMockData === true;
+    }
+
+    const viteImportMeta = import.meta as ImportMeta & {
+      env?: {
+        DEV?: boolean;
+      };
+    };
+
+    return viteImportMeta.env?.DEV === true;
+  }
+
   /**
    * Evaluates if a role is authorized for an administrative action.
    */
@@ -78,15 +94,14 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Returns development-only administrative mock users. Production/default
-   * callers fail closed with an empty list until a real server data source is
-   * connected.
+   * Returns development-only administrative mock users. Production callers
+   * fail closed with an empty list until a real server data source is connected.
    */
   public static listUsers(
     companyId: string,
     options: SecurityAdministrationDataOptions = {}
   ): SystemUserRecord[] {
-    if (options.allowDevelopmentMockData !== true) {
+    if (!this.isDevelopmentMockDataEnabled(options)) {
       return [];
     }
 
@@ -107,15 +122,15 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Returns fabricated session telemetry only for explicit development mode.
-   * Production/default callers return no sessions rather than presenting mock
-   * IPs, timestamps or session IDs as real security telemetry.
+   * Returns fabricated session telemetry only in explicit development mode.
+   * Production callers return no sessions rather than presenting mock IPs,
+   * timestamps or session IDs as real security telemetry.
    */
   public static listActiveSessions(
     companyId: string,
     options: SecurityAdministrationDataOptions = {}
   ): ActiveSessionRecord[] {
-    if (options.allowDevelopmentMockData !== true) {
+    if (!this.isDevelopmentMockDataEnabled(options)) {
       return [];
     }
 
@@ -138,8 +153,8 @@ export class SecurityAdministrationService {
 
   /**
    * Updates only the development mock user store. Real production user status
-   * changes must be implemented through a trusted server-side administration
-   * endpoint in a later SECURITY-2 wave.
+   * changes must use a trusted server-side administration endpoint in a later
+   * SECURITY-2 wave.
    */
   public static async updateUserStatus(
     companyId: string,
@@ -150,7 +165,7 @@ export class SecurityAdministrationService {
     correlationId: string = `corr-sec-user-${Date.now()}`,
     options: SecurityAdministrationDataOptions = {}
   ): Promise<{ success: boolean; message: string }> {
-    if (options.allowDevelopmentMockData !== true) {
+    if (!this.isDevelopmentMockDataEnabled(options)) {
       return {
         success: false,
         message: 'Operação indisponível: gestão local de usuários simulados é permitida somente em desenvolvimento.',
