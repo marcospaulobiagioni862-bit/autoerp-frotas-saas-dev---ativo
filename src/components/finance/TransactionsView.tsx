@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import {
-  FinancialAccountRepository,
-  FinancialTransactionRepository,
-} from '../../persistence/repositories/localRepositories';
-import { FinancialAccount, FinancialTransaction } from '../../types/entities';
+import { FinancialTransaction } from '../../types/entities';
 import { TransactionType } from '../../types/enums';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
-import { useAuth } from '../../hooks/useAuth';
+import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import type { SettlementAccountOption } from '../../api/financeSettlementClient';
 import {
   ArrowRightLeft,
   Wallet,
@@ -21,15 +17,12 @@ interface TransactionsViewProps {
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransferModal }) => {
-  const { user } = useAuth();
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<string | null>(null);
-
-  // Reversal confirm dialog state
   const [reversalTargetTx, setReversalTargetTx] = useState<FinancialTransaction | null>(null);
 
   useEffect(() => {
@@ -38,43 +31,37 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
 
   const loadData = async () => {
     setLoading(true);
-    const accRepo = new FinancialAccountRepository();
-    const txRepo = new FinancialTransactionRepository();
-
-    const [accList, txList] = await Promise.all([
-      accRepo.findAllForCompany(user.companyId),
-      txRepo.findAllForCompany(user.companyId),
-    ]);
-
-    setAccounts(accList);
-    setTransactions(txList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    setLoading(false);
+    try {
+      const [options, txList] = await Promise.all([
+        FinanceTransactionClient.getOptions(),
+        FinanceTransactionClient.listTransactions(),
+      ]);
+      setAccounts(options.accounts);
+      setTransactions(txList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } catch (err) {
+      setAccounts([]);
+      setTransactions([]);
+      setMessage(err instanceof Error ? err.message : 'Erro ao carregar extrato financeiro.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const confirmReverse = async () => {
     if (!reversalTargetTx) return;
 
     try {
-      if (reversalTargetTx.companyId !== user.companyId) {
-        alert('Erro de tenant: A transação não pertence à empresa da sessão atual.');
-        setReversalTargetTx(null);
-        return;
-      }
-
-      await FinanceEngine.reverseTransaction(
-        user.companyId,
+      await FinanceTransactionClient.reverse(
         reversalTargetTx.id,
-        reversalTargetTx.amount,
-        'Estorno operacional solicitado via extrato',
-        user.userId,
-        user.name
+        Number(reversalTargetTx.amount),
+        'Estorno operacional solicitado via extrato'
       );
 
       setMessage('Transação estornada com sucesso!');
       setReversalTargetTx(null);
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao realizar estorno');
+      await loadData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Erro ao realizar estorno');
       setReversalTargetTx(null);
     }
   };
@@ -119,7 +106,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         </div>
       )}
 
-      {/* Account Balances Summary Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {accounts.map((acc) => {
           const isCard = acc.type === 'CREDIT_CARD';
@@ -150,7 +136,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         })}
       </div>
 
-      {/* Filters Bar */}
       <Card padding="sm">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="w-full sm:w-80">
@@ -189,7 +174,6 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         </div>
       </Card>
 
-      {/* Transactions Table */}
       <Card padding="none">
         {loading ? (
           <div className="p-6 space-y-3">
@@ -215,6 +199,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                   const isIncome = tx.type === TransactionType.INCOME;
                   const isExpense = tx.type === TransactionType.EXPENSE;
                   const isTransfer = tx.type === TransactionType.TRANSFER;
+                  const isReversal = tx.type === TransactionType.REVERSAL;
 
                   return (
                     <tr
@@ -268,7 +253,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                         )}
                       </td>
                       <td className="p-3.5 text-right">
-                        {!tx.isReversed && (
+                        {!tx.isReversed && !isReversal && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -300,4 +285,3 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     </div>
   );
 };
-
