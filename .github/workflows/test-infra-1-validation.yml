@@ -43,7 +43,7 @@ jobs:
 
       - name: Verify AutoERP source equals TEST-INFRA-1 candidate
         run: |
-          git diff --exit-code c3d0121d02de9a0f3934a10c75596293ea81c346 -- . ':(exclude).github/**'
+          git diff --exit-code 5c44998db42ab1c0c52dd8fdde57dbb923b5c978 -- . ':(exclude).github/**'
 
       - name: Install declared dependencies
         run: npm install --no-audit --no-fund
