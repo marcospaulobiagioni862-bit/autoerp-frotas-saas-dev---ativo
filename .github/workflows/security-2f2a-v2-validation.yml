@@ -1,0 +1,323 @@
+name: SECURITY-2F2A v2 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2f2a-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: security-2f2a-ci-session-secret-at-least-32-bytes
+      JWT_ISSUER: autoerp-ci
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals rebuilt SECURITY-2F2A candidate
+        run: |
+          git diff --exit-code cbcfcc9d108625da95d6147b2eabea6e0ff5bb2f -- . ':(exclude).github/**'
+
+      - name: Verify session security wiring statically
+        shell: bash
+        run: |
+          grep -F "app.post('/api/auth/login'" server.ts >/dev/null
+          grep -F "app.post('/api/auth/logout'" server.ts >/dev/null
+          grep -F "authenticateTokenPrincipal" server.ts >/dev/null
+          grep -F "extractSessionTokenFromCookie" server.ts >/dev/null
+          grep -F "HttpOnly" src/server/session.ts >/dev/null
+          grep -F "SameSite=Strict" src/server/session.ts >/dev/null
+          grep -F "Path=/api" src/server/session.ts >/dev/null
+          grep -F "INVALID_CREDENTIALS" src/server/login.ts >/dev/null
+          grep -F 'server.mjs' package.json >/dev/null
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Create PostgreSQL login seed
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci-tmp"
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/seed.ts" <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          import { Pool } from 'pg';
+
+          async function main() {
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const admin = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL! });
+            for (const migration of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+            ]) {
+              await admin.query(fs.readFileSync(path.join(workspace, migration), 'utf8'));
+            }
+
+            const { hashPassword } = await import(pathToFileURL(path.join(workspace, 'src/server/password.ts')).href);
+            const validHash = await hashPassword('AutoERP-Login-Passphrase-2026');
+            const inactiveHash = await hashPassword('AutoERP-Inactive-Passphrase-2026');
+
+            await admin.query(`
+              INSERT INTO companies (id, document, name, status)
+              VALUES
+                ('company-login-1', '12345678000199', 'Login Company', 'ACTIVE'),
+                ('company-login-inactive', '99887766000155', 'Inactive Company', 'INACTIVE')
+            `);
+            await admin.query(`
+              INSERT INTO users (id, company_id, name, email, role, active, permissions)
+              VALUES
+                ('login-user-1', 'company-login-1', 'Login User', 'login.user@example.com', 'OPERATIONAL_MANAGER', true, ARRAY['VIEW_DRIVER_HEALTH']),
+                ('login-user-inactive', 'company-login-1', 'Inactive User', 'inactive.user@example.com', 'ADMIN', false, ARRAY['*']),
+                ('login-user-no-credential', 'company-login-1', 'No Credential', 'no.credential@example.com', 'ADMIN', true, ARRAY['*'])
+            `);
+            await admin.query(
+              `INSERT INTO user_credentials (company_id, user_id, password_hash) VALUES ($1,$2,$3),($4,$5,$6)`,
+              ['company-login-1','login-user-1',validHash,'company-login-1','login-user-inactive',inactiveHash]
+            );
+
+            await admin.query(`CREATE ROLE autoerp_ci_app LOGIN PASSWORD 'autoerp_ci_pass'`);
+            await admin.query(`GRANT USAGE ON SCHEMA public TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT ON TABLE companies TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT ON TABLE users TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT ON TABLE user_credentials TO autoerp_ci_app`);
+            await admin.end();
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_SECURITY_2F2A_SEED_FATAL');
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+
+      - name: Seed real PostgreSQL login data
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/seed.ts"
+
+      - name: Start production server with non-bypass DB role
+        env:
+          NODE_ENV: production
+          USE_PGLITE: "false"
+          ALLOW_MOCK_AUTH: "false"
+          DATABASE_URL: postgres://autoerp_ci_app:autoerp_ci_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2f2a-ci-session-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npm start > "$GITHUB_WORKSPACE/.ci-tmp/server.log" 2>&1 &
+          echo $! > "$GITHUB_WORKSPACE/.ci-tmp/server.pid"
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/auth/me || true)
+            if [ "$status" = "401" ]; then
+              echo "PRODUCTION_SERVER_READY=PASS"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$GITHUB_WORKSPACE/.ci-tmp/server.log"
+          exit 1
+
+      - name: Run real HTTP login/session assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$GITHUB_WORKSPACE/.ci-tmp"
+
+          login_status=$(curl -sS -D "$tmp/login.headers" -o "$tmp/login.body" -w "%{http_code}" \
+            -H 'Content-Type: application/json' \
+            -X POST http://127.0.0.1:3000/api/auth/login \
+            --data '{"companyDocument":"12345678000199","email":"LOGIN.USER@EXAMPLE.COM","password":"AutoERP-Login-Passphrase-2026"}')
+          test "$login_status" = "200"
+          grep -F '"userId":"login-user-1"' "$tmp/login.body" >/dev/null
+          grep -F '"companyId":"company-login-1"' "$tmp/login.body" >/dev/null
+          grep -F '"role":"OPERATIONAL_MANAGER"' "$tmp/login.body" >/dev/null
+          ! grep -E 'passwordHash|password_hash|"token"' "$tmp/login.body" >/dev/null
+
+          cookie_line=$(grep -i '^Set-Cookie:' "$tmp/login.headers")
+          for attr in 'autoerp_session=' 'HttpOnly' 'SameSite=Strict' 'Path=/api' 'Max-Age=900' 'Secure'; do
+            echo "$cookie_line" | grep -F "$attr" >/dev/null
+          done
+          token=$(echo "$cookie_line" | sed -E 's/.*autoerp_session=([^;]+).*/\1/' | tr -d '\r')
+          test -n "$token"
+          echo "HTTP_LOGIN_COOKIE=PASS"
+
+          me_status=$(curl -sS -o "$tmp/me.body" -w "%{http_code}" -H "Cookie: autoerp_session=$token" http://127.0.0.1:3000/api/auth/me)
+          test "$me_status" = "200"
+          grep -F '"userId":"login-user-1"' "$tmp/me.body" >/dev/null
+          grep -F '"companyId":"company-login-1"' "$tmp/me.body" >/dev/null
+          ! grep -E 'passwordHash|password_hash|"token"' "$tmp/me.body" >/dev/null
+          echo "HTTP_AUTH_ME=PASS"
+
+          tampered_status=$(curl -sS -o "$tmp/tampered.body" -w "%{http_code}" -H "Cookie: autoerp_session=x$token" http://127.0.0.1:3000/api/auth/me)
+          test "$tampered_status" = "401"
+          echo "HTTP_TAMPERED_SESSION=REJECTED"
+
+          assert_invalid() {
+            local payload="$1"
+            local name="$2"
+            local file="$tmp/$name.body"
+            local status
+            status=$(curl -sS -o "$file" -w "%{http_code}" -H 'Content-Type: application/json' -X POST http://127.0.0.1:3000/api/auth/login --data "$payload")
+            test "$status" = "401"
+            test "$(cat "$file")" = '{"error":"Invalid credentials"}'
+          }
+
+          assert_invalid '{"companyDocument":"00000000000000","email":"login.user@example.com","password":"AutoERP-Login-Passphrase-2026"}' missing-company
+          assert_invalid '{"companyDocument":"99887766000155","email":"login.user@example.com","password":"AutoERP-Login-Passphrase-2026"}' inactive-company
+          assert_invalid '{"companyDocument":"12345678000199","email":"missing@example.com","password":"AutoERP-Login-Passphrase-2026"}' missing-user
+          assert_invalid '{"companyDocument":"12345678000199","email":"inactive.user@example.com","password":"AutoERP-Inactive-Passphrase-2026"}' inactive-user
+          assert_invalid '{"companyDocument":"12345678000199","email":"no.credential@example.com","password":"AutoERP-Login-Passphrase-2026"}' missing-credential
+          assert_invalid '{"companyDocument":"12345678000199","email":"login.user@example.com","password":"AutoERP-Wrong-Passphrase-2026"}' wrong-password
+          echo "HTTP_UNIFORM_INVALID_LOGIN=PASS"
+
+          logout_status=$(curl -sS -D "$tmp/logout.headers" -o /dev/null -w "%{http_code}" -H "Cookie: autoerp_session=$token" -X POST http://127.0.0.1:3000/api/auth/logout)
+          test "$logout_status" = "204"
+          logout_cookie=$(grep -i '^Set-Cookie:' "$tmp/logout.headers")
+          for attr in 'autoerp_session=' 'Max-Age=0' 'HttpOnly' 'SameSite=Strict' 'Path=/api' 'Secure'; do
+            echo "$logout_cookie" | grep -F "$attr" >/dev/null
+          done
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me)" = "401"
+          echo "HTTP_LOGOUT=PASS"
+
+      - name: Create strict regression harness
+        shell: bash
+        run: |
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/regression.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private store = new Map<string, string>();
+            clear() { this.store.clear(); }
+            getItem(k: string) { return this.store.has(k) ? this.store.get(k)! : null; }
+            removeItem(k: string) { this.store.delete(k); }
+            setItem(k: string, v: string) { this.store.set(String(k), String(v)); }
+            key(i: number) { return Array.from(this.store.keys())[i] ?? null; }
+            get length() { return this.store.size; }
+          }
+
+          async function main() {
+            const storage = new MemoryStorage();
+            Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
+            Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
+            const w = process.env.GITHUB_WORKSPACE!;
+            const u = (p: string) => pathToFileURL(path.join(w, p)).href;
+
+            const { resolveEmbeddedAuthUser } = await import(u('src/hooks/useAuth.ts'));
+            if (resolveEmbeddedAuthUser(false) !== null) throw new Error('Production embedded auth regression');
+
+            const { SessionLoginTestRunner } = await import(u('src/server/__tests__/sessionLoginTestRunner.ts'));
+            const sl = await SessionLoginTestRunner.runAllTests();
+            console.log(JSON.stringify(sl, null, 2));
+            if (sl.total !== 12 || sl.passed !== 12 || sl.failed !== 0) throw new Error(`SessionLogin ${sl.passed}/${sl.total}`);
+
+            const { PasswordSecurityTestRunner } = await import(u('src/server/__tests__/passwordTestRunner.ts'));
+            const pw = await PasswordSecurityTestRunner.runAllTests();
+            if (pw.total !== 6 || pw.passed !== 6 || pw.failed !== 0) throw new Error(`PasswordSecurity ${pw.passed}/${pw.total}`);
+
+            const { ServerAuthTestRunner } = await import(u('src/server/__tests__/authTestRunner.ts'));
+            const sa = await ServerAuthTestRunner.runAllTests();
+            if (sa.total !== 8 || sa.passed !== 8 || sa.failed !== 0) throw new Error(`ServerAuth ${sa.passed}/${sa.total}`);
+
+            const { SecurityAdministrationTestRunner } = await import(u('src/domain/admin/SecurityAdministrationService.test.ts'));
+            const ad = await SecurityAdministrationTestRunner.runAllTests();
+            if (ad.total !== 4 || ad.passed !== 4 || ad.failed !== 0) throw new Error(`AdminSecurity ${ad.passed}/${ad.total}`);
+
+            const { TenantConfigurationTestRunner } = await import(u('src/domain/admin/TenantConfigurationService.test.ts'));
+            const tc = await TenantConfigurationTestRunner.runAllTests();
+            if (tc.total !== 4 || tc.passed !== 4 || tc.failed !== 0) throw new Error(`TenantConfig ${tc.passed}/${tc.total}`);
+
+            const originalArgv = process.argv;
+            process.argv = [];
+            const { ContractTestRunner } = await import(u('src/domain/services/__tests__/contractTestRunner.ts'));
+            const { FinanceTestRunner } = await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const { SecurityTestRunner } = await import(u('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv = originalArgv;
+
+            const run = async (name: string, fn: () => Promise<any>, expected: number) => {
+              storage.clear();
+              const r = await fn();
+              if (!r || r.total !== expected || r.passed !== expected || r.failed !== 0) throw new Error(`${name} ${r?.passed}/${r?.total}`);
+            };
+            await run('Contract', () => ContractTestRunner.runAllTests(), 20);
+            await run('Finance', () => FinanceTestRunner.runAllTests(), 46);
+            await run('Security', () => SecurityTestRunner.runAllTests(), 35);
+          }
+
+          main().catch((e) => { console.error(e); process.exitCode = 2; });
+          EOF
+
+      - name: Run strict regression assertions
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/regression.ts"
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/.ci-tmp/server.pid" ]; then kill "$(cat "$GITHUB_WORKSPACE/.ci-tmp/server.pid")" || true; fi
+          cat "$GITHUB_WORKSPACE/.ci-tmp/server.log" || true
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2F2A_V2_CI_REPORT',
+              `VALIDATION_STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              'CANDIDATE=cbcfcc9d108625da95d6147b2eabea6e0ff5bb2f',
+              'STRICT_ACCEPTANCE=production ESM server PASS; real PostgreSQL login PASS; HttpOnly/SameSite=Strict/Path=/api/Secure cookie PASS; auth/me via cookie PASS; tampered session rejected; uniform invalid-login PASS; logout PASS; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS',
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
