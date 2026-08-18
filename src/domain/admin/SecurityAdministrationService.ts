@@ -3,27 +3,21 @@ import { SystemUserRecord, ActiveSessionRecord, RbacMatrixRule } from './types';
 import { UserRole, AuditAction } from '../../types/enums';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 
-export interface SecurityAdministrationDataOptions {
-  allowDevelopmentMockData?: boolean;
+export function resolveSecurityAdministrationMockMode(isDevelopmentRuntime: boolean): boolean {
+  return isDevelopmentRuntime === true;
 }
 
 export class SecurityAdministrationService {
   private static USER_STORAGE_KEY_PREFIX = '__autoerp_admin_users_v1_';
 
-  private static isDevelopmentMockDataEnabled(
-    options: SecurityAdministrationDataOptions
-  ): boolean {
-    if (options.allowDevelopmentMockData !== undefined) {
-      return options.allowDevelopmentMockData === true;
-    }
-
+  private static isDevelopmentMockDataEnabled(): boolean {
     const viteImportMeta = import.meta as ImportMeta & {
       env?: {
         DEV?: boolean;
       };
     };
 
-    return viteImportMeta.env?.DEV === true;
+    return resolveSecurityAdministrationMockMode(viteImportMeta.env?.DEV === true);
   }
 
   /**
@@ -97,11 +91,8 @@ export class SecurityAdministrationService {
    * Returns development-only administrative mock users. Production callers
    * fail closed with an empty list until a real server data source is connected.
    */
-  public static listUsers(
-    companyId: string,
-    options: SecurityAdministrationDataOptions = {}
-  ): SystemUserRecord[] {
-    if (!this.isDevelopmentMockDataEnabled(options)) {
+  public static listUsers(companyId: string): SystemUserRecord[] {
+    if (!this.isDevelopmentMockDataEnabled()) {
       return [];
     }
 
@@ -122,19 +113,16 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Returns fabricated session telemetry only in explicit development mode.
+   * Returns fabricated session telemetry only in Vite development runtime.
    * Production callers return no sessions rather than presenting mock IPs,
    * timestamps or session IDs as real security telemetry.
    */
-  public static listActiveSessions(
-    companyId: string,
-    options: SecurityAdministrationDataOptions = {}
-  ): ActiveSessionRecord[] {
-    if (!this.isDevelopmentMockDataEnabled(options)) {
+  public static listActiveSessions(companyId: string): ActiveSessionRecord[] {
+    if (!this.isDevelopmentMockDataEnabled()) {
       return [];
     }
 
-    const users = this.listUsers(companyId, options);
+    const users = this.listUsers(companyId);
     const now = new Date();
 
     return users.map((u, idx) => ({
@@ -162,10 +150,9 @@ export class SecurityAdministrationService {
     newStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
     executorUserId: string,
     executorRole: string,
-    correlationId: string = `corr-sec-user-${Date.now()}`,
-    options: SecurityAdministrationDataOptions = {}
+    correlationId: string = `corr-sec-user-${Date.now()}`
   ): Promise<{ success: boolean; message: string }> {
-    if (!this.isDevelopmentMockDataEnabled(options)) {
+    if (!this.isDevelopmentMockDataEnabled()) {
       return {
         success: false,
         message: 'Operação indisponível: gestão local de usuários simulados é permitida somente em desenvolvimento.',
@@ -179,7 +166,7 @@ export class SecurityAdministrationService {
       };
     }
 
-    const users = this.listUsers(companyId, options);
+    const users = this.listUsers(companyId);
     const userIndex = users.findIndex(u => u.id === targetUserId);
     if (userIndex === -1) {
       return { success: false, message: 'Usuário não encontrado para este tenant.' };
