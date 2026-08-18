@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ci-validate-test-infra-1
+  pull_request:
+    branches:
+      - test-infra-1-fixture-isolation
   workflow_dispatch:
 
 permissions:
