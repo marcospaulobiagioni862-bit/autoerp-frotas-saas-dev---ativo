@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
 import { FinanceReportingClient } from '../../api/financeReportingClient';
 import { VehicleRepository } from '../../persistence/repositories/localRepositories';
 import { Vehicle } from '../../types/entities';
@@ -58,7 +57,7 @@ export const DREReportView: React.FC = () => {
           const isVehicleValid = finalSelectedVehicleId && vehList.some(v => v.id === finalSelectedVehicleId);
           const vId = isVehicleValid ? finalSelectedVehicleId : vehList[0].id;
           finalSelectedVehicleId = vId;
-          vProfit = await FinanceEngine.getVehicleProfitability(companyId, vId, startDate, endDate, regime);
+          vProfit = await FinanceReportingClient.getVehicleProfitability(vId, startDate, endDate, regime);
         } else {
           finalSelectedVehicleId = '';
         }
