@@ -85,6 +85,10 @@ export class SessionLoginTestRunner {
       active: true,
       permissions: ['VIEW_DRIVER_HEALTH'],
     };
+    const sessionIdentity = {
+      userId: activeUser.id,
+      companyId: activeUser.companyId,
+    };
 
     await run('SL01', 'Valid credential returns the current database principal', async () => {
       const principal = await authenticatePasswordLogin(
@@ -155,7 +159,7 @@ export class SessionLoginTestRunner {
     });
 
     await run('SL06', 'Issued session token is revalidated against current database user', async () => {
-      const token = await issueSessionToken(activeUser, JWT_CONFIG, 300);
+      const token = await issueSessionToken(sessionIdentity, JWT_CONFIG, 300);
       const currentUser = {
         ...activeUser,
         role: 'ADMIN',
@@ -176,7 +180,7 @@ export class SessionLoginTestRunner {
     });
 
     await run('SL07', 'Session token signed with wrong secret is rejected', async () => {
-      const token = await issueSessionToken(activeUser, JWT_CONFIG, 300);
+      const token = await issueSessionToken(sessionIdentity, JWT_CONFIG, 300);
       await expectRejected(() =>
         authenticateTokenPrincipal(
           token,
@@ -241,8 +245,8 @@ export class SessionLoginTestRunner {
     });
 
     await run('SL12', 'Invalid session TTL is rejected', async () => {
-      await expectRejected(() => issueSessionToken(activeUser, JWT_CONFIG, 0));
-      await expectRejected(() => issueSessionToken(activeUser, JWT_CONFIG, 3601));
+      await expectRejected(() => issueSessionToken(sessionIdentity, JWT_CONFIG, 0));
+      await expectRejected(() => issueSessionToken(sessionIdentity, JWT_CONFIG, 3601));
     });
 
     const passed = tests.filter((test) => test.passed).length;
