@@ -12,11 +12,13 @@ export class ProductionAdministrationService {
   public static getProductionSummary(
     companyId: string,
     userRole: string = 'ADMIN',
-    allowDevelopmentMockData: boolean = false
+    allowDevelopmentMockData?: boolean
   ) {
     const health = SystemHealthService.calculateSystemHealth(companyId);
     const config = TenantConfigurationService.getConfig(companyId);
-    const securityDataOptions = { allowDevelopmentMockData };
+    const securityDataOptions = allowDevelopmentMockData === undefined
+      ? {}
+      : { allowDevelopmentMockData };
     const users = SecurityAdministrationService.listUsers(companyId, securityDataOptions);
     const sessions = SecurityAdministrationService.listActiveSessions(companyId, securityDataOptions);
     const backups = BackupService.listBackups(companyId);
@@ -74,7 +76,9 @@ export class ProductionAdministrationService {
       config,
       usersCount: users.length,
       activeSessionsCount: sessions.length,
-      securityDataSource: allowDevelopmentMockData ? 'DEVELOPMENT_MOCK' : 'SERVER_SOURCE_NOT_CONNECTED',
+      securityDataSource: users.length > 0 || sessions.length > 0
+        ? 'DEVELOPMENT_MOCK'
+        : 'SERVER_SOURCE_NOT_CONNECTED',
       backupsCount: backups.length,
       alerts,
       lastAuditTimestamp: new Date().toISOString(),
