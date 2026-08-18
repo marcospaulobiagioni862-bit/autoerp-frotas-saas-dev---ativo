@@ -67,21 +67,22 @@ function requireStringClaim(
 }
 
 /**
- * Verifies the JWT cryptographically and then revalidates the current user
+ * Verifies a raw JWT cryptographically and then revalidates the current user
  * record before creating the server-side principal.
  *
- * The token proves who was authenticated by the configured issuer. Only after
- * cryptographic verification do we pass its companyId to the user lookup so
- * the database layer can establish the tenant/RLS scope for that query.
- * Database data remains authoritative for current tenant membership, role,
- * permissions and active status.
+ * The token proves only the authenticated user/tenant pair. Database data stays
+ * authoritative for current tenant membership, active status, role, name and
+ * permissions on every protected request.
  */
-export async function authenticateBearerPrincipal(
-  authorizationHeader: string | undefined,
+export async function authenticateTokenPrincipal(
+  token: string,
   config: JwtAuthenticationConfig,
   findUserById: AuthenticatedUserLookup
 ): Promise<AuthenticatedPrincipal> {
-  const token = extractBearerToken(authorizationHeader);
+  if (!token || token.trim() === '') {
+    throw new AuthenticationError('Missing authentication token');
+  }
+
   const secret = new TextEncoder().encode(
     requireConfiguredValue(config.secret, 'JWT_SECRET')
   );
@@ -118,4 +119,21 @@ export async function authenticateBearerPrincipal(
     role: user.role,
     permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
   };
+}
+
+/**
+ * Compatibility wrapper for Authorization: Bearer clients. Cookie-backed
+ * sessions use authenticateTokenPrincipal directly so both transports share the
+ * exact same cryptographic verification and database revalidation path.
+ */
+export async function authenticateBearerPrincipal(
+  authorizationHeader: string | undefined,
+  config: JwtAuthenticationConfig,
+  findUserById: AuthenticatedUserLookup
+): Promise<AuthenticatedPrincipal> {
+  return await authenticateTokenPrincipal(
+    extractBearerToken(authorizationHeader),
+    config,
+    findUserById
+  );
 }
