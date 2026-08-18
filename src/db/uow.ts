@@ -4,6 +4,7 @@ import {
   PostgresAccountPayableRepository,
   PostgresFinancialTransactionRepository,
   PostgresFinancialAccountRepository,
+  PostgresPaymentMethodRepository,
   PostgresAuditLogRepository,
   PostgresUserRepository,
   PostgresFinancialPeriodRepository
@@ -36,6 +37,7 @@ export class UnitOfWork {
         getPayableRepo: () => new PostgresAccountPayableRepository(tx),
         getTransactionRepo: () => new PostgresFinancialTransactionRepository(tx),
         getAccountRepo: () => new PostgresFinancialAccountRepository(tx),
+        getPaymentMethodRepo: () => new PostgresPaymentMethodRepository(tx),
         getAuditLogRepo: () => new PostgresAuditLogRepository(tx),
         getUserRepo: () => new PostgresUserRepository(tx),
         getFinancialPeriodRepo: () => new PostgresFinancialPeriodRepository(tx)

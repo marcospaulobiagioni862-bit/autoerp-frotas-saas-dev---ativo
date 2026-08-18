@@ -1,6 +1,7 @@
 import { FinanceEngine } from './src/domain/finance/FinanceEngine';
 import { ReceivableService } from './src/domain/finance/ReceivableService';
 import { PayableService } from './src/domain/finance/PayableService';
+import { SettlementService } from './src/domain/finance/SettlementService';
 import { UnitOfWork } from './src/db/uow';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -370,6 +371,94 @@ async function startServer() {
     }
 
     res.json({ user: req.principal });
+  });
+
+  // SECURITY-2G4: settlement options and settlement commands are server-authoritative.
+  // Tenant and audit identity are derived exclusively from the authenticated principal.
+  app.get('/api/finance/settlement-options', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const options = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const accountRepo = txContext.getAccountRepo();
+        const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+        if (!accountRepo.findAll || !paymentMethodRepo) {
+          throw new Error('Settlement repositories unavailable');
+        }
+        const [accounts, paymentMethods] = await Promise.all([
+          accountRepo.findAll(),
+          paymentMethodRepo.findAll(),
+        ]);
+        return {
+          accounts: accounts.filter((item: any) => item.status === 'ACTIVE'),
+          paymentMethods: paymentMethods.filter((item: any) => item.active !== false),
+        };
+      });
+      res.json(options);
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/receivables/:id/receipt', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const result = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await SettlementService.registerReceipt(
+            {
+              companyId: principal.companyId,
+              obligationId: req.params.id,
+              financialAccountId: req.body?.financialAccountId,
+              paymentMethodId: req.body?.paymentMethodId,
+              paymentAmount: Number(req.body?.paymentAmount),
+              paymentDate: req.body?.paymentDate,
+              description: req.body?.description,
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
+      );
+      res.status(201).json({ item: result.receivable, transaction: result.transaction });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/payables/:id/payment', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const result = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await SettlementService.registerPayment(
+            {
+              companyId: principal.companyId,
+              obligationId: req.params.id,
+              financialAccountId: req.body?.financialAccountId,
+              paymentMethodId: req.body?.paymentMethodId,
+              paymentAmount: Number(req.body?.paymentAmount),
+              paymentDate: req.body?.paymentDate,
+              description: req.body?.description,
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
+      );
+      res.status(201).json({ item: result.payable, transaction: result.transaction });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
   });
 
   // SECURITY-2G3: authenticated finance obligation reads use the same

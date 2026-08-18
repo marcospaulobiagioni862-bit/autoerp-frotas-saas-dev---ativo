@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AccountPayable, FinancialAccount, PaymentMethod } from '../../types/entities';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
-import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
-import { useAuth } from '../../hooks/useAuth';
+import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
+import { FinanceSettlementClient, SettlementAccountOption, SettlementPaymentMethodOption } from '../../api/financeSettlementClient';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -13,9 +11,8 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, payable, onSuccess }) => {
-  const { user } = useAuth();
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
+  const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<number>(0);
@@ -33,25 +30,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   }, [payable]);
 
   const loadOptions = async () => {
-    const accRepo = new FinancialAccountRepository();
-    const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAllForCompany(user.companyId);
-    const pmList = await pmRepo.findAllForCompany(user.companyId);
-    setAccounts(accList);
-    setMethods(pmList);
-
-    if (accList.length > 0) setSelectedAccountId(accList[0].id);
-    if (pmList.length > 0) setSelectedMethodId(pmList[0].id);
+    try {
+      const options = await FinanceSettlementClient.getOptions();
+      setAccounts(options.accounts);
+      setMethods(options.paymentMethods);
+      if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
+      if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
+    } catch (err) {
+      setAccounts([]);
+      setMethods([]);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
+    }
   };
 
   if (!isOpen || !payable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (payable.companyId !== user.companyId) {
-      setError('Erro de isolamento de tenant: O título a pagar não pertence à sua empresa.');
-      return;
-    }
     if (amount <= 0) {
       setError('O valor a pagar deve ser maior que zero.');
       return;
@@ -65,16 +60,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
       setIsSubmitting(true);
       setError(null);
 
-      await FinanceEngine.registerPayment({
-        companyId: payable.companyId,
-        obligationId: payable.id,
+      await FinanceSettlementClient.registerPayment(payable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount: amount,
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Pagamento efetuado via portal operacional',
-        userId: user.userId,
-        userName: user.name,
       });
 
       onSuccess();

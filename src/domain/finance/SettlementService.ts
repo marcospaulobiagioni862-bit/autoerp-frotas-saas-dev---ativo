@@ -39,9 +39,21 @@ export class SettlementService {
     receivable: AccountReceivable;
     transaction: FinancialTransaction;
   }> {
-    await FinancialAuthorizationService.authorize(params.userId, params.companyId, 'RECEIPT_REGISTER');
+    await FinancialAuthorizationService.authorize(
+      params.userId,
+      params.companyId,
+      'RECEIPT_REGISTER',
+      txContext
+    );
 
-    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate);
+    if (!Number.isFinite(params.paymentAmount) || params.paymentAmount <= 0) {
+      throw new Error('Valor da liquidação deve ser maior que zero');
+    }
+    if (!params.financialAccountId || !params.paymentMethodId || !params.paymentDate) {
+      throw new Error('Conta financeira, forma de pagamento e data são obrigatórias');
+    }
+
+    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
 
     let receivable: AccountReceivable | null;
     if (txContext) {
@@ -65,6 +77,21 @@ export class SettlementService {
     if (!account) throw new Error('Conta financeira não encontrada');
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
+    }
+
+    if (txContext) {
+      const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+      if (!paymentMethodRepo) {
+        throw new Error('Forma de pagamento indisponível no contexto transacional');
+      }
+      const paymentMethod = await paymentMethodRepo.findById(params.paymentMethodId);
+      if (!paymentMethod) throw new Error('Forma de pagamento não encontrada');
+      if (!paymentMethod.companyId || paymentMethod.companyId !== params.companyId) {
+        throw new Error('Acesso negado: Forma de pagamento pertence a outra empresa ou tenant inválido');
+      }
+      if (paymentMethod.active === false) {
+        throw new Error('Forma de pagamento inativa');
+      }
     }
 
     if (receivable.status === ObligationStatus.PAID || receivable.status === ObligationStatus.CANCELLED) {
@@ -151,7 +178,8 @@ export class SettlementService {
         params.userId,
         params.userName,
         previousState,
-        updatedReceivable
+        updatedReceivable,
+        txContext
       );
 
       return { receivable: updatedReceivable, transaction: savedTransaction };
@@ -169,9 +197,21 @@ export class SettlementService {
     payable: AccountPayable;
     transaction: FinancialTransaction;
   }> {
-    await FinancialAuthorizationService.authorize(params.userId, params.companyId, 'PAYMENT_REGISTER');
+    await FinancialAuthorizationService.authorize(
+      params.userId,
+      params.companyId,
+      'PAYMENT_REGISTER',
+      txContext
+    );
 
-    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate);
+    if (!Number.isFinite(params.paymentAmount) || params.paymentAmount <= 0) {
+      throw new Error('Valor da liquidação deve ser maior que zero');
+    }
+    if (!params.financialAccountId || !params.paymentMethodId || !params.paymentDate) {
+      throw new Error('Conta financeira, forma de pagamento e data são obrigatórias');
+    }
+
+    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
 
     let payable: AccountPayable | null;
     if (txContext) {
@@ -195,6 +235,21 @@ export class SettlementService {
     if (!account) throw new Error('Conta financeira não encontrada');
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
+    }
+
+    if (txContext) {
+      const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+      if (!paymentMethodRepo) {
+        throw new Error('Forma de pagamento indisponível no contexto transacional');
+      }
+      const paymentMethod = await paymentMethodRepo.findById(params.paymentMethodId);
+      if (!paymentMethod) throw new Error('Forma de pagamento não encontrada');
+      if (!paymentMethod.companyId || paymentMethod.companyId !== params.companyId) {
+        throw new Error('Acesso negado: Forma de pagamento pertence a outra empresa ou tenant inválido');
+      }
+      if (paymentMethod.active === false) {
+        throw new Error('Forma de pagamento inativa');
+      }
     }
 
     if (payable.status === ObligationStatus.PAID || payable.status === ObligationStatus.CANCELLED) {
@@ -282,7 +337,8 @@ export class SettlementService {
         params.userId,
         params.userName,
         previousState,
-        updatedPayable
+        updatedPayable,
+        txContext
       );
 
       return { payable: updatedPayable, transaction: savedTransaction };
