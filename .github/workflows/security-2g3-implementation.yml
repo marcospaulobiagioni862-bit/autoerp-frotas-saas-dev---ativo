@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ci-implement-security-2g3
+  pull_request:
+    branches:
+      - ci-implement-security-2g3
 
 permissions:
   contents: write
