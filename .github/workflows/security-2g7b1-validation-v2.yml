@@ -1,0 +1,80 @@
+name: SECURITY-2G7B1 validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g7b1-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        shell: bash
+        run: git diff --exit-code "${{ github.event.pull_request.head.sha }}" -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G7B1 authority static gate
+        shell: bash
+        run: |
+          grep -F "app.get('/api/finance/reports/dre'" server.ts >/dev/null
+          grep -F 'DREService.getDREReport' server.ts >/dev/null
+          grep -F 'UnitOfWork.run(principal.companyId' server.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/financeReportingClient.ts >/dev/null
+          grep -F 'FinanceReportingClient.getDRE' src/components/finance/DREReportView.tsx >/dev/null
+          ! grep -F 'FinanceEngine.getDREReport' src/components/finance/DREReportView.tsx
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeReportingClient.ts
+          grep -F "const dateKey = (value?: string) => (value || '').slice(0, 10);" src/domain/finance/DREService.ts >/dev/null
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Reporting and prior finance transports
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: PostgreSQL 16 + session/RLS DRE parity + regressions
+        run: npx tsx .ci/g7b1-v2-validation.ts
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G7B1_CI_REPORT_V2',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=103b788d605038d86d662f90116c072de1892c93','DRE end-date CASH+ACCRUAL PostgreSQL16/RLS parity required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
