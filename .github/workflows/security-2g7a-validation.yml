@@ -1,0 +1,219 @@
+name: SECURITY-2G7A validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g7a
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code f45fe13e36bcc96ce5cdd8f9abf7503f46f12169 -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G7A authority static gate
+        shell: bash
+        run: |
+          grep -F "app.get('/api/finance/overview'" server.ts >/dev/null
+          grep -F 'UnitOfWork.run(principal.companyId' server.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/financeOverviewClient.ts >/dev/null
+          grep -F 'FinanceOverviewClient' src/components/finance/FinanceOverviewView.tsx >/dev/null
+          ! grep -Eq 'localRepositories|AccountReceivableRepository|AccountPayableRepository|FinancialAccountRepository' src/components/finance/FinanceOverviewView.tsx
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeOverviewClient.ts
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Finance overview transport tests
+        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+
+      - name: Prior finance transport regressions
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g7a-seed.ts <<'EOF'
+          import fs from 'node:fs';
+          import { Pool } from 'pg';
+          import { hashPassword } from '../src/server/password';
+          const p = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL! });
+          async function main() {
+            for (const f of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+              'drizzle/0004_payment_methods_rls_permissive.sql',
+              'drizzle/0005_financial_periods_rls_permissive.sql',
+            ]) await p.query(fs.readFileSync(f, 'utf8'));
+
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES
+              ('company-g7a-a','55555555000155','Tenant G7A A','ACTIVE'),
+              ('company-g7a-b','66666666000166','Tenant G7A B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES
+              ('g7a-admin-a','company-g7a-a','Admin G7A A','admin-a@g7a.test','ADMIN',true,ARRAY['*']),
+              ('g7a-admin-b','company-g7a-b','Admin G7A B','admin-b@g7a.test','ADMIN',true,ARRAY['*'])`);
+            const [ha, hb] = await Promise.all(['StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES ($1,$2,$3),($4,$5,$6)`,
+              ['company-g7a-a','g7a-admin-a',ha,'company-g7a-b','g7a-admin-b',hb]);
+
+            await p.query(`INSERT INTO financial_accounts(id,company_id,name,type,current_balance,status) VALUES
+              ('g7a-acc-a1','company-g7a-a','Conta A1','BANK','1000.00','ACTIVE'),
+              ('g7a-acc-a2','company-g7a-a','Conta A2','CASH','250.00','ACTIVE'),
+              ('g7a-acc-b1','company-g7a-b','Conta B1','BANK','9000.00','ACTIVE')`);
+
+            await p.query(`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,category_id,description,original_amount,updated_amount,balance_amount,due_date,competence_date,status) VALUES
+              ('g7a-ar-a1','company-g7a-a','MANUAL','g7a-ar-a1','cat-income','AR A pending','500.00','500.00','500.00','2026-09-10','2026-09-01','PENDING'),
+              ('g7a-ar-a2','company-g7a-a','MANUAL','g7a-ar-a2','cat-income','AR A partial','500.00','500.00','300.00','2026-09-11','2026-09-01','PARTIALLY_PAID'),
+              ('g7a-ar-a3','company-g7a-a','MANUAL','g7a-ar-a3','cat-income','AR A paid','999.00','999.00','0.00','2026-09-12','2026-09-01','PAID'),
+              ('g7a-ar-b1','company-g7a-b','MANUAL','g7a-ar-b1','cat-income','AR B pending','7000.00','7000.00','7000.00','2026-09-10','2026-09-01','PENDING')`);
+
+            await p.query(`INSERT INTO account_payables(id,company_id,origin_type,origin_id,category_id,description,original_amount,updated_amount,balance_amount,due_date,competence_date,status) VALUES
+              ('g7a-ap-a1','company-g7a-a','MANUAL','g7a-ap-a1','cat-expense','AP A pending','200.00','200.00','200.00','2026-09-10','2026-09-01','PENDING'),
+              ('g7a-ap-a2','company-g7a-a','MANUAL','g7a-ap-a2','cat-expense','AP A partial','300.00','300.00','100.00','2026-09-11','2026-09-01','PARTIALLY_PAID'),
+              ('g7a-ap-a3','company-g7a-a','MANUAL','g7a-ap-a3','cat-expense','AP A paid','888.00','888.00','0.00','2026-09-12','2026-09-01','PAID'),
+              ('g7a-ap-b1','company-g7a-b','MANUAL','g7a-ap-b1','cat-expense','AP B pending','6000.00','6000.00','6000.00','2026-09-10','2026-09-01','PENDING')`);
+
+            await p.query(`CREATE ROLE autoerp_g7a_app LOGIN PASSWORD 'autoerp_g7a_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g7a_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,account_receivables,account_payables,financial_accounts TO autoerp_g7a_app`);
+            await p.end();
+          }
+          main().catch(e => { console.error(e); process.exit(2); });
+          EOF
+          npx tsx .ci-tmp/g7a-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g7a_app:autoerp_g7a_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g7a-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true)
+            [ "$code" = 401 ] && exit 0
+            sleep 1
+          done
+          cat .ci-tmp/server.log
+          exit 1
+
+      - name: Production G7A HTTP tenant isolation
+        shell: bash
+        run: |
+          cat > .ci-tmp/g7a-http.ts <<'EOF'
+          const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){
+            const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});
+            if(r.status!==200) throw Error(`login ${email} ${r.status} ${await r.text()}`);
+            const c=r.headers.get('set-cookie'); if(!c) throw Error('cookie missing'); return c.split(';')[0];
+          }
+          async function get(cookie:string|null, forgedTenant?:string){
+            return fetch(base+'/api/finance/overview',{headers:{...(cookie?{cookie}:{}),...(forgedTenant?{'x-company-id':forgedTenant}:{})}});
+          }
+          function assertSummary(v:any,r:number,p:number,b:number,label:string){
+            if(v.totalReceivable!==r||v.totalPayable!==p||v.totalBalance!==b) throw Error(`${label} ${JSON.stringify(v)}`);
+          }
+          async function main(){
+            let r=await get(null); if(r.status!==401) throw Error(`no-session ${r.status}`); console.log('G7A_NO_SESSION=PASS');
+            const ca=await login('55555555000155','admin-a@g7a.test');
+            const cb=await login('66666666000166','admin-b@g7a.test');
+            console.log('G7A_LOGIN=PASS');
+            r=await get(ca,'company-g7a-b'); if(r.status!==200) throw Error(`overview A ${r.status}`); let j=await r.json(); assertSummary(j,800,300,1250,'A'); console.log('G7A_TENANT_A=PASS');
+            r=await get(cb,'company-g7a-a'); if(r.status!==200) throw Error(`overview B ${r.status}`); j=await r.json(); assertSummary(j,7000,6000,9000,'B'); console.log('G7A_TENANT_B=PASS');
+            console.log('G7A_FORGED_TENANT_HEADER=IGNORED');
+          }
+          main().catch(e=>{console.error('G7A_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g7a-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g7a-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';
+          class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){
+            const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});
+            const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;
+            const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];
+            for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}
+            const a=process.argv;process.argv=[];
+            const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));
+            const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv=a;
+            for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}
+            console.log('G7A_REGRESSIONS=PASS');
+          }
+          main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G7A_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=f45fe13e36bcc96ce5cdd8f9abf7503f46f12169','FinanceOverviewClient=required','PostgreSQL16 session/RLS overview isolation=required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
