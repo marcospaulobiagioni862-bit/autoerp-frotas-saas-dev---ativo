@@ -58,7 +58,7 @@ export class FinanceTestRunner {
     await seedAutoERPTestData(true);
 
     const companyId = 'company-main-uuid';
-    const userId = 'usr-admin';
+    const userId = 'user-admin-1';
     const userName = 'Admin Auditor';
     const defaultAccount = 'acc-nubank-1';
     const creditCardAccount = 'acc-card-master';
