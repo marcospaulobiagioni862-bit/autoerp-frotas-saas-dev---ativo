@@ -37,7 +37,7 @@ export class ContractTestRunner {
     await seedAutoERPTestData(true);
 
     const companyId = 'company-main-uuid';
-    const userId = 'usr-admin';
+    const userId = 'user-admin-1';
     const userName = 'Admin Tester';
 
     const contractService = new ContractService();
@@ -65,8 +65,11 @@ export class ContractTestRunner {
     };
 
     let testContractId = '';
-    let testVehicleId = 'veh-1';
-    let testDriverId = 'drv-1';
+    const testVehicleId = 'veh-18';
+    const testDriverId = 'drv-18';
+    const auxiliaryVehicleId = 'veh-19';
+    const auxiliaryDriverId = 'drv-19';
+    const conflictDriverId = 'drv-20';
 
     // CT01: Criar contrato DRAFT
     await test('CT01', 'CT01. Criar contrato DRAFT', async () => {
@@ -201,8 +204,8 @@ export class ContractTestRunner {
       // Criar e ativar primeiro contrato
       const c1 = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-2',
-        driverId: 'drv-2',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-10-01',
         endDate: '2026-12-31',
         rentalAmount: 800,
@@ -221,8 +224,8 @@ export class ContractTestRunner {
       // Tentar ativar segundo contrato para o mesmo veículo no mesmo período
       const c2 = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-2',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: conflictDriverId,
         startDate: '2026-10-15',
         endDate: '2026-11-15',
         rentalAmount: 850,
@@ -232,6 +235,8 @@ export class ContractTestRunner {
         userName,
       });
 
+      let conflictBlocked = false;
+      let conflictMessage = '';
       try {
         await contractService.activateContract({
           companyId,
@@ -239,10 +244,33 @@ export class ContractTestRunner {
           userId,
           userName,
         });
-        return { passed: false, message: 'Permitiu ativar contrato conflitante no mesmo veículo!' };
       } catch (err: any) {
-        return { passed: true, message: `Conflito de veículo bloqueado com sucesso: ${err.message}` };
+        conflictBlocked = true;
+        conflictMessage = err.message;
+      } finally {
+        const c2State = await contractRepo.findById(c2.id);
+        if (c2State?.status === ContractStatus.ACTIVE) {
+          await contractService.closeContract({
+            companyId,
+            contractId: c2.id,
+            closeDate: '2026-11-15',
+            userId,
+            userName,
+          });
+        }
+        await contractService.closeContract({
+          companyId,
+          contractId: c1.id,
+          closeDate: '2026-12-31',
+          userId,
+          userName,
+        });
       }
+
+      if (conflictBlocked) {
+        return { passed: true, message: `Conflito de veículo bloqueado com sucesso: ${conflictMessage}` };
+      }
+      return { passed: false, message: 'Permitiu ativar contrato conflitante no mesmo veículo!' };
     });
 
     // CT07: Ativar contrato válido
@@ -264,8 +292,8 @@ export class ContractTestRunner {
     await test('CT08', 'CT08. DRAFT não gera recebível automático', async () => {
       const draft = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-3',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-09-10',
         rentalAmount: 600,
         billingPeriodicity: RecurringFrequency.WEEKLY,
@@ -286,8 +314,8 @@ export class ContractTestRunner {
     await test('CT09', 'CT09. AWAITING_SIGNATURE não gera recebível automático', async () => {
       const awaiting = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-3',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-09-15',
         rentalAmount: 600,
         billingPeriodicity: RecurringFrequency.WEEKLY,
@@ -348,8 +376,8 @@ export class ContractTestRunner {
     await test('CT13', 'CT13. CLOSED impede geração de novas cobranças recorrentes', async () => {
       const tempC = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-3',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-09-01',
         rentalAmount: 500,
         billingPeriodicity: RecurringFrequency.WEEKLY,
@@ -371,8 +399,8 @@ export class ContractTestRunner {
     await test('CT14', 'CT14. Cancelar contrato preservando histórico financeiro', async () => {
       const cCancel = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-3',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-09-01',
         rentalAmount: 650,
         billingPeriodicity: RecurringFrequency.WEEKLY,
@@ -466,8 +494,8 @@ export class ContractTestRunner {
       // Re-ativar um contrato para testar renovação
       const cOld = await contractService.createContract({
         companyId,
-        vehicleId: 'veh-3',
-        driverId: 'drv-3',
+        vehicleId: auxiliaryVehicleId,
+        driverId: auxiliaryDriverId,
         startDate: '2026-08-01',
         endDate: '2026-08-31',
         rentalAmount: 700,
