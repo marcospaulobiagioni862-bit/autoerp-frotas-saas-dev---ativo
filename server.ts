@@ -6,6 +6,7 @@ import { TransferService } from './src/domain/finance/TransferService';
 import { ReversalService } from './src/domain/finance/ReversalService';
 import { RenegotiationService } from './src/domain/finance/RenegotiationService';
 import { DREService } from './src/domain/finance/DREService';
+import { ProfitabilityService } from './src/domain/finance/ProfitabilityService';
 import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime } from './src/types/enums';
 import express from 'express';
@@ -439,6 +440,43 @@ async function startServer() {
       const report = await UnitOfWork.run(principal.companyId, async (txContext) =>
         await DREService.getDREReport(
           principal.companyId,
+          periodStart,
+          periodEnd,
+          regime,
+          txContext
+        )
+      );
+      res.json({ report });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  // SECURITY-2G7B2: vehicle profitability financial values are server-authoritative.
+  app.get('/api/finance/reports/vehicle-profitability', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const vehicleId = typeof req.query.vehicleId === 'string' ? req.query.vehicleId.trim() : '';
+    const periodStart = typeof req.query.start === 'string' ? req.query.start : '';
+    const periodEnd = typeof req.query.end === 'string' ? req.query.end : '';
+    const regime = req.query.regime === AccountingRegime.CASH
+      ? AccountingRegime.CASH
+      : req.query.regime === AccountingRegime.ACCRUAL
+        ? AccountingRegime.ACCRUAL
+        : null;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (!vehicleId || !datePattern.test(periodStart) || !datePattern.test(periodEnd) || periodStart > periodEnd || !regime) {
+      res.status(400).json({ error: 'Invalid vehicle profitability parameters' });
+      return;
+    }
+
+    try {
+      const report = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await ProfitabilityService.getVehicleProfitability(
+          principal.companyId,
+          vehicleId,
           periodStart,
           periodEnd,
           regime,

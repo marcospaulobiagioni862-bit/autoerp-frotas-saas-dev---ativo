@@ -1,3 +1,4 @@
+import { ITransactionContext } from './ITransactionContext';
 import {
   FinancialTransactionRepository,
   AccountReceivableRepository,
@@ -19,9 +20,15 @@ export class ProfitabilityService {
     vehicleId: string,
     periodStart: string,
     periodEnd: string,
-    regime: AccountingRegime = AccountingRegime.CASH
+    regime: AccountingRegime = AccountingRegime.CASH,
+    txContext?: ITransactionContext
   ): Promise<VehicleProfitabilityReport> {
-    const vehicle = await this.vehicleRepo.findByIdForCompany(vehicleId, companyId);
+    // Vehicle metadata is display-only in the current report UI. The trusted
+    // server path does not depend on browser/local vehicle metadata for any
+    // financial calculation. Local lookup remains only for legacy test/DEV.
+    const vehicle = txContext
+      ? null
+      : await this.vehicleRepo.findByIdForCompany(vehicleId, companyId);
 
     let rentalIncome = 0;
     let kmExcessIncome = 0;
@@ -36,15 +43,22 @@ export class ProfitabilityService {
     let financingExpense = 0;
     let otherExpense = 0;
 
+    const dateKey = (value?: string) => (value || '').slice(0, 10);
     const isDepositText = (desc?: string, origin?: string) => {
       const text = (desc || '').toLowerCase();
       return text.includes('caução') || text.includes('caucao') || origin === OriginType.SECURITY_DEPOSIT;
     };
 
     if (regime === AccountingRegime.CASH) {
-      const allTx = await this.txRepo.findByVehicleIdForCompany(companyId, vehicleId);
-      const allPayables = await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
-      const allReceivables = await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const allTx = txContext
+        ? (await txContext.getTransactionRepo().findAll()).filter((t) => t.vehicleId === vehicleId)
+        : await this.txRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const allPayables = txContext
+        ? (await txContext.getPayableRepo().findAll()).filter((p) => p.vehicleId === vehicleId)
+        : await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const allReceivables = txContext
+        ? (await txContext.getReceivableRepo().findAll()).filter((r) => r.vehicleId === vehicleId)
+        : await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const payMap = new Map(allPayables.map((p) => [p.id, p]));
       const recMap = new Map(allReceivables.map((r) => [r.id, r]));
@@ -53,14 +67,15 @@ export class ProfitabilityService {
         (t) =>
           t.vehicleId === vehicleId &&
           !t.isReversed &&
-          t.transactionDate >= periodStart &&
-          t.transactionDate <= periodEnd &&
+          dateKey(t.transactionDate) >= periodStart &&
+          dateKey(t.transactionDate) <= periodEnd &&
           t.type !== TransactionType.TRANSFER &&
           t.type !== TransactionType.REVERSAL &&
           !isDepositText(t.description)
       );
 
       for (const t of periodTx) {
+        const amount = Number(t.amount || 0);
         if (t.type === TransactionType.INCOME) {
           let recOrigin: OriginType | undefined = undefined;
           if (t.receivableId && recMap.has(t.receivableId)) {
@@ -68,11 +83,11 @@ export class ProfitabilityService {
           }
 
           if (recOrigin === OriginType.KM_EXCESS || t.description.toLowerCase().includes('excesso km')) {
-            kmExcessIncome += t.amount;
+            kmExcessIncome += amount;
           } else if (recOrigin === OriginType.TRAFFIC_TICKET_DRIVER || t.description.toLowerCase().includes('reembolso de multa')) {
-            finesReimbursedIncome += t.amount;
+            finesReimbursedIncome += amount;
           } else {
-            rentalIncome += t.amount;
+            rentalIncome += amount;
           }
         } else if (t.type === TransactionType.EXPENSE) {
           let payOrigin: OriginType | undefined = undefined;
@@ -83,43 +98,48 @@ export class ProfitabilityService {
           const desc = t.description.toLowerCase();
 
           if (payOrigin === OriginType.MAINTENANCE || desc.includes('manutenção') || desc.includes('manutencao') || desc.includes('pneus') || desc.includes('óleo') || desc.includes('retífica')) {
-            maintenanceExpense += t.amount;
+            maintenanceExpense += amount;
           } else if (payOrigin === OriginType.INSURANCE || desc.includes('seguro')) {
-            insuranceExpense += t.amount;
+            insuranceExpense += amount;
           } else if (payOrigin === OriginType.TRACKER || desc.includes('rastreador')) {
-            trackerExpense += t.amount;
+            trackerExpense += amount;
           } else if (payOrigin === OriginType.DOCUMENTATION || desc.includes('ipva') || desc.includes('licenciamento') || desc.includes('documentação')) {
-            documentationExpense += t.amount;
+            documentationExpense += amount;
           } else if (payOrigin === OriginType.TRAFFIC_TICKET_COMPANY || desc.includes('multa')) {
-            finesCompanyExpense += t.amount;
+            finesCompanyExpense += amount;
           } else if (payOrigin === OriginType.FINANCING || desc.includes('financiamento')) {
-            financingExpense += t.amount;
+            financingExpense += amount;
           } else {
-            otherExpense += t.amount;
+            otherExpense += amount;
           }
         }
       }
     } else {
       // ACCRUAL REGIME
-      const receivables = await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
-      const payables = await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const receivables = txContext
+        ? (await txContext.getReceivableRepo().findAll()).filter((r) => r.vehicleId === vehicleId)
+        : await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
+      const payables = txContext
+        ? (await txContext.getPayableRepo().findAll()).filter((p) => p.vehicleId === vehicleId)
+        : await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const periodRec = receivables.filter(
         (r) =>
           r.vehicleId === vehicleId &&
           r.status !== ObligationStatus.CANCELLED &&
-          r.competenceDate >= periodStart &&
-          r.competenceDate <= periodEnd &&
+          dateKey(r.competenceDate) >= periodStart &&
+          dateKey(r.competenceDate) <= periodEnd &&
           !isDepositText(r.description, r.originType)
       );
 
       for (const r of periodRec) {
+        const amount = Number(r.originalAmount || 0);
         if (r.originType === OriginType.KM_EXCESS) {
-          kmExcessIncome += r.originalAmount;
+          kmExcessIncome += amount;
         } else if (r.originType === OriginType.TRAFFIC_TICKET_DRIVER) {
-          finesReimbursedIncome += r.originalAmount;
+          finesReimbursedIncome += amount;
         } else {
-          rentalIncome += r.originalAmount;
+          rentalIncome += amount;
         }
       }
 
@@ -127,26 +147,27 @@ export class ProfitabilityService {
         (p) =>
           p.vehicleId === vehicleId &&
           p.status !== ObligationStatus.CANCELLED &&
-          p.competenceDate >= periodStart &&
-          p.competenceDate <= periodEnd &&
+          dateKey(p.competenceDate) >= periodStart &&
+          dateKey(p.competenceDate) <= periodEnd &&
           !isDepositText(p.description, p.originType)
       );
 
       for (const p of periodPay) {
+        const amount = Number(p.originalAmount || 0);
         if (p.originType === OriginType.MAINTENANCE) {
-          maintenanceExpense += p.originalAmount;
+          maintenanceExpense += amount;
         } else if (p.originType === OriginType.INSURANCE) {
-          insuranceExpense += p.originalAmount;
+          insuranceExpense += amount;
         } else if (p.originType === OriginType.TRACKER) {
-          trackerExpense += p.originalAmount;
+          trackerExpense += amount;
         } else if (p.originType === OriginType.DOCUMENTATION) {
-          documentationExpense += p.originalAmount;
+          documentationExpense += amount;
         } else if (p.originType === OriginType.TRAFFIC_TICKET_COMPANY) {
-          finesCompanyExpense += p.originalAmount;
+          finesCompanyExpense += amount;
         } else if (p.originType === OriginType.FINANCING) {
-          financingExpense += p.originalAmount;
+          financingExpense += amount;
         } else {
-          otherExpense += p.originalAmount;
+          otherExpense += amount;
         }
       }
     }
