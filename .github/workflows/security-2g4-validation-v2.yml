@@ -1,0 +1,222 @@
+name: SECURITY-2G4 validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g4-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 46224b35f74ee719d37ec14f570b8882d3cb3e29 -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G4 settlement authority static gate
+        shell: bash
+        run: |
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/modals/PaymentModal.tsx
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/modals/ReceiptModal.tsx
+          grep -F "credentials: 'include'" src/api/financeSettlementClient.ts >/dev/null
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeSettlementClient.ts
+          grep -F "app.get('/api/finance/settlement-options'" server.ts >/dev/null
+          grep -F "app.post('/api/finance/receivables/:id/receipt'" server.ts >/dev/null
+          grep -F "app.post('/api/finance/payables/:id/payment'" server.ts >/dev/null
+          grep -F "companyId: principal.companyId" server.ts >/dev/null
+          grep -F "userId: principal.userId" server.ts >/dev/null
+          grep -F "userName: principal.name" server.ts >/dev/null
+          test "$(grep -c 'params.paymentDate, txContext' src/domain/finance/SettlementService.ts)" -eq 2
+          test "$(grep -c 'params.userName,' src/domain/finance/SettlementService.ts)" -ge 2
+          grep -F 'getPaymentMethodRepo' src/db/uow.ts >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0004_payment_methods_rls_permissive.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0005_financial_periods_rls_permissive.sql >/dev/null
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Settlement client tests
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g4-seed.ts <<'EOF'
+          import fs from 'node:fs';
+          import { Pool } from 'pg';
+          import { hashPassword } from '../src/server/password';
+          const p = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL! });
+          async function main() {
+            for (const f of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+              'drizzle/0004_payment_methods_rls_permissive.sql',
+              'drizzle/0005_financial_periods_rls_permissive.sql',
+            ]) await p.query(fs.readFileSync(f, 'utf8'));
+
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES
+              ('company-g4-a','55555555000155','Tenant G4 A','ACTIVE'),
+              ('company-g4-b','66666666000166','Tenant G4 B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES
+              ('g4-admin-a','company-g4-a','Admin G4 A','admin-a@g4.test','ADMIN',true,ARRAY['*']),
+              ('g4-readonly-a','company-g4-a','Readonly G4 A','readonly-a@g4.test','READONLY',true,ARRAY[]::text[]),
+              ('g4-admin-b','company-g4-b','Admin G4 B','admin-b@g4.test','ADMIN',true,ARRAY['*'])`);
+            const hashes = await Promise.all(['StrongPass123!','StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES
+              ($1,$2,$3),($4,$5,$6),($7,$8,$9)`,
+              ['company-g4-a','g4-admin-a',hashes[0],'company-g4-a','g4-readonly-a',hashes[1],'company-g4-b','g4-admin-b',hashes[2]]);
+            await p.query(`INSERT INTO financial_accounts(id,company_id,name,type,initial_balance,current_balance,status) VALUES
+              ('g4-acc-a','company-g4-a','Banco A','BANK',1000,1000,'ACTIVE'),
+              ('g4-acc-b','company-g4-b','Banco B','BANK',2000,2000,'ACTIVE')`);
+            await p.query(`INSERT INTO payment_methods(id,company_id,name,type,fee_percentage,active) VALUES
+              ('g4-pm-a','company-g4-a','PIX A','PIX',0,true),
+              ('g4-pm-b','company-g4-b','PIX B','PIX',0,true)`);
+
+            const ar = async (id:string, company:string, amount:number, due='2026-09-15') =>
+              p.query(`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key)
+                VALUES ($1,$2,'MANUAL',$3,'cat-income',$4,$5,$5,0,$5,$6,$6,'PENDING',$7)`,
+                [id,company,`origin-${id}`,`AR ${id}`,amount,due,`idem-${id}`]);
+            const ap = async (id:string, company:string, amount:number, due='2026-09-15') =>
+              p.query(`INSERT INTO account_payables(id,company_id,origin_type,origin_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key)
+                VALUES ($1,$2,'MANUAL',$3,'cat-expense',$4,$5,$5,0,$5,$6,$6,'PENDING',$7)`,
+                [id,company,`origin-${id}`,`AP ${id}`,amount,due,`idem-${id}`]);
+
+            await ar('g4-ar-a','company-g4-a',100);
+            await ar('g4-ar-b','company-g4-b',120);
+            await ar('g4-ar-over','company-g4-a',50);
+            await ar('g4-ar-readonly','company-g4-a',70);
+            await ar('g4-ar-rollback','company-g4-a',80);
+            await ar('g4-ar-closed','company-g4-a',60,'2026-10-15');
+            await ap('g4-ap-a','company-g4-a',90);
+            await ap('g4-ap-b','company-g4-b',110);
+            await ap('g4-ap-zero','company-g4-a',40);
+
+            await p.query(`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status,created_at,updated_at)
+              VALUES ('g4-period-closed','company-g4-a',2026,10,'2026-10-01','2026-10-31','CLOSED',now(),now())`);
+
+            await p.query(`CREATE ROLE autoerp_g4_app LOGIN PASSWORD 'autoerp_g4_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g4_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,financial_periods,payment_methods TO autoerp_g4_app`);
+            await p.query(`GRANT SELECT,UPDATE ON financial_accounts TO autoerp_g4_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON account_receivables,account_payables TO autoerp_g4_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON financial_transactions TO autoerp_g4_app`);
+            await p.query(`GRANT SELECT,INSERT ON audit_logs TO autoerp_g4_app`);
+            await p.end();
+          }
+          main().catch(e => { console.error(e); process.exit(2); });
+          EOF
+          npx tsx .ci-tmp/g4-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g4_app:autoerp_g4_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g4-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production G4 settlement integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          cat > .ci-tmp/g4-http.ts <<'EOF'
+          import { Pool } from 'pg';
+          const db=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!}); const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status} ${await r.text()}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function req(path:string,cookie:string|null,init:RequestInit={}){return fetch(base+path,{...init,headers:{...(init.headers||{}),...(cookie?{cookie}:{})}})}
+          async function post(path:string,cookie:string|null,body:any){return req(path,cookie,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}
+          async function body(r:Response){const t=await r.text();try{return JSON.parse(t)}catch{return t}}
+          async function state(table:string,id:string){return (await db.query(`SELECT * FROM ${table} WHERE id=$1`,[id])).rows[0]}
+          async function txCount(column:string,id:string){return Number((await db.query(`SELECT count(*)::int c FROM financial_transactions WHERE ${column}=$1`,[id])).rows[0].c)}
+          async function main(){
+            let r=await req('/api/finance/settlement-options',null);if(r.status!==401)throw Error(`options no session ${r.status}`);r=await post('/api/finance/receivables/g4-ar-a/receipt',null,{});if(r.status!==401)throw Error(`receipt no session ${r.status}`);console.log('G4_NO_SESSION=PASS');
+            const ca=await login('55555555000155','admin-a@g4.test'),cb=await login('66666666000166','admin-b@g4.test'),cr=await login('55555555000155','readonly-a@g4.test');console.log('G4_LOGIN=PASS');
+            r=await req('/api/finance/settlement-options',ca);if(r.status!==200)throw Error(`options A ${r.status} ${JSON.stringify(await body(r))}`);let j:any=await body(r);if(!j.accounts.some((x:any)=>x.id==='g4-acc-a')||j.accounts.some((x:any)=>x.id==='g4-acc-b'))throw Error('account tenant leak');if(!j.paymentMethods.some((x:any)=>x.id==='g4-pm-a')||j.paymentMethods.some((x:any)=>x.id==='g4-pm-b'))throw Error('payment method tenant isolation');console.log('G4_OPTIONS_TENANT=PASS');
+            const receiptBody={financialAccountId:'g4-acc-a',paymentMethodId:'g4-pm-a',paymentAmount:40,paymentDate:'2026-09-15',description:'partial receipt',companyId:'company-g4-b',userId:'g4-admin-b',userName:'FORGED'};
+            r=await post('/api/finance/receivables/g4-ar-a/receipt',ca,receiptBody);if(r.status!==201)throw Error(`receipt ${r.status} ${JSON.stringify(await body(r))}`);let ar=await state('account_receivables','g4-ar-a'),acc=await state('financial_accounts','g4-acc-a');if(Number(ar.paid_amount)!==40||Number(ar.balance_amount)!==60||ar.status!=='PARTIALLY_PAID')throw Error('partial receipt state');if(Number(acc.current_balance)!==1040)throw Error(`receipt balance ${acc.current_balance}`);if(await txCount('receivable_id','g4-ar-a')!==1)throw Error('receipt transaction count');let q=await db.query(`SELECT user_id,changes FROM audit_logs WHERE entity_id='g4-ar-a' AND action IN ('RECEIVE','PARTIAL_PAYMENT') ORDER BY timestamp DESC LIMIT 1`);if(q.rowCount!==1||q.rows[0].user_id!=='g4-admin-a'||JSON.parse(q.rows[0].changes).userName!=='Admin G4 A')throw Error('receipt audit principal');console.log('G4_RECEIPT_PARTIAL=PASS');
+            const paymentBody={financialAccountId:'g4-acc-a',paymentMethodId:'g4-pm-a',paymentAmount:30,paymentDate:'2026-09-15',description:'partial payment',companyId:'company-g4-b',userId:'g4-admin-b',userName:'FORGED'};
+            r=await post('/api/finance/payables/g4-ap-a/payment',ca,paymentBody);if(r.status!==201)throw Error(`payment ${r.status} ${JSON.stringify(await body(r))}`);let ap=await state('account_payables','g4-ap-a');acc=await state('financial_accounts','g4-acc-a');if(Number(ap.paid_amount)!==30||Number(ap.balance_amount)!==60||ap.status!=='PARTIALLY_PAID')throw Error('partial payment state');if(Number(acc.current_balance)!==1010)throw Error(`payment balance ${acc.current_balance}`);if(await txCount('payable_id','g4-ap-a')!==1)throw Error('payment transaction count');q=await db.query(`SELECT user_id,changes FROM audit_logs WHERE entity_id='g4-ap-a' AND action IN ('PAY','PARTIAL_PAYMENT') ORDER BY timestamp DESC LIMIT 1`);if(q.rowCount!==1||q.rows[0].user_id!=='g4-admin-a'||JSON.parse(q.rows[0].changes).userName!=='Admin G4 A')throw Error('payment audit principal');console.log('G4_PAYMENT_PARTIAL=PASS');
+            const beforeB=await state('account_receivables','g4-ar-b');r=await post('/api/finance/receivables/g4-ar-b/receipt',ca,{...receiptBody,paymentAmount:10});if(r.status!==404)throw Error(`cross obligation ${r.status}`);const afterB=await state('account_receivables','g4-ar-b');if(afterB.paid_amount!==beforeB.paid_amount||await txCount('receivable_id','g4-ar-b')!==0)throw Error('cross obligation mutated');console.log('G4_CROSS_OBLIGATION=BLOCKED');
+            const beforeOver=await state('account_receivables','g4-ar-over');r=await post('/api/finance/receivables/g4-ar-over/receipt',ca,{...receiptBody,financialAccountId:'g4-acc-b',paymentAmount:10});if(r.status!==404)throw Error(`cross account ${r.status}`);let after=await state('account_receivables','g4-ar-over');if(after.paid_amount!==beforeOver.paid_amount)throw Error('cross account mutated');r=await post('/api/finance/receivables/g4-ar-over/receipt',ca,{...receiptBody,paymentMethodId:'g4-pm-b',paymentAmount:10});if(r.status!==404)throw Error(`cross method ${r.status}`);after=await state('account_receivables','g4-ar-over');if(after.paid_amount!==beforeOver.paid_amount)throw Error('cross method mutated');console.log('G4_CROSS_ACCOUNT_METHOD=BLOCKED');
+            const beforeRO=await state('account_receivables','g4-ar-readonly');r=await post('/api/finance/receivables/g4-ar-readonly/receipt',cr,{...receiptBody,paymentAmount:10});if(r.status!==403)throw Error(`readonly ${r.status}`);const afterRO=await state('account_receivables','g4-ar-readonly');if(afterRO.paid_amount!==beforeRO.paid_amount||await txCount('receivable_id','g4-ar-readonly')!==0)throw Error('readonly mutated');console.log('G4_READONLY=BLOCKED');
+            r=await post('/api/finance/receivables/g4-ar-over/receipt',ca,{...receiptBody,paymentAmount:51});if(r.status!==400)throw Error(`overpayment ${r.status}`);after=await state('account_receivables','g4-ar-over');if(after.paid_amount!==beforeOver.paid_amount||await txCount('receivable_id','g4-ar-over')!==0)throw Error('overpayment mutated');r=await post('/api/finance/payables/g4-ap-zero/payment',ca,{...paymentBody,paymentAmount:0});if(r.status!==400)throw Error(`zero ${r.status}`);const zero=await state('account_payables','g4-ap-zero');if(Number(zero.paid_amount)!==0||await txCount('payable_id','g4-ap-zero')!==0)throw Error('zero mutated');console.log('G4_AMOUNT_GATES=PASS');
+            r=await post('/api/finance/receivables/g4-ar-closed/receipt',ca,{...receiptBody,paymentAmount:10,paymentDate:'2026-10-15'});if(r.status!==409)throw Error(`closed ${r.status} ${JSON.stringify(await body(r))}`);const closed=await state('account_receivables','g4-ar-closed');if(Number(closed.paid_amount)!==0||await txCount('receivable_id','g4-ar-closed')!==0)throw Error('closed mutated');console.log('G4_CLOSED_PERIOD=BLOCKED');
+            const rb=await state('account_receivables','g4-ar-rollback'),bal=Number((await state('financial_accounts','g4-acc-a')).current_balance);await db.query(`REVOKE INSERT ON audit_logs FROM autoerp_g4_app`);r=await post('/api/finance/receivables/g4-ar-rollback/receipt',ca,{...receiptBody,paymentAmount:20});if(r.status===201)throw Error('rollback unexpectedly succeeded');await db.query(`GRANT INSERT ON audit_logs TO autoerp_g4_app`);const ra=await state('account_receivables','g4-ar-rollback'),bal2=Number((await state('financial_accounts','g4-acc-a')).current_balance);if(ra.paid_amount!==rb.paid_amount||bal2!==bal||await txCount('receivable_id','g4-ar-rollback')!==0)throw Error('UOW rollback failed');console.log('G4_ATOMIC_ROLLBACK=PASS');
+            r=await req('/api/finance/settlement-options',cb);j=await body(r);if(!j.accounts.some((x:any)=>x.id==='g4-acc-b')||j.accounts.some((x:any)=>x.id==='g4-acc-a')||!j.paymentMethods.some((x:any)=>x.id==='g4-pm-b')||j.paymentMethods.some((x:any)=>x.id==='g4-pm-a'))throw Error('tenant B options');console.log('G4_REVERSE_TENANT_OPTIONS=PASS');await db.end();
+          }
+          main().catch(e=>{console.error('G4_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g4-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g4-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G4_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G4_CI_REPORT_V2',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=46224b35f74ee719d37ec14f570b8882d3cb3e29','FinanceSettlementClient=7/7 required','PaymentMethods/FinancialPeriods RLS repair required','PostgreSQL16 settlement authority required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
