@@ -1,0 +1,168 @@
+name: SECURITY-2G3 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g3
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 03ab7a155956d5c03f9bbd42d85bc8f3116b9e0e -- . ':(exclude).github/**'
+
+      - name: G3 authority static gate
+        shell: bash
+        run: |
+          grep -F "app.get('/api/finance/receivables'" server.ts >/dev/null
+          grep -F "app.get('/api/finance/payables'" server.ts >/dev/null
+          grep -F 'UnitOfWork.run(principal.companyId' server.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/financeObligationClient.ts >/dev/null
+          ! grep -Eq 'localRepositories|FinanceEngine|useAuth' src/components/finance/ReceivablesView.tsx
+          ! grep -Eq 'localRepositories|FinanceEngine|useAuth' src/components/finance/PayablesView.tsx
+          ! grep -Eq 'companyId|userId|userName' src/api/financeObligationClient.ts || {
+            # Type names or error text may mention identities; payload construction must not.
+            ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeObligationClient.ts
+          }
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Finance obligation transport tests
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g3-seed.ts <<'EOF'
+          import fs from 'node:fs'; import {Pool} from 'pg'; import {hashPassword} from '../src/server/password';
+          const p=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!});
+          async function main(){
+            for(const f of ['drizzle/0000_milky_invisible_woman.sql','drizzle/0001_rls_and_audit.sql','drizzle/0002_phase1_final_hardening.sql','drizzle/0003_auth_credentials.sql']) await p.query(fs.readFileSync(f,'utf8'));
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES ('company-g3-a','33333333000133','Tenant G3 A','ACTIVE'),('company-g3-b','44444444000144','Tenant G3 B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES ('g3-admin-a','company-g3-a','Admin G3 A','admin-a@g3.test','ADMIN',true,ARRAY['*']),('g3-admin-b','company-g3-b','Admin G3 B','admin-b@g3.test','ADMIN',true,ARRAY['*'])`);
+            const hs=await Promise.all(['StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES ($1,$2,$3),($4,$5,$6)`,['company-g3-a','g3-admin-a',hs[0],'company-g3-b','g3-admin-b',hs[1]]);
+            await p.query(`CREATE ROLE autoerp_g3_app LOGIN PASSWORD 'autoerp_g3_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g3_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,financial_periods TO autoerp_g3_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON account_receivables,account_payables TO autoerp_g3_app`);
+            await p.query(`GRANT SELECT,INSERT ON audit_logs TO autoerp_g3_app`);
+            await p.end();
+          } main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g3-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g3_app:autoerp_g3_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g3-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production G3 HTTP trust-boundary integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          cat > .ci-tmp/g3-http.ts <<'EOF'
+          import {Pool} from 'pg';
+          const db=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!}); const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function req(path:string,cookie:string|null,init:RequestInit={}){return fetch(base+path,{...init,headers:{...(init.headers||{}),...(cookie?{cookie}:{})}})}
+          async function post(path:string,cookie:string,body:any){return req(path,cookie,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}
+          async function json(r:Response){const t=await r.text();try{return JSON.parse(t)}catch{throw Error(`${r.status} ${t}`)}}
+          async function main(){
+            let r=await req('/api/finance/receivables',null); if(r.status!==401)throw Error(`GET no-session ${r.status}`); console.log('G3_GET_NO_SESSION=PASS');
+            const ca=await login('33333333000133','admin-a@g3.test'), cb=await login('44444444000144','admin-b@g3.test'); console.log('G3_LOGIN=PASS');
+            const arA={originType:'MANUAL',originId:'g3-ar-a',categoryId:'cat-income',description:'AR A',totalAmount:101,dueDate:'2026-09-10',competenceDate:'2026-09-01'};
+            const arB={...arA,originId:'g3-ar-b',description:'AR B',totalAmount:202};
+            const apA={originType:'MANUAL',originId:'g3-ap-a',categoryId:'cat-expense',description:'AP A',totalAmount:303,dueDate:'2026-09-12',competenceDate:'2026-09-01',idempotencyKey:'g3-ap-a-key'};
+            const apB={...apA,originId:'g3-ap-b',description:'AP B',totalAmount:404,idempotencyKey:'g3-ap-b-key'};
+            r=await post('/api/finance/receivables',ca,arA); if(r.status!==201)throw Error(`create arA ${r.status} ${await r.text()}`); const aAr=(await json(r)).items[0];
+            r=await post('/api/finance/receivables',cb,arB); if(r.status!==201)throw Error(`create arB ${r.status}`); const bAr=(await json(r)).items[0];
+            r=await post('/api/finance/payables',ca,apA); if(r.status!==201)throw Error(`create apA ${r.status}`); const aAp=(await json(r)).items[0];
+            r=await post('/api/finance/payables',cb,apB); if(r.status!==201)throw Error(`create apB ${r.status}`); const bAp=(await json(r)).items[0];
+            r=await req('/api/finance/receivables',ca); if(r.status!==200)throw Error(`list arA ${r.status}`); let j=await json(r); if(!j.items.some((x:any)=>x.id===aAr.id)||j.items.some((x:any)=>x.id===bAr.id)||j.items.some((x:any)=>x.companyId!=='company-g3-a'))throw Error('AR tenant leak'); console.log('G3_AR_GET_TENANT=PASS');
+            r=await req('/api/finance/payables',ca); if(r.status!==200)throw Error(`list apA ${r.status}`); j=await json(r); if(!j.items.some((x:any)=>x.id===aAp.id)||j.items.some((x:any)=>x.id===bAp.id)||j.items.some((x:any)=>x.companyId!=='company-g3-a'))throw Error('AP tenant leak'); console.log('G3_AP_GET_TENANT=PASS');
+            r=await req('/api/finance/receivables',cb); j=await json(r); if(!j.items.some((x:any)=>x.id===bAr.id)||j.items.some((x:any)=>x.id===aAr.id))throw Error('AR reverse tenant leak');
+            r=await req('/api/finance/payables',cb); j=await json(r); if(!j.items.some((x:any)=>x.id===bAp.id)||j.items.some((x:any)=>x.id===aAp.id))throw Error('AP reverse tenant leak'); console.log('G3_CROSS_TENANT_READ=BLOCKED');
+            r=await post(`/api/finance/receivables/${aAr.id}/cancel`,ca,{reason:'g3 cancel'}); if(r.status!==200)throw Error(`cancel ar ${r.status}`);
+            r=await post(`/api/finance/payables/${aAp.id}/cancel`,ca,{reason:'g3 cancel'}); if(r.status!==200)throw Error(`cancel ap ${r.status}`); console.log('G3_G2_COMMAND_REGRESSION=PASS');
+            const q=await db.query(`SELECT entity_id,user_id FROM audit_logs WHERE entity_id=ANY($1::text[]) AND action='CANCEL'`,[[aAr.id,aAp.id]]); if(q.rowCount!==2||q.rows.some(x=>x.user_id!=='g3-admin-a'))throw Error('cancel audit identity'); console.log('G3_AUDIT_IDENTITY=PASS');
+            await db.end();
+          } main().catch(e=>{console.error('G3_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g3-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g3-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G3_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G3_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=03ab7a155956d5c03f9bbd42d85bc8f3116b9e0e','FinanceObligationClient=7/7 required','PostgreSQL16 session GET tenant isolation required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
