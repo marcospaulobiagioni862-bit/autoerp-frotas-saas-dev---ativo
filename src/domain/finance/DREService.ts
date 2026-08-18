@@ -1,3 +1,4 @@
+import { ITransactionContext } from './ITransactionContext';
 import {
   AccountReceivableRepository,
   AccountPayableRepository,
@@ -16,7 +17,8 @@ export class DREService {
     companyId: string,
     periodStart: string,
     periodEnd: string,
-    regime: AccountingRegime = AccountingRegime.ACCRUAL
+    regime: AccountingRegime = AccountingRegime.ACCRUAL,
+    txContext?: ITransactionContext
   ): Promise<DREReport> {
     let grossRevenueAmount = 0;
     let deductionsAmount = 0;
@@ -25,8 +27,12 @@ export class DREService {
     let financialResultAmount = 0;
 
     if (regime === AccountingRegime.ACCRUAL) {
-      const recs = await this.recRepo.findAllForCompany(companyId);
-      const pays = await this.payRepo.findAllForCompany(companyId);
+      const recs = txContext
+        ? await txContext.getReceivableRepo().findAll()
+        : await this.recRepo.findAllForCompany(companyId);
+      const pays = txContext
+        ? await txContext.getPayableRepo().findAll()
+        : await this.payRepo.findAllForCompany(companyId);
 
       const isDeposit = (desc?: string, origin?: string) => {
         const text = (desc || '').toLowerCase();
@@ -52,16 +58,22 @@ export class DREService {
       );
 
       for (const r of periodRecs) {
-        grossRevenueAmount += r.originalAmount;
-        financialResultAmount += (r.fineAmount + r.interestAmount - r.discountAmount);
+        grossRevenueAmount += Number(r.originalAmount || 0);
+        financialResultAmount += (
+          Number(r.fineAmount || 0) +
+          Number(r.interestAmount || 0) -
+          Number(r.discountAmount || 0)
+        );
       }
 
       for (const p of periodPays) {
-        directCostsAmount += p.originalAmount;
+        directCostsAmount += Number(p.originalAmount || 0);
       }
     } else {
       // CASH REGIME
-      const txs = await this.txRepo.findAllForCompany(companyId);
+      const txs = txContext
+        ? await txContext.getTransactionRepo().findAll()
+        : await this.txRepo.findAllForCompany(companyId);
       const isDepositTx = (desc?: string) => {
         const text = (desc || '').toLowerCase();
         return text.includes('caução') || text.includes('caucao');
@@ -77,8 +89,8 @@ export class DREService {
       );
 
       for (const t of periodTxs) {
-        if (t.type === TransactionType.INCOME) grossRevenueAmount += t.amount;
-        else if (t.type === TransactionType.EXPENSE) directCostsAmount += t.amount;
+        if (t.type === TransactionType.INCOME) grossRevenueAmount += Number(t.amount || 0);
+        else if (t.type === TransactionType.EXPENSE) directCostsAmount += Number(t.amount || 0);
       }
     }
 
