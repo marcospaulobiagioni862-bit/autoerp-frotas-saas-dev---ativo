@@ -1,0 +1,60 @@
+name: SECURITY-2 residual finance audit
+
+on:
+  pull_request:
+    branches:
+      - ci-audit-security-2-residual-finance
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Prove audited main snapshot
+        shell: bash
+        run: |
+          echo "AUDITED_MAIN=fac23620a33b0dd3864e0eb7c9ce1c35f4b8e88a"
+          git diff --exit-code fac23620a33b0dd3864e0eb7c9ce1c35f4b8e88a -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: Frontend FinanceEngine callsites
+        shell: bash
+        run: |
+          echo '=== FRONTEND_FINANCE_ENGINE_CALLS ==='
+          grep -RIn --include='*.ts' --include='*.tsx' 'FinanceEngine\.' src/components src/App.tsx src/hooks 2>/dev/null || true
+
+      - name: Frontend localRepositories imports
+        shell: bash
+        run: |
+          echo '=== FRONTEND_LOCAL_REPOSITORY_IMPORTS ==='
+          grep -RIn --include='*.ts' --include='*.tsx' 'localRepositories' src/components src/App.tsx src/hooks 2>/dev/null || true
+
+      - name: Sensitive finance operation callsites
+        shell: bash
+        run: |
+          echo '=== SENSITIVE_FINANCE_OPERATION_CALLS ==='
+          grep -RInE --include='*.ts' --include='*.tsx' '(receiveSecurityDeposit|returnSecurityDeposit|compensateSecurityDeposit|getCashFlowReport|getAccrualSummary|processRecurring|reconcil|FinancialPeriod|closeFinancialPeriod|reopenFinancialPeriod|createReceivable|createPayable|settleReceivable|settlePayable|transfer|reverseTransaction|renegoti)' src/components src/App.tsx src/hooks 2>/dev/null || true
+
+      - name: Direct sensitive repository construction in frontend
+        shell: bash
+        run: |
+          echo '=== FRONTEND_DIRECT_REPOSITORY_CONSTRUCTION ==='
+          grep -RInE --include='*.ts' --include='*.tsx' 'new (AccountReceivableRepository|AccountPayableRepository|FinancialTransactionRepository|FinancialAccountRepository|SecurityDepositRepository|FinancialPeriodRepository|BankStatement|Reconciliation|Recurring|VehicleRepository|DriverRepository)' src/components src/App.tsx src/hooks 2>/dev/null || true
+
+      - name: Finance API client usage
+        shell: bash
+        run: |
+          echo '=== FRONTEND_FINANCE_API_CLIENTS ==='
+          grep -RInE --include='*.ts' --include='*.tsx' '(FinanceOverviewClient|FinanceObligationClient|FinanceSettlementClient|FinanceTransactionClient|FinanceRenegotiationClient|FinanceReportingClient)' src/components src/App.tsx src/hooks 2>/dev/null || true
+
+      - name: Production hardcoded privileged identities
+        shell: bash
+        run: |
+          echo '=== FRONTEND_HARDCODED_PRIVILEGED_IDENTITIES ==='
+          grep -RInE --include='*.ts' --include='*.tsx' '(user-admin-1|usr-admin|Administrador|Gestor de Frota|permissions:[[:space:]]*\[.\*.)' src/components src/App.tsx src/hooks src/domain/services 2>/dev/null || true
