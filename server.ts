@@ -4,6 +4,7 @@ import { PayableService } from './src/domain/finance/PayableService';
 import { SettlementService } from './src/domain/finance/SettlementService';
 import { TransferService } from './src/domain/finance/TransferService';
 import { ReversalService } from './src/domain/finance/ReversalService';
+import { RenegotiationService } from './src/domain/finance/RenegotiationService';
 import { UnitOfWork } from './src/db/uow';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -373,6 +374,61 @@ async function startServer() {
     }
 
     res.json({ user: req.principal });
+  });
+
+  // SECURITY-2G6: receivable renegotiation is server-authoritative.
+  app.post('/api/finance/receivables/renegotiate', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const obligationIds = Array.isArray(req.body?.obligationIds)
+      ? req.body.obligationIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+    const newTotalAmount = Number(req.body?.newTotalAmount);
+    const installmentsCount = Number(req.body?.installmentsCount);
+    const firstDueDate = typeof req.body?.firstDueDate === 'string' ? req.body.firstDueDate : '';
+    const categoryId = typeof req.body?.categoryId === 'string' ? req.body.categoryId : '';
+    const description = typeof req.body?.description === 'string' ? req.body.description : '';
+
+    if (
+      obligationIds.length === 0 ||
+      !Number.isFinite(newTotalAmount) ||
+      newTotalAmount < 0 ||
+      !Number.isInteger(installmentsCount) ||
+      installmentsCount < 1 ||
+      installmentsCount > 24 ||
+      !firstDueDate ||
+      !categoryId
+    ) {
+      res.status(400).json({ error: 'Payload de renegociação inválido' });
+      return;
+    }
+
+    try {
+      const items = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await RenegotiationService.renegociate(
+            {
+              companyId: principal.companyId,
+              obligationIds,
+              type: 'RECEIVABLE',
+              newTotalAmount,
+              installmentsCount,
+              firstDueDate,
+              categoryId,
+              description,
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
+      );
+      res.status(201).json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
   });
 
   // SECURITY-2G5: transaction history, transfers and reversals are server-authoritative.
