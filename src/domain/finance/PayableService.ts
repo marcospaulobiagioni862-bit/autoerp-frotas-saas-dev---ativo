@@ -7,6 +7,7 @@ import { AuditLogger } from '../../shared/utils/auditLogger';
 import { IdempotencyService } from '../services/IdempotencyService';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
+import { ITransactionContext } from './ITransactionContext';
 
 export interface CreatePayableParams {
   companyId: string;
@@ -31,8 +32,16 @@ export interface CreatePayableParams {
 export class PayableService {
   private static repo = new AccountPayableRepository();
 
-  public static async create(params: CreatePayableParams): Promise<AccountPayable[]> {
-    await FinancialAuthorizationService.authorize(params.userId, params.companyId, 'PAYABLE_CREATE');
+  public static async create(
+    params: CreatePayableParams,
+    txContext?: ITransactionContext
+  ): Promise<AccountPayable[]> {
+    await FinancialAuthorizationService.authorize(
+      params.userId,
+      params.companyId,
+      'PAYABLE_CREATE',
+      txContext
+    );
 
     const installments = Math.max(1, params.installmentsCount || 1);
     const baseAmount = roundCurrency(params.totalAmount / installments);
@@ -53,8 +62,8 @@ export class PayableService {
       const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
       const periodRef = params.competenceDate || calculatedDueDate;
 
-      await FinancialPeriodService.assertDateOpen(params.companyId, periodRef);
-      await FinancialPeriodService.assertDateOpen(params.companyId, calculatedDueDate);
+      await FinancialPeriodService.assertDateOpen(params.companyId, periodRef, txContext);
+      await FinancialPeriodService.assertDateOpen(params.companyId, calculatedDueDate, txContext);
 
       const idempotencyKey = params.idempotencyKey || IdempotencyService.buildKey(
         params.originType,
@@ -63,18 +72,31 @@ export class PayableService {
         periodRef,
         params.companyId
       );
-      const legacyKey = IdempotencyService.buildLegacyKey(params.originType, params.originId, i, periodRef);
+      const legacyKey = IdempotencyService.buildLegacyKey(
+        params.originType,
+        params.originId,
+        i,
+        periodRef
+      );
 
       const savedItem = await IdempotencyService.executeWithLock(idempotencyKey, async () => {
-        // Check Idempotency
-        let existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, idempotencyKey);
-        if (!existing) {
-          const legacyItem = await this.repo.findByIdempotencyKeyForCompany(params.companyId, legacyKey);
-          if (legacyItem) {
-            existing = legacyItem;
+        let existing: AccountPayable | null;
+        if (txContext) {
+          existing = await txContext.getPayableRepo().findByIdempotencyKey(idempotencyKey);
+          if (!existing) {
+            existing = await txContext.getPayableRepo().findByIdempotencyKey(legacyKey);
+          }
+        } else {
+          existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, idempotencyKey);
+          if (!existing) {
+            existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, legacyKey);
           }
         }
+
         if (existing) {
+          if (existing.companyId !== params.companyId) {
+            throw new Error('Acesso negado: Conta a Pagar idempotente pertence a outro tenant');
+          }
           return existing;
         }
 
@@ -83,7 +105,7 @@ export class PayableService {
           companyId: params.companyId,
           originType: params.originType,
           originId: params.originId,
-          vehicleId: params.vehicleId, // Vehicle cost center
+          vehicleId: params.vehicleId,
           supplierId: params.supplierId,
           driverId: params.driverId,
           contractId: params.contractId,
@@ -107,7 +129,9 @@ export class PayableService {
           updatedAt: new Date().toISOString(),
         };
 
-        const saved = await this.repo.createForCompany(params.companyId, item);
+        const saved = txContext
+          ? await txContext.getPayableRepo().create(item)
+          : await this.repo.createForCompany(params.companyId, item);
 
         await AuditLogger.logAction(
           params.companyId,
@@ -117,7 +141,8 @@ export class PayableService {
           params.userId,
           params.userName,
           null,
-          saved
+          saved,
+          txContext
         );
 
         return saved;
@@ -142,13 +167,25 @@ export class PayableService {
     payableId: string,
     reason: string,
     userId: string,
-    userName: string
+    userName: string,
+    txContext?: ITransactionContext
   ): Promise<AccountPayable> {
-    await FinancialAuthorizationService.authorize(userId, companyId, 'PAYABLE_CANCEL');
+    await FinancialAuthorizationService.authorize(
+      userId,
+      companyId,
+      'PAYABLE_CANCEL',
+      txContext
+    );
 
-    const payable = await this.repo.findByIdForCompany(payableId, companyId);
+    const payable = txContext
+      ? await txContext.getPayableRepo().findById(payableId)
+      : await this.repo.findByIdForCompany(payableId, companyId);
+
     if (!payable) {
       throw new Error('Conta a Pagar não encontrada');
+    }
+    if (!payable.companyId || payable.companyId !== companyId) {
+      throw new Error('Acesso negado: Conta a Pagar pertence a outra empresa ou tenant inválido');
     }
 
     if (payable.status === ObligationStatus.CANCELLED) {
@@ -161,10 +198,15 @@ export class PayableService {
 
     const previousState = { ...payable };
 
-    const updatedPayable = await this.repo.updateForCompany(payableId, companyId, {
-      status: ObligationStatus.CANCELLED,
-      updatedAt: new Date().toISOString(),
-    });
+    const updatedPayable = txContext
+      ? await txContext.getPayableRepo().update(payableId, {
+          status: ObligationStatus.CANCELLED,
+          updatedAt: new Date().toISOString(),
+        })
+      : await this.repo.updateForCompany(payableId, companyId, {
+          status: ObligationStatus.CANCELLED,
+          updatedAt: new Date().toISOString(),
+        });
 
     await AuditLogger.logAction(
       companyId,
@@ -174,7 +216,8 @@ export class PayableService {
       userId,
       userName,
       previousState,
-      updatedPayable
+      updatedPayable,
+      txContext
     );
 
     return updatedPayable;
