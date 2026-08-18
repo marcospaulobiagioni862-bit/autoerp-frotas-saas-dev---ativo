@@ -6,6 +6,7 @@ export class SecurityAdministrationTestRunner {
   public static async runAllTests(): Promise<{ total: number; passed: number; failed: number; results: any[] }> {
     const results: any[] = [];
     const companyId = 'test-company-security';
+    const developmentOptions = { allowDevelopmentMockData: true };
 
     // Test 1: RBAC Permission Matrix Validation
     try {
@@ -22,34 +23,66 @@ export class SecurityAdministrationTestRunner {
       results.push({ id: 'sec-01', name: 'Matriz de Permissões RBAC (ADMIN vs. GESTOR)', passed: false, message: err?.message });
     }
 
-    // Test 2: Active User Session Listing
+    // Test 2: Explicit development session simulation remains tenant-scoped
     try {
-      const sessions = SecurityAdministrationService.listActiveSessions(companyId);
+      const sessions = SecurityAdministrationService.listActiveSessions(companyId, developmentOptions);
       const passed = Array.isArray(sessions) && sessions.length > 0 && sessions.every(s => s.companyId === companyId);
       results.push({
         id: 'sec-02',
-        name: 'Listagem e Monitoramento de Sessões Ativas por Tenant',
+        name: 'Simulação de sessões somente em desenvolvimento e isolada por tenant',
         passed,
-        message: passed ? `${sessions.length} sessões ativas isoladas por tenant` : 'Falha no isolamento de sessões',
+        message: passed ? `${sessions.length} sessões simuladas explicitamente em desenvolvimento` : 'Falha no isolamento da simulação de sessões',
       });
     } catch (err: any) {
-      results.push({ id: 'sec-02', name: 'Listagem e Monitoramento de Sessões Ativas por Tenant', passed: false, message: err?.message });
+      results.push({ id: 'sec-02', name: 'Simulação de sessões somente em desenvolvimento e isolada por tenant', passed: false, message: err?.message });
     }
 
-    // Test 3: User Status Update Protection
+    // Test 3: Development mock user status update remains RBAC protected
     try {
-      const users = SecurityAdministrationService.listUsers(companyId);
+      const users = SecurityAdministrationService.listUsers(companyId, developmentOptions);
       const targetUser = users[0];
-      const updateRes = await SecurityAdministrationService.updateUserStatus(companyId, targetUser.id, 'SUSPENDED', 'admin-id', UserRole.ADMIN);
+      const updateRes = await SecurityAdministrationService.updateUserStatus(
+        companyId,
+        targetUser.id,
+        'SUSPENDED',
+        'admin-id',
+        UserRole.ADMIN,
+        'corr-security-admin-dev-test',
+        developmentOptions
+      );
       const passed = updateRes.success;
       results.push({
         id: 'sec-03',
-        name: 'Alteração de Status de Usuário com Trava de Segurança',
+        name: 'Alteração de status simulada com trava RBAC em desenvolvimento',
         passed,
-        message: passed ? 'Status de usuário alterado e auditado com sucesso' : 'Falha na alteração de status',
+        message: passed ? 'Status de usuário simulado alterado com autorização explícita' : 'Falha na alteração simulada de status',
       });
     } catch (err: any) {
-      results.push({ id: 'sec-03', name: 'Alteração de Status de Usuário com Trava de Segurança', passed: false, message: err?.message });
+      results.push({ id: 'sec-03', name: 'Alteração de status simulada com trava RBAC em desenvolvimento', passed: false, message: err?.message });
+    }
+
+    // Test 4: Production/default mode must never fabricate users or sessions
+    try {
+      const users = SecurityAdministrationService.listUsers(companyId);
+      const sessions = SecurityAdministrationService.listActiveSessions(companyId);
+      const updateRes = await SecurityAdministrationService.updateUserStatus(
+        companyId,
+        'usr-admin-test',
+        'SUSPENDED',
+        'admin-id',
+        UserRole.ADMIN
+      );
+      const passed = users.length === 0 && sessions.length === 0 && updateRes.success === false;
+      results.push({
+        id: 'sec-04',
+        name: 'Modo padrão/produção falha fechado sem telemetria administrativa fabricada',
+        passed,
+        message: passed
+          ? 'Nenhum usuário/sessão mock foi exposto e escrita local foi rejeitada'
+          : 'Modo padrão expôs ou alterou dados administrativos simulados',
+      });
+    } catch (err: any) {
+      results.push({ id: 'sec-04', name: 'Modo padrão/produção falha fechado sem telemetria administrativa fabricada', passed: false, message: err?.message });
     }
 
     const passed = results.filter(r => r.passed).length;
