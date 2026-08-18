@@ -18,12 +18,14 @@ export interface TransactionFinancialPeriodFilterOptions {
 
 export interface ITransactionReceivableRepository {
   findById(id: string): Promise<AccountReceivable | null>;
+  findByIdempotencyKey(key: string): Promise<AccountReceivable | null>;
   create(item: AccountReceivable): Promise<AccountReceivable>;
   update(id: string, item: Partial<AccountReceivable>): Promise<AccountReceivable>;
 }
 
 export interface ITransactionPayableRepository {
   findById(id: string): Promise<AccountPayable | null>;
+  findByIdempotencyKey(key: string): Promise<AccountPayable | null>;
   create(item: AccountPayable): Promise<AccountPayable>;
   update(id: string, item: Partial<AccountPayable>): Promise<AccountPayable>;
 }
@@ -64,4 +66,3 @@ export interface ITransactionContext {
   getUserRepo(): ITransactionUserRepository;
   getFinancialPeriodRepo(): ITransactionFinancialPeriodRepository;
 }
-

@@ -1,9 +1,10 @@
 import { db } from '../index';
-import { 
-  users, companies, accountReceivables, accountPayables, 
+import {
+  users, companies, accountReceivables, accountPayables,
   financialTransactions, financialAccounts, auditLogs, contracts, financialPeriods
 } from '../schema';
 import { eq, and, sql, lt } from 'drizzle-orm';
+import { AuditLog } from '../../types/entities';
 
 // Basic wrapper around Drizzle ORM to satisfy IBaseRepository requirements
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
@@ -72,7 +73,7 @@ export class PostgresAccountReceivableRepository extends PostgresBaseRepository<
   }
   async findByContractId(contractId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.contractId, contractId)); }
   async findByDriverId(driverId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.driverId, driverId)); /* Adjust if actual driverId col exists */ }
-  async findByVehicleId(vehicleId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.vehicleId, vehicleId)); /* Adjust if actual vehicleId col */ }
+  async findByVehicleId(vehicleId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.vehicleId, vehicleId)); /* Adjust if actual driverId col */ }
   async findOverdue(companyId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(and(eq(this.tableName.companyId, companyId), eq(this.tableName.status, 'PENDING'), lt(this.tableName.dueDate, new Date().toISOString()))); }
 }
 
@@ -97,14 +98,14 @@ export class PostgresFinancialTransactionRepository extends PostgresBaseReposito
 
 export class PostgresFinancialAccountRepository extends PostgresBaseRepository<any> {
   constructor(tx?: any) { super(financialAccounts, tx); }
-  
+
   async findByIdWithLock(id: string): Promise<any | undefined> {
     const res = await this.tx.execute(
       sql`SELECT * FROM financial_accounts WHERE id = ${id} FOR UPDATE`
     );
     return res.rows[0];
   }
-  
+
   async lockTwoAccounts(id1: string, id2: string): Promise<any[]> {
     const [firstId, secondId] = id1 < id2 ? [id1, id2] : [id2, id1];
     const res1 = await this.tx.execute(
@@ -125,8 +126,30 @@ export class PostgresFinancialAccountRepository extends PostgresBaseRepository<a
   }
 }
 
-export class PostgresAuditLogRepository extends PostgresBaseRepository<any> {
+export class PostgresAuditLogRepository extends PostgresBaseRepository<AuditLog> {
   constructor(tx?: any) { super(auditLogs, tx); }
+
+  async create(item: AuditLog): Promise<AuditLog> {
+    const changes = JSON.stringify({
+      previousState: item.previousState ?? null,
+      newState: item.newState ?? null,
+      userName: item.userName,
+    });
+
+    await this.tx.insert(auditLogs).values({
+      id: item.id,
+      companyId: item.companyId,
+      userId: item.userId,
+      action: String(item.action),
+      entityType: item.entityName,
+      entityId: item.entityId,
+      changes,
+      timestamp: item.timestamp,
+      ipAddress: item.ipAddress,
+    });
+
+    return item;
+  }
 }
 
 export class PostgresContractRepository extends PostgresBaseRepository<any> {
