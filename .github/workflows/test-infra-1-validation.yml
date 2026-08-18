@@ -91,6 +91,8 @@ jobs:
             const moduleUrl = (relativePath: string) =>
               pathToFileURL(path.join(workspace, relativePath)).href;
 
+            const originalArgv = process.argv;
+            process.argv = [];
             const { ContractTestRunner } = await import(
               moduleUrl('src/domain/services/__tests__/contractTestRunner.ts')
             );
@@ -100,6 +102,7 @@ jobs:
             const { SecurityTestRunner } = await import(
               moduleUrl('src/domain/services/__tests__/securityTestRunner.ts')
             );
+            process.argv = originalArgv;
 
             const run = async (name: string, fn: () => Promise<any>) => {
               memoryStorage.clear();
