@@ -372,6 +372,36 @@ async function startServer() {
     res.json({ user: req.principal });
   });
 
+  // SECURITY-2G3: authenticated finance obligation reads use the same
+  // UnitOfWork/RLS tenant boundary as the command endpoints.
+  app.get('/api/finance/receivables', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await txContext.getReceivableRepo().findAll()
+      );
+      res.json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.get('/api/finance/payables', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await txContext.getPayableRepo().findAll()
+      );
+      res.json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
   // SECURITY-2G2: finance obligation commands cross the server trust boundary.
   // Tenant and audit identity come only from the authenticated principal; client
   // supplied companyId/userId/userName fields are intentionally not consumed.
