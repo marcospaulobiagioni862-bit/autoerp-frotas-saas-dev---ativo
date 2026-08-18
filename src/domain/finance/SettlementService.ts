@@ -46,6 +46,13 @@ export class SettlementService {
       txContext
     );
 
+    if (!Number.isFinite(params.paymentAmount) || params.paymentAmount <= 0) {
+      throw new Error('Valor da liquidação deve ser maior que zero');
+    }
+    if (!params.financialAccountId || !params.paymentMethodId || !params.paymentDate) {
+      throw new Error('Conta financeira, forma de pagamento e data são obrigatórias');
+    }
+
     await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
 
     let receivable: AccountReceivable | null;
@@ -73,7 +80,11 @@ export class SettlementService {
     }
 
     if (txContext) {
-      const paymentMethod = await txContext.getPaymentMethodRepo().findById(params.paymentMethodId);
+      const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+      if (!paymentMethodRepo) {
+        throw new Error('Forma de pagamento indisponível no contexto transacional');
+      }
+      const paymentMethod = await paymentMethodRepo.findById(params.paymentMethodId);
       if (!paymentMethod) throw new Error('Forma de pagamento não encontrada');
       if (!paymentMethod.companyId || paymentMethod.companyId !== params.companyId) {
         throw new Error('Acesso negado: Forma de pagamento pertence a outra empresa ou tenant inválido');
@@ -193,6 +204,13 @@ export class SettlementService {
       txContext
     );
 
+    if (!Number.isFinite(params.paymentAmount) || params.paymentAmount <= 0) {
+      throw new Error('Valor da liquidação deve ser maior que zero');
+    }
+    if (!params.financialAccountId || !params.paymentMethodId || !params.paymentDate) {
+      throw new Error('Conta financeira, forma de pagamento e data são obrigatórias');
+    }
+
     await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
 
     let payable: AccountPayable | null;
@@ -220,7 +238,11 @@ export class SettlementService {
     }
 
     if (txContext) {
-      const paymentMethod = await txContext.getPaymentMethodRepo().findById(params.paymentMethodId);
+      const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
+      if (!paymentMethodRepo) {
+        throw new Error('Forma de pagamento indisponível no contexto transacional');
+      }
+      const paymentMethod = await paymentMethodRepo.findById(params.paymentMethodId);
       if (!paymentMethod) throw new Error('Forma de pagamento não encontrada');
       if (!paymentMethod.companyId || paymentMethod.companyId !== params.companyId) {
         throw new Error('Acesso negado: Forma de pagamento pertence a outra empresa ou tenant inválido');

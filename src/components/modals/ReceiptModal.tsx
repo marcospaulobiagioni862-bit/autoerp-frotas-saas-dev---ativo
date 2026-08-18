@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AccountReceivable, FinancialAccount, PaymentMethod } from '../../types/entities';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
-import { FinancialAccountRepository, PaymentMethodRepository } from '../../persistence/repositories/localRepositories';
-import { useAuth } from '../../hooks/useAuth';
+import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
+import { FinanceSettlementClient, SettlementAccountOption, SettlementPaymentMethodOption } from '../../api/financeSettlementClient';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -13,9 +11,8 @@ interface ReceiptModalProps {
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, receivable, onSuccess }) => {
-  const { user } = useAuth();
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
+  const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<number>(0);
@@ -33,25 +30,23 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   }, [receivable]);
 
   const loadOptions = async () => {
-    const accRepo = new FinancialAccountRepository();
-    const pmRepo = new PaymentMethodRepository();
-    const accList = await accRepo.findAllForCompany(user.companyId);
-    const pmList = await pmRepo.findAllForCompany(user.companyId);
-    setAccounts(accList);
-    setMethods(pmList);
-
-    if (accList.length > 0) setSelectedAccountId(accList[0].id);
-    if (pmList.length > 0) setSelectedMethodId(pmList[0].id);
+    try {
+      const options = await FinanceSettlementClient.getOptions();
+      setAccounts(options.accounts);
+      setMethods(options.paymentMethods);
+      if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
+      if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
+    } catch (err) {
+      setAccounts([]);
+      setMethods([]);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
+    }
   };
 
   if (!isOpen || !receivable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (receivable.companyId !== user.companyId) {
-      setError('Erro de isolamento de tenant: O título a receber não pertence à sua empresa.');
-      return;
-    }
     if (amount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
@@ -65,16 +60,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       setIsSubmitting(true);
       setError(null);
 
-      await FinanceEngine.registerReceipt({
-        companyId: receivable.companyId,
-        obligationId: receivable.id,
+      await FinanceSettlementClient.registerReceipt(receivable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount: amount,
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
-        userId: user.userId,
-        userName: user.name,
       });
 
       onSuccess();
