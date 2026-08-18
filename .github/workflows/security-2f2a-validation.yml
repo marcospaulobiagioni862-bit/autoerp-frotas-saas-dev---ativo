@@ -48,7 +48,7 @@ jobs:
 
       - name: Verify source equals SECURITY-2F2A candidate
         run: |
-          git diff --exit-code ae16e89a38143b66c11abf4fa31b2d942033bef4 -- . ':(exclude).github/**'
+          git diff --exit-code 2045d8de0a2f2db749e215306f876f25696473ed -- . ':(exclude).github/**'
 
       - name: Verify session security wiring statically
         shell: bash
@@ -366,7 +366,7 @@ jobs:
               'AUTOERP_SECURITY_2F2A_CI_REPORT',
               `VALIDATION_STATUS=${{ job.status }}`,
               `RUN_ID=${context.runId}`,
-              'CANDIDATE=ae16e89a38143b66c11abf4fa31b2d942033bef4',
+              'CANDIDATE=2045d8de0a2f2db749e215306f876f25696473ed',
               'STRICT_ACCEPTANCE=real PostgreSQL production login PASS; HttpOnly/SameSite=Strict/Path=/api/Secure cookie PASS; /api/auth/me via cookie PASS; tampered session rejected; uniform invalid-login responses PASS; logout cookie clear PASS; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS',
             ].join('\n');
             await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
