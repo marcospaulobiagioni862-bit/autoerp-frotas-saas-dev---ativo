@@ -1,0 +1,228 @@
+name: SECURITY-2F2B validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2f2b
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: security-2f2b-ci-jwt-secret-at-least-32-bytes
+      JWT_ISSUER: autoerp-ci
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals SECURITY-2F2B candidate
+        run: git diff --exit-code d903c450f172978dca789af10d21b5833760f0c1 -- . ':(exclude).github/**'
+
+      - name: Verify bootstrap wiring statically
+        shell: bash
+        run: |
+          grep -F "app.post('/api/auth/bootstrap'" server.ts >/dev/null
+          grep -F 'x-autoerp-bootstrap-token' server.ts >/dev/null
+          grep -F 'AUTOERP_BOOTSTRAP_TOKEN' server.ts >/dev/null
+          grep -F 'timingSafeEqual' src/server/bootstrap.ts >/dev/null
+          grep -F 'BOOTSTRAP_TOKEN_MIN_LENGTH = 32' src/server/bootstrap.ts >/dev/null
+          ! grep -E "AUTOERP_BOOTSTRAP_TOKEN[=:][[:space:]]*['\"][^$]" src/server/bootstrap.ts server.ts >/dev/null
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Prepare real PostgreSQL bootstrap data
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci-tmp"
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/seed-bootstrap.ts" <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { Pool } from 'pg';
+
+          async function main() {
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const admin = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL! });
+            for (const migration of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+            ]) {
+              await admin.query(fs.readFileSync(path.join(workspace, migration), 'utf8'));
+            }
+
+            await admin.query(`
+              INSERT INTO companies (id, name, status) VALUES
+                ('bootstrap-company-1', 'Bootstrap Company', 'ACTIVE'),
+                ('bootstrap-company-2', 'Other Company', 'ACTIVE')
+            `);
+            await admin.query(`
+              INSERT INTO users (id, company_id, name, email, role, active, permissions) VALUES
+                ('bootstrap-admin-1', 'bootstrap-company-1', 'Bootstrap Admin', 'placeholder-admin@example.invalid', 'ADMIN', true, ARRAY['*']),
+                ('bootstrap-nonadmin-1', 'bootstrap-company-1', 'Not Admin', 'nonadmin@example.invalid', 'OPERATIONAL', true, ARRAY[]::text[]),
+                ('bootstrap-inactive-admin', 'bootstrap-company-1', 'Inactive Admin', 'inactive@example.invalid', 'ADMIN', false, ARRAY['*']),
+                ('bootstrap-other-admin', 'bootstrap-company-2', 'Other Admin', 'other@example.invalid', 'ADMIN', true, ARRAY['*'])
+            `);
+
+            await admin.query(`CREATE ROLE autoerp_ci_app LOGIN PASSWORD 'autoerp_ci_pass'`);
+            await admin.query(`GRANT USAGE ON SCHEMA public TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT, UPDATE ON TABLE companies TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT, UPDATE ON TABLE users TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT, INSERT, UPDATE ON TABLE user_credentials TO autoerp_ci_app`);
+            await admin.end();
+          }
+
+          main().catch((error) => { console.error(error); process.exitCode = 2; });
+          EOF
+
+      - name: Seed bootstrap fixtures
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/seed-bootstrap.ts"
+
+      - name: Start production server with bootstrap secret
+        env:
+          NODE_ENV: production
+          USE_PGLITE: "false"
+          ALLOW_MOCK_AUTH: "false"
+          DATABASE_URL: postgres://autoerp_ci_app:autoerp_ci_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2f2b-ci-jwt-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+          AUTOERP_BOOTSTRAP_TOKEN: security-2f2b-bootstrap-secret-at-least-32-chars
+        shell: bash
+        run: |
+          npm start > "$GITHUB_WORKSPACE/.ci-tmp/server.log" 2>&1 &
+          echo $! > "$GITHUB_WORKSPACE/.ci-tmp/server.pid"
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/auth/me || true)
+            if [ "$status" = "401" ]; then echo 'PRODUCTION_SERVER_READY=PASS'; exit 0; fi
+            sleep 1
+          done
+          cat "$GITHUB_WORKSPACE/.ci-tmp/server.log"
+          exit 1
+
+      - name: Run real bootstrap to login assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=http://127.0.0.1:3000
+          tmp="$GITHUB_WORKSPACE/.ci-tmp"
+          secret='security-2f2b-bootstrap-secret-at-least-32-chars'
+          password='AutoERP-First-Admin-Passphrase-2026'
+          valid='{"companyId":"bootstrap-company-1","userId":"bootstrap-admin-1","companyDocument":"12345678000199","email":"first.admin@example.com","password":"AutoERP-First-Admin-Passphrase-2026"}'
+
+          status=$(curl -sS -o "$tmp/wrong-token.body" -w '%{http_code}' -H 'Content-Type: application/json' -H 'x-autoerp-bootstrap-token: wrong-bootstrap-secret-that-is-long-enough' -X POST "$base/api/auth/bootstrap" --data "$valid")
+          test "$status" = '404'
+
+          status=$(curl -sS -o "$tmp/nonadmin.body" -w '%{http_code}' -H 'Content-Type: application/json' -H "x-autoerp-bootstrap-token: $secret" -X POST "$base/api/auth/bootstrap" --data '{"companyId":"bootstrap-company-1","userId":"bootstrap-nonadmin-1","companyDocument":"12345678000199","email":"nonadmin@real.example","password":"AutoERP-First-Admin-Passphrase-2026"}')
+          test "$status" = '404'
+
+          status=$(curl -sS -o "$tmp/inactive.body" -w '%{http_code}' -H 'Content-Type: application/json' -H "x-autoerp-bootstrap-token: $secret" -X POST "$base/api/auth/bootstrap" --data '{"companyId":"bootstrap-company-1","userId":"bootstrap-inactive-admin","companyDocument":"12345678000199","email":"inactive@real.example","password":"AutoERP-First-Admin-Passphrase-2026"}')
+          test "$status" = '404'
+
+          status=$(curl -sS -o "$tmp/cross.body" -w '%{http_code}' -H 'Content-Type: application/json' -H "x-autoerp-bootstrap-token: $secret" -X POST "$base/api/auth/bootstrap" --data '{"companyId":"bootstrap-company-1","userId":"bootstrap-other-admin","companyDocument":"12345678000199","email":"cross@real.example","password":"AutoERP-First-Admin-Passphrase-2026"}')
+          test "$status" = '404'
+
+          status=$(curl -sS -o "$tmp/bootstrap.body" -w '%{http_code}' -H 'Content-Type: application/json' -H "x-autoerp-bootstrap-token: $secret" -X POST "$base/api/auth/bootstrap" --data "$valid")
+          test "$status" = '201'
+          grep -F '"userId":"bootstrap-admin-1"' "$tmp/bootstrap.body" >/dev/null
+          grep -F '"companyId":"bootstrap-company-1"' "$tmp/bootstrap.body" >/dev/null
+          grep -F '"email":"first.admin@example.com"' "$tmp/bootstrap.body" >/dev/null
+          ! grep -E 'password|passwordHash|password_hash|bootstrap|token' "$tmp/bootstrap.body" >/dev/null
+          echo 'HTTP_BOOTSTRAP_FIRST_ADMIN=PASS'
+
+          status=$(curl -sS -D "$tmp/login.headers" -o "$tmp/login.body" -w '%{http_code}' -H 'Content-Type: application/json' -X POST "$base/api/auth/login" --data '{"companyDocument":"12345678000199","email":"FIRST.ADMIN@EXAMPLE.COM","password":"AutoERP-First-Admin-Passphrase-2026"}')
+          test "$status" = '200'
+          grep -F '"userId":"bootstrap-admin-1"' "$tmp/login.body" >/dev/null
+          grep -F 'autoerp_session=' "$tmp/login.headers" >/dev/null
+          echo 'HTTP_LOGIN_AFTER_BOOTSTRAP=PASS'
+
+          status=$(curl -sS -o "$tmp/second.body" -w '%{http_code}' -H 'Content-Type: application/json' -H "x-autoerp-bootstrap-token: $secret" -X POST "$base/api/auth/bootstrap" --data "$valid")
+          test "$status" = '404'
+          echo 'HTTP_SECOND_BOOTSTRAP=BLOCKED'
+
+      - name: Create regression harness
+        shell: bash
+        run: |
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/regression.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+          class MemoryStorage { private s=new Map<string,string>(); clear(){this.s.clear()} getItem(k:string){return this.s.has(k)?this.s.get(k)!:null} removeItem(k:string){this.s.delete(k)} setItem(k:string,v:string){this.s.set(String(k),String(v))} key(i:number){return Array.from(this.s.keys())[i]??null} get length(){return this.s.size} }
+          async function main(){
+            const storage=new MemoryStorage(); Object.defineProperty(globalThis,'localStorage',{value:storage,configurable:true}); Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});
+            const w=process.env.GITHUB_WORKSPACE!; const u=(p:string)=>pathToFileURL(path.join(w,p)).href;
+            const { BootstrapTestRunner }=await import(u('src/server/__tests__/bootstrapTestRunner.ts')); const bs=await BootstrapTestRunner.runAllTests(); if(bs.total!==5||bs.passed!==5||bs.failed!==0) throw new Error(`Bootstrap ${bs.passed}/${bs.total}`);
+            const { SessionLoginTestRunner }=await import(u('src/server/__tests__/sessionLoginTestRunner.ts')); const sl=await SessionLoginTestRunner.runAllTests(); if(sl.total!==12||sl.passed!==12||sl.failed!==0) throw new Error(`SessionLogin ${sl.passed}/${sl.total}`);
+            const { PasswordSecurityTestRunner }=await import(u('src/server/__tests__/passwordTestRunner.ts')); const pw=await PasswordSecurityTestRunner.runAllTests(); if(pw.total!==6||pw.passed!==6||pw.failed!==0) throw new Error(`Password ${pw.passed}/${pw.total}`);
+            const { ServerAuthTestRunner }=await import(u('src/server/__tests__/authTestRunner.ts')); const sa=await ServerAuthTestRunner.runAllTests(); if(sa.total!==8||sa.passed!==8||sa.failed!==0) throw new Error(`ServerAuth ${sa.passed}/${sa.total}`);
+            const { SecurityAdministrationTestRunner }=await import(u('src/domain/admin/SecurityAdministrationService.test.ts')); const ad=await SecurityAdministrationTestRunner.runAllTests(); if(ad.total!==4||ad.passed!==4||ad.failed!==0) throw new Error(`Admin ${ad.passed}/${ad.total}`);
+            const { TenantConfigurationTestRunner }=await import(u('src/domain/admin/TenantConfigurationService.test.ts')); const tc=await TenantConfigurationTestRunner.runAllTests(); if(tc.total!==4||tc.passed!==4||tc.failed!==0) throw new Error(`Tenant ${tc.passed}/${tc.total}`);
+            const original=process.argv; process.argv=[]; const {ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts')); const {FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts')); const {SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts')); process.argv=original;
+            const run=async(n:string,f:()=>Promise<any>,e:number)=>{storage.clear();const r=await f();if(!r||r.total!==e||r.passed!==e||r.failed!==0)throw new Error(`${n} ${r?.passed}/${r?.total}`)};
+            await run('Contract',()=>ContractTestRunner.runAllTests(),20); await run('Finance',()=>FinanceTestRunner.runAllTests(),46); await run('Security',()=>SecurityTestRunner.runAllTests(),35);
+          }
+          main().catch(e=>{console.error(e);process.exitCode=2});
+          EOF
+          npx tsx "$GITHUB_WORKSPACE/.ci-tmp/regression.ts"
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/.ci-tmp/server.pid" ]; then kill "$(cat "$GITHUB_WORKSPACE/.ci-tmp/server.pid")" || true; fi
+          cat "$GITHUB_WORKSPACE/.ci-tmp/server.log" || true
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2F2B_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=d903c450f172978dca789af10d21b5833760f0c1','STRICT_ACCEPTANCE=production bootstrap secret gate PASS; BootstrapSecurity 5/5; real PostgreSQL first-admin bootstrap PASS; non-admin/inactive/cross-tenant blocked; login after bootstrap PASS; second bootstrap blocked; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
