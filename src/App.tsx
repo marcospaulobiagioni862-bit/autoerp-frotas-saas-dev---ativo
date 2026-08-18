@@ -302,7 +302,11 @@ export default function App() {
           )}
 
           {activeTab === 'administration' && (
-            <AdministrationCenterView />
+            <AdministrationCenterView
+              companyId={user.companyId}
+              currentUserId={user.userId}
+              currentUserRole={user.role}
+            />
           )}
 
           {activeTab === 'release-governance' && (
