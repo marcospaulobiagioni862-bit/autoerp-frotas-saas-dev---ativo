@@ -1,0 +1,1 @@
+Trigger SECURITY-2G4 strict PostgreSQL settlement validation.
