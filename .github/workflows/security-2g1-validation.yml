@@ -1,0 +1,362 @@
+name: SECURITY-2G1 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: security-2g1-ci-secret-at-least-32-bytes
+      JWT_ISSUER: autoerp-ci
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals SECURITY-2G1 candidate
+        run: git diff --exit-code d34b30fc15b99e6fae9ea3db650f47577251e203 -- . ':(exclude).github/**'
+
+      - name: Verify SECURITY-2G1 wiring statically
+        shell: bash
+        run: |
+          grep -F 'findByIdempotencyKey(key: string)' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'txContext.getReceivableRepo().findByIdempotencyKey' src/domain/finance/ReceivableService.ts >/dev/null
+          grep -F 'txContext.getPayableRepo().findByIdempotencyKey' src/domain/finance/PayableService.ts >/dev/null
+          grep -F 'txContext.getReceivableRepo().create(item)' src/domain/finance/ReceivableService.ts >/dev/null
+          grep -F 'txContext.getPayableRepo().create(item)' src/domain/finance/PayableService.ts >/dev/null
+          grep -F 'txContext.getReceivableRepo().update' src/domain/finance/ReceivableService.ts >/dev/null
+          grep -F 'txContext.getPayableRepo().update' src/domain/finance/PayableService.ts >/dev/null
+          grep -F 'entityType: item.entityName' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F 'previousState: item.previousState ?? null' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F 'newState: item.newState ?? null' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F 'userName: item.userName' src/db/repositories/postgresRepositories.ts >/dev/null
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build production frontend and server
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Create real PostgreSQL SECURITY-2G1 integration harness
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci-tmp"
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/security-2g1-postgres.ts" <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          import { Pool } from 'pg';
+
+          async function main() {
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const adminUrl = process.env.ADMIN_DATABASE_URL!;
+            const appUrl = process.env.DATABASE_URL!;
+            const admin = new Pool({ connectionString: adminUrl });
+
+            for (const migration of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+            ]) {
+              await admin.query(fs.readFileSync(path.join(workspace, migration), 'utf8'));
+            }
+
+            await admin.query(`
+              INSERT INTO companies (id, document, name, status)
+              VALUES
+                ('company-g1-a', '11111111000111', 'Tenant G1 A', 'ACTIVE'),
+                ('company-g1-b', '22222222000122', 'Tenant G1 B', 'ACTIVE')
+              ON CONFLICT (id) DO NOTHING
+            `);
+            await admin.query(`
+              INSERT INTO users (id, company_id, name, email, role, active, permissions)
+              VALUES
+                ('g1-admin-a', 'company-g1-a', 'Finance Admin A', 'g1-admin-a@example.com', 'ADMIN', true, ARRAY['*']),
+                ('g1-admin-b', 'company-g1-b', 'Finance Admin B', 'g1-admin-b@example.com', 'ADMIN', true, ARRAY['*'])
+            `);
+            await admin.query(`CREATE ROLE autoerp_g1_app LOGIN PASSWORD 'autoerp_g1_pass'`);
+            await admin.query(`GRANT USAGE ON SCHEMA public TO autoerp_g1_app`);
+            await admin.query(`GRANT SELECT ON TABLE users, financial_periods TO autoerp_g1_app`);
+            await admin.query(`GRANT SELECT, INSERT, UPDATE ON TABLE account_receivables, account_payables TO autoerp_g1_app`);
+            await admin.query(`GRANT SELECT, INSERT ON TABLE audit_logs TO autoerp_g1_app`);
+
+            process.env.USE_PGLITE = 'false';
+            process.env.DATABASE_URL = appUrl;
+            process.env.NODE_ENV = 'test';
+
+            const moduleUrl = (relativePath: string) => pathToFileURL(path.join(workspace, relativePath)).href;
+            const { UnitOfWork } = await import(moduleUrl('src/db/uow.ts'));
+            const { ReceivableService } = await import(moduleUrl('src/domain/finance/ReceivableService.ts'));
+            const { PayableService } = await import(moduleUrl('src/domain/finance/PayableService.ts'));
+            const { OriginType, ObligationStatus } = await import(moduleUrl('src/types/enums.ts'));
+
+            const arParams = {
+              companyId: 'company-g1-a',
+              originType: OriginType.MANUAL,
+              originId: 'g1-ar-main',
+              categoryId: 'cat-income-g1',
+              description: 'SECURITY-2G1 AR',
+              totalAmount: 600,
+              dueDate: '2026-09-10',
+              competenceDate: '2026-09-01',
+              userId: 'g1-admin-a',
+              userName: 'Finance Admin A',
+            };
+
+            const firstAr = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await ReceivableService.create(arParams, tx))[0]
+            );
+            if (!firstAr || firstAr.companyId !== 'company-g1-a') throw new Error('AR create failed');
+            console.log('G1_AR_CREATE=PASS');
+
+            const secondAr = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await ReceivableService.create(arParams, tx))[0]
+            );
+            if (secondAr.id !== firstAr.id) throw new Error('AR idempotency returned different record');
+            const arCount = await admin.query(`SELECT count(*)::int AS c FROM account_receivables WHERE company_id='company-g1-a' AND origin_id='g1-ar-main'`);
+            if (arCount.rows[0].c !== 1) throw new Error('AR idempotency duplicated row');
+            console.log('G1_AR_IDEMPOTENCY=PASS');
+
+            const arCreateAudit = await admin.query(`SELECT entity_type, changes FROM audit_logs WHERE company_id='company-g1-a' AND entity_id=$1 AND action='CREATE'`, [firstAr.id]);
+            if (arCreateAudit.rowCount !== 1 || arCreateAudit.rows[0].entity_type !== 'AccountReceivable') throw new Error('AR audit create missing/adaptation invalid');
+            const arCreateChanges = JSON.parse(arCreateAudit.rows[0].changes);
+            if (arCreateChanges.previousState !== null || !arCreateChanges.newState || arCreateChanges.userName !== 'Finance Admin A') throw new Error('AR audit changes payload invalid');
+            console.log('G1_AR_AUDIT_ADAPTER=PASS');
+
+            const cancelledAr = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              await ReceivableService.cancelReceivable('company-g1-a', firstAr.id, 'CI cancel', 'g1-admin-a', 'Finance Admin A', tx)
+            );
+            if (cancelledAr.status !== ObligationStatus.CANCELLED) throw new Error('AR cancel failed');
+            const arCancelAudit = await admin.query(`SELECT changes FROM audit_logs WHERE company_id='company-g1-a' AND entity_id=$1 AND action='CANCEL'`, [firstAr.id]);
+            if (arCancelAudit.rowCount !== 1) throw new Error('AR cancel audit missing');
+            const arCancelChanges = JSON.parse(arCancelAudit.rows[0].changes);
+            if (!arCancelChanges.previousState || !arCancelChanges.newState || arCancelChanges.userName !== 'Finance Admin A') throw new Error('AR cancel audit payload invalid');
+            console.log('G1_AR_CANCEL=PASS');
+
+            const apParams = {
+              companyId: 'company-g1-a',
+              originType: OriginType.MANUAL,
+              originId: 'g1-ap-main',
+              categoryId: 'cat-expense-g1',
+              description: 'SECURITY-2G1 AP',
+              totalAmount: 450,
+              dueDate: '2026-09-12',
+              competenceDate: '2026-09-01',
+              userId: 'g1-admin-a',
+              userName: 'Finance Admin A',
+            };
+
+            const firstAp = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await PayableService.create(apParams, tx))[0]
+            );
+            if (!firstAp || firstAp.companyId !== 'company-g1-a') throw new Error('AP create failed');
+            console.log('G1_AP_CREATE=PASS');
+
+            const secondAp = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await PayableService.create(apParams, tx))[0]
+            );
+            if (secondAp.id !== firstAp.id) throw new Error('AP idempotency returned different record');
+            const apCount = await admin.query(`SELECT count(*)::int AS c FROM account_payables WHERE company_id='company-g1-a' AND origin_id='g1-ap-main'`);
+            if (apCount.rows[0].c !== 1) throw new Error('AP idempotency duplicated row');
+            console.log('G1_AP_IDEMPOTENCY=PASS');
+
+            const apCreateAudit = await admin.query(`SELECT entity_type, changes FROM audit_logs WHERE company_id='company-g1-a' AND entity_id=$1 AND action='CREATE'`, [firstAp.id]);
+            if (apCreateAudit.rowCount !== 1 || apCreateAudit.rows[0].entity_type !== 'AccountPayable') throw new Error('AP audit create missing/adaptation invalid');
+            const apCreateChanges = JSON.parse(apCreateAudit.rows[0].changes);
+            if (apCreateChanges.previousState !== null || !apCreateChanges.newState || apCreateChanges.userName !== 'Finance Admin A') throw new Error('AP audit changes payload invalid');
+            console.log('G1_AP_AUDIT_ADAPTER=PASS');
+
+            const cancelledAp = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              await PayableService.cancelPayable('company-g1-a', firstAp.id, 'CI cancel', 'g1-admin-a', 'Finance Admin A', tx)
+            );
+            if (cancelledAp.status !== ObligationStatus.CANCELLED) throw new Error('AP cancel failed');
+            console.log('G1_AP_CANCEL=PASS');
+
+            const crossAr = await UnitOfWork.run('company-g1-b', async (tx: any) => tx.getReceivableRepo().findById(firstAr.id));
+            const crossAp = await UnitOfWork.run('company-g1-b', async (tx: any) => tx.getPayableRepo().findById(firstAp.id));
+            if (crossAr !== null || crossAp !== null) throw new Error('Cross-tenant read exposed obligations');
+            console.log('G1_CROSS_TENANT_READ=BLOCKED');
+
+            const pendingAr = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await ReceivableService.create({ ...arParams, originId: 'g1-ar-cross' }, tx))[0]
+            );
+            const pendingAp = await UnitOfWork.run('company-g1-a', async (tx: any) =>
+              (await PayableService.create({ ...apParams, originId: 'g1-ap-cross' }, tx))[0]
+            );
+
+            let crossArCancelBlocked = false;
+            try {
+              await UnitOfWork.run('company-g1-b', async (tx: any) =>
+                await ReceivableService.cancelReceivable('company-g1-b', pendingAr.id, 'attack', 'g1-admin-b', 'Finance Admin B', tx)
+              );
+            } catch { crossArCancelBlocked = true; }
+            let crossApCancelBlocked = false;
+            try {
+              await UnitOfWork.run('company-g1-b', async (tx: any) =>
+                await PayableService.cancelPayable('company-g1-b', pendingAp.id, 'attack', 'g1-admin-b', 'Finance Admin B', tx)
+              );
+            } catch { crossApCancelBlocked = true; }
+            if (!crossArCancelBlocked || !crossApCancelBlocked) throw new Error('Cross-tenant cancel was not blocked');
+            const stillPending = await admin.query(`SELECT (SELECT status FROM account_receivables WHERE id=$1) AS ar_status, (SELECT status FROM account_payables WHERE id=$2) AS ap_status`, [pendingAr.id, pendingAp.id]);
+            if (stillPending.rows[0].ar_status !== 'PENDING' || stillPending.rows[0].ap_status !== 'PENDING') throw new Error('Cross-tenant cancel mutated row');
+            console.log('G1_CROSS_TENANT_CANCEL=BLOCKED');
+
+            let browserTenantOverrideBlocked = false;
+            try {
+              await UnitOfWork.run('company-g1-a', async (tx: any) =>
+                await ReceivableService.create({ ...arParams, companyId: 'company-g1-b', originId: 'g1-browser-forge', userId: 'g1-admin-b', userName: 'Finance Admin B' }, tx)
+              );
+            } catch { browserTenantOverrideBlocked = true; }
+            if (!browserTenantOverrideBlocked) throw new Error('Client companyId overrode UnitOfWork tenant');
+            console.log('G1_CLIENT_COMPANY_ID_OVERRIDE=BLOCKED');
+
+            let arRollbackCaught = false;
+            try {
+              await UnitOfWork.run('company-g1-a', async (tx: any) => {
+                await ReceivableService.create({ ...arParams, originId: 'g1-ar-rollback' }, tx);
+                throw new Error('intentional rollback');
+              });
+            } catch { arRollbackCaught = true; }
+            if (!arRollbackCaught) throw new Error('AR rollback harness did not throw');
+            const arRollbackRows = await admin.query(`SELECT count(*)::int AS c FROM account_receivables WHERE origin_id='g1-ar-rollback'`);
+            const arRollbackAudit = await admin.query(`SELECT count(*)::int AS c FROM audit_logs WHERE changes LIKE '%g1-ar-rollback%'`);
+            if (arRollbackRows.rows[0].c !== 0 || arRollbackAudit.rows[0].c !== 0) throw new Error('AR transaction rollback failed');
+            console.log('G1_AR_ROLLBACK=PASS');
+
+            let apRollbackCaught = false;
+            try {
+              await UnitOfWork.run('company-g1-a', async (tx: any) => {
+                await PayableService.create({ ...apParams, originId: 'g1-ap-rollback' }, tx);
+                throw new Error('intentional rollback');
+              });
+            } catch { apRollbackCaught = true; }
+            if (!apRollbackCaught) throw new Error('AP rollback harness did not throw');
+            const apRollbackRows = await admin.query(`SELECT count(*)::int AS c FROM account_payables WHERE origin_id='g1-ap-rollback'`);
+            const apRollbackAudit = await admin.query(`SELECT count(*)::int AS c FROM audit_logs WHERE changes LIKE '%g1-ap-rollback%'`);
+            if (apRollbackRows.rows[0].c !== 0 || apRollbackAudit.rows[0].c !== 0) throw new Error('AP transaction rollback failed');
+            console.log('G1_AP_ROLLBACK=PASS');
+
+            await admin.end();
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_SECURITY_2G1_POSTGRES_FATAL');
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+
+      - name: Run real PostgreSQL SECURITY-2G1 integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+          DATABASE_URL: postgres://autoerp_g1_app:autoerp_g1_pass@127.0.0.1:5432/autoerp_ci
+          USE_PGLITE: "false"
+          NODE_ENV: test
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/security-2g1-postgres.ts"
+
+      - name: Create strict regression harness
+        shell: bash
+        run: |
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/security-2g1-regression.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private s = new Map<string,string>();
+            clear(){this.s.clear()}
+            getItem(k:string){return this.s.has(k)?this.s.get(k)!:null}
+            removeItem(k:string){this.s.delete(k)}
+            setItem(k:string,v:string){this.s.set(String(k),String(v))}
+            key(i:number){return Array.from(this.s.keys())[i]??null}
+            get length(){return this.s.size}
+          }
+
+          async function main(){
+            const storage=new MemoryStorage();
+            Object.defineProperty(globalThis,'localStorage',{value:storage,configurable:true});
+            Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});
+            const w=process.env.GITHUB_WORKSPACE!;
+            const u=(p:string)=>pathToFileURL(path.join(w,p)).href;
+
+            const { AuthSessionTestRunner }=await import(u('src/auth/__tests__/authSessionTestRunner.ts'));
+            const as=await AuthSessionTestRunner.runAllTests(); if(as.total!==8||as.passed!==8||as.failed!==0) throw new Error(`AuthSession ${as.passed}/${as.total}`);
+            const { BootstrapTestRunner }=await import(u('src/server/__tests__/bootstrapTestRunner.ts'));
+            const bs=await BootstrapTestRunner.runAllTests(); if(bs.total!==5||bs.passed!==5||bs.failed!==0) throw new Error(`Bootstrap ${bs.passed}/${bs.total}`);
+            const { SessionLoginTestRunner }=await import(u('src/server/__tests__/sessionLoginTestRunner.ts'));
+            const sl=await SessionLoginTestRunner.runAllTests(); if(sl.total!==12||sl.passed!==12||sl.failed!==0) throw new Error(`SessionLogin ${sl.passed}/${sl.total}`);
+            const { PasswordSecurityTestRunner }=await import(u('src/server/__tests__/passwordTestRunner.ts'));
+            const pw=await PasswordSecurityTestRunner.runAllTests(); if(pw.total!==6||pw.passed!==6||pw.failed!==0) throw new Error(`Password ${pw.passed}/${pw.total}`);
+            const { ServerAuthTestRunner }=await import(u('src/server/__tests__/authTestRunner.ts'));
+            const sa=await ServerAuthTestRunner.runAllTests(); if(sa.total!==8||sa.passed!==8||sa.failed!==0) throw new Error(`ServerAuth ${sa.passed}/${sa.total}`);
+            const { SecurityAdministrationTestRunner }=await import(u('src/domain/admin/SecurityAdministrationService.test.ts'));
+            const ad=await SecurityAdministrationTestRunner.runAllTests(); if(ad.total!==4||ad.passed!==4||ad.failed!==0) throw new Error(`AdminSecurity ${ad.passed}/${ad.total}`);
+            const { TenantConfigurationTestRunner }=await import(u('src/domain/admin/TenantConfigurationService.test.ts'));
+            const tc=await TenantConfigurationTestRunner.runAllTests(); if(tc.total!==4||tc.passed!==4||tc.failed!==0) throw new Error(`TenantConfig ${tc.passed}/${tc.total}`);
+
+            const original=process.argv; process.argv=[];
+            const {ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));
+            const {FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const {SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv=original;
+            const run=async(n:string,f:()=>Promise<any>,e:number)=>{storage.clear();const r=await f();if(!r||r.total!==e||r.passed!==e||r.failed!==0)throw new Error(`${n} ${r?.passed}/${r?.total}`)};
+            await run('Contract',()=>ContractTestRunner.runAllTests(),20);
+            await run('Finance',()=>FinanceTestRunner.runAllTests(),46);
+            await run('Security',()=>SecurityTestRunner.runAllTests(),35);
+            console.log('G1_REGRESSION_SUITE=PASS');
+          }
+          main().catch(e=>{console.error('AUTOERP_SECURITY_2G1_REGRESSION_FATAL');console.error(e);process.exitCode=2});
+          EOF
+          npx tsx "$GITHUB_WORKSPACE/.ci-tmp/security-2g1-regression.ts"
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G1_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=d34b30fc15b99e6fae9ea3db650f47577251e203','STRICT_ACCEPTANCE=PostgreSQL16 AR/AP create+idempotency+cancel PASS; audit adapter PASS; cross-tenant read/cancel BLOCKED; client companyId override BLOCKED; AR/AP transaction rollback PASS; AuthSession 8/8; Bootstrap 5/5; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
