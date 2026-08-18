@@ -6,7 +6,7 @@ on:
       - ci-validate-security-1
   pull_request:
     branches:
-      - security-1-driver-health-auth-gate
+      - ci-validate-security-1
   workflow_dispatch:
 
 permissions:
