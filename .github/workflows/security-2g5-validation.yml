@@ -1,0 +1,202 @@
+name: SECURITY-2G5 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g5
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 5847a086e5b6bc1213bb8163a6a39ab04af52632 -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G5 authority static gate
+        shell: bash
+        run: |
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/modals/TransferModal.tsx
+          ! grep -Eq 'FinanceEngine|localRepositories|useAuth' src/components/finance/TransactionsView.tsx
+          grep -F "credentials: 'include'" src/api/financeTransactionClient.ts >/dev/null
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeTransactionClient.ts
+          grep -F "app.get('/api/finance/transactions'" server.ts >/dev/null
+          grep -F "app.post('/api/finance/transfers'" server.ts >/dev/null
+          grep -F "app.post('/api/finance/transactions/:id/reverse'" server.ts >/dev/null
+          grep -F "companyId: principal.companyId" server.ts >/dev/null
+          grep -F "userId: principal.userId" server.ts >/dev/null
+          grep -F "userName: principal.name" server.ts >/dev/null
+          grep -F "'FINANCIAL_TRANSFER'," src/domain/finance/TransferService.ts >/dev/null
+          grep -F "'FINANCIAL_REVERSAL'," src/domain/finance/ReversalService.ts >/dev/null
+          grep -F "TransactionType.REVERSAL" src/domain/finance/ReversalService.ts >/dev/null
+          grep -F "originalTx.destinationAccountId" src/domain/finance/ReversalService.ts >/dev/null
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Transaction client tests
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g5-seed.ts <<'EOF'
+          import fs from 'node:fs';
+          import { Pool } from 'pg';
+          import { hashPassword } from '../src/server/password';
+          const p=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!});
+          async function main(){
+            for(const f of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+              'drizzle/0004_payment_methods_rls_permissive.sql',
+              'drizzle/0005_financial_periods_rls_permissive.sql',
+            ]) await p.query(fs.readFileSync(f,'utf8'));
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES
+              ('company-g5-a','77777777000177','Tenant G5 A','ACTIVE'),
+              ('company-g5-b','88888888000188','Tenant G5 B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES
+              ('g5-admin-a','company-g5-a','Admin G5 A','admin-a@g5.test','ADMIN',true,ARRAY['*']),
+              ('g5-readonly-a','company-g5-a','Readonly G5 A','readonly-a@g5.test','READONLY',true,ARRAY[]::text[]),
+              ('g5-admin-b','company-g5-b','Admin G5 B','admin-b@g5.test','ADMIN',true,ARRAY['*'])`);
+            const hs=await Promise.all(['StrongPass123!','StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES
+              ($1,$2,$3),($4,$5,$6),($7,$8,$9)`,['company-g5-a','g5-admin-a',hs[0],'company-g5-a','g5-readonly-a',hs[1],'company-g5-b','g5-admin-b',hs[2]]);
+            await p.query(`INSERT INTO financial_accounts(id,company_id,name,type,initial_balance,current_balance,status) VALUES
+              ('g5-a-src','company-g5-a','A Source','BANK',1000,1000,'ACTIVE'),
+              ('g5-a-dst','company-g5-a','A Dest','BANK',500,500,'ACTIVE'),
+              ('g5-a-src2','company-g5-a','A Source 2','BANK',900,900,'ACTIVE'),
+              ('g5-a-dst2','company-g5-a','A Dest 2','BANK',300,300,'ACTIVE'),
+              ('g5-b-src','company-g5-b','B Source','BANK',2000,2000,'ACTIVE'),
+              ('g5-b-dst','company-g5-b','B Dest','BANK',700,700,'ACTIVE')`);
+            await p.query(`INSERT INTO payment_methods(id,company_id,name,type,fee_percentage,active) VALUES
+              ('g5-pm-a','company-g5-a','PIX A','PIX',0,true),
+              ('g5-pm-b','company-g5-b','PIX B','PIX',0,true)`);
+            await p.query(`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status,created_at,updated_at)
+              VALUES ('g5-period-closed','company-g5-a',2026,10,'2026-10-01','2026-10-31','CLOSED',now(),now())`);
+            await p.query(`CREATE ROLE autoerp_g5_app LOGIN PASSWORD 'autoerp_g5_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g5_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,financial_periods,payment_methods TO autoerp_g5_app`);
+            await p.query(`GRANT SELECT,UPDATE ON financial_accounts TO autoerp_g5_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON financial_transactions TO autoerp_g5_app`);
+            await p.query(`GRANT SELECT ON account_receivables,account_payables TO autoerp_g5_app`);
+            await p.query(`GRANT SELECT,INSERT ON audit_logs TO autoerp_g5_app`);
+            await p.end();
+          }
+          main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g5-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g5_app:autoerp_g5_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g5-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production G5 transfer/reversal integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          cat > .ci-tmp/g5-http.ts <<'EOF'
+          import { Pool } from 'pg';
+          const db=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!}); const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status} ${await r.text()}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function req(path:string,cookie:string|null,init:RequestInit={}){return fetch(base+path,{...init,headers:{...(init.headers||{}),...(cookie?{cookie}:{})}})}
+          async function post(path:string,cookie:string|null,body:any){return req(path,cookie,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)})}
+          async function body(r:Response){const t=await r.text();try{return JSON.parse(t)}catch{return t}}
+          async function acc(id:string){return (await db.query(`SELECT current_balance FROM financial_accounts WHERE id=$1`,[id])).rows[0]}
+          async function tx(id:string){return (await db.query(`SELECT * FROM financial_transactions WHERE id=$1`,[id])).rows[0]}
+          async function txCount(where:string,val:string){return Number((await db.query(`SELECT count(*)::int c FROM financial_transactions WHERE ${where}=$1`,[val])).rows[0].c)}
+          async function main(){
+            let r=await req('/api/finance/transactions',null);if(r.status!==401)throw Error(`list no session ${r.status}`);r=await post('/api/finance/transfers',null,{});if(r.status!==401)throw Error(`transfer no session ${r.status}`);r=await post('/api/finance/transactions/x/reverse',null,{});if(r.status!==401)throw Error(`reversal no session ${r.status}`);console.log('G5_NO_SESSION=PASS');
+            const ca=await login('77777777000177','admin-a@g5.test'),cb=await login('88888888000188','admin-b@g5.test'),cr=await login('77777777000177','readonly-a@g5.test');console.log('G5_LOGIN=PASS');
+            const transferBody={sourceAccountId:'g5-a-src',destinationAccountId:'g5-a-dst',amount:100,transferDate:'2026-09-15',paymentMethodId:'g5-pm-a',description:'G5 transfer',companyId:'company-g5-b',userId:'g5-admin-b',userName:'FORGED'};
+            r=await post('/api/finance/transfers',ca,transferBody);if(r.status!==201)throw Error(`transfer ${r.status} ${JSON.stringify(await body(r))}`);let j:any=await body(r);const transfer=j.item;if(transfer.companyId!=='company-g5-a'||transfer.createdById!=='g5-admin-a'||transfer.destinationAccountId!=='g5-a-dst'||transfer.type!=='TRANSFER')throw Error('transfer principal/shape');if(Number((await acc('g5-a-src')).current_balance)!==900||Number((await acc('g5-a-dst')).current_balance)!==600)throw Error('transfer balances');if(await txCount('id',transfer.id)!==1)throw Error('transfer count');let q=await db.query(`SELECT user_id,changes FROM audit_logs WHERE entity_id=$1 AND action='CREATE'`,[transfer.id]);if(q.rowCount!==1||q.rows[0].user_id!=='g5-admin-a'||JSON.parse(q.rows[0].changes).userName!=='Admin G5 A')throw Error('transfer audit');console.log('G5_TRANSFER=PASS');
+            r=await req('/api/finance/transactions',ca);if(r.status!==200)throw Error(`list A ${r.status}`);j=await body(r);if(!j.items.some((x:any)=>x.id===transfer.id)||j.items.some((x:any)=>x.companyId!=='company-g5-a'))throw Error('A list isolation');r=await req('/api/finance/transactions',cb);j=await body(r);if(j.items.some((x:any)=>x.id===transfer.id)||j.items.some((x:any)=>x.companyId!=='company-g5-b'))throw Error('B list isolation');console.log('G5_GET_TENANT=PASS');
+            const beforeSrc=Number((await acc('g5-a-src')).current_balance),beforeDst=Number((await acc('g5-a-dst')).current_balance);r=await post('/api/finance/transfers',ca,{...transferBody,sourceAccountId:'g5-b-src',amount:10});if(r.status!==404)throw Error(`cross source ${r.status}`);r=await post('/api/finance/transfers',ca,{...transferBody,destinationAccountId:'g5-b-dst',amount:10});if(r.status!==404)throw Error(`cross dest ${r.status}`);r=await post('/api/finance/transfers',ca,{...transferBody,paymentMethodId:'g5-pm-b',amount:10});if(r.status!==404)throw Error(`cross method ${r.status}`);if(Number((await acc('g5-a-src')).current_balance)!==beforeSrc||Number((await acc('g5-a-dst')).current_balance)!==beforeDst)throw Error('cross tenant mutated');console.log('G5_CROSS_TENANT=BLOCKED');
+            r=await post('/api/finance/transfers',cr,{...transferBody,sourceAccountId:'g5-a-src2',destinationAccountId:'g5-a-dst2',amount:10});if(r.status!==403)throw Error(`readonly ${r.status}`);if(Number((await acc('g5-a-src2')).current_balance)!==900||Number((await acc('g5-a-dst2')).current_balance)!==300)throw Error('readonly mutated');r=await post('/api/finance/transfers',ca,{...transferBody,sourceAccountId:'g5-a-src2',destinationAccountId:'g5-a-dst2',amount:0});if(r.status!==400)throw Error(`zero ${r.status}`);r=await post('/api/finance/transfers',ca,{...transferBody,sourceAccountId:'g5-a-src2',destinationAccountId:'g5-a-dst2',amount:10,transferDate:'2026-10-15'});if(r.status!==409)throw Error(`closed ${r.status}`);if(Number((await acc('g5-a-src2')).current_balance)!==900||Number((await acc('g5-a-dst2')).current_balance)!==300)throw Error('amount/period mutated');console.log('G5_TRANSFER_GATES=PASS');
+            r=await post(`/api/finance/transactions/${transfer.id}/reverse`,ca,{reversalAmount:40,reason:'partial',companyId:'company-g5-b',userId:'g5-admin-b'});if(r.status!==201)throw Error(`partial reversal ${r.status} ${JSON.stringify(await body(r))}`);j=await body(r);const rev1=j.item;if(rev1.type!=='REVERSAL'||rev1.reversalTransactionId!==transfer.id||rev1.destinationAccountId!=='g5-a-dst')throw Error('partial reversal shape');if(Number((await acc('g5-a-src')).current_balance)!==940||Number((await acc('g5-a-dst')).current_balance)!==560)throw Error('partial transfer reversal balances');let orig=await tx(transfer.id);if(orig.is_reversed!==false)throw Error('partial marked full');console.log('G5_PARTIAL_TRANSFER_REVERSAL=PASS');
+            r=await post(`/api/finance/transactions/${transfer.id}/reverse`,ca,{reversalAmount:60,reason:'full'});if(r.status!==201)throw Error(`full reversal ${r.status} ${JSON.stringify(await body(r))}`);j=await body(r);const rev2=j.item;if(Number((await acc('g5-a-src')).current_balance)!==1000||Number((await acc('g5-a-dst')).current_balance)!==500)throw Error('full transfer reversal balances');orig=await tx(transfer.id);if(orig.is_reversed!==true)throw Error('full not marked');if(await txCount('reversal_transaction_id',transfer.id)!==2)throw Error('reversal count');console.log('G5_FULL_TRANSFER_REVERSAL=PASS');
+            const fullSrc=Number((await acc('g5-a-src')).current_balance),fullDst=Number((await acc('g5-a-dst')).current_balance);r=await post(`/api/finance/transactions/${transfer.id}/reverse`,ca,{reversalAmount:1,reason:'double'});if(r.status===201)throw Error('double reversal succeeded');r=await post(`/api/finance/transactions/${rev1.id}/reverse`,ca,{reversalAmount:1,reason:'reversal-of-reversal'});if(r.status===201)throw Error('reversal-of-reversal succeeded');if(Number((await acc('g5-a-src')).current_balance)!==fullSrc||Number((await acc('g5-a-dst')).current_balance)!==fullDst)throw Error('invalid reversal mutated');console.log('G5_REVERSAL_GATES=PASS');
+            r=await post(`/api/finance/transactions/${transfer.id}/reverse`,cb,{reversalAmount:1,reason:'cross'});if(r.status!==404)throw Error(`cross reversal ${r.status}`);console.log('G5_CROSS_REVERSAL=BLOCKED');
+            const rollbackSrc=Number((await acc('g5-a-src2')).current_balance),rollbackDst=Number((await acc('g5-a-dst2')).current_balance);await db.query(`REVOKE INSERT ON audit_logs FROM autoerp_g5_app`);r=await post('/api/finance/transfers',ca,{...transferBody,sourceAccountId:'g5-a-src2',destinationAccountId:'g5-a-dst2',amount:25,description:'rollback transfer'});if(r.status===201)throw Error('rollback transfer succeeded');await db.query(`GRANT INSERT ON audit_logs TO autoerp_g5_app`);if(Number((await acc('g5-a-src2')).current_balance)!==rollbackSrc||Number((await acc('g5-a-dst2')).current_balance)!==rollbackDst)throw Error('rollback balances failed');q=await db.query(`SELECT count(*)::int c FROM financial_transactions WHERE description='rollback transfer'`);if(Number(q.rows[0].c)!==0)throw Error('rollback transaction persisted');console.log('G5_ATOMIC_ROLLBACK=PASS');
+            await db.end();
+          }
+          main().catch(e=>{console.error('G5_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g5-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g5-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G5_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G5_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=5847a086e5b6bc1213bb8163a6a39ab04af52632','FinanceTransactionClient=8/8 required','PostgreSQL16 transfer/reversal authority required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
