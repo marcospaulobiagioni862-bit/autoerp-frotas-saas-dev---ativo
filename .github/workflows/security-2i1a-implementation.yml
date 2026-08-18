@@ -1,0 +1,106 @@
+name: SECURITY-2I1A implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i1a
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2i1a-vehicle-server-foundation
+          fetch-depth: 0
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2i1a
+          path: .ci-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2I1A patch
+        run: python .ci-control/.ci/apply-security-2i1a.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | grep -v '^\.ci-control/' | sort -u)"
+          expected="$(printf '%s\n' \
+            drizzle/0007_vehicle_core_authority.sql \
+            drizzle/meta/_journal.json \
+            server.ts \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts | sort)"
+          printf 'CHANGED:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+
+      - name: I1A authority static gate
+        shell: bash
+        run: |
+          grep -F '0007_vehicle_core_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F "ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS brand" drizzle/0007_vehicle_core_authority.sql >/dev/null
+          grep -F 'getVehicleRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'PostgresVehicleRepository' src/db/uow.ts >/dev/null
+          grep -F "app.get('/api/fleet/vehicles'" server.ts >/dev/null
+          grep -F "app.post('/api/fleet/vehicles'" server.ts >/dev/null
+          grep -F "app.patch('/api/fleet/vehicles/:id'" server.ts >/dev/null
+          grep -F "app.post('/api/fleet/vehicles/:id/status'" server.ts >/dev/null
+          grep -F "const OPERATIONAL_WRITE_ROLES" server.ts >/dev/null
+          grep -F "credentials:'include'" src/api/vehicleClient.ts >/dev/null
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:|currentDriverId[[:space:]]*:|currentContractId[[:space:]]*:|status[[:space:]]*:' src/api/vehicleClient.ts
+          grep -F 'tenant_isolation_ve' drizzle/0001_rls_and_audit.sql >/dev/null
+          grep -F 'ALTER TABLE vehicles FORCE ROW LEVEL SECURITY' drizzle/0001_rls_and_audit.sql >/dev/null
+
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Vehicle client tests
+        run: npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+
+      - name: Diff safety
+        shell: bash
+        run: |
+          ! git diff --name-only | grep -E '^package(-lock)?\.json$'
+          ! git diff | grep -E 'ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true' || exit 1
+          ! git diff --name-only | grep -E '^src/components/'
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add drizzle/0007_vehicle_core_authority.sql \
+            drizzle/meta/_journal.json \
+            src/db/schema.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            server.ts \
+            src/api/vehicleClient.ts \
+            src/api/__tests__/vehicleClientTestRunner.ts
+          git commit -m 'feat(security): add vehicle server authority foundation'
+          git push origin HEAD:security-2i1a-vehicle-server-foundation
