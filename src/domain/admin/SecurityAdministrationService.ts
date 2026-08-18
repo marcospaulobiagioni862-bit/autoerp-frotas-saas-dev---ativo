@@ -3,9 +3,12 @@ import { SystemUserRecord, ActiveSessionRecord, RbacMatrixRule } from './types';
 import { UserRole, AuditAction } from '../../types/enums';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 
+export interface SecurityAdministrationDataOptions {
+  allowDevelopmentMockData?: boolean;
+}
+
 export class SecurityAdministrationService {
   private static USER_STORAGE_KEY_PREFIX = '__autoerp_admin_users_v1_';
-  private static SESSION_STORAGE_KEY_PREFIX = '__autoerp_admin_sessions_v1_';
 
   /**
    * Evaluates if a role is authorized for an administrative action.
@@ -75,9 +78,18 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Retrieves users for a specific tenant.
+   * Returns development-only administrative mock users. Production/default
+   * callers fail closed with an empty list until a real server data source is
+   * connected.
    */
-  public static listUsers(companyId: string): SystemUserRecord[] {
+  public static listUsers(
+    companyId: string,
+    options: SecurityAdministrationDataOptions = {}
+  ): SystemUserRecord[] {
+    if (options.allowDevelopmentMockData !== true) {
+      return [];
+    }
+
     if (typeof window === 'undefined' || !window.localStorage) {
       return this.getMockDefaultUsers(companyId);
     }
@@ -95,10 +107,19 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Retrieves active user sessions for monitoring.
+   * Returns fabricated session telemetry only for explicit development mode.
+   * Production/default callers return no sessions rather than presenting mock
+   * IPs, timestamps or session IDs as real security telemetry.
    */
-  public static listActiveSessions(companyId: string): ActiveSessionRecord[] {
-    const users = this.listUsers(companyId);
+  public static listActiveSessions(
+    companyId: string,
+    options: SecurityAdministrationDataOptions = {}
+  ): ActiveSessionRecord[] {
+    if (options.allowDevelopmentMockData !== true) {
+      return [];
+    }
+
+    const users = this.listUsers(companyId, options);
     const now = new Date();
 
     return users.map((u, idx) => ({
@@ -116,7 +137,9 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Safely updates a user role or status with audit log.
+   * Updates only the development mock user store. Real production user status
+   * changes must be implemented through a trusted server-side administration
+   * endpoint in a later SECURITY-2 wave.
    */
   public static async updateUserStatus(
     companyId: string,
@@ -124,8 +147,16 @@ export class SecurityAdministrationService {
     newStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED',
     executorUserId: string,
     executorRole: string,
-    correlationId: string = `corr-sec-user-${Date.now()}`
+    correlationId: string = `corr-sec-user-${Date.now()}`,
+    options: SecurityAdministrationDataOptions = {}
   ): Promise<{ success: boolean; message: string }> {
+    if (options.allowDevelopmentMockData !== true) {
+      return {
+        success: false,
+        message: 'Operação indisponível: gestão local de usuários simulados é permitida somente em desenvolvimento.',
+      };
+    }
+
     if (!this.isActionAllowed(executorRole, 'CONFIGURE_USERS')) {
       return {
         success: false,
@@ -133,7 +164,7 @@ export class SecurityAdministrationService {
       };
     }
 
-    const users = this.listUsers(companyId);
+    const users = this.listUsers(companyId, options);
     const userIndex = users.findIndex(u => u.id === targetUserId);
     if (userIndex === -1) {
       return { success: false, message: 'Usuário não encontrado para este tenant.' };
@@ -144,7 +175,7 @@ export class SecurityAdministrationService {
       localStorage.setItem(`${this.USER_STORAGE_KEY_PREFIX}${companyId}`, JSON.stringify(users));
     }
 
-    // AuditLog registration
+    // AuditLog registration for the development simulation only.
     try {
       const auditRepo = new AuditLogRepository();
       await auditRepo.create({
@@ -164,7 +195,7 @@ export class SecurityAdministrationService {
         }),
       });
     } catch {
-      // Non-blocking
+      // Non-blocking in the development-only simulation.
     }
 
     return {
