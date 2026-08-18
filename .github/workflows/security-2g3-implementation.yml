@@ -37,7 +37,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock
 
       - name: Apply exact SECURITY-2G3 patch
         run: python .ci-control/ci/security-2g3-apply.py
@@ -45,7 +45,10 @@ jobs:
       - name: Scope gate
         shell: bash
         run: |
-          git diff --name-only | sort > /tmp/changed.txt
+          {
+            git diff --name-only
+            git ls-files --others --exclude-standard | grep -v '^.ci-control/' || true
+          } | sort -u > /tmp/changed.txt
           cat >/tmp/expected.txt <<'EOF'
           server.ts
           src/api/__tests__/financeObligationClientTestRunner.ts
