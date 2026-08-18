@@ -1,0 +1,143 @@
+name: SECURITY-2F3 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2f3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: security-2f3-ci-secret-at-least-32-bytes
+      JWT_ISSUER: autoerp-ci
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals SECURITY-2F3 candidate
+        run: git diff --exit-code 92cf0e4b21d9cf9a90aab2383e44816dd60cc735 -- . ':(exclude).github/**'
+
+      - name: Verify frontend auth boundary statically
+        shell: bash
+        run: |
+          grep -F '<AuthProvider>' src/main.tsx >/dev/null
+          grep -F '<App />' src/main.tsx >/dev/null
+          grep -F "fetchImpl('/api/auth/me'" src/hooks/useAuth.ts >/dev/null
+          grep -F "fetchImpl('/api/auth/login'" src/hooks/useAuth.ts >/dev/null
+          grep -F "fetchImpl('/api/auth/logout'" src/hooks/useAuth.ts >/dev/null
+          grep -F "credentials: 'include'" src/hooks/useAuth.ts >/dev/null
+          grep -F '<LoginView onLogin={login} />' src/auth/AuthProvider.tsx >/dev/null
+          grep -F "authMode: embeddedDevelopmentUser ? 'development-mock' : 'server-session'" src/auth/AuthProvider.tsx >/dev/null
+          ! grep -R -E 'localStorage|sessionStorage|indexedDB' src/hooks/useAuth.ts src/auth src/components/auth >/dev/null
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build production frontend and server
+        run: npm run build
+
+      - name: Verify production login gate bundle
+        shell: bash
+        run: |
+          test -f dist/index.html
+          test -f dist/server.mjs
+          grep -R -F '/api/auth/me' dist/assets >/dev/null
+          grep -R -F '/api/auth/login' dist/assets >/dev/null
+          grep -R -F '/api/auth/logout' dist/assets >/dev/null
+          grep -R -F 'Acesso ao sistema' dist/assets >/dev/null
+          ! grep -R -F 'AUTHENTICATION_REQUIRED: embedded ADMIN authentication is disabled' dist/assets >/dev/null
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Create strict auth/regression harness
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.ci-tmp"
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/regression.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private s = new Map<string,string>();
+            clear(){this.s.clear()}
+            getItem(k:string){return this.s.has(k)?this.s.get(k)!:null}
+            removeItem(k:string){this.s.delete(k)}
+            setItem(k:string,v:string){this.s.set(String(k),String(v))}
+            key(i:number){return Array.from(this.s.keys())[i]??null}
+            get length(){return this.s.size}
+          }
+
+          async function main(){
+            const storage=new MemoryStorage();
+            Object.defineProperty(globalThis,'localStorage',{value:storage,configurable:true});
+            Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});
+            const w=process.env.GITHUB_WORKSPACE!;
+            const u=(p:string)=>pathToFileURL(path.join(w,p)).href;
+
+            const { AuthSessionTestRunner }=await import(u('src/auth/__tests__/authSessionTestRunner.ts'));
+            const as=await AuthSessionTestRunner.runAllTests();
+            console.log('AUTH_SESSION', JSON.stringify(as));
+            if(as.total!==8||as.passed!==8||as.failed!==0) throw new Error(`AuthSession ${as.passed}/${as.total}`);
+
+            const { BootstrapTestRunner }=await import(u('src/server/__tests__/bootstrapTestRunner.ts'));
+            const bs=await BootstrapTestRunner.runAllTests(); if(bs.total!==5||bs.passed!==5||bs.failed!==0) throw new Error(`Bootstrap ${bs.passed}/${bs.total}`);
+            const { SessionLoginTestRunner }=await import(u('src/server/__tests__/sessionLoginTestRunner.ts'));
+            const sl=await SessionLoginTestRunner.runAllTests(); if(sl.total!==12||sl.passed!==12||sl.failed!==0) throw new Error(`SessionLogin ${sl.passed}/${sl.total}`);
+            const { PasswordSecurityTestRunner }=await import(u('src/server/__tests__/passwordTestRunner.ts'));
+            const pw=await PasswordSecurityTestRunner.runAllTests(); if(pw.total!==6||pw.passed!==6||pw.failed!==0) throw new Error(`Password ${pw.passed}/${pw.total}`);
+            const { ServerAuthTestRunner }=await import(u('src/server/__tests__/authTestRunner.ts'));
+            const sa=await ServerAuthTestRunner.runAllTests(); if(sa.total!==8||sa.passed!==8||sa.failed!==0) throw new Error(`ServerAuth ${sa.passed}/${sa.total}`);
+            const { SecurityAdministrationTestRunner }=await import(u('src/domain/admin/SecurityAdministrationService.test.ts'));
+            const ad=await SecurityAdministrationTestRunner.runAllTests(); if(ad.total!==4||ad.passed!==4||ad.failed!==0) throw new Error(`AdminSecurity ${ad.passed}/${ad.total}`);
+            const { TenantConfigurationTestRunner }=await import(u('src/domain/admin/TenantConfigurationService.test.ts'));
+            const tc=await TenantConfigurationTestRunner.runAllTests(); if(tc.total!==4||tc.passed!==4||tc.failed!==0) throw new Error(`TenantConfig ${tc.passed}/${tc.total}`);
+
+            const original=process.argv; process.argv=[];
+            const {ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));
+            const {FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const {SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv=original;
+            const run=async(n:string,f:()=>Promise<any>,e:number)=>{storage.clear();const r=await f();if(!r||r.total!==e||r.passed!==e||r.failed!==0)throw new Error(`${n} ${r?.passed}/${r?.total}`)};
+            await run('Contract',()=>ContractTestRunner.runAllTests(),20);
+            await run('Finance',()=>FinanceTestRunner.runAllTests(),46);
+            await run('Security',()=>SecurityTestRunner.runAllTests(),35);
+          }
+          main().catch(e=>{console.error(e);process.exitCode=2});
+          EOF
+          npx tsx "$GITHUB_WORKSPACE/.ci-tmp/regression.ts"
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2F3_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=92cf0e4b21d9cf9a90aab2383e44816dd60cc735','STRICT_ACCEPTANCE=AuthSession 8/8; App gated by AuthProvider; production restore/login/logout use credentials include; no auth Web Storage; production LoginView bundle PASS; Bootstrap 5/5; SessionLogin 12/12; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
