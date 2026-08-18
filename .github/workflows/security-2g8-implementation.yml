@@ -1,0 +1,114 @@
+name: SECURITY-2G8 implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2g8
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2g8-deposit-server-authority
+          fetch-depth: 0
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2g8
+          path: .ci-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2G8 patch
+        run: python .ci-control/.ci/apply-security-2g8.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | grep -v '^\.ci-control/' | sort -u)"
+          expected="$(printf '%s\n' \
+            drizzle/0006_security_deposit_authority.sql \
+            drizzle/meta/_journal.json \
+            server.ts \
+            src/api/__tests__/financeDepositClientTestRunner.ts \
+            src/api/financeDepositClient.ts \
+            src/components/contracts/ContractDetailsModal.tsx \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/DepositService.ts \
+            src/domain/finance/ITransactionContext.ts | sort)"
+          printf 'CHANGED:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+
+      - name: G8 static authority gate
+        shell: bash
+        run: |
+          grep -F "0006_security_deposit_authority" drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE security_deposits ADD COLUMN IF NOT EXISTS received_amount' drizzle/0006_security_deposit_authority.sql >/dev/null
+          grep -F 'ALTER TABLE security_deposit_movements ADD COLUMN IF NOT EXISTS financial_transaction_id' drizzle/0006_security_deposit_authority.sql >/dev/null
+          grep -F 'getSecurityDepositRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'PostgresSecurityDepositRepository' src/db/uow.ts >/dev/null
+          grep -F "'RECEIPT_REGISTER'" src/domain/finance/DepositService.ts >/dev/null
+          grep -F 'getContractRepo().findById(contractId)' server.ts >/dev/null
+          grep -F "app.post('/api/finance/security-deposits/receive'" server.ts >/dev/null
+          grep -F "app.get('/api/finance/security-deposits/by-contract/:contractId'" server.ts >/dev/null
+          grep -F 'FinanceDepositClient.getByContract' src/components/contracts/ContractDetailsModal.tsx >/dev/null
+          grep -F 'FinanceDepositClient.receive' src/components/contracts/ContractDetailsModal.tsx >/dev/null
+          ! grep -F 'FinanceEngine.receiveSecurityDeposit' src/components/contracts/ContractDetailsModal.tsx
+          ! grep -F 'SecurityDepositRepository' src/components/contracts/ContractDetailsModal.tsx
+          grep -F "credentials: 'include'" src/api/financeDepositClient.ts >/dev/null
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:|driverId[[:space:]]*:|vehicleId[[:space:]]*:' src/api/financeDepositClient.ts
+
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Finance deposit client tests
+        run: npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+
+      - name: Diff safety
+        shell: bash
+        run: |
+          ! git diff --name-only | grep -E '^package(-lock)?\.json$'
+          ! git diff | grep -E 'ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true' || exit 1
+          # Existing RLS coverage for deposits must remain in hardening migration.
+          grep -F "'security_deposits'" drizzle/0002_phase1_final_hardening.sql >/dev/null
+          grep -F "'security_deposit_movements'" drizzle/0002_phase1_final_hardening.sql >/dev/null
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add drizzle/0006_security_deposit_authority.sql \
+            drizzle/meta/_journal.json \
+            src/db/schema.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/domain/finance/DepositService.ts \
+            server.ts \
+            src/api/financeDepositClient.ts \
+            src/api/__tests__/financeDepositClientTestRunner.ts \
+            src/components/contracts/ContractDetailsModal.tsx
+          git commit -m 'feat(security): move security deposit receipt to server authority'
+          git push origin HEAD:security-2g8-deposit-server-authority
