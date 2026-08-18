@@ -1,0 +1,127 @@
+name: TEST-INFRA-1 validation
+
+on:
+  push:
+    branches:
+      - ci-validate-test-infra-1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: ci-test-secret-not-for-production
+      JWT_ISSUER: autoerp
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Show environment
+        run: |
+          node --version
+          npm --version
+          git rev-parse HEAD
+
+      - name: Verify AutoERP source equals TEST-INFRA-1 candidate
+        run: |
+          git diff --exit-code c3d0121d02de9a0f3934a10c75596293ea81c346 -- . ':(exclude).github/**'
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Create ephemeral native-test harness
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/autoerp-native-tests.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private store = new Map<string, string>();
+            get length() { return this.store.size; }
+            clear() { this.store.clear(); }
+            getItem(key: string) { return this.store.has(key) ? this.store.get(key)! : null; }
+            key(index: number) { return Array.from(this.store.keys())[index] ?? null; }
+            removeItem(key: string) { this.store.delete(key); }
+            setItem(key: string, value: string) { this.store.set(String(key), String(value)); }
+          }
+
+          const memoryStorage = new MemoryStorage();
+          Object.defineProperty(globalThis, 'localStorage', {
+            value: memoryStorage,
+            configurable: true,
+            writable: false,
+          });
+          Object.defineProperty(globalThis, 'window', {
+            value: globalThis,
+            configurable: true,
+            writable: false,
+          });
+
+          const workspace = process.env.GITHUB_WORKSPACE!;
+          const moduleUrl = (relativePath: string) =>
+            pathToFileURL(path.join(workspace, relativePath)).href;
+
+          const { ContractTestRunner } = await import(
+            moduleUrl('src/domain/services/__tests__/contractTestRunner.ts')
+          );
+          const { FinanceTestRunner } = await import(
+            moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts')
+          );
+          const { SecurityTestRunner } = await import(
+            moduleUrl('src/domain/services/__tests__/securityTestRunner.ts')
+          );
+
+          const run = async (name: string, fn: () => Promise<any>) => {
+            memoryStorage.clear();
+            try {
+              const result = await fn();
+              console.log(`AUTOERP_NATIVE_RUNNER_BEGIN=${name}`);
+              console.log(JSON.stringify(result, null, 2));
+              console.log(`AUTOERP_NATIVE_RUNNER_END=${name}`);
+              return result;
+            } catch (error) {
+              console.error(`AUTOERP_NATIVE_RUNNER_FATAL=${name}`);
+              console.error(error);
+              process.exitCode = 2;
+              return null;
+            }
+          };
+
+          await run('ContractTestRunner', () => ContractTestRunner.runAllTests());
+          await run('FinanceTestRunner', () => FinanceTestRunner.runAllTests());
+          await run('SecurityTestRunner', () => SecurityTestRunner.runAllTests());
+          EOF
+
+      - name: Run native AutoERP runners
+        run: npx tsx "$RUNNER_TEMP/autoerp-native-tests.ts"
+
+      - name: Verify repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
