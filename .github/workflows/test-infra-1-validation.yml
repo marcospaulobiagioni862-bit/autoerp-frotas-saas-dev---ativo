@@ -74,51 +74,59 @@ jobs:
             setItem(key: string, value: string) { this.store.set(String(key), String(value)); }
           }
 
-          const memoryStorage = new MemoryStorage();
-          Object.defineProperty(globalThis, 'localStorage', {
-            value: memoryStorage,
-            configurable: true,
-            writable: false,
+          async function main() {
+            const memoryStorage = new MemoryStorage();
+            Object.defineProperty(globalThis, 'localStorage', {
+              value: memoryStorage,
+              configurable: true,
+              writable: false,
+            });
+            Object.defineProperty(globalThis, 'window', {
+              value: globalThis,
+              configurable: true,
+              writable: false,
+            });
+
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const moduleUrl = (relativePath: string) =>
+              pathToFileURL(path.join(workspace, relativePath)).href;
+
+            const { ContractTestRunner } = await import(
+              moduleUrl('src/domain/services/__tests__/contractTestRunner.ts')
+            );
+            const { FinanceTestRunner } = await import(
+              moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts')
+            );
+            const { SecurityTestRunner } = await import(
+              moduleUrl('src/domain/services/__tests__/securityTestRunner.ts')
+            );
+
+            const run = async (name: string, fn: () => Promise<any>) => {
+              memoryStorage.clear();
+              try {
+                const result = await fn();
+                console.log(`AUTOERP_NATIVE_RUNNER_BEGIN=${name}`);
+                console.log(JSON.stringify(result, null, 2));
+                console.log(`AUTOERP_NATIVE_RUNNER_END=${name}`);
+                return result;
+              } catch (error) {
+                console.error(`AUTOERP_NATIVE_RUNNER_FATAL=${name}`);
+                console.error(error);
+                process.exitCode = 2;
+                return null;
+              }
+            };
+
+            await run('ContractTestRunner', () => ContractTestRunner.runAllTests());
+            await run('FinanceTestRunner', () => FinanceTestRunner.runAllTests());
+            await run('SecurityTestRunner', () => SecurityTestRunner.runAllTests());
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_NATIVE_HARNESS_FATAL');
+            console.error(error);
+            process.exitCode = 2;
           });
-          Object.defineProperty(globalThis, 'window', {
-            value: globalThis,
-            configurable: true,
-            writable: false,
-          });
-
-          const workspace = process.env.GITHUB_WORKSPACE!;
-          const moduleUrl = (relativePath: string) =>
-            pathToFileURL(path.join(workspace, relativePath)).href;
-
-          const { ContractTestRunner } = await import(
-            moduleUrl('src/domain/services/__tests__/contractTestRunner.ts')
-          );
-          const { FinanceTestRunner } = await import(
-            moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts')
-          );
-          const { SecurityTestRunner } = await import(
-            moduleUrl('src/domain/services/__tests__/securityTestRunner.ts')
-          );
-
-          const run = async (name: string, fn: () => Promise<any>) => {
-            memoryStorage.clear();
-            try {
-              const result = await fn();
-              console.log(`AUTOERP_NATIVE_RUNNER_BEGIN=${name}`);
-              console.log(JSON.stringify(result, null, 2));
-              console.log(`AUTOERP_NATIVE_RUNNER_END=${name}`);
-              return result;
-            } catch (error) {
-              console.error(`AUTOERP_NATIVE_RUNNER_FATAL=${name}`);
-              console.error(error);
-              process.exitCode = 2;
-              return null;
-            }
-          };
-
-          await run('ContractTestRunner', () => ContractTestRunner.runAllTests());
-          await run('FinanceTestRunner', () => FinanceTestRunner.runAllTests());
-          await run('SecurityTestRunner', () => SecurityTestRunner.runAllTests());
           EOF
 
       - name: Run native AutoERP runners
