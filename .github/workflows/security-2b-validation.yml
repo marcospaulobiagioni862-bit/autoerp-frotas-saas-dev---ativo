@@ -1,0 +1,179 @@
+name: SECURITY-2B validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2b
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: ci-test-secret-not-for-production
+      JWT_ISSUER: autoerp
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals SECURITY-2B candidate
+        run: |
+          git diff --exit-code 320b89c9e461f6821591f932c6fffa96b4d9d8b8 -- . ':(exclude).github/**'
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Verify SECURITY-2A fail-closed remains bundled
+        shell: bash
+        run: |
+          grep -R -F "AUTHENTICATION_REQUIRED" dist/assets >/dev/null
+
+      - name: Verify trusted principal endpoint is bundled server-side
+        shell: bash
+        run: |
+          grep -F "/api/auth/me" dist/server.cjs >/dev/null
+          grep -F "Authenticated user is inactive" dist/server.cjs >/dev/null
+
+      - name: Create ephemeral strict test harness
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/autoerp-security-2b-tests.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private store = new Map<string, string>();
+            get length() { return this.store.size; }
+            clear() { this.store.clear(); }
+            getItem(key: string) { return this.store.has(key) ? this.store.get(key)! : null; }
+            key(index: number) { return Array.from(this.store.keys())[index] ?? null; }
+            removeItem(key: string) { this.store.delete(key); }
+            setItem(key: string, value: string) { this.store.set(String(key), String(value)); }
+          }
+
+          async function main() {
+            const memoryStorage = new MemoryStorage();
+            Object.defineProperty(globalThis, 'localStorage', {
+              value: memoryStorage,
+              configurable: true,
+              writable: false,
+            });
+            Object.defineProperty(globalThis, 'window', {
+              value: globalThis,
+              configurable: true,
+              writable: false,
+            });
+
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const moduleUrl = (relativePath: string) =>
+              pathToFileURL(path.join(workspace, relativePath)).href;
+
+            const { resolveEmbeddedAuthUser } = await import(moduleUrl('src/hooks/useAuth.ts'));
+            if (resolveEmbeddedAuthUser(false) !== null) {
+              throw new Error('SECURITY-2A regression: production resolved an embedded trusted user.');
+            }
+            console.log('SECURITY_2A_REGRESSION=PASS');
+
+            const { ServerAuthTestRunner } = await import(
+              moduleUrl('src/server/__tests__/authTestRunner.ts')
+            );
+            const serverAuth = await ServerAuthTestRunner.runAllTests();
+            console.log('AUTOERP_SERVER_AUTH_BEGIN');
+            console.log(JSON.stringify(serverAuth, null, 2));
+            console.log('AUTOERP_SERVER_AUTH_END');
+            if (serverAuth.total !== 7 || serverAuth.passed !== 7 || serverAuth.failed !== 0) {
+              throw new Error(`ServerAuth expected 7/7 PASS, got ${serverAuth.passed}/${serverAuth.total}.`);
+            }
+
+            const originalArgv = process.argv;
+            process.argv = [];
+            const { ContractTestRunner } = await import(
+              moduleUrl('src/domain/services/__tests__/contractTestRunner.ts')
+            );
+            const { FinanceTestRunner } = await import(
+              moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts')
+            );
+            const { SecurityTestRunner } = await import(
+              moduleUrl('src/domain/services/__tests__/securityTestRunner.ts')
+            );
+            process.argv = originalArgv;
+
+            const run = async (name: string, fn: () => Promise<any>, expectedTotal: number) => {
+              memoryStorage.clear();
+              const result = await fn();
+              console.log(`AUTOERP_NATIVE_RUNNER_BEGIN=${name}`);
+              console.log(JSON.stringify(result, null, 2));
+              console.log(`AUTOERP_NATIVE_RUNNER_END=${name}`);
+              if (!result || result.total !== expectedTotal || result.passed !== expectedTotal || result.failed !== 0) {
+                throw new Error(
+                  `${name} expected ${expectedTotal}/${expectedTotal} PASS, got ` +
+                  `${result?.passed ?? 'null'}/${result?.total ?? 'null'} with ${result?.failed ?? 'null'} failed.`
+                );
+              }
+            };
+
+            await run('ContractTestRunner', () => ContractTestRunner.runAllTests(), 20);
+            await run('FinanceTestRunner', () => FinanceTestRunner.runAllTests(), 46);
+            await run('SecurityTestRunner', () => SecurityTestRunner.runAllTests(), 35);
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_SECURITY_2B_HARNESS_FATAL');
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+
+      - name: Run strict SECURITY-2B assertions
+        run: npx tsx "$RUNNER_TEMP/autoerp-security-2b-tests.ts"
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2B_CI_REPORT',
+              `VALIDATION_STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              `RUN_ATTEMPT=${process.env.GITHUB_RUN_ATTEMPT}`,
+              'CANDIDATE=320b89c9e461f6821591f932c6fffa96b4d9d8b8',
+              'STRICT_ACCEPTANCE=SECURITY-2A regression PASS; ServerAuth 7/7; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
