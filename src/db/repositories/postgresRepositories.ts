@@ -1,7 +1,7 @@
 import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
-  financialTransactions, financialAccounts, auditLogs, contracts, financialPeriods
+  financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods
 } from '../schema';
 import { eq, and, sql, lt } from 'drizzle-orm';
 import { AuditLog } from '../../types/entities';
@@ -124,6 +124,10 @@ export class PostgresFinancialAccountRepository extends PostgresBaseRepository<a
     if (!res.rows[0]) throw new Error('Account not found or update failed');
     return res.rows[0];
   }
+}
+
+export class PostgresPaymentMethodRepository extends PostgresBaseRepository<any> {
+  constructor(tx?: any) { super(paymentMethods, tx); }
 }
 
 export class PostgresAuditLogRepository extends PostgresBaseRepository<AuditLog> {
