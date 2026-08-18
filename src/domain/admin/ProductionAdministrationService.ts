@@ -9,18 +9,11 @@ export class ProductionAdministrationService {
   /**
    * Consolidates complete production administration status.
    */
-  public static getProductionSummary(
-    companyId: string,
-    userRole: string = 'ADMIN',
-    allowDevelopmentMockData?: boolean
-  ) {
+  public static getProductionSummary(companyId: string, userRole: string = 'ADMIN') {
     const health = SystemHealthService.calculateSystemHealth(companyId);
     const config = TenantConfigurationService.getConfig(companyId);
-    const securityDataOptions = allowDevelopmentMockData === undefined
-      ? {}
-      : { allowDevelopmentMockData };
-    const users = SecurityAdministrationService.listUsers(companyId, securityDataOptions);
-    const sessions = SecurityAdministrationService.listActiveSessions(companyId, securityDataOptions);
+    const users = SecurityAdministrationService.listUsers(companyId);
+    const sessions = SecurityAdministrationService.listActiveSessions(companyId);
     const backups = BackupService.listBackups(companyId);
     const drStatus = BackupService.getDisasterRecoveryStatus(companyId);
 
