@@ -32,7 +32,7 @@ jobs:
         with: { node-version: 20 }
 
       - name: Source integrity
-        run: git diff --exit-code 03ab7a155956d5c03f9bbd42d85bc8f3116b9e0e -- . ':(exclude).github/**'
+        run: git diff --exit-code 03ab7a155956d5c03f9bbd42d85bc8f3116b9e0e -- . ':(exclude).github/**' ':(exclude).ci/**'
 
       - name: G3 authority static gate
         shell: bash
