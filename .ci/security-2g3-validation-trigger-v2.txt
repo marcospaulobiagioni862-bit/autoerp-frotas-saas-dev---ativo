@@ -1,0 +1,1 @@
+Trigger SECURITY-2G3 strict validation v2 after CI-only source-integrity fix.
