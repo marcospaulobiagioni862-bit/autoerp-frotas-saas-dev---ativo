@@ -1,0 +1,193 @@
+name: SECURITY-2G7B1 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g7b1
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code 8d7852668b86083ab01095c222b782b112bdc2fc -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G7B1 authority static gate
+        shell: bash
+        run: |
+          grep -F "app.get('/api/finance/reports/dre'" server.ts >/dev/null
+          grep -F 'DREService.getDREReport' server.ts >/dev/null
+          grep -F 'UnitOfWork.run(principal.companyId' server.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/financeReportingClient.ts >/dev/null
+          grep -F 'FinanceReportingClient.getDRE' src/components/finance/DREReportView.tsx >/dev/null
+          ! grep -F 'FinanceEngine.getDREReport' src/components/finance/DREReportView.tsx
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeReportingClient.ts
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Reporting client tests
+        run: npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+      - name: Prior finance transport regressions
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g7b1-seed.ts <<'EOF'
+          import fs from 'node:fs';
+          import { Pool } from 'pg';
+          import { hashPassword } from '../src/server/password';
+          const p = new Pool({ connectionString: process.env.ADMIN_DATABASE_URL! });
+          async function main() {
+            for (const f of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+              'drizzle/0004_payment_methods_rls_permissive.sql',
+              'drizzle/0005_financial_periods_rls_permissive.sql',
+            ]) await p.query(fs.readFileSync(f, 'utf8'));
+
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES
+              ('company-g7b1-a','77777777000177','Tenant G7B1 A','ACTIVE'),
+              ('company-g7b1-b','88888888000188','Tenant G7B1 B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES
+              ('g7b1-admin-a','company-g7b1-a','Admin G7B1 A','admin-a@g7b1.test','ADMIN',true,ARRAY['*']),
+              ('g7b1-admin-b','company-g7b1-b','Admin G7B1 B','admin-b@g7b1.test','ADMIN',true,ARRAY['*'])`);
+            const [ha,hb] = await Promise.all(['StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES ($1,$2,$3),($4,$5,$6)`,
+              ['company-g7b1-a','g7b1-admin-a',ha,'company-g7b1-b','g7b1-admin-b',hb]);
+
+            await p.query(`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,category_id,description,original_amount,discount_amount,fine_amount,interest_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status) VALUES
+              ('g7b1-ar-a1','company-g7b1-a','MANUAL','g7b1-ar-a1','cat-income','Receita normal','1000.00','5.00','20.00','10.00','1025.00','0','1025.00','2026-09-10','2026-09-10','PENDING'),
+              ('g7b1-ar-a2','company-g7b1-a','MANUAL','g7b1-ar-a2','cat-income','Receita no ultimo dia','200.00','0','0','0','200.00','0','200.00','2026-09-30','2026-09-30','PENDING'),
+              ('g7b1-ar-a3','company-g7b1-a','SECURITY_DEPOSIT','g7b1-dep-a','cat-income','Caução recebida','500.00','0','0','0','500.00','0','500.00','2026-09-12','2026-09-12','PENDING'),
+              ('g7b1-ar-a4','company-g7b1-a','MANUAL','g7b1-cancel-a','cat-income','Cancelada','300.00','0','0','0','300.00','0','300.00','2026-09-15','2026-09-15','CANCELLED'),
+              ('g7b1-ar-b1','company-g7b1-b','MANUAL','g7b1-ar-b1','cat-income','Receita tenant B','9000.00','0','0','0','9000.00','0','9000.00','2026-09-10','2026-09-10','PENDING')`);
+
+            await p.query(`INSERT INTO account_payables(id,company_id,origin_type,origin_id,category_id,description,original_amount,discount_amount,fine_amount,interest_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status) VALUES
+              ('g7b1-ap-a1','company-g7b1-a','MANUAL','g7b1-ap-a1','cat-expense','Despesa normal','400.00','0','0','0','400.00','0','400.00','2026-09-10','2026-09-10','PENDING'),
+              ('g7b1-ap-a2','company-g7b1-a','MANUAL','g7b1-ap-a2','cat-expense','Despesa no ultimo dia','100.00','0','0','0','100.00','0','100.00','2026-09-30','2026-09-30','PENDING'),
+              ('g7b1-ap-a3','company-g7b1-a','SECURITY_DEPOSIT','g7b1-dep-pay-a','cat-expense','Caução devolvida','150.00','0','0','0','150.00','0','150.00','2026-09-12','2026-09-12','PENDING'),
+              ('g7b1-ap-b1','company-g7b1-b','MANUAL','g7b1-ap-b1','cat-expense','Despesa tenant B','8000.00','0','0','0','8000.00','0','8000.00','2026-09-10','2026-09-10','PENDING')`);
+
+            await p.query(`INSERT INTO financial_transactions(id,company_id,financial_account_id,type,amount,payment_method_id,transaction_date,competence_date,description,is_reversed,created_by_id) VALUES
+              ('g7b1-tx-a1','company-g7b1-a','acc-a','INCOME','800.00','pm-a','2026-09-10','2026-09-10','Receita caixa',false,'g7b1-admin-a'),
+              ('g7b1-tx-a2','company-g7b1-a','acc-a','INCOME','200.00','pm-a','2026-09-30','2026-09-30','Receita ultimo dia',false,'g7b1-admin-a'),
+              ('g7b1-tx-a3','company-g7b1-a','acc-a','EXPENSE','300.00','pm-a','2026-09-15','2026-09-15','Despesa caixa',false,'g7b1-admin-a'),
+              ('g7b1-tx-a4','company-g7b1-a','acc-a','INCOME','100.00','pm-a','2026-09-16','2026-09-16','Caução recebida',false,'g7b1-admin-a'),
+              ('g7b1-tx-a5','company-g7b1-a','acc-a','INCOME','500.00','pm-a','2026-09-17','2026-09-17','Receita estornada',true,'g7b1-admin-a'),
+              ('g7b1-tx-b1','company-g7b1-b','acc-b','INCOME','9900.00','pm-b','2026-09-10','2026-09-10','Receita B',false,'g7b1-admin-b')`);
+
+            await p.query(`CREATE ROLE autoerp_g7b1_app LOGIN PASSWORD 'autoerp_g7b1_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g7b1_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,account_receivables,account_payables,financial_transactions TO autoerp_g7b1_app`);
+            await p.end();
+          }
+          main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g7b1-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g7b1_app:autoerp_g7b1_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g7b1-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production DRE PostgreSQL/RLS parity
+        shell: bash
+        run: |
+          cat > .ci-tmp/g7b1-http.ts <<'EOF'
+          const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status} ${await r.text()}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function get(cookie:string|null,regime:string,start='2026-09-01',end='2026-09-30',forged?:string){return fetch(`${base}/api/finance/reports/dre?start=${start}&end=${end}&regime=${regime}`,{headers:{...(cookie?{cookie}:{}),...(forged?{'x-company-id':forged}:{})}})}
+          function eq(a:number,b:number,label:string){if(Math.abs(Number(a)-b)>0.0001)throw Error(`${label}: ${a} != ${b}`)}
+          async function main(){
+            let r=await get(null,'CASH'); if(r.status!==401)throw Error(`no-session ${r.status}`); console.log('G7B1_NO_SESSION=PASS');
+            const ca=await login('77777777000177','admin-a@g7b1.test'); const cb=await login('88888888000188','admin-b@g7b1.test'); console.log('G7B1_LOGIN=PASS');
+            r=await get(ca,'BAD'); if(r.status!==400)throw Error(`invalid regime ${r.status}`); console.log('G7B1_INVALID_PARAMS=PASS');
+            r=await get(ca,'ACCRUAL','2026-09-01','2026-09-30','company-g7b1-b'); if(r.status!==200)throw Error(`accrual A ${r.status} ${await r.text()}`); let j:any=await r.json(); let d=j.report; eq(d.grossRevenue.amount,1200,'accrual gross'); eq(d.directCosts.amount,500,'accrual costs'); eq(d.financialResult.amount,25,'accrual financial'); eq(d.netProfit,725,'accrual net'); eq(d.breakdown.maintenanceCosts,200,'accrual maintenance'); eq(d.breakdown.insuranceCosts,150,'accrual insurance'); eq(d.breakdown.trackerCosts,100,'accrual tracker'); eq(d.breakdown.trafficTicketCosts,50,'accrual ticket'); console.log('G7B1_ACCRUAL_EXACT=PASS');
+            r=await get(ca,'CASH','2026-09-01','2026-09-30','company-g7b1-b'); if(r.status!==200)throw Error(`cash A ${r.status} ${await r.text()}`); j=await r.json(); d=j.report; eq(d.grossRevenue.amount,1000,'cash gross'); eq(d.directCosts.amount,300,'cash costs'); eq(d.netProfit,700,'cash net'); eq(d.breakdown.maintenanceCosts,120,'cash maintenance'); eq(d.breakdown.insuranceCosts,90,'cash insurance'); eq(d.breakdown.trackerCosts,60,'cash tracker'); eq(d.breakdown.trafficTicketCosts,30,'cash ticket'); console.log('G7B1_CASH_EXACT=PASS');
+            r=await get(cb,'ACCRUAL'); if(r.status!==200)throw Error(`accrual B ${r.status}`); j=await r.json(); d=j.report; eq(d.grossRevenue.amount,9000,'tenant B gross'); eq(d.directCosts.amount,8000,'tenant B costs'); if(d.grossRevenue.amount===1200)throw Error('tenant leak'); console.log('G7B1_TENANT_ISOLATION=PASS');
+            console.log('G7B1_FORGED_TENANT_HEADER=IGNORED');
+          }
+          main().catch(e=>{console.error('G7B1_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g7b1-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g7b1-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G7B1_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G7B1_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=8d7852668b86083ab01095c222b782b112bdc2fc','DRE CASH+ACCRUAL exact PostgreSQL16/RLS parity required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
