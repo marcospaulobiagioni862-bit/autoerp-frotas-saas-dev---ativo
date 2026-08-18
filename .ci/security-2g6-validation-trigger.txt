@@ -1,0 +1,1 @@
+Trigger SECURITY-2G6 strict PostgreSQL renegotiation validation.
