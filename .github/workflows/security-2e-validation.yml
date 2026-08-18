@@ -1,0 +1,335 @@
+name: SECURITY-2E validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2e
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: ci-test-secret-not-for-production
+      JWT_ISSUER: autoerp
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals SECURITY-2E candidate
+        run: |
+          git diff --exit-code 48238dfc09f02767673638ac49693a3ca21f4e2e -- . ':(exclude).github/**'
+
+      - name: Verify RLS-aware auth wiring statically
+        shell: bash
+        run: |
+          grep -F "async (userId, verifiedCompanyId)" server.ts >/dev/null
+          grep -F "UnitOfWork.run(verifiedCompanyId" server.ts >/dev/null
+          grep -F "findUserById(userId, tokenCompanyId)" src/server/auth.ts >/dev/null
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Create real PostgreSQL RLS integration assertion
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/autoerp-security-2e-postgres.ts" <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+          import pg from 'pg';
+          import { SignJWT } from 'jose';
+
+          async function main() {
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const adminUrl = process.env.ADMIN_DATABASE_URL!;
+            const appUrl = process.env.DATABASE_URL!;
+            const admin = new pg.Pool({ connectionString: adminUrl });
+
+            const migration0 = fs.readFileSync(path.join(workspace, 'drizzle/0000_milky_invisible_woman.sql'), 'utf8');
+            const migration1 = fs.readFileSync(path.join(workspace, 'drizzle/0001_rls_and_audit.sql'), 'utf8');
+            await admin.query(migration0);
+            await admin.query(migration1);
+
+            await admin.query(`
+              INSERT INTO users (id, company_id, name, email, role, active, permissions)
+              VALUES
+                ('server-user-1', 'company-1', 'Server User', 'server-user-1@example.com', 'OPERATIONAL_MANAGER', true, ARRAY['VIEW_DRIVER_HEALTH']),
+                ('server-user-2', 'company-2', 'Other Tenant User', 'server-user-2@example.com', 'ADMIN', true, ARRAY['*'])
+            `);
+            await admin.query(`CREATE ROLE autoerp_ci_app LOGIN PASSWORD 'autoerp_ci_pass'`);
+            await admin.query(`GRANT USAGE ON SCHEMA public TO autoerp_ci_app`);
+            await admin.query(`GRANT SELECT ON TABLE users TO autoerp_ci_app`);
+            await admin.end();
+
+            process.env.USE_PGLITE = 'false';
+            process.env.DATABASE_URL = appUrl;
+            process.env.NODE_ENV = 'test';
+
+            const moduleUrl = (relativePath: string) =>
+              pathToFileURL(path.join(workspace, relativePath)).href;
+
+            const { PostgresUserRepository } = await import(
+              moduleUrl('src/db/repositories/postgresRepositories.ts')
+            );
+            const directRepo = new PostgresUserRepository();
+            const direct = await directRepo.findById('server-user-1');
+            if (direct !== null) {
+              throw new Error('RLS integration failed: unscoped direct user lookup unexpectedly saw a row.');
+            }
+            console.log('RLS_UNSCOPED_USER_LOOKUP=NULL');
+
+            const { UnitOfWork } = await import(moduleUrl('src/db/uow.ts'));
+            const scoped = await UnitOfWork.run('company-1', async (context) =>
+              await context.getUserRepo().findById('server-user-1')
+            );
+            if (!scoped || scoped.companyId !== 'company-1') {
+              throw new Error('RLS integration failed: tenant-scoped lookup did not find the current user.');
+            }
+            console.log('RLS_SCOPED_USER_LOOKUP=PASS');
+
+            const crossTenant = await UnitOfWork.run('company-2', async (context) =>
+              await context.getUserRepo().findById('server-user-1')
+            );
+            if (crossTenant !== null) {
+              throw new Error('RLS integration failed: cross-tenant lookup exposed another tenant user.');
+            }
+            console.log('RLS_CROSS_TENANT_USER_LOOKUP=BLOCKED');
+
+            const { authenticateBearerPrincipal } = await import(moduleUrl('src/server/auth.ts'));
+            const issuer = 'autoerp-rls-ci';
+            const audience = 'autoerp-users';
+            const secretText = 'security-2e-real-postgres-secret-32-bytes';
+            const secret = new TextEncoder().encode(secretText);
+            const now = Math.floor(Date.now() / 1000);
+            const token = await new SignJWT({
+              userId: 'server-user-1',
+              companyId: 'company-1',
+              role: 'ADMIN',
+            })
+              .setProtectedHeader({ alg: 'HS256' })
+              .setIssuer(issuer)
+              .setAudience(audience)
+              .setIssuedAt(now)
+              .setExpirationTime(now + 3600)
+              .sign(secret);
+
+            const principal = await authenticateBearerPrincipal(
+              `Bearer ${token}`,
+              { secret: secretText, issuer, audience },
+              async (userId, verifiedCompanyId) =>
+                await UnitOfWork.run(verifiedCompanyId, async (context) =>
+                  await context.getUserRepo().findById(userId)
+                )
+            );
+            if (
+              principal.userId !== 'server-user-1' ||
+              principal.companyId !== 'company-1' ||
+              principal.role !== 'OPERATIONAL_MANAGER'
+            ) {
+              throw new Error('RLS integration failed: trusted principal did not use tenant-scoped current DB user.');
+            }
+            console.log('RLS_AUTHENTICATED_PRINCIPAL=PASS');
+
+            const attackerToken = await new SignJWT({
+              userId: 'server-user-1',
+              companyId: 'company-2',
+              role: 'ADMIN',
+            })
+              .setProtectedHeader({ alg: 'HS256' })
+              .setIssuer(issuer)
+              .setAudience(audience)
+              .setIssuedAt(now)
+              .setExpirationTime(now + 3600)
+              .sign(secret);
+
+            let rejected = false;
+            try {
+              await authenticateBearerPrincipal(
+                `Bearer ${attackerToken}`,
+                { secret: secretText, issuer, audience },
+                async (userId, verifiedCompanyId) =>
+                  await UnitOfWork.run(verifiedCompanyId, async (context) =>
+                    await context.getUserRepo().findById(userId)
+                  )
+              );
+            } catch {
+              rejected = true;
+            }
+            if (!rejected) {
+              throw new Error('RLS integration failed: forged tenant token was accepted.');
+            }
+            console.log('RLS_FORGED_TENANT_TOKEN=REJECTED');
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_SECURITY_2E_POSTGRES_FATAL');
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+
+      - name: Run real PostgreSQL RLS integration assertion
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+          DATABASE_URL: postgres://autoerp_ci_app:autoerp_ci_pass@127.0.0.1:5432/autoerp_ci
+          USE_PGLITE: "false"
+          NODE_ENV: test
+        run: npx tsx "$RUNNER_TEMP/autoerp-security-2e-postgres.ts"
+
+      - name: Create ephemeral strict regression harness
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/autoerp-security-2e-tests.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private store = new Map<string, string>();
+            get length() { return this.store.size; }
+            clear() { this.store.clear(); }
+            getItem(key: string) { return this.store.has(key) ? this.store.get(key)! : null; }
+            key(index: number) { return Array.from(this.store.keys())[index] ?? null; }
+            removeItem(key: string) { this.store.delete(key); }
+            setItem(key: string, value: string) { this.store.set(String(key), String(value)); }
+          }
+
+          async function main() {
+            const memoryStorage = new MemoryStorage();
+            Object.defineProperty(globalThis, 'localStorage', {
+              value: memoryStorage,
+              configurable: true,
+              writable: false,
+            });
+            Object.defineProperty(globalThis, 'window', {
+              value: globalThis,
+              configurable: true,
+              writable: false,
+            });
+
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const moduleUrl = (relativePath: string) =>
+              pathToFileURL(path.join(workspace, relativePath)).href;
+
+            const { resolveEmbeddedAuthUser } = await import(moduleUrl('src/hooks/useAuth.ts'));
+            if (resolveEmbeddedAuthUser(false) !== null) {
+              throw new Error('SECURITY-2A regression: production resolved an embedded trusted user.');
+            }
+
+            const { ServerAuthTestRunner } = await import(moduleUrl('src/server/__tests__/authTestRunner.ts'));
+            const serverAuth = await ServerAuthTestRunner.runAllTests();
+            console.log('AUTOERP_SERVER_AUTH_BEGIN');
+            console.log(JSON.stringify(serverAuth, null, 2));
+            console.log('AUTOERP_SERVER_AUTH_END');
+            if (serverAuth.total !== 8 || serverAuth.passed !== 8 || serverAuth.failed !== 0) {
+              throw new Error(`ServerAuth expected 8/8 PASS, got ${serverAuth.passed}/${serverAuth.total}.`);
+            }
+
+            const { SecurityAdministrationTestRunner } = await import(moduleUrl('src/domain/admin/SecurityAdministrationService.test.ts'));
+            const adminSecurity = await SecurityAdministrationTestRunner.runAllTests();
+            if (adminSecurity.total !== 4 || adminSecurity.passed !== 4 || adminSecurity.failed !== 0) {
+              throw new Error(`AdminSecurity expected 4/4 PASS, got ${adminSecurity.passed}/${adminSecurity.total}.`);
+            }
+
+            const { TenantConfigurationTestRunner } = await import(moduleUrl('src/domain/admin/TenantConfigurationService.test.ts'));
+            const tenantConfig = await TenantConfigurationTestRunner.runAllTests();
+            if (tenantConfig.total !== 4 || tenantConfig.passed !== 4 || tenantConfig.failed !== 0) {
+              throw new Error(`TenantConfig expected 4/4 PASS, got ${tenantConfig.passed}/${tenantConfig.total}.`);
+            }
+
+            const originalArgv = process.argv;
+            process.argv = [];
+            const { ContractTestRunner } = await import(moduleUrl('src/domain/services/__tests__/contractTestRunner.ts'));
+            const { FinanceTestRunner } = await import(moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const { SecurityTestRunner } = await import(moduleUrl('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv = originalArgv;
+
+            const run = async (name: string, fn: () => Promise<any>, expectedTotal: number) => {
+              memoryStorage.clear();
+              const result = await fn();
+              console.log(`AUTOERP_NATIVE_RUNNER_BEGIN=${name}`);
+              console.log(JSON.stringify(result, null, 2));
+              console.log(`AUTOERP_NATIVE_RUNNER_END=${name}`);
+              if (!result || result.total !== expectedTotal || result.passed !== expectedTotal || result.failed !== 0) {
+                throw new Error(`${name} expected ${expectedTotal}/${expectedTotal} PASS, got ${result?.passed}/${result?.total}.`);
+              }
+            };
+
+            await run('ContractTestRunner', () => ContractTestRunner.runAllTests(), 20);
+            await run('FinanceTestRunner', () => FinanceTestRunner.runAllTests(), 46);
+            await run('SecurityTestRunner', () => SecurityTestRunner.runAllTests(), 35);
+          }
+
+          main().catch((error) => {
+            console.error('AUTOERP_SECURITY_2E_HARNESS_FATAL');
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+
+      - name: Run strict regression assertions
+        run: npx tsx "$RUNNER_TEMP/autoerp-security-2e-tests.ts"
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity to PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2E_CI_REPORT',
+              `VALIDATION_STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              `RUN_ATTEMPT=${process.env.GITHUB_RUN_ATTEMPT}`,
+              'CANDIDATE=48238dfc09f02767673638ac49693a3ca21f4e2e',
+              'STRICT_ACCEPTANCE=real PostgreSQL FORCE RLS integration PASS; unscoped lookup NULL; scoped lookup PASS; cross-tenant blocked; forged tenant JWT rejected; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
