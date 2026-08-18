@@ -239,26 +239,20 @@ export class DriverService {
     return created;
   }
 
-  public static isHealthAuthorized(
+  private static hasHealthPermission(
     action: 'VIEW_DRIVER_HEALTH' | 'EDIT_DRIVER_HEALTH',
-    driver: Driver,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): boolean {
     if (!userContext || !userContext.userId) {
-      return false; // Usuário inexistente
+      return false;
     }
     if (userContext.active === false) {
-      return false; // Usuário inativo
+      return false;
     }
 
     const roleUpper = String(userContext.role).toUpperCase();
     const canonicalRoles = ['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY'];
     if (!canonicalRoles.includes(roleUpper)) {
-      return false; // Role desconhecida
-    }
-
-    // Cross-tenant check: cross-tenant é bloqueado inclusive para ADMIN
-    if (driver.companyId !== userContext.companyId) {
       return false;
     }
 
@@ -274,25 +268,49 @@ export class DriverService {
       return roleUpper === 'ADMIN' || roleUpper === 'MANAGER' || roleUpper === 'OPERATIONAL_MANAGER';
     }
 
-    return false; // Deny-by-default
+    return false;
+  }
+
+  public static isHealthAuthorized(
+    action: 'VIEW_DRIVER_HEALTH' | 'EDIT_DRIVER_HEALTH',
+    driver: Driver,
+    userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
+  ): boolean {
+    if (!DriverService.hasHealthPermission(action, userContext)) {
+      return false;
+    }
+
+    // Cross-tenant check: cross-tenant é bloqueado inclusive para ADMIN
+    if (driver.companyId !== userContext!.companyId) {
+      return false;
+    }
+
+    return true;
   }
 
   public async getDriverHealthAndEmergency(
     driverId: string,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): Promise<any> {
+    const context = userContext || {
+      userId: 'usr-unknown',
+      role: 'READONLY',
+      active: false,
+      companyId: '',
+    };
+
+    // Primeiro gate: valida identidade/role/permissão antes de qualquer lookup do motorista.
+    // Isso evita revelar a existência de um driverId para contextos sem autorização de saúde.
+    if (!DriverService.hasHealthPermission('VIEW_DRIVER_HEALTH', context)) {
+      throw new Error('Acesso negado: Permissão VIEW_DRIVER_HEALTH necessária.');
+    }
+
     const existing = await this.driverRepo.findById(driverId);
     if (!existing) {
       throw new Error(`Motorista ${driverId} não encontrado.`);
     }
 
-    const context = userContext || {
-      userId: 'usr-unknown',
-      role: 'READONLY',
-      active: false,
-      companyId: existing.companyId,
-    };
-
+    // Segundo gate: após o lookup autorizado, aplica também o isolamento por tenant.
     const isAuthorized = DriverService.isHealthAuthorized('VIEW_DRIVER_HEALTH', existing, context);
     if (!isAuthorized) {
       await AuditLogger.logAction(
@@ -329,6 +347,13 @@ export class DriverService {
     userName: string,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): Promise<Driver> {
+    // Quando um contexto explícito é fornecido, o gate de identidade/role/permissão
+    // deve ocorrer antes de qualquer lookup ou alteração. O caminho sem userContext
+    // é preservado apenas por compatibilidade com chamadas legadas existentes.
+    if (userContext && !DriverService.hasHealthPermission('EDIT_DRIVER_HEALTH', userContext)) {
+      throw new Error('Acesso negado: Permissão EDIT_DRIVER_HEALTH necessária.');
+    }
+
     const existing = await this.driverRepo.findById(driverId);
     if (!existing) {
       throw new Error(`Motorista ${driverId} não encontrado.`);
