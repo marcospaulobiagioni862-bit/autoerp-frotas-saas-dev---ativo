@@ -72,18 +72,19 @@ jobs:
       - name: Create real PostgreSQL RLS integration assertion
         shell: bash
         run: |
-          cat > "$RUNNER_TEMP/autoerp-security-2e-postgres.ts" <<'EOF'
+          mkdir -p "$GITHUB_WORKSPACE/.ci-tmp"
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/autoerp-security-2e-postgres.ts" <<'EOF'
           import fs from 'node:fs';
           import path from 'node:path';
           import { pathToFileURL } from 'node:url';
-          import pg from 'pg';
+          import { Pool } from 'pg';
           import { SignJWT } from 'jose';
 
           async function main() {
             const workspace = process.env.GITHUB_WORKSPACE!;
             const adminUrl = process.env.ADMIN_DATABASE_URL!;
             const appUrl = process.env.DATABASE_URL!;
-            const admin = new pg.Pool({ connectionString: adminUrl });
+            const admin = new Pool({ connectionString: adminUrl });
 
             const migration0 = fs.readFileSync(path.join(workspace, 'drizzle/0000_milky_invisible_woman.sql'), 'utf8');
             const migration1 = fs.readFileSync(path.join(workspace, 'drizzle/0001_rls_and_audit.sql'), 'utf8');
@@ -214,12 +215,12 @@ jobs:
           DATABASE_URL: postgres://autoerp_ci_app:autoerp_ci_pass@127.0.0.1:5432/autoerp_ci
           USE_PGLITE: "false"
           NODE_ENV: test
-        run: npx tsx "$RUNNER_TEMP/autoerp-security-2e-postgres.ts"
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/autoerp-security-2e-postgres.ts"
 
       - name: Create ephemeral strict regression harness
         shell: bash
         run: |
-          cat > "$RUNNER_TEMP/autoerp-security-2e-tests.ts" <<'EOF'
+          cat > "$GITHUB_WORKSPACE/.ci-tmp/autoerp-security-2e-tests.ts" <<'EOF'
           import { pathToFileURL } from 'node:url';
           import path from 'node:path';
 
@@ -307,7 +308,7 @@ jobs:
           EOF
 
       - name: Run strict regression assertions
-        run: npx tsx "$RUNNER_TEMP/autoerp-security-2e-tests.ts"
+        run: npx tsx "$GITHUB_WORKSPACE/.ci-tmp/autoerp-security-2e-tests.ts"
 
       - name: Verify tracked repository remained unchanged
         run: |
