@@ -3,9 +3,22 @@ import { SystemUserRecord, ActiveSessionRecord, RbacMatrixRule } from './types';
 import { UserRole, AuditAction } from '../../types/enums';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 
+export function resolveSecurityAdministrationMockMode(isDevelopmentRuntime: boolean): boolean {
+  return isDevelopmentRuntime === true;
+}
+
 export class SecurityAdministrationService {
   private static USER_STORAGE_KEY_PREFIX = '__autoerp_admin_users_v1_';
-  private static SESSION_STORAGE_KEY_PREFIX = '__autoerp_admin_sessions_v1_';
+
+  private static isDevelopmentMockDataEnabled(): boolean {
+    const viteImportMeta = import.meta as ImportMeta & {
+      env?: {
+        DEV?: boolean;
+      };
+    };
+
+    return resolveSecurityAdministrationMockMode(viteImportMeta.env?.DEV === true);
+  }
 
   /**
    * Evaluates if a role is authorized for an administrative action.
@@ -75,9 +88,14 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Retrieves users for a specific tenant.
+   * Returns development-only administrative mock users. Production callers
+   * fail closed with an empty list until a real server data source is connected.
    */
   public static listUsers(companyId: string): SystemUserRecord[] {
+    if (!this.isDevelopmentMockDataEnabled()) {
+      return [];
+    }
+
     if (typeof window === 'undefined' || !window.localStorage) {
       return this.getMockDefaultUsers(companyId);
     }
@@ -95,9 +113,15 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Retrieves active user sessions for monitoring.
+   * Returns fabricated session telemetry only in Vite development runtime.
+   * Production callers return no sessions rather than presenting mock IPs,
+   * timestamps or session IDs as real security telemetry.
    */
   public static listActiveSessions(companyId: string): ActiveSessionRecord[] {
+    if (!this.isDevelopmentMockDataEnabled()) {
+      return [];
+    }
+
     const users = this.listUsers(companyId);
     const now = new Date();
 
@@ -116,7 +140,9 @@ export class SecurityAdministrationService {
   }
 
   /**
-   * Safely updates a user role or status with audit log.
+   * Updates only the development mock user store. Real production user status
+   * changes must use a trusted server-side administration endpoint in a later
+   * SECURITY-2 wave.
    */
   public static async updateUserStatus(
     companyId: string,
@@ -126,6 +152,13 @@ export class SecurityAdministrationService {
     executorRole: string,
     correlationId: string = `corr-sec-user-${Date.now()}`
   ): Promise<{ success: boolean; message: string }> {
+    if (!this.isDevelopmentMockDataEnabled()) {
+      return {
+        success: false,
+        message: 'Operação indisponível: gestão local de usuários simulados é permitida somente em desenvolvimento.',
+      };
+    }
+
     if (!this.isActionAllowed(executorRole, 'CONFIGURE_USERS')) {
       return {
         success: false,
@@ -144,7 +177,7 @@ export class SecurityAdministrationService {
       localStorage.setItem(`${this.USER_STORAGE_KEY_PREFIX}${companyId}`, JSON.stringify(users));
     }
 
-    // AuditLog registration
+    // AuditLog registration for the development simulation only.
     try {
       const auditRepo = new AuditLogRepository();
       await auditRepo.create({
@@ -164,7 +197,7 @@ export class SecurityAdministrationService {
         }),
       });
     } catch {
-      // Non-blocking
+      // Non-blocking in the development-only simulation.
     }
 
     return {

@@ -69,6 +69,9 @@ export class ProductionAdministrationService {
       config,
       usersCount: users.length,
       activeSessionsCount: sessions.length,
+      securityDataSource: users.length > 0 || sessions.length > 0
+        ? 'DEVELOPMENT_MOCK'
+        : 'SERVER_SOURCE_NOT_CONNECTED',
       backupsCount: backups.length,
       alerts,
       lastAuditTimestamp: new Date().toISOString(),
