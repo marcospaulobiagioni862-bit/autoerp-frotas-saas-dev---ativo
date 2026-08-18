@@ -47,11 +47,20 @@ type AdminTab =
   | 'integrity' 
   | 'observability';
 
-export const AdministrationCenterView: React.FC = () => {
+interface AdministrationCenterViewProps {
+  companyId: string;
+  currentUserId: string;
+  currentUserRole: string;
+}
+
+export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> = ({
+  companyId,
+  currentUserId,
+  currentUserRole,
+}) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
-  const [companyId] = useState<string>('company-default');
-  const [userRole] = useState<string>('ADMIN');
-  const [userId] = useState<string>('usr-admin-default');
+  const userRole = currentUserRole;
+  const userId = currentUserId;
 
   const [summary, setSummary] = useState<any>(null);
   const [tenantConfig, setTenantConfig] = useState<any>(null);
@@ -75,8 +84,8 @@ export const AdministrationCenterView: React.FC = () => {
     const sessList = SecurityAdministrationService.listActiveSessions(companyId);
 
     const auditRepo = new AuditLogRepository();
-    const logs = await auditRepo.findAll();
-    const tenantLogs = logs.filter(l => !companyId || l.companyId === companyId).slice(-30).reverse();
+    const logs = await auditRepo.findAllForCompany(companyId);
+    const tenantLogs = logs.slice(-30).reverse();
 
     setSummary(prodSummary);
     setTenantConfig(cfg);

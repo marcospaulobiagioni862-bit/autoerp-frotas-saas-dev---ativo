@@ -3,11 +3,26 @@ import { TenantOperationalConfig } from './types';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 import { AuditAction } from '../../types/enums';
 
+export function resolveTenantLocalConfigurationMode(isDevelopmentRuntime: boolean): boolean {
+  return isDevelopmentRuntime === true;
+}
+
 export class TenantConfigurationService {
   private static STORAGE_KEY_PREFIX = '__autoerp_tenant_config_v1_';
 
+  private static isDevelopmentLocalConfigurationEnabled(): boolean {
+    const viteImportMeta = import.meta as ImportMeta & {
+      env?: {
+        DEV?: boolean;
+      };
+    };
+
+    return resolveTenantLocalConfigurationMode(viteImportMeta.env?.DEV === true);
+  }
+
   /**
-   * Returns default configuration for a given companyId.
+   * Development-only seed configuration used to keep the local development UI
+   * usable until TenantOperationalConfig has a trusted server-side source.
    */
   public static getDefaultConfig(companyId: string): TenantOperationalConfig {
     return {
@@ -35,14 +50,50 @@ export class TenantConfigurationService {
         notificationsEnabled: true,
       },
       updatedAt: new Date().toISOString(),
-      updatedBy: 'system-default',
+      updatedBy: 'development-default',
+    };
+  }
+
+  private static getServerSourceUnavailableConfig(companyId: string): TenantOperationalConfig {
+    return {
+      companyId,
+      companyName: '',
+      document: '',
+      email: '',
+      phone: '',
+      address: '',
+      timezone: 'America/Sao_Paulo',
+      currency: 'BRL',
+      maxVehiclesLimit: 0,
+      maxDriversLimit: 0,
+      slaResponseHours: 0,
+      securityPolicy: {
+        enforceMfa: true,
+        sessionTimeoutMinutes: 0,
+        maxLoginAttempts: 0,
+      },
+      auditRetentionDays: 0,
+      backupFrequencyHours: 0,
+      uiPreferences: {
+        density: 'COMFORTABLE',
+        theme: 'LIGHT',
+        notificationsEnabled: false,
+      },
+      updatedAt: new Date(0).toISOString(),
+      updatedBy: 'SERVER_SOURCE_NOT_CONNECTED',
     };
   }
 
   /**
-   * Retrieves current tenant configuration, falling back to safe defaults.
+   * Retrieves tenant configuration. LocalStorage is a development-only source;
+   * non-DEV callers receive an explicit neutral/unavailable state rather than
+   * fabricated company data.
    */
   public static getConfig(companyId: string): TenantOperationalConfig {
+    if (!this.isDevelopmentLocalConfigurationEnabled()) {
+      return this.getServerSourceUnavailableConfig(companyId);
+    }
+
     if (typeof window === 'undefined' || !window.localStorage) {
       return this.getDefaultConfig(companyId);
     }
@@ -64,13 +115,13 @@ export class TenantConfigurationService {
    * Validates and sanitizes configuration to ensure no negative numbers, NaN or Infinity.
    */
   public static validateAndSanitize(
-    input: Partial<TenantOperationalConfig>, 
+    input: Partial<TenantOperationalConfig>,
     companyId: string
   ): TenantOperationalConfig {
     const defaults = this.getDefaultConfig(companyId);
 
-    const safeNumber = (val: any, fallback: number): number => {
-      if (typeof val !== 'number' || isNaN(val) || !isFinite(val) || val < 0) {
+    const safeNumber = (val: unknown, fallback: number): number => {
+      if (typeof val !== 'number' || Number.isNaN(val) || !Number.isFinite(val) || val < 0) {
         return fallback;
       }
       return Math.floor(val);
@@ -112,7 +163,9 @@ export class TenantConfigurationService {
   }
 
   /**
-   * Updates tenant configuration safely with validation and AuditLog registration.
+   * Updates local tenant configuration only in development. Production/default
+   * callers fail closed until a trusted server-side configuration endpoint is
+   * implemented.
    */
   public static async updateConfig(
     companyId: string,
@@ -123,8 +176,16 @@ export class TenantConfigurationService {
     if (!companyId) {
       return {
         success: false,
-        config: this.getDefaultConfig(''),
+        config: this.getServerSourceUnavailableConfig(''),
         message: 'Ação bloqueada: companyId é obrigatório.',
+      };
+    }
+
+    if (!this.isDevelopmentLocalConfigurationEnabled()) {
+      return {
+        success: false,
+        config: this.getServerSourceUnavailableConfig(companyId),
+        message: 'Operação indisponível: configuração local de tenant é permitida somente em desenvolvimento.',
       };
     }
 
@@ -132,7 +193,7 @@ export class TenantConfigurationService {
 
     this.saveConfigWithoutAudit(sanitized);
 
-    // AuditLog registration
+    // AuditLog registration for the development-only local configuration path.
     try {
       const auditRepo = new AuditLogRepository();
       await auditRepo.create({
@@ -155,13 +216,13 @@ export class TenantConfigurationService {
         }),
       });
     } catch {
-      // Non-blocking for UI
+      // Non-blocking in the development-only local configuration path.
     }
 
     return {
       success: true,
       config: sanitized,
-      message: 'Configuração do tenant atualizada e auditada com sucesso.',
+      message: 'Configuração local de desenvolvimento atualizada e auditada com sucesso.',
     };
   }
 }
