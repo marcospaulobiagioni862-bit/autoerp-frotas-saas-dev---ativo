@@ -1,0 +1,192 @@
+name: SECURITY-2G6 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2g6-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Source integrity
+        run: git diff --exit-code e14229b154bdf6dfa7a7e0ccf8cadcfae81f10ba -- . ':(exclude).github/**' ':(exclude).ci/**'
+
+      - name: G6 authority static gate
+        shell: bash
+        run: |
+          ! grep -Eq 'FinanceEngine|useAuth' src/components/modals/RenegotiationModal.tsx
+          grep -F "credentials: 'include'" src/api/financeRenegotiationClient.ts >/dev/null
+          ! grep -Eq 'companyId[[:space:]]*:|userId[[:space:]]*:|userName[[:space:]]*:' src/api/financeRenegotiationClient.ts
+          grep -F "app.post('/api/finance/receivables/renegotiate'" server.ts >/dev/null
+          grep -F "companyId: principal.companyId" server.ts >/dev/null
+          grep -F "userId: principal.userId" server.ts >/dev/null
+          grep -F "userName: principal.name" server.ts >/dev/null
+          grep -F "type: 'RECEIVABLE'" server.ts >/dev/null
+          grep -F "financialPeriodLock: 'SHARED'" server.ts >/dev/null
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Renegotiation client tests
+        run: npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: Seed real PostgreSQL
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          mkdir -p .ci-tmp
+          cat > .ci-tmp/g6-seed.ts <<'EOF'
+          import fs from 'node:fs';
+          import { Pool } from 'pg';
+          import { hashPassword } from '../src/server/password';
+          const p=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!});
+          async function main(){
+            for(const f of [
+              'drizzle/0000_milky_invisible_woman.sql',
+              'drizzle/0001_rls_and_audit.sql',
+              'drizzle/0002_phase1_final_hardening.sql',
+              'drizzle/0003_auth_credentials.sql',
+              'drizzle/0004_payment_methods_rls_permissive.sql',
+              'drizzle/0005_financial_periods_rls_permissive.sql',
+            ]) await p.query(fs.readFileSync(f,'utf8'));
+            await p.query(`INSERT INTO companies(id,document,name,status) VALUES
+              ('company-g6-a','99999999000199','Tenant G6 A','ACTIVE'),
+              ('company-g6-b','12121212000112','Tenant G6 B','ACTIVE')`);
+            await p.query(`INSERT INTO users(id,company_id,name,email,role,active,permissions) VALUES
+              ('g6-admin-a','company-g6-a','Admin G6 A','admin-a@g6.test','ADMIN',true,ARRAY['*']),
+              ('g6-readonly-a','company-g6-a','Readonly G6 A','readonly-a@g6.test','READONLY',true,ARRAY[]::text[]),
+              ('g6-admin-b','company-g6-b','Admin G6 B','admin-b@g6.test','ADMIN',true,ARRAY['*'])`);
+            const hs=await Promise.all(['StrongPass123!','StrongPass123!','StrongPass123!'].map(hashPassword));
+            await p.query(`INSERT INTO user_credentials(company_id,user_id,password_hash) VALUES
+              ($1,$2,$3),($4,$5,$6),($7,$8,$9)`,['company-g6-a','g6-admin-a',hs[0],'company-g6-a','g6-readonly-a',hs[1],'company-g6-b','g6-admin-b',hs[2]]);
+            const ar=async(id:string,company:string,amount:number,due='2026-09-15')=>p.query(`INSERT INTO account_receivables(id,company_id,origin_type,origin_id,category_id,description,original_amount,updated_amount,paid_amount,balance_amount,due_date,competence_date,status,idempotency_key)
+              VALUES($1,$2,'MANUAL',$3,'cat-income',$4,$5,$5,0,$5,$6,$6,'PENDING',$7)`,[id,company,`origin-${id}`,`AR ${id}`,amount,due,`idem-${id}`]);
+            await ar('g6-a1','company-g6-a',60.01);
+            await ar('g6-a2','company-g6-a',39.99);
+            await ar('g6-b1','company-g6-b',50);
+            await ar('g6-cross-a','company-g6-a',25);
+            await ar('g6-readonly','company-g6-a',30);
+            await ar('g6-invalid','company-g6-a',35);
+            await ar('g6-closed','company-g6-a',40,'2026-10-15');
+            await ar('g6-rb1','company-g6-a',45);
+            await ar('g6-rb2','company-g6-a',55);
+            await p.query(`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status,created_at,updated_at)
+              VALUES('g6-period-closed','company-g6-a',2026,10,'2026-10-01','2026-10-31','CLOSED',now(),now())`);
+            await p.query(`CREATE ROLE autoerp_g6_app LOGIN PASSWORD 'autoerp_g6_pass'`);
+            await p.query(`GRANT USAGE ON SCHEMA public TO autoerp_g6_app`);
+            await p.query(`GRANT SELECT ON companies,users,user_credentials,financial_periods TO autoerp_g6_app`);
+            await p.query(`GRANT SELECT,INSERT,UPDATE ON account_receivables TO autoerp_g6_app`);
+            await p.query(`GRANT SELECT,INSERT ON audit_logs TO autoerp_g6_app`);
+            await p.end();
+          }
+          main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g6-seed.ts
+
+      - name: Start production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: 'false'
+          ALLOW_MOCK_AUTH: 'false'
+          DATABASE_URL: postgres://autoerp_g6_app:autoerp_g6_pass@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: security-2g6-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          node dist/server.mjs > .ci-tmp/server.log 2>&1 & echo $! > .ci-tmp/server.pid
+          for i in {1..30}; do code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/auth/me || true); [ "$code" = 401 ] && exit 0; sleep 1; done
+          cat .ci-tmp/server.log; exit 1
+
+      - name: Production G6 renegotiation integration
+        env:
+          ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+        shell: bash
+        run: |
+          cat > .ci-tmp/g6-http.ts <<'EOF'
+          import { Pool } from 'pg';
+          const db=new Pool({connectionString:process.env.ADMIN_DATABASE_URL!}); const base='http://127.0.0.1:3000'; const password='StrongPass123!';
+          async function login(doc:string,email:string){const r=await fetch(base+'/api/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyDocument:doc,email,password})});if(r.status!==200)throw Error(`login ${email} ${r.status} ${await r.text()}`);const c=r.headers.get('set-cookie');if(!c)throw Error('cookie missing');return c.split(';')[0]}
+          async function post(cookie:string|null,body:any){return fetch(base+'/api/finance/receivables/renegotiate',{method:'POST',headers:{'content-type':'application/json',...(cookie?{cookie}:{})},body:JSON.stringify(body)})}
+          async function j(r:Response){const t=await r.text();try{return JSON.parse(t)}catch{return t}}
+          async function row(id:string){return (await db.query(`SELECT * FROM account_receivables WHERE id=$1`,[id])).rows[0]}
+          async function newCount(reneg:string){return Number((await db.query(`SELECT count(*)::int c FROM account_receivables WHERE renegotiation_id=$1 AND origin_type='RENEGOTIATION'`,[reneg])).rows[0].c)}
+          async function main(){
+            let r=await post(null,{});if(r.status!==401)throw Error(`no session ${r.status}`);console.log('G6_NO_SESSION=PASS');
+            const ca=await login('99999999000199','admin-a@g6.test'),cb=await login('12121212000112','admin-b@g6.test'),cr=await login('99999999000199','readonly-a@g6.test');console.log('G6_LOGIN=PASS');
+            const normal={obligationIds:['g6-a1','g6-a2'],newTotalAmount:100.01,installmentsCount:3,firstDueDate:'2026-09-15',categoryId:'cat-income',description:'Acordo G6',companyId:'company-g6-b',userId:'g6-admin-b',userName:'FORGED'};
+            r=await post(ca,normal);if(r.status!==201)throw Error(`normal ${r.status} ${JSON.stringify(await j(r))}`);const out:any=await j(r);if(!Array.isArray(out.items)||out.items.length!==3)throw Error('new installment count response');const a1=await row('g6-a1'),a2=await row('g6-a2');if(a1.status!=='CANCELLED'||a2.status!=='CANCELLED'||!a1.renegotiation_id||a1.renegotiation_id!==a2.renegotiation_id)throw Error('original cancellation/reneg id');const reneg=a1.renegotiation_id;const q=await db.query(`SELECT company_id,original_amount,installment_number,total_installments FROM account_receivables WHERE renegotiation_id=$1 AND origin_type='RENEGOTIATION' ORDER BY installment_number`,[reneg]);if(q.rowCount!==3||q.rows.some(x=>x.company_id!=='company-g6-a'||Number(x.total_installments)!==3))throw Error('new rows tenant/count');const cents=q.rows.reduce((s,x)=>s+Math.round(Number(x.original_amount)*100),0);if(cents!==10001)throw Error(`cent sum ${cents}`);let aq=await db.query(`SELECT user_id,changes FROM audit_logs WHERE entity_id=$1 AND entity_type='Renegotiation' AND action='CREATE'`,[reneg]);if(aq.rowCount!==1||aq.rows[0].user_id!=='g6-admin-a'||JSON.parse(aq.rows[0].changes).userName!=='Admin G6 A')throw Error('audit principal');console.log('G6_NORMAL_ATOMIC_CENTS=PASS');
+            const crossBeforeA=await row('g6-cross-a'),crossBeforeB=await row('g6-b1');r=await post(ca,{...normal,obligationIds:['g6-cross-a','g6-b1'],newTotalAmount:75});if(r.status!==404)throw Error(`cross ${r.status}`);const crossAfterA=await row('g6-cross-a'),crossAfterB=await row('g6-b1');if(crossAfterA.status!==crossBeforeA.status||crossAfterA.renegotiation_id!==crossBeforeA.renegotiation_id||crossAfterB.status!==crossBeforeB.status||crossAfterB.renegotiation_id!==crossBeforeB.renegotiation_id)throw Error('cross mutated');console.log('G6_CROSS_TENANT=BLOCKED');
+            const roBefore=await row('g6-readonly');r=await post(cr,{...normal,obligationIds:['g6-readonly'],newTotalAmount:30,installmentsCount:2});if(r.status!==403)throw Error(`readonly ${r.status}`);const roAfter=await row('g6-readonly');if(roAfter.status!==roBefore.status||roAfter.renegotiation_id!==roBefore.renegotiation_id)throw Error('readonly mutated');console.log('G6_READONLY=BLOCKED');
+            const invBefore=await row('g6-invalid');for(const bad of [{...normal,obligationIds:[]},{...normal,obligationIds:['g6-invalid'],installmentsCount:0},{...normal,obligationIds:['g6-invalid'],installmentsCount:25},{...normal,obligationIds:['g6-invalid'],newTotalAmount:-1}]){r=await post(ca,bad);if(r.status!==400)throw Error(`invalid payload ${r.status}`)}const invAfter=await row('g6-invalid');if(invAfter.status!==invBefore.status||invAfter.renegotiation_id!==invBefore.renegotiation_id)throw Error('invalid mutated');console.log('G6_PAYLOAD_GATES=PASS');
+            const closedBefore=await row('g6-closed');r=await post(ca,{...normal,obligationIds:['g6-closed'],newTotalAmount:40,installmentsCount:2,firstDueDate:'2026-10-15'});if(r.status!==409)throw Error(`closed ${r.status} ${JSON.stringify(await j(r))}`);const closedAfter=await row('g6-closed');if(closedAfter.status!==closedBefore.status||closedAfter.renegotiation_id!==closedBefore.renegotiation_id)throw Error('closed mutated');console.log('G6_CLOSED_PERIOD=BLOCKED');
+            const rb1=await row('g6-rb1'),rb2=await row('g6-rb2');await db.query(`REVOKE INSERT ON audit_logs FROM autoerp_g6_app`);r=await post(ca,{...normal,obligationIds:['g6-rb1','g6-rb2'],newTotalAmount:100,installmentsCount:4,description:'rollback g6'});if(r.status===201)throw Error('rollback unexpectedly succeeded');await db.query(`GRANT INSERT ON audit_logs TO autoerp_g6_app`);const ra1=await row('g6-rb1'),ra2=await row('g6-rb2');if(ra1.status!==rb1.status||ra2.status!==rb2.status||ra1.renegotiation_id||ra2.renegotiation_id)throw Error('rollback originals mutated');const leak=await db.query(`SELECT count(*)::int c FROM account_receivables WHERE description LIKE 'rollback g6%'`);if(Number(leak.rows[0].c)!==0)throw Error('rollback new rows persisted');console.log('G6_ATOMIC_ROLLBACK=PASS');
+            r=await post(cb,{...normal,obligationIds:['g6-cross-a'],newTotalAmount:25,installmentsCount:1});if(r.status!==404)throw Error(`reverse cross ${r.status}`);console.log('G6_REVERSE_CROSS=BLOCKED');
+            await db.end();
+          }
+          main().catch(e=>{console.error('G6_HTTP_FATAL',e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/g6-http.ts
+
+      - name: Regression suites
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2g6-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          cat > .ci-tmp/regression.ts <<'EOF'
+          import{pathToFileURL}from'node:url';import path from'node:path';class M{private s=new Map<string,string>();clear(){this.s.clear()}getItem(k:string){return this.s.get(k)??null}removeItem(k:string){this.s.delete(k)}setItem(k:string,v:string){this.s.set(k,String(v))}key(i:number){return[...this.s.keys()][i]??null}get length(){return this.s.size}}
+          async function main(){const st=new M();Object.defineProperty(globalThis,'localStorage',{value:st,configurable:true});Object.defineProperty(globalThis,'window',{value:globalThis,configurable:true});const u=(p:string)=>pathToFileURL(path.join(process.cwd(),p)).href;const ss:[string,string,string,number][]=[['AuthSession','src/auth/__tests__/authSessionTestRunner.ts','AuthSessionTestRunner',8],['Bootstrap','src/server/__tests__/bootstrapTestRunner.ts','BootstrapTestRunner',5],['SessionLogin','src/server/__tests__/sessionLoginTestRunner.ts','SessionLoginTestRunner',12],['Password','src/server/__tests__/passwordTestRunner.ts','PasswordSecurityTestRunner',6],['ServerAuth','src/server/__tests__/authTestRunner.ts','ServerAuthTestRunner',8],['Admin','src/domain/admin/SecurityAdministrationService.test.ts','SecurityAdministrationTestRunner',4],['Tenant','src/domain/admin/TenantConfigurationService.test.ts','TenantConfigurationTestRunner',4]];for(const[n,f,k,e]of ss){const m:any=await import(u(f)),r=await m[k].runAllTests();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}const a=process.argv;process.argv=[];const{ContractTestRunner}=await import(u('src/domain/services/__tests__/contractTestRunner.ts'));const{FinanceTestRunner}=await import(u('src/domain/finance/__tests__/financeTestRunner.ts'));const{SecurityTestRunner}=await import(u('src/domain/services/__tests__/securityTestRunner.ts'));process.argv=a;for(const[n,f,e]of [['Contract',()=>ContractTestRunner.runAllTests(),20],['Finance',()=>FinanceTestRunner.runAllTests(),46],['Security',()=>SecurityTestRunner.runAllTests(),35]]as any){st.clear();const r=await f();if(r.passed!==e||r.total!==e||r.failed)throw Error(`${n} ${r.passed}/${r.total}`)}console.log('G6_REGRESSIONS=PASS')}main().catch(e=>{console.error(e);process.exit(2)});
+          EOF
+          npx tsx .ci-tmp/regression.ts
+
+      - name: Stop server
+        if: always()
+        run: |
+          [ ! -f .ci-tmp/server.pid ] || kill "$(cat .ci-tmp/server.pid)" || true
+          cat .ci-tmp/server.log 2>/dev/null || true
+
+      - name: Tracked immutability
+        run: test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2G6_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=e14229b154bdf6dfa7a7e0ccf8cadcfae81f10ba','FinanceRenegotiationClient=5/5 required','PostgreSQL16 renegotiation authority required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
