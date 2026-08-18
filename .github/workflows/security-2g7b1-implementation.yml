@@ -1,0 +1,80 @@
+name: SECURITY-2G7B1 implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2g7b1
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2g7b1-dre-server-authority
+          fetch-depth: 0
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2g7b1
+          path: .ci-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Install dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2G7B1 patch
+        run: python .ci-control/.ci/apply-security-2g7b1.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | grep -v '^\.ci-control/' | sort -u)"
+          expected="$(printf '%s\n' \
+            server.ts \
+            src/api/__tests__/financeReportingClientTestRunner.ts \
+            src/api/financeReportingClient.ts \
+            src/components/finance/DREReportView.tsx \
+            src/domain/finance/DREService.ts | sort)"
+          printf 'CHANGED:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Finance reporting client tests
+        run: npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+
+      - name: Diff safety
+        shell: bash
+        run: |
+          ! git diff --name-only | grep -E '^(drizzle/|src/db/schema\.ts|package\.json|package-lock\.json)$'
+          ! git diff | grep -E 'ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true' || exit 1
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add server.ts \
+            src/domain/finance/DREService.ts \
+            src/api/financeReportingClient.ts \
+            src/api/__tests__/financeReportingClientTestRunner.ts \
+            src/components/finance/DREReportView.tsx
+          git commit -m 'feat(security): move DRE read to server authority'
+          git push origin HEAD:security-2g7b1-dre-server-authority
