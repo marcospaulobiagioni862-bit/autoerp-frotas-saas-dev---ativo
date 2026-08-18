@@ -31,14 +31,13 @@ import {
   VehicleRepository,
   DriverRepository,
   AccountReceivableRepository,
-  SecurityDepositRepository,
   AuditLogRepository,
   TrafficTicketRepository,
 } from '../../persistence/repositories/localRepositories';
 import { AttachmentList } from '../documents/AttachmentList';
 import { FileUpload } from '../documents/FileUpload';
 import { ContractService, ContractFinancialSummary } from '../../domain/services/ContractService';
-import { FinanceEngine } from '../../domain/finance/FinanceEngine';
+import { FinanceDepositClient } from '../../api/financeDepositClient';
 import { Contract, Vehicle, Driver, AccountReceivable, SecurityDeposit, AuditLog, TrafficTicket } from '../../types/entities';
 import { ContractStatus, ObligationStatus, VehicleStatus } from '../../types/enums';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -143,7 +142,6 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
       const vehicleRepo = new VehicleRepository();
       const driverRepo = new DriverRepository();
       const receivableRepo = new AccountReceivableRepository();
-      const depositRepo = new SecurityDepositRepository();
       const ticketRepo = new TrafficTicketRepository();
       
       const c = await contractRepo.findByIdForCompany(
@@ -175,10 +173,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
           companyIdSnapshot,
           c.id
         ),
-        depositRepo.findByContractIdForCompany(
-          companyIdSnapshot,
-          c.id
-        ),
+        FinanceDepositClient.getByContract(c.id),
         ticketRepo.findAllForCompany(companyIdSnapshot),
         contractService.getContractHistory(c.id)
       ]);
@@ -404,16 +399,12 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({
     setError(null);
 
     try {
-      await FinanceEngine.receiveSecurityDeposit(
-        actionCompanyId!, contract.id,
-        driver.id,
-        vehicle.id,
+      await FinanceDepositClient.receive({
+        contractId: contract.id,
         amount,
-        'acc-nubank-1',
-        'pm-pix',
-        'usr-admin',
-        'Administrador'
-      );
+        financialAccountId: 'acc-nubank-1',
+        paymentMethodId: 'pm-pix',
+      });
 
       if (
         activeCompanyIdRef.current !== actionCompanyId ||

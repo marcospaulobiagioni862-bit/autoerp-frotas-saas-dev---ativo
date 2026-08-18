@@ -7,7 +7,10 @@ import {
   PostgresPaymentMethodRepository,
   PostgresAuditLogRepository,
   PostgresUserRepository,
-  PostgresFinancialPeriodRepository
+  PostgresFinancialPeriodRepository,
+  PostgresContractRepository,
+  PostgresSecurityDepositRepository,
+  PostgresSecurityDepositMovementRepository
 } from './repositories/postgresRepositories';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
@@ -40,7 +43,10 @@ export class UnitOfWork {
         getPaymentMethodRepo: () => new PostgresPaymentMethodRepository(tx),
         getAuditLogRepo: () => new PostgresAuditLogRepository(tx),
         getUserRepo: () => new PostgresUserRepository(tx),
-        getFinancialPeriodRepo: () => new PostgresFinancialPeriodRepository(tx)
+        getFinancialPeriodRepo: () => new PostgresFinancialPeriodRepository(tx),
+        getContractRepo: () => new PostgresContractRepository(tx),
+        getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
+        getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx)
       };
       
       return await callback(txContext);

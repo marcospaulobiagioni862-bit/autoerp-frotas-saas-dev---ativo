@@ -7,6 +7,8 @@ import {
   AuditLog,
   User,
   FinancialPeriod,
+  SecurityDeposit,
+  SecurityDepositMovement,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -66,6 +68,27 @@ export interface ITransactionFinancialPeriodRepository {
   update(id: string, item: Partial<FinancialPeriod>): Promise<FinancialPeriod>;
 }
 
+export interface ITransactionSecurityDepositRepository {
+  lockContract(companyId: string, contractId: string): Promise<void>;
+  findById(id: string): Promise<SecurityDeposit | null>;
+  findByContractId(contractId: string): Promise<SecurityDeposit | null>;
+  create(item: SecurityDeposit): Promise<SecurityDeposit>;
+  update(id: string, item: Partial<SecurityDeposit>): Promise<SecurityDeposit>;
+}
+
+export interface ITransactionSecurityDepositMovementRepository {
+  create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;
+}
+
+export interface ITransactionContractRepository {
+  findById(id: string): Promise<{
+    id: string;
+    companyId: string;
+    driverId: string;
+    vehicleId: string;
+  } | null>;
+}
+
 export interface ITransactionContext {
   getReceivableRepo(): ITransactionReceivableRepository;
   getPayableRepo(): ITransactionPayableRepository;
@@ -75,4 +98,7 @@ export interface ITransactionContext {
   getAuditLogRepo(): ITransactionAuditLogRepository;
   getUserRepo(): ITransactionUserRepository;
   getFinancialPeriodRepo(): ITransactionFinancialPeriodRepository;
+  getSecurityDepositRepo(): ITransactionSecurityDepositRepository;
+  getSecurityDepositMovementRepo(): ITransactionSecurityDepositMovementRepository;
+  getContractRepo(): ITransactionContractRepository;
 }
