@@ -1,0 +1,187 @@
+name: SECURITY-2F2A blocker validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2f2a-blocker
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "true"
+      ALLOW_MOCK_AUTH: "false"
+      JWT_SECRET: blocker-ci-secret-at-least-32-bytes
+      JWT_ISSUER: autoerp-ci
+      JWT_AUDIENCE: autoerp-users
+
+    steps:
+      - name: Checkout validation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify source equals blocker candidate
+        run: |
+          git diff --exit-code ff6bff24d4ccd84ddc2ad3d9eae1d1e8af061a9e -- . ':(exclude).github/**'
+
+      - name: Install declared dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Build ESM production server
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/build.log"
+          test -f dist/server.mjs
+          test ! -f dist/server.cjs
+          ! grep -F 'empty-import-meta' "$RUNNER_TEMP/build.log"
+          ! grep -F '"import.meta" is not available with the "cjs" output format' "$RUNNER_TEMP/build.log"
+
+      - name: TypeScript noEmit
+        run: npx tsc --noEmit
+
+      - name: Start real production server
+        env:
+          NODE_ENV: production
+          USE_PGLITE: "false"
+          ALLOW_MOCK_AUTH: "false"
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_ci
+          JWT_SECRET: blocker-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npm start > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/auth/me || true)
+            if [ "$status" = "401" ]; then
+              echo "PRODUCTION_ESM_SERVER_READY=PASS"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+
+      - name: Create regression harness
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/blocker-regression.ts" <<'EOF'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+
+          class MemoryStorage {
+            private store = new Map<string, string>();
+            clear() { this.store.clear(); }
+            getItem(key: string) { return this.store.has(key) ? this.store.get(key)! : null; }
+            removeItem(key: string) { this.store.delete(key); }
+            setItem(key: string, value: string) { this.store.set(String(key), String(value)); }
+            key(index: number) { return Array.from(this.store.keys())[index] ?? null; }
+            get length() { return this.store.size; }
+          }
+
+          async function main() {
+            const memoryStorage = new MemoryStorage();
+            Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage, configurable: true });
+            Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
+            const workspace = process.env.GITHUB_WORKSPACE!;
+            const moduleUrl = (relativePath: string) => pathToFileURL(path.join(workspace, relativePath)).href;
+
+            const { PasswordSecurityTestRunner } = await import(moduleUrl('src/server/__tests__/passwordTestRunner.ts'));
+            const password = await PasswordSecurityTestRunner.runAllTests();
+            if (password.total !== 6 || password.passed !== 6 || password.failed !== 0) throw new Error(`PasswordSecurity ${password.passed}/${password.total}`);
+
+            const { ServerAuthTestRunner } = await import(moduleUrl('src/server/__tests__/authTestRunner.ts'));
+            const serverAuth = await ServerAuthTestRunner.runAllTests();
+            if (serverAuth.total !== 8 || serverAuth.passed !== 8 || serverAuth.failed !== 0) throw new Error(`ServerAuth ${serverAuth.passed}/${serverAuth.total}`);
+
+            const { SecurityAdministrationTestRunner } = await import(moduleUrl('src/domain/admin/SecurityAdministrationService.test.ts'));
+            const admin = await SecurityAdministrationTestRunner.runAllTests();
+            if (admin.total !== 4 || admin.passed !== 4 || admin.failed !== 0) throw new Error(`AdminSecurity ${admin.passed}/${admin.total}`);
+
+            const { TenantConfigurationTestRunner } = await import(moduleUrl('src/domain/admin/TenantConfigurationService.test.ts'));
+            const tenant = await TenantConfigurationTestRunner.runAllTests();
+            if (tenant.total !== 4 || tenant.passed !== 4 || tenant.failed !== 0) throw new Error(`TenantConfig ${tenant.passed}/${tenant.total}`);
+
+            const originalArgv = process.argv;
+            process.argv = [];
+            const { ContractTestRunner } = await import(moduleUrl('src/domain/services/__tests__/contractTestRunner.ts'));
+            const { FinanceTestRunner } = await import(moduleUrl('src/domain/finance/__tests__/financeTestRunner.ts'));
+            const { SecurityTestRunner } = await import(moduleUrl('src/domain/services/__tests__/securityTestRunner.ts'));
+            process.argv = originalArgv;
+
+            const run = async (name: string, fn: () => Promise<any>, expected: number) => {
+              memoryStorage.clear();
+              const result = await fn();
+              if (!result || result.total !== expected || result.passed !== expected || result.failed !== 0) throw new Error(`${name} ${result?.passed}/${result?.total}`);
+            };
+
+            await run('Contract', () => ContractTestRunner.runAllTests(), 20);
+            await run('Finance', () => FinanceTestRunner.runAllTests(), 46);
+            await run('Security', () => SecurityTestRunner.runAllTests(), 35);
+          }
+
+          main().catch((error) => {
+            console.error(error);
+            process.exitCode = 2;
+          });
+          EOF
+          npx tsx "$RUNNER_TEMP/blocker-regression.ts"
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/server.pid")" || true
+          fi
+          cat "$RUNNER_TEMP/server.log" || true
+
+      - name: Verify tracked repository remained unchanged
+        run: |
+          git status --short
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Publish validation identity
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2F2A_BLOCKER_CI_REPORT',
+              `VALIDATION_STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              'CANDIDATE=ff6bff24d4ccd84ddc2ad3d9eae1d1e8af061a9e',
+              'STRICT_ACCEPTANCE=ESM bundle PASS; no empty-import-meta warning; production npm start PASS; protected endpoint 401 without session; PasswordSecurity 6/6; ServerAuth 8/8; AdminSecurity 4/4; TenantConfig 4/4; Contract 20/20; Finance 46/46; Security 35/35; lint/build/tsc/source-integrity/tracked-immutability PASS',
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
