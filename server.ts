@@ -15,6 +15,12 @@ import {
   JwtAuthenticationConfig,
 } from './src/server/auth';
 import {
+  assertBootstrapRuntimeConfiguration,
+  BootstrapInputError,
+  BootstrapUnavailableError,
+  executeAuthorizedBootstrap,
+} from './src/server/bootstrap';
+import {
   authenticatePasswordLogin,
   InvalidLoginError,
 } from './src/server/login';
@@ -54,6 +60,7 @@ async function startServer() {
     if (!process.env.JWT_SECRET || !process.env.JWT_ISSUER || !process.env.JWT_AUDIENCE) {
       throw new Error('FATAL: Production environment requires valid JWT_SECRET, JWT_ISSUER, and JWT_AUDIENCE.');
     }
+    assertBootstrapRuntimeConfiguration(process.env.AUTOERP_BOOTSTRAP_TOKEN, true);
   }
 
   // Inject UOW for real ACID transactions in production
@@ -62,6 +69,126 @@ async function startServer() {
   const app = express();
   app.use(express.json());
   const PORT = 3000;
+
+  // One-time first-admin credential provisioning. Disabled unless a strong
+  // server-only bootstrap secret is explicitly configured. The endpoint never
+  // creates a session; normal login is required after provisioning.
+  app.post('/api/auth/bootstrap', async (req: Request, res: Response) => {
+    try {
+      const providedToken = typeof req.headers['x-autoerp-bootstrap-token'] === 'string'
+        ? req.headers['x-autoerp-bootstrap-token']
+        : undefined;
+
+      const provisioned = await executeAuthorizedBootstrap(
+        {
+          companyId: req.body?.companyId,
+          userId: req.body?.userId,
+          companyDocument: req.body?.companyDocument,
+          email: req.body?.email,
+          password: req.body?.password,
+        },
+        providedToken,
+        process.env.AUTOERP_BOOTSTRAP_TOKEN,
+        async (prepared) =>
+          await db.transaction(async (tx) => {
+            const companyRows = await tx
+              .select()
+              .from(companies)
+              .where(
+                and(
+                  eq(companies.id, prepared.companyId),
+                  eq(companies.status, 'ACTIVE')
+                )
+              )
+              .limit(1);
+
+            const company = companyRows[0];
+            if (!company) {
+              throw new BootstrapUnavailableError();
+            }
+
+            await tx.execute(
+              sql`SELECT set_config('app.current_tenant', ${prepared.companyId}, true)`
+            );
+
+            const userRows = await tx
+              .select()
+              .from(users)
+              .where(
+                and(
+                  eq(users.id, prepared.userId),
+                  eq(users.companyId, prepared.companyId),
+                  eq(users.active, true),
+                  eq(users.role, 'ADMIN')
+                )
+              )
+              .limit(1);
+
+            const user = userRows[0];
+            if (!user) {
+              throw new BootstrapUnavailableError();
+            }
+
+            const credentialRepo = new PostgresAuthCredentialRepository(tx);
+            const existingCredential = await credentialRepo.findByUserId(
+              prepared.companyId,
+              prepared.userId
+            );
+            if (existingCredential) {
+              throw new BootstrapUnavailableError();
+            }
+
+            const now = new Date().toISOString();
+            await tx
+              .update(companies)
+              .set({
+                document: prepared.companyDocument,
+                updatedAt: now,
+              })
+              .where(eq(companies.id, prepared.companyId));
+
+            await tx
+              .update(users)
+              .set({
+                email: prepared.email,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(users.id, prepared.userId),
+                  eq(users.companyId, prepared.companyId)
+                )
+              );
+
+            await credentialRepo.setPasswordHash({
+              companyId: prepared.companyId,
+              userId: prepared.userId,
+              passwordHash: prepared.passwordHash,
+            });
+
+            return {
+              userId: prepared.userId,
+              companyId: prepared.companyId,
+              email: prepared.email,
+            };
+          })
+      );
+
+      res.status(201).json({ user: provisioned });
+    } catch (error) {
+      if (error instanceof BootstrapUnavailableError) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      if (error instanceof BootstrapInputError) {
+        res.status(400).json({ error: 'Invalid bootstrap request' });
+        return;
+      }
+
+      console.error('AUTOERP_BOOTSTRAP_FAILURE', error);
+      res.status(409).json({ error: 'Bootstrap unavailable' });
+    }
+  });
 
   // Login must be reachable before the protected /api middleware. Tenant is
   // resolved from the company document first; users and credentials are read
