@@ -1,13 +1,12 @@
 name: SECURITY-2G3 implementation gate
 
 on:
-  pull_request:
+  push:
     branches:
       - ci-implement-security-2g3
 
 permissions:
   contents: write
-  pull-requests: read
 
 jobs:
   implement:
@@ -20,6 +19,15 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2g3
+          path: .ci-control
+          sparse-checkout: |
+            ci/security-2g3-apply.py
+          sparse-checkout-cone-mode: false
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -30,350 +38,7 @@ jobs:
         run: npm ci
 
       - name: Apply exact SECURITY-2G3 patch
-        shell: bash
-        run: |
-          python <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              p = Path(path)
-              text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected exactly one match, found {count}")
-              p.write_text(text.replace(old, new, 1))
-
-          # Transaction interfaces: read lists through the same UOW/RLS context.
-          replace_once(
-              'src/domain/finance/ITransactionContext.ts',
-              """export interface ITransactionReceivableRepository {\n  findById(id: string): Promise<AccountReceivable | null>;\n  findByIdempotencyKey(key: string): Promise<AccountReceivable | null>;\n  create(item: AccountReceivable): Promise<AccountReceivable>;\n""",
-              """export interface ITransactionReceivableRepository {\n  findById(id: string): Promise<AccountReceivable | null>;\n  findByIdempotencyKey(key: string): Promise<AccountReceivable | null>;\n  findAll(filters?: TransactionFilterOptions): Promise<AccountReceivable[]>;\n  create(item: AccountReceivable): Promise<AccountReceivable>;\n"""
-          )
-          replace_once(
-              'src/domain/finance/ITransactionContext.ts',
-              """export interface ITransactionPayableRepository {\n  findById(id: string): Promise<AccountPayable | null>;\n  findByIdempotencyKey(key: string): Promise<AccountPayable | null>;\n  create(item: AccountPayable): Promise<AccountPayable>;\n""",
-              """export interface ITransactionPayableRepository {\n  findById(id: string): Promise<AccountPayable | null>;\n  findByIdempotencyKey(key: string): Promise<AccountPayable | null>;\n  findAll(filters?: TransactionFilterOptions): Promise<AccountPayable[]>;\n  create(item: AccountPayable): Promise<AccountPayable>;\n"""
-          )
-
-          # Authenticated, tenant-scoped reads for the production frontend.
-          marker = """  // SECURITY-2G2: finance obligation commands cross the server trust boundary.\n  // Tenant and audit identity come only from the authenticated principal; client\n  // supplied companyId/userId/userName fields are intentionally not consumed.\n"""
-          insert = """  // SECURITY-2G3: authenticated finance obligation reads use the same\n  // UnitOfWork/RLS tenant boundary as the command endpoints.\n  app.get('/api/finance/receivables', async (req: Request, res: Response) => {\n    const principal = requireFinancePrincipal(req, res);\n    if (!principal) return;\n\n    try {\n      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>\n        await txContext.getReceivableRepo().findAll()\n      );\n      res.json({ items });\n    } catch (error) {\n      sendFinanceCommandError(res, error);\n    }\n  });\n\n  app.get('/api/finance/payables', async (req: Request, res: Response) => {\n    const principal = requireFinancePrincipal(req, res);\n    if (!principal) return;\n\n    try {\n      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>\n        await txContext.getPayableRepo().findAll()\n      );\n      res.json({ items });\n    } catch (error) {\n      sendFinanceCommandError(res, error);\n    }\n  });\n\n""" + marker
-          replace_once('server.ts', marker, insert)
-
-          # Client transport is server-authoritative and has no local fallback.
-          client = r'''import type { AccountPayable, AccountReceivable } from '../types/entities';
-
-export interface CreateReceivableRequest {
-  originType: string;
-  originId: string;
-  vehicleId?: string;
-  driverId?: string;
-  contractId?: string;
-  categoryId: string;
-  description: string;
-  totalAmount: number;
-  dueDate: string;
-  competenceDate?: string;
-  installmentsCount?: number;
-  recurrenceDaysInterval?: number;
-}
-
-export interface CreatePayableRequest extends CreateReceivableRequest {
-  supplierId?: string;
-  idempotencyKey?: string;
-}
-
-export class FinanceObligationApiError extends Error {
-  constructor(public readonly status: number, message: string) {
-    super(message);
-    this.name = 'FinanceObligationApiError';
-  }
-}
-
-type JsonRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid finance API response');
-  }
-  return value as JsonRecord;
-}
-
-function numberField(record: JsonRecord, key: string): number {
-  const value = Number(record[key]);
-  if (!Number.isFinite(value)) {
-    throw new Error(`Invalid finance API numeric field: ${key}`);
-  }
-  return value;
-}
-
-function dateField(record: JsonRecord, key: string): string {
-  const value = record[key];
-  if (typeof value !== 'string') {
-    throw new Error(`Invalid finance API date field: ${key}`);
-  }
-  return value.slice(0, 10);
-}
-
-function normalizeReceivable(value: unknown): AccountReceivable {
-  const record = asRecord(value);
-  return {
-    ...record,
-    originalAmount: numberField(record, 'originalAmount'),
-    discountAmount: numberField(record, 'discountAmount'),
-    fineAmount: numberField(record, 'fineAmount'),
-    interestAmount: numberField(record, 'interestAmount'),
-    updatedAmount: numberField(record, 'updatedAmount'),
-    paidAmount: numberField(record, 'paidAmount'),
-    balanceAmount: numberField(record, 'balanceAmount'),
-    dueDate: dateField(record, 'dueDate'),
-    competenceDate: dateField(record, 'competenceDate'),
-  } as unknown as AccountReceivable;
-}
-
-function normalizePayable(value: unknown): AccountPayable {
-  const record = asRecord(value);
-  return {
-    ...record,
-    originalAmount: numberField(record, 'originalAmount'),
-    discountAmount: numberField(record, 'discountAmount'),
-    fineAmount: numberField(record, 'fineAmount'),
-    interestAmount: numberField(record, 'interestAmount'),
-    updatedAmount: numberField(record, 'updatedAmount'),
-    paidAmount: numberField(record, 'paidAmount'),
-    balanceAmount: numberField(record, 'balanceAmount'),
-    dueDate: dateField(record, 'dueDate'),
-    competenceDate: dateField(record, 'competenceDate'),
-  } as unknown as AccountPayable;
-}
-
-async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
-  const response = await fetch(path, {
-    ...init,
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    let message = `Finance API request failed (${response.status})`;
-    try {
-      const payload = asRecord(await response.json());
-      if (typeof payload.error === 'string' && payload.error) {
-        message = payload.error;
-      }
-    } catch {
-      // Keep the generic fail-closed message; never fall back to local storage.
-    }
-    throw new FinanceObligationApiError(response.status, message);
-  }
-
-  return await response.json();
-}
-
-function jsonRequest(method: 'POST', body: unknown): RequestInit {
-  return {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  };
-}
-
-function itemsFromPayload(payload: unknown): unknown[] {
-  const record = asRecord(payload);
-  if (!Array.isArray(record.items)) {
-    throw new Error('Invalid finance API items response');
-  }
-  return record.items;
-}
-
-export class FinanceObligationClient {
-  static async listReceivables(): Promise<AccountReceivable[]> {
-    const payload = await requestJson('/api/finance/receivables');
-    return itemsFromPayload(payload).map(normalizeReceivable);
-  }
-
-  static async createReceivable(input: CreateReceivableRequest): Promise<AccountReceivable[]> {
-    const payload = await requestJson('/api/finance/receivables', jsonRequest('POST', input));
-    return itemsFromPayload(payload).map(normalizeReceivable);
-  }
-
-  static async cancelReceivable(id: string, reason: string): Promise<AccountReceivable> {
-    const payload = asRecord(await requestJson(
-      `/api/finance/receivables/${encodeURIComponent(id)}/cancel`,
-      jsonRequest('POST', { reason })
-    ));
-    return normalizeReceivable(payload.item);
-  }
-
-  static async listPayables(): Promise<AccountPayable[]> {
-    const payload = await requestJson('/api/finance/payables');
-    return itemsFromPayload(payload).map(normalizePayable);
-  }
-
-  static async createPayable(input: CreatePayableRequest): Promise<AccountPayable[]> {
-    const payload = await requestJson('/api/finance/payables', jsonRequest('POST', input));
-    return itemsFromPayload(payload).map(normalizePayable);
-  }
-
-  static async cancelPayable(id: string, reason: string): Promise<AccountPayable> {
-    const payload = asRecord(await requestJson(
-      `/api/finance/payables/${encodeURIComponent(id)}/cancel`,
-      jsonRequest('POST', { reason })
-    ));
-    return normalizePayable(payload.item);
-  }
-}
-'''
-          Path('src/api').mkdir(parents=True, exist_ok=True)
-          Path('src/api/financeObligationClient.ts').write_text(client)
-
-          # ReceivablesView: remove browser repositories/FinanceEngine and use API only.
-          p = Path('src/components/finance/ReceivablesView.tsx')
-          text = p.read_text()
-          text = text.replace("import { AccountReceivableRepository } from '../../persistence/repositories/localRepositories';\n", '')
-          text = text.replace("import { FinanceEngine } from '../../domain/finance/FinanceEngine';\n", '')
-          text = text.replace("import { useAuth } from '../../hooks/useAuth';\n", '')
-          text = text.replace(
-              "import { ObligationStatus, OriginType } from '../../types/enums';\n",
-              "import { ObligationStatus, OriginType } from '../../types/enums';\nimport { FinanceObligationClient } from '../../api/financeObligationClient';\n"
-          )
-          text = text.replace("  const { user } = useAuth();\n", '')
-          old = """  const loadReceivables = async () => {\n    setLoading(true);\n    const repo = new AccountReceivableRepository();\n    const list = await repo.findAllForCompany(user.companyId);\n    setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));\n    setLoading(false);\n  };\n"""
-          new = """  const loadReceivables = async () => {\n    setLoading(true);\n    try {\n      const list = await FinanceObligationClient.listReceivables();\n      setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));\n    } catch (err) {\n      const message = err instanceof Error ? err.message : 'Erro ao carregar contas a receber.';\n      alert(message);\n      setReceivables([]);\n    } finally {\n      setLoading(false);\n    }\n  };\n"""
-          if old not in text: raise SystemExit('ReceivablesView load block mismatch')
-          text = text.replace(old, new, 1)
-          old = """      await FinanceEngine.createReceivable({\n        companyId: user.companyId,\n        originType: OriginType.MANUAL,\n        originId: 'manual-' + Date.now(),\n        categoryId,\n        description,\n        totalAmount: parseFloat(totalAmount),\n        dueDate,\n        competenceDate: competenceDate || dueDate,\n        installmentsCount: parseInt(installmentsCount) || 1,\n        driverId: driverId.trim() || undefined,\n        vehicleId: vehicleId.trim() || undefined,\n        contractId: contractId.trim() || undefined,\n        userId: user.userId,\n        userName: user.name,\n      });\n"""
-          new = """      await FinanceObligationClient.createReceivable({\n        originType: OriginType.MANUAL,\n        originId: 'manual-' + Date.now(),\n        categoryId,\n        description,\n        totalAmount: parseFloat(totalAmount),\n        dueDate,\n        competenceDate: competenceDate || dueDate,\n        installmentsCount: parseInt(installmentsCount) || 1,\n        driverId: driverId.trim() || undefined,\n        vehicleId: vehicleId.trim() || undefined,\n        contractId: contractId.trim() || undefined,\n      });\n"""
-          if old not in text: raise SystemExit('ReceivablesView create block mismatch')
-          text = text.replace(old, new, 1)
-          old = """      const item = receivables.find((r) => r.id === cancelTargetId);\n      if (!item || item.companyId !== user.companyId) {\n        alert('Erro de tenant: O título a receber não pertence à empresa da sessão atual.');\n        setCancelTargetId(null);\n        return;\n      }\n      await FinanceEngine.cancelReceivable(\n        user.companyId,\n        cancelTargetId,\n        'Cancelamento via interface',\n        user.userId,\n        user.name\n      );\n"""
-          new = """      const item = receivables.find((r) => r.id === cancelTargetId);\n      if (!item) {\n        alert('Título a receber não encontrado na lista atual.');\n        setCancelTargetId(null);\n        return;\n      }\n      await FinanceObligationClient.cancelReceivable(\n        cancelTargetId,\n        'Cancelamento via interface'\n      );\n"""
-          if old not in text: raise SystemExit('ReceivablesView cancel block mismatch')
-          text = text.replace(old, new, 1)
-          text = text.replace('Esta operação será auditada e enviada via FinanceEngine.', 'Esta operação será auditada e processada no servidor.')
-          p.write_text(text)
-
-          # PayablesView: same trust-boundary migration.
-          p = Path('src/components/finance/PayablesView.tsx')
-          text = p.read_text()
-          text = text.replace("import { AccountPayableRepository } from '../../persistence/repositories/localRepositories';\n", '')
-          text = text.replace("import { FinanceEngine } from '../../domain/finance/FinanceEngine';\n", '')
-          text = text.replace("import { useAuth } from '../../hooks/useAuth';\n", '')
-          text = text.replace(
-              "import { ObligationStatus, OriginType } from '../../types/enums';\n",
-              "import { ObligationStatus, OriginType } from '../../types/enums';\nimport { FinanceObligationClient } from '../../api/financeObligationClient';\n"
-          )
-          text = text.replace("  const { user } = useAuth();\n", '')
-          old = """  const loadPayables = async () => {\n    setLoading(true);\n    const repo = new AccountPayableRepository();\n    const list = await repo.findAllForCompany(user.companyId);\n    setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));\n    setLoading(false);\n  };\n"""
-          new = """  const loadPayables = async () => {\n    setLoading(true);\n    try {\n      const list = await FinanceObligationClient.listPayables();\n      setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));\n    } catch (err) {\n      const message = err instanceof Error ? err.message : 'Erro ao carregar contas a pagar.';\n      alert(message);\n      setPayables([]);\n    } finally {\n      setLoading(false);\n    }\n  };\n"""
-          if old not in text: raise SystemExit('PayablesView load block mismatch')
-          text = text.replace(old, new, 1)
-          old = """      await FinanceEngine.createPayable({\n        companyId: user.companyId,\n        originType: OriginType.MANUAL,\n        originId: 'manual-' + Date.now(),\n        categoryId,\n        description,\n        totalAmount: parseFloat(totalAmount),\n        dueDate,\n        competenceDate: competenceDate || dueDate,\n        installmentsCount: parseInt(installmentsCount) || 1,\n        supplierId: supplierId.trim() || undefined,\n        driverId: driverId.trim() || undefined,\n        vehicleId: vehicleId.trim() || undefined,\n        contractId: contractId.trim() || undefined,\n        userId: user.userId,\n        userName: user.name,\n      });\n"""
-          new = """      await FinanceObligationClient.createPayable({\n        originType: OriginType.MANUAL,\n        originId: 'manual-' + Date.now(),\n        categoryId,\n        description,\n        totalAmount: parseFloat(totalAmount),\n        dueDate,\n        competenceDate: competenceDate || dueDate,\n        installmentsCount: parseInt(installmentsCount) || 1,\n        supplierId: supplierId.trim() || undefined,\n        driverId: driverId.trim() || undefined,\n        vehicleId: vehicleId.trim() || undefined,\n        contractId: contractId.trim() || undefined,\n      });\n"""
-          if old not in text: raise SystemExit('PayablesView create block mismatch')
-          text = text.replace(old, new, 1)
-          old = """      const item = payables.find((p) => p.id === cancelTargetId);\n      if (!item || item.companyId !== user.companyId) {\n        alert('Erro de tenant: O título a pagar não pertence à empresa da sessão atual.');\n        setCancelTargetId(null);\n        return;\n      }\n      await FinanceEngine.cancelPayable(\n        user.companyId,\n        cancelTargetId,\n        'Cancelamento manual via interface',\n        user.userId,\n        user.name\n      );\n"""
-          new = """      const item = payables.find((p) => p.id === cancelTargetId);\n      if (!item) {\n        alert('Título a pagar não encontrado na lista atual.');\n        setCancelTargetId(null);\n        return;\n      }\n      await FinanceObligationClient.cancelPayable(\n        cancelTargetId,\n        'Cancelamento manual via interface'\n      );\n"""
-          if old not in text: raise SystemExit('PayablesView cancel block mismatch')
-          text = text.replace(old, new, 1)
-          text = text.replace('Esta operação será registrada e enviada via FinanceEngine.', 'Esta operação será auditada e processada no servidor.')
-          p.write_text(text)
-
-          test_runner = r'''import { FinanceObligationApiError, FinanceObligationClient } from '../financeObligationClient';
-
-function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
-}
-
-const originalFetch = globalThis.fetch;
-let calls: Array<{ url: string; init?: RequestInit }> = [];
-let responder: (url: string, init?: RequestInit) => Promise<Response>;
-
-globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  calls.push({ url, init });
-  return await responder(url, init);
-};
-
-const financeRow = {
-  id: 'ar-1', companyId: 'tenant-a', originType: 'MANUAL', originId: 'origin-1',
-  categoryId: 'cat-1', description: 'Teste', originalAmount: '100.50', discountAmount: '0',
-  fineAmount: '0', interestAmount: '0', updatedAmount: '100.50', paidAmount: '0',
-  balanceAmount: '100.50', dueDate: '2026-08-20T00:00:00.000Z', competenceDate: '2026-08-18T00:00:00.000Z',
-  status: 'PENDING', idempotencyKey: 'idem-1'
-};
-
-async function run() {
-  let passed = 0;
-  try {
-    responder = async () => new Response(JSON.stringify({ items: [financeRow] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    const receivables = await FinanceObligationClient.listReceivables();
-    assert(calls[0].url === '/api/finance/receivables', 'list receivables URL');
-    assert(calls[0].init?.credentials === 'include', 'list receivables credentials');
-    assert(receivables[0].originalAmount === 100.5, 'receivable numeric normalization');
-    assert(receivables[0].dueDate === '2026-08-20', 'receivable date normalization');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ items: [financeRow] }), { status: 201, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    await FinanceObligationClient.createReceivable({ originType: 'MANUAL', originId: 'o', categoryId: 'c', description: 'd', totalAmount: 10, dueDate: '2026-08-20' });
-    const createReceivableBody = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
-    assert(calls[0].init?.credentials === 'include', 'create receivable credentials');
-    assert(!('companyId' in createReceivableBody) && !('userId' in createReceivableBody) && !('userName' in createReceivableBody), 'create receivable must not send identity');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ item: financeRow }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    await FinanceObligationClient.cancelReceivable('ar/1', 'reason');
-    assert(calls[0].url === '/api/finance/receivables/ar%2F1/cancel', 'cancel receivable URL encoding');
-    assert(calls[0].init?.credentials === 'include', 'cancel receivable credentials');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ items: [financeRow] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    const payables = await FinanceObligationClient.listPayables();
-    assert(calls[0].url === '/api/finance/payables', 'list payables URL');
-    assert(payables[0].balanceAmount === 100.5, 'payable numeric normalization');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ items: [financeRow] }), { status: 201, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    await FinanceObligationClient.createPayable({ originType: 'MANUAL', originId: 'o', categoryId: 'c', description: 'd', totalAmount: 10, dueDate: '2026-08-20' });
-    const createPayableBody = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
-    assert(!('companyId' in createPayableBody) && !('userId' in createPayableBody) && !('userName' in createPayableBody), 'create payable must not send identity');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ item: financeRow }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    calls = [];
-    await FinanceObligationClient.cancelPayable('ap-1', 'reason');
-    assert(calls[0].url === '/api/finance/payables/ap-1/cancel', 'cancel payable URL');
-    assert(calls[0].init?.credentials === 'include', 'cancel payable credentials');
-    passed++;
-
-    responder = async () => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    let failedClosed = false;
-    try {
-      await FinanceObligationClient.listReceivables();
-    } catch (error) {
-      failedClosed = error instanceof FinanceObligationApiError && error.status === 401;
-    }
-    assert(failedClosed, '401 must fail closed without fallback');
-    passed++;
-
-    console.log(`FinanceObligationClient ${passed}/7 PASS`);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-}
-
-run().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-'''
-          Path('src/api/__tests__').mkdir(parents=True, exist_ok=True)
-          Path('src/api/__tests__/financeObligationClientTestRunner.ts').write_text(test_runner)
-          PY
+        run: python .ci-control/ci/security-2g3-apply.py
 
       - name: Scope gate
         shell: bash
@@ -389,9 +54,11 @@ run().catch((error) => {
           EOF
           sort -o /tmp/expected.txt /tmp/expected.txt
           diff -u /tmp/expected.txt /tmp/changed.txt
-          ! grep -q "localRepositories\|FinanceEngine\|useAuth" src/components/finance/ReceivablesView.tsx
-          ! grep -q "localRepositories\|FinanceEngine\|useAuth" src/components/finance/PayablesView.tsx
+          ! grep -Eq "localRepositories|FinanceEngine|useAuth" src/components/finance/ReceivablesView.tsx
+          ! grep -Eq "localRepositories|FinanceEngine|useAuth" src/components/finance/PayablesView.tsx
           grep -q "credentials: 'include'" src/api/financeObligationClient.ts
+          grep -q "app.get('/api/finance/receivables'" server.ts
+          grep -q "app.get('/api/finance/payables'" server.ts
 
       - name: Lint and typecheck
         run: npm run lint
@@ -405,7 +72,10 @@ run().catch((error) => {
       - name: Finance obligation client tests
         run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
 
-      - name: Commit validated candidate patch
+      - name: Diff safety
+        run: git diff --check
+
+      - name: Commit validated production candidate
         shell: bash
         run: |
           git config user.name "chatgpt-codex-connector"
