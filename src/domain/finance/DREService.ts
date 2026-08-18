@@ -26,6 +26,8 @@ export class DREService {
     let operatingExpensesAmount = 0;
     let financialResultAmount = 0;
 
+    const dateKey = (value?: string) => (value || '').slice(0, 10);
+
     if (regime === AccountingRegime.ACCRUAL) {
       const recs = txContext
         ? await txContext.getReceivableRepo().findAll()
@@ -41,19 +43,17 @@ export class DREService {
 
       const periodRecs = recs.filter(
         (r) =>
-          
           r.status !== ObligationStatus.CANCELLED &&
-          r.competenceDate >= periodStart &&
-          r.competenceDate <= periodEnd &&
+          dateKey(r.competenceDate) >= periodStart &&
+          dateKey(r.competenceDate) <= periodEnd &&
           !isDeposit(r.description, r.originType)
       );
 
       const periodPays = pays.filter(
         (p) =>
-          
           p.status !== ObligationStatus.CANCELLED &&
-          p.competenceDate >= periodStart &&
-          p.competenceDate <= periodEnd &&
+          dateKey(p.competenceDate) >= periodStart &&
+          dateKey(p.competenceDate) <= periodEnd &&
           !isDeposit(p.description, p.originType)
       );
 
@@ -81,10 +81,9 @@ export class DREService {
 
       const periodTxs = txs.filter(
         (t) =>
-          
           !t.isReversed &&
-          t.transactionDate >= periodStart &&
-          t.transactionDate <= periodEnd &&
+          dateKey(t.transactionDate) >= periodStart &&
+          dateKey(t.transactionDate) <= periodEnd &&
           !isDepositTx(t.description)
       );
 
