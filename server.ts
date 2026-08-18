@@ -4,7 +4,6 @@ import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { db } from './src/db/index';
-import { PostgresUserRepository } from './src/db/repositories/postgresRepositories';
 import { sql } from 'drizzle-orm';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -36,7 +35,6 @@ async function startServer() {
   const app = express();
   app.use(express.json());
   const PORT = 3000;
-  const userRepo = new PostgresUserRepository();
 
   // Middleware for injecting tenant context securely
   app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
@@ -55,9 +53,10 @@ async function startServer() {
       return next();
     }
 
-    // SERVER_SIDE_TENANT_AUTHORITY: JWT proves the authentication event, while
-    // the current user record remains authoritative for active status, tenant,
-    // role and permissions.
+    // SERVER_SIDE_TENANT_AUTHORITY: JWT proves the authentication event. Only
+    // after signature/issuer/audience verification does authenticateBearerPrincipal
+    // supply the verified token tenant to this lookup. UnitOfWork then establishes
+    // app.current_tenant for PostgreSQL RLS before reading the current user row.
     try {
       const authHeader = typeof req.headers.authorization === 'string'
         ? req.headers.authorization
@@ -70,7 +69,10 @@ async function startServer() {
           issuer: process.env.JWT_ISSUER || '',
           audience: process.env.JWT_AUDIENCE || '',
         },
-        async (userId) => await userRepo.findById(userId)
+        async (userId, verifiedCompanyId) =>
+          await UnitOfWork.run(verifiedCompanyId, async (transactionContext) =>
+            await transactionContext.getUserRepo().findById(userId)
+          )
       );
       next();
     } catch {

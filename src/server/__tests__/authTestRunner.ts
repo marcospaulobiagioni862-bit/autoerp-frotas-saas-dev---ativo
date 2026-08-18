@@ -36,9 +36,15 @@ async function signToken(input: {
     .sign(new TextEncoder().encode(input.secret || SECRET));
 }
 
-function createLookup(users: AuthenticatedUserRecord[]) {
+function createTenantScopedLookup(users: AuthenticatedUserRecord[]) {
   const byId = new Map(users.map((user) => [user.id, user]));
-  return async (userId: string) => byId.get(userId) || null;
+  return async (userId: string, verifiedCompanyId: string) => {
+    const user = byId.get(userId) || null;
+    if (!user || user.companyId !== verifiedCompanyId) {
+      return null;
+    }
+    return user;
+  };
 }
 
 async function expectRejected(action: () => Promise<unknown>): Promise<void> {
@@ -94,7 +100,7 @@ export class ServerAuthTestRunner {
       const principal = await authenticateBearerPrincipal(
         `Bearer ${token}`,
         { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-        createLookup([activeUser])
+        createTenantScopedLookup([activeUser])
       );
 
       if (principal.role !== activeUser.role) {
@@ -113,24 +119,31 @@ export class ServerAuthTestRunner {
         authenticateBearerPrincipal(
           undefined,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([activeUser])
+          createTenantScopedLookup([activeUser])
         )
       );
     });
 
-    await run('SA03', 'Invalid JWT signature is rejected', async () => {
+    await run('SA03', 'Invalid JWT signature is rejected before user lookup', async () => {
       const token = await signToken({
         userId: activeUser.id,
         companyId: activeUser.companyId,
         secret: 'different-security-2b-secret-32-bytes',
       });
+      let lookupCalls = 0;
       await expectRejected(() =>
         authenticateBearerPrincipal(
           `Bearer ${token}`,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([activeUser])
+          async () => {
+            lookupCalls += 1;
+            return activeUser;
+          }
         )
       );
+      if (lookupCalls !== 0) {
+        throw new Error(`Invalid signature reached user lookup ${lookupCalls} time(s)`);
+      }
     });
 
     await run('SA04', 'Expired JWT is rejected', async () => {
@@ -143,7 +156,7 @@ export class ServerAuthTestRunner {
         authenticateBearerPrincipal(
           `Bearer ${token}`,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([activeUser])
+          createTenantScopedLookup([activeUser])
         )
       );
     });
@@ -157,7 +170,7 @@ export class ServerAuthTestRunner {
         authenticateBearerPrincipal(
           `Bearer ${token}`,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([activeUser])
+          createTenantScopedLookup([activeUser])
         )
       );
     });
@@ -172,12 +185,12 @@ export class ServerAuthTestRunner {
         authenticateBearerPrincipal(
           `Bearer ${token}`,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([inactiveUser])
+          createTenantScopedLookup([inactiveUser])
         )
       );
     });
 
-    await run('SA07', 'Token tenant different from current user tenant is rejected', async () => {
+    await run('SA07', 'Token tenant different from current user tenant is rejected by scoped lookup', async () => {
       const token = await signToken({
         userId: activeUser.id,
         companyId: 'company-attacker',
@@ -186,9 +199,38 @@ export class ServerAuthTestRunner {
         authenticateBearerPrincipal(
           `Bearer ${token}`,
           { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
-          createLookup([activeUser])
+          createTenantScopedLookup([activeUser])
         )
       );
+    });
+
+    await run('SA08', 'Verified JWT tenant is passed exactly to the user lookup', async () => {
+      const token = await signToken({
+        userId: activeUser.id,
+        companyId: activeUser.companyId,
+      });
+      let receivedUserId = '';
+      let receivedCompanyId = '';
+
+      const principal = await authenticateBearerPrincipal(
+        `Bearer ${token}`,
+        { secret: SECRET, issuer: ISSUER, audience: AUDIENCE },
+        async (userId, verifiedCompanyId) => {
+          receivedUserId = userId;
+          receivedCompanyId = verifiedCompanyId;
+          return activeUser;
+        }
+      );
+
+      if (receivedUserId !== activeUser.id) {
+        throw new Error(`Lookup received wrong userId: ${receivedUserId}`);
+      }
+      if (receivedCompanyId !== activeUser.companyId) {
+        throw new Error(`Lookup received wrong companyId: ${receivedCompanyId}`);
+      }
+      if (principal.userId !== activeUser.id) {
+        throw new Error('Principal userId changed unexpectedly');
+      }
     });
 
     const passed = tests.filter((test) => test.passed).length;

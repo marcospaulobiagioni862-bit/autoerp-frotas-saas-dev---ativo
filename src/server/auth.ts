@@ -24,7 +24,8 @@ export interface JwtAuthenticationConfig {
 }
 
 export type AuthenticatedUserLookup = (
-  userId: string
+  userId: string,
+  verifiedCompanyId: string
 ) => Promise<AuthenticatedUserRecord | null>;
 
 export class AuthenticationError extends Error {
@@ -69,8 +70,10 @@ function requireStringClaim(
  * Verifies the JWT cryptographically and then revalidates the current user
  * record before creating the server-side principal.
  *
- * The token proves who was authenticated by the configured issuer. The
- * database remains authoritative for current tenant membership, role,
+ * The token proves who was authenticated by the configured issuer. Only after
+ * cryptographic verification do we pass its companyId to the user lookup so
+ * the database layer can establish the tenant/RLS scope for that query.
+ * Database data remains authoritative for current tenant membership, role,
  * permissions and active status.
  */
 export async function authenticateBearerPrincipal(
@@ -94,7 +97,7 @@ export async function authenticateBearerPrincipal(
   const userId = requireStringClaim(payloadRecord, 'userId');
   const tokenCompanyId = requireStringClaim(payloadRecord, 'companyId');
 
-  const user = await findUserById(userId);
+  const user = await findUserById(userId, tokenCompanyId);
   if (!user) {
     throw new AuthenticationError('Authenticated user does not exist');
   }
