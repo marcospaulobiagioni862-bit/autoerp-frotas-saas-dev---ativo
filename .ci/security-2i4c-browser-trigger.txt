@@ -1,4 +1,4 @@
-SECURITY-2I4C runtime cycle fix gate trigger v2
-Blocked candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
-Expected validated product change: src/domain/finance/FinanceEngine.ts only.
-Never merge this CI-only branch.
+SECURITY-2I4C full browser revalidation trigger
+Corrected candidate: 3dd1f1a14973defb8b352e707bad3e14ab8b7e83
+Tree: a165a21d66f6c2e7500880f6e857272a0ebd2080
+Read-only full runtime/UX flow. Never merge this CI-only branch.
