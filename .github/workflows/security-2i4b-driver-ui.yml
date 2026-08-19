@@ -1,0 +1,130 @@
+name: SECURITY-2I4B driver UI gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4b-driver-ui
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 40754c311f0fdad37bb8cdedba76350df16afbd1
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch DriverDetails document path
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/drivers/DriverDetailsModal.tsx')
+          text = p.read_text()
+
+          old = "import { VehicleClient } from '../../api/vehicleClient';"
+          new = old + "\nimport { DocumentClient } from '../../api/documentClient';\nimport { FileUpload } from '../documents/FileUpload';"
+          assert text.count(old) == 1 and 'DocumentClient' not in text
+          text = text.replace(old, new)
+
+          old = "  const [docNotes, setDocNotes] = useState('');"
+          new = old + "\n  const [docAttachmentId, setDocAttachmentId] = useState('');"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "      const supplemental = await bridge.getSupplementalSummary(coreDriver);"
+          new = old + "\n      supplemental.documents = await DocumentClient.list({ subjectType: 'DRIVER', subjectId: coreDriver.id });"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = """      await bridge.addDocument(driver, {
+        documentType: docType,
+        documentNumber: docNumber || undefined,
+        expirationDate: docExpDate || undefined,
+        notes: docNotes || undefined,
+      });"""
+          new = """      await DocumentClient.create({
+        subjectType: 'DRIVER',
+        subjectId: driver.id,
+        documentType: docType,
+        documentNumber: docNumber || undefined,
+        expirationDate: docExpDate || undefined,
+        attachmentId: docAttachmentId || undefined,
+        notes: docNotes || undefined,
+      });"""
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "      setDocNotes('');"
+          new = old + "\n      setDocAttachmentId('');"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = """  const handleRemoveDocument = async (documentId: string) => {
+    if (!confirm('Deseja realmente remover este documento?')) return;
+    try {
+      await bridge.removeDocument(documentId);
+      await loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover documento.');
+    }
+  };"""
+          new = """  const handleRemoveDocument = async (documentId: string) => {
+    if (!confirm('Deseja arquivar este documento? O histórico será preservado.')) return;
+    try {
+      await DocumentClient.archive(documentId);
+      await loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao arquivar documento.');
+    }
+  };"""
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "            <Input label=\"Data de Validade\" type=\"date\" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />"
+          new = old + "\n            <FileUpload entityType=\"Driver\" entityId={driver?.id || ''} documentType={docType} onUploadComplete={(attachment) => setDocAttachmentId(attachment.id)} />\n            {docAttachmentId && <p className=\"text-xs text-emerald-600\">Arquivo enviado e vinculado ao servidor.</p>}"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "<div><strong className=\"text-sm block\">{doc.documentType}</strong><span className=\"text-xs text-slate-500\">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''}</span></div>"
+          new = "<div><strong className=\"text-sm block\">{doc.documentType}</strong><span className=\"text-xs text-slate-500\">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''} • v{doc.versionNumber}</span><div className=\"mt-1\"><Badge variant={doc.complianceStatus === DocumentStatus.VALID ? 'success' : doc.complianceStatus === DocumentStatus.EXPIRED ? 'danger' : 'warning'}>{doc.complianceStatus}</Badge></div></div>"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          p.write_text(text)
+          PY
+      - name: Static authority gate
+        run: |
+          test "$(git diff --name-only)" = "src/components/drivers/DriverDetailsModal.tsx"
+          grep -F "DocumentClient.list({ subjectType: 'DRIVER'" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F "DocumentClient.create" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F "DocumentClient.archive" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F "<FileUpload entityType=\"Driver\"" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          if grep -E 'bridge\.(addDocument|removeDocument)' src/components/drivers/DriverDetailsModal.tsx; then exit 1; fi
+          if grep -E 'DriverDocumentRepository|DriverDocument' src/components/drivers/DriverLegacyDetailsBridge.ts; then exit 1; fi
+          git diff --check
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Document client and policy regressions
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+      - name: Publish after green
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/drivers/DriverDetailsModal.tsx
+          git commit -m 'feat(driver): switch document UI to server authority'
+          git push origin HEAD:security-2i4b-document-semantics
