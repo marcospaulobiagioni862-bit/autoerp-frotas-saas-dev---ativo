@@ -1,0 +1,3 @@
+Trigger SECURITY-2I4C legacy contract regression adaptation.
+Product head: 6afc445498de1e48aefc94505ad8b812fac4aec0
+Never merge this CI branch.
