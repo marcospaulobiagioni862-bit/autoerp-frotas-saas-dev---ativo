@@ -1,0 +1,3 @@
+Re-run SECURITY-2I4C UI gate after deterministic duplicate-line patch fix.
+Product candidate remains ce8a597ffddc04570679b120a3376a9adedd9921.
+Never merge this CI branch.
