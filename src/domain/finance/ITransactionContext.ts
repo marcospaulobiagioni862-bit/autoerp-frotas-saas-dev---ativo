@@ -10,6 +10,7 @@ import {
   SecurityDeposit,
   SecurityDepositMovement,
   DriverHealthAndEmergency,
+  Vehicle,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -18,6 +19,15 @@ export interface TransactionFilterOptions {
 
 export interface TransactionFinancialPeriodFilterOptions {
   companyId?: string;
+}
+
+export interface ITransactionVehicleRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<Vehicle | null>;
+  findAllByCompany(companyId: string): Promise<Vehicle[]>;
+  findByPlate(companyId: string, plate: string): Promise<Vehicle | null>;
+  findByRenavam(companyId: string, renavam: string): Promise<Vehicle | null>;
+  create(item: Vehicle): Promise<Vehicle>;
+  updateForCompany(companyId: string, id: string, item: Partial<Vehicle>): Promise<Vehicle | null>;
 }
 
 export interface ITransactionReceivableRepository {
@@ -105,6 +115,7 @@ export interface ITransactionContractRepository {
 }
 
 export interface ITransactionContext {
+  getVehicleRepo(): ITransactionVehicleRepository;
   getReceivableRepo(): ITransactionReceivableRepository;
   getPayableRepo(): ITransactionPayableRepository;
   getTransactionRepo(): ITransactionFinancialTransactionRepository;

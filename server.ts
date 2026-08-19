@@ -11,6 +11,7 @@ import { DepositService } from './src/domain/finance/DepositService';
 import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime, AuditAction } from './src/types/enums';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
+import { registerVehicleRoutes } from './src/server/vehicleRoutes';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -381,6 +382,8 @@ async function startServer() {
 
     res.json({ user: req.principal });
   });
+
+  registerVehicleRoutes(app);
 
   // SECURITY-2G7A: finance overview is server-authoritative and tenant-scoped.
   app.get('/api/finance/overview', async (req: Request, res: Response) => {

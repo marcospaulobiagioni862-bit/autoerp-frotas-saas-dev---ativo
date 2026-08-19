@@ -2,10 +2,10 @@ import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
   financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods,
-  securityDeposits, securityDepositMovements, driverHealthProfiles
+  securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles
 } from '../schema';
 import { eq, and, sql, lt } from 'drizzle-orm';
-import { AuditLog, SecurityDeposit, SecurityDepositMovement } from '../../types/entities';
+import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle } from '../../types/entities';
 
 // Basic wrapper around Drizzle ORM to satisfy IBaseRepository requirements
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
@@ -58,6 +58,123 @@ export class PostgresBaseRepository<T extends { id: string; companyId?: string }
       target: this.tableName.id,
       set: item
     });
+  }
+}
+
+export class PostgresVehicleRepository {
+  private tx: any;
+  constructor(tx?: any) { this.tx = tx || db; }
+
+  private map(row: any): Vehicle {
+    return {
+      id: row.id,
+      companyId: row.companyId,
+      plate: row.plate,
+      brand: row.brand || '',
+      model: row.model || '',
+      version: row.version || undefined,
+      yearFabrication: Number(row.yearFabrication || 0),
+      yearModel: Number(row.yearModel || 0),
+      color: row.color || '',
+      renavam: row.renavam,
+      chassis: row.chassis || '',
+      currentKm: Number(row.currentKm || 0),
+      nextMaintenanceKm: row.nextMaintenanceKm == null ? undefined : Number(row.nextMaintenanceKm),
+      fuelType: row.fuelType || 'Flex',
+      category: row.category || 'Padrão',
+      acquisitionValue: Number(row.acquisitionValue || 0),
+      currentValue: Number(row.currentValue || 0),
+      rentalValueBase: Number(row.rentalValueBase || 0),
+      status: row.status as Vehicle['status'],
+      currentDriverId: row.currentDriverId || undefined,
+      currentContractId: row.currentContractId || undefined,
+      notes: row.notes || undefined,
+      isArchived: Boolean(row.isArchived),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async findByIdForCompany(companyId: string, id: string): Promise<Vehicle | null> {
+    const rows = await this.tx.select().from(vehicles).where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id))).limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async findAllByCompany(companyId: string): Promise<Vehicle[]> {
+    const rows = await this.tx.select().from(vehicles).where(eq(vehicles.companyId, companyId));
+    return rows.map((row: any) => this.map(row));
+  }
+
+  async findByPlate(companyId: string, plate: string): Promise<Vehicle | null> {
+    const rows = await this.tx.select().from(vehicles).where(and(eq(vehicles.companyId, companyId), eq(vehicles.plate, plate))).limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async findByRenavam(companyId: string, renavam: string): Promise<Vehicle | null> {
+    const rows = await this.tx.select().from(vehicles).where(and(eq(vehicles.companyId, companyId), eq(vehicles.renavam, renavam))).limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async create(item: Vehicle): Promise<Vehicle> {
+    const rows = await this.tx.insert(vehicles).values({
+      id: item.id,
+      companyId: item.companyId,
+      plate: item.plate,
+      renavam: item.renavam,
+      brand: item.brand,
+      model: item.model,
+      version: item.version || null,
+      yearFabrication: item.yearFabrication,
+      yearModel: item.yearModel,
+      color: item.color,
+      chassis: item.chassis,
+      currentKm: item.currentKm,
+      nextMaintenanceKm: item.nextMaintenanceKm ?? null,
+      fuelType: item.fuelType,
+      category: item.category,
+      acquisitionValue: String(item.acquisitionValue),
+      currentValue: String(item.currentValue),
+      rentalValueBase: String(item.rentalValueBase),
+      status: item.status,
+      currentDriverId: item.currentDriverId || null,
+      currentContractId: item.currentContractId || null,
+      notes: item.notes || null,
+      isArchived: Boolean(item.isArchived),
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }).returning();
+    return this.map(rows[0]);
+  }
+
+  async updateForCompany(companyId: string, id: string, item: Partial<Vehicle>): Promise<Vehicle | null> {
+    const values: any = {};
+    if (item.plate !== undefined) values.plate = item.plate;
+    if (item.renavam !== undefined) values.renavam = item.renavam;
+    if (item.brand !== undefined) values.brand = item.brand;
+    if (item.model !== undefined) values.model = item.model;
+    if (item.version !== undefined) values.version = item.version || null;
+    if (item.yearFabrication !== undefined) values.yearFabrication = item.yearFabrication;
+    if (item.yearModel !== undefined) values.yearModel = item.yearModel;
+    if (item.color !== undefined) values.color = item.color;
+    if (item.chassis !== undefined) values.chassis = item.chassis;
+    if (item.currentKm !== undefined) values.currentKm = item.currentKm;
+    if (item.nextMaintenanceKm !== undefined) values.nextMaintenanceKm = item.nextMaintenanceKm;
+    if (item.fuelType !== undefined) values.fuelType = item.fuelType;
+    if (item.category !== undefined) values.category = item.category;
+    if (item.acquisitionValue !== undefined) values.acquisitionValue = String(item.acquisitionValue);
+    if (item.currentValue !== undefined) values.currentValue = String(item.currentValue);
+    if (item.rentalValueBase !== undefined) values.rentalValueBase = String(item.rentalValueBase);
+    if (item.status !== undefined) values.status = item.status;
+    if (item.currentDriverId !== undefined) values.currentDriverId = item.currentDriverId || null;
+    if (item.currentContractId !== undefined) values.currentContractId = item.currentContractId || null;
+    if (item.notes !== undefined) values.notes = item.notes || null;
+    if (item.isArchived !== undefined) values.isArchived = item.isArchived;
+    if (item.updatedAt !== undefined) values.updatedAt = item.updatedAt;
+    const rows = await this.tx.update(vehicles)
+      .set(values)
+      .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id)))
+      .returning();
+    return rows[0] ? this.map(rows[0]) : null;
   }
 }
 
