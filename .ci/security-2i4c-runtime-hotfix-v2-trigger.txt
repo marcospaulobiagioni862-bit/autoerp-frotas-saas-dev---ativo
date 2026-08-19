@@ -1,3 +1,4 @@
-SECURITY-2I4C runtime hotfix validation v2
+SECURITY-2I4C runtime hotfix validation v3
 Hotfix candidate: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+Authenticated App boot gate.
 Never merge this CI-only branch.
