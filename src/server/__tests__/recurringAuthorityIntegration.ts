@@ -284,6 +284,8 @@ async function testRlsNonSuperuser(): Promise<void> {
     assert(crossTenantInsertRejected, 'RLS did not reject a cross-tenant notification insert');
   } finally {
     await client.end().catch(() => undefined);
+    await db.execute(sql.raw(`REVOKE ALL PRIVILEGES ON recurring_rules, recurring_rule_runs, notifications FROM ${rlsRole}`));
+    await db.execute(sql.raw(`REVOKE USAGE ON SCHEMA public FROM ${rlsRole}`));
     await db.execute(sql.raw(`DROP ROLE IF EXISTS ${rlsRole}`));
   }
 }
