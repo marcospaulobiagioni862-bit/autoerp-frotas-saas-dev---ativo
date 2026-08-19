@@ -57,7 +57,6 @@ jobs:
           from pathlib import Path
           import json
 
-          # 1) Entity exports
           path = Path('src/types/entities/index.ts')
           text = path.read_text()
           needle = "export * from './audit';"
@@ -65,13 +64,11 @@ jobs:
           text = text.replace(needle, needle + "\nexport * from './notifications';")
           path.write_text(text)
 
-          # 2) Transaction context types/interfaces/getter
           path = Path('src/domain/finance/ITransactionContext.ts')
           text = path.read_text()
           import_needle = "  ContractArtifactType,\n} from '../../types/entities';"
           assert text.count(import_needle) == 1
           text = text.replace(import_needle, "  ContractArtifactType,\n  PersistentNotification,\n  NotificationStatus,\n} from '../../types/entities';")
-
           interface_anchor = "export interface ITransactionContext {"
           assert text.count(interface_anchor) == 1
           notification_interfaces = '''export interface TransactionNotificationFilters {\n  status?: NotificationStatus;\n  limit?: number;\n  includeArchived?: boolean;\n  recipientUserId?: string;\n}\n\nexport interface ITransactionNotificationRepository {\n  findByIdForCompany(companyId: string, id: string): Promise<PersistentNotification | null>;\n  findByIdempotencyKey(companyId: string, key: string): Promise<PersistentNotification | null>;\n  findAllByCompany(companyId: string, filters?: TransactionNotificationFilters): Promise<PersistentNotification[]>;\n  countUnread(companyId: string, recipientUserId?: string): Promise<number>;\n  create(item: PersistentNotification): Promise<PersistentNotification>;\n  updateStatusForCompany(\n    companyId: string,\n    id: string,\n    status: NotificationStatus,\n    now: string\n  ): Promise<PersistentNotification | null>;\n  markAllRead(companyId: string, recipientUserId: string | undefined, now: string): Promise<number>;\n}\n\n'''
@@ -81,7 +78,6 @@ jobs:
           text = text.replace(getter_needle, "  getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;\n  getNotificationRepo(): ITransactionNotificationRepository;\n}")
           path.write_text(text)
 
-          # 3) UnitOfWork wiring
           path = Path('src/db/uow.ts')
           text = path.read_text()
           import_anchor = "import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';"
@@ -92,7 +88,6 @@ jobs:
           text = text.replace(getter_anchor, getter_anchor + "\n        getNotificationRepo: () => new PostgresNotificationRepository(tx),")
           path.write_text(text)
 
-          # 4) Canonical Drizzle schema
           path = Path('src/db/schema.ts')
           text = path.read_text()
           schema_anchor = "export const communicationLogs = pgTable('communication_logs', {"
@@ -101,7 +96,6 @@ jobs:
           text = text.replace(schema_anchor, schema_block + schema_anchor)
           path.write_text(text)
 
-          # 5) Drizzle journal
           path = Path('drizzle/meta/_journal.json')
           journal = json.loads(path.read_text())
           assert journal['entries'][-1]['idx'] == 14
@@ -210,7 +204,7 @@ jobs:
       - name: Notification UnitOfWork integration
         run: |
           set -euo pipefail
-          npx tsx -e "import { NotificationFoundationIntegrationRunner } from './src/server/__tests__/notificationFoundationIntegration.ts'; await NotificationFoundationIntegrationRunner.runAllTests();"
+          npx tsx -e "(async () => { const { NotificationFoundationIntegrationRunner } = await import('./src/server/__tests__/notificationFoundationIntegration.ts'); await NotificationFoundationIntegrationRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
 
       - name: Scheduler global uniqueness smoke
         env:
