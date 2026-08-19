@@ -1,0 +1,4 @@
+SECURITY-2I3 final validation trigger v2
+candidate=2c48bf56278f2d4dd867f868edc7e8f6e3a09e06
+tree=564253b4c5de98d460451f9cc01acc991f425729
+control-fix=audit_logs.entity_type
