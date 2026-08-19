@@ -1,0 +1,212 @@
+name: SECURITY-2I4B integrated validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4b-integrated
+
+permissions:
+  contents: read
+
+jobs:
+  integrated-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 16151a09e8c3aad2c5efbdb7a29e1ae7e143e534
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Candidate identity and exact scope
+        run: |
+          test "$(git rev-parse HEAD)" = "16151a09e8c3aad2c5efbdb7a29e1ae7e143e534"
+          test "$(git rev-parse HEAD^{tree})" = "6dd992ab07c6a9f30f58c61c4dde2b0b56c8a5f0"
+          test "$(git merge-base aa6795b0681636b1da367e0e47da812ff9aadb85 HEAD)" = "aa6795b0681636b1da367e0e47da812ff9aadb85"
+          changed="$(git diff --name-only aa6795b0681636b1da367e0e47da812ff9aadb85..HEAD | sort)"
+          expected="$(printf '%s\n' \
+            drizzle/0013_document_semantics.sql \
+            drizzle/meta/_journal.json \
+            src/api/__tests__/documentClientTestRunner.ts \
+            src/api/documentClient.ts \
+            src/components/drivers/DriverDetailsModal.tsx \
+            src/components/drivers/DriverLegacyDetailsBridge.ts \
+            src/components/fleet/FleetComplianceManagement.tsx \
+            src/db/repositories/postgresDocumentRepository.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/documents/__tests__/documentPolicyTestRunner.ts \
+            src/domain/documents/documentPolicy.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/__tests__/documentAuthorityIntegration.ts \
+            src/server/documentRoutes.ts \
+            src/server/vehicleRoutes.ts \
+            src/types/entities/documents.ts | sort)"
+          printf 'I4B_DIFF:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+      - name: Static authority and safety gate
+        run: |
+          grep -F '0013_document_semantics' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE documents FORCE ROW LEVEL SECURITY' drizzle/0013_document_semantics.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0013_document_semantics.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0013_document_semantics.sql >/dev/null
+          grep -F 'getDocumentRepo()' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'new PostgresDocumentRepository' src/db/uow.ts >/dev/null
+          grep -F 'registerDocumentRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/documentClient.ts >/dev/null
+          grep -F "DocumentClient.list({ subjectType: 'DRIVER'" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F "DocumentClient.list({ subjectType: 'VEHICLE'" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F '<FileUpload entityType="Driver"' src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F '<FileUpload entityType="Vehicle"' src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F "? 'Pendente'" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          if grep -E 'DriverDocumentRepository|addDocument\(|removeDocument\(' src/components/drivers/DriverLegacyDetailsBridge.ts; then exit 1; fi
+          if grep -E 'VehicleDocumentRepository|VehicleRepository|FleetComplianceService\.createDocument|FleetComplianceService\.deleteDocument|company-main-uuid|usr-admin|Gestor de Frota' src/components/fleet/FleetComplianceManagement.tsx; then exit 1; fi
+          if grep -E 'DriverDocumentRepository|bridge\.(addDocument|removeDocument)' src/components/drivers/DriverDetailsModal.tsx; then exit 1; fi
+          if grep -E 'base64|dataBase64|readAsDataURL' src/api/documentClient.ts src/server/documentRoutes.ts; then exit 1; fi
+          if grep -F "app.delete('/api/documents" src/server/documentRoutes.ts; then exit 1; fi
+          git diff --check aa6795b0681636b1da367e0e47da812ff9aadb85..HEAD
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Document client and policy
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+      - name: Apply migrations 0000 through 0013
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Verify documents RLS indexes constraints
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            enabled boolean;
+            forced boolean;
+            using_expr text;
+            check_expr text;
+            idx_count integer;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO enabled, forced
+            FROM pg_class WHERE oid='public.documents'::regclass;
+            IF NOT enabled OR NOT forced THEN RAISE EXCEPTION 'documents RLS/FORCE failed'; END IF;
+            SELECT qual, with_check INTO using_expr, check_expr
+            FROM pg_policies WHERE schemaname='public' AND tablename='documents' AND policyname='tenant_isolation_docs';
+            IF using_expr IS NULL OR using_expr NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'documents USING failed'; END IF;
+            IF check_expr IS NULL OR check_expr NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'documents WITH CHECK failed'; END IF;
+            SELECT count(*) INTO idx_count FROM pg_indexes
+            WHERE schemaname='public' AND tablename='documents'
+              AND indexname IN ('uq_documents_current_semantic','uq_documents_version_semantic','idx_documents_company_subject_current','idx_documents_company_type_current','idx_documents_company_expiration','idx_documents_attachment');
+            IF idx_count <> 6 THEN RAISE EXCEPTION 'documents indexes missing: %', idx_count; END IF;
+          END $$;
+          SQL
+      - name: Non-superuser documents RLS enforcement
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='autoerp_i4b_integrated_rls') THEN
+              CREATE ROLE autoerp_i4b_integrated_rls LOGIN PASSWORD 'autoerp-i4b-integrated-rls' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO autoerp_i4b_integrated_rls;
+          GRANT SELECT, INSERT, UPDATE ON documents TO autoerp_i4b_integrated_rls;
+          INSERT INTO documents (
+            id, company_id, subject_type, subject_id, document_type, version_number,
+            is_current, is_archived, cost, created_by, created_at, updated_at
+          ) VALUES
+            ('i4b-int-rls-a','i4b-int-company-a','VEHICLE','veh-a','CRLV',1,true,false,0,'user-a',NOW(),NOW()),
+            ('i4b-int-rls-b','i4b-int-company-b','VEHICLE','veh-b','CRLV',1,true,false,0,'user-b',NOW(),NOW())
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+          PGPASSWORD='autoerp-i4b-integrated-rls' psql -h localhost -U autoerp_i4b_integrated_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4b-int-company-a';
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM documents WHERE id IN ('i4b-int-rls-a','i4b-int-rls-b');
+            IF c <> 1 THEN RAISE EXCEPTION 'documents non-superuser RLS read failed: %', c; END IF;
+          END $$;
+          SQL
+          if PGPASSWORD='autoerp-i4b-integrated-rls' psql -h localhost -U autoerp_i4b_integrated_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4b-int-company-a';
+          INSERT INTO documents (
+            id, company_id, subject_type, subject_id, document_type, version_number,
+            is_current, is_archived, cost, created_by, created_at, updated_at
+          ) VALUES ('i4b-int-forged','i4b-int-company-b','VEHICLE','veh-b','IPVA',1,true,false,0,'user-b',NOW(),NOW());
+          SQL
+          then
+            echo 'documents RLS WITH CHECK failed'
+            exit 1
+          fi
+      - name: Document authority PostgreSQL integration
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Attachment Driver Contract PostgreSQL regressions
+        run: |
+          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Established client finance security auth regressions
+        env:
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i4b-integrated-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/api/__tests__/attachmentClientTestRunner.ts
+          npx tsx src/api/__tests__/contractClientTestRunner.ts
+          npx tsx src/api/__tests__/driverClientTestRunner.ts
+          npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Candidate immutability
+        run: |
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "16151a09e8c3aad2c5efbdb7a29e1ae7e143e534"
+          test "$(git rev-parse HEAD^{tree})" = "6dd992ab07c6a9f30f58c61c4dde2b0b56c8a5f0"
