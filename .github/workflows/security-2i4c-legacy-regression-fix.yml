@@ -1,0 +1,115 @@
+name: SECURITY-2I4C legacy contract regression fix
+
+on:
+  pull_request:
+    branches:
+      - ci-fix-security-2i4c-legacy-contract-regression
+
+permissions:
+  contents: write
+
+jobs:
+  legacy-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-legacy-regression
+    steps:
+      - name: Checkout exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: 6afc445498de1e48aefc94505ad8b812fac4aec0
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify immutable product head
+        run: |
+          test "$(git rev-parse HEAD)" = "6afc445498de1e48aefc94505ad8b812fac4aec0"
+
+      - name: Adapt I3 fixtures as explicit legacy contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/server/__tests__/contractAuthorityIntegration.ts')
+          text = p.read_text()
+          old = """async function scalar(query: any): Promise<any> {\n  const result: any = await db.execute(query);\n  return result.rows?.[0];\n}\n"""
+          new = old + """\nasync function markLegacyContract(contractId: string): Promise<void> {\n  await db.execute(sql`UPDATE contracts SET signature_required = false WHERE id = ${contractId}`);\n}\n"""
+          if text.count(old) != 1:
+              raise SystemExit('legacy helper insertion mismatch')
+          text = text.replace(old, new)
+          replacements = [
+            ("""      const created = (await json(response)).item;\n      assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');\n""",
+             """      const created = (await json(response)).item;\n      assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');\n      await markLegacyContract(created.id);\n"""),
+            ("""      const conflictContract = (await json(response)).item;\n      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);\n""",
+             """      const conflictContract = (await json(response)).item;\n      await markLegacyContract(conflictContract.id);\n      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);\n"""),
+            ("""      const rollbackContract = (await json(response)).item;\n\n      const originalAuditCreate = PostgresAuditLogRepository.prototype.create;\n""",
+             """      const rollbackContract = (await json(response)).item;\n      await markLegacyContract(rollbackContract.id);\n\n      const originalAuditCreate = PostgresAuditLogRepository.prototype.create;\n"""),
+            ("""      const vehicleRollbackContract = (await json(response)).item;\n      const originalVehicleUpdate = PostgresVehicleRepository.prototype.updateForCompany;\n""",
+             """      const vehicleRollbackContract = (await json(response)).item;\n      await markLegacyContract(vehicleRollbackContract.id);\n      const originalVehicleUpdate = PostgresVehicleRepository.prototype.updateForCompany;\n"""),
+          ]
+          for old_block, new_block in replacements:
+              if text.count(old_block) != 1:
+                  raise SystemExit('legacy fixture replacement mismatch')
+              text = text.replace(old_block, new_block)
+          p.write_text(text)
+          PY
+          test "$(git diff --name-only)" = "src/server/__tests__/contractAuthorityIntegration.ts"
+          git diff --check
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations 0000 through 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls drizzle/[0-9][0-9][0-9][0-9]_*.sql | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+
+      - name: I3 legacy contract regression
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: I4C signed contract regression
+        run: npx tsx src/server/__tests__/contractExecutionAuthorityIntegration.ts
+
+      - name: Production gate integrity
+        run: |
+          grep -q "signatureRequired: true" src/server/contractRoutes.ts
+          grep -q "Signed contract evidence required" src/server/contractRoutes.ts
+          ! grep -q "signatureRequired: false" src/server/contractRoutes.ts
+          grep -q "markLegacyContract" src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: Publish test-only regression adaptation
+        run: |
+          git config user.name "ChatGPT AutoERP"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/server/__tests__/contractAuthorityIntegration.ts
+          git commit -m "test(contract): preserve I3 legacy activation regression"
+          git push origin HEAD:security-2i4c-contract-execution-authority
