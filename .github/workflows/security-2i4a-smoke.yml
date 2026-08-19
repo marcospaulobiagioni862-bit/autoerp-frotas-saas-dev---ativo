@@ -16,14 +16,14 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: d4291533583d445df096547e22abbe5e0851a558
+          ref: 48cd608ddaa36e9bd7bb160f048234272673491e
           fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: Verify candidate
-        run: test "$(git rev-parse HEAD)" = "d4291533583d445df096547e22abbe5e0851a558"
+        run: test "$(git rev-parse HEAD)" = "48cd608ddaa36e9bd7bb160f048234272673491e"
       - name: Install
         run: npm install --no-package-lock --no-audit --no-fund
       - name: TypeScript
