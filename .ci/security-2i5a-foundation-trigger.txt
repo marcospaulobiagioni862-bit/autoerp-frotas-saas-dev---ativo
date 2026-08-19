@@ -1,3 +1,4 @@
-SECURITY-2I5A foundation gate
+SECURITY-2I5A foundation gate v2
 Product SHA: 341f505f793e37057050d189848f6840dac68430
+Fix: async wrapper for tsx integration invocation only.
 Never merge this CI-only branch.
