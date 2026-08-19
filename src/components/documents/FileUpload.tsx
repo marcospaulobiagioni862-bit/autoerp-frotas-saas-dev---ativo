@@ -1,8 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { Button } from '../ui/Button';
-import { UploadCloud, File, AlertCircle, X } from 'lucide-react';
-import { AttachmentService } from '../../domain/services/AttachmentService';
-import { useAuth } from '../../hooks/useAuth';
+import { UploadCloud, AlertCircle, X } from 'lucide-react';
+import { AttachmentClient, type AttachmentUploadInput } from '../../api/attachmentClient';
 
 interface FileUploadProps {
   entityType: string;
@@ -14,89 +12,52 @@ interface FileUploadProps {
   multiple?: boolean;
 }
 
-export function FileUpload({ 
-  entityType, 
-  entityId, 
-  documentType, 
+const SERVER_ENTITY_TYPES = new Set(['Vehicle', 'Driver', 'Contract', 'HealthAndEmergency']);
+
+export function FileUpload({
+  entityType,
+  entityId,
+  documentType,
   onUploadComplete,
   maxSizeMB = 10,
-  allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'],
-  multiple = false
+  allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+  multiple = false,
 }: FileUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
-  const attachmentService = new AttachmentService();
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const processFile = async (file: File) => {
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error(`Tipo não permitido: ${file.name}`);
+  const validateFile = (file: File): void => {
+    if (!SERVER_ENTITY_TYPES.has(entityType)) {
+      throw new Error(`Anexos para ${entityType} ainda não foram migrados para o servidor.`);
     }
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      throw new Error(`Arquivo excede ${maxSizeMB}MB: ${file.name}`);
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        // extract base64 part
-        const base64 = result.split(',')[1] || result;
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    if (!allowedTypes.includes(file.type)) throw new Error(`Tipo não permitido: ${file.name}`);
+    if (file.size <= 0) throw new Error(`Arquivo vazio: ${file.name}`);
+    if (file.size > maxSizeMB * 1024 * 1024) throw new Error(`Arquivo excede ${maxSizeMB}MB: ${file.name}`);
   };
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    if (!user) {
-      setError("Usuário não autenticado.");
-      return;
-    }
-
     setIsUploading(true);
     setError(null);
-    
     try {
       const filesArray = Array.from(files);
       const toProcess = multiple ? filesArray : [filesArray[0]];
-
       for (const file of toProcess) {
-        const base64 = await processFile(file);
-        
-        const attachment = await attachmentService.upload({
-          companyId: user.companyId,
-          entityType,
+        validateFile(file);
+        const attachment = await AttachmentClient.upload({
+          entityType: entityType as AttachmentUploadInput['entityType'],
           entityId,
           documentType,
           fileName: file.name,
           mimeType: file.type,
-          dataBase64: base64,
-          userId: user.id,
-          userName: user.name,
-          userContext: user
+          content: file,
         });
-
-        if (onUploadComplete) {
-          onUploadComplete(attachment);
-        }
+        onUploadComplete?.(attachment);
       }
-    } catch (err: any) {
-      setError(err.message || 'Erro no upload.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro no upload.');
     } finally {
       setIsUploading(false);
       setIsDragging(false);
@@ -104,25 +65,15 @@ export function FileUpload({
     }
   };
 
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    handleUpload(e.dataTransfer.files);
-  };
-
-  const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleUpload(e.target.files);
-  };
-
   return (
     <div className="w-full">
-      <div 
+      <div
         className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors cursor-pointer
           ${isDragging ? 'border-primary bg-primary/5' : 'border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800'}
-          ${isUploading ? 'opacity-50 pointer-events-none' : ''}
-        `}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={onDrop}
+          ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+        onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => { event.preventDefault(); void handleUpload(event.dataTransfer.files); }}
         onClick={() => fileInputRef.current?.click()}
       >
         <UploadCloud className={`h-10 w-10 mb-3 ${isDragging ? 'text-primary' : 'text-gray-400'}`} />
@@ -130,13 +81,13 @@ export function FileUpload({
           {isUploading ? 'Enviando...' : 'Arraste arquivos aqui ou clique para selecionar'}
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-          Formatos suportados: {allowedTypes.map(t => t.split('/')[1]).join(', ').toUpperCase()} (Max {maxSizeMB}MB)
+          Formatos suportados: {allowedTypes.map((type) => type.split('/')[1]).join(', ').toUpperCase()} (Max {maxSizeMB}MB)
         </p>
-        <input 
-          type="file" 
+        <input
+          type="file"
           ref={fileInputRef}
-          className="hidden" 
-          onChange={onChange}
+          className="hidden"
+          onChange={(event) => void handleUpload(event.target.files)}
           accept={allowedTypes.join(',')}
           multiple={multiple}
         />
