@@ -5,6 +5,7 @@ import {
   FinancialAccount,
   PaymentMethod,
   AuditLog,
+  FileAttachment,
   User,
   FinancialPeriod,
   SecurityDeposit,
@@ -87,6 +88,18 @@ export interface ITransactionAuditLogRepository {
   create(item: AuditLog): Promise<AuditLog>;
 }
 
+export interface ITransactionAttachmentRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<FileAttachment | null>;
+  findAllByCompany(companyId: string): Promise<FileAttachment[]>;
+  findByEntity(companyId: string, entityType: string, entityId: string): Promise<FileAttachment[]>;
+  create(item: FileAttachment): Promise<FileAttachment>;
+  updateForCompany(
+    companyId: string,
+    id: string,
+    item: Partial<Pick<FileAttachment, 'isArchived' | 'contentState'>>
+  ): Promise<FileAttachment | null>;
+}
+
 export interface ITransactionUserRepository {
   findById(id: string): Promise<User | null>;
 }
@@ -145,6 +158,7 @@ export interface ITransactionContext {
   getAccountRepo(): ITransactionFinancialAccountRepository;
   getPaymentMethodRepo?(): ITransactionPaymentMethodRepository;
   getAuditLogRepo(): ITransactionAuditLogRepository;
+  getAttachmentRepo(): ITransactionAttachmentRepository;
   getUserRepo(): ITransactionUserRepository;
   getFinancialPeriodRepo(): ITransactionFinancialPeriodRepository;
   getSecurityDepositRepo(): ITransactionSecurityDepositRepository;

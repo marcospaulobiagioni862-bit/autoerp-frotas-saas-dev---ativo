@@ -24,14 +24,16 @@ export interface FileAttachment {
   mimeType: string;
   uploadedBy: string;
   createdAt: string;
-  // Extended production ready fields
+  // Optional only for legacy browser-local records created before SECURITY-2I4A.
+  // Server-authoritative API payloads always validate and return entityType.
   entityType?: string;
   documentType?: string;
-  storageProvider?: 'LOCAL' | 'CLOUD';
+  storageProvider?: 'LOCAL' | 'CLOUD' | 'LEGACY_BROWSER' | 'SERVER_FS';
   storageKey?: string;
   checksum?: string;
   createdBy?: string;
   isArchived?: boolean;
+  contentState?: 'LEGACY_BROWSER' | 'AVAILABLE' | 'MISSING';
   description?: string;
   issueDate?: string;
   expirationDate?: string;

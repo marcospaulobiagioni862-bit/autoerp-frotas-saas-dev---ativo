@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { FileAttachment } from '../../types/entities/audit';
-import { AttachmentService } from '../../domain/services/AttachmentService';
-import { useAuth } from '../../hooks/useAuth';
-import { File, Download, Eye, Trash2, ShieldAlert, ArchiveRestore, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import type { FileAttachment } from '../../types/entities/audit';
+import { AttachmentClient } from '../../api/attachmentClient';
+import { Download, Eye, File, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface AttachmentListProps {
@@ -15,79 +13,93 @@ interface AttachmentListProps {
   showFilters?: boolean;
 }
 
-export function AttachmentList({ entityType, entityId, attachments: initialAttachments, onRefresh, showFilters = false }: AttachmentListProps) {
+export function AttachmentList({ entityType, entityId, attachments: initialAttachments, onRefresh }: AttachmentListProps) {
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
   const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
-  const attachmentService = new AttachmentService();
-
   const [previewData, setPreviewData] = useState<{ url: string; type: string; name: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (initialAttachments) {
-      setAttachments(initialAttachments);
-      setLoading(false);
-    } else if (entityType && entityId && user) {
-      fetchAttachments();
-    }
-  }, [initialAttachments, entityType, entityId, user]);
-
   const fetchAttachments = async () => {
-    if (!user || !entityType || !entityId) return;
+    if (!entityType || !entityId) return;
     setLoading(true);
+    setError(null);
     try {
-      const data = await attachmentService.findByEntity(user.companyId, entityType, entityId);
-      setAttachments(data.filter(a => !a.isArchived));
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar anexos.');
+      const data = await AttachmentClient.list({ entityType, entityId });
+      setAttachments(data.filter((item) => !item.isArchived));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar anexos.');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (initialAttachments) {
+      setAttachments(initialAttachments);
+      setLoading(false);
+    } else if (entityType && entityId) {
+      void fetchAttachments();
+    }
+  }, [initialAttachments, entityType, entityId]);
+
+  useEffect(() => () => {
+    if (previewData?.url) URL.revokeObjectURL(previewData.url);
+  }, [previewData]);
+
+  const getAvailableAttachment = (id: string): FileAttachment | undefined =>
+    attachments.find((item) => item.id === id && item.storageProvider === 'SERVER_FS' && item.contentState === 'AVAILABLE');
+
   const handlePreview = async (id: string) => {
-    if (!user) return;
+    const item = getAvailableAttachment(id);
+    if (!item) {
+      alert('O conteúdo deste registro legado não está disponível no storage do servidor.');
+      return;
+    }
     try {
-      const doc = await attachmentService.getAttachment(id, user);
-      if (doc.mimeType.startsWith('image/') || doc.mimeType === 'application/pdf') {
-        const url = `data:${doc.mimeType};base64,${doc.rawBase64}`;
-        setPreviewData({ url, type: doc.mimeType, name: doc.fileName });
-      } else {
-        handleDownload(id); // auto-download if not previewable
+      const blob = await AttachmentClient.content(id);
+      if (!blob.type.startsWith('image/') && blob.type !== 'application/pdf') {
+        await handleDownload(id);
+        return;
       }
-    } catch (err: any) {
-      alert(err.message || 'Erro ao carregar arquivo.');
+      const url = URL.createObjectURL(blob);
+      setPreviewData({ url, type: blob.type, name: item.fileName });
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao carregar arquivo.');
     }
   };
 
   const handleDownload = async (id: string) => {
-    if (!user) return;
+    const item = getAvailableAttachment(id);
+    if (!item) {
+      alert('O conteúdo deste registro legado não está disponível no storage do servidor.');
+      return;
+    }
     try {
-      const doc = await attachmentService.getAttachment(id, user);
-      const url = `data:${doc.mimeType};base64,${doc.rawBase64}`;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (err: any) {
-      alert(err.message || 'Erro ao baixar arquivo.');
+      const blob = await AttachmentClient.content(id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = item.fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao baixar arquivo.');
     }
   };
 
-  const handleDelete = async () => {
-    if (!user || !deleteId) return;
+  const handleArchive = async () => {
+    if (!deleteId) return;
     try {
-      await attachmentService.archive(deleteId, user);
+      await AttachmentClient.archive(deleteId);
       setDeleteId(null);
       if (onRefresh) onRefresh();
-      else if (entityType && entityId) fetchAttachments();
-      else setAttachments(attachments.filter(a => a.id !== deleteId));
-    } catch (err: any) {
-      alert(err.message || 'Erro ao excluir.');
+      else if (entityType && entityId) await fetchAttachments();
+      else setAttachments((current) => current.filter((item) => item.id !== deleteId));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao arquivar documento.');
     }
   };
 
@@ -103,86 +115,69 @@ export function AttachmentList({ entityType, entityId, attachments: initialAttac
         </div>
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-700 border rounded-lg overflow-hidden">
-          {attachments.map((att) => (
-            <li key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
-              <div className="flex items-center space-x-3 truncate">
-                <div className="flex-shrink-0">
-                  <File className="h-5 w-5 text-gray-400" />
-                </div>
-                <div className="truncate">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {att.fileName}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500">{att.documentType || 'Documento'}</span>
-                    <span className="text-xs text-gray-400">·</span>
-                    <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
-                    <span className="text-xs text-gray-400">·</span>
-                    <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
+          {attachments.map((att) => {
+            const serverAvailable = att.storageProvider === 'SERVER_FS' && att.contentState === 'AVAILABLE';
+            return (
+              <li key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <div className="flex items-center space-x-3 truncate">
+                  <File className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  <div className="truncate">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{att.fileName}</p>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500">{att.documentType || 'Documento'}</span>
+                      <span className="text-xs text-gray-400">·</span>
+                      <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
+                      <span className="text-xs text-gray-400">·</span>
+                      <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
+                      {!serverAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
-                <Button variant="ghost" size="sm" onClick={() => handlePreview(att.id)} title="Visualizar">
-                  <Eye className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => handleDownload(att.id)} title="Baixar">
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Excluir">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
+                <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                  <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!serverAvailable} title="Visualizar">
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!serverAvailable} title="Baixar">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
-      {/* Preview Modal */}
       {previewData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
               <h3 className="font-medium">{previewData.name}</h3>
-              <div className="flex space-x-2">
-                <a 
-                  href={previewData.url} 
-                  download={previewData.name}
-                  className="px-3 py-1.5 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary/90 flex items-center"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Baixar
-                </a>
-                <button onClick={() => setPreviewData(null)} className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+              <button onClick={() => setPreviewData(null)} className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                <X className="h-5 w-5" />
+              </button>
             </div>
             <div className="p-4 flex-1 overflow-auto bg-gray-100 dark:bg-black/50 flex items-center justify-center min-h-[300px]">
               {previewData.type.startsWith('image/') ? (
                 <img src={previewData.url} alt={previewData.name} className="max-w-full max-h-full object-contain" />
-              ) : previewData.type === 'application/pdf' ? (
-                <iframe src={previewData.url} title={previewData.name} className="w-full h-[70vh] border-0" />
               ) : (
-                <div className="text-center">
-                  <File className="h-12 w-12 mx-auto text-gray-400 mb-2" />
-                  <p>Visualização não disponível para este tipo de arquivo.</p>
-                </div>
+                <iframe src={previewData.url} title={previewData.name} className="w-full h-[70vh] border-0" />
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation */}
       {deleteId && (
         <ConfirmDialog
           isOpen={!!deleteId}
-          title="Excluir Documento"
-          description="Tem certeza que deseja arquivar este documento? Ele poderá ser restaurado se necessário (soft delete)."
-          onConfirm={handleDelete}
+          title="Arquivar Documento"
+          description="Tem certeza que deseja arquivar este documento? Os bytes não serão apagados nesta etapa."
+          onConfirm={() => void handleArchive()}
           onCancel={() => setDeleteId(null)}
-          confirmText="Excluir"
+          confirmText="Arquivar"
           cancelText="Cancelar"
           type="danger"
         />
