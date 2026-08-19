@@ -1,0 +1,135 @@
+name: SECURITY-2I5A scheduler startup wiring fix
+
+on:
+  pull_request:
+    branches:
+      - ci-fix-security-2i5a-scheduler-startup
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i5a-startup-fix
+      SOURCE_SHA: 3f605cc569f19b11f49a4fdbdb9337ae8890b89e
+      PRODUCT_BRANCH: security-2i5a-alert-scheduler-authority
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 3f605cc569f19b11f49a4fdbdb9337ae8890b89e
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Surgical scheduler startup wiring
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('server.ts')
+          s = p.read_text()
+          old = '''  app.listen(PORT, '0.0.0.0', () => {\n    console.log(`Server running on http://0.0.0.0:${PORT}`);\n  });'''
+          new = '''  app.listen(PORT, '0.0.0.0', () => {\n    console.log(`Server running on http://0.0.0.0:${PORT}`);\n    startAlertScheduler();\n  });'''
+          if s.count(old) != 1:
+              raise SystemExit(f'listen block count={s.count(old)}')
+          p.write_text(s.replace(old, new))
+          PY
+          test "$(git status --porcelain | wc -l)" = "1"
+          test "$(git status --porcelain | awk '{print $2}')" = "server.ts"
+          grep -A3 "app.listen(PORT" server.ts | grep -F "startAlertScheduler();"
+
+      - name: Install TypeScript build
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm run lint
+          npm run build
+
+      - name: Apply migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('startup-company','STARTUP','Startup Company','ACTIVE',NOW(),NOW())
+          ON CONFLICT (id) DO UPDATE SET status='ACTIVE', updated_at=NOW();
+          SQL
+
+      - name: Scheduler disabled boot means zero automatic runs
+        env:
+          AUTOERP_SCHEDULER_ENABLED: 'false'
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          rm -f /tmp/i5a-disabled.log
+          nohup npm run dev >/tmp/i5a-disabled.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:3000/ >/dev/null 2>&1 && break || sleep 1; done
+          sleep 2
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "select count(*) from scheduler_runs")" = "0"
+          kill "$PID" || true
+          wait "$PID" 2>/dev/null || true
+          sleep 1
+
+      - name: Scheduler enabled boot acquires one bucket
+        env:
+          AUTOERP_SCHEDULER_ENABLED: 'true'
+          AUTOERP_SCHEDULER_INSTANCE_ID: 'startup-ci'
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          rm -f /tmp/i5a-enabled.log
+          nohup npm run dev >/tmp/i5a-enabled.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 40); do
+            COUNT=$(psql -h localhost -U postgres -d autoerp_ci -Atc "select count(*) from scheduler_runs" || echo 0)
+            [ "$COUNT" = "1" ] && break
+            sleep 1
+          done
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "select count(*) from scheduler_runs")" = "1"
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "select job_key from scheduler_runs limit 1")" = "ALERT_MATERIALIZATION"
+          kill "$PID" || true
+          wait "$PID" 2>/dev/null || true
+
+      - name: Scheduler regression
+        run: |
+          set -euo pipefail
+          npx tsx src/server/__tests__/alertSchedulerIntegration.ts
+
+      - name: Publish exact one-file fix
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- server.ts
+          test "$(git diff --cached --name-only)" = "server.ts"
+          git commit -m "fix(scheduler): start alert scheduler after server boot"
+          git push origin "HEAD:$PRODUCT_BRANCH"
