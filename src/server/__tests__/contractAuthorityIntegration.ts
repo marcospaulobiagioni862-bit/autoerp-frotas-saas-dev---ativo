@@ -27,6 +27,10 @@ async function scalar(query: any): Promise<any> {
   return result.rows?.[0];
 }
 
+async function markLegacyContract(contractId: string): Promise<void> {
+  await db.execute(sql`UPDATE contracts SET signature_required = false WHERE id = ${contractId}`);
+}
+
 export class ContractAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
     await db.execute(sql`
@@ -135,6 +139,7 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 201, `tenant A create expected 201, got ${response.status}`);
       const created = (await json(response)).item;
       assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
+      await markLegacyContract(created.id);
 
       response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, adminA);
       assert(response.status === 409, `same-tenant contract number expected 409, got ${response.status}`);
@@ -171,6 +176,7 @@ export class ContractAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 201, `conflict draft create expected 201, got ${response.status}`);
       const conflictContract = (await json(response)).item;
+      await markLegacyContract(conflictContract.id);
       response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
       assert(response.status === 409, `vehicle active conflict expected 409, got ${response.status}`);
 
@@ -211,6 +217,7 @@ export class ContractAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 201, `rollback draft create expected 201, got ${response.status}`);
       const rollbackContract = (await json(response)).item;
+      await markLegacyContract(rollbackContract.id);
 
       const originalAuditCreate = PostgresAuditLogRepository.prototype.create;
       PostgresAuditLogRepository.prototype.create = async function forcedAuditFailure(): Promise<any> {
@@ -235,6 +242,7 @@ export class ContractAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 201, `vehicle rollback draft create expected 201, got ${response.status}`);
       const vehicleRollbackContract = (await json(response)).item;
+      await markLegacyContract(vehicleRollbackContract.id);
       const originalVehicleUpdate = PostgresVehicleRepository.prototype.updateForCompany;
       PostgresVehicleRepository.prototype.updateForCompany = async function forcedVehicleFailure(): Promise<any> {
         throw new Error('FORCED_CONTRACT_VEHICLE_FAILURE');
