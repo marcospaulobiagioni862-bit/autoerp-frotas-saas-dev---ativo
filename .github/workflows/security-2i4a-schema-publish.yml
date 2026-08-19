@@ -1,0 +1,97 @@
+name: SECURITY-2I4A schema publish gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4a
+
+permissions:
+  contents: write
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 48cd608ddaa36e9bd7bb160f048234272673491e
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify candidate
+        run: test "$(git rev-parse HEAD)" = "48cd608ddaa36e9bd7bb160f048234272673491e"
+      - name: Align canonical Drizzle schema
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          schema = Path('src/db/schema.ts')
+          text = schema.read_text()
+          old = """export const fileAttachments = pgTable('file_attachments', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  entityType: text('entity_type').notNull(),
+  entityId: text('entity_id').notNull(),
+  fileName: text('file_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  url: text('url').notNull(),
+  size: integer('size'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+});"""
+          new = """export const fileAttachments = pgTable('file_attachments', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  entityType: text('entity_type').notNull(),
+  entityName: text('entity_name').notNull(),
+  entityId: text('entity_id').notNull(),
+  documentType: text('document_type'),
+  fileName: text('file_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  url: text('url').notNull(),
+  size: integer('size'),
+  fileSize: integer('file_size').notNull().default(0),
+  storageProvider: text('storage_provider').notNull().default('LEGACY_BROWSER'),
+  storageKey: text('storage_key'),
+  checksum: text('checksum'),
+  description: text('description'),
+  issueDate: text('issue_date'),
+  expirationDate: text('expiration_date'),
+  createdBy: text('created_by'),
+  isArchived: boolean('is_archived').notNull().default(false),
+  contentState: text('content_state').notNull().default('LEGACY_BROWSER'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idxCompanyEntity: index('idx_att_company_entity').on(t.companyId, t.entityType, t.entityId, t.isArchived),
+  idxCompanyDocument: index('idx_att_company_document').on(t.companyId, t.documentType, t.isArchived),
+  idxCompanyCreated: index('idx_att_company_created').on(t.companyId, t.createdAt),
+}));"""
+          assert text.count(old) == 1, f'fileAttachments schema block count={text.count(old)}'
+          schema.write_text(text.replace(old, new))
+          PY
+      - name: Schema-only diff
+        run: |
+          test "$(git diff --name-only)" = "src/db/schema.ts"
+          grep -F "entityName: text('entity_name').notNull()" src/db/schema.ts >/dev/null
+          grep -F "storageProvider: text('storage_provider').notNull().default('LEGACY_BROWSER')" src/db/schema.ts >/dev/null
+          grep -F "contentState: text('content_state').notNull().default('LEGACY_BROWSER')" src/db/schema.ts >/dev/null
+          grep -F "idxCompanyEntity: index('idx_att_company_entity')" src/db/schema.ts >/dev/null
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Diff safety
+        run: |
+          git diff --check
+          ! git diff | grep -E '@ts-ignore|ts-ignore'
+      - name: Publish schema alignment
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/db/schema.ts
+          git commit -m 'feat(db): align attachment authority Drizzle schema'
+          git push origin HEAD:security-2i4a-attachment-authority
