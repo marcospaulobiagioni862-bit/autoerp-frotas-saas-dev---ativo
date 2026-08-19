@@ -28,36 +28,19 @@ jobs:
           from pathlib import Path
           p = Path('src/components/fleet/FleetComplianceManagement.tsx')
           text = p.read_text()
-          old = """doc.complianceStatus === DocumentStatus.VALID
-                                ? 'success'
-                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
-                                ? 'warning'
-                                : 'danger'"""
-          new = """doc.complianceStatus === DocumentStatus.VALID
-                                ? 'success'
-                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON || doc.complianceStatus === DocumentStatus.PENDING
-                                ? 'warning'
-                                : 'danger'"""
-          assert text.count(old) == 1, f'variant block count={text.count(old)}'
+          old = ": doc.complianceStatus === DocumentStatus.EXPIRING_SOON\n                                ? 'warning'\n                                : 'danger'"
+          new = ": doc.complianceStatus === DocumentStatus.EXPIRING_SOON || doc.complianceStatus === DocumentStatus.PENDING\n                                ? 'warning'\n                                : 'danger'"
+          assert text.count(old) == 1, f'variant tail count={text.count(old)}'
           text = text.replace(old, new)
-          old = """doc.complianceStatus === DocumentStatus.VALID
-                              ? 'Válido'
-                              : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
-                              ? 'A Vencer'
-                              : 'Vencido'"""
-          new = """doc.complianceStatus === DocumentStatus.VALID
-                              ? 'Válido'
-                              : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
-                              ? 'A Vencer'
-                              : doc.complianceStatus === DocumentStatus.PENDING
-                              ? 'Pendente'
-                              : 'Vencido'"""
-          assert text.count(old) == 1, f'label block count={text.count(old)}'
+          old = ": doc.complianceStatus === DocumentStatus.EXPIRING_SOON\n                              ? 'A Vencer'\n                              : 'Vencido'"
+          new = ": doc.complianceStatus === DocumentStatus.EXPIRING_SOON\n                              ? 'A Vencer'\n                              : doc.complianceStatus === DocumentStatus.PENDING\n                              ? 'Pendente'\n                              : 'Vencido'"
+          assert text.count(old) == 1, f'label tail count={text.count(old)}'
           p.write_text(text.replace(old, new))
           PY
       - name: Scope and static check
         run: |
           test "$(git diff --name-only)" = "src/components/fleet/FleetComplianceManagement.tsx"
+          grep -F "DocumentStatus.PENDING" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
           grep -F "? 'Pendente'" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
           git diff --check
       - name: Install
