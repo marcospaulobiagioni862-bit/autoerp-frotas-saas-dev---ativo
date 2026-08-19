@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     const contract = await scalar(sql`SELECT status FROM contracts WHERE id=${contractId}`);
     const vehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id=${vehicleId}`);
     const receivable = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${contractId}`);
-    const audit = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE entity_name='Contract' AND entity_id=${contractId} AND action='UPDATE'`);
+    const audit = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE entity_type='Contract' AND entity_id=${contractId} AND action='UPDATE'`);
 
     assert(contract?.status === 'DRAFT', `PENDING CNH changed Contract status: ${contract?.status}`);
     assert(vehicle?.status === 'AVAILABLE', `PENDING CNH changed Vehicle status: ${vehicle?.status}`);
