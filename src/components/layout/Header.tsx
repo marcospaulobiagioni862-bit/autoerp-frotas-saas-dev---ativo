@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Building2, RefreshCw, Sun, Moon, Menu } from 'lucide-react';
+import { AlertInbox } from '../notifications/AlertInbox';
 
 interface HeaderProps {
   testStatus: { passed: number; total: number; failed: number } | null;
   onOpenTestRunner: () => void;
   onResetSeedData: () => void;
   onToggleMobileSidebar?: () => void;
+  onNavigate?: (tab: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -13,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTestRunner,
   onResetSeedData,
   onToggleMobileSidebar,
+  onNavigate,
 }) => {
   const [isDark, setIsDark] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark');
@@ -91,6 +94,8 @@ export const Header: React.FC<HeaderProps> = ({
           <RefreshCw className="w-4 h-4" />
           <span className="hidden lg:inline">Reset Seed</span>
         </button>
+
+        <AlertInbox onNavigate={onNavigate} />
 
         {/* Dark/Light mode toggle */}
         <button

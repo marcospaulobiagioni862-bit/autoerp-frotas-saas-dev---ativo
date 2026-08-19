@@ -237,6 +237,7 @@ export default function App() {
         onOpenTestRunner={() => setActiveTab('tests')}
         onResetSeedData={handleResetSeedData}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+        onNavigate={(tab) => setActiveTab(tab as NavigationTab)}
       />
 
       {/* Main Body */}
