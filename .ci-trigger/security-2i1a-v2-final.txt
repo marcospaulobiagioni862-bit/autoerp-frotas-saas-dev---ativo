@@ -1,0 +1,2 @@
+Validate exact candidate a15c0f9ee22563d4069de5c5d96e35639f4a8090 independently against production base 6823cb1a71e8e816231d087724491d424b350426.
+CI-only branch; never merge.
