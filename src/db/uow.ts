@@ -17,6 +17,7 @@ import {
 import { PostgresDriverRepository } from './repositories/postgresDriverRepository';
 import { PostgresContractRepository } from './repositories/postgresContractRepository';
 import { PostgresAttachmentRepository } from './repositories/postgresAttachmentRepository';
+import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -50,6 +51,7 @@ export class UnitOfWork {
         getPaymentMethodRepo: () => new PostgresPaymentMethodRepository(tx),
         getAuditLogRepo: () => new PostgresAuditLogRepository(tx),
         getAttachmentRepo: () => new PostgresAttachmentRepository(tx),
+        getDocumentRepo: () => new PostgresDocumentRepository(tx),
         getUserRepo: () => new PostgresUserRepository(tx),
         getFinancialPeriodRepo: () => new PostgresFinancialPeriodRepository(tx),
         getContractRepo: () => new PostgresContractRepository(tx),
