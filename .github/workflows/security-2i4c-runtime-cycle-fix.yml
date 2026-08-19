@@ -1,0 +1,222 @@
+name: SECURITY-2I4C runtime cycle surgical fix
+
+on:
+  pull_request:
+    branches:
+      - ci-fix-security-2i4c-runtime-cycle
+
+permissions:
+  contents: write
+
+jobs:
+  runtime-cycle-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-runtime-fix-attachments
+      SOURCE_SHA: 2288ee011415f69f011f6b21fb16db96d1e24196
+      SOURCE_TREE: 036909fab49f8532aa8b83cc2576b51f7d9e2004
+      PRODUCT_BRANCH: security-2i4c-contract-execution-authority
+      BROWSER_COMPANY_ID: runtime-cycle-company
+      BROWSER_USER_ID: runtime-cycle-admin
+    steps:
+      - name: Checkout exact blocked candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 2288ee011415f69f011f6b21fb16db96d1e24196
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Assert exact source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$SOURCE_TREE"
+          test -z "$(git status --porcelain)"
+
+      - name: Break FinanceEngine TrafficTicketService initialization cycle
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/domain/finance/FinanceEngine.ts')
+          text = path.read_text()
+
+          import_line = "import { TrafficTicketService } from '../services/TrafficTicketService';\n"
+          if text.count(import_line) != 1:
+              raise SystemExit(f'expected exactly one TrafficTicketService import, got {text.count(import_line)}')
+          text = text.replace(import_line, '')
+
+          old = """  // 11. NIC Penalties
+          private static trafficTicketService = new TrafficTicketService();
+
+          public static async processNICPenalty(
+            ticketId: string,
+            nicAmount?: number,
+            userId: string = 'system',
+            userName: string = 'System'
+          ) {
+            return this.trafficTicketService.processNICPenalty(ticketId, nicAmount, userId, userName);
+          }
+
+          public static async processPendingNICPenalties(
+            companyId: string,
+            userId: string = 'system',
+            userName: string = 'System'
+          ) {
+            return this.trafficTicketService.processPendingNICPenalties(companyId, userId, userName);
+          }
+"""
+          new = """  // 11. NIC Penalties
+          // Load the legacy ticket service only on demand. TrafficTicketService depends on
+          // FinanceEngine for obligation creation, so a static import/instance here creates
+          // an ES-module initialization cycle that crashes the browser bundle before React boots.
+          public static async processNICPenalty(
+            ticketId: string,
+            nicAmount?: number,
+            userId: string = 'system',
+            userName: string = 'System'
+          ) {
+            const { TrafficTicketService } = await import('../services/TrafficTicketService');
+            return new TrafficTicketService().processNICPenalty(ticketId, nicAmount, userId, userName);
+          }
+
+          public static async processPendingNICPenalties(
+            companyId: string,
+            userId: string = 'system',
+            userName: string = 'System'
+          ) {
+            const { TrafficTicketService } = await import('../services/TrafficTicketService');
+            return new TrafficTicketService().processPendingNICPenalties(companyId, userId, userName);
+          }
+"""
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one static NIC service block, got {text.count(old)}')
+          text = text.replace(old, new)
+          path.write_text(text)
+          PY
+
+          test "$(git status --porcelain | wc -l)" = "1"
+          test "$(git status --porcelain | awk '{print $2}')" = "src/domain/finance/FinanceEngine.ts"
+          ! grep -F "import { TrafficTicketService } from '../services/TrafficTicketService';" src/domain/finance/FinanceEngine.ts
+          ! grep -F "private static trafficTicketService" src/domain/finance/FinanceEngine.ts
+          grep -F "await import('../services/TrafficTicketService')" src/domain/finance/FinanceEngine.ts
+
+      - name: Install and compile
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          command -v google-chrome
+          npm run lint
+          npm run build
+          test "$(git status --porcelain | wc -l)" = "1"
+          test "$(git status --porcelain | awk '{print $2}')" = "src/domain/finance/FinanceEngine.ts"
+
+      - name: Apply migrations and seed browser principal
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('runtime-cycle-company', 'RUNTIME-CYCLE', 'Runtime Cycle Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET document=EXCLUDED.document, name=EXCLUDED.name, status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('runtime-cycle-admin', 'runtime-cycle-company', 'Runtime Cycle Admin', 'runtime-cycle@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id=EXCLUDED.company_id, name=EXCLUDED.name, email=EXCLUDED.email, role='ADMIN', active=true, updated_at=NOW();
+          SQL
+
+      - name: Start patched candidate server
+        run: |
+          set -euo pipefail
+          rm -rf "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-runtime-fix
+          mkdir -p "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-runtime-fix
+          nohup npm run dev > /tmp/i4c-runtime-fix/server.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS -H "x-company-id: $BROWSER_COMPANY_ID" -H "x-user-id: $BROWSER_USER_ID" \
+              http://127.0.0.1:3000/api/auth/me >/tmp/i4c-runtime-fix/auth-me.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i4c-runtime-fix/server.log
+          exit 1
+
+      - name: Browser boot regression gate
+        run: |
+          cat > .git/runtime-boot.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const errors = [];
+          const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 1000 },
+            extraHTTPHeaders: {
+              'x-company-id': process.env.BROWSER_COMPANY_ID,
+              'x-user-id': process.env.BROWSER_USER_ID,
+            },
+          });
+          const page = await context.newPage();
+          page.on('pageerror', (error) => errors.push(error.stack || String(error)));
+          try {
+            await page.goto('http://127.0.0.1:3000', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.getByText('Visão Geral', { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.screenshot({ path: '/tmp/i4c-runtime-fix/boot-success.png', fullPage: true });
+            await writeFile('/tmp/i4c-runtime-fix/page-errors.json', JSON.stringify(errors, null, 2));
+            if (errors.length) throw new Error(`browser page errors: ${errors.join(' | ')}`);
+            console.log('AUTOERP_BROWSER_BOOT_PASS');
+          } catch (error) {
+            await page.screenshot({ path: '/tmp/i4c-runtime-fix/boot-failure.png', fullPage: true }).catch(() => {});
+            await writeFile('/tmp/i4c-runtime-fix/page-errors.json', JSON.stringify(errors, null, 2)).catch(() => {});
+            throw error;
+          } finally {
+            await browser.close();
+          }
+          NODE
+          node .git/runtime-boot.mjs
+          test "$(git status --porcelain | wc -l)" = "1"
+          test "$(git status --porcelain | awk '{print $2}')" = "src/domain/finance/FinanceEngine.ts"
+
+      - name: Publish one-file runtime fix to product branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- src/domain/finance/FinanceEngine.ts
+          test "$(git diff --cached --name-only | wc -l)" = "1"
+          test "$(git diff --cached --name-only)" = "src/domain/finance/FinanceEngine.ts"
+          git commit -m "fix(runtime): break finance ticket initialization cycle"
+          git push origin "HEAD:$PRODUCT_BRANCH"
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i4c-runtime-cycle-fix-evidence
+          path: /tmp/i4c-runtime-fix
+          if-no-files-found: warn
+          retention-days: 7
