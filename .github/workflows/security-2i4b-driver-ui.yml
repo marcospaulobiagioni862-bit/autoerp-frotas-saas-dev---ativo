@@ -45,21 +45,25 @@ jobs:
           assert text.count(old) == 1
           text = text.replace(old, new)
 
-          old = """      await bridge.addDocument(driver, {
-        documentType: docType,
-        documentNumber: docNumber || undefined,
-        expirationDate: docExpDate || undefined,
-        notes: docNotes || undefined,
-      });"""
-          new = """      await DocumentClient.create({
-        subjectType: 'DRIVER',
-        subjectId: driver.id,
-        documentType: docType,
-        documentNumber: docNumber || undefined,
-        expirationDate: docExpDate || undefined,
-        attachmentId: docAttachmentId || undefined,
-        notes: docNotes || undefined,
-      });"""
+          old = '\n'.join([
+              "      await bridge.addDocument(driver, {",
+              "        documentType: docType,",
+              "        documentNumber: docNumber || undefined,",
+              "        expirationDate: docExpDate || undefined,",
+              "        notes: docNotes || undefined,",
+              "      });",
+          ])
+          new = '\n'.join([
+              "      await DocumentClient.create({",
+              "        subjectType: 'DRIVER',",
+              "        subjectId: driver.id,",
+              "        documentType: docType,",
+              "        documentNumber: docNumber || undefined,",
+              "        expirationDate: docExpDate || undefined,",
+              "        attachmentId: docAttachmentId || undefined,",
+              "        notes: docNotes || undefined,",
+              "      });",
+          ])
           assert text.count(old) == 1
           text = text.replace(old, new)
 
@@ -68,24 +72,28 @@ jobs:
           assert text.count(old) == 1
           text = text.replace(old, new)
 
-          old = """  const handleRemoveDocument = async (documentId: string) => {
-    if (!confirm('Deseja realmente remover este documento?')) return;
-    try {
-      await bridge.removeDocument(documentId);
-      await loadData();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao remover documento.');
-    }
-  };"""
-          new = """  const handleRemoveDocument = async (documentId: string) => {
-    if (!confirm('Deseja arquivar este documento? O histórico será preservado.')) return;
-    try {
-      await DocumentClient.archive(documentId);
-      await loadData();
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao arquivar documento.');
-    }
-  };"""
+          old = '\n'.join([
+              "  const handleRemoveDocument = async (documentId: string) => {",
+              "    if (!confirm('Deseja realmente remover este documento?')) return;",
+              "    try {",
+              "      await bridge.removeDocument(documentId);",
+              "      await loadData();",
+              "    } catch (err: unknown) {",
+              "      alert(err instanceof Error ? err.message : 'Erro ao remover documento.');",
+              "    }",
+              "  };",
+          ])
+          new = '\n'.join([
+              "  const handleRemoveDocument = async (documentId: string) => {",
+              "    if (!confirm('Deseja arquivar este documento? O histórico será preservado.')) return;",
+              "    try {",
+              "      await DocumentClient.archive(documentId);",
+              "      await loadData();",
+              "    } catch (err: unknown) {",
+              "      alert(err instanceof Error ? err.message : 'Erro ao arquivar documento.');",
+              "    }",
+              "  };",
+          ])
           assert text.count(old) == 1
           text = text.replace(old, new)
 
