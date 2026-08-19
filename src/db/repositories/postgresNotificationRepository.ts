@@ -119,6 +119,29 @@ export class PostgresNotificationRepository implements ITransactionNotificationR
     return created;
   }
 
+  async createIfAbsent(
+    item: PersistentNotification
+  ): Promise<{ item: PersistentNotification; created: boolean }> {
+    const result = await this.tx.execute(sql`
+      INSERT INTO notifications (
+        id, company_id, recipient_user_id, source_type, source_id, source_version,
+        alert_stage, title, message, severity, due_date, destination_tab,
+        idempotency_key, status, read_at, dismissed_at, created_at, updated_at
+      ) VALUES (
+        ${item.id}, ${item.companyId}, ${item.recipientUserId || null}, ${item.sourceType}, ${item.sourceId},
+        ${item.sourceVersion || null}, ${item.alertStage}, ${item.title}, ${item.message}, ${item.severity},
+        ${item.dueDate || null}, ${item.destinationTab || null}, ${item.idempotencyKey}, ${item.status},
+        ${item.readAt || null}, ${item.dismissedAt || null}, ${item.createdAt}, ${item.updatedAt}
+      )
+      ON CONFLICT (company_id, idempotency_key) DO NOTHING
+      RETURNING id
+    `);
+    const created = Boolean(rowsOf(result)[0]);
+    const persisted = await this.findByIdempotencyKey(item.companyId, item.idempotencyKey);
+    if (!persisted) throw new Error('Notification idempotent create failed');
+    return { item: persisted, created };
+  }
+
   async updateStatusForCompany(
     companyId: string,
     id: string,

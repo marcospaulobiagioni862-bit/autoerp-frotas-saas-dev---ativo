@@ -233,6 +233,7 @@ export interface ITransactionNotificationRepository {
   findAllByCompany(companyId: string, filters?: TransactionNotificationFilters): Promise<PersistentNotification[]>;
   countUnread(companyId: string, recipientUserId?: string): Promise<number>;
   create(item: PersistentNotification): Promise<PersistentNotification>;
+  createIfAbsent(item: PersistentNotification): Promise<{ item: PersistentNotification; created: boolean }>;
   updateStatusForCompany(
     companyId: string,
     id: string,
