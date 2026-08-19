@@ -58,6 +58,7 @@ export interface ITransactionKmRecordRepository {
 export interface ITransactionReceivableRepository {
   findById(id: string): Promise<AccountReceivable | null>;
   findByIdempotencyKey(key: string): Promise<AccountReceivable | null>;
+  findByContractId(contractId: string): Promise<AccountReceivable[]>;
   findAll(filters?: TransactionFilterOptions): Promise<AccountReceivable[]>;
   create(item: AccountReceivable): Promise<AccountReceivable>;
   update(id: string, item: Partial<AccountReceivable>): Promise<AccountReceivable>;
