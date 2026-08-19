@@ -1,0 +1,145 @@
+name: SECURITY-2I5A scheduler gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i5a-scheduler
+
+permissions:
+  contents: write
+
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_i5a_scheduler
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_i5a_scheduler"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_i5a_scheduler
+      NODE_ENV: test
+      AUTOERP_SCHEDULER_ENABLED: 'false'
+      PRODUCT_SHA: 4fca437c6f954d9095dfd9d93625dcf63b319778
+      PRODUCT_BRANCH: security-2i5a-alert-scheduler-authority
+    steps:
+      - name: Checkout exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: 4fca437c6f954d9095dfd9d93625dcf63b319778
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Add race-safe createIfAbsent contract
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/domain/finance/ITransactionContext.ts')
+          text = path.read_text()
+          needle = "  create(item: PersistentNotification): Promise<PersistentNotification>;\n  updateStatusForCompany("
+          assert text.count(needle) == 1
+          replacement = "  create(item: PersistentNotification): Promise<PersistentNotification>;\n  createIfAbsent(item: PersistentNotification): Promise<{ item: PersistentNotification; created: boolean }>;\n  updateStatusForCompany("
+          text = text.replace(needle, replacement)
+          path.write_text(text)
+
+          path = Path('src/db/repositories/postgresNotificationRepository.ts')
+          text = path.read_text()
+          anchor = "  async updateStatusForCompany(\n"
+          assert text.count(anchor) == 1
+          method = '''  async createIfAbsent(\n    item: PersistentNotification\n  ): Promise<{ item: PersistentNotification; created: boolean }> {\n    const result = await this.tx.execute(sql`\n      INSERT INTO notifications (\n        id, company_id, recipient_user_id, source_type, source_id, source_version,\n        alert_stage, title, message, severity, due_date, destination_tab,\n        idempotency_key, status, read_at, dismissed_at, created_at, updated_at\n      ) VALUES (\n        ${item.id}, ${item.companyId}, ${item.recipientUserId || null}, ${item.sourceType}, ${item.sourceId},\n        ${item.sourceVersion || null}, ${item.alertStage}, ${item.title}, ${item.message}, ${item.severity},\n        ${item.dueDate || null}, ${item.destinationTab || null}, ${item.idempotencyKey}, ${item.status},\n        ${item.readAt || null}, ${item.dismissedAt || null}, ${item.createdAt}, ${item.updatedAt}\n      )\n      ON CONFLICT (company_id, idempotency_key) DO NOTHING\n      RETURNING id\n    `);\n    const created = Boolean(rowsOf(result)[0]);\n    const persisted = await this.findByIdempotencyKey(item.companyId, item.idempotencyKey);\n    if (!persisted) throw new Error('Notification idempotent create failed');\n    return { item: persisted, created };\n  }\n\n'''
+          text = text.replace(anchor, method + anchor)
+          path.write_text(text)
+          PY
+
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' src/db/repositories/postgresNotificationRepository.ts src/domain/finance/ITransactionContext.ts | sort)"
+          printf '%s\n' "$changed"
+          test "$changed" = "$expected"
+          git diff --check
+
+      - name: Install, TypeScript and build
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm run lint
+          npm run build
+
+      - name: Pure alert policy
+        run: |
+          set -euo pipefail
+          npx tsx -e "(async () => { const { AlertEvaluationTestRunner } = await import('./src/domain/notifications/__tests__/alertEvaluationTestRunner.ts'); await AlertEvaluationTestRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Apply migrations 0000 through 0015
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_i5a_scheduler -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+
+      - name: Scheduler concurrency and retry integration
+        run: |
+          set -euo pipefail
+          npx tsx -e "(async () => { const { AlertSchedulerIntegrationRunner } = await import('./src/server/__tests__/alertSchedulerIntegration.ts'); await AlertSchedulerIntegrationRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: RLS regression
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_i5a_scheduler -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE enabled boolean; forced boolean; pcount int;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO enabled, forced
+              FROM pg_class WHERE oid='notifications'::regclass;
+            IF NOT enabled OR NOT forced THEN RAISE EXCEPTION 'notification RLS/FORCE missing'; END IF;
+            SELECT count(*) INTO pcount FROM pg_policies
+              WHERE tablename='notifications' AND policyname='tenant_access_notifications'
+              AND permissive='PERMISSIVE' AND qual LIKE '%app.current_tenant%' AND with_check LIKE '%app.current_tenant%';
+            IF pcount <> 1 THEN RAISE EXCEPTION 'notification permissive policy missing'; END IF;
+          END $$;
+          SQL
+
+      - name: Final scope safety
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' src/db/repositories/postgresNotificationRepository.ts src/domain/finance/ITransactionContext.ts | sort)"
+          test "$changed" = "$expected"
+
+      - name: Publish validated race-safe wiring
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/db/repositories/postgresNotificationRepository.ts src/domain/finance/ITransactionContext.ts
+          git diff --cached --check
+          git commit -m 'feat(i5a): make notification materialization race-safe'
+          git push origin HEAD:"$PRODUCT_BRANCH"
