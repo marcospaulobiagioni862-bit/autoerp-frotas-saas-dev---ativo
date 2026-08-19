@@ -1,5 +1,6 @@
-Trigger SECURITY-2I4C final independent validation.
-Consolidated candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
-Tree: 036909fab49f8532aa8b83cc2576b51f7d9e2004
+Trigger SECURITY-2I4C final independent validation v2.
+Consolidated corrected candidate: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+Tree: a165a21d66f6c2e7500880f6e857272a0ebd2080
 Exactly one commit over main 68b2ab0315bfb9e77cacb760b8f1bffdb4034357.
+Includes independent technical matrix and final Chrome runtime boot.
 Never merge this CI branch.
