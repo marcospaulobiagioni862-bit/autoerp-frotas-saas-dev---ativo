@@ -1,0 +1,303 @@
+import { randomUUID } from 'node:crypto';
+import type { Express, Request, Response } from 'express';
+import { UnitOfWork } from '../db/uow';
+import { AuditAction, VehicleStatus } from '../types/enums';
+import type { Vehicle } from '../types/entities';
+import type { AuthenticatedPrincipal } from './auth';
+
+type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS';
+
+const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
+const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+
+class VehicleValidationError extends Error {}
+class VehicleConflictError extends Error {}
+class VehicleNotFoundError extends Error {}
+
+function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
+  return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
+}
+
+function hasVehiclePermission(principal: AuthenticatedPrincipal, action: VehicleAction): boolean {
+  const role = String(principal.role || '').toUpperCase();
+  if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes(action)) return true;
+  if (action === 'VIEW_VEHICLE') return true;
+  return DEFAULT_WRITE_ROLES.has(role);
+}
+
+function requireVehiclePrincipal(req: Request, res: Response, action: VehicleAction): AuthenticatedPrincipal | null {
+  const principal = principalFrom(req);
+  if (!principal) {
+    res.status(401).json({ error: 'Unauthorized: Authentication required' });
+    return null;
+  }
+  if (!hasVehiclePermission(principal, action)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return principal;
+}
+
+function normalizePlate(value: unknown): string {
+  const plate = typeof value === 'string' ? value.toUpperCase().trim().replace(/[^A-Z0-9]/g, '') : '';
+  if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate)) {
+    throw new VehicleValidationError('Invalid vehicle plate');
+  }
+  return plate;
+}
+
+function requiredText(value: unknown, field: string): string {
+  const clean = typeof value === 'string' ? value.trim() : '';
+  if (!clean) throw new VehicleValidationError(`Missing ${field}`);
+  return clean;
+}
+
+function optionalText(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  return String(value).trim();
+}
+
+function requiredNonNegative(value: unknown, field: string): number {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue) || numberValue < 0) throw new VehicleValidationError(`Invalid ${field}`);
+  return numberValue;
+}
+
+function optionalNonNegative(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return requiredNonNegative(value, field);
+}
+
+function optionalNonNegativeInteger(value: unknown, field: string): number | undefined {
+  const parsed = optionalNonNegative(value, field);
+  if (parsed === undefined) return undefined;
+  if (!Number.isInteger(parsed)) throw new VehicleValidationError(`Invalid ${field}`);
+  return parsed;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === '23505');
+}
+
+function sendVehicleError(res: Response, error: unknown): void {
+  if (error instanceof VehicleValidationError) {
+    res.status(400).json({ error: 'Invalid vehicle request' });
+    return;
+  }
+  if (error instanceof VehicleConflictError || isUniqueViolation(error)) {
+    res.status(409).json({ error: 'Vehicle conflict' });
+    return;
+  }
+  if (error instanceof VehicleNotFoundError) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  console.error('AUTOERP_VEHICLE_AUTHORITY_FAILURE', error);
+  res.status(500).json({ error: 'Vehicle operation failed' });
+}
+
+function appendStatusReason(existing: Vehicle, reason?: string): string | undefined {
+  if (!reason) return existing.notes;
+  return `${existing.notes || ''}\n[Status]: ${reason}`.trim();
+}
+
+export function registerVehicleRoutes(app: Express): void {
+  // SECURITY-2I1A-v2 foundation only. Fleet UI/KM switchover remains I1B.
+  app.get('/api/fleet/vehicles', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await txContext.getVehicleRepo().findAllByCompany(principal.companyId)
+      );
+      res.json({ items: items.filter((item) => !item.isArchived) });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.get('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await txContext.getVehicleRepo().findByIdForCompany(principal.companyId, req.params.id)
+      );
+      if (!item || item.isArchived) throw new VehicleNotFoundError();
+      res.json({ item });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.post('/api/fleet/vehicles', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'CREATE_VEHICLE');
+    if (!principal) return;
+    try {
+      const plate = normalizePlate(req.body?.plate);
+      const renavam = requiredText(req.body?.renavam, 'renavam');
+      const brand = requiredText(req.body?.brand, 'brand');
+      const model = requiredText(req.body?.model, 'model');
+      const currentKm = requiredNonNegative(req.body?.currentKm, 'currentKm');
+      const acquisitionValue = requiredNonNegative(req.body?.acquisitionValue, 'acquisitionValue');
+      const currentValue = requiredNonNegative(req.body?.currentValue, 'currentValue');
+      const rentalValueBase = requiredNonNegative(req.body?.rentalValueBase, 'rentalValueBase');
+      const nextMaintenanceKm = optionalNonNegative(req.body?.nextMaintenanceKm, 'nextMaintenanceKm');
+      const yearFabrication = optionalNonNegativeInteger(req.body?.yearFabrication, 'yearFabrication') ?? 0;
+      const yearModel = optionalNonNegativeInteger(req.body?.yearModel, 'yearModel') ?? 0;
+
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        if (await repo.findByPlate(principal.companyId, plate)) throw new VehicleConflictError();
+        if (await repo.findByRenavam(principal.companyId, renavam)) throw new VehicleConflictError();
+        const now = new Date().toISOString();
+        const created = await repo.create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          plate,
+          brand,
+          model,
+          version: optionalText(req.body?.version),
+          yearFabrication,
+          yearModel,
+          color: optionalText(req.body?.color) || '',
+          renavam,
+          chassis: (optionalText(req.body?.chassis) || '').toUpperCase(),
+          currentKm,
+          nextMaintenanceKm,
+          fuelType: optionalText(req.body?.fuelType) || 'Flex',
+          category: optionalText(req.body?.category) || 'Padrão',
+          acquisitionValue,
+          currentValue,
+          rentalValueBase,
+          status: VehicleStatus.AVAILABLE,
+          notes: optionalText(req.body?.notes),
+          isArchived: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityId: created.id,
+          action: AuditAction.CREATE,
+          newState: JSON.stringify(created),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+        return created;
+      });
+      res.status(201).json({ item });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.patch('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'EDIT_VEHICLE');
+    if (!principal) return;
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        const existing = await repo.findByIdForCompany(principal.companyId, req.params.id);
+        if (!existing || existing.isArchived) throw new VehicleNotFoundError();
+        const changes: Partial<Vehicle> = { updatedAt: new Date().toISOString() };
+
+        if (req.body?.plate !== undefined) {
+          const plate = normalizePlate(req.body.plate);
+          const duplicate = await repo.findByPlate(principal.companyId, plate);
+          if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError();
+          changes.plate = plate;
+        }
+        if (req.body?.renavam !== undefined) {
+          const renavam = requiredText(req.body.renavam, 'renavam');
+          const duplicate = await repo.findByRenavam(principal.companyId, renavam);
+          if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError();
+          changes.renavam = renavam;
+        }
+        if (req.body?.brand !== undefined) changes.brand = requiredText(req.body.brand, 'brand');
+        if (req.body?.model !== undefined) changes.model = requiredText(req.body.model, 'model');
+        if (req.body?.version !== undefined) changes.version = optionalText(req.body.version) || '';
+        if (req.body?.color !== undefined) changes.color = optionalText(req.body.color) || '';
+        if (req.body?.chassis !== undefined) changes.chassis = (optionalText(req.body.chassis) || '').toUpperCase();
+        if (req.body?.fuelType !== undefined) changes.fuelType = requiredText(req.body.fuelType, 'fuelType');
+        if (req.body?.category !== undefined) changes.category = requiredText(req.body.category, 'category');
+        if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
+        if (req.body?.yearFabrication !== undefined) changes.yearFabrication = optionalNonNegativeInteger(req.body.yearFabrication, 'yearFabrication')!;
+        if (req.body?.yearModel !== undefined) changes.yearModel = optionalNonNegativeInteger(req.body.yearModel, 'yearModel')!;
+        if (req.body?.currentKm !== undefined) changes.currentKm = requiredNonNegative(req.body.currentKm, 'currentKm');
+        if (req.body?.nextMaintenanceKm !== undefined) changes.nextMaintenanceKm = requiredNonNegative(req.body.nextMaintenanceKm, 'nextMaintenanceKm');
+        if (req.body?.acquisitionValue !== undefined) changes.acquisitionValue = requiredNonNegative(req.body.acquisitionValue, 'acquisitionValue');
+        if (req.body?.currentValue !== undefined) changes.currentValue = requiredNonNegative(req.body.currentValue, 'currentValue');
+        if (req.body?.rentalValueBase !== undefined) changes.rentalValueBase = requiredNonNegative(req.body.rentalValueBase, 'rentalValueBase');
+
+        if (Object.keys(changes).length === 1) throw new VehicleValidationError('No editable fields');
+        const updated = await repo.updateForCompany(principal.companyId, existing.id, changes);
+        if (!updated) throw new VehicleNotFoundError();
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityId: existing.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify(existing),
+          newState: JSON.stringify(updated),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: changes.updatedAt!,
+        });
+        return updated;
+      });
+      res.json({ item });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.patch('/api/fleet/vehicles/:id/status', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'CHANGE_VEHICLE_STATUS');
+    if (!principal) return;
+    const status = typeof req.body?.status === 'string' ? req.body.status : '';
+    if (!Object.values(VehicleStatus).includes(status as VehicleStatus)) {
+      res.status(400).json({ error: 'Invalid vehicle status' });
+      return;
+    }
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        const existing = await repo.findByIdForCompany(principal.companyId, req.params.id);
+        if (!existing) throw new VehicleNotFoundError();
+        if (existing.status === status) return existing;
+        const now = new Date().toISOString();
+        const reason = optionalText(req.body?.reason);
+        const updated = await repo.updateForCompany(principal.companyId, existing.id, {
+          status: status as VehicleStatus,
+          isArchived: status === VehicleStatus.ARCHIVED,
+          notes: appendStatusReason(existing, reason),
+          updatedAt: now,
+        });
+        if (!updated) throw new VehicleNotFoundError();
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityId: existing.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify({ status: existing.status, isArchived: existing.isArchived }),
+          newState: JSON.stringify({ status: updated.status, isArchived: updated.isArchived, reason }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+        return updated;
+      });
+      res.json({ item });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+}
