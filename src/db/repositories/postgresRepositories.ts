@@ -2,7 +2,7 @@ import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
   financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods,
-  securityDeposits, securityDepositMovements
+  securityDeposits, securityDepositMovements, driverHealthProfiles
 } from '../schema';
 import { eq, and, sql, lt } from 'drizzle-orm';
 import { AuditLog, SecurityDeposit, SecurityDepositMovement } from '../../types/entities';
@@ -285,5 +285,28 @@ export class PostgresSecurityDepositMovementRepository {
       createdAt: item.createdAt,
     }).returning();
     return this.map(rows[0]);
+  }
+}
+
+export class PostgresDriverHealthProfileRepository extends PostgresBaseRepository<any> {
+  constructor(tx?: any) { super(driverHealthProfiles, tx); }
+
+  async findByDriverId(driverId: string): Promise<any | null> {
+    const rows = await this.tx.select().from(driverHealthProfiles).where(eq(driverHealthProfiles.driverId, driverId)).limit(1);
+    return rows[0] || null;
+  }
+
+  async upsert(item: any): Promise<any> {
+    const rows = await this.tx.insert(driverHealthProfiles).values(item).onConflictDoUpdate({
+      target: [driverHealthProfiles.companyId, driverHealthProfiles.driverId],
+      set: {
+        bloodType: item.bloodType ?? null, allergies: item.allergies ?? null,
+        relevantConditions: item.relevantConditions ?? null, continuousMedications: item.continuousMedications ?? null,
+        emergencyContactName: item.emergencyContactName ?? null, emergencyContactRelationship: item.emergencyContactRelationship ?? null,
+        emergencyContactPhone: item.emergencyContactPhone ?? null, emergencyNotes: item.emergencyNotes ?? null,
+        lastUpdateDate: item.lastUpdateDate ?? null, responsibleUser: item.responsibleUser ?? null, updatedAt: item.updatedAt,
+      },
+    }).returning();
+    return rows[0];
   }
 }

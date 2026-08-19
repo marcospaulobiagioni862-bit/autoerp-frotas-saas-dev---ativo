@@ -50,6 +50,13 @@
       "when": 1787094000000,
       "tag": "0006_security_deposit_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787097600000,
+      "tag": "0007_driver_health_profiles",
+      "breakpoints": true
     }
   ]
 }

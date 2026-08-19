@@ -9,7 +9,9 @@ import { DREService } from './src/domain/finance/DREService';
 import { ProfitabilityService } from './src/domain/finance/ProfitabilityService';
 import { DepositService } from './src/domain/finance/DepositService';
 import { UnitOfWork } from './src/db/uow';
-import { AccountingRegime } from './src/types/enums';
+import { AccountingRegime, AuditAction } from './src/types/enums';
+import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
+import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -488,6 +490,60 @@ async function startServer() {
     } catch (error) {
       sendFinanceCommandError(res, error);
     }
+  });
+
+  // SECURITY-2H1-v2: driver health/emergency data is server-authoritative.
+  app.get('/api/drivers/:id/health', async (req: Request, res: Response) => {
+    const principal=req.principal;
+    if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return;}
+    const context={userId:principal.userId,role:principal.role,active:true,companyId:principal.companyId,permissions:principal.permissions};
+    if(!hasDriverHealthPermission('VIEW_DRIVER_HEALTH',context)){res.status(403).json({error:'Forbidden'});return;}
+    const driverId=typeof req.params.id==='string'?req.params.id.trim():'';
+    if(!driverId){res.status(400).json({error:'Invalid driver health request'});return;}
+    try {
+      const health=await UnitOfWork.run(principal.companyId, async tx=>{
+        const profile=await tx.getDriverHealthRepo().findByDriverId(driverId);
+        await tx.getAuditLogRepo().create({
+          id:randomUUID(),companyId:principal.companyId,entityName:'DriverHealthSecurity',entityId:driverId,
+          action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,
+          newState:JSON.stringify({event:'VIEW_DRIVER_HEALTH'}),timestamp:new Date().toISOString(),
+        });
+        if(!profile)return {};
+        const {id:_id,companyId:_companyId,driverId:_driverId,createdAt:_createdAt,updatedAt:_updatedAt,...safe}=profile;
+        return safe;
+      });
+      res.json({health});
+    } catch { res.status(400).json({error:'Driver health request failed'}); }
+  });
+
+  app.put('/api/drivers/:id/health', async (req: Request, res: Response) => {
+    const principal=req.principal;
+    if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return;}
+    const context={userId:principal.userId,role:principal.role,active:true,companyId:principal.companyId,permissions:principal.permissions};
+    if(!hasDriverHealthPermission('EDIT_DRIVER_HEALTH',context)){res.status(403).json({error:'Forbidden'});return;}
+    const driverId=typeof req.params.id==='string'?req.params.id.trim():'';
+    const raw=req.body?.health;
+    if(!driverId||!raw||typeof raw!=='object'||Array.isArray(raw)){res.status(400).json({error:'Invalid driver health request'});return;}
+    const allowed=['bloodType','allergies','relevantConditions','continuousMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes'] as const;
+    const health:Record<string,string>={};
+    for(const key of allowed){const value=(raw as Record<string,unknown>)[key];if(value!==undefined){if(typeof value!=='string'){res.status(400).json({error:'Invalid driver health request'});return;}health[key]=value;}}
+    try {
+      const saved=await UnitOfWork.run(principal.companyId, async tx=>{
+        const existing=await tx.getDriverHealthRepo().findByDriverId(driverId); const now=new Date().toISOString();
+        const profile=await tx.getDriverHealthRepo().upsert({
+          id:existing?.id||randomUUID(),companyId:principal.companyId,driverId,
+          ...(existing||{}),...health,lastUpdateDate:now,responsibleUser:principal.name,createdAt:existing?.createdAt||now,updatedAt:now,
+        });
+        await tx.getAuditLogRepo().create({
+          id:randomUUID(),companyId:principal.companyId,entityName:'DriverHealthSecurity',entityId:driverId,
+          action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,
+          newState:JSON.stringify({event:'EDIT_DRIVER_HEALTH',fieldsChanged:Object.keys(health)}),timestamp:now,
+        });
+        return profile;
+      });
+      const {id:_id,companyId:_companyId,driverId:_driverId,createdAt:_createdAt,updatedAt:_updatedAt,...safe}=saved;
+      res.json({health:safe});
+    } catch { res.status(400).json({error:'Driver health request failed'}); }
   });
 
   // SECURITY-2G8: security-deposit read/receipt are server-authoritative.
