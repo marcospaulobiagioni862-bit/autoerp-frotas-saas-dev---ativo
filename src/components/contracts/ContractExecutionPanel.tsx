@@ -166,9 +166,9 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
           ) : (
             <p className="text-xs text-slate-500">Nenhum PDF oficial foi gerado para este contrato.</p>
           )}
-          {canGenerate && !generated && (
+          {canGenerate && (
             <Button size="sm" variant="primary" isLoading={loading} onClick={generatePdf} disabled={!selectedTemplateId}>
-              <FileText className="w-4 h-4" />Gerar PDF oficial
+              {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar PDF oficial' : 'Gerar PDF oficial'}
             </Button>
           )}
         </div>
