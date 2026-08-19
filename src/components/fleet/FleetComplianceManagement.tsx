@@ -369,7 +369,7 @@ export const FleetComplianceManagement: React.FC = () => {
                             variant={
                               doc.complianceStatus === DocumentStatus.VALID
                                 ? 'success'
-                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
+                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON || doc.complianceStatus === DocumentStatus.PENDING
                                 ? 'warning'
                                 : 'danger'
                             }
@@ -378,6 +378,8 @@ export const FleetComplianceManagement: React.FC = () => {
                               ? 'Válido'
                               : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
                               ? 'A Vencer'
+                              : doc.complianceStatus === DocumentStatus.PENDING
+                              ? 'Pendente'
                               : 'Vencido'}
                           </Badge>
                         </td>
