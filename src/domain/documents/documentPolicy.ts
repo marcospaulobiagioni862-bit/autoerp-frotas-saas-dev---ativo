@@ -1,18 +1,20 @@
 import { DocumentStatus } from '../../types/enums';
 import type { DocumentAlertStage } from '../../types/entities';
 
+export class DocumentPolicyValidationError extends Error {}
+
 export const ANNUAL_VEHICLE_DOCUMENT_TYPES = new Set(['IPVA', 'CRLV', 'LICENCIAMENTO']);
 
 export function normalizeDocumentType(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) throw new Error('Document type is required');
+  if (!raw) throw new DocumentPolicyValidationError('Document type is required');
   const normalized = raw
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
-  if (!normalized || normalized.length > 80) throw new Error('Invalid document type');
+  if (!normalized || normalized.length > 80) throw new DocumentPolicyValidationError('Invalid document type');
   return normalized;
 }
 
@@ -22,22 +24,22 @@ export function isAnnualVehicleDocument(documentType: string): boolean {
 
 export function parseIsoDate(value: unknown, field: string, required = false): string | undefined {
   if (value === undefined || value === null || value === '') {
-    if (required) throw new Error(`${field} is required`);
+    if (required) throw new DocumentPolicyValidationError(`${field} is required`);
     return undefined;
   }
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`Invalid ${field}`);
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new DocumentPolicyValidationError(`Invalid ${field}`);
   const date = new Date(`${value}T00:00:00Z`);
-  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error(`Invalid ${field}`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new DocumentPolicyValidationError(`Invalid ${field}`);
   return value;
 }
 
 export function parseReferenceYear(value: unknown, required = false): number | undefined {
   if (value === undefined || value === null || value === '') {
-    if (required) throw new Error('referenceYear is required');
+    if (required) throw new DocumentPolicyValidationError('referenceYear is required');
     return undefined;
   }
   const year = Number(value);
-  if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new Error('Invalid referenceYear');
+  if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new DocumentPolicyValidationError('Invalid referenceYear');
   return year;
 }
 
