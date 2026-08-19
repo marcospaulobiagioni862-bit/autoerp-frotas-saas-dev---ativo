@@ -1,4 +1,4 @@
-SECURITY-2I4C browser runtime checkpoint trigger v3
-Candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
-Uses runner-provided Chrome; no Chromium download.
+SECURITY-2I4C runtime cycle fix gate trigger v2
+Blocked candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
+Expected validated product change: src/domain/finance/FinanceEngine.ts only.
 Never merge this CI-only branch.
