@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   validate:
@@ -66,3 +67,19 @@ jobs:
 
       - name: Production build gate
         run: npm run build
+
+      - name: Report gate success to SECURITY-2I5 issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh issue comment 163 --repo "$GITHUB_REPOSITORY"
+          --body "SECURITY-2I5 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Report gate failure to SECURITY-2I5 issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh issue comment 163 --repo "$GITHUB_REPOSITORY"
+          --body "SECURITY-2I5 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
