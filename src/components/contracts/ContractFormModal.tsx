@@ -1,31 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import {
-  FileText,
-  Car,
-  User,
-  Calendar,
-  DollarSign,
-  AlertCircle,
-  Clock,
-  ShieldAlert,
-  Save,
-  X,
-} from 'lucide-react';
-import {
-  ModalContainer,
-  Card,
-  Button,
-  Input,
-  Select,
-} from '../ui';
-import {
-  VehicleRepository,
-  DriverRepository,
-  ContractRepository,
-} from '../../persistence/repositories/localRepositories';
-import { ContractService } from '../../domain/services/ContractService';
-import { Vehicle, Driver, Contract } from '../../types/entities';
-import { ContractStatus, RecurringFrequency, VehicleStatus, DriverStatus } from '../../types/enums';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, FileText, Save, X } from 'lucide-react';
+import { Button, Input, ModalContainer } from '../ui';
+import { ContractClient } from '../../api/contractClient';
+import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import type { Contract, Driver, Vehicle } from '../../types/entities';
+import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -35,484 +15,137 @@ interface ContractFormModalProps {
   onSuccess: () => void;
 }
 
-export const ContractFormModal: React.FC<ContractFormModalProps> = ({
-  isOpen,
-  onClose,
-  contractToEdit,
-  companyId,
-  onSuccess,
-}) => {
+export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(false);
-
-  // Form State
-  const [contractNumber, setContractNumber] = useState('');
-  const [vehicleId, setVehicleId] = useState('');
-  const [driverId, setDriverId] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [status, setStatus] = useState<ContractStatus>(ContractStatus.DRAFT);
-  const [rentalAmount, setRentalAmount] = useState<number | ''>(700);
-  const [billingPeriodicity, setBillingPeriodicity] = useState<RecurringFrequency>(
-    RecurringFrequency.WEEKLY
-  );
-  const [billingDueDayOfWeek, setBillingDueDayOfWeek] = useState<number>(1);
-  const [billingDueDayOfMonth, setBillingDueDayOfMonth] = useState<number>(1);
-  const [securityDepositAmount, setSecurityDepositAmount] = useState<number | ''>(1000);
-  const [franchiseKm, setFranchiseKm] = useState<number | ''>(1500);
-  const [excessKmRate, setExcessKmRate] = useState<number | ''>(0.5);
-  const [notes, setNotes] = useState('');
-
   const [loading, setLoading] = useState(false);
+  const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activateAfterSave, setActivateAfterSave] = useState(false);
+  const [form, setForm] = useState({
+    contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '700',
+    billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
+    securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', notes: '',
+  });
+
+  const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
     if (!isOpen) return;
-
-    const loadOptions = async () => {
-      setLoadingOptions(true);
-      try {
-        const vehicleRepo = new VehicleRepository();
-        const driverRepo = new DriverRepository();
-
-        const [allVehicles, allDrivers] = await Promise.all([
-          vehicleRepo.findAll({ companyId }),
-          driverRepo.findAll({ companyId }),
-        ]);
-
-        // Filtrar veículos válidos (AVAILABLE ou associados ao contrato atual)
-        const validVehicles = allVehicles.filter(
-          (v) =>
-            !v.isArchived &&
-            v.status !== VehicleStatus.SOLD &&
-            v.status !== VehicleStatus.INACTIVE &&
-            (v.status === VehicleStatus.AVAILABLE ||
-              (contractToEdit && v.id === contractToEdit.vehicleId))
-        );
-
-        // Filtrar motoristas válidos (não arquivados, não bloqueados)
-        const validDrivers = allDrivers.filter(
-          (d) =>
-            !d.isArchived &&
-            d.status !== DriverStatus.INACTIVE &&
-            d.status !== DriverStatus.BLOCKED &&
-            (d.status === DriverStatus.ACTIVE ||
-              d.status === DriverStatus.PENDING ||
-              d.status === DriverStatus.PENDING_DOCS ||
-              (contractToEdit && d.id === contractToEdit.driverId))
-        );
-
+    let active = true;
+    setError(null);
+    setLoadingOptions(true);
+    Promise.all([VehicleClient.list(), DriverClient.list()])
+      .then(([vehicleList, driverList]) => {
+        if (!active) return;
+        const validVehicles = vehicleList.filter((item) => !item.isArchived && (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId));
+        const validDrivers = driverList.filter((item) => !item.isArchived && (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId));
         setVehicles(validVehicles);
         setDrivers(validDrivers);
-
         if (contractToEdit) {
-          setContractNumber(contractToEdit.contractNumber);
-          setVehicleId(contractToEdit.vehicleId);
-          setDriverId(contractToEdit.driverId);
-          setStartDate(contractToEdit.startDate);
-          setEndDate(contractToEdit.endDate || '');
-          setStatus(contractToEdit.status);
-          setRentalAmount(contractToEdit.rentalAmount);
-          setBillingPeriodicity(contractToEdit.billingPeriodicity);
-          setBillingDueDayOfWeek(contractToEdit.billingDueDayOfWeek || 1);
-          setBillingDueDayOfMonth(contractToEdit.billingDueDayOfMonth || 1);
-          setSecurityDepositAmount(contractToEdit.securityDepositAmount);
-          setFranchiseKm(contractToEdit.franchiseKm || 1500);
-          setExcessKmRate(contractToEdit.excessKmRate || 0.5);
-          setNotes(contractToEdit.notes || '');
+          setForm({
+            contractNumber: contractToEdit.contractNumber,
+            vehicleId: contractToEdit.vehicleId,
+            driverId: contractToEdit.driverId,
+            startDate: contractToEdit.startDate,
+            endDate: contractToEdit.endDate || '',
+            rentalAmount: String(contractToEdit.rentalAmount),
+            billingPeriodicity: contractToEdit.billingPeriodicity,
+            billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
+            billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
+            securityDepositAmount: String(contractToEdit.securityDepositAmount),
+            franchiseKm: String(contractToEdit.franchiseKm),
+            excessKmRate: String(contractToEdit.excessKmRate),
+            paymentMethodId: contractToEdit.paymentMethodId || '',
+            notes: contractToEdit.notes || '',
+          });
         } else {
-          // Reset para criação
-          const today = new Date().toISOString().split('T')[0];
-          const dateStr = today.replace(/-/g, '');
-          const randStr = Math.floor(1000 + Math.random() * 9000);
-
-          setContractNumber(`CNT-${dateStr}-${randStr}`);
-          setVehicleId(validVehicles[0]?.id || '');
-          setDriverId(validDrivers[0]?.id || '');
-          setStartDate(today);
-          setEndDate('');
-          setStatus(ContractStatus.DRAFT);
-          setRentalAmount(700);
-          setBillingPeriodicity(RecurringFrequency.WEEKLY);
-          setBillingDueDayOfWeek(1);
-          setBillingDueDayOfMonth(1);
-          setSecurityDepositAmount(1000);
-          setFranchiseKm(1500);
-          setExcessKmRate(0.5);
-          setNotes('');
-        }
-      } catch (err) {
-        console.error('Erro ao carregar opções para formulário de contrato:', err);
-      } finally {
-        setLoadingOptions(false);
-      }
-    };
-
-    loadOptions();
-    setError(null);
-  }, [isOpen, contractToEdit, companyId]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!vehicleId) {
-      setError('Selecione um veículo para o contrato.');
-      return;
-    }
-    if (!driverId) {
-      setError('Selecione um motorista para o contrato.');
-      return;
-    }
-    if (!startDate) {
-      setError('A data de início do contrato é obrigatória.');
-      return;
-    }
-    if (rentalAmount === '' || Number(rentalAmount) <= 0) {
-      setError('Informe um valor de aluguel maior que zero.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const contractService = new ContractService();
-
-      if (contractToEdit) {
-        // Atualização
-        await contractService.updateContract(contractToEdit.id, {
-          contractNumber,
-          vehicleId,
-          driverId,
-          startDate,
-          endDate: endDate || undefined,
-          rentalAmount: Number(rentalAmount),
-          billingPeriodicity,
-          billingDueDayOfWeek: Number(billingDueDayOfWeek),
-          billingDueDayOfMonth: Number(billingDueDayOfMonth),
-          securityDepositAmount: Number(securityDepositAmount || 0),
-          franchiseKm: Number(franchiseKm || 0),
-          excessKmRate: Number(excessKmRate || 0),
-          notes,
-          userId: 'usr-admin',
-          userName: 'Administrador',
-        });
-
-        // Se alterou status para ACTIVE
-        if (status === ContractStatus.ACTIVE && contractToEdit.status !== ContractStatus.ACTIVE) {
-          await contractService.activateContract({
-            companyId,
-            contractId: contractToEdit.id,
-            userId: 'usr-admin',
-            userName: 'Administrador',
+          setForm({
+            contractNumber: '', vehicleId: validVehicles[0]?.id || '', driverId: validDrivers[0]?.id || '',
+            startDate: new Date().toISOString().slice(0, 10), endDate: '', rentalAmount: '700',
+            billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
+            securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', notes: '',
           });
         }
-      } else {
-        // Criação
-        await contractService.createContract({
-          companyId,
-          contractNumber,
-          vehicleId,
-          driverId,
-          startDate,
-          endDate: endDate || undefined,
-          rentalAmount: Number(rentalAmount),
-          billingPeriodicity,
-          billingDueDayOfWeek: Number(billingDueDayOfWeek),
-          billingDueDayOfMonth: Number(billingDueDayOfMonth),
-          securityDepositAmount: Number(securityDepositAmount || 0),
-          franchiseKm: Number(franchiseKm || 0),
-          excessKmRate: Number(excessKmRate || 0),
-          notes,
-          status,
-          userId: 'usr-admin',
-          userName: 'Administrador',
-        });
-      }
+        setActivateAfterSave(false);
+      })
+      .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
+      .finally(() => { if (active) setLoadingOptions(false); });
+    return () => { active = false; };
+  }, [isOpen, contractToEdit, companyId]);
 
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    if (!form.vehicleId || !form.driverId || !form.startDate || Number(form.rentalAmount) <= 0) {
+      setError('Preencha veículo, motorista, data inicial e valor de aluguel válido.');
+      return;
+    }
+    if (form.endDate && form.startDate > form.endDate) {
+      setError('A data final não pode ser anterior à data inicial.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const input = {
+        contractNumber: form.contractNumber.trim() || undefined,
+        vehicleId: form.vehicleId,
+        driverId: form.driverId,
+        startDate: form.startDate,
+        endDate: form.endDate || undefined,
+        rentalAmount: Number(form.rentalAmount),
+        billingPeriodicity: form.billingPeriodicity,
+        billingDueDayOfWeek: Number(form.billingDueDayOfWeek),
+        billingDueDayOfMonth: Number(form.billingDueDayOfMonth),
+        securityDepositAmount: Number(form.securityDepositAmount || 0),
+        franchiseKm: Number(form.franchiseKm || 0),
+        excessKmRate: Number(form.excessKmRate || 0),
+        paymentMethodId: form.paymentMethodId || undefined,
+        notes: form.notes || undefined,
+      };
+      const saved = contractToEdit ? await ContractClient.update(contractToEdit.id, input) : await ContractClient.create(input);
+      if (activateAfterSave) await ContractClient.activate(saved.id);
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setError(err.message || 'Erro ao salvar contrato.');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Erro ao salvar contrato.');
     } finally {
       setLoading(false);
     }
   };
 
+  const canActivate = !contractToEdit || [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contractToEdit.status);
+
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
-      <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-        <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-emerald-600" />
-          {contractToEdit ? 'Editar Contrato de Locação' : 'Novo Contrato de Locação'}
-        </h2>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
+        <h2 className="flex items-center gap-2 font-bold"><FileText className="w-5 h-5 text-emerald-600" />{contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
+        <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
-
-      <form onSubmit={handleSubmit} className="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
-        {error && (
-          <div className="p-3 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 dark:text-rose-300">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* DADOS BÁSICOS DO CONTRATO */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-1.5">
-            <FileText className="w-4 h-4 text-emerald-600" />
-            Identificação & Partes
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Nº do Contrato *
-              </label>
-              <Input
-                type="text"
-                value={contractNumber}
-                onChange={(e) => setContractNumber(e.target.value)}
-                placeholder="Ex: CNT-202608-001"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Veículo *
-              </label>
-              <Select
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                required
-                disabled={loadingOptions}
-              >
-                <option value="">Selecione o Veículo...</option>
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.brand} {v.model} - Placa: {v.plate}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Motorista *
-              </label>
-              <Select
-                value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
-                required
-                disabled={loadingOptions}
-              >
-                <option value="">Selecione o Motorista...</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.fullName} (CPF: {d.cpf})
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </div>
+      <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto p-5 space-y-4">
+        {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
+          <Field label="Data inicial"><Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
+          <Field label="Veículo"><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
+          <Field label="Motorista"><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
+          <Field label="Data final"><Input type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
+          <Field label="Aluguel"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
+          <Field label="Periodicidade"><select value={form.billingPeriodicity} onChange={(e) => set('billingPeriodicity', e.target.value)} className="control">{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v}</option>)}</select></Field>
+          <Field label="Dia semanal"><Input type="number" min="1" max="7" value={form.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} /></Field>
+          <Field label="Dia mensal"><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} /></Field>
+          <Field label="Caução"><Input type="number" min="0" step="0.01" value={form.securityDepositAmount} onChange={(e) => set('securityDepositAmount', e.target.value)} /></Field>
+          <Field label="Franquia KM"><Input type="number" min="0" value={form.franchiseKm} onChange={(e) => set('franchiseKm', e.target.value)} /></Field>
+          <Field label="KM excedente"><Input type="number" min="0" step="0.01" value={form.excessKmRate} onChange={(e) => set('excessKmRate', e.target.value)} /></Field>
+          <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
         </div>
-
-        {/* VIGÊNCIA E STATUS */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-1.5">
-            <Calendar className="w-4 h-4 text-emerald-600" />
-            Vigência & Status do Ciclo de Vida
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Data Inicial *
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Data Final (Opcional)
-              </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Status Inicial
-              </label>
-              <Select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ContractStatus)}
-                disabled={!!contractToEdit && contractToEdit.status === ContractStatus.ACTIVE}
-              >
-                <option value={ContractStatus.DRAFT}>Rascunho (DRAFT)</option>
-                <option value={ContractStatus.AWAITING_SIGNATURE}>Aguardando Assinatura</option>
-                <option value={ContractStatus.ACTIVE}>Ativo (ACTIVE)</option>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* VALORES E RECORRÊNCIA */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-1.5">
-            <DollarSign className="w-4 h-4 text-emerald-600" />
-            Condições Financeiras & Recorrência
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Valor da Locação (R$) *
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={rentalAmount}
-                onChange={(e) => setRentalAmount(e.target.value ? Number(e.target.value) : '')}
-                placeholder="700.00"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Periodicidade de Cobrança *
-              </label>
-              <Select
-                value={billingPeriodicity}
-                onChange={(e) => setBillingPeriodicity(e.target.value as RecurringFrequency)}
-              >
-                <option value={RecurringFrequency.WEEKLY}>Semanal</option>
-                <option value={RecurringFrequency.MONTHLY}>Mensal</option>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                {billingPeriodicity === RecurringFrequency.WEEKLY
-                  ? 'Dia do Vencimento (Semanal)'
-                  : 'Dia do Vencimento (Mensal)'}
-              </label>
-              {billingPeriodicity === RecurringFrequency.WEEKLY ? (
-                <Select
-                  value={billingDueDayOfWeek}
-                  onChange={(e) => setBillingDueDayOfWeek(Number(e.target.value))}
-                >
-                  <option value={1}>Segunda-feira</option>
-                  <option value={2}>Terça-feira</option>
-                  <option value={3}>Quarta-feira</option>
-                  <option value={4}>Quinta-feira</option>
-                  <option value={5}>Sexta-feira</option>
-                  <option value={6}>Sábado</option>
-                  <option value={7}>Domingo</option>
-                </Select>
-              ) : (
-                <Input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={billingDueDayOfMonth}
-                  onChange={(e) => setBillingDueDayOfMonth(Number(e.target.value))}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Valor da Caução (R$)
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={securityDepositAmount}
-                onChange={(e) =>
-                  setSecurityDepositAmount(e.target.value ? Number(e.target.value) : '')
-                }
-                placeholder="1000.00"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Franquia de KM (período)
-              </label>
-              <Input
-                type="number"
-                value={franchiseKm}
-                onChange={(e) => setFranchiseKm(e.target.value ? Number(e.target.value) : '')}
-                placeholder="1500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Taxa KM Excedente (R$/km)
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                value={excessKmRate}
-                onChange={(e) => setExcessKmRate(e.target.value ? Number(e.target.value) : '')}
-                placeholder="0.50"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* OBSERVAÇÕES */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Observações Gerais / Cláusulas Especiais
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="Anotações adicionais do contrato..."
-            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
-          />
-        </div>
-
-        {/* BOTÕES */}
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            isLoading={loading}
-            icon={<Save className="w-4 h-4 mr-1" />}
-          >
-            {contractToEdit ? 'Atualizar Contrato' : 'Salvar Contrato'}
-          </Button>
-        </div>
+        <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
+        {canActivate && <label className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm"><input type="checkbox" checked={activateAfterSave} onChange={(e) => setActivateAfterSave(e.target.checked)} /><span><strong>Ativar após salvar</strong><br /><span className="text-xs text-slate-500">Contrato, vínculo do veículo, cobrança inicial e auditoria só confirmam juntos.</span></span></label>}
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />{activateAfterSave ? 'Salvar e ativar' : 'Salvar'}</Button></div>
       </form>
+      <style>{`.control{width:100%;border:1px solid rgb(226 232 240);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem}`}</style>
     </ModalContainer>
   );
 };
+
+const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => <label className="block space-y-1.5 text-xs font-semibold text-slate-600"><span>{label}</span>{children}</label>;
