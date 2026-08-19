@@ -239,7 +239,7 @@ export function registerContractRoutes(app: Express): void {
     if (!principal) return;
     const body = editableBody(req);
     try {
-      forbidAuthorityFields(body, ['companyId','userId','userName','role','status','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl']);
+      forbidAuthorityFields(body, ['companyId','userId','userName','role','status','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl','signatureRequired']);
       const vehicleId = requiredText(body.vehicleId, 'vehicleId');
       const driverId = requiredText(body.driverId, 'driverId');
       const startDate = normalizeDate(body.startDate, 'startDate');
@@ -253,12 +253,18 @@ export function registerContractRoutes(app: Express): void {
       const franchiseKm = nonNegativeInteger(body.franchiseKm, 'franchiseKm', 0);
       const excessKmRate = nonNegative(body.excessKmRate, 'excessKmRate', 0);
       const requestedNumber = normalizeContractNumber(body.contractNumber);
+      const requestedTemplateId = optionalText(body.templateId);
 
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
+        if (requestedTemplateId) {
+          const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
+          if (!template || template.isArchived) throw new ContractNotFoundError();
+          if (!template.isCurrent || !template.isActive) throw new ContractConflictError('Contract template unavailable');
+        }
 
         let contractNumber = requestedNumber || generateContractNumber();
         if (await tx.getContractRepo().findByNumber(principal.companyId, contractNumber)) {
@@ -287,7 +293,8 @@ export function registerContractRoutes(app: Express): void {
           franchiseKm,
           excessKmRate,
           paymentMethodId: optionalText(body.paymentMethodId),
-          templateId: optionalText(body.templateId),
+          templateId: requestedTemplateId,
+          signatureRequired: true,
           notes: optionalText(body.notes),
           isArchived: false,
           createdAt: now,
@@ -311,7 +318,7 @@ export function registerContractRoutes(app: Express): void {
     if (!principal) return;
     const body = editableBody(req);
     try {
-      forbidAuthorityFields(body, ['companyId','userId','userName','role','status','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl']);
+      forbidAuthorityFields(body, ['companyId','userId','userName','role','status','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl','signatureRequired']);
       const editable = ['contractNumber','vehicleId','driverId','startDate','endDate','rentalAmount','billingPeriodicity','billingDueDayOfWeek','billingDueDayOfMonth','securityDepositAmount','franchiseKm','excessKmRate','paymentMethodId','templateId','notes'];
       if (!editable.some((key) => Object.prototype.hasOwnProperty.call(body, key))) throw new ContractValidationError('No editable fields');
 
@@ -321,12 +328,22 @@ export function registerContractRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(existing.status)) {
           throw new ContractConflictError('Contract is not editable');
         }
+        const generatedArtifact = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, existing.id, 'GENERATED_PDF', true
+        );
+        if (generatedArtifact) throw new ContractConflictError('Contract terms are locked after PDF generation');
 
         const vehicleId = body.vehicleId === undefined ? existing.vehicleId : requiredText(body.vehicleId, 'vehicleId');
         const driverId = body.driverId === undefined ? existing.driverId : requiredText(body.driverId, 'driverId');
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived || !driver || driver.isArchived) throw new ContractNotFoundError();
+        const nextTemplateId = body.templateId === undefined ? existing.templateId : optionalText(body.templateId);
+        if (nextTemplateId) {
+          const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, nextTemplateId);
+          if (!template || template.isArchived) throw new ContractNotFoundError();
+          if (!template.isCurrent || !template.isActive) throw new ContractConflictError('Contract template unavailable');
+        }
 
         const contractNumber = body.contractNumber === undefined
           ? existing.contractNumber
@@ -352,7 +369,7 @@ export function registerContractRoutes(app: Express): void {
           franchiseKm: body.franchiseKm === undefined ? existing.franchiseKm : nonNegativeInteger(body.franchiseKm, 'franchiseKm'),
           excessKmRate: body.excessKmRate === undefined ? existing.excessKmRate : nonNegative(body.excessKmRate, 'excessKmRate'),
           paymentMethodId: body.paymentMethodId === undefined ? existing.paymentMethodId : optionalText(body.paymentMethodId),
-          templateId: body.templateId === undefined ? existing.templateId : optionalText(body.templateId),
+          templateId: nextTemplateId,
           notes: body.notes === undefined ? existing.notes : optionalText(body.notes),
           updatedAt: now,
         });
@@ -386,6 +403,17 @@ export function registerContractRoutes(app: Express): void {
         }
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
           throw new ContractConflictError('Contract lifecycle does not allow activation');
+        }
+        if (contract.signatureRequired) {
+          const generated = await tx.getContractArtifactRepo().findCurrentForContract(
+            principal.companyId, contract.id, 'GENERATED_PDF', true
+          );
+          const signed = await tx.getContractArtifactRepo().findCurrentForContract(
+            principal.companyId, contract.id, 'SIGNED_EVIDENCE', true
+          );
+          if (!generated || !signed || signed.sourceArtifactId !== generated.id) {
+            throw new ContractConflictError('Signed contract evidence required');
+          }
         }
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
         validateDateRange(contract.startDate, contract.endDate);

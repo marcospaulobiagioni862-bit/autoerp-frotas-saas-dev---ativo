@@ -15,7 +15,6 @@ import { TransferService, TransferParams } from './TransferService';
 import { RecurringProcessingService, ProcessRecurringRulesParams, RecurringProcessingResult } from './RecurringProcessingService';
 import { BankReconciliationService, ImportStatementParams, MatchSuggestion } from './BankReconciliationService';
 import { FinancialPeriodService, ClosePeriodParams, ReopenPeriodParams } from './FinancialPeriodService';
-import { TrafficTicketService } from '../services/TrafficTicketService';
 import { OverdueService, DelinquentReceivable, AgingReport } from './OverdueService';
 
 import {
@@ -235,15 +234,14 @@ export class FinanceEngine {
   }
 
   // 11. NIC Penalties
-  private static trafficTicketService = new TrafficTicketService();
-
   public static async processNICPenalty(
     ticketId: string,
     nicAmount?: number,
     userId: string = 'system',
     userName: string = 'System'
   ) {
-    return this.trafficTicketService.processNICPenalty(ticketId, nicAmount, userId, userName);
+    const { TrafficTicketService } = await import('../services/TrafficTicketService');
+    return new TrafficTicketService().processNICPenalty(ticketId, nicAmount, userId, userName);
   }
 
   public static async processPendingNICPenalties(
@@ -251,7 +249,8 @@ export class FinanceEngine {
     userId: string = 'system',
     userName: string = 'System'
   ) {
-    return this.trafficTicketService.processPendingNICPenalties(companyId, userId, userName);
+    const { TrafficTicketService } = await import('../services/TrafficTicketService');
+    return new TrafficTicketService().processPendingNICPenalties(companyId, userId, userName);
   }
 
   // 12. Bank Reconciliation

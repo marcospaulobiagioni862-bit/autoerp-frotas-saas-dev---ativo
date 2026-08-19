@@ -16,6 +16,8 @@ import {
 } from './repositories/postgresRepositories';
 import { PostgresDriverRepository } from './repositories/postgresDriverRepository';
 import { PostgresContractRepository } from './repositories/postgresContractRepository';
+import { PostgresContractTemplateRepository } from './repositories/postgresContractTemplateRepository';
+import { PostgresContractArtifactRepository } from './repositories/postgresContractArtifactRepository';
 import { PostgresAttachmentRepository } from './repositories/postgresAttachmentRepository';
 import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
 import { db } from './index';
@@ -55,6 +57,8 @@ export class UnitOfWork {
         getUserRepo: () => new PostgresUserRepository(tx),
         getFinancialPeriodRepo: () => new PostgresFinancialPeriodRepository(tx),
         getContractRepo: () => new PostgresContractRepository(tx),
+        getContractTemplateRepo: () => new PostgresContractTemplateRepository(tx),
+        getContractArtifactRepo: () => new PostgresContractArtifactRepository(tx),
         getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
         getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx),
         getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),

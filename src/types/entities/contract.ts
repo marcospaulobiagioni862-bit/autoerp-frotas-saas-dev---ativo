@@ -21,6 +21,7 @@ export interface Contract {
   templateId?: string;
   generatedPdfUrl?: string;
   signedContractUrl?: string;
+  signatureRequired?: boolean;
   notes?: string;
   isArchived: boolean;
   createdAt: string;
@@ -28,11 +29,40 @@ export interface Contract {
 }
 
 export interface ContractTemplate {
-  id: string; // UUID
+  id: string;
   companyId: string;
+  templateKey: string;
   title: string;
   contentMarkdown: string;
-  active: boolean;
+  versionNumber: number;
+  supersedesTemplateId?: string;
+  isCurrent: boolean;
+  isActive: boolean;
+  isArchived: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ContractArtifactType = 'GENERATED_PDF' | 'SIGNED_EVIDENCE';
+export type ContractSignatureMethod = 'SIGNED_PDF_UPLOAD';
+
+export interface ContractArtifact {
+  id: string;
+  companyId: string;
+  contractId: string;
+  artifactType: ContractArtifactType;
+  attachmentId: string;
+  templateId?: string;
+  sourceArtifactId?: string;
+  snapshotJson?: string;
+  snapshotHash: string;
+  isCurrent: boolean;
+  isArchived: boolean;
+  signatureMethod?: ContractSignatureMethod;
+  signedByName?: string;
+  signedAt?: string;
+  createdBy: string;
   createdAt: string;
   updatedAt: string;
 }
