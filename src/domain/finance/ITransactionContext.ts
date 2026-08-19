@@ -6,6 +6,8 @@ import {
   PaymentMethod,
   AuditLog,
   FileAttachment,
+  DocumentRecord,
+  DocumentSubjectType,
   User,
   FinancialPeriod,
   SecurityDeposit,
@@ -100,6 +102,40 @@ export interface ITransactionAttachmentRepository {
   ): Promise<FileAttachment | null>;
 }
 
+export interface TransactionDocumentFilters {
+  subjectType?: DocumentSubjectType;
+  subjectId?: string;
+  documentType?: string;
+  referenceYear?: number;
+  currentOnly?: boolean;
+  includeArchived?: boolean;
+}
+
+export interface ITransactionDocumentRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<DocumentRecord | null>;
+  findAllByCompany(companyId: string, filters?: TransactionDocumentFilters): Promise<DocumentRecord[]>;
+  findVersions(
+    companyId: string,
+    subjectType: DocumentSubjectType,
+    subjectId: string,
+    documentType: string,
+    referenceYear?: number
+  ): Promise<DocumentRecord[]>;
+  findCurrentWithLock(
+    companyId: string,
+    subjectType: DocumentSubjectType,
+    subjectId: string,
+    documentType: string,
+    referenceYear?: number
+  ): Promise<DocumentRecord | null>;
+  create(item: DocumentRecord): Promise<DocumentRecord>;
+  updateForCompany(
+    companyId: string,
+    id: string,
+    item: Partial<Pick<DocumentRecord, 'isCurrent' | 'isArchived' | 'payableId' | 'updatedAt'>>
+  ): Promise<DocumentRecord | null>;
+}
+
 export interface ITransactionUserRepository {
   findById(id: string): Promise<User | null>;
 }
@@ -159,6 +195,7 @@ export interface ITransactionContext {
   getPaymentMethodRepo?(): ITransactionPaymentMethodRepository;
   getAuditLogRepo(): ITransactionAuditLogRepository;
   getAttachmentRepo(): ITransactionAttachmentRepository;
+  getDocumentRepo(): ITransactionDocumentRepository;
   getUserRepo(): ITransactionUserRepository;
   getFinancialPeriodRepo(): ITransactionFinancialPeriodRepository;
   getSecurityDepositRepo(): ITransactionSecurityDepositRepository;

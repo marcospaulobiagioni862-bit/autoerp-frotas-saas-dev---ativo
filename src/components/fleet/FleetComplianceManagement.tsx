@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  VehicleDocumentRepository,
   InsuranceRepository,
   TrackerRepository,
-  VehicleRepository,
 } from '../../persistence/repositories/localRepositories';
 import { FleetComplianceService } from '../../domain/services/FleetComplianceService';
-import { VehicleDocument, Insurance, Tracker, Vehicle } from '../../types/entities';
+import { DocumentClient } from '../../api/documentClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { FileUpload } from '../documents/FileUpload';
+import type { DocumentRecord, Insurance, Tracker, Vehicle } from '../../types/entities';
 import { DocumentStatus } from '../../types/enums';
 import {
   ShieldCheck,
@@ -27,7 +28,7 @@ import { Card, Button, Badge, Input, Select, ModalContainer } from '../ui';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 
 export const FleetComplianceManagement: React.FC = () => {
-  const [documents, setDocuments] = useState<VehicleDocument[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [insurances, setInsurances] = useState<Insurance[]>([]);
   const [trackers, setTrackers] = useState<Tracker[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -48,6 +49,8 @@ export const FleetComplianceManagement: React.FC = () => {
   const [docCost, setDocCost] = useState<string>('');
   const [docGeneratePayable, setDocGeneratePayable] = useState<boolean>(true);
   const [docNotes, setDocNotes] = useState<string>('');
+  const [docReferenceYear, setDocReferenceYear] = useState<string>(String(new Date().getFullYear()));
+  const [docAttachmentId, setDocAttachmentId] = useState<string>('');
 
   // Form states - Insurance
   const [insVehicleId, setInsVehicleId] = useState<string>('');
@@ -71,9 +74,10 @@ export const FleetComplianceManagement: React.FC = () => {
   const [trkCost, setTrkCost] = useState<string>('65');
   const [trkDate, setTrkDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
-  const companyId = 'company-main-uuid';
-  const userId = 'usr-admin';
-  const userName = 'Gestor de Frota';
+  // Temporary legacy authority only for Insurance/Tracker until their server-side wave.
+  const legacyCompanyId = 'company-main-uuid';
+  const legacyUserId = 'usr-admin';
+  const legacyUserName = 'Gestor de Frota';
 
   useEffect(() => {
     loadData();
@@ -82,16 +86,14 @@ export const FleetComplianceManagement: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const docRepo = new VehicleDocumentRepository();
       const insRepo = new InsuranceRepository();
       const trkRepo = new TrackerRepository();
-      const vehRepo = new VehicleRepository();
 
       const [docsList, insList, trkList, vehList] = await Promise.all([
-        docRepo.findAll({ companyId }),
-        insRepo.findAll({ companyId }),
-        trkRepo.findAll({ companyId }),
-        vehRepo.findAll({ companyId }),
+        DocumentClient.list({ subjectType: 'VEHICLE' }),
+        insRepo.findAll({ companyId: legacyCompanyId }),
+        trkRepo.findAll({ companyId: legacyCompanyId }),
+        VehicleClient.list(),
       ]);
 
       setDocuments(docsList);
@@ -112,17 +114,22 @@ export const FleetComplianceManagement: React.FC = () => {
       return;
     }
     try {
-      await FleetComplianceService.createDocument({
-        companyId,
-        vehicleId: docVehicleId,
+      const annual = ['CRLV', 'IPVA', 'LICENCIAMENTO'].includes(docType);
+      if (annual && !docReferenceYear) {
+        alert('Informe o ano de referência para este documento anual.');
+        return;
+      }
+      await DocumentClient.create({
+        subjectType: 'VEHICLE',
+        subjectId: docVehicleId,
         documentType: docType,
-        documentNumber: docNumber,
+        documentNumber: docNumber || undefined,
+        referenceYear: docReferenceYear ? Number(docReferenceYear) : undefined,
         expirationDate: docExpDate,
+        attachmentId: docAttachmentId || undefined,
         cost: docCost ? parseFloat(docCost) : 0,
-        notes: docNotes,
+        notes: docNotes || undefined,
         generatePayable: docGeneratePayable,
-        userId,
-        userName,
       });
       setIsDocModalOpen(false);
       resetDocForm();
@@ -140,7 +147,7 @@ export const FleetComplianceManagement: React.FC = () => {
     }
     try {
       await FleetComplianceService.createInsurance({
-        companyId,
+        companyId: legacyCompanyId,
         vehicleId: insVehicleId,
         insuranceCompany: insCompany,
         policyNumber: insPolicy,
@@ -152,8 +159,8 @@ export const FleetComplianceManagement: React.FC = () => {
         endDate: insEndDate,
         brokerName: insBroker,
         generatePayable: insGeneratePayable,
-        userId,
-        userName,
+        userId: legacyUserId,
+        userName: legacyUserName,
       });
       setIsInsModalOpen(false);
       resetInsForm();
@@ -171,7 +178,7 @@ export const FleetComplianceManagement: React.FC = () => {
     }
     try {
       await FleetComplianceService.createTracker({
-        companyId,
+        companyId: legacyCompanyId,
         vehicleId: trkVehicleId,
         equipmentModel: trkModel,
         imei: trkImei,
@@ -179,8 +186,8 @@ export const FleetComplianceManagement: React.FC = () => {
         chipNumber: trkChip,
         monthlyCost: trkCost ? parseFloat(trkCost) : 0,
         installationDate: trkDate,
-        userId,
-        userName,
+        userId: legacyUserId,
+        userName: legacyUserName,
       });
       setIsTrackerModalOpen(false);
       resetTrackerForm();
@@ -197,6 +204,8 @@ export const FleetComplianceManagement: React.FC = () => {
     setDocExpDate('');
     setDocCost('');
     setDocNotes('');
+    setDocReferenceYear(String(new Date().getFullYear()));
+    setDocAttachmentId('');
   };
 
   const resetInsForm = () => {
@@ -217,9 +226,9 @@ export const FleetComplianceManagement: React.FC = () => {
   };
 
   // Metrics
-  const validDocsCount = documents.filter((d) => d.status === DocumentStatus.VALID).length;
-  const expiringDocsCount = documents.filter((d) => d.status === DocumentStatus.EXPIRING_SOON).length;
-  const expiredDocsCount = documents.filter((d) => d.status === DocumentStatus.EXPIRED).length;
+  const validDocsCount = documents.filter((d) => d.complianceStatus === DocumentStatus.VALID).length;
+  const expiringDocsCount = documents.filter((d) => d.complianceStatus === DocumentStatus.EXPIRING_SOON).length;
+  const expiredDocsCount = documents.filter((d) => d.complianceStatus === DocumentStatus.EXPIRED).length;
   const activeInsurancesCount = insurances.filter((i) => i.status !== DocumentStatus.EXPIRED).length;
   const activeTrackersCount = trackers.filter((t) => t.status === 'ACTIVE').length;
 
@@ -349,39 +358,41 @@ export const FleetComplianceManagement: React.FC = () => {
                     {documents.map((doc) => (
                       <tr key={doc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20">
                         <td className="p-3 font-mono font-bold text-slate-900 dark:text-slate-100">
-                          {getVehiclePlate(doc.vehicleId)}
+                          {getVehiclePlate(doc.subjectId)}
                         </td>
-                        <td className="p-3 font-semibold">{doc.documentType}</td>
+                        <td className="p-3 font-semibold">{doc.documentType}<span className="block text-[10px] text-slate-400">v{doc.versionNumber} • {doc.alertStage}</span></td>
                         <td className="p-3 font-mono text-slate-500">{doc.documentNumber || '-'}</td>
-                        <td className="p-3 font-mono">{new Date(doc.expirationDate).toLocaleDateString('pt-BR')}</td>
+                        <td className="p-3 font-mono">{doc.expirationDate ? new Date(`${doc.expirationDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}</td>
                         <td className="p-3 font-mono text-emerald-600 font-semibold">{formatCurrencyBRL(doc.cost || 0)}</td>
                         <td className="p-3">
                           <Badge
                             variant={
-                              doc.status === DocumentStatus.VALID
+                              doc.complianceStatus === DocumentStatus.VALID
                                 ? 'success'
-                                : doc.status === DocumentStatus.EXPIRING_SOON
+                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON || doc.complianceStatus === DocumentStatus.PENDING
                                 ? 'warning'
                                 : 'danger'
                             }
                           >
-                            {doc.status === DocumentStatus.VALID
+                            {doc.complianceStatus === DocumentStatus.VALID
                               ? 'Válido'
-                              : doc.status === DocumentStatus.EXPIRING_SOON
+                              : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
                               ? 'A Vencer'
+                              : doc.complianceStatus === DocumentStatus.PENDING
+                              ? 'Pendente'
                               : 'Vencido'}
                           </Badge>
                         </td>
                         <td className="p-3">
                           <button
                             onClick={async () => {
-                              if (confirm('Deseja excluir este documento?')) {
-                                await FleetComplianceService.deleteDocument(doc.id, userId, userName);
+                              if (confirm('Deseja arquivar este documento? O histórico será preservado.')) {
+                                await DocumentClient.archive(doc.id);
                                 await loadData();
                               }
                             }}
                             className="p-1 text-slate-400 hover:text-red-600 rounded"
-                            title="Excluir"
+                            title="Arquivar"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -500,7 +511,7 @@ export const FleetComplianceManagement: React.FC = () => {
             <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Veículo *</label>
             <select
               value={docVehicleId}
-              onChange={(e) => setDocVehicleId(e.target.value)}
+              onChange={(e) => { setDocVehicleId(e.target.value); setDocAttachmentId(''); }}
               className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
               required
             >
@@ -523,6 +534,7 @@ export const FleetComplianceManagement: React.FC = () => {
               >
                 <option value="CRLV">CRLV (Licenciamento Anual)</option>
                 <option value="IPVA">IPVA</option>
+                <option value="LICENCIAMENTO">Licenciamento</option>
                 <option value="SEGURO OBRIGATÓRIO">Seguro Obrigatório / DPVAT</option>
                 <option value="VISTORIA">Vistoria Veicular</option>
                 <option value="LAUDO">Laudo CNV / GNV</option>
@@ -561,6 +573,20 @@ export const FleetComplianceManagement: React.FC = () => {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-700 dark:text-slate-300 font-medium mb-1">Ano de Referência</label>
+              <Input type="number" min="1900" max="2200" value={docReferenceYear} onChange={(e) => setDocReferenceYear(e.target.value)} />
+            </div>
+            <div className="flex items-end text-[11px] text-slate-500">Obrigatório para CRLV, IPVA e Licenciamento.</div>
+          </div>
+
+          {docVehicleId ? (
+            <div className="space-y-2">
+              <FileUpload entityType="Vehicle" entityId={docVehicleId} documentType={docType} onUploadComplete={(attachment) => setDocAttachmentId(attachment.id)} />
+              {docAttachmentId && <p className="text-xs text-emerald-600">Arquivo enviado e vinculado ao servidor.</p>}
+            </div>
+          ) : <p className="text-xs text-slate-500">Selecione o veículo antes de enviar o arquivo.</p>}
           <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"

@@ -34,6 +34,8 @@ import {
 import { DriverClient } from '../../api/driverClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import { DocumentClient } from '../../api/documentClient';
+import { FileUpload } from '../documents/FileUpload';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
 import type { DriverHealthAndEmergency } from '../../types/entities';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -87,6 +89,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [docNumber, setDocNumber] = useState('');
   const [docExpDate, setDocExpDate] = useState('');
   const [docNotes, setDocNotes] = useState('');
+  const [docAttachmentId, setDocAttachmentId] = useState('');
 
   const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
   const [isEditHealthOpen, setIsEditHealthOpen] = useState(false);
@@ -124,6 +127,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     try {
       const coreDriver = await DriverClient.get(driverId);
       const supplemental = await bridge.getSupplementalSummary(coreDriver);
+      supplemental.documents = await DocumentClient.list({ subjectType: 'DRIVER', subjectId: coreDriver.id });
       if (coreDriver.currentVehicleId) {
         const vehicle = await VehicleClient.get(coreDriver.currentVehicleId);
         supplemental.currentVehicle = { ...vehicle, year: vehicle.yearModel || vehicle.yearFabrication };
@@ -221,16 +225,20 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     if (!driver) return;
     setActionLoading(true);
     try {
-      await bridge.addDocument(driver, {
+      await DocumentClient.create({
+        subjectType: 'DRIVER',
+        subjectId: driver.id,
         documentType: docType,
         documentNumber: docNumber || undefined,
         expirationDate: docExpDate || undefined,
+        attachmentId: docAttachmentId || undefined,
         notes: docNotes || undefined,
       });
       setIsAddDocOpen(false);
       setDocNumber('');
       setDocExpDate('');
       setDocNotes('');
+      setDocAttachmentId('');
       await loadData();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao adicionar documento.');
@@ -240,12 +248,12 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   };
 
   const handleRemoveDocument = async (documentId: string) => {
-    if (!confirm('Deseja realmente remover este documento?')) return;
+    if (!confirm('Deseja arquivar este documento? O histórico será preservado.')) return;
     try {
-      await bridge.removeDocument(documentId);
+      await DocumentClient.archive(documentId);
       await loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao remover documento.');
+      alert(err instanceof Error ? err.message : 'Erro ao arquivar documento.');
     }
   };
 
@@ -441,7 +449,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                   <div key={doc.id} className="p-3 border rounded-xl flex justify-between items-center">
                     <div className="flex gap-3 items-center">
                       <File className="w-5 h-5 text-emerald-600" />
-                      <div><strong className="text-sm block">{doc.documentType}</strong><span className="text-xs text-slate-500">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''}</span></div>
+                      <div><strong className="text-sm block">{doc.documentType}</strong><span className="text-xs text-slate-500">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''} • v{doc.versionNumber}</span><div className="mt-1"><Badge variant={doc.complianceStatus === DocumentStatus.VALID ? 'success' : doc.complianceStatus === DocumentStatus.EXPIRED ? 'danger' : 'warning'}>{doc.complianceStatus}</Badge></div></div>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => handleRemoveDocument(doc.id)}><Trash2 className="w-4 h-4 text-rose-600" /></Button>
                   </div>
@@ -559,6 +567,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
             </Select>
             <Input label="Número do Documento" value={docNumber} onChange={(event) => setDocNumber(event.target.value)} />
             <Input label="Data de Validade" type="date" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />
+            <FileUpload entityType="Driver" entityId={driver?.id || ''} documentType={docType} onUploadComplete={(attachment) => setDocAttachmentId(attachment.id)} />
+            {docAttachmentId && <p className="text-xs text-emerald-600">Arquivo enviado e vinculado ao servidor.</p>}
             <Input label="Observações" value={docNotes} onChange={(event) => setDocNotes(event.target.value)} />
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsAddDocOpen(false)}>Cancelar</Button><Button type="submit" isLoading={actionLoading}>Salvar Documento</Button></div>
           </form>
