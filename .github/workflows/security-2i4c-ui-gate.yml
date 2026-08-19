@@ -1,0 +1,111 @@
+name: SECURITY-2I4C UI switchover gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4c-ui-gate
+
+permissions:
+  contents: write
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-ui-attachments
+    steps:
+      - name: Checkout exact I4C3 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ce8a597ffddc04570679b120a3376a9adedd9921
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify immutable candidate
+        run: |
+          test "$(git rev-parse HEAD)" = "ce8a597ffddc04570679b120a3376a9adedd9921"
+          test "$(git merge-base 68b2ab0315bfb9e77cacb760b8f1bffdb4034357 HEAD)" = "68b2ab0315bfb9e77cacb760b8f1bffdb4034357"
+
+      - name: Apply UI switchover patch
+        run: |
+          git show origin/ci-implement-security-2i4c-ui-gate:.ci/security-2i4c-ui-patch.py > /tmp/ui_patch.py
+          git show origin/ci-implement-security-2i4c-ui-gate:.ci/security-2i4c-ui-extra-patch.py > /tmp/ui_extra.py
+          python /tmp/ui_patch.py
+          python /tmp/ui_extra.py
+
+      - name: Scope gate
+        run: |
+          git diff --name-only | sort | tee /tmp/changed.txt
+          cat > /tmp/allowed.txt <<'EOF'
+          src/api/contractClient.ts
+          src/components/contracts/ContractDetailsModal.tsx
+          src/components/contracts/ContractExecutionPanel.tsx
+          src/components/contracts/ContractFormModal.tsx
+          src/components/contracts/ContractsManagement.tsx
+          EOF
+          sort -o /tmp/allowed.txt /tmp/allowed.txt
+          diff -u /tmp/allowed.txt /tmp/changed.txt
+          git diff --check
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations 0000 through 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls drizzle/[0-9][0-9][0-9][0-9]_*.sql | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+
+      - name: Re-run I4C server integration after UI switchover
+        run: npx tsx src/server/__tests__/contractExecutionAuthorityIntegration.ts
+
+      - name: Static UI authority checks
+        run: |
+          grep -q "ContractTemplateClient.list" src/components/contracts/ContractFormModal.tsx
+          grep -q "templateId: form.templateId" src/components/contracts/ContractFormModal.tsx
+          grep -q "contractToEdit?.signatureRequired === false" src/components/contracts/ContractFormModal.tsx
+          grep -q "ContractExecutionPanel" src/components/contracts/ContractDetailsModal.tsx
+          grep -q "contract.signatureRequired === false" src/components/contracts/ContractDetailsModal.tsx
+          grep -q "PDF / Assinatura" src/components/contracts/ContractsManagement.tsx
+          grep -q "ContractTemplateManagementModal" src/components/contracts/ContractsManagement.tsx
+          grep -q "Regenerar PDF oficial" src/components/contracts/ContractExecutionPanel.tsx
+          grep -q "SIGNED_CONTRACT" src/components/contracts/ContractExecutionPanel.tsx
+          grep -q "typeof item.signatureRequired !== 'boolean'" src/api/contractClient.ts
+          ! grep -R "generatedPdfUrl\|signedContractUrl" -n src/components/contracts/ContractExecutionPanel.tsx src/api/contractExecutionClient.ts src/api/contractTemplateClient.ts
+
+      - name: Publish validated UI switchover
+        run: |
+          git config user.name "ChatGPT AutoERP"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/api/contractClient.ts src/components/contracts/ContractDetailsModal.tsx src/components/contracts/ContractExecutionPanel.tsx src/components/contracts/ContractFormModal.tsx src/components/contracts/ContractsManagement.tsx
+          git commit -m "feat(contract): switch UI to template PDF and signature authority"
+          git push origin HEAD:security-2i4c-contract-execution-authority
