@@ -1,0 +1,100 @@
+name: SECURITY-2H1-v2 validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-driver-health-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Source integrity
+        run: git diff --exit-code 2efc81334e8cd830311e9461ee4297addaf566d3 -- . ':(exclude).github/**' ':(exclude).ci/**'
+      - name: H1 authority static gate
+        shell: bash
+        run: |
+          grep -F '0007_driver_health_profiles' drizzle/meta/_journal.json >/dev/null
+          grep -F 'FORCE ROW LEVEL SECURITY' drizzle/0007_driver_health_profiles.sql >/dev/null
+          grep -F "app.get('/api/drivers/:id/health'" server.ts >/dev/null
+          grep -F "app.put('/api/drivers/:id/health'" server.ts >/dev/null
+          grep -F 'UnitOfWork.run(principal.companyId' server.ts >/dev/null
+          grep -F "credentials:'include'" src/api/driverHealthClient.ts >/dev/null
+          grep -F 'DriverHealthClient.get' src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F 'DriverHealthClient.update' src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          ! grep -F 'driver.healthAndEmergency' src/components/drivers/DriverDetailsModal.tsx
+          ! grep -F "'usr-admin'" src/components/drivers/DriverDetailsModal.tsx | grep -F 'updateHealthAndEmergency'
+          grep -F 'delete driverWithoutHealth.healthAndEmergency' src/domain/services/DriverService.ts >/dev/null
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Driver health transport tests
+        run: npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+      - name: PostgreSQL16 session/RLS health validation
+        run: npx tsx .ci/h1-v2-validation.ts
+      - name: Core regressions
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2h1-ci-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Prior finance transports
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+      - name: Diff and tracked immutability
+        shell: bash
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body=['AUTOERP_SECURITY_2H1_V2_CI_REPORT',`VALIDATION_STATUS=${{ job.status }}`,`RUN_ID=${context.runId}`,'CANDIDATE=2efc81334e8cd830311e9461ee4297addaf566d3','DriverHealthClient=6/6 required','PostgreSQL16/session/RLS health isolation required','audit metadata only + rollback required','Contract=20/20 required','Finance=46/46 required','Security=35/35 required'].join('\n');
+            await github.rest.issues.createComment({owner:context.repo.owner,repo:context.repo.repo,issue_number:context.issue.number,body});
