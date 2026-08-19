@@ -1,0 +1,239 @@
+name: SECURITY-2I5A integrated final gate v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i5a-integrated-v2
+
+permissions:
+  contents: read
+
+jobs:
+  integrated-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      AUTOERP_SCHEDULER_ENABLED: 'false'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i5a-integrated-v2-attachments
+      CANDIDATE_SHA: dda484318e22e634b1fb93c8d2143036ced65c93
+      PRODUCTION_BASE: 3717bcc73f626f597b3bd58dac1c27e844767655
+      BROWSER_COMPANY_ID: company-main-uuid
+      BROWSER_USER_ID: user-admin-1
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: dda484318e22e634b1fb93c8d2143036ced65c93
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact 23-file scope and authority
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+          mapfile -t actual < <(git diff --name-only "$PRODUCTION_BASE"..HEAD | sort)
+          expected=$(cat <<'EOF'
+          drizzle/0015_scheduler_notifications.sql
+          drizzle/meta/_journal.json
+          server.ts
+          src/App.tsx
+          src/api/__tests__/notificationClientTestRunner.ts
+          src/api/notificationClient.ts
+          src/components/layout/Header.tsx
+          src/components/notifications/AlertInbox.tsx
+          src/db/repositories/postgresNotificationRepository.ts
+          src/db/schema.ts
+          src/db/uow.ts
+          src/domain/finance/ITransactionContext.ts
+          src/domain/notifications/__tests__/alertEvaluationTestRunner.ts
+          src/domain/notifications/alertEvaluation.ts
+          src/domain/notifications/notificationMaterializer.ts
+          src/server/__tests__/alertSchedulerIntegration.ts
+          src/server/__tests__/notificationAuthorityIntegration.ts
+          src/server/__tests__/notificationFoundationIntegration.ts
+          src/server/alertScheduler.ts
+          src/server/notificationRoutes.ts
+          src/server/vehicleRoutes.ts
+          src/types/entities/index.ts
+          src/types/entities/notifications.ts
+          EOF
+          )
+          test "${#actual[@]}" = "23"
+          diff -u <(printf '%s\n' "$expected" | sed 's/^          //' | sed '/^$/d' | sort) <(printf '%s\n' "${actual[@]}")
+          grep -F "NotificationClient" src/components/notifications/AlertInbox.tsx
+          grep -F "AlertInbox" src/components/layout/Header.tsx
+          grep -F "onNavigate={(tab) => setActiveTab(tab as NavigationTab)}" src/App.tsx
+          ! grep -E "NotificationRepository|StorageAdapter|localStorage|indexedDB" src/components/notifications/AlertInbox.tsx
+          ! grep -R -E "localRepositories|StorageAdapter|localStorage|indexedDB" src/server/alertScheduler.ts src/server/notificationRoutes.ts src/domain/notifications/alertEvaluation.ts src/domain/notifications/notificationMaterializer.ts
+          grep -F "startAlertScheduler();" server.ts
+          grep -F "AUTOERP_SCHEDULER_ENABLED" src/server/alertScheduler.ts
+          grep -F "ENABLE ROW LEVEL SECURITY" drizzle/0015_scheduler_notifications.sql
+          grep -F "FORCE ROW LEVEL SECURITY" drizzle/0015_scheduler_notifications.sql
+          grep -F "AS PERMISSIVE" drizzle/0015_scheduler_notifications.sql
+
+      - name: Install app and system-Chrome harness
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          BROWSER="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          test -n "$BROWSER"
+          echo "BROWSER_EXECUTABLE=$BROWSER" >> "$GITHUB_ENV"
+          test -z "$(git status --porcelain)"
+
+      - name: TypeScript build notification runners
+        run: |
+          set -euo pipefail
+          npm run lint
+          npm run build
+          npx tsx src/domain/notifications/__tests__/alertEvaluationTestRunner.ts
+          npx tsx src/api/__tests__/notificationClientTestRunner.ts
+
+      - name: PostgreSQL16 migrations 0000 through 0015
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "select relrowsecurity::text || ':' || relforcerowsecurity::text from pg_class where relname='notifications'")" = "true:true"
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "select count(*) from pg_policies where tablename='notifications' and policyname='tenant_access_notifications' and permissive='PERMISSIVE'")" = "1"
+
+      - name: I5A authority scheduler and API integrations
+        run: |
+          set -euo pipefail
+          npx tsx src/server/__tests__/notificationFoundationIntegration.ts
+          npx tsx src/server/__tests__/alertSchedulerIntegration.ts
+          npx tsx src/server/__tests__/notificationAuthorityIntegration.ts
+
+      - name: Prior PostgreSQL authority regressions
+        run: |
+          set -euo pipefail
+          npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractExecutionAuthorityIntegration.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Seed Header Alert Inbox browser fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('company-main-uuid', 'I5A-BROWSER', 'AutoERP Browser Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('user-admin-1', 'company-main-uuid', 'Browser Admin', 'browser-admin@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id='company-main-uuid', role='ADMIN', active=true, updated_at=NOW();
+          DELETE FROM notifications WHERE company_id='company-main-uuid' AND idempotency_key LIKE 'I5A_BROWSER:%';
+          INSERT INTO notifications (
+            id, company_id, recipient_user_id, source_type, source_id, source_version,
+            alert_stage, title, message, severity, due_date, destination_tab,
+            idempotency_key, status, created_at, updated_at
+          ) VALUES
+          ('i5a-browser-1','company-main-uuid',NULL,'DOCUMENT','doc-browser-1','1','D7','Documento vence em 7 dias','CRLV de teste próximo do vencimento.','WARNING','2026-08-26','compliance','I5A_BROWSER:1','UNREAD',NOW(),NOW()),
+          ('i5a-browser-2','company-main-uuid',NULL,'FINANCE_RECEIVABLE','ar-browser-1',NULL,'POST_DUE','Conta vencida','Conta a receber de teste vencida.','DANGER','2026-08-18','receivables','I5A_BROWSER:2','UNREAD',NOW(),NOW());
+          SQL
+
+      - name: Start exact candidate server
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/i5a-browser-v2 "$ATTACHMENT_STORAGE_DIR"
+          mkdir -p /tmp/i5a-browser-v2 "$ATTACHMENT_STORAGE_DIR"
+          nohup npm run dev > /tmp/i5a-browser-v2/server.log 2>&1 &
+          echo $! > /tmp/i5a-browser-v2/server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS -H "x-company-id: $BROWSER_COMPANY_ID" -H "x-user-id: $BROWSER_USER_ID" http://127.0.0.1:3000/api/notifications/unread-count >/tmp/i5a-browser-v2/count.json; then
+              cat /tmp/i5a-browser-v2/count.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i5a-browser-v2/server.log
+          exit 1
+
+      - name: Chrome Header Alert Inbox persistence smoke
+        run: |
+          cat > .git/i5a-browser-v2.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const pageErrors = [];
+          const http5xx = [];
+          const browser = await chromium.launch({ headless:true, executablePath:process.env.BROWSER_EXECUTABLE, args:['--no-sandbox','--disable-dev-shm-usage'] });
+          const context = await browser.newContext({ viewport:{width:1440,height:1000}, extraHTTPHeaders:{'x-company-id':process.env.BROWSER_COMPANY_ID,'x-user-id':process.env.BROWSER_USER_ID} });
+          const page = await context.newPage();
+          page.on('pageerror', e => pageErrors.push(e.stack || String(e)));
+          page.on('response', r => { if (r.status() >= 500) http5xx.push(`${r.status()} ${r.request().method()} ${r.url()}`); });
+          try {
+            await page.goto('http://127.0.0.1:3000', { waitUntil:'domcontentloaded', timeout:30000 });
+            await page.getByText('Visão Geral', {exact:true}).first().waitFor({state:'visible',timeout:20000});
+            const bell = page.getByRole('button',{name:'Abrir central de alertas'});
+            await bell.click();
+            await page.getByRole('heading',{name:'Central de Alertas'}).waitFor();
+            await page.getByText('Documento vence em 7 dias',{exact:true}).waitFor();
+            await page.getByText('Conta vencida',{exact:true}).waitFor();
+            await page.getByText('2 não lidos',{exact:true}).waitFor();
+            await page.screenshot({path:'/tmp/i5a-browser-v2/inbox-open.png',fullPage:true});
+            const doc = page.locator('article').filter({hasText:'Documento vence em 7 dias'});
+            await doc.getByText('Marcar como lido',{exact:true}).click();
+            await page.getByText('1 não lido',{exact:true}).waitFor({timeout:10000});
+            const ar = page.locator('article').filter({hasText:'Conta vencida'});
+            await ar.getByRole('button',{name:'Dispensar Conta vencida'}).click();
+            await page.getByText('Conta vencida',{exact:true}).waitFor({state:'detached',timeout:10000});
+            const state = await page.evaluate(async () => {
+              const countResponse = await fetch('/api/notifications/unread-count');
+              const listResponse = await fetch('/api/notifications?limit=20');
+              return { countStatus:countResponse.status, count:await countResponse.json(), listStatus:listResponse.status, list:await listResponse.json() };
+            });
+            if (state.countStatus !== 200 || state.listStatus !== 200) throw new Error(`API status invalid ${JSON.stringify(state)}`);
+            if (state.count.count !== 0) throw new Error(`expected unread 0 got ${state.count.count}`);
+            if (pageErrors.length) throw new Error(`page errors ${pageErrors.join(' | ')}`);
+            if (http5xx.length) throw new Error(`HTTP 5xx ${http5xx.join(' | ')}`);
+            await page.screenshot({path:'/tmp/i5a-browser-v2/inbox-updated.png',fullPage:true});
+            await writeFile('/tmp/i5a-browser-v2/result.json', JSON.stringify({state,pageErrors,http5xx},null,2));
+            console.log('SECURITY-2I5A INTEGRATED V2 CHROME PASS');
+          } finally { await browser.close(); }
+          NODE
+          node .git/i5a-browser-v2.mjs
+
+      - name: Final candidate immutability
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i5a-integrated-v2-browser-evidence
+          path: /tmp/i5a-browser-v2
+          if-no-files-found: warn
+          retention-days: 7
