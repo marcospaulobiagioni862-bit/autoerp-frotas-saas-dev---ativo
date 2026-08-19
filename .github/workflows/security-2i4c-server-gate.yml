@@ -1,0 +1,102 @@
+name: SECURITY-2I4C server authority gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4c-server-gate-v2
+
+permissions:
+  contents: write
+
+jobs:
+  server-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-server-attachments
+    steps:
+      - name: Checkout exact I4C2 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 57c051766a7afa1c7b6ecd41d1695af77712a9e7
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify immutable candidate
+        run: |
+          test "$(git rev-parse HEAD)" = "57c051766a7afa1c7b6ecd41d1695af77712a9e7"
+          test "$(git merge-base 68b2ab0315bfb9e77cacb760b8f1bffdb4034357 HEAD)" = "68b2ab0315bfb9e77cacb760b8f1bffdb4034357"
+
+      - name: Apply server wiring patch
+        run: |
+          git show origin/ci-implement-security-2i4c-server-gate-v2:.ci/security-2i4c-server-patch.py > /tmp/i4c_server_patch.py
+          python /tmp/i4c_server_patch.py
+
+      - name: Scope gate
+        run: |
+          git diff --name-only | sort | tee /tmp/changed.txt
+          printf '%s\n' src/server/contractRoutes.ts src/server/vehicleRoutes.ts | sort > /tmp/allowed.txt
+          diff -u /tmp/allowed.txt /tmp/changed.txt
+          git diff --check
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations 0000 through 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls drizzle/[0-9][0-9][0-9][0-9]_*.sql | sort); do
+            echo "APPLY $f"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+
+      - name: Contract execution integration
+        run: npx tsx src/server/__tests__/contractExecutionAuthorityIntegration.ts
+
+      - name: Static server authority checks
+        run: |
+          grep -q "registerContractTemplateRoutes(app)" src/server/vehicleRoutes.ts
+          grep -q "registerContractExecutionRoutes(app)" src/server/vehicleRoutes.ts
+          grep -q "Signed contract evidence required" src/server/contractRoutes.ts
+          grep -q "Contract terms are locked after PDF generation" src/server/contractRoutes.ts
+          grep -q "signatureRequired'" src/server/contractRoutes.ts
+          grep -q "pdf-lib" package.json
+          grep -q "GENERATED_CONTRACT" src/server/contractExecutionRoutes.ts
+          grep -q "SIGNED_CONTRACT" src/server/contractExecutionRoutes.ts
+          grep -q "ServerAttachmentStorage" src/server/contractExecutionRoutes.ts
+          ! grep -R "generatedPdfUrl.*req\.body\|signedContractUrl.*req\.body" -n src/server src/api src/components
+
+      - name: Publish validated server wiring
+        run: |
+          git config user.name "ChatGPT AutoERP"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/server/contractRoutes.ts src/server/vehicleRoutes.ts
+          git commit -m "feat(contract): enforce I4C execution and signature gates"
+          git push origin HEAD:security-2i4c-contract-execution-authority
