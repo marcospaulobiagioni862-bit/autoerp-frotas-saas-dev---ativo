@@ -429,6 +429,34 @@ export const fileAttachments = pgTable('file_attachments', {
   idxCompanyCreated: index('idx_att_company_created').on(t.companyId, t.createdAt),
 }));
 
+export const documents = pgTable('documents', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  subjectType: text('subject_type').notNull(),
+  subjectId: text('subject_id').notNull(),
+  documentType: text('document_type').notNull(),
+  documentNumber: text('document_number'),
+  referenceYear: integer('reference_year'),
+  issueDate: text('issue_date'),
+  expirationDate: text('expiration_date'),
+  attachmentId: text('attachment_id'),
+  versionNumber: integer('version_number').notNull().default(1),
+  supersedesDocumentId: text('supersedes_document_id'),
+  isCurrent: boolean('is_current').notNull().default(true),
+  isArchived: boolean('is_archived').notNull().default(false),
+  cost: numeric('cost', { precision: 12, scale: 2 }).notNull().default('0'),
+  payableId: text('payable_id'),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idxCompanySubjectCurrent: index('idx_documents_company_subject_current').on(t.companyId, t.subjectType, t.subjectId, t.isCurrent, t.isArchived),
+  idxCompanyTypeCurrent: index('idx_documents_company_type_current').on(t.companyId, t.documentType, t.isCurrent, t.isArchived),
+  idxCompanyExpiration: index('idx_documents_company_expiration').on(t.companyId, t.expirationDate, t.isCurrent, t.isArchived),
+  idxAttachment: index('idx_documents_attachment').on(t.companyId, t.attachmentId),
+}));
+
 export const communicationLogs = pgTable('communication_logs', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
