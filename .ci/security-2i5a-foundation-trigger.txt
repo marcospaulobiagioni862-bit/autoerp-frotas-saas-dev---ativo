@@ -1,0 +1,3 @@
+SECURITY-2I5A foundation gate
+Product SHA: 341f505f793e37057050d189848f6840dac68430
+Never merge this CI-only branch.
