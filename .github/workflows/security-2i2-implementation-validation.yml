@@ -33,7 +33,7 @@ jobs:
       - name: Checkout exact I2 candidate
         uses: actions/checkout@v4
         with:
-          ref: 9c96ed8a3f810040b32b9bed706e6ea0adf4b4ee
+          ref: 83cef21a08e74f3521787f7da5cc5a3ec2a76648
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -42,7 +42,8 @@ jobs:
       - name: Candidate identity and scope
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "9c96ed8a3f810040b32b9bed706e6ea0adf4b4ee"
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "83cef21a08e74f3521787f7da5cc5a3ec2a76648"
           test "$(git merge-base 4eae042609e4bae49733f129dde291ef99b3f4db HEAD)" = "4eae042609e4bae49733f129dde291ef99b3f4db"
           changed="$(git diff --name-only 4eae042609e4bae49733f129dde291ef99b3f4db..HEAD | sort)"
           expected="$(printf '%s\n' \
@@ -66,6 +67,7 @@ jobs:
       - name: Static Driver authority gate
         shell: bash
         run: |
+          set -euo pipefail
           grep -F '0010_driver_core_authority' drizzle/meta/_journal.json >/dev/null
           grep -F 'ALTER TABLE drivers FORCE ROW LEVEL SECURITY' drizzle/0010_driver_core_authority.sql >/dev/null
           grep -F 'AS PERMISSIVE' drizzle/0010_driver_core_authority.sql >/dev/null
@@ -73,6 +75,7 @@ jobs:
           grep -F 'getDriverRepo()' src/domain/finance/ITransactionContext.ts >/dev/null
           grep -F 'getDriverRepo: () => new PostgresDriverRepository(tx)' src/db/uow.ts >/dev/null
           grep -F 'class PostgresDriverRepository' src/db/repositories/postgresDriverRepository.ts >/dev/null
+          grep -F 'jsonb_array_elements_text' src/db/repositories/postgresDriverRepository.ts >/dev/null
           grep -F "app.get('/api/drivers'" src/server/driverRoutes.ts >/dev/null
           grep -F "app.post('/api/drivers'" src/server/driverRoutes.ts >/dev/null
           grep -F "app.patch('/api/drivers/:id/status'" src/server/driverRoutes.ts >/dev/null
@@ -81,10 +84,20 @@ jobs:
           grep -F 'registerDriverRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
           grep -F 'static async list' src/api/driverClient.ts >/dev/null
           grep -F 'static async archive' src/api/driverClient.ts >/dev/null
-          ! grep -E 'DriverRepository|VehicleRepository|DriverService' src/components/drivers/DriversManagement.tsx
-          ! grep -E 'DriverService|companyId|usr-admin|Administrador' src/components/drivers/DriverFormModal.tsx
-          ! grep -E 'DriverService|DriverRepository|VehicleRepository' src/components/drivers/DriverDetailsModal.tsx
-          ! grep -E 'DriverRepository|VehicleRepository' src/components/drivers/DriverLegacyDetailsBridge.ts
+
+          if grep -E 'DriverRepository|VehicleRepository|DriverService' src/components/drivers/DriversManagement.tsx; then
+            echo 'Forbidden local core authority in DriversManagement'; exit 1
+          fi
+          if grep -E 'DriverService|companyId|usr-admin|Administrador' src/components/drivers/DriverFormModal.tsx; then
+            echo 'Forbidden browser authority in DriverFormModal'; exit 1
+          fi
+          if grep -E 'DriverService|DriverRepository|VehicleRepository' src/components/drivers/DriverDetailsModal.tsx; then
+            echo 'Forbidden local core authority in DriverDetailsModal'; exit 1
+          fi
+          if grep -E '^[[:space:]]*(DriverRepository|VehicleRepository)[,;]?$' src/components/drivers/DriverLegacyDetailsBridge.ts; then
+            echo 'Forbidden core repository import in DriverLegacyDetailsBridge'; exit 1
+          fi
+
           grep -F 'DriverClient.list' src/components/drivers/DriversManagement.tsx >/dev/null
           grep -F 'VehicleClient.list' src/components/drivers/DriversManagement.tsx >/dev/null
           grep -F 'DriverClient.get' src/components/drivers/DriverDetailsModal.tsx >/dev/null
@@ -107,6 +120,7 @@ jobs:
           PGPASSWORD: postgres
         shell: bash
         run: |
+          set -euo pipefail
           for file in $(find drizzle -maxdepth 1 -name '*.sql' ! -name '0010_driver_core_authority.sql' | sort); do
             echo "Applying $file"
             psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
@@ -127,6 +141,7 @@ jobs:
           PGPASSWORD: postgres
         shell: bash
         run: |
+          set -euo pipefail
           psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f drizzle/0010_driver_core_authority.sql
           psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
@@ -182,6 +197,7 @@ jobs:
           JWT_AUDIENCE: autoerp-users
         shell: bash
         run: |
+          set -euo pipefail
           npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
           npx tsx src/api/__tests__/vehicleClientTestRunner.ts
           npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
@@ -203,9 +219,10 @@ jobs:
       - name: Diff and candidate immutability
         shell: bash
         run: |
+          set -euo pipefail
           git diff --check
           test -z "$(git status --porcelain --untracked-files=no)"
-          test "$(git rev-parse HEAD)" = "9c96ed8a3f810040b32b9bed706e6ea0adf4b4ee"
+          test "$(git rev-parse HEAD)" = "83cef21a08e74f3521787f7da5cc5a3ec2a76648"
 
       - name: Validation report
         if: always()
@@ -216,7 +233,7 @@ jobs:
               'AUTOERP_SECURITY_2I2_IMPLEMENTATION_VALIDATION_REPORT',
               `STATUS=${{ job.status }}`,
               `RUN_ID=${context.runId}`,
-              'CANDIDATE=9c96ed8a3f810040b32b9bed706e6ea0adf4b4ee',
+              'CANDIDATE=83cef21a08e74f3521787f7da5cc5a3ec2a76648',
               'BASE=4eae042609e4bae49733f129dde291ef99b3f4db',
               'PostgreSQL16/RLS/RBAC/Driver+Health atomicity required',
               'DriverClient + DriverHealthClient + VehicleClient regressions required',
