@@ -1,0 +1,98 @@
+name: SECURITY-2H1-v2 implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-driver-health-v2
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2h1-v2-driver-health-server-authority
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-driver-health-v2
+          path: .control
+          sparse-checkout: |
+            ci
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Apply exact H1-v2 patch
+        run: python .control/ci/apply_driver_health_v2.py
+      - name: Scope gate
+        shell: bash
+        run: |
+          rm -rf .control
+          mapfile -t files < <(git status --porcelain | sed -E 's/^.. //' | sort)
+          printf '%s\n' "${files[@]}"
+          expected=$(cat <<'EOF'
+          drizzle/0007_driver_health_profiles.sql
+          drizzle/meta/_journal.json
+          server.ts
+          src/api/__tests__/driverHealthClientTestRunner.ts
+          src/api/driverHealthClient.ts
+          src/components/drivers/DriverDetailsModal.tsx
+          src/db/repositories/postgresRepositories.ts
+          src/db/schema.ts
+          src/db/uow.ts
+          src/domain/finance/ITransactionContext.ts
+          src/domain/services/DriverService.ts
+          src/shared/security/driverHealthAuthorization.ts
+          EOF
+          )
+          actual=$(printf '%s\n' "${files[@]}" | sed '/^$/d')
+          test "$actual" = "$expected"
+      - name: H1 static security gate
+        shell: bash
+        run: |
+          grep -F "0007_driver_health_profiles" drizzle/meta/_journal.json >/dev/null
+          grep -F "FORCE ROW LEVEL SECURITY" drizzle/0007_driver_health_profiles.sql >/dev/null
+          grep -F "hasDriverHealthPermission" server.ts >/dev/null
+          grep -F "app.get('/api/drivers/:id/health'" server.ts >/dev/null
+          grep -F "app.put('/api/drivers/:id/health'" server.ts >/dev/null
+          grep -F "DriverHealthClient.get" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          grep -F "DriverHealthClient.update" src/components/drivers/DriverDetailsModal.tsx >/dev/null
+          ! grep -F "driver.healthAndEmergency" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "delete driverWithoutHealth.healthAndEmergency" src/domain/services/DriverService.ts >/dev/null
+          grep -F "process.env.NODE_ENV !== 'test'" src/domain/services/DriverService.ts >/dev/null
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Driver health transport tests
+        run: npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+      - name: Security regression 35/35
+        env:
+          NODE_ENV: test
+        run: npx tsx src/domain/services/__tests__/securityTestRunner.ts
+      - name: Diff safety
+        shell: bash
+        run: |
+          git diff --check
+          ! git diff -- server.ts src/domain/services/DriverService.ts | grep -E '^\+.*(ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true)' 
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'AutoERP CI'
+          git config user.email 'autoerp-ci@users.noreply.github.com'
+          git add drizzle/0007_driver_health_profiles.sql drizzle/meta/_journal.json server.ts src/api/__tests__/driverHealthClientTestRunner.ts src/api/driverHealthClient.ts src/components/drivers/DriverDetailsModal.tsx src/db/repositories/postgresRepositories.ts src/db/schema.ts src/db/uow.ts src/domain/finance/ITransactionContext.ts src/domain/services/DriverService.ts src/shared/security/driverHealthAuthorization.ts
+          git commit -m 'feat(security): move driver health to server authority'
+          git push origin HEAD:security-2h1-v2-driver-health-server-authority
