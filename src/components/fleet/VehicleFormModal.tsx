@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '../../types/entities';
-import { CreateVehicleDTO, UpdateVehicleDTO, VehicleService } from '../../domain/services/VehicleService';
+import { VehicleClient } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -12,7 +12,26 @@ interface VehicleFormModalProps {
   onClose: () => void;
   onSuccess: () => void;
   vehicleToEdit?: Vehicle | null;
-  companyId: string;
+}
+
+interface VehicleFormData {
+  plate: string;
+  brand: string;
+  model: string;
+  version?: string;
+  yearFabrication: number;
+  yearModel: number;
+  color: string;
+  renavam: string;
+  chassis: string;
+  currentKm: number;
+  nextMaintenanceKm?: number;
+  fuelType: string;
+  category: string;
+  acquisitionValue: number;
+  currentValue: number;
+  rentalValueBase: number;
+  notes?: string;
 }
 
 export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
@@ -20,10 +39,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   onClose,
   onSuccess,
   vehicleToEdit,
-  companyId,
 }) => {
-  const [formData, setFormData] = useState<CreateVehicleDTO>({
-    companyId,
+  const [formData, setFormData] = useState<VehicleFormData>({
     plate: '',
     brand: '',
     model: '',
@@ -49,7 +66,6 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   useEffect(() => {
     if (vehicleToEdit) {
       setFormData({
-        companyId: vehicleToEdit.companyId,
         plate: vehicleToEdit.plate,
         brand: vehicleToEdit.brand,
         model: vehicleToEdit.model,
@@ -70,7 +86,6 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
       });
     } else {
       setFormData({
-        companyId,
         plate: '',
         brand: '',
         model: '',
@@ -91,9 +106,9 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
       });
     }
     setErrorMessage(null);
-  }, [vehicleToEdit, isOpen, companyId]);
+  }, [vehicleToEdit, isOpen]);
 
-  const handleChange = (field: keyof CreateVehicleDTO, value: any) => {
+  const handleChange = (field: keyof VehicleFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errorMessage) setErrorMessage(null);
   };
@@ -104,20 +119,11 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const service = new VehicleService();
       if (vehicleToEdit) {
-        await service.updateVehicle(
-          vehicleToEdit.id,
-          formData as UpdateVehicleDTO,
-          'user-admin-1',
-          'Gestor de Frota'
-        );
+        const { currentKm: _serverManagedKm, ...editableFields } = formData;
+        await VehicleClient.update(vehicleToEdit.id, editableFields);
       } else {
-        await service.createVehicle(
-          formData,
-          'user-admin-1',
-          'Gestor de Frota'
-        );
+        await VehicleClient.create(formData);
       }
       onSuccess();
       onClose();
@@ -241,8 +247,10 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             label="KM Atual *"
             type="number"
             required
+            disabled={!!vehicleToEdit}
             value={formData.currentKm}
             onChange={(e) => handleChange('currentKm', Number(e.target.value))}
+            helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
 
           <Input

@@ -1,4 +1,4 @@
-import type { Vehicle } from '../types/entities';
+import type { Vehicle, KmRecord } from '../types/entities';
 import { VehicleStatus } from '../types/enums';
 
 export class VehicleApiError extends Error {
@@ -28,6 +28,17 @@ function validateVehicle(value: unknown): Vehicle {
   return item as unknown as Vehicle;
 }
 
+const KM_TYPES = new Set(['CHECK_IN', 'CHECK_OUT', 'PERIODIC', 'MAINTENANCE']);
+function validateKmRecord(value: unknown): KmRecord {
+  const item = asRecord(value);
+  if (
+    typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.vehicleId !== 'string' ||
+    !Number.isInteger(item.kmValue) || Number(item.kmValue) < 0 || typeof item.recordDate !== 'string' ||
+    typeof item.readingType !== 'string' || !KM_TYPES.has(item.readingType) || typeof item.createdAt !== 'string'
+  ) throw new Error('Invalid KM record payload');
+  return item as unknown as KmRecord;
+}
+
 async function apiError(response: Response): Promise<VehicleApiError> {
   let message = `Vehicle request failed (${response.status})`;
   try {
@@ -37,7 +48,7 @@ async function apiError(response: Response): Promise<VehicleApiError> {
   return new VehicleApiError(response.status, message);
 }
 
-export interface VehicleWriteInput {
+export interface VehicleUpdateInput {
   plate?: string;
   renavam?: string;
   brand?: string;
@@ -47,7 +58,6 @@ export interface VehicleWriteInput {
   yearModel?: number;
   color?: string;
   chassis?: string;
-  currentKm?: number;
   nextMaintenanceKm?: number;
   fuelType?: string;
   category?: string;
@@ -57,9 +67,27 @@ export interface VehicleWriteInput {
   notes?: string;
 }
 
-export type VehicleCreateInput = VehicleWriteInput & Required<Pick<VehicleWriteInput,
-  'plate' | 'renavam' | 'brand' | 'model' | 'currentKm' | 'acquisitionValue' | 'currentValue' | 'rentalValueBase'
->>;
+export type VehicleCreateInput = VehicleUpdateInput & {
+  plate: string;
+  renavam: string;
+  brand: string;
+  model: string;
+  currentKm: number;
+  acquisitionValue: number;
+  currentValue: number;
+  rentalValueBase: number;
+};
+
+export interface VehicleKmInput {
+  kmValue: number;
+  readingType: KmRecord['readingType'];
+  notes?: string;
+}
+
+export interface VehicleKmResult {
+  record: KmRecord;
+  vehicle: Vehicle;
+}
 
 export class VehicleClient {
   static async list(): Promise<Vehicle[]> {
@@ -84,7 +112,7 @@ export class VehicleClient {
     return validateVehicle(asRecord(await response.json()).item);
   }
 
-  static async update(id: string, input: VehicleWriteInput): Promise<Vehicle> {
+  static async update(id: string, input: VehicleUpdateInput): Promise<Vehicle> {
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}`, {
       method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
@@ -98,5 +126,22 @@ export class VehicleClient {
     });
     if (!response.ok) throw await apiError(response);
     return validateVehicle(asRecord(await response.json()).item);
+  }
+
+  static async listKm(vehicleId: string): Promise<KmRecord[]> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/km-records`, { credentials: 'include' });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (!Array.isArray(payload.items)) throw new Error('Invalid KM record list');
+    return payload.items.map(validateKmRecord);
+  }
+
+  static async recordKm(vehicleId: string, input: VehicleKmInput): Promise<VehicleKmResult> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/km-records`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return { record: validateKmRecord(payload.record), vehicle: validateVehicle(payload.vehicle) };
   }
 }

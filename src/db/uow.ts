@@ -12,7 +12,8 @@ import {
   PostgresSecurityDepositRepository,
   PostgresSecurityDepositMovementRepository,
   PostgresDriverHealthProfileRepository,
-  PostgresVehicleRepository
+  PostgresVehicleRepository,
+  PostgresKmRecordRepository
 } from './repositories/postgresRepositories';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
@@ -39,6 +40,7 @@ export class UnitOfWork {
       
       const txContext: ITransactionContext = {
         getVehicleRepo: () => new PostgresVehicleRepository(tx),
+        getKmRecordRepo: () => new PostgresKmRecordRepository(tx),
         getReceivableRepo: () => new PostgresAccountReceivableRepository(tx),
         getPayableRepo: () => new PostgresAccountPayableRepository(tx),
         getTransactionRepo: () => new PostgresFinancialTransactionRepository(tx),

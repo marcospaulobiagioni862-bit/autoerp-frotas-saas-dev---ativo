@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { VehicleRepository } from '../../persistence/repositories/localRepositories';
-import { VehicleService } from '../../domain/services/VehicleService';
+import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VehicleStatus } from '../../types/enums';
-import { useAuth } from '../../hooks/useAuth';
 import {
   Car,
   Search,
@@ -25,7 +23,6 @@ import { RecordKmModal } from './RecordKmModal';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 
 export const FleetManagement: React.FC = () => {
-  const { user } = useAuth();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -52,9 +49,8 @@ export const FleetManagement: React.FC = () => {
   const loadVehicles = async () => {
     setLoading(true);
     try {
-      const repo = new VehicleRepository();
-      const list = await repo.findAll({ companyId: user.companyId });
-      setVehicles(list.filter((v) => !v.isArchived));
+      const list = await VehicleClient.list();
+      setVehicles(list);
     } catch (err) {
       console.error('Erro ao carregar veículos:', err);
     } finally {
@@ -95,14 +91,7 @@ export const FleetManagement: React.FC = () => {
   const handleConfirmStatusChange = async (reason?: string) => {
     if (!vehicleForStatusChange || !targetStatus) return;
     try {
-      const service = new VehicleService();
-      await service.changeStatus(
-        vehicleForStatusChange.id,
-        targetStatus,
-        reason,
-        user.userId,
-        user.name
-      );
+      await VehicleClient.changeStatus(vehicleForStatusChange.id, targetStatus, reason);
       await loadVehicles();
     } catch (err: any) {
       alert(err.message || 'Erro ao alterar status do veículo.');
@@ -367,7 +356,6 @@ export const FleetManagement: React.FC = () => {
         }}
         onSuccess={loadVehicles}
         vehicleToEdit={vehicleToEdit}
-        companyId={user.companyId}
       />
 
       <VehicleDetailsModal
