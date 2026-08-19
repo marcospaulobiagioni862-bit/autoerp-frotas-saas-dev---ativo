@@ -1,0 +1,75 @@
+name: SECURITY-2I4B pending badge fix
+
+on:
+  pull_request:
+    branches:
+      - ci-fix-security-2i4b-pending-badge
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 13fd15781dd298c6a6e0b5b3cb20a16401284abd
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fix PENDING presentation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/fleet/FleetComplianceManagement.tsx')
+          text = p.read_text()
+          old = """doc.complianceStatus === DocumentStatus.VALID
+                                ? 'success'
+                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
+                                ? 'warning'
+                                : 'danger'"""
+          new = """doc.complianceStatus === DocumentStatus.VALID
+                                ? 'success'
+                                : doc.complianceStatus === DocumentStatus.EXPIRING_SOON || doc.complianceStatus === DocumentStatus.PENDING
+                                ? 'warning'
+                                : 'danger'"""
+          assert text.count(old) == 1, f'variant block count={text.count(old)}'
+          text = text.replace(old, new)
+          old = """doc.complianceStatus === DocumentStatus.VALID
+                              ? 'Válido'
+                              : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
+                              ? 'A Vencer'
+                              : 'Vencido'"""
+          new = """doc.complianceStatus === DocumentStatus.VALID
+                              ? 'Válido'
+                              : doc.complianceStatus === DocumentStatus.EXPIRING_SOON
+                              ? 'A Vencer'
+                              : doc.complianceStatus === DocumentStatus.PENDING
+                              ? 'Pendente'
+                              : 'Vencido'"""
+          assert text.count(old) == 1, f'label block count={text.count(old)}'
+          p.write_text(text.replace(old, new))
+          PY
+      - name: Scope and static check
+        run: |
+          test "$(git diff --name-only)" = "src/components/fleet/FleetComplianceManagement.tsx"
+          grep -F "? 'Pendente'" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          git diff --check
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Publish after green
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/fleet/FleetComplianceManagement.tsx
+          git commit -m 'fix(fleet): render pending documents distinctly from expired'
+          git push origin HEAD:security-2i4b-document-semantics
