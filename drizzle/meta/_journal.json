@@ -71,6 +71,13 @@
       "when": 1787109000000,
       "tag": "0009_vehicle_km_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787113500000,
+      "tag": "0010_driver_core_authority",
+      "breakpoints": true
     }
   ]
 }

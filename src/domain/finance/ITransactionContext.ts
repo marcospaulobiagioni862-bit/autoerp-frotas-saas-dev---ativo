@@ -10,6 +10,7 @@ import {
   SecurityDeposit,
   SecurityDepositMovement,
   DriverHealthAndEmergency,
+  Driver,
   Vehicle,
   KmRecord,
 } from '../../types/entities';
@@ -20,6 +21,15 @@ export interface TransactionFilterOptions {
 
 export interface TransactionFinancialPeriodFilterOptions {
   companyId?: string;
+}
+
+export interface ITransactionDriverRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<Driver | null>;
+  findAllByCompany(companyId: string): Promise<Driver[]>;
+  findByCpf(companyId: string, cpf: string): Promise<Driver | null>;
+  findByCnh(companyId: string, cnh: string): Promise<Driver | null>;
+  create(item: Driver): Promise<Driver>;
+  updateForCompany(companyId: string, id: string, item: Driver): Promise<Driver | null>;
 }
 
 export interface ITransactionVehicleRepository {
@@ -98,7 +108,6 @@ export interface ITransactionSecurityDepositMovementRepository {
   create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;
 }
 
-
 export interface TransactionDriverHealthProfile extends DriverHealthAndEmergency {
   id: string;
   companyId: string;
@@ -122,6 +131,7 @@ export interface ITransactionContractRepository {
 }
 
 export interface ITransactionContext {
+  getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
   getKmRecordRepo(): ITransactionKmRecordRepository;
   getReceivableRepo(): ITransactionReceivableRepository;
