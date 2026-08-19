@@ -64,7 +64,7 @@ jobs:
           printf 'MATERIALIZED_I3_DIFF:\n%s\n' "$changed"
           test "$changed" = "$expected"
 
-      - name: Apply exact final wiring and CNH hardening
+      - name: Apply exact final wiring and hardening
         shell: bash
         run: |
           python - <<'PY'
@@ -85,7 +85,16 @@ jobs:
           old = "  if (driver.cnhStatus === DocumentStatus.EXPIRED) throw new ContractConflictError('Driver CNH expired');"
           assert text.count(old) == 1, f'CNH gate count={text.count(old)}'
           new = "  if (![DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(driver.cnhStatus)) throw new ContractConflictError('Driver CNH invalid');"
-          routes.write_text(text.replace(old, new))
+          text = text.replace(old, new)
+
+          old = '          originId: active.id,'
+          assert text.count(old) == 1, f'activation origin count={text.count(old)}'
+          text = text.replace(old, '          originId: `${active.id}:${active.startDate}`,')
+
+          old = '          originId: contract.id,'
+          assert text.count(old) == 1, f'billing origin count={text.count(old)}'
+          text = text.replace(old, '          originId: `${contract.id}:${competenceDate}`,')
+          routes.write_text(text)
           PY
 
       - name: Final implementation scope
@@ -123,6 +132,8 @@ jobs:
           grep -F 'getDriverRepo().findByIdForCompanyWithLock' src/server/contractRoutes.ts >/dev/null
           grep -F 'getVehicleRepo().findByIdForCompanyWithLock' src/server/contractRoutes.ts >/dev/null
           grep -F 'ReceivableService.create' src/server/contractRoutes.ts >/dev/null
+          grep -F 'originId: `${active.id}:${active.startDate}`' src/server/contractRoutes.ts >/dev/null
+          grep -F 'originId: `${contract.id}:${competenceDate}`' src/server/contractRoutes.ts >/dev/null
           grep -F 'registerContractRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
           grep -F 'static async activate' src/api/contractClient.ts >/dev/null
           grep -F 'static async bill' src/api/contractClient.ts >/dev/null
@@ -248,7 +259,7 @@ jobs:
           git config user.name 'autoerp-security-controller'
           git config user.email 'actions@users.noreply.github.com'
           git add src/server/vehicleRoutes.ts src/server/contractRoutes.ts
-          git commit -m 'fix(security): wire Contract routes and harden CNH gate'
+          git commit -m 'fix(security): wire Contract routes and period-scope billing'
           git push origin HEAD:security-2i3-contract-binding-authority
           echo "PUBLISHED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
@@ -264,6 +275,7 @@ jobs:
               `PUBLISHED_SHA=${process.env.PUBLISHED_SHA || 'not-published'}`,
               'BASE=b4ded6b5fb726cb3983f73b8323f3957a779a343',
               'SCOPE=Contract core + atomic Driver/Vehicle binding + initial receivable',
+              'BILLING_ORIGIN=contract+competence to satisfy legacy installment uniqueness',
               'PostgreSQL16/RLS/RBAC/rollback/idempotency required',
               'ContractClient + Driver/Vehicle/Finance/Security/auth regressions required'
             ].join('\n');
