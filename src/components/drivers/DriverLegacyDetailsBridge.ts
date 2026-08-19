@@ -1,5 +1,4 @@
 import {
-  DriverDocumentRepository,
   ContractRepository,
   TrafficTicketRepository,
   AccountReceivableRepository,
@@ -7,7 +6,7 @@ import {
   AuditLogRepository,
   CommunicationLogRepository,
 } from '../../persistence/repositories/localRepositories';
-import type { CommunicationLog, Driver, DriverDocument } from '../../types/entities';
+import type { CommunicationLog, DocumentRecord, Driver } from '../../types/entities';
 import { DocumentStatus, DriverStatus, ObligationStatus } from '../../types/enums';
 import { generateUUID } from '../../shared/utils/uuid';
 
@@ -16,7 +15,7 @@ export interface DriverLegacyDetailedSummary {
   currentVehicle?: any;
   currentContract?: any;
   contractHistory: any[];
-  documents: DriverDocument[];
+  documents: DocumentRecord[];
   trafficTickets: any[];
   securityDeposits: any[];
   receivables: any[];
@@ -70,12 +69,11 @@ function obligationBalance(item: any): number {
 }
 
 /**
- * Temporary read/write bridge for Driver-adjacent entities that are explicitly
- * outside SECURITY-2I2. It never imports DriverRepository or VehicleRepository
- * and it never supplies Driver/Vehicle core authority.
+ * Temporary bridge only for Driver-adjacent entities that remain outside the
+ * server-authority waves. SECURITY-2I4B explicitly removed all document reads
+ * and writes from this bridge; `documents` is filled by DocumentClient.
  */
 export class DriverLegacyDetailsBridge {
-  private readonly docRepo = new DriverDocumentRepository();
   private readonly contractRepo = new ContractRepository();
   private readonly ticketRepo = new TrafficTicketRepository();
   private readonly receivableRepo = new AccountReceivableRepository();
@@ -85,10 +83,9 @@ export class DriverLegacyDetailsBridge {
 
   async getSupplementalSummary(driver: Driver): Promise<DriverLegacyDetailedSummary> {
     const driverId = driver.id;
-    const [currentContract, allContracts, documents, trafficTickets, securityDeposits, receivables, allAuditLogs, communicationLogs] = await Promise.all([
+    const [currentContract, allContracts, trafficTickets, securityDeposits, receivables, allAuditLogs, communicationLogs] = await Promise.all([
       driver.currentContractId ? this.contractRepo.findById(driver.currentContractId) : Promise.resolve(null),
       this.contractRepo.findAll({ driverId }),
-      this.docRepo.findAll({ driverId }),
       this.ticketRepo.findAll({ driverId }),
       this.depositRepo.findAll({ driverId }),
       this.receivableRepo.findAll({ driverId }),
@@ -125,7 +122,7 @@ export class DriverLegacyDetailsBridge {
       currentVehicle: undefined,
       currentContract: currentContract || undefined,
       contractHistory: allContracts,
-      documents,
+      documents: [],
       trafficTickets,
       securityDeposits,
       receivables,
@@ -140,38 +137,6 @@ export class DriverLegacyDetailsBridge {
       },
       cnhAlert: evaluateExpiration(driver.cnhExpiration),
     };
-  }
-
-  async addDocument(driver: Driver, docData: {
-    documentType: string;
-    documentNumber?: string;
-    expirationDate?: string;
-    fileUrl?: string;
-    notes?: string;
-  }): Promise<DriverDocument> {
-    const now = new Date().toISOString();
-    const status = docData.expirationDate
-      ? evaluateExpiration(docData.expirationDate).status
-      : DocumentStatus.VALID;
-    return await this.docRepo.create({
-      id: generateUUID(),
-      companyId: driver.companyId,
-      driverId: driver.id,
-      documentType: docData.documentType,
-      documentNumber: docData.documentNumber,
-      expirationDate: docData.expirationDate,
-      status,
-      fileUrl: docData.fileUrl,
-      notes: docData.notes,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  async removeDocument(documentId: string): Promise<boolean> {
-    const existing = await this.docRepo.findById(documentId);
-    if (!existing) throw new Error(`Documento ${documentId} não encontrado.`);
-    return await this.docRepo.delete(documentId);
   }
 
   async addCommunicationLog(driver: Driver, logData: Omit<CommunicationLog, 'id' | 'dateTime' | 'companyId' | 'driverId'>): Promise<CommunicationLog> {
