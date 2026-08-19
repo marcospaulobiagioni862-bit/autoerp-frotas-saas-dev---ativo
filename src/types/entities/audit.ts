@@ -26,12 +26,12 @@ export interface FileAttachment {
   createdAt: string;
   entityType: string;
   documentType?: string;
-  storageProvider: 'LEGACY_BROWSER' | 'SERVER_FS';
+  storageProvider?: 'LOCAL' | 'CLOUD' | 'LEGACY_BROWSER' | 'SERVER_FS';
   storageKey?: string;
   checksum?: string;
   createdBy?: string;
-  isArchived: boolean;
-  contentState: 'LEGACY_BROWSER' | 'AVAILABLE' | 'MISSING';
+  isArchived?: boolean;
+  contentState?: 'LEGACY_BROWSER' | 'AVAILABLE' | 'MISSING';
   description?: string;
   issueDate?: string;
   expirationDate?: string;
