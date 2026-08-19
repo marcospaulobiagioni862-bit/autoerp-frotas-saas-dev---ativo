@@ -1,0 +1,172 @@
+name: SECURITY-2I4C final full browser E2E
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4c-e2e-final
+
+permissions:
+  contents: read
+
+jobs:
+  full-browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_i4c_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_i4c_e2e"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_i4c_e2e
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      VITE_E2E: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-e2e-attachments
+      CANDIDATE_SHA: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+      CANDIDATE_TREE: a165a21d66f6c2e7500880f6e857272a0ebd2080
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+      BROWSER_COMPANY_ID: browser-i4c-company
+      BROWSER_USER_ID: browser-i4c-admin
+    steps:
+      - name: Checkout exact corrected candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact candidate identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+      - name: Install application and Playwright library
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          command -v google-chrome
+          google-chrome --version
+          test -z "$(git status --porcelain)"
+
+      - name: Apply migrations and seed authenticated tenant
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_i4c_e2e -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          psql -h localhost -U postgres -d autoerp_i4c_e2e -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('browser-i4c-company', 'BROWSER-I4C', 'Browser I4C Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET document=EXCLUDED.document, name=EXCLUDED.name, status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('browser-i4c-admin', 'browser-i4c-company', 'Browser I4C Admin', 'browser-i4c-admin@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id=EXCLUDED.company_id, name=EXCLUDED.name, email=EXCLUDED.email, role='ADMIN', active=true, updated_at=NOW();
+          SQL
+
+      - name: Start exact candidate in E2E session mode
+        run: |
+          set -euo pipefail
+          rm -rf "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-e2e-final
+          mkdir -p "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-e2e-final
+          nohup npm run dev > /tmp/i4c-e2e-final/server.log 2>&1 &
+          echo $! > /tmp/i4c-e2e-final/server.pid
+          for i in $(seq 1 90); do
+            if curl -fsS \
+              -H "x-company-id: $BROWSER_COMPANY_ID" \
+              -H "x-user-id: $BROWSER_USER_ID" \
+              http://127.0.0.1:3000/api/auth/me > /tmp/i4c-e2e-final/auth-me.json; then
+              cat /tmp/i4c-e2e-final/auth-me.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i4c-e2e-final/server.log
+          exit 1
+
+      - name: Seed vehicle and driver through authoritative APIs
+        run: |
+          set -euo pipefail
+          H1="x-company-id: $BROWSER_COMPANY_ID"
+          H2="x-user-id: $BROWSER_USER_ID"
+          curl -fsS -X POST http://127.0.0.1:3000/api/fleet/vehicles \
+            -H "$H1" -H "$H2" -H 'content-type: application/json' \
+            --data '{"plate":"BRW1A01","renavam":"BRW-RENAVAM-001","brand":"Toyota","model":"Yaris","version":"XL","yearFabrication":2025,"yearModel":2026,"color":"Prata","chassis":"BRWCHASSIS001","currentKm":10000,"fuelType":"Flex","category":"Sedan","acquisitionValue":80000,"currentValue":70000,"rentalValueBase":800}' \
+            | tee /tmp/i4c-e2e-final/vehicle.json
+          curl -fsS -X POST http://127.0.0.1:3000/api/drivers \
+            -H "$H1" -H "$H2" -H 'content-type: application/json' \
+            --data '{"fullName":"Browser Driver I4C","cpf":"11144477735","birthDate":"1990-01-01","phone":"11999999999","whatsapp":"11999999999","email":"browser-driver@example.test","address":{"street":"Rua Browser","number":"100","neighborhood":"Centro","city":"São Paulo","state":"SP","zipCode":"01001000"},"cnhNumber":"02650306461","cnhCategory":"B","cnhExpiration":"2035-01-01","appPlatforms":["Uber"]}' \
+            | tee /tmp/i4c-e2e-final/driver.json
+          echo "BROWSER_VEHICLE_ID=$(jq -r '.item.id' /tmp/i4c-e2e-final/vehicle.json)" >> "$GITHUB_ENV"
+          echo "BROWSER_DRIVER_ID=$(jq -r '.item.id' /tmp/i4c-e2e-final/driver.json)" >> "$GITHUB_ENV"
+          test "$(jq -r '.item.status' /tmp/i4c-e2e-final/vehicle.json)" = "AVAILABLE"
+          test "$(jq -r '.item.status' /tmp/i4c-e2e-final/driver.json)" = "ACTIVE"
+
+      - name: Create browser PDF fixtures
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { PDFDocument, StandardFonts } from 'pdf-lib';
+          import { writeFile } from 'node:fs/promises';
+          async function create(path, text) {
+            const doc = await PDFDocument.create();
+            const page = doc.addPage([595, 842]);
+            const font = await doc.embedFont(StandardFonts.Helvetica);
+            page.drawText(text, { x: 50, y: 780, size: 14, font });
+            await writeFile(path, await doc.save());
+          }
+          await create('/tmp/i4c-e2e-final/signed-browser.pdf', 'Evidencia assinada - browser E2E I4C');
+          await create('/tmp/i4c-e2e-final/generic-browser.pdf', 'Anexo generico - browser E2E I4C');
+          NODE
+
+      - name: Materialize independent E2E script
+        run: |
+          set -euo pipefail
+          git fetch origin ci-validate-security-2i4c-e2e-final --quiet
+          git show origin/ci-validate-security-2i4c-e2e-final:.ci/security-2i4c-e2e-final.mjs > .git/security-2i4c-e2e-final.mjs
+          test -s .git/security-2i4c-e2e-final.mjs
+          test -z "$(git status --porcelain)"
+
+      - name: Full Chrome I4C E2E
+        run: |
+          set -euo pipefail
+          node .git/security-2i4c-e2e-final.mjs
+
+      - name: Final candidate immutability
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+      - name: Upload full browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i4c-final-full-browser-e2e
+          path: /tmp/i4c-e2e-final
+          if-no-files-found: warn
+          retention-days: 7
