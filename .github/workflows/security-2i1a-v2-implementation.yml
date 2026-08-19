@@ -1,0 +1,189 @@
+name: SECURITY-2I1A-v2 implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i1a-v2
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  implement-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2i1a-v2-vehicle-server-foundation
+          fetch-depth: 0
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2i1a-v2
+          path: .ci-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Exact base gate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "6823cb1a71e8e816231d087724491d424b350426"
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2I1A-v2 patch
+        run: python .ci-control/.ci/apply-security-2i1a-v2.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | grep -v '^\.ci-control/' | sort -u)"
+          expected="$(printf '%s\n' \
+            drizzle/0008_vehicle_core_authority.sql \
+            drizzle/meta/_journal.json \
+            server.ts \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/vehicleRoutes.ts | sort)"
+          printf 'CHANGED:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -E '^src/components/'
+
+      - name: I1A-v2 authority static gate
+        shell: bash
+        run: |
+          grep -F '0008_vehicle_core_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE vehicles FORCE ROW LEVEL SECURITY' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'vehicles_current_km_nonnegative' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'getVehicleRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'PostgresVehicleRepository' src/db/uow.ts >/dev/null
+          grep -F 'findByIdForCompany' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F "app.post('/api/fleet/vehicles'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.patch('/api/fleet/vehicles/:id'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.patch('/api/fleet/vehicles/:id/status'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'principal.companyId' src/server/vehicleRoutes.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/vehicleClient.ts >/dev/null
+          grep -F 'registerVehicleRoutes(app)' server.ts >/dev/null
+          ! grep -F 'VehicleClient' src/components/fleet/FleetManagement.tsx
+          ! grep -F 'VehicleClient' src/components/fleet/VehicleFormModal.tsx
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Vehicle client tests
+        run: npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+
+      - name: PostgreSQL16 session/RLS/RBAC/audit validation
+        shell: bash
+        run: |
+          mkdir -p .ci
+          cp .ci-control/.ci/security-2i1a-v2-validation.ts .ci/security-2i1a-v2-validation.ts
+          npx tsx .ci/security-2i1a-v2-validation.ts
+          rm -rf .ci
+
+      - name: Core regressions
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i1a-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Diff safety
+        shell: bash
+        run: |
+          git diff --check
+          ! git diff --name-only | grep -E '^package(-lock)?\.json$'
+          ! git diff --name-only | grep -E '^src/components/'
+          ! git diff | grep -E '@ts-ignore|ts-ignore'
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            drizzle/0008_vehicle_core_authority.sql \
+            drizzle/meta/_journal.json \
+            server.ts \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/vehicleRoutes.ts
+          git commit -m 'feat(security): add vehicle server authority foundation v2'
+          git push origin HEAD:security-2i1a-v2-vehicle-server-foundation
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2I1A_V2_IMPLEMENTATION_REPORT',
+              `STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              `CANDIDATE_SHA=${process.env.CANDIDATE_SHA || 'not-published'}`,
+              'BASE=6823cb1a71e8e816231d087724491d424b350426',
+              'UI_SWITCHOVER=DEFERRED_TO_I1B',
+              'PostgreSQL16/RLS/RBAC/audit rollback required',
+              'VehicleClient=8/8 required',
+              'Contract=20/20, Finance=46/46, Security=35/35 required'
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
