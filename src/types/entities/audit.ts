@@ -24,14 +24,14 @@ export interface FileAttachment {
   mimeType: string;
   uploadedBy: string;
   createdAt: string;
-  // Extended production ready fields
-  entityType?: string;
+  entityType: string;
   documentType?: string;
-  storageProvider?: 'LOCAL' | 'CLOUD';
+  storageProvider: 'LEGACY_BROWSER' | 'SERVER_FS';
   storageKey?: string;
   checksum?: string;
   createdBy?: string;
-  isArchived?: boolean;
+  isArchived: boolean;
+  contentState: 'LEGACY_BROWSER' | 'AVAILABLE' | 'MISSING';
   description?: string;
   issueDate?: string;
   expirationDate?: string;
