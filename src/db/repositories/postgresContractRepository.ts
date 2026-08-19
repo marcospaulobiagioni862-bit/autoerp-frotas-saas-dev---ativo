@@ -32,6 +32,7 @@ export class PostgresContractRepository implements ITransactionContractRepositor
       templateId: row.template_id || undefined,
       generatedPdfUrl: row.generated_pdf_url || undefined,
       signedContractUrl: row.signed_contract_url || undefined,
+      signatureRequired: Boolean(row.signature_required),
       notes: row.notes || undefined,
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
@@ -137,14 +138,14 @@ export class PostgresContractRepository implements ITransactionContractRepositor
         contract_number, start_date, end_date, rental_amount, billing_periodicity,
         billing_due_day_of_week, billing_due_day_of_month,
         security_deposit_amount, security_deposit_id, franchise_km, excess_km_rate,
-        payment_method_id, template_id, generated_pdf_url, signed_contract_url,
+        payment_method_id, template_id, generated_pdf_url, signed_contract_url, signature_required,
         notes, is_archived, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.driverId}, ${item.vehicleId}, ${item.status},
         ${item.contractNumber}, ${item.startDate}, ${item.endDate || null}, ${item.rentalAmount}, ${item.billingPeriodicity},
         ${item.billingDueDayOfWeek ?? 1}, ${item.billingDueDayOfMonth ?? 1},
         ${item.securityDepositAmount}, ${item.securityDepositId || null}, ${item.franchiseKm}, ${item.excessKmRate},
-        ${item.paymentMethodId || null}, ${item.templateId || null}, ${item.generatedPdfUrl || null}, ${item.signedContractUrl || null},
+        ${item.paymentMethodId || null}, ${item.templateId || null}, ${item.generatedPdfUrl || null}, ${item.signedContractUrl || null}, ${item.signatureRequired ?? true},
         ${item.notes || null}, ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
       )
     `);
@@ -177,6 +178,7 @@ export class PostgresContractRepository implements ITransactionContractRepositor
         template_id = ${item.templateId || null},
         generated_pdf_url = ${item.generatedPdfUrl || null},
         signed_contract_url = ${item.signedContractUrl || null},
+        signature_required = ${item.signatureRequired ?? true},
         notes = ${item.notes || null},
         is_archived = ${item.isArchived},
         updated_at = ${item.updatedAt}

@@ -17,6 +17,9 @@ import {
   Vehicle,
   KmRecord,
   Contract,
+  ContractTemplate,
+  ContractArtifact,
+  ContractArtifactType,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -184,6 +187,37 @@ export interface ITransactionContractRepository {
   updateForCompany(companyId: string, id: string, item: Partial<Contract>): Promise<Contract | null>;
 }
 
+export interface ITransactionContractTemplateRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<ContractTemplate | null>;
+  findByIdForCompanyWithLock(companyId: string, id: string): Promise<ContractTemplate | null>;
+  findAllByCompany(companyId: string, includeArchived?: boolean): Promise<ContractTemplate[]>;
+  findVersions(companyId: string, templateKey: string): Promise<ContractTemplate[]>;
+  findCurrentWithLock(companyId: string, templateKey: string): Promise<ContractTemplate | null>;
+  create(item: ContractTemplate): Promise<ContractTemplate>;
+  updateForCompany(
+    companyId: string,
+    id: string,
+    item: Partial<Pick<ContractTemplate, 'isCurrent' | 'isActive' | 'isArchived' | 'updatedAt'>>
+  ): Promise<ContractTemplate | null>;
+}
+
+export interface ITransactionContractArtifactRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<ContractArtifact | null>;
+  findCurrentForContract(
+    companyId: string,
+    contractId: string,
+    artifactType: ContractArtifactType,
+    lock?: boolean
+  ): Promise<ContractArtifact | null>;
+  findAllForContract(companyId: string, contractId: string): Promise<ContractArtifact[]>;
+  create(item: ContractArtifact): Promise<ContractArtifact>;
+  updateForCompany(
+    companyId: string,
+    id: string,
+    item: Partial<Pick<ContractArtifact, 'isCurrent' | 'isArchived' | 'updatedAt'>>
+  ): Promise<ContractArtifact | null>;
+}
+
 export interface ITransactionContext {
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
@@ -201,5 +235,7 @@ export interface ITransactionContext {
   getSecurityDepositRepo(): ITransactionSecurityDepositRepository;
   getSecurityDepositMovementRepo(): ITransactionSecurityDepositMovementRepository;
   getContractRepo(): ITransactionContractRepository;
+  getContractTemplateRepo(): ITransactionContractTemplateRepository;
+  getContractArtifactRepo(): ITransactionContractArtifactRepository;
   getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
 }

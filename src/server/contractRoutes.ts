@@ -288,6 +288,7 @@ export function registerContractRoutes(app: Express): void {
           excessKmRate,
           paymentMethodId: optionalText(body.paymentMethodId),
           templateId: optionalText(body.templateId),
+          signatureRequired: true,
           notes: optionalText(body.notes),
           isArchived: false,
           createdAt: now,
