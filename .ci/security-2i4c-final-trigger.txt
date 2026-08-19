@@ -1,6 +1,7 @@
-Trigger SECURITY-2I4C final independent validation v2.
+Trigger SECURITY-2I4C final independent validation v2 — fresh rerun.
 Consolidated corrected candidate: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
 Tree: a165a21d66f6c2e7500880f6e857272a0ebd2080
 Exactly one commit over main 68b2ab0315bfb9e77cacb760b8f1bffdb4034357.
-Includes independent technical matrix and final Chrome runtime boot.
+Includes independent 26-file technical matrix and final authenticated Chrome runtime boot.
+Fresh rerun after runtime-hotfix proof 32301518012.
 Never merge this CI branch.
