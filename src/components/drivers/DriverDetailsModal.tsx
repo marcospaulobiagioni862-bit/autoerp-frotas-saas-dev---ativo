@@ -38,6 +38,8 @@ import {
 } from '../../domain/services/DriverService';
 import { DriverStatus, DocumentStatus, TicketResponsibility, ObligationStatus } from '../../types/enums';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { DriverHealthAndEmergency } from '../../types/entities';
+import { DriverHealthClient } from '../../api/driverHealthClient';
 
 interface DriverDetailsModalProps {
   isOpen: boolean;
@@ -87,7 +89,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
-  const [isHealthUnlocked, setIsHealthUnlocked] = useState(false); // To enforce "permissão restrita" with confirmation/toggle
+  const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
+  const [healthProfile, setHealthProfile] = useState<DriverHealthAndEmergency>({});
 
   // WhatsApp Communications State
   const [customMsg, setCustomMsg] = useState('');
@@ -95,57 +98,40 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
   const driver = summary?.driver;
 
-  useEffect(() => {
-    if (summary?.driver?.healthAndEmergency) {
-      const h = summary.driver.healthAndEmergency;
-      setBloodType(h.bloodType || '');
-      setAllergies(h.allergies || '');
-      setRelevantConditions(h.relevantConditions || '');
-      setContinuousMedications(h.continuousMedications || '');
-      setEmergencyContactName(h.emergencyContactName || '');
-      setEmergencyContactRelationship(h.emergencyContactRelationship || '');
-      setEmergencyContactPhone(h.emergencyContactPhone || '');
-      setEmergencyNotes(h.emergencyNotes || '');
-    } else {
-      setBloodType('');
-      setAllergies('');
-      setRelevantConditions('');
-      setContinuousMedications('');
-      setEmergencyContactName('');
-      setEmergencyContactRelationship('');
-      setEmergencyContactPhone('');
-      setEmergencyNotes('');
-    }
-  }, [summary]);
+  const applyHealthProfile = (h: DriverHealthAndEmergency) => {
+    setHealthProfile(h);
+    setBloodType(h.bloodType || ''); setAllergies(h.allergies || '');
+    setRelevantConditions(h.relevantConditions || ''); setContinuousMedications(h.continuousMedications || '');
+    setEmergencyContactName(h.emergencyContactName || ''); setEmergencyContactRelationship(h.emergencyContactRelationship || '');
+    setEmergencyContactPhone(h.emergencyContactPhone || ''); setEmergencyNotes(h.emergencyNotes || '');
+  };
+
+  const handleUnlockHealth = async () => {
+    if (!driverId) return;
+    setActionLoading(true);
+    try {
+      const h = await DriverHealthClient.get(driverId);
+      applyHealthProfile(h);
+      setIsHealthUnlocked(true);
+    } catch (err: any) {
+      alert(err.message || 'Acesso negado aos dados de saúde.');
+      setIsHealthUnlocked(false);
+    } finally { setActionLoading(false); }
+  };
 
   const handleSaveHealthAndEmergency = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!driverId) return;
     setActionLoading(true);
     try {
-      const driverService = new DriverService();
-      await driverService.updateHealthAndEmergency(
-        driverId,
-        {
-          bloodType,
-          allergies,
-          relevantConditions,
-          continuousMedications,
-          emergencyContactName,
-          emergencyContactRelationship,
-          emergencyContactPhone,
-          emergencyNotes,
-        },
-        'usr-admin',
-        'Administrador'
-      );
+      const updated = await DriverHealthClient.update(driverId, {
+        bloodType, allergies, relevantConditions, continuousMedications, emergencyContactName,
+        emergencyContactRelationship, emergencyContactPhone, emergencyNotes,
+      });
+      applyHealthProfile(updated);
       setIsEditHealthOpen(false);
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao atualizar dados de saúde.');
-    } finally {
-      setActionLoading(false);
-    }
+    } catch (err: any) { alert(err.message || 'Erro ao atualizar dados de saúde.'); }
+    finally { setActionLoading(false); }
   };
 
   const handleSendWhatsApp = async (type: typeof msgType, customText?: string) => {
@@ -227,6 +213,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && driverId) {
+      setIsHealthUnlocked(false);
+      applyHealthProfile({});
       loadData();
       setActiveTab('overview');
     }
@@ -922,21 +910,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                     </p>
                   </div>
                   <Button
-                    onClick={() => {
-                      setIsHealthUnlocked(true);
-                      // Log access audit
-                      const driverService = new DriverService();
-                      driverService.addCommunicationLog({
-                        companyId: driver.companyId,
-                        driverId: driver.id,
-                        type: 'CUSTOM',
-                        phone: driver.phone,
-                        message: `Visualização administrativa de dados de saúde e emergência do motorista ${driver.fullName}`,
-                        relatedRef: 'Acesso Restrito Saúde',
-                        user: 'Administrador',
-                        status: 'MANUALLY_CONFIRMED_SENT'
-                      });
-                    }}
+                    onClick={handleUnlockHealth}
+                    disabled={actionLoading}
                     variant="primary"
                     size="sm"
                   >
@@ -973,25 +948,25 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                         <div>
                           <span className="text-slate-400 block">Tipo Sanguíneo</span>
                           <strong className="text-slate-800 dark:text-slate-100 text-sm font-mono">
-                            {driver.healthAndEmergency?.bloodType || 'Não informado'}
+                            {healthProfile?.bloodType || 'Não informado'}
                           </strong>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Alergias</span>
                           <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {driver.healthAndEmergency?.allergies || 'Nenhuma alergia conhecida registrada.'}
+                            {healthProfile?.allergies || 'Nenhuma alergia conhecida registrada.'}
                           </p>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Condições Médicas Relevantes</span>
                           <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {driver.healthAndEmergency?.relevantConditions || 'Nenhuma condição reportada.'}
+                            {healthProfile?.relevantConditions || 'Nenhuma condição reportada.'}
                           </p>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Medicamentos de Uso Contínuo</span>
                           <p className="text-slate-800 dark:text-slate-200 font-medium font-mono">
-                            {driver.healthAndEmergency?.continuousMedications || 'Nenhum medicamento registrado.'}
+                            {healthProfile?.continuousMedications || 'Nenhum medicamento registrado.'}
                           </p>
                         </div>
                       </div>
@@ -1006,34 +981,34 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                         <div>
                           <span className="text-slate-400 block">Nome do Contato</span>
                           <strong className="text-slate-800 dark:text-slate-100 text-sm">
-                            {driver.healthAndEmergency?.emergencyContactName || 'Não informado'}
+                            {healthProfile?.emergencyContactName || 'Não informado'}
                           </strong>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Parentesco / Relação</span>
                           <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {driver.healthAndEmergency?.emergencyContactRelationship || 'Não informado'}
+                            {healthProfile?.emergencyContactRelationship || 'Não informado'}
                           </p>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Telefone de Emergência</span>
                           <p className="text-slate-800 dark:text-slate-200 font-bold font-mono text-sm">
-                            {driver.healthAndEmergency?.emergencyContactPhone || 'Não informado'}
+                            {healthProfile?.emergencyContactPhone || 'Não informado'}
                           </p>
                         </div>
                         <div>
                           <span className="text-slate-400 block">Observações de Emergência</span>
                           <p className="text-slate-800 dark:text-slate-200 italic">
-                            {driver.healthAndEmergency?.emergencyNotes || 'Sem observações adicionais.'}
+                            {healthProfile?.emergencyNotes || 'Sem observações adicionais.'}
                           </p>
                         </div>
                       </div>
                     </Card>
                   </div>
 
-                  {driver.healthAndEmergency?.lastUpdateDate && (
+                  {healthProfile?.lastUpdateDate && (
                     <p className="text-[10px] text-slate-400 font-mono text-right">
-                      Última atualização: {new Date(driver.healthAndEmergency.lastUpdateDate + 'T12:00:00').toLocaleDateString('pt-BR')} por {driver.healthAndEmergency.responsibleUser || 'Sistema'}
+                      Última atualização: {new Date(healthProfile.lastUpdateDate + 'T12:00:00').toLocaleDateString('pt-BR')} por {healthProfile.responsibleUser || 'Sistema'}
                     </p>
                   )}
                 </div>

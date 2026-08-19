@@ -53,6 +53,28 @@ export const drivers = pgTable('drivers', {
   idx_company_active: index('idx_drv_company_active').on(t.companyId, t.active),
 }));
 
+export const driverHealthProfiles = pgTable('driver_health_profiles', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  driverId: text('driver_id').notNull(),
+  bloodType: text('blood_type'),
+  allergies: text('allergies'),
+  relevantConditions: text('relevant_conditions'),
+  continuousMedications: text('continuous_medications'),
+  emergencyContactName: text('emergency_contact_name'),
+  emergencyContactRelationship: text('emergency_contact_relationship'),
+  emergencyContactPhone: text('emergency_contact_phone'),
+  emergencyNotes: text('emergency_notes'),
+  lastUpdateDate: timestamp('last_update_date', { mode: 'string' }),
+  responsibleUser: text('responsible_user'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  unq_company_driver: unique('driver_health_profiles_company_driver_unique').on(t.companyId, t.driverId),
+  idx_company: index('idx_driver_health_profiles_company').on(t.companyId),
+  idx_driver: index('idx_driver_health_profiles_driver').on(t.driverId),
+}));
+
 export const contracts = pgTable('contracts', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),

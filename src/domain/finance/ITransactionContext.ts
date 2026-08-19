@@ -9,6 +9,7 @@ import {
   FinancialPeriod,
   SecurityDeposit,
   SecurityDepositMovement,
+  DriverHealthAndEmergency,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -80,6 +81,20 @@ export interface ITransactionSecurityDepositMovementRepository {
   create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;
 }
 
+
+export interface TransactionDriverHealthProfile extends DriverHealthAndEmergency {
+  id: string;
+  companyId: string;
+  driverId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ITransactionDriverHealthProfileRepository {
+  findByDriverId(driverId: string): Promise<TransactionDriverHealthProfile | null>;
+  upsert(item: TransactionDriverHealthProfile): Promise<TransactionDriverHealthProfile>;
+}
+
 export interface ITransactionContractRepository {
   findById(id: string): Promise<{
     id: string;
@@ -101,4 +116,5 @@ export interface ITransactionContext {
   getSecurityDepositRepo(): ITransactionSecurityDepositRepository;
   getSecurityDepositMovementRepo(): ITransactionSecurityDepositMovementRepository;
   getContractRepo(): ITransactionContractRepository;
+  getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
 }

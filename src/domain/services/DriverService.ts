@@ -15,6 +15,7 @@ import { Driver, DriverDocument, CommunicationLog } from '../../types/entities';
 import { DriverStatus, DocumentStatus, AuditAction, ObligationStatus } from '../../types/enums';
 import { AuditLogger } from '../../shared/utils/auditLogger';
 import { generateUUID } from '../../shared/utils/uuid';
+import { hasDriverHealthPermission, isDriverHealthAuthorized } from '../../shared/security/driverHealthAuthorization';
 
 export interface CreateDriverDTO {
   companyId: string;
@@ -243,32 +244,7 @@ export class DriverService {
     action: 'VIEW_DRIVER_HEALTH' | 'EDIT_DRIVER_HEALTH',
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): boolean {
-    if (!userContext || !userContext.userId) {
-      return false;
-    }
-    if (userContext.active === false) {
-      return false;
-    }
-
-    const roleUpper = String(userContext.role).toUpperCase();
-    const canonicalRoles = ['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY'];
-    if (!canonicalRoles.includes(roleUpper)) {
-      return false;
-    }
-
-    const permissions = userContext.permissions || [];
-
-    if (action === 'VIEW_DRIVER_HEALTH') {
-      if (permissions.includes('VIEW_DRIVER_HEALTH')) return true;
-      return roleUpper === 'ADMIN' || roleUpper === 'MANAGER' || roleUpper === 'OPERATIONAL_MANAGER';
-    }
-
-    if (action === 'EDIT_DRIVER_HEALTH') {
-      if (permissions.includes('EDIT_DRIVER_HEALTH')) return true;
-      return roleUpper === 'ADMIN' || roleUpper === 'MANAGER' || roleUpper === 'OPERATIONAL_MANAGER';
-    }
-
-    return false;
+    return hasDriverHealthPermission(action, userContext);
   }
 
   public static isHealthAuthorized(
@@ -276,67 +252,29 @@ export class DriverService {
     driver: Driver,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): boolean {
-    if (!DriverService.hasHealthPermission(action, userContext)) {
-      return false;
-    }
+    return isDriverHealthAuthorized(action, driver.companyId, userContext);
+  }
 
-    // Cross-tenant check: cross-tenant é bloqueado inclusive para ADMIN
-    if (driver.companyId !== userContext!.companyId) {
-      return false;
+  private static assertLegacyHealthTestRuntime(): void {
+    if (typeof process === 'undefined' || process.env.NODE_ENV !== 'test') {
+      throw new Error('Acesso negado: dados de saúde exigem autoridade server-side.');
     }
-
-    return true;
   }
 
   public async getDriverHealthAndEmergency(
     driverId: string,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): Promise<any> {
-    const context = userContext || {
-      userId: 'usr-unknown',
-      role: 'READONLY',
-      active: false,
-      companyId: '',
-    };
-
-    // Primeiro gate: valida identidade/role/permissão antes de qualquer lookup do motorista.
-    // Isso evita revelar a existência de um driverId para contextos sem autorização de saúde.
+    DriverService.assertLegacyHealthTestRuntime();
+    const context = userContext || { userId: 'usr-unknown', role: 'READONLY', active: false, companyId: '' };
     if (!DriverService.hasHealthPermission('VIEW_DRIVER_HEALTH', context)) {
       throw new Error('Acesso negado: Permissão VIEW_DRIVER_HEALTH necessária.');
     }
-
     const existing = await this.driverRepo.findById(driverId);
-    if (!existing) {
-      throw new Error(`Motorista ${driverId} não encontrado.`);
-    }
-
-    // Segundo gate: após o lookup autorizado, aplica também o isolamento por tenant.
-    const isAuthorized = DriverService.isHealthAuthorized('VIEW_DRIVER_HEALTH', existing, context);
-    if (!isAuthorized) {
-      await AuditLogger.logAction(
-        existing.companyId,
-        'DriverHealthSecurity',
-        driverId,
-        AuditAction.UPDATE,
-        context.userId,
-        context.userId,
-        undefined,
-        { error: 'Acesso negado: Sem permissão para visualizar dados de saúde.', action: 'VIEW_DRIVER_HEALTH' }
-      );
+    if (!existing) throw new Error(`Motorista ${driverId} não encontrado.`);
+    if (!DriverService.isHealthAuthorized('VIEW_DRIVER_HEALTH', existing, context)) {
       throw new Error('Acesso negado: Permissão VIEW_DRIVER_HEALTH necessária.');
     }
-
-    await AuditLogger.logAction(
-      existing.companyId,
-      'DriverHealthSecurity',
-      driverId,
-      AuditAction.UPDATE,
-      context.userId,
-      context.userId,
-      undefined,
-      { success: 'Acesso autorizado a dados de saúde', action: 'VIEW_DRIVER_HEALTH' }
-    );
-
     return existing.healthAndEmergency || {};
   }
 
@@ -347,62 +285,18 @@ export class DriverService {
     userName: string,
     userContext?: { userId: string; role: string; active: boolean; companyId: string; permissions?: string[] }
   ): Promise<Driver> {
-    // Quando um contexto explícito é fornecido, o gate de identidade/role/permissão
-    // deve ocorrer antes de qualquer lookup ou alteração. O caminho sem userContext
-    // é preservado apenas por compatibilidade com chamadas legadas existentes.
+    DriverService.assertLegacyHealthTestRuntime();
     if (userContext && !DriverService.hasHealthPermission('EDIT_DRIVER_HEALTH', userContext)) {
       throw new Error('Acesso negado: Permissão EDIT_DRIVER_HEALTH necessária.');
     }
-
     const existing = await this.driverRepo.findById(driverId);
-    if (!existing) {
-      throw new Error(`Motorista ${driverId} não encontrado.`);
-    }
-
-    const context = userContext || {
-      userId,
-      role: 'ADMIN', // default to ADMIN for backward compatibility
-      active: true,
-      companyId: existing.companyId,
-    };
-
-    const isAuthorized = DriverService.isHealthAuthorized('EDIT_DRIVER_HEALTH', existing, context);
-    if (!isAuthorized) {
-      await AuditLogger.logAction(
-        existing.companyId,
-        'DriverHealthSecurity',
-        driverId,
-        AuditAction.UPDATE,
-        context.userId,
-        userName || context.userId,
-        undefined,
-        { error: 'Acesso negado: Sem permissão para editar dados de saúde.', action: 'EDIT_DRIVER_HEALTH' }
-      );
+    if (!existing) throw new Error(`Motorista ${driverId} não encontrado.`);
+    const context = userContext || { userId, role: 'ADMIN', active: true, companyId: existing.companyId };
+    if (!DriverService.isHealthAuthorized('EDIT_DRIVER_HEALTH', existing, context)) {
       throw new Error('Acesso negado: Permissão EDIT_DRIVER_HEALTH necessária.');
     }
-
-    const healthAndEmergency = {
-      ...(existing.healthAndEmergency || {}),
-      ...healthData,
-      lastUpdateDate: new Date().toISOString().split('T')[0],
-      responsibleUser: userName || context.userId,
-    };
-
-    const updated = await this.driverRepo.update(driverId, { healthAndEmergency });
-
-    // Registra auditoria sem expor conteúdo sensível (por exemplo, doenças, alergias ou medicamentos completos)
-    await AuditLogger.logAction(
-      existing.companyId,
-      'Driver',
-      driverId,
-      AuditAction.UPDATE,
-      context.userId,
-      userName || context.userId,
-      { healthUpdate: 'Alteração de dados médicos' },
-      { healthUpdate: 'Atualizado com sucesso', fieldsChanged: Object.keys(healthData) }
-    );
-
-    return updated;
+    const healthAndEmergency = { ...(existing.healthAndEmergency || {}), ...healthData, lastUpdateDate: new Date().toISOString().split('T')[0], responsibleUser: userName || context.userId };
+    return this.driverRepo.update(driverId, { healthAndEmergency });
   }
 
   public async updateDriver(
@@ -686,8 +580,11 @@ export class DriverService {
 
     const cnhAlert = evaluateCnhStatus(driver.cnhExpiration);
 
+    const driverWithoutHealth = { ...driver };
+    delete driverWithoutHealth.healthAndEmergency;
+
     return {
-      driver,
+      driver: driverWithoutHealth,
       currentVehicle,
       currentContract,
       contractHistory: allContracts,
