@@ -1,0 +1,225 @@
+name: SECURITY-2I4C final independent validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4c-final
+
+permissions:
+  contents: read
+
+jobs:
+  technical-final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-final-attachments
+      CANDIDATE_SHA: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+      CANDIDATE_TREE: a165a21d66f6c2e7500880f6e857272a0ebd2080
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+    steps:
+      - name: Checkout exact consolidated corrected candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact consolidated identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test "$(git merge-base "$PRODUCTION_BASE" HEAD)" = "$PRODUCTION_BASE"
+          test -z "$(git status --porcelain)"
+
+      - name: Run independent final technical matrix
+        run: |
+          set -euo pipefail
+          git fetch origin ci-validate-security-2i4c-final --quiet
+          git show origin/ci-validate-security-2i4c-final:.ci/security-2i4c-final-validation-v2.sh > /tmp/i4c-final-v2-wrapper.sh
+          chmod +x /tmp/i4c-final-v2-wrapper.sh
+          /tmp/i4c-final-v2-wrapper.sh
+
+      - name: Final technical immutability
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+  browser-boot-final:
+    needs: technical-final
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_browser_final
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_browser_final"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_browser_final
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-final-browser-attachments
+      CANDIDATE_SHA: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+      CANDIDATE_TREE: a165a21d66f6c2e7500880f6e857272a0ebd2080
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+      BROWSER_COMPANY_ID: final-i4c-company
+      BROWSER_USER_ID: final-i4c-admin
+    steps:
+      - name: Checkout exact consolidated corrected candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact browser candidate identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+      - name: Install app and Chrome driver
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          command -v google-chrome
+          npm run lint
+          npm run build
+          test -z "$(git status --porcelain)"
+
+      - name: Apply migrations and seed browser principal
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_browser_final -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          psql -h localhost -U postgres -d autoerp_browser_final -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('final-i4c-company', 'FINAL-I4C', 'Final I4C Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET document=EXCLUDED.document, name=EXCLUDED.name, status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('final-i4c-admin', 'final-i4c-company', 'Final I4C Admin', 'final-i4c@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id=EXCLUDED.company_id, name=EXCLUDED.name, email=EXCLUDED.email, role='ADMIN', active=true, updated_at=NOW();
+          SQL
+
+      - name: Start exact consolidated app
+        run: |
+          set -euo pipefail
+          rm -rf "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-final-browser
+          mkdir -p "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-final-browser
+          nohup npm run dev > /tmp/i4c-final-browser/server.log 2>&1 &
+          echo $! > /tmp/i4c-final-browser/server.pid
+          for i in $(seq 1 90); do
+            if curl -fsS -H "x-company-id: $BROWSER_COMPANY_ID" -H "x-user-id: $BROWSER_USER_ID" http://127.0.0.1:3000/api/auth/me >/tmp/i4c-final-browser/auth-me.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i4c-final-browser/server.log
+          exit 1
+
+      - name: Chrome final runtime boot
+        run: |
+          cat > .git/i4c-final-browser-boot.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const pageErrors = [];
+          const serverErrors = [];
+          const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 1000 },
+            extraHTTPHeaders: {
+              'x-company-id': process.env.BROWSER_COMPANY_ID,
+              'x-user-id': process.env.BROWSER_USER_ID,
+            },
+          });
+          const page = await context.newPage();
+          page.on('pageerror', (error) => pageErrors.push(error.stack || String(error)));
+          page.on('response', (response) => {
+            if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+          });
+          try {
+            await page.goto('http://127.0.0.1:3000', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.getByText('Visão Geral', { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.screenshot({ path: '/tmp/i4c-final-browser/final-boot.png', fullPage: true });
+            const result = {
+              candidate: process.env.CANDIDATE_SHA,
+              tree: process.env.CANDIDATE_TREE,
+              pageErrors,
+              serverErrors,
+              url: page.url(),
+            };
+            await writeFile('/tmp/i4c-final-browser/result.json', JSON.stringify(result, null, 2));
+            if (pageErrors.length) throw new Error(`page errors: ${pageErrors.join(' | ')}`);
+            if (serverErrors.length) throw new Error(`HTTP 5xx: ${serverErrors.join(' | ')}`);
+            console.log('SECURITY-2I4C_FINAL_BROWSER_BOOT_PASS');
+          } finally {
+            await browser.close();
+          }
+          NODE
+          node .git/i4c-final-browser-boot.mjs
+
+      - name: Final browser immutability
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+      - name: Upload final browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i4c-final-browser-evidence
+          path: /tmp/i4c-final-browser
+          if-no-files-found: warn
+          retention-days: 7
