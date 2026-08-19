@@ -1,4 +1,5 @@
-Trigger SECURITY-2I4C integrated validation.
-Immutable product candidate: 590b962e060bdfb0a6173c710960600aa3ca02eb
-Tree: 036909fab49f8532aa8b83cc2576b51f7d9e2004
+Trigger SECURITY-2I4C integrated validation v2.
+Immutable corrected candidate: 3dd1f1a14973defb8b352e707bad3e14ab8b7e83
+Tree: a165a21d66f6c2e7500880f6e857272a0ebd2080
+Includes 26-file scope and FinanceEngine runtime-cycle regression.
 Never merge this CI branch.
