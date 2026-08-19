@@ -1,0 +1,187 @@
+name: SECURITY-2I4C foundation implementation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4c-foundation-v2
+
+permissions:
+  contents: write
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout exact I4C candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 8d763d616e551664ba92505635badd9194156285
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify immutable candidate
+        run: |
+          test "$(git rev-parse HEAD)" = "8d763d616e551664ba92505635badd9194156285"
+          test "$(git merge-base 68b2ab0315bfb9e77cacb760b8f1bffdb4034357 HEAD)" = "68b2ab0315bfb9e77cacb760b8f1bffdb4034357"
+
+      - name: Load and apply authorized patch
+        run: |
+          git show origin/ci-implement-security-2i4c-foundation-v2:.ci/security-2i4c-foundation-patch.py > /tmp/i4c_patch.py
+          sed -i 's#ICAgICAgICBub3RlcyA9ICR7aXRlbS5ub3RlcyB8fIG51bGx9LA==#ICAgICAgICBub3RlcyA9ICR7aXRlbS5ub3RlcyB8fCBudWxsfSw=#' /tmp/i4c_patch.py
+          python /tmp/i4c_patch.py
+
+      - name: Scope gate
+        run: |
+          git diff --name-only | sort | tee /tmp/changed.txt
+          cat > /tmp/allowed.txt <<'EOF'
+          drizzle/meta/_journal.json
+          src/db/repositories/postgresContractRepository.ts
+          src/db/schema.ts
+          src/db/uow.ts
+          src/domain/finance/ITransactionContext.ts
+          src/server/contractRoutes.ts
+          src/types/entities/contract.ts
+          EOF
+          sort -o /tmp/allowed.txt /tmp/allowed.txt
+          diff -u /tmp/allowed.txt /tmp/changed.txt
+
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations 0000 through 0013
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls drizzle/[0-9][0-9][0-9][0-9]_*.sql | sort | grep -v '0014_contract_execution_authority.sql'); do
+            echo "APPLY $f"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+
+      - name: Seed legacy contract before 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies(id, document, name, status) VALUES ('tenant-legacy','00','Legacy Co','ACTIVE');
+          INSERT INTO contracts(
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date,
+            rental_amount, billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived
+          ) VALUES (
+            'legacy-contract','tenant-legacy','legacy-driver','legacy-vehicle','DRAFT','LEGACY-I4C','2026-08-01',
+            700,'WEEKLY',1,1,0,0,0,false
+          );
+          SQL
+
+      - name: Apply migration 0014
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f drizzle/0014_contract_execution_authority.sql
+
+      - name: Validate migration semantics and RLS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "SELECT signature_required FROM contracts WHERE id='legacy-contract'")" = "f"
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO contracts(
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date,
+            rental_amount, billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived
+          ) VALUES (
+            'new-contract','tenant-legacy','driver-new','vehicle-new','DRAFT','NEW-I4C','2026-08-19',
+            700,'WEEKLY',1,1,0,0,0,false
+          );
+          DO $$
+          BEGIN
+            IF (SELECT signature_required FROM contracts WHERE id='new-contract') IS DISTINCT FROM true THEN
+              RAISE EXCEPTION 'new contracts must default signature_required=true';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_class c WHERE c.relname='contract_templates' AND c.relrowsecurity AND c.relforcerowsecurity
+            ) THEN RAISE EXCEPTION 'contract_templates RLS/FORCE missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_class c WHERE c.relname='contract_artifacts' AND c.relrowsecurity AND c.relforcerowsecurity
+            ) THEN RAISE EXCEPTION 'contract_artifacts RLS/FORCE missing'; END IF;
+          END $$;
+          DROP ROLE IF EXISTS autoerp_i4c_rls;
+          CREATE ROLE autoerp_i4c_rls LOGIN PASSWORD 'rls-pass';
+          GRANT USAGE ON SCHEMA public TO autoerp_i4c_rls;
+          GRANT SELECT, INSERT, UPDATE ON contract_templates, contract_artifacts TO autoerp_i4c_rls;
+          SQL
+
+          PGPASSWORD=rls-pass psql -h localhost -U autoerp_i4c_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.current_tenant','tenant-a',false);
+          INSERT INTO contract_templates(
+            id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by
+          ) VALUES ('tpl-a','tenant-a','rental','Rental','Hello',1,true,true,false,'user-a');
+          INSERT INTO contract_artifacts(
+            id,company_id,contract_id,artifact_type,attachment_id,template_id,snapshot_json,snapshot_hash,is_current,is_archived,created_by
+          ) VALUES (
+            'art-a','tenant-a','contract-a','GENERATED_PDF','att-a','tpl-a','{}',
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',true,false,'user-a'
+          );
+          SELECT set_config('app.current_tenant','tenant-b',false);
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM contract_templates) <> 0 THEN RAISE EXCEPTION 'template RLS leak'; END IF;
+            IF (SELECT count(*) FROM contract_artifacts) <> 0 THEN RAISE EXCEPTION 'artifact RLS leak'; END IF;
+          END $$;
+          SQL
+
+          set +e
+          PGPASSWORD=rls-pass psql -h localhost -U autoerp_i4c_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.current_tenant','tenant-b',false);
+          INSERT INTO contract_templates(
+            id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by
+          ) VALUES ('tpl-forged','tenant-a','forged','Forged','No',1,true,true,false,'user-x');
+          SQL
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+
+      - name: Static foundation checks
+        run: |
+          grep -q "contractTemplates = pgTable" src/db/schema.ts
+          grep -q "contractArtifacts = pgTable" src/db/schema.ts
+          grep -q "signatureRequired: true" src/server/contractRoutes.ts
+          grep -q "getContractTemplateRepo" src/db/uow.ts
+          grep -q "getContractArtifactRepo" src/db/uow.ts
+          git diff --check
+
+      - name: Publish validated alignment
+        run: |
+          git config user.name "ChatGPT AutoERP"
+          git config user.email "actions@users.noreply.github.com"
+          git add drizzle/meta/_journal.json src/types/entities/contract.ts src/db/schema.ts src/domain/finance/ITransactionContext.ts src/db/uow.ts src/db/repositories/postgresContractRepository.ts src/server/contractRoutes.ts
+          git commit -m "feat(contract): wire I4C execution authority foundation"
+          git push origin HEAD:security-2i4c-contract-execution-authority
