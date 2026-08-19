@@ -1,0 +1,299 @@
+name: SECURITY-2I3 final validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i3-final
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+
+    steps:
+      - name: Checkout exact consolidated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 2c48bf56278f2d4dd867f868edc7e8f6e3a09e06
+          fetch-depth: 0
+
+      - name: Checkout independent validation control
+        uses: actions/checkout@v4
+        with:
+          ref: ci-validate-security-2i3-final
+          path: .validation-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Candidate identity tree base and exact scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "2c48bf56278f2d4dd867f868edc7e8f6e3a09e06"
+          test "$(git rev-parse HEAD^{tree})" = "564253b4c5de98d460451f9cc01acc991f425729"
+          test "$(git merge-base b4ded6b5fb726cb3983f73b8323f3957a779a343 HEAD)" = "b4ded6b5fb726cb3983f73b8323f3957a779a343"
+          test "$(git rev-list --count b4ded6b5fb726cb3983f73b8323f3957a779a343..HEAD)" = "1"
+          changed="$(git diff --name-only b4ded6b5fb726cb3983f73b8323f3957a779a343..HEAD | sort)"
+          expected="$(printf '%s\n' \
+            drizzle/0011_contract_core_authority.sql \
+            drizzle/meta/_journal.json \
+            src/api/__tests__/contractClientTestRunner.ts \
+            src/api/contractClient.ts \
+            src/components/contracts/ContractDetailsModal.tsx \
+            src/components/contracts/ContractFormModal.tsx \
+            src/components/contracts/ContractLegacyDetailsBridge.ts \
+            src/components/contracts/ContractsManagement.tsx \
+            src/db/repositories/postgresContractRepository.ts \
+            src/db/repositories/postgresDriverRepository.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/__tests__/contractAuthorityIntegration.ts \
+            src/server/contractRoutes.ts \
+            src/server/vehicleRoutes.ts | sort)"
+          printf 'FINAL_SECURITY_2I3_DIFF:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+
+      - name: Independent static server-authority gate
+        shell: bash
+        run: |
+          grep -F '0011_contract_core_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE contracts ENABLE ROW LEVEL SECURITY' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'ALTER TABLE contracts FORCE ROW LEVEL SECURITY' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'uq_contract_company_number' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'uq_contract_active_vehicle' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'uq_contract_active_driver' drizzle/0011_contract_core_authority.sql >/dev/null
+          grep -F 'findByIdForCompanyWithLock' src/db/repositories/postgresContractRepository.ts >/dev/null
+          grep -F 'findByIdForCompanyWithLock' src/db/repositories/postgresDriverRepository.ts >/dev/null
+          grep -F 'getVehicleRepo().findByIdForCompanyWithLock' src/server/contractRoutes.ts >/dev/null
+          grep -F 'getDriverRepo().findByIdForCompanyWithLock' src/server/contractRoutes.ts >/dev/null
+          grep -F 'ReceivableService.create' src/server/contractRoutes.ts >/dev/null
+          grep -F 'originId: `${active.id}:${active.startDate}`' src/server/contractRoutes.ts >/dev/null
+          grep -F 'originId: `${contract.id}:${competenceDate}`' src/server/contractRoutes.ts >/dev/null
+          grep -F 'DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON' src/server/contractRoutes.ts >/dev/null
+          grep -F 'registerContractRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'static async activate' src/api/contractClient.ts >/dev/null
+          grep -F 'static async bill' src/api/contractClient.ts >/dev/null
+          if grep -E 'ContractRepository|VehicleRepository|DriverRepository|ContractService' src/components/contracts/ContractsManagement.tsx; then exit 1; fi
+          if grep -E 'ContractRepository|VehicleRepository|DriverRepository|ContractService|usr-admin|Administrador' src/components/contracts/ContractFormModal.tsx; then exit 1; fi
+          if grep -E 'ContractRepository|VehicleRepository|DriverRepository|ContractService' src/components/contracts/ContractDetailsModal.tsx; then exit 1; fi
+          if grep -E 'new (ContractRepository|VehicleRepository|DriverRepository)' src/components/contracts/ContractLegacyDetailsBridge.ts; then exit 1; fi
+          if grep -F "app.delete('/api/contracts" src/server/contractRoutes.ts; then exit 1; fi
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: ContractClient transport
+        run: npx tsx -e "import('./src/api/__tests__/contractClientTestRunner.ts').then(async (m) => { await m.ContractClientTestRunner.runAllTests(); console.log('ContractClient PASS'); })"
+
+      - name: PostgreSQL16 migrations 0000 through 0010
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' ! -name '0011_contract_core_authority.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+
+      - name: Seed legacy Contract before 0011
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO contracts (id, company_id, driver_id, vehicle_id, status, created_at, updated_at)
+          VALUES ('legacy-contract-i3-final', 'legacy-company-i3-final', 'legacy-driver-i3-final', 'legacy-vehicle-i3-final', 'DRAFT', '2026-08-02T12:00:00Z', '2026-08-02T12:00:00Z');
+          SQL
+
+      - name: Apply 0011 and prove backfill RLS metadata indexes
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f drizzle/0011_contract_core_authority.sql
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            r record;
+            rls_enabled boolean;
+            rls_forced boolean;
+            policy_using text;
+            policy_check text;
+            index_count integer;
+          BEGIN
+            SELECT contract_number, start_date, rental_amount, is_archived INTO r
+            FROM contracts WHERE id='legacy-contract-i3-final';
+            IF r.contract_number NOT LIKE 'LEGACY-%' OR r.start_date <> '2026-08-02' OR r.rental_amount <> 0 OR r.is_archived IS DISTINCT FROM false THEN
+              RAISE EXCEPTION 'legacy Contract backfill failed: %', row_to_json(r);
+            END IF;
+
+            SELECT relrowsecurity, relforcerowsecurity INTO rls_enabled, rls_forced
+            FROM pg_class WHERE oid='public.contracts'::regclass;
+            IF NOT rls_enabled OR NOT rls_forced THEN RAISE EXCEPTION 'Contract RLS/FORCE metadata failed'; END IF;
+
+            SELECT qual, with_check INTO policy_using, policy_check
+            FROM pg_policies WHERE schemaname='public' AND tablename='contracts' AND policyname='tenant_isolation_ct';
+            IF policy_using IS NULL OR policy_using NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'Contract USING metadata failed'; END IF;
+            IF policy_check IS NULL OR policy_check NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'Contract WITH CHECK metadata failed'; END IF;
+
+            SELECT count(*) INTO index_count FROM pg_indexes
+            WHERE schemaname='public' AND tablename='contracts'
+              AND indexname IN ('uq_contract_company_number','uq_contract_active_vehicle','uq_contract_active_driver');
+            IF index_count <> 3 THEN RAISE EXCEPTION 'Contract unique indexes missing: %', index_count; END IF;
+          END $$;
+          SQL
+
+      - name: Actual non-superuser RLS USING and WITH CHECK proof
+        env:
+          PGPASSWORD: postgres
+        shell: bash
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO contracts (
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date, rental_amount,
+            billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived, created_at, updated_at
+          ) VALUES
+            ('rls-i3-a', 'rls-tenant-a', 'rls-driver-a', 'rls-vehicle-a', 'DRAFT', 'RLS-I3-A', '2026-09-01', 700, 'WEEKLY', 1, 1, 0, 0, 0, false, NOW(), NOW()),
+            ('rls-i3-b', 'rls-tenant-b', 'rls-driver-b', 'rls-vehicle-b', 'DRAFT', 'RLS-I3-B', '2026-09-01', 700, 'WEEKLY', 1, 1, 0, 0, 0, false, NOW(), NOW());
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='autoerp_i3_rls_test') THEN
+              CREATE ROLE autoerp_i3_rls_test NOLOGIN;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO autoerp_i3_rls_test;
+          GRANT SELECT, INSERT, UPDATE ON contracts TO autoerp_i3_rls_test;
+          SQL
+
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE autoerp_i3_rls_test;
+          SELECT set_config('app.current_tenant', 'rls-tenant-a', false);
+          DO $$
+          DECLARE n integer;
+          BEGIN
+            SELECT count(*) INTO n FROM contracts WHERE id IN ('rls-i3-a','rls-i3-b');
+            IF n <> 1 THEN RAISE EXCEPTION 'RLS USING leak/deny mismatch: %', n; END IF;
+            IF NOT EXISTS (SELECT 1 FROM contracts WHERE id='rls-i3-a') THEN RAISE EXCEPTION 'RLS USING hid same-tenant row'; END IF;
+            IF EXISTS (SELECT 1 FROM contracts WHERE id='rls-i3-b') THEN RAISE EXCEPTION 'RLS USING leaked cross-tenant row'; END IF;
+          END $$;
+          RESET ROLE;
+          SQL
+
+          if psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE autoerp_i3_rls_test;
+          SELECT set_config('app.current_tenant', 'rls-tenant-a', false);
+          INSERT INTO contracts (
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date, rental_amount,
+            billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived, created_at, updated_at
+          ) VALUES (
+            'rls-i3-forged', 'rls-tenant-b', 'rls-driver-x', 'rls-vehicle-x', 'DRAFT', 'RLS-I3-FORGED', '2026-09-01', 700,
+            'WEEKLY', 1, 1, 0, 0, 0, false, NOW(), NOW()
+          );
+          SQL
+          then
+            echo 'ERROR: RLS WITH CHECK allowed forged cross-tenant insert'
+            exit 1
+          else
+            echo 'RLS WITH CHECK cross-tenant insert denial PASS'
+          fi
+
+      - name: Contract authority PostgreSQL integration
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: Independent PENDING CNH runtime rollback proof
+        shell: bash
+        run: |
+          mkdir -p .ci
+          cp .validation-control/.ci/security-2i3-final-extra.ts .ci/security-2i3-final-extra.ts
+          npx tsx .ci/security-2i3-final-extra.ts
+          rm -rf .ci
+
+      - name: Full required regressions
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i3-final-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/contractClientTestRunner.ts
+          npx tsx src/api/__tests__/driverClientTestRunner.ts
+          npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Immutable consolidated candidate gate
+        shell: bash
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test "$(git rev-parse HEAD)" = "2c48bf56278f2d4dd867f868edc7e8f6e3a09e06"
+          test "$(git rev-parse HEAD^{tree})" = "564253b4c5de98d460451f9cc01acc991f425729"
+
+      - name: Final validation report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2I3_FINAL_VALIDATION_REPORT',
+              `STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              'CANDIDATE=2c48bf56278f2d4dd867f868edc7e8f6e3a09e06',
+              'CANDIDATE_TREE=564253b4c5de98d460451f9cc01acc991f425729',
+              'BASE=b4ded6b5fb726cb3983f73b8323f3957a779a343',
+              'EXACT_COMMITS=1 and EXACT_SCOPE=15 files required',
+              'PostgreSQL16 migration/backfill/index/RLS metadata + actual non-superuser USING/WITH CHECK required',
+              'Atomic Contract/Vehicle/Receivable/Audit + billing idempotency + forced rollback required',
+              'PENDING CNH runtime denial with zero partial writes required',
+              'ContractClient + Driver/Vehicle/Finance/Security/auth/session regressions required'
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
