@@ -1,0 +1,122 @@
+name: SECURITY-2I4B PostgreSQL gate
+
+on:
+  pull_request:
+    branches:
+      - ci-postgres-security-2i4b
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: c25891d72b843d664769bab7249620507bba1c10
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify candidate
+        run: test "$(git rev-parse HEAD)" = "c25891d72b843d664769bab7249620507bba1c10"
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Apply migrations 0000 through 0013
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Verify documents RLS indexes constraints
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            enabled boolean;
+            forced boolean;
+            using_expr text;
+            check_expr text;
+            idx_count integer;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO enabled, forced
+            FROM pg_class WHERE oid='public.documents'::regclass;
+            IF NOT enabled OR NOT forced THEN RAISE EXCEPTION 'documents RLS/FORCE failed'; END IF;
+
+            SELECT qual, with_check INTO using_expr, check_expr
+            FROM pg_policies WHERE schemaname='public' AND tablename='documents' AND policyname='tenant_isolation_docs';
+            IF using_expr IS NULL OR using_expr NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'documents USING failed'; END IF;
+            IF check_expr IS NULL OR check_expr NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'documents WITH CHECK failed'; END IF;
+
+            SELECT count(*) INTO idx_count FROM pg_indexes
+            WHERE schemaname='public' AND tablename='documents'
+              AND indexname IN ('uq_documents_current_semantic','uq_documents_version_semantic','idx_documents_company_subject_current','idx_documents_company_type_current','idx_documents_company_expiration','idx_documents_attachment');
+            IF idx_count <> 6 THEN RAISE EXCEPTION 'documents indexes missing: %', idx_count; END IF;
+          END $$;
+          SQL
+      - name: Non-superuser documents RLS enforcement
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='autoerp_i4b_rls') THEN
+              CREATE ROLE autoerp_i4b_rls LOGIN PASSWORD 'autoerp-i4b-rls' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO autoerp_i4b_rls;
+          GRANT SELECT, INSERT, UPDATE ON documents TO autoerp_i4b_rls;
+          INSERT INTO documents (
+            id, company_id, subject_type, subject_id, document_type, version_number,
+            is_current, is_archived, cost, created_by, created_at, updated_at
+          ) VALUES
+            ('i4b-rls-a','i4b-rls-company-a','VEHICLE','veh-a','CRLV',1,true,false,0,'user-a',NOW(),NOW()),
+            ('i4b-rls-b','i4b-rls-company-b','VEHICLE','veh-b','CRLV',1,true,false,0,'user-b',NOW(),NOW())
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+          PGPASSWORD='autoerp-i4b-rls' psql -h localhost -U autoerp_i4b_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4b-rls-company-a';
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM documents WHERE id IN ('i4b-rls-a','i4b-rls-b');
+            IF c <> 1 THEN RAISE EXCEPTION 'documents non-superuser RLS read failed: %', c; END IF;
+          END $$;
+          SQL
+          if PGPASSWORD='autoerp-i4b-rls' psql -h localhost -U autoerp_i4b_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4b-rls-company-a';
+          INSERT INTO documents (
+            id, company_id, subject_type, subject_id, document_type, version_number,
+            is_current, is_archived, cost, created_by, created_at, updated_at
+          ) VALUES ('i4b-rls-forged','i4b-rls-company-b','VEHICLE','veh-b','IPVA',1,true,false,0,'user-b',NOW(),NOW());
+          SQL
+          then
+            echo 'documents RLS WITH CHECK failed'
+            exit 1
+          fi
+      - name: Document authority integration
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
