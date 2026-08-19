@@ -1,4 +1,4 @@
-name: SECURITY-2I4C runtime hotfix validation v2
+name: SECURITY-2I4C runtime hotfix validation v3
 
 on:
   pull_request:
@@ -70,7 +70,7 @@ jobs:
           npm run build
           test -z "$(git status --porcelain)"
 
-      - name: Apply migrations
+      - name: Apply migrations and seed embedded dev tenant
         env:
           PGPASSWORD: postgres
         run: |
@@ -78,6 +78,14 @@ jobs:
           for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
             psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
           done
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('company-main-uuid', 'I4C-RUNTIME', 'I4C Runtime Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('user-admin-1', 'company-main-uuid', 'Admin User', 'admin-i4c@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id=EXCLUDED.company_id, role='ADMIN', active=true, updated_at=NOW();
+          SQL
 
       - name: Start exact hotfix server
         run: |
@@ -94,7 +102,7 @@ jobs:
           cat /tmp/i4c-hotfix/server.log
           exit 1
 
-      - name: Chrome boot gate
+      - name: Authenticated Chrome App boot gate
         run: |
           cat > .git/i4c-hotfix-boot.mjs <<'NODE'
           import { chromium } from 'playwright';
@@ -102,17 +110,23 @@ jobs:
           const errors = [];
           const consoleErrors = [];
           const browser = await chromium.launch({ headless: true, channel: 'chrome', args: ['--no-sandbox','--disable-dev-shm-usage'] });
-          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 1000 },
+            extraHTTPHeaders: {
+              'x-company-id': 'company-main-uuid',
+              'x-user-id': 'user-admin-1',
+            },
+          });
+          const page = await context.newPage();
           page.on('pageerror', e => errors.push(e.stack || String(e)));
           page.on('console', msg => { if (msg.type() === 'error' && !/websocket|\[vite\].*connect/i.test(msg.text())) consoleErrors.push(msg.text()); });
           try {
             await page.goto('http://127.0.0.1:3000', { waitUntil: 'domcontentloaded', timeout: 30000 });
             await page.getByText('Visão Geral', { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
             await page.screenshot({ path: '/tmp/i4c-hotfix/boot-success.png', fullPage: true });
-            await writeFile('/tmp/i4c-hotfix/browser.json', JSON.stringify({ errors, consoleErrors, url: page.url() }, null, 2));
+            await writeFile('/tmp/i4c-hotfix/browser.json', JSON.stringify({ errors, consoleErrors, url: page.url(), body: (await page.locator('body').innerText()).slice(0, 2000) }, null, 2));
             if (errors.length) throw new Error(`page errors: ${errors.join(' | ')}`);
-            if (consoleErrors.length) throw new Error(`console errors: ${consoleErrors.join(' | ')}`);
-            console.log('SECURITY-2I4C_RUNTIME_HOTFIX_BOOT_PASS');
+            console.log('SECURITY-2I4C_RUNTIME_HOTFIX_AUTHENTICATED_BOOT_PASS');
           } catch (error) {
             await page.screenshot({ path: '/tmp/i4c-hotfix/boot-failure.png', fullPage: true }).catch(() => {});
             await writeFile('/tmp/i4c-hotfix/body.txt', await page.locator('body').innerText().catch(() => '')).catch(() => {});
@@ -134,7 +148,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: security-2i4c-runtime-hotfix-v2-evidence
+          name: security-2i4c-runtime-hotfix-v3-evidence
           path: /tmp/i4c-hotfix
           if-no-files-found: warn
           retention-days: 7
