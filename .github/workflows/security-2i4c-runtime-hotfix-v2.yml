@@ -1,0 +1,140 @@
+name: SECURITY-2I4C runtime hotfix validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4c-runtime-hotfix-v2
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-hotfix-attachments
+      ORIGINAL_SHA: 2288ee011415f69f011f6b21fb16db96d1e24196
+      HOTFIX_SHA: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+    steps:
+      - name: Checkout exact hotfix candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Assert hotfix identity and exact delta
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HOTFIX_SHA"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+          git diff --name-only "$ORIGINAL_SHA" "$HOTFIX_SHA" | tee /tmp/hotfix-files.txt
+          test "$(wc -l < /tmp/hotfix-files.txt)" = "1"
+          test "$(cat /tmp/hotfix-files.txt)" = "src/domain/finance/FinanceEngine.ts"
+          git diff --check "$ORIGINAL_SHA" "$HOTFIX_SHA"
+          ! grep -F "import { TrafficTicketService } from '../services/TrafficTicketService';" src/domain/finance/FinanceEngine.ts
+          ! grep -F "private static trafficTicketService" src/domain/finance/FinanceEngine.ts
+          test "$(grep -F "await import('../services/TrafficTicketService')" src/domain/finance/FinanceEngine.ts | wc -l)" = "2"
+
+      - name: Install, lint and build
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          command -v google-chrome
+          npm run lint
+          npm run build
+          test -z "$(git status --porcelain)"
+
+      - name: Apply migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+
+      - name: Start exact hotfix server
+        run: |
+          set -euo pipefail
+          rm -rf "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-hotfix
+          mkdir -p "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-hotfix
+          nohup npm run dev > /tmp/i4c-hotfix/server.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -fsS -H 'x-company-id: company-main-uuid' -H 'x-user-id: user-admin-1' http://127.0.0.1:3000/api/auth/me >/tmp/i4c-hotfix/auth.json; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i4c-hotfix/server.log
+          exit 1
+
+      - name: Chrome boot gate
+        run: |
+          cat > .git/i4c-hotfix-boot.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const errors = [];
+          const consoleErrors = [];
+          const browser = await chromium.launch({ headless: true, channel: 'chrome', args: ['--no-sandbox','--disable-dev-shm-usage'] });
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+          page.on('pageerror', e => errors.push(e.stack || String(e)));
+          page.on('console', msg => { if (msg.type() === 'error' && !/websocket|\[vite\].*connect/i.test(msg.text())) consoleErrors.push(msg.text()); });
+          try {
+            await page.goto('http://127.0.0.1:3000', { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.getByText('Visão Geral', { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.screenshot({ path: '/tmp/i4c-hotfix/boot-success.png', fullPage: true });
+            await writeFile('/tmp/i4c-hotfix/browser.json', JSON.stringify({ errors, consoleErrors, url: page.url() }, null, 2));
+            if (errors.length) throw new Error(`page errors: ${errors.join(' | ')}`);
+            if (consoleErrors.length) throw new Error(`console errors: ${consoleErrors.join(' | ')}`);
+            console.log('SECURITY-2I4C_RUNTIME_HOTFIX_BOOT_PASS');
+          } catch (error) {
+            await page.screenshot({ path: '/tmp/i4c-hotfix/boot-failure.png', fullPage: true }).catch(() => {});
+            await writeFile('/tmp/i4c-hotfix/body.txt', await page.locator('body').innerText().catch(() => '')).catch(() => {});
+            await writeFile('/tmp/i4c-hotfix/browser.json', JSON.stringify({ errors, consoleErrors, url: page.url() }, null, 2)).catch(() => {});
+            throw error;
+          } finally { await browser.close(); }
+          NODE
+          node .git/i4c-hotfix-boot.mjs
+
+      - name: Final immutable hotfix candidate
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HOTFIX_SHA"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test -z "$(git status --porcelain)"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i4c-runtime-hotfix-v2-evidence
+          path: /tmp/i4c-hotfix
+          if-no-files-found: warn
+          retention-days: 7
