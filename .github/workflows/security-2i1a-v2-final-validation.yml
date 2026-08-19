@@ -1,0 +1,165 @@
+name: SECURITY-2I1A-v2 final validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i1a-v2
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: a15c0f9ee22563d4069de5c5d96e35639f4a8090
+          fetch-depth: 0
+
+      - name: Checkout independent validation control
+        uses: actions/checkout@v4
+        with:
+          ref: ci-validate-security-2i1a-v2
+          path: .validation-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Candidate identity and scope
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "a15c0f9ee22563d4069de5c5d96e35639f4a8090"
+          test "$(git merge-base 6823cb1a71e8e816231d087724491d424b350426 HEAD)" = "6823cb1a71e8e816231d087724491d424b350426"
+          test "$(git rev-list --count 6823cb1a71e8e816231d087724491d424b350426..HEAD)" = "1"
+          changed="$(git diff --name-only 6823cb1a71e8e816231d087724491d424b350426..HEAD | sort)"
+          expected="$(printf '%s\n' \
+            drizzle/0008_vehicle_core_authority.sql \
+            drizzle/meta/_journal.json \
+            server.ts \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/vehicleRoutes.ts | sort)"
+          printf 'VALIDATED_DIFF:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+          ! printf '%s\n' "$changed" | grep -E '^src/components/'
+
+      - name: Static authority and migration gate
+        shell: bash
+        run: |
+          grep -F '0008_vehicle_core_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE vehicles FORCE ROW LEVEL SECURITY' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'vehicles_current_km_nonnegative' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'vehicles_acquisition_value_nonnegative' drizzle/0008_vehicle_core_authority.sql >/dev/null
+          grep -F 'getVehicleRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'findByIdForCompany' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F 'findAllByCompany' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F "app.get('/api/fleet/vehicles'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.post('/api/fleet/vehicles'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.patch('/api/fleet/vehicles/:id'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.patch('/api/fleet/vehicles/:id/status'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'principal.companyId' src/server/vehicleRoutes.ts >/dev/null
+          grep -F "credentials: 'include'" src/api/vehicleClient.ts >/dev/null
+          grep -F 'registerVehicleRoutes(app)' server.ts >/dev/null
+          ! grep -F 'VehicleClient' src/components/fleet/FleetManagement.tsx
+          ! grep -F 'VehicleClient' src/components/fleet/VehicleFormModal.tsx
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Vehicle client transport
+        run: npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+
+      - name: Independent PostgreSQL16 validation
+        shell: bash
+        run: |
+          mkdir -p .ci
+          cp .validation-control/.ci/security-2i1a-v2-final-validation.ts .ci/security-2i1a-v2-final-validation.ts
+          npx tsx .ci/security-2i1a-v2-final-validation.ts
+          rm -rf .ci
+
+      - name: Full regression suite
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i1a-final-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Immutable candidate gate
+        shell: bash
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test "$(git rev-parse HEAD)" = "a15c0f9ee22563d4069de5c5d96e35639f4a8090"
+
+      - name: Validation report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2I1A_V2_FINAL_VALIDATION_REPORT',
+              `STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              'CANDIDATE=a15c0f9ee22563d4069de5c5d96e35639f4a8090',
+              'CANDIDATE_TREE=1453e168722276d59ce56c244523de7e2a583bfe',
+              'BASE=6823cb1a71e8e816231d087724491d424b350426',
+              'UI_SWITCHOVER=I1B',
+              'VehicleClient=8/8 required',
+              'PostgreSQL16/session/RLS/RBAC/audit rollback required',
+              'Contract=20/20, Finance=46/46, Security=35/35 required'
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
