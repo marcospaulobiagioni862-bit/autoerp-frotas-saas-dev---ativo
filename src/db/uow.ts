@@ -31,7 +31,7 @@ export interface UnitOfWorkOptions {
 export class UnitOfWork {
   static async run<T>(
     companyId: string,
-    callback: (tx: ITransactionContext) => Promise<T>,
+    callback: (tx: any | ITransactionContext) => Promise<T>,
     options?: UnitOfWorkOptions
   ): Promise<T> {
     return await db.transaction(async (tx) => {
