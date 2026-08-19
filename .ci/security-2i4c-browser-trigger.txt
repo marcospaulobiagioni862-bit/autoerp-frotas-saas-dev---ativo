@@ -1,4 +1,4 @@
-SECURITY-2I4C browser runtime checkpoint trigger v2
+SECURITY-2I4C browser runtime checkpoint trigger v3
 Candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
-Resolver-safe Playwright execution from .git/.
+Uses runner-provided Chrome; no Chromium download.
 Never merge this CI-only branch.
