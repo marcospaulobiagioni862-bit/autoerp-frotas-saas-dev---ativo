@@ -1,0 +1,86 @@
+name: SECURITY-2I4A regression gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4a
+
+permissions:
+  contents: read
+
+jobs:
+  regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 48cd608ddaa36e9bd7bb160f048234272673491e
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify candidate
+        run: test "$(git rev-parse HEAD)" = "48cd608ddaa36e9bd7bb160f048234272673491e"
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Apply migrations 0000 through 0012
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Driver and Contract authority regressions PostgreSQL
+        run: |
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Client and domain regressions
+        env:
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i4a-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        run: |
+          npx tsx src/api/__tests__/attachmentClientTestRunner.ts
+          npx tsx src/api/__tests__/contractClientTestRunner.ts
+          npx tsx src/api/__tests__/driverClientTestRunner.ts
+          npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
