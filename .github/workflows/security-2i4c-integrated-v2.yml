@@ -1,0 +1,259 @@
+name: SECURITY-2I4C integrated validation v2
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4c-integrated
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-integrated-attachments
+      CANDIDATE_SHA: 3dd1f1a14973defb8b352e707bad3e14ab8b7e83
+      CANDIDATE_TREE: a165a21d66f6c2e7500880f6e857272a0ebd2080
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+    steps:
+      - name: Checkout immutable corrected candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 3dd1f1a14973defb8b352e707bad3e14ab8b7e83
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Identity and exact 26-file scope
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git merge-base "$PRODUCTION_BASE" HEAD)" = "$PRODUCTION_BASE"
+          changed="$(git diff --name-only "$PRODUCTION_BASE"..HEAD | sort)"
+          expected="$(printf '%s\n' \
+            drizzle/0014_contract_execution_authority.sql \
+            drizzle/meta/_journal.json \
+            package.json \
+            src/api/contractClient.ts \
+            src/api/contractExecutionClient.ts \
+            src/api/contractTemplateClient.ts \
+            src/components/contracts/ContractDetailsModal.tsx \
+            src/components/contracts/ContractExecutionPanel.tsx \
+            src/components/contracts/ContractFormModal.tsx \
+            src/components/contracts/ContractTemplateManagementModal.tsx \
+            src/components/contracts/ContractsManagement.tsx \
+            src/db/repositories/postgresContractArtifactRepository.ts \
+            src/db/repositories/postgresContractRepository.ts \
+            src/db/repositories/postgresContractTemplateRepository.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/contracts/contractTemplatePolicy.ts \
+            src/domain/finance/FinanceEngine.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/__tests__/contractAuthorityIntegration.ts \
+            src/server/__tests__/contractExecutionAuthorityIntegration.ts \
+            src/server/contractExecutionRoutes.ts \
+            src/server/contractRoutes.ts \
+            src/server/contractTemplateRoutes.ts \
+            src/server/vehicleRoutes.ts \
+            src/types/entities/contract.ts | sort)"
+          test "$changed" = "$expected"
+          test "$(printf '%s\n' "$changed" | wc -l)" = "26"
+          git diff --check "$PRODUCTION_BASE"..HEAD
+
+      - name: Static I4C authority and runtime-cycle gate
+        run: |
+          set -euo pipefail
+          grep -F '0014_contract_execution_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE contract_templates FORCE ROW LEVEL SECURITY' drizzle/0014_contract_execution_authority.sql >/dev/null
+          grep -F 'ALTER TABLE contract_artifacts FORCE ROW LEVEL SECURITY' drizzle/0014_contract_execution_authority.sql >/dev/null
+          test "$(grep -c 'AS PERMISSIVE' drizzle/0014_contract_execution_authority.sql)" -ge 2
+          test "$(grep -c 'WITH CHECK' drizzle/0014_contract_execution_authority.sql)" -ge 2
+          grep -F "signatureRequired: true" src/server/contractRoutes.ts >/dev/null
+          grep -F 'Signed contract evidence required' src/server/contractRoutes.ts >/dev/null
+          grep -F 'Contract terms are locked after PDF generation' src/server/contractRoutes.ts >/dev/null
+          grep -F 'registerContractTemplateRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'registerContractExecutionRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'ServerAttachmentStorage' src/server/contractExecutionRoutes.ts >/dev/null
+          grep -F "documentType: 'GENERATED_CONTRACT'" src/server/contractExecutionRoutes.ts >/dev/null
+          grep -F "attachment.documentType !== 'SIGNED_CONTRACT'" src/server/contractExecutionRoutes.ts >/dev/null
+          grep -F "buffer.subarray(0, 5).toString('ascii') !== '%PDF-'" src/server/contractExecutionRoutes.ts >/dev/null
+          grep -F '"pdf-lib"' package.json >/dev/null
+          grep -F 'ContractTemplateClient.list' src/components/contracts/ContractFormModal.tsx >/dev/null
+          grep -F 'ContractExecutionPanel' src/components/contracts/ContractDetailsModal.tsx >/dev/null
+          grep -F 'PDF / Assinatura' src/components/contracts/ContractsManagement.tsx >/dev/null
+          grep -F 'Regenerar PDF oficial' src/components/contracts/ContractExecutionPanel.tsx >/dev/null
+          grep -F 'esta tela não declara certificação ICP-Brasil' src/components/contracts/ContractExecutionPanel.tsx >/dev/null
+          grep -F 'markLegacyContract' src/server/__tests__/contractAuthorityIntegration.ts >/dev/null
+          if grep -R -E 'generatedPdfUrl.*(body|req\.)|signedContractUrl.*(body|req\.)' src/server src/api src/components/contracts; then exit 1; fi
+          if grep -R -E 'base64|readAsDataURL|dataBase64' src/server/contractExecutionRoutes.ts src/api/contractExecutionClient.ts src/api/contractTemplateClient.ts src/components/contracts/ContractExecutionPanel.tsx; then exit 1; fi
+          if grep -R -F "signatureRequired: false" src/server/contractRoutes.ts; then exit 1; fi
+          if grep -F "import { TrafficTicketService } from '../services/TrafficTicketService';" src/domain/finance/FinanceEngine.ts; then exit 1; fi
+          if grep -F 'private static trafficTicketService' src/domain/finance/FinanceEngine.ts; then exit 1; fi
+          test "$(grep -Fc "await import('../services/TrafficTicketService')" src/domain/finance/FinanceEngine.ts)" = "2"
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Document client and policy regressions
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+
+      - name: Apply migrations 0000 through 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+
+      - name: I4C schema RLS and indexes
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE tpl_enabled boolean; tpl_forced boolean; art_enabled boolean; art_forced boolean;
+                  tpl_using text; tpl_check text; art_using text; art_check text; idx_count integer;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO tpl_enabled, tpl_forced FROM pg_class WHERE oid='public.contract_templates'::regclass;
+            SELECT relrowsecurity, relforcerowsecurity INTO art_enabled, art_forced FROM pg_class WHERE oid='public.contract_artifacts'::regclass;
+            IF NOT tpl_enabled OR NOT tpl_forced THEN RAISE EXCEPTION 'contract_templates RLS/FORCE failed'; END IF;
+            IF NOT art_enabled OR NOT art_forced THEN RAISE EXCEPTION 'contract_artifacts RLS/FORCE failed'; END IF;
+            SELECT qual, with_check INTO tpl_using, tpl_check FROM pg_policies
+              WHERE schemaname='public' AND tablename='contract_templates' AND policyname='tenant_isolation_contract_templates';
+            SELECT qual, with_check INTO art_using, art_check FROM pg_policies
+              WHERE schemaname='public' AND tablename='contract_artifacts' AND policyname='tenant_isolation_contract_artifacts';
+            IF tpl_using IS NULL OR tpl_using NOT LIKE '%app.current_tenant%' OR tpl_check IS NULL OR tpl_check NOT LIKE '%app.current_tenant%' THEN
+              RAISE EXCEPTION 'contract_templates policy invalid';
+            END IF;
+            IF art_using IS NULL OR art_using NOT LIKE '%app.current_tenant%' OR art_check IS NULL OR art_check NOT LIKE '%app.current_tenant%' THEN
+              RAISE EXCEPTION 'contract_artifacts policy invalid';
+            END IF;
+            SELECT count(*) INTO idx_count FROM pg_indexes WHERE schemaname='public' AND indexname IN (
+              'uq_contract_template_version','uq_contract_template_current','idx_contract_template_company_current',
+              'uq_contract_artifact_current','idx_contract_artifact_contract','idx_contract_artifact_attachment','idx_contract_artifact_source'
+            );
+            IF idx_count <> 7 THEN RAISE EXCEPTION 'I4C indexes missing: %', idx_count; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='contracts'
+                AND column_name='signature_required' AND is_nullable='NO' AND column_default='true'
+            ) THEN RAISE EXCEPTION 'contracts.signature_required default/not-null invalid'; END IF;
+          END $$;
+          SQL
+
+      - name: I4C non-superuser tenant isolation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='autoerp_i4c_integrated_rls') THEN
+              CREATE ROLE autoerp_i4c_integrated_rls LOGIN PASSWORD 'autoerp-i4c-integrated-rls' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO autoerp_i4c_integrated_rls;
+          GRANT SELECT, INSERT, UPDATE ON contract_templates, contract_artifacts TO autoerp_i4c_integrated_rls;
+          SQL
+          PGPASSWORD='autoerp-i4c-integrated-rls' psql -h localhost -U autoerp_i4c_integrated_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4c-rls-a';
+          INSERT INTO contract_templates(id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by)
+            VALUES ('i4c-rls-tpl-a','i4c-rls-a','rental','Rental A','Contrato teste',1,true,true,false,'user-a');
+          INSERT INTO contract_artifacts(id,company_id,contract_id,artifact_type,attachment_id,template_id,snapshot_json,snapshot_hash,is_current,is_archived,created_by)
+            VALUES ('i4c-rls-art-a','i4c-rls-a','contract-a','GENERATED_PDF','attachment-a','i4c-rls-tpl-a','{}','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',true,false,'user-a');
+          SET app.current_tenant = 'i4c-rls-b';
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM contract_templates WHERE id='i4c-rls-tpl-a';
+            IF c <> 0 THEN RAISE EXCEPTION 'contract template RLS read leak'; END IF;
+            SELECT count(*) INTO c FROM contract_artifacts WHERE id='i4c-rls-art-a';
+            IF c <> 0 THEN RAISE EXCEPTION 'contract artifact RLS read leak'; END IF;
+          END $$;
+          SQL
+          if PGPASSWORD='autoerp-i4c-integrated-rls' psql -h localhost -U autoerp_i4c_integrated_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'i4c-rls-b';
+          INSERT INTO contract_templates(id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by)
+            VALUES ('i4c-rls-forged','i4c-rls-a','forged','Forged','Contrato teste',1,true,true,false,'user-x');
+          SQL
+          then
+            echo 'I4C RLS WITH CHECK failed'
+            exit 1
+          fi
+
+      - name: I4C contract execution authority integration
+        run: npx tsx src/server/__tests__/contractExecutionAuthorityIntegration.ts
+
+      - name: Document Attachment Driver Contract PostgreSQL regressions
+        run: |
+          npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: Client finance security auth regressions including NIC path
+        env:
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i4c-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/api/__tests__/attachmentClientTestRunner.ts
+          npx tsx src/api/__tests__/contractClientTestRunner.ts
+          npx tsx src/api/__tests__/driverClientTestRunner.ts
+          npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Immutable corrected candidate
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
