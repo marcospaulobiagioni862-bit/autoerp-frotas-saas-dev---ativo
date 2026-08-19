@@ -1,0 +1,4 @@
+SECURITY-2I4C final full browser E2E
+Candidate: 87f0f4a4ae92cf920c8a482323565bbf71377fd9
+Tree: a165a21d66f6c2e7500880f6e857272a0ebd2080
+Never merge this CI-only branch.
