@@ -522,6 +522,50 @@ export const documents = pgTable('documents', {
   idxAttachment: index('idx_documents_attachment').on(t.companyId, t.attachmentId),
 }));
 
+export const notifications = pgTable('notifications', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  recipientUserId: text('recipient_user_id'),
+  sourceType: text('source_type').notNull(),
+  sourceId: text('source_id').notNull(),
+  sourceVersion: text('source_version'),
+  alertStage: text('alert_stage').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  severity: text('severity').notNull(),
+  dueDate: text('due_date'),
+  destinationTab: text('destination_tab'),
+  idempotencyKey: text('idempotency_key').notNull(),
+  status: text('status').notNull().default('UNREAD'),
+  readAt: timestamp('read_at', { mode: 'string' }),
+  dismissedAt: timestamp('dismissed_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  unqIdempotency: unique('notifications_idempotency_unique').on(t.companyId, t.idempotencyKey),
+  idxCompanyStatusCreated: index('idx_notifications_company_status_created').on(t.companyId, t.status, t.createdAt),
+  idxCompanySource: index('idx_notifications_company_source').on(t.companyId, t.sourceType, t.sourceId),
+  idxCompanyDue: index('idx_notifications_company_due').on(t.companyId, t.dueDate),
+  idxCompanyRecipient: index('idx_notifications_company_recipient').on(t.companyId, t.recipientUserId, t.status, t.createdAt),
+}));
+
+export const schedulerRuns = pgTable('scheduler_runs', {
+  id: text('id').primaryKey(),
+  jobKey: text('job_key').notNull(),
+  executionBucket: text('execution_bucket').notNull(),
+  startedAt: timestamp('started_at', { mode: 'string' }).notNull(),
+  finishedAt: timestamp('finished_at', { mode: 'string' }),
+  status: text('status').notNull(),
+  instanceId: text('instance_id').notNull(),
+  errorMessage: text('error_message'),
+  metricsJson: text('metrics_json'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  unqJobBucket: unique('scheduler_runs_job_bucket_unique').on(t.jobKey, t.executionBucket),
+  idxJobStarted: index('idx_scheduler_runs_job_started').on(t.jobKey, t.startedAt),
+  idxStatusStarted: index('idx_scheduler_runs_status_started').on(t.status, t.startedAt),
+}));
+
 export const communicationLogs = pgTable('communication_logs', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),

@@ -20,6 +20,7 @@ import { PostgresContractTemplateRepository } from './repositories/postgresContr
 import { PostgresContractArtifactRepository } from './repositories/postgresContractArtifactRepository';
 import { PostgresAttachmentRepository } from './repositories/postgresAttachmentRepository';
 import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
+import { PostgresNotificationRepository } from './repositories/postgresNotificationRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -62,6 +63,7 @@ export class UnitOfWork {
         getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
         getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx),
         getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),
+        getNotificationRepo: () => new PostgresNotificationRepository(tx),
       };
 
       return await callback(txContext);

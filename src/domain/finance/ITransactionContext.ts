@@ -20,6 +20,8 @@ import {
   ContractTemplate,
   ContractArtifact,
   ContractArtifactType,
+  PersistentNotification,
+  NotificationStatus,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -218,6 +220,28 @@ export interface ITransactionContractArtifactRepository {
   ): Promise<ContractArtifact | null>;
 }
 
+export interface TransactionNotificationFilters {
+  status?: NotificationStatus;
+  limit?: number;
+  includeArchived?: boolean;
+  recipientUserId?: string;
+}
+
+export interface ITransactionNotificationRepository {
+  findByIdForCompany(companyId: string, id: string): Promise<PersistentNotification | null>;
+  findByIdempotencyKey(companyId: string, key: string): Promise<PersistentNotification | null>;
+  findAllByCompany(companyId: string, filters?: TransactionNotificationFilters): Promise<PersistentNotification[]>;
+  countUnread(companyId: string, recipientUserId?: string): Promise<number>;
+  create(item: PersistentNotification): Promise<PersistentNotification>;
+  updateStatusForCompany(
+    companyId: string,
+    id: string,
+    status: NotificationStatus,
+    now: string
+  ): Promise<PersistentNotification | null>;
+  markAllRead(companyId: string, recipientUserId: string | undefined, now: string): Promise<number>;
+}
+
 export interface ITransactionContext {
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
@@ -238,4 +262,5 @@ export interface ITransactionContext {
   getContractTemplateRepo(): ITransactionContractTemplateRepository;
   getContractArtifactRepo(): ITransactionContractArtifactRepository;
   getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
+  getNotificationRepo(): ITransactionNotificationRepository;
 }

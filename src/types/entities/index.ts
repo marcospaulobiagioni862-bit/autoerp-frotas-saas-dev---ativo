@@ -9,3 +9,4 @@ export * from './insurance';
 export * from './tracker';
 export * from './trafficTicket';
 export * from './audit';
+export * from './notifications';
