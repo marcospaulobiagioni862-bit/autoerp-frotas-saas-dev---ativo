@@ -1,0 +1,4 @@
+Trigger SECURITY-2I4C foundation v2 validation.
+Product candidate: 8d763d616e551664ba92505635badd9194156285
+CI base: 9ad559692a48f21a77308f401e61366727533a18
+Never merge this CI branch.
