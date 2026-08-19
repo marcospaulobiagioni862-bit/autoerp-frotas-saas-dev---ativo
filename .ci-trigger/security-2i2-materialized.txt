@@ -1,0 +1,2 @@
+SECURITY-2I2 materialized candidate validation trigger
+candidate=9c96ed8a3f810040b32b9bed706e6ea0adf4b4ee
