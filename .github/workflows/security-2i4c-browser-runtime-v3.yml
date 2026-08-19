@@ -1,0 +1,394 @@
+name: SECURITY-2I4C browser runtime checkpoint v3
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4c-browser-v3
+
+permissions:
+  contents: read
+
+jobs:
+  browser-runtime-v3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-i4c-browser-attachments
+      CANDIDATE_SHA: 2288ee011415f69f011f6b21fb16db96d1e24196
+      CANDIDATE_TREE: 036909fab49f8532aa8b83cc2576b51f7d9e2004
+      PRODUCTION_BASE: 68b2ab0315bfb9e77cacb760b8f1bffdb4034357
+      BROWSER_COMPANY_ID: browser-i4c-company
+      BROWSER_USER_ID: browser-i4c-admin
+    steps:
+      - name: Checkout exact frozen candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 2288ee011415f69f011f6b21fb16db96d1e24196
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Candidate identity and immutability
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test "$(git rev-list --count "$PRODUCTION_BASE"..HEAD)" = "1"
+          test -z "$(git status --porcelain)"
+
+      - name: Install app and use runner Chrome
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.55.0
+          BROWSER="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          test -n "$BROWSER"
+          echo "BROWSER_EXECUTABLE=$BROWSER" >> "$GITHUB_ENV"
+          "$BROWSER" --version
+          npm run lint
+          npm run build
+          test -z "$(git status --porcelain)"
+
+      - name: Apply migrations and seed browser principal
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies (id, document, name, status, created_at, updated_at)
+          VALUES ('browser-i4c-company', 'BROWSER-I4C', 'Browser I4C Company', 'ACTIVE', NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET document=EXCLUDED.document, name=EXCLUDED.name, status='ACTIVE', updated_at=NOW();
+          INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+          VALUES ('browser-i4c-admin', 'browser-i4c-company', 'Browser I4C Admin', 'browser-i4c-admin@example.test', 'ADMIN', true, NOW(), NOW())
+          ON CONFLICT (id) DO UPDATE SET company_id=EXCLUDED.company_id, name=EXCLUDED.name, email=EXCLUDED.email, role='ADMIN', active=true, updated_at=NOW();
+          SQL
+
+      - name: Start exact candidate server
+        run: |
+          set -euo pipefail
+          rm -rf "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-browser
+          mkdir -p "$ATTACHMENT_STORAGE_DIR" /tmp/i4c-browser
+          nohup npm run dev > /tmp/i4c-browser/server.log 2>&1 &
+          echo $! > /tmp/i4c-browser/server.pid
+          for i in $(seq 1 90); do
+            if curl -fsS -H "x-company-id: $BROWSER_COMPANY_ID" -H "x-user-id: $BROWSER_USER_ID" http://127.0.0.1:3000/api/auth/me >/tmp/i4c-browser/auth-me.json; then
+              cat /tmp/i4c-browser/auth-me.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/i4c-browser/server.log
+          exit 1
+
+      - name: Seed vehicle and driver through authoritative APIs
+        run: |
+          set -euo pipefail
+          H1="x-company-id: $BROWSER_COMPANY_ID"
+          H2="x-user-id: $BROWSER_USER_ID"
+          curl -fsS -X POST http://127.0.0.1:3000/api/fleet/vehicles \
+            -H "$H1" -H "$H2" -H 'content-type: application/json' \
+            --data '{"plate":"BRW1A01","renavam":"BRW-RENAVAM-001","brand":"Toyota","model":"Yaris","version":"XL","yearFabrication":2025,"yearModel":2026,"color":"Prata","chassis":"BRWCHASSIS001","currentKm":10000,"fuelType":"Flex","category":"Sedan","acquisitionValue":80000,"currentValue":70000,"rentalValueBase":800}' \
+            | tee /tmp/i4c-browser/vehicle.json
+          curl -fsS -X POST http://127.0.0.1:3000/api/drivers \
+            -H "$H1" -H "$H2" -H 'content-type: application/json' \
+            --data '{"fullName":"Browser Driver I4C","cpf":"11144477735","birthDate":"1990-01-01","phone":"11999999999","whatsapp":"11999999999","email":"browser-driver@example.test","address":{"street":"Rua Browser","number":"100","neighborhood":"Centro","city":"São Paulo","state":"SP","zipCode":"01001000"},"cnhNumber":"02650306461","cnhCategory":"B","cnhExpiration":"2035-01-01","appPlatforms":["Uber"]}' \
+            | tee /tmp/i4c-browser/driver.json
+          echo "BROWSER_VEHICLE_ID=$(jq -r '.item.id' /tmp/i4c-browser/vehicle.json)" >> "$GITHUB_ENV"
+          echo "BROWSER_DRIVER_ID=$(jq -r '.item.id' /tmp/i4c-browser/driver.json)" >> "$GITHUB_ENV"
+          test "$(jq -r '.item.status' /tmp/i4c-browser/vehicle.json)" = "AVAILABLE"
+          test "$(jq -r '.item.status' /tmp/i4c-browser/driver.json)" = "ACTIVE"
+
+      - name: Create PDF fixtures
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { PDFDocument, StandardFonts } from 'pdf-lib';
+          import { writeFile } from 'node:fs/promises';
+          async function create(path, text) {
+            const doc = await PDFDocument.create();
+            const page = doc.addPage([595, 842]);
+            const font = await doc.embedFont(StandardFonts.Helvetica);
+            page.drawText(text, { x: 50, y: 780, size: 14, font });
+            await writeFile(path, await doc.save());
+          }
+          await create('/tmp/i4c-browser/signed-browser.pdf', 'Evidencia assinada - browser runtime I4C');
+          await create('/tmp/i4c-browser/generic-browser.pdf', 'Anexo generico - browser runtime I4C');
+          NODE
+
+      - name: Materialize resolver-safe browser script
+        run: |
+          cat > .git/i4c-browser-runtime-v3.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+
+          const baseURL = 'http://127.0.0.1:3000';
+          const companyId = process.env.BROWSER_COMPANY_ID;
+          const userId = process.env.BROWSER_USER_ID;
+          const vehicleId = process.env.BROWSER_VEHICLE_ID;
+          const driverId = process.env.BROWSER_DRIVER_ID;
+          const out = '/tmp/i4c-browser';
+          const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+          const browser = await chromium.launch({
+            headless: true,
+            executablePath: process.env.BROWSER_EXECUTABLE,
+            args: ['--no-sandbox', '--disable-dev-shm-usage'],
+          });
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 1000 },
+            extraHTTPHeaders: { 'x-company-id': companyId, 'x-user-id': userId },
+          });
+          const page = await context.newPage();
+          const blockingConsole = [];
+          const pageErrors = [];
+          const serverErrors = [];
+          page.on('console', (msg) => {
+            if (msg.type() !== 'error') return;
+            const text = msg.text();
+            if (/websocket|\[vite\].*connect/i.test(text)) return;
+            blockingConsole.push(text);
+          });
+          page.on('pageerror', (error) => pageErrors.push(String(error)));
+          page.on('response', (response) => {
+            if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+          });
+
+          async function api(path, init = {}) {
+            return await page.evaluate(async ({ path, init }) => {
+              const response = await fetch(path, init);
+              const text = await response.text();
+              let body = null;
+              try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+              return { status: response.status, body };
+            }, { path, init });
+          }
+          async function currentContract() {
+            const result = await api('/api/contracts');
+            assert(result.status === 200, `contract list status ${result.status}`);
+            const item = result.body.items.find((candidate) => candidate.contractNumber === 'BROWSER-I4C-001');
+            assert(item, 'browser contract not found');
+            return item;
+          }
+          async function currentGenerated(contractId) {
+            const result = await api(`/api/contracts/${encodeURIComponent(contractId)}/artifacts`);
+            assert(result.status === 200, `artifact list status ${result.status}`);
+            return result.body.items.find((item) => item.artifactType === 'GENERATED_PDF' && item.isCurrent && !item.isArchived);
+          }
+
+          try {
+            await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            await page.getByText('Visão Geral', { exact: true }).first().waitFor({ state: 'visible', timeout: 20000 });
+            await page.getByText('Contratos', { exact: true }).first().click();
+            await page.getByRole('heading', { name: 'Contratos' }).waitFor({ state: 'visible', timeout: 15000 });
+            await page.screenshot({ path: `${out}/01-contracts.png`, fullPage: true });
+
+            await page.getByRole('button', { name: /Modelos de Contrato/ }).click();
+            await page.getByRole('heading', { name: 'Modelos de Contrato' }).waitFor();
+            await page.getByLabel('Chave do modelo').fill('browser-locacao');
+            await page.getByLabel('Título').fill('Contrato Browser I4C');
+            await page.getByLabel('Conteúdo Markdown').fill(
+              '# Contrato {{contract.number}}\n' +
+              'Locadora: {{company.name}} - {{company.document}}\n' +
+              'Motorista: {{driver.name}} CPF {{driver.cpf}} CNH {{driver.cnh}}\n' +
+              'Veículo: {{vehicle.brand}} {{vehicle.model}} placa {{vehicle.plate}} RENAVAM {{vehicle.renavam}}\n' +
+              'Aluguel: {{contract.rentalAmount}} - franquia {{contract.franchiseKm}} km - excedente {{contract.excessKmRate}}.'
+            );
+            await page.getByRole('button', { name: 'Criar modelo' }).click();
+            await page.getByText('Modelo criado com sucesso.', { exact: true }).waitFor({ timeout: 15000 });
+            await page.getByText('v1', { exact: true }).waitFor();
+            await page.getByRole('button', { name: /Nova versão/ }).first().click();
+            const templateContent = page.getByLabel('Conteúdo Markdown');
+            await templateContent.fill((await templateContent.inputValue()) + '\nVersão 2 homologação browser.');
+            await page.getByRole('button', { name: 'Criar nova versão' }).click();
+            await page.getByText('Nova versão v2 criada.', { exact: true }).waitFor({ timeout: 15000 });
+            await page.getByText('v2', { exact: true }).waitFor();
+            const templateList = await api('/api/contract-templates?currentOnly=false&activeOnly=false');
+            assert(templateList.status === 200, `template list status ${templateList.status}`);
+            const versions = templateList.body.items.filter((item) => item.templateKey === 'browser-locacao');
+            assert(versions.some((item) => item.versionNumber === 1 && item.isCurrent === false), 'template v1 history missing');
+            assert(versions.some((item) => item.versionNumber === 2 && item.isCurrent === true), 'template v2 current missing');
+            await page.screenshot({ path: `${out}/02-template-v2.png`, fullPage: true });
+
+            const templateHeading = page.getByRole('heading', { name: 'Modelos de Contrato' });
+            await templateHeading.locator('xpath=../following-sibling::button').click();
+            await templateHeading.waitFor({ state: 'hidden' });
+
+            await page.getByRole('button', { name: 'Novo Contrato' }).click();
+            await page.getByRole('heading', { name: 'Novo Contrato' }).waitFor();
+            await page.getByLabel('Número do contrato').fill('BROWSER-I4C-001');
+            await page.getByLabel('Modelo de contrato').selectOption({ label: 'Contrato Browser I4C • v2' });
+            await page.getByLabel('Veículo').selectOption(vehicleId);
+            await page.getByLabel('Motorista').selectOption(driverId);
+            await page.getByLabel('Data inicial').fill('2026-09-01');
+            await page.getByLabel('Aluguel').fill('800');
+            await page.getByLabel('Caução').fill('1000');
+            await page.getByLabel('Franquia KM').fill('1500');
+            await page.getByLabel('KM excedente').fill('0.6');
+            assert(await page.getByText('Ativar após salvar', { exact: false }).count() === 0, 'new contract exposed immediate activation');
+            await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+            await page.getByRole('heading', { name: 'Novo Contrato' }).waitFor({ state: 'hidden', timeout: 15000 });
+
+            const row = page.getByRole('row').filter({ hasText: 'BROWSER-I4C-001' });
+            await row.waitFor({ state: 'visible', timeout: 15000 });
+            assert(await row.getByRole('button', { name: 'PDF / Assinatura' }).count() === 1, 'signature flow action absent');
+            assert(await row.getByRole('button', { name: /^Ativar/ }).count() === 0, 'signature-required row exposed activation');
+            await page.screenshot({ path: `${out}/03-contract-created.png`, fullPage: true });
+            await row.getByRole('button', { name: 'PDF / Assinatura' }).click();
+
+            await page.getByRole('heading', { name: 'BROWSER-I4C-001' }).waitFor({ timeout: 15000 });
+            await page.getByText('PDF NÃO GERADO', { exact: true }).waitFor();
+            assert(await page.getByRole('button', { name: 'Ativar legado' }).count() === 0, 'details exposed legacy activation');
+            const contractBeforePdf = await currentContract();
+            assert(contractBeforePdf.signatureRequired === true, 'new contract signatureRequired is not true');
+            assert(contractBeforePdf.status === 'DRAFT', `expected DRAFT got ${contractBeforePdf.status}`);
+
+            const genWait = page.waitForResponse((r) => r.url().includes(`/api/contracts/${contractBeforePdf.id}/generate-pdf`) && r.request().method() === 'POST');
+            await page.getByRole('button', { name: 'Gerar PDF oficial' }).click();
+            const genResponse = await genWait;
+            assert(genResponse.status() === 201, `first PDF generation status ${genResponse.status()}`);
+            await page.getByText('AGUARDANDO ASSINATURA', { exact: true }).waitFor({ timeout: 15000 });
+            await page.getByText('Snapshot SHA-256', { exact: true }).waitFor();
+            await page.getByRole('button', { name: 'Abrir PDF gerado' }).waitFor();
+            const firstGenerated = await currentGenerated(contractBeforePdf.id);
+            assert(firstGenerated && /^[0-9a-f]{64}$/.test(firstGenerated.snapshotHash), 'generated snapshot hash invalid');
+            const pdfCheck = await page.evaluate(async (attachmentId) => {
+              const response = await fetch(`/api/attachments/${encodeURIComponent(attachmentId)}/content`);
+              const bytes = new Uint8Array(await response.arrayBuffer());
+              return { status: response.status, prefix: String.fromCharCode(...bytes.slice(0, 5)), type: response.headers.get('content-type') };
+            }, firstGenerated.attachmentId);
+            assert(pdfCheck.status === 200 && pdfCheck.prefix === '%PDF-', `generated file is not PDF ${JSON.stringify(pdfCheck)}`);
+            assert((pdfCheck.type || '').includes('application/pdf'), `generated PDF mime mismatch ${pdfCheck.type}`);
+            await page.screenshot({ path: `${out}/04-pdf-generated.png`, fullPage: true });
+
+            const mutationAttempt = await api(`/api/contracts/${encodeURIComponent(contractBeforePdf.id)}`, {
+              method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rentalAmount: 999 })
+            });
+            assert(mutationAttempt.status === 409, `post-PDF term lock expected 409 got ${mutationAttempt.status}`);
+
+            const regenWait = page.waitForResponse((r) => r.url().includes(`/api/contracts/${contractBeforePdf.id}/generate-pdf`) && r.request().method() === 'POST');
+            await page.getByRole('button', { name: 'Regenerar PDF oficial' }).click();
+            const regenResponse = await regenWait;
+            assert(regenResponse.status() === 201, `PDF regeneration status ${regenResponse.status()}`);
+            const regenerated = await currentGenerated(contractBeforePdf.id);
+            assert(regenerated && regenerated.id !== firstGenerated.id, 'PDF regeneration did not replace current artifact');
+
+            const genericHeading = page.getByText('Arquivos e anexos do contrato', { exact: true });
+            const genericSection = genericHeading.locator('xpath=..');
+            await genericSection.locator('input[type="file"]').setInputFiles('/tmp/i4c-browser/generic-browser.pdf');
+            await page.getByText('generic-browser.pdf', { exact: false }).last().waitFor({ timeout: 15000 });
+            const artifactsAfterGeneric = await api(`/api/contracts/${encodeURIComponent(contractBeforePdf.id)}/artifacts`);
+            assert(!artifactsAfterGeneric.body.items.some((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived), 'generic attachment became signature evidence');
+
+            const signedHeading = page.getByText('Evidência do assinado', { exact: true });
+            const signedSection = signedHeading.locator('xpath=../..');
+            await signedSection.locator('input[type="file"]').setInputFiles('/tmp/i4c-browser/signed-browser.pdf');
+            await page.getByText('Arquivo pronto:', { exact: false }).waitFor({ timeout: 15000 });
+            await page.getByPlaceholder('Nome de quem assinou').fill('Browser Driver I4C');
+            await signedSection.locator('input[type="date"]').fill('2026-08-19');
+            await signedSection.getByRole('button', { name: 'Registrar evidência assinada' }).click();
+            await page.getByText('ASSINADO / EVIDÊNCIA', { exact: true }).waitFor({ timeout: 15000 });
+            await page.getByText('Evidência registrada', { exact: true }).waitFor();
+            await page.getByText('Checksum do PDF assinado', { exact: true }).waitFor();
+            await page.getByRole('button', { name: 'Abrir PDF assinado' }).waitFor();
+            assert(await page.getByRole('button', { name: 'Regenerar PDF oficial' }).count() === 0, 'regeneration remained available after evidence');
+            await page.getByText('Contrato apto para ativação', { exact: true }).waitFor();
+            await page.screenshot({ path: `${out}/05-signed-evidence.png`, fullPage: true });
+
+            const signedArtifacts = await api(`/api/contracts/${encodeURIComponent(contractBeforePdf.id)}/artifacts`);
+            const signedArtifact = signedArtifacts.body.items.find((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived);
+            assert(signedArtifact, 'signed evidence artifact missing');
+            assert(signedArtifact.sourceArtifactId === regenerated.id, 'signed evidence not bound to current generated PDF');
+            assert(/^[0-9a-f]{64}$/.test(signedArtifact.snapshotHash), 'signed evidence checksum invalid');
+
+            await page.getByRole('button', { name: 'Ativar contrato' }).click();
+            await page.getByText('Contrato ativado com assinatura, vínculo e cobrança confirmados.', { exact: true }).waitFor({ timeout: 15000 });
+            const activeContract = await currentContract();
+            assert(activeContract.status === 'ACTIVE', `contract activation status ${activeContract.status}`);
+            const vehicleResult = await api(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}`);
+            assert(vehicleResult.status === 200, `vehicle read status ${vehicleResult.status}`);
+            assert(vehicleResult.body.item.status === 'RENTED', `vehicle status ${vehicleResult.body.item.status}`);
+            assert(vehicleResult.body.item.currentContractId === activeContract.id, 'vehicle contract binding mismatch');
+            assert(vehicleResult.body.item.currentDriverId === driverId, 'vehicle driver binding mismatch');
+            const driverResult = await api(`/api/drivers/${encodeURIComponent(driverId)}`);
+            assert(driverResult.status === 200, `driver read status ${driverResult.status}`);
+            assert(driverResult.body.item.currentContractId === activeContract.id, 'driver contract binding mismatch');
+            assert(driverResult.body.item.currentVehicleId === vehicleId, 'driver vehicle binding mismatch');
+            const receivableResult = await api('/api/finance/receivables');
+            assert(receivableResult.status === 200, `receivable list status ${receivableResult.status}`);
+            assert(receivableResult.body.items.filter((item) => item.contractId === activeContract.id).length === 1, 'initial contract receivable missing or duplicated');
+            await page.screenshot({ path: `${out}/06-active-contract.png`, fullPage: true });
+
+            const detailsHeading = page.getByRole('heading', { name: 'BROWSER-I4C-001' });
+            await detailsHeading.locator('xpath=../../following-sibling::button').click();
+            await detailsHeading.waitFor({ state: 'hidden' });
+            await page.getByText('Central de Documentos', { exact: true }).first().click();
+            await page.getByRole('heading', { name: 'Central de Documentos' }).waitFor({ timeout: 15000 });
+            await page.getByText('Resultados (', { exact: false }).waitFor({ timeout: 15000 });
+            await page.screenshot({ path: `${out}/07-document-center.png`, fullPage: true });
+
+            const result = {
+              candidate: process.env.CANDIDATE_SHA,
+              contractId: activeContract.id,
+              generatedArtifactId: regenerated.id,
+              signedArtifactId: signedArtifact.id,
+              consoleErrors: blockingConsole,
+              pageErrors,
+              serverErrors,
+              finalContractStatus: activeContract.status,
+              finalVehicleStatus: vehicleResult.body.item.status,
+            };
+            await writeFile(`${out}/result.json`, JSON.stringify(result, null, 2));
+            assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
+            assert(serverErrors.length === 0, `HTTP 5xx: ${serverErrors.join(' | ')}`);
+            assert(blockingConsole.length === 0, `blocking console errors: ${blockingConsole.join(' | ')}`);
+            console.log('SECURITY-2I4C BROWSER RUNTIME CHECKPOINT V3 PASS');
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Browser runtime and UX checkpoint
+        run: |
+          set -euo pipefail
+          node .git/i4c-browser-runtime-v3.mjs
+
+      - name: Final immutable candidate
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git rev-parse HEAD^)" = "$PRODUCTION_BASE"
+          test -z "$(git status --porcelain)"
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-2i4c-browser-evidence-v3
+          path: /tmp/i4c-browser
+          if-no-files-found: warn
+          retention-days: 7
