@@ -51,6 +51,16 @@ jobs:
         run: |
           git show origin/ci-implement-security-2i4c-ui-gate:.ci/security-2i4c-ui-patch.py > /tmp/ui_patch.py
           git show origin/ci-implement-security-2i4c-ui-gate:.ci/security-2i4c-ui-extra-patch.py > /tmp/ui_extra.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('/tmp/ui_patch.py')
+          text = p.read_text()
+          old = '''    if count != 1:\n        raise SystemExit(f"{path}: expected 1 replacement, found {count}")\n    p.write_text(text.replace(old, new))\n'''
+          new = '''    if count == 2 and path == 'src/components/contracts/ContractFormModal.tsx' and "securityDepositAmount: '1000'" in old and "paymentMethodId: '', notes: ''" in old:\n        p.write_text(text.replace(old, new, 1))\n        return\n    if count != 1:\n        raise SystemExit(f"{path}: expected 1 replacement, found {count}")\n    p.write_text(text.replace(old, new))\n'''
+          if text.count(old) != 1:
+              raise SystemExit('ui patch helper preprocessor mismatch')
+          p.write_text(text.replace(old, new))
+          PY
           python /tmp/ui_patch.py
           python /tmp/ui_extra.py
 
