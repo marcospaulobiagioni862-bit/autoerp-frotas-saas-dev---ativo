@@ -90,6 +90,9 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
 };
 
+const RECURRING_SYSTEM_USER_ID = 'system-recurring';
+const RECURRING_SYSTEM_PERMISSIONS = new Set(['PAYABLE_CREATE', 'RECEIVABLE_CREATE']);
+
 export class FinancialAuthorizationService {
   public static async authorize(
     userId: string,
@@ -103,6 +106,26 @@ export class FinancialAuthorizationService {
 
     if (!userId) {
       throw new Error('Acesso negado: Usuário não informado');
+    }
+
+    // SECURITY-2I5: only trusted server code can mint this narrow capability.
+    // No HTTP/body/header field can set trustedSystemActor on a transaction context.
+    if (
+      txContext?.trustedSystemActor === 'RECURRING' &&
+      userId === RECURRING_SYSTEM_USER_ID &&
+      RECURRING_SYSTEM_PERMISSIONS.has(requiredPermission)
+    ) {
+      const now = new Date().toISOString();
+      return {
+        id: RECURRING_SYSTEM_USER_ID,
+        companyId,
+        name: 'Motor de Recorrência',
+        email: 'system-recurring@internal.invalid',
+        role: 'ADMIN' as any,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      } as User;
     }
 
     let user: User | null = null;

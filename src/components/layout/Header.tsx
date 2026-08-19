@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ShieldCheck, Building2, RefreshCw, Sun, Moon, Menu } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface HeaderProps {
   testStatus: { passed: number; total: number; failed: number } | null;
@@ -60,7 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Test Engine Baseline Badge */}
         <button
           onClick={onOpenTestRunner}
           className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -82,7 +82,6 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        {/* Reset Database Seed Button */}
         <button
           onClick={onResetSeedData}
           className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -92,7 +91,8 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden lg:inline">Reset Seed</span>
         </button>
 
-        {/* Dark/Light mode toggle */}
+        <NotificationBell />
+
         <button
           onClick={toggleDarkMode}
           aria-label={isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
@@ -104,7 +104,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-6 w-px bg-slate-200 dark:border-slate-800 dark:bg-slate-800 mx-0.5 hidden sm:block" />
 
-        {/* User profile */}
         <div className="flex items-center gap-2 pl-1">
           <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-600 shrink-0">
             CS
@@ -118,4 +117,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

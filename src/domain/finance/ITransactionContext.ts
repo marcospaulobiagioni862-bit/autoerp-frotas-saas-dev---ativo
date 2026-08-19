@@ -218,6 +218,8 @@ export interface ITransactionContractArtifactRepository {
   ): Promise<ContractArtifact | null>;
 }
 
+export type TrustedSystemActor = 'RECURRING';
+
 export interface ITransactionContext {
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
@@ -238,4 +240,8 @@ export interface ITransactionContext {
   getContractTemplateRepo(): ITransactionContractTemplateRepository;
   getContractArtifactRepo(): ITransactionContractArtifactRepository;
   getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
+  /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
+  getRawTransaction?(): any;
+  /** Capability is minted only by UnitOfWork options inside trusted server code. */
+  trustedSystemActor?: TrustedSystemActor;
 }
