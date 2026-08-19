@@ -1,0 +1,4 @@
+SECURITY-2I4C runtime cycle surgical fix trigger
+Source candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
+Expected product change: src/domain/finance/FinanceEngine.ts only.
+Never merge this CI-only branch.
