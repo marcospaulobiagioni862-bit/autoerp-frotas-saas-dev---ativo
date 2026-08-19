@@ -1,0 +1,5 @@
+Trigger SECURITY-2I4C final independent validation.
+Consolidated candidate: 2288ee011415f69f011f6b21fb16db96d1e24196
+Tree: 036909fab49f8532aa8b83cc2576b51f7d9e2004
+Exactly one commit over main 68b2ab0315bfb9e77cacb760b8f1bffdb4034357.
+Never merge this CI branch.
