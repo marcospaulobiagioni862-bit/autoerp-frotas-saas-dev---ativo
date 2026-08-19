@@ -1,45 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  User,
-  CreditCard,
-  Car,
-  FileText,
-  DollarSign,
+  Activity,
   AlertTriangle,
+  Calendar,
+  Car,
   Clock,
-  ShieldAlert,
-  ShieldCheck,
-  Plus,
-  Trash2,
-  File,
-  Lock,
-  Unlock,
+  CreditCard,
+  DollarSign,
   ExternalLink,
-  Phone,
+  File,
+  FileText,
+  Lock,
   Mail,
   MapPin,
-  Calendar,
   MessageSquare,
-  Activity,
+  Phone,
+  Plus,
+  ShieldAlert,
+  Trash2,
+  Unlock,
+  User,
 } from 'lucide-react';
 import {
-  ModalContainer,
-  Card,
   Badge,
   Button,
+  Card,
+  ConfirmDialog,
   Input,
+  ModalContainer,
   Select,
   Skeleton,
-  ConfirmDialog,
 } from '../ui';
-import {
-  DriverService,
-  DriverDetailedSummary,
-} from '../../domain/services/DriverService';
-import { DriverStatus, DocumentStatus, TicketResponsibility, ObligationStatus } from '../../types/enums';
-import { formatCurrencyBRL } from '../../shared/utils/currency';
-import { DriverHealthAndEmergency } from '../../types/entities';
+import { DriverClient } from '../../api/driverClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { DocumentStatus, DriverStatus } from '../../types/enums';
+import type { DriverHealthAndEmergency } from '../../types/entities';
+import { formatCurrencyBRL } from '../../shared/utils/currency';
+import {
+  DriverLegacyDetailsBridge,
+  type DriverLegacyDetailedSummary,
+} from './DriverLegacyDetailsBridge';
 
 interface DriverDetailsModalProps {
   isOpen: boolean;
@@ -49,6 +50,19 @@ interface DriverDetailsModalProps {
   onDriverUpdated?: () => void;
 }
 
+type DriverTab =
+  | 'overview'
+  | 'cnh'
+  | 'vehicles'
+  | 'contracts'
+  | 'finance'
+  | 'tickets'
+  | 'communications'
+  | 'health'
+  | 'history';
+
+type MessageType = 'RENT_CHARGE' | 'DUE_REMINDER' | 'TICKET_ALERT' | 'MAINTENANCE_ALERT' | 'CUSTOM';
+
 export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   isOpen,
   onClose,
@@ -56,31 +70,27 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   onSelectVehicle,
   onDriverUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'cnh' | 'vehicles' | 'contracts' | 'finance' | 'tickets' | 'communications' | 'health' | 'history'
-  >('overview');
-
-  const [summary, setSummary] = useState<DriverDetailedSummary | null>(null);
-  const [uploadCount, setUploadCount] = useState(0);
+  const bridge = useMemo(() => new DriverLegacyDetailsBridge(), []);
+  const [activeTab, setActiveTab] = useState<DriverTab>('overview');
+  const [summary, setSummary] = useState<DriverLegacyDetailedSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Block/Unblock Dialogs
   const [isBlockDialogOpen, setIsBlockDialogOpen] = useState(false);
   const [blockReason, setBlockReason] = useState('');
   const [isUnblockDialogOpen, setIsUnblockDialogOpen] = useState(false);
   const [unblockReason, setUnblockReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
 
-  // New Document Modal/State
   const [isAddDocOpen, setIsAddDocOpen] = useState(false);
   const [docType, setDocType] = useState('Comprovante de Residência');
   const [docNumber, setDocNumber] = useState('');
   const [docExpDate, setDocExpDate] = useState('');
   const [docNotes, setDocNotes] = useState('');
 
-  // Health & Emergency Edit Modal/State
+  const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
   const [isEditHealthOpen, setIsEditHealthOpen] = useState(false);
+  const [healthProfile, setHealthProfile] = useState<DriverHealthAndEmergency>({});
   const [bloodType, setBloodType] = useState('');
   const [allergies, setAllergies] = useState('');
   const [relevantConditions, setRelevantConditions] = useState('');
@@ -89,111 +99,22 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
-  const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
-  const [healthProfile, setHealthProfile] = useState<DriverHealthAndEmergency>({});
 
-  // WhatsApp Communications State
   const [customMsg, setCustomMsg] = useState('');
-  const [msgType, setMsgType] = useState<'RENT_CHARGE' | 'DUE_REMINDER' | 'TICKET_ALERT' | 'MAINTENANCE_ALERT' | 'CUSTOM'>('CUSTOM');
+  const [msgType, setMsgType] = useState<MessageType>('CUSTOM');
 
   const driver = summary?.driver;
 
-  const applyHealthProfile = (h: DriverHealthAndEmergency) => {
-    setHealthProfile(h);
-    setBloodType(h.bloodType || ''); setAllergies(h.allergies || '');
-    setRelevantConditions(h.relevantConditions || ''); setContinuousMedications(h.continuousMedications || '');
-    setEmergencyContactName(h.emergencyContactName || ''); setEmergencyContactRelationship(h.emergencyContactRelationship || '');
-    setEmergencyContactPhone(h.emergencyContactPhone || ''); setEmergencyNotes(h.emergencyNotes || '');
-  };
-
-  const handleUnlockHealth = async () => {
-    if (!driverId) return;
-    setActionLoading(true);
-    try {
-      const h = await DriverHealthClient.get(driverId);
-      applyHealthProfile(h);
-      setIsHealthUnlocked(true);
-    } catch (err: any) {
-      alert(err.message || 'Acesso negado aos dados de saúde.');
-      setIsHealthUnlocked(false);
-    } finally { setActionLoading(false); }
-  };
-
-  const handleSaveHealthAndEmergency = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!driverId) return;
-    setActionLoading(true);
-    try {
-      const updated = await DriverHealthClient.update(driverId, {
-        bloodType, allergies, relevantConditions, continuousMedications, emergencyContactName,
-        emergencyContactRelationship, emergencyContactPhone, emergencyNotes,
-      });
-      applyHealthProfile(updated);
-      setIsEditHealthOpen(false);
-    } catch (err: any) { alert(err.message || 'Erro ao atualizar dados de saúde.'); }
-    finally { setActionLoading(false); }
-  };
-
-  const handleSendWhatsApp = async (type: typeof msgType, customText?: string) => {
-    if (!driver || !summary) return;
-    let message = '';
-    let ref = '';
-
-    if (type === 'RENT_CHARGE') {
-      const pendingBRL = formatCurrencyBRL(summary.financialSummary.totalPendingAmount);
-      message = `Olá ${driver.fullName}, gostaríamos de lembrar sobre a cobrança em aberto do aluguel do veículo no valor de ${pendingBRL}. Por favor, realize o pagamento para manter seu cadastro regularizado. Qualquer dúvida, estamos à disposição!`;
-      ref = `Saldo devedor total: ${pendingBRL}`;
-    } else if (type === 'DUE_REMINDER') {
-      message = `Olá ${driver.fullName}, este é um lembrete amigável de que a sua próxima parcela de aluguel está próxima do vencimento. Mantenha os pagamentos em dia para evitar juros e bloqueios. Obrigado!`;
-      ref = 'Lembrete de Vencimento';
-    } else if (type === 'TICKET_ALERT') {
-      const count = summary.trafficTickets.length;
-      message = `Olá ${driver.fullName}, identificamos ${count} nova(s) multa(s) de trânsito vinculada(s) ao veículo durante seu período de locação. Por favor, verifique os detalhes no painel ou entre em contato para receber a guia.`;
-      ref = `Aviso de Multas (${count})`;
-    } else if (type === 'MAINTENANCE_ALERT') {
-      message = `Olá ${driver.fullName}, lembramos que o veículo está agendado ou necessita de manutenção preventiva em breve. Favor agendar o comparecimento na oficina parceira para garantir sua segurança na via.`;
-      ref = 'Aviso de Manutenção';
-    } else {
-      message = customText || customMsg || 'Olá!';
-      ref = 'Mensagem Personalizada';
-    }
-
-    try {
-      // Save Communication Log
-      const driverService = new DriverService();
-      await driverService.addCommunicationLog({
-        companyId: driver.companyId,
-        driverId: driver.id,
-        type,
-        phone: driver.phone,
-        message,
-        relatedRef: ref,
-        user: 'Administrador',
-        status: 'OPENED_IN_WHATSAPP',
-      });
-
-      // Open WhatsApp Web/App
-      const cleanPhone = driver.phone.replace(/\D/g, '');
-      const waUrl = `https://wa.me/${cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone}?text=${encodeURIComponent(message)}`;
-      window.open(waUrl, '_blank');
-
-      setCustomMsg('');
-
-      // Reload summary to see new log
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao registrar log de comunicação.');
-    }
-  };
-
-  const handleConfirmCommunicationSent = async (logId: string) => {
-    try {
-      const driverService = new DriverService();
-      await driverService.updateCommunicationStatus(logId, 'MANUALLY_CONFIRMED_SENT');
-      await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao confirmar envio.');
-    }
+  const applyHealthProfile = (health: DriverHealthAndEmergency) => {
+    setHealthProfile(health);
+    setBloodType(health.bloodType || '');
+    setAllergies(health.allergies || '');
+    setRelevantConditions(health.relevantConditions || '');
+    setContinuousMedications(health.continuousMedications || '');
+    setEmergencyContactName(health.emergencyContactName || '');
+    setEmergencyContactRelationship(health.emergencyContactRelationship || '');
+    setEmergencyContactPhone(health.emergencyContactPhone || '');
+    setEmergencyNotes(health.emergencyNotes || '');
   };
 
   const loadData = async () => {
@@ -201,37 +122,40 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const driverService = new DriverService();
-      const data = await driverService.getDriverDetailedSummary(driverId);
-      setSummary(data);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao carregar os detalhes do motorista.');
+      const coreDriver = await DriverClient.get(driverId);
+      const supplemental = await bridge.getSupplementalSummary(coreDriver);
+      if (coreDriver.currentVehicleId) {
+        const vehicle = await VehicleClient.get(coreDriver.currentVehicleId);
+        supplemental.currentVehicle = { ...vehicle, year: vehicle.yearModel || vehicle.yearFabrication };
+      }
+      setSummary(supplemental);
+    } catch (err: unknown) {
+      setSummary(null);
+      setError(err instanceof Error ? err.message : 'Erro ao carregar os detalhes do motorista.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isOpen && driverId) {
-      setIsHealthUnlocked(false);
-      applyHealthProfile({});
-      loadData();
-      setActiveTab('overview');
-    }
+    if (!isOpen || !driverId) return;
+    setActiveTab('overview');
+    setIsHealthUnlocked(false);
+    applyHealthProfile({});
+    void loadData();
   }, [isOpen, driverId]);
 
   const handleBlockDriver = async () => {
     if (!driverId || !blockReason.trim()) return;
     setActionLoading(true);
     try {
-      const driverService = new DriverService();
-      await driverService.blockDriver(driverId, blockReason, 'usr-admin', 'Administrador');
+      await DriverClient.changeStatus(driverId, DriverStatus.BLOCKED);
       setIsBlockDialogOpen(false);
       setBlockReason('');
       await loadData();
-      if (onDriverUpdated) onDriverUpdated();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao bloquear motorista.');
+      onDriverUpdated?.();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao bloquear motorista.');
     } finally {
       setActionLoading(false);
     }
@@ -241,88 +165,179 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     if (!driverId || !unblockReason.trim()) return;
     setActionLoading(true);
     try {
-      const driverService = new DriverService();
-      await driverService.unblockDriver(driverId, unblockReason, 'usr-admin', 'Administrador');
+      await DriverClient.changeStatus(driverId, DriverStatus.ACTIVE);
       setIsUnblockDialogOpen(false);
       setUnblockReason('');
       await loadData();
-      if (onDriverUpdated) onDriverUpdated();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao desbloquear motorista.');
+      onDriverUpdated?.();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao desbloquear motorista.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleAddDocument = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUnlockHealth = async () => {
     if (!driverId) return;
     setActionLoading(true);
     try {
-      const driverService = new DriverService();
-      await driverService.addDocument(
-        driverId,
-        {
-          documentType: docType,
-          documentNumber: docNumber,
-          expirationDate: docExpDate || undefined,
-          notes: docNotes,
-        },
-        'usr-admin',
-        'Administrador'
-      );
+      const health = await DriverHealthClient.get(driverId);
+      applyHealthProfile(health);
+      setIsHealthUnlocked(true);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Acesso negado aos dados de saúde.');
+      setIsHealthUnlocked(false);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveHealthAndEmergency = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!driverId) return;
+    setActionLoading(true);
+    try {
+      const health = await DriverHealthClient.update(driverId, {
+        bloodType,
+        allergies,
+        relevantConditions,
+        continuousMedications,
+        emergencyContactName,
+        emergencyContactRelationship,
+        emergencyContactPhone,
+        emergencyNotes,
+      });
+      applyHealthProfile(health);
+      setIsEditHealthOpen(false);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao atualizar dados de saúde.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddDocument = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!driver) return;
+    setActionLoading(true);
+    try {
+      await bridge.addDocument(driver, {
+        documentType: docType,
+        documentNumber: docNumber || undefined,
+        expirationDate: docExpDate || undefined,
+        notes: docNotes || undefined,
+      });
       setIsAddDocOpen(false);
       setDocNumber('');
       setDocExpDate('');
       setDocNotes('');
       await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao adicionar documento.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao adicionar documento.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleRemoveDocument = async (docId: string) => {
+  const handleRemoveDocument = async (documentId: string) => {
     if (!confirm('Deseja realmente remover este documento?')) return;
     try {
-      const driverService = new DriverService();
-      await driverService.removeDocument(docId, 'usr-admin', 'Administrador');
+      await bridge.removeDocument(documentId);
       await loadData();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao remover documento.');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao remover documento.');
     }
+  };
+
+  const buildMessage = (type: MessageType, customText?: string) => {
+    if (!driver || !summary) return { message: '', ref: '' };
+    if (type === 'RENT_CHARGE') {
+      const amount = formatCurrencyBRL(summary.financialSummary.totalPendingAmount);
+      return {
+        message: `Olá ${driver.fullName}, gostaríamos de lembrar sobre a cobrança em aberto do aluguel do veículo no valor de ${amount}. Por favor, realize o pagamento para manter seu cadastro regularizado. Qualquer dúvida, estamos à disposição!`,
+        ref: `Saldo devedor total: ${amount}`,
+      };
+    }
+    if (type === 'DUE_REMINDER') {
+      return {
+        message: `Olá ${driver.fullName}, este é um lembrete amigável de que a sua próxima parcela de aluguel está próxima do vencimento. Mantenha os pagamentos em dia para evitar juros e bloqueios. Obrigado!`,
+        ref: 'Lembrete de Vencimento',
+      };
+    }
+    if (type === 'TICKET_ALERT') {
+      return {
+        message: `Olá ${driver.fullName}, identificamos ${summary.trafficTickets.length} nova(s) multa(s) de trânsito vinculada(s) ao veículo durante seu período de locação. Entre em contato para verificar os detalhes.`,
+        ref: `Aviso de Multas (${summary.trafficTickets.length})`,
+      };
+    }
+    if (type === 'MAINTENANCE_ALERT') {
+      return {
+        message: `Olá ${driver.fullName}, lembramos que o veículo está agendado ou necessita de manutenção preventiva em breve. Favor agendar o comparecimento na oficina parceira.`,
+        ref: 'Aviso de Manutenção',
+      };
+    }
+    return { message: customText || customMsg || 'Olá!', ref: 'Mensagem Personalizada' };
+  };
+
+  const handleSendWhatsApp = async (type: MessageType) => {
+    if (!driver) return;
+    const { message, ref } = buildMessage(type);
+    if (!message) return;
+    try {
+      await bridge.addCommunicationLog(driver, {
+        type,
+        phone: driver.phone,
+        message,
+        relatedRef: ref,
+        user: 'UI legada — entidade suplementar',
+        status: 'OPENED_IN_WHATSAPP',
+      });
+      const cleanPhone = driver.phone.replace(/\D/g, '');
+      const destination = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+      window.open(`https://wa.me/${destination}?text=${encodeURIComponent(message)}`, '_blank');
+      setCustomMsg('');
+      await loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao registrar comunicação.');
+    }
+  };
+
+  const handleConfirmCommunicationSent = async (logId: string) => {
+    try {
+      await bridge.updateCommunicationStatus(logId, 'MANUALLY_CONFIRMED_SENT');
+      await loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao confirmar envio.');
+    }
+  };
+
+  const getStatusBadge = (status?: DriverStatus) => {
+    if (status === DriverStatus.ACTIVE) return <Badge variant="success">Ativo</Badge>;
+    if (status === DriverStatus.BLOCKED) return <Badge variant="danger">Bloqueado</Badge>;
+    if (status === DriverStatus.PENDING || status === DriverStatus.PENDING_DOCS) return <Badge variant="warning">Pendente</Badge>;
+    return <Badge variant="neutral">{status || 'Sem Status'}</Badge>;
+  };
+
+  const getCnhBadge = (status?: DocumentStatus) => {
+    if (status === DocumentStatus.VALID) return <Badge variant="success">CNH Válida</Badge>;
+    if (status === DocumentStatus.EXPIRING_SOON) return <Badge variant="warning">CNH Vencendo</Badge>;
+    if (status === DocumentStatus.EXPIRED) return <Badge variant="danger">CNH Vencida</Badge>;
+    return <Badge variant="neutral">Sem Info</Badge>;
   };
 
   if (!isOpen) return null;
 
-  const getStatusBadge = (st?: DriverStatus) => {
-    switch (st) {
-      case DriverStatus.ACTIVE:
-        return <Badge variant="success">Ativo</Badge>;
-      case DriverStatus.INACTIVE:
-        return <Badge variant="neutral">Inativo</Badge>;
-      case DriverStatus.BLOCKED:
-        return <Badge variant="danger">Bloqueado</Badge>;
-      case DriverStatus.PENDING_DOCS:
-        return <Badge variant="warning">Pendente de Docs</Badge>;
-      default:
-        return <Badge variant="neutral">{st || 'Sem Status'}</Badge>;
-    }
-  };
-
-  const getCnhBadge = (st?: DocumentStatus) => {
-    switch (st) {
-      case DocumentStatus.VALID:
-        return <Badge variant="success">CNH Válida</Badge>;
-      case DocumentStatus.EXPIRING_SOON:
-        return <Badge variant="warning">CNH Vencendo</Badge>;
-      case DocumentStatus.EXPIRED:
-        return <Badge variant="danger">CNH Vencida</Badge>;
-      default:
-        return <Badge variant="neutral">Sem Info</Badge>;
-    }
-  };
+  const tabs: Array<{ id: DriverTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { id: 'overview', label: 'Visão Geral', icon: User },
+    { id: 'cnh', label: 'CNH & Documentos', icon: CreditCard },
+    { id: 'vehicles', label: 'Veículos', icon: Car },
+    { id: 'contracts', label: 'Contratos', icon: FileText },
+    { id: 'finance', label: 'Financeiro', icon: DollarSign },
+    { id: 'tickets', label: 'Multas', icon: AlertTriangle },
+    { id: 'communications', label: 'Comunicações', icon: MessageSquare },
+    { id: 'health', label: 'Saúde & Emergência', icon: ShieldAlert },
+    { id: 'history', label: 'Histórico', icon: Clock },
+  ];
 
   return (
     <ModalContainer
@@ -343,902 +358,251 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           <p className="font-semibold">{error || 'Motorista não encontrado.'}</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* CABEÇALHO RESUMO */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold text-lg">
+        <div className="space-y-5">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-700 font-bold">
                 {driver.fullName.substring(0, 2).toUpperCase()}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                    {driver.fullName}
-                  </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-bold">{driver.fullName}</h2>
                   {getStatusBadge(driver.status)}
                   {getCnhBadge(summary.cnhAlert.status)}
                 </div>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">
-                  CPF: {driver.cpf} • CNH: {driver.cnhNumber} ({driver.cnhCategory})
-                </p>
+                <p className="text-xs text-slate-500 font-mono">CPF: {driver.cpf} • CNH: {driver.cnhNumber} ({driver.cnhCategory})</p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-              {driver.status === DriverStatus.BLOCKED ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsUnblockDialogOpen(true)}
-                  className="text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                >
-                  <Unlock className="w-4 h-4 mr-1.5" />
-                  Desbloquear
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsBlockDialogOpen(true)}
-                  className="text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                >
-                  <Lock className="w-4 h-4 mr-1.5" />
-                  Bloquear
-                </Button>
-              )}
-            </div>
+            {driver.status === DriverStatus.BLOCKED ? (
+              <Button variant="outline" onClick={() => setIsUnblockDialogOpen(true)}>
+                <Unlock className="w-4 h-4 mr-1.5" />Desbloquear
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => setIsBlockDialogOpen(true)}>
+                <Lock className="w-4 h-4 mr-1.5" />Bloquear
+              </Button>
+            )}
           </div>
 
-          {/* ALERTA CNH SE VENCIDA OU VENCENDO */}
           {summary.cnhAlert.status !== DocumentStatus.VALID && (
-            <div
-              className={`p-3.5 rounded-xl border flex items-center gap-3 ${
-                summary.cnhAlert.status === DocumentStatus.EXPIRED
-                  ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200'
-                  : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
-              }`}
-            >
-              <ShieldAlert className="w-5 h-5 shrink-0" />
-              <div className="text-xs">
-                <strong>Alerta de CNH: </strong>
-                {summary.cnhAlert.message} Data de validade cadastrada:{' '}
-                <span className="font-mono">{driver.cnhExpiration}</span>.
-              </div>
+            <div className="p-3.5 rounded-xl border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-xs">
+              <ShieldAlert className="w-4 h-4 inline mr-2" />
+              <strong>Alerta de CNH:</strong> {summary.cnhAlert.message}
             </div>
           )}
 
-          {/* ABAS */}
-          <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar gap-1">
-            {[
-              { id: 'overview', label: 'Visão Geral', icon: User },
-              { id: 'cnh', label: 'CNH & Documentos', icon: CreditCard },
-              { id: 'vehicles', label: 'Veículos', icon: Car },
-              { id: 'contracts', label: 'Contratos', icon: FileText },
-              { id: 'finance', label: 'Financeiro', icon: DollarSign },
-              { id: 'tickets', label: 'Multas', icon: AlertTriangle },
-              { id: 'communications', label: 'Comunicações', icon: MessageSquare },
-              { id: 'health', label: 'Saúde & Emergência', icon: ShieldAlert },
-              { id: 'history', label: 'Histórico', icon: Clock },
-            ].map((tab) => {
+          <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto gap-1">
+            {tabs.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors ${
-                    isActive
-                      ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 dark:border-emerald-400'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 ${activeTab === tab.id ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500'}`}
                 >
-                  <Icon className="w-4 h-4" />
-                  {tab.label}
+                  <Icon className="w-4 h-4" />{tab.label}
                 </button>
               );
             })}
           </div>
 
-          {/* CONTEÚDO DAS ABAS */}
-
-          {/* TAB 1: VISÃO GERAL */}
           {activeTab === 'overview' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="p-4 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Informações de Contato
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
-                    <Phone className="w-4 h-4 text-slate-400" />
-                    <span>{driver.phone}</span>
-                    {driver.whatsapp && (
-                      <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-md font-mono">
-                        WhatsApp
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
-                    <Mail className="w-4 h-4 text-slate-400" />
-                    <span>{driver.email || 'E-mail não informado'}</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
-                    <Calendar className="w-4 h-4 text-slate-400" />
-                    <span>Data Nasc: {driver.birthDate}</span>
-                  </div>
-                </div>
+                <h3 className="text-xs font-bold uppercase text-slate-400">Contato</h3>
+                <p className="text-sm flex items-center gap-2"><Phone className="w-4 h-4" />{driver.phone}</p>
+                <p className="text-sm flex items-center gap-2"><Mail className="w-4 h-4" />{driver.email || 'E-mail não informado'}</p>
+                <p className="text-sm flex items-center gap-2"><Calendar className="w-4 h-4" />{driver.birthDate}</p>
               </Card>
-
               <Card className="p-4 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Endereço
-                </h3>
-                <div className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300">
-                  <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p>
-                      {driver.address?.street}, {driver.address?.number}{' '}
-                      {driver.address?.complement && `(${driver.address.complement})`}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {driver.address?.neighborhood} • {driver.address?.city} / {driver.address?.state}
-                    </p>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      CEP: {driver.address?.zipCode}
-                    </p>
-                  </div>
+                <h3 className="text-xs font-bold uppercase text-slate-400">Endereço</h3>
+                <div className="text-sm flex items-start gap-2">
+                  <MapPin className="w-4 h-4 mt-0.5" />
+                  <span>{driver.address.street}, {driver.address.number} — {driver.address.neighborhood}, {driver.address.city}/{driver.address.state} • CEP {driver.address.zipCode}</span>
                 </div>
               </Card>
-
               <Card className="p-4 md:col-span-2 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Plataformas de Atuação & Anotações
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {driver.appPlatforms?.map((p) => (
-                    <Badge key={p} variant="neutral">
-                      {p}
-                    </Badge>
-                  ))}
-                </div>
-                {driver.notes && (
-                  <p className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
-                    {driver.notes}
-                  </p>
-                )}
+                <h3 className="text-xs font-bold uppercase text-slate-400">Plataformas & Observações</h3>
+                <div className="flex flex-wrap gap-2">{driver.appPlatforms.map((platform) => <Badge key={platform} variant="neutral">{platform}</Badge>)}</div>
+                {driver.notes && <p className="text-xs text-slate-500">{driver.notes}</p>}
               </Card>
             </div>
           )}
 
-          {/* TAB 2: CNH & DOCUMENTOS */}
           {activeTab === 'cnh' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  Documentos Registrados
-                </h3>
-                <Button size="sm" onClick={() => setIsAddDocOpen(true)}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Anexar Documento
-                </Button>
+                <h3 className="text-sm font-semibold">Documentos Registrados</h3>
+                <Button size="sm" onClick={() => setIsAddDocOpen(true)}><Plus className="w-4 h-4 mr-1" />Anexar Documento</Button>
               </div>
-
-              {/* LISTA DE DOCUMENTOS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {summary.documents.length === 0 && <p className="text-xs text-slate-400">Nenhum documento suplementar registrado.</p>}
                 {summary.documents.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-lg">
-                        <File className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <strong className="text-sm font-semibold text-slate-900 dark:text-slate-100 block">
-                          {doc.documentType}
-                        </strong>
-                        <p className="text-xs text-slate-500 font-mono">
-                          {doc.documentNumber || 'Sem número'}
-                        </p>
-                        {doc.expirationDate && (
-                          <p className="text-[11px] text-slate-400">
-                            Validade: <span className="font-mono">{doc.expirationDate}</span>
-                          </p>
-                        )}
-                      </div>
+                  <div key={doc.id} className="p-3 border rounded-xl flex justify-between items-center">
+                    <div className="flex gap-3 items-center">
+                      <File className="w-5 h-5 text-emerald-600" />
+                      <div><strong className="text-sm block">{doc.documentType}</strong><span className="text-xs text-slate-500">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''}</span></div>
                     </div>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                      onClick={() => handleRemoveDocument(doc.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => handleRemoveDocument(doc.id)}><Trash2 className="w-4 h-4 text-rose-600" /></Button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* TAB 3: VEÍCULOS */}
           {activeTab === 'vehicles' && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Veículo Atual Vinculado
-              </h3>
-
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Veículo Atual Vinculado</h3>
               {summary.currentVehicle ? (
-                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Car className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-                    <div>
-                      <strong className="text-base font-bold text-slate-900 dark:text-slate-100 block">
-                        {summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})
-                      </strong>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 font-mono">
-                        Placa: {summary.currentVehicle.plate} • Renavam: {summary.currentVehicle.renavam}
-                      </p>
-                    </div>
-                  </div>
-
-                  {onSelectVehicle && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        onClose();
-                        onSelectVehicle(summary.currentVehicle.id);
-                      }}
-                    >
-                      <ExternalLink className="w-4 h-4 mr-1" />
-                      Ver Veículo
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div className="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-xs">
-                  Nenhum veículo vinculado ativamente a este motorista no momento.
-                </div>
-              )}
+                <Card className="p-4 flex justify-between items-center">
+                  <div><strong>{summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})</strong><p className="text-xs text-slate-500">Placa {summary.currentVehicle.plate} • Renavam {summary.currentVehicle.renavam}</p></div>
+                  {onSelectVehicle && <Button size="sm" variant="outline" onClick={() => { onClose(); onSelectVehicle(summary.currentVehicle.id); }}><ExternalLink className="w-4 h-4 mr-1" />Ver Veículo</Button>}
+                </Card>
+              ) : <p className="text-xs text-slate-400">Nenhum veículo vinculado.</p>}
             </div>
           )}
 
-          {/* TAB 4: CONTRATOS */}
           {activeTab === 'contracts' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Histórico de Contratos
-              </h3>
-              {summary.contractHistory.length === 0 ? (
-                <p className="text-xs text-slate-400">Nenhum contrato registrado para este motorista.</p>
-              ) : (
-                <div className="space-y-2">
-                  {summary.contractHistory.map((c) => (
-                    <div
-                      key={c.id}
-                      className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100 block">
-                          Contrato #{c.contractNumber}
-                        </span>
-                        <span className="text-slate-500">
-                          Início: {c.startDate} • Término: {c.endDate || 'Em andamento'}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">
-                          {formatCurrencyBRL(c.recurringValue)} / {c.frequency}
-                        </span>
-                        <Badge variant={c.status === 'ACTIVE' ? 'success' : 'neutral'}>
-                          {c.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <h3 className="text-sm font-semibold">Histórico de Contratos</h3>
+              {summary.contractHistory.length === 0 ? <p className="text-xs text-slate-400">Nenhum contrato registrado.</p> : summary.contractHistory.map((contract) => (
+                <Card key={contract.id} className="p-3 flex justify-between text-xs">
+                  <div><strong className="font-mono block">Contrato #{contract.contractNumber || contract.id}</strong><span>{contract.startDate || '—'} → {contract.endDate || 'Em andamento'}</span></div>
+                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.recurringValue || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : 'neutral'}>{contract.status}</Badge></div>
+                </Card>
+              ))}
             </div>
           )}
 
-          {/* TAB 5: FINANCEIRO */}
           {activeTab === 'finance' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <span className="text-xs text-slate-400 block">Pendente / Em Aberto</span>
-                  <strong className="text-lg font-mono font-bold text-amber-600 dark:text-amber-400">
-                    {formatCurrencyBRL(summary.financialSummary.totalPendingAmount)}
-                  </strong>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <span className="text-xs text-slate-400 block">Vencido / Em Atraso</span>
-                  <strong className="text-lg font-mono font-bold text-rose-600 dark:text-rose-400">
-                    {formatCurrencyBRL(summary.financialSummary.totalOverdueAmount)}
-                  </strong>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <span className="text-xs text-slate-400 block">Total Recebido</span>
-                  <strong className="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    {formatCurrencyBRL(summary.financialSummary.totalPaidAmount)}
-                  </strong>
-                </div>
+                <Card className="p-3"><span className="text-xs text-slate-400 block">Pendente</span><strong className="text-amber-600">{formatCurrencyBRL(summary.financialSummary.totalPendingAmount)}</strong></Card>
+                <Card className="p-3"><span className="text-xs text-slate-400 block">Vencido</span><strong className="text-rose-600">{formatCurrencyBRL(summary.financialSummary.totalOverdueAmount)}</strong></Card>
+                <Card className="p-3"><span className="text-xs text-slate-400 block">Recebido</span><strong className="text-emerald-600">{formatCurrencyBRL(summary.financialSummary.totalPaidAmount)}</strong></Card>
               </div>
-
-              {/* CAUÇÕES */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Garantia / Caução (Security Deposit)
-                </h4>
-                {summary.securityDeposits.length === 0 ? (
-                  <p className="text-xs text-slate-400">Nenhuma caução registrada.</p>
-                ) : (
-                  summary.securityDeposits.map((dep) => (
-                    <div
-                      key={dep.id}
-                      className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-xl flex justify-between items-center text-xs"
-                    >
-                      <div>
-                        <span className="font-semibold block">Caução Contratual</span>
-                        <span className="text-slate-400">Status: {dep.status}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block">
-                          {formatCurrencyBRL(dep.amount)}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Saldo: {formatCurrencyBRL(dep.balance)}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <h4 className="text-xs font-bold uppercase text-slate-400">Cauções</h4>
+              {summary.securityDeposits.length === 0 ? <p className="text-xs text-slate-400">Nenhuma caução registrada.</p> : summary.securityDeposits.map((deposit) => (
+                <Card key={deposit.id} className="p-3 flex justify-between text-xs"><span>Status: {deposit.status}</span><strong>{formatCurrencyBRL(Number(deposit.amount || 0))}</strong></Card>
+              ))}
             </div>
           )}
 
-          {/* TAB 6: MULTAS */}
           {activeTab === 'tickets' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Multas de Trânsito Atribuídas
-              </h3>
-              {summary.trafficTickets.length === 0 ? (
-                <p className="text-xs text-slate-400">Nenhuma multa registrada para este motorista.</p>
-              ) : (
-                <div className="space-y-2">
-                  {summary.trafficTickets.map((t) => (
-                    <div
-                      key={t.id}
-                      className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-xl flex justify-between items-center text-xs"
-                    >
-                      <div>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100 block">
-                          {t.infractionCode || 'Auto s/n'} — {t.description}
-                        </span>
-                        <span className="text-slate-400">
-                          Data: {t.infractionDate} • Vencimento: {t.dueDate}
-                        </span>
-                      </div>
-                      <div className="text-right font-mono font-bold text-rose-600 dark:text-rose-400">
-                        {formatCurrencyBRL(t.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <h3 className="text-sm font-semibold">Multas de Trânsito Atribuídas</h3>
+              {summary.trafficTickets.length === 0 ? <p className="text-xs text-slate-400">Nenhuma multa registrada.</p> : summary.trafficTickets.map((ticket) => (
+                <Card key={ticket.id} className="p-3 flex justify-between text-xs"><div><strong className="block">{ticket.infractionCode || 'Auto s/n'} — {ticket.description}</strong><span>{ticket.infractionDate} • vence {ticket.dueDate}</span></div><strong className="text-rose-600">{formatCurrencyBRL(Number(ticket.amount || 0))}</strong></Card>
+              ))}
             </div>
           )}
 
-          {/* TAB: COMUNICAÇÕES & WHATSAPP */}
           {activeTab === 'communications' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* GERAR MENSAGENS */}
-                <Card className="p-4 space-y-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      Disparador de WhatsApp
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Escolha um modelo de mensagem operacional pré-formatada baseada nos dados do motorista.
-                    </p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMsgType('RENT_CHARGE');
-                          const pendingBRL = formatCurrencyBRL(summary.financialSummary.totalPendingAmount);
-                          setCustomMsg(`Olá ${driver.fullName}, gostaríamos de lembrar sobre a cobrança em aberto do aluguel do veículo no valor de ${pendingBRL}. Por favor, realize o pagamento para manter seu cadastro regularizado. Qualquer dúvida, estamos à disposição!`);
-                        }}
-                        className="text-xs"
-                      >
-                        Cobrar Aluguel
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMsgType('DUE_REMINDER');
-                          setCustomMsg(`Olá ${driver.fullName}, este é um lembrete amigável de que a sua próxima parcela de aluguel está próxima do vencimento. Mantenha os pagamentos em dia para evitar juros e bloqueios. Obrigado!`);
-                        }}
-                        className="text-xs"
-                      >
-                        Lembrar Vencimento
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMsgType('TICKET_ALERT');
-                          const count = summary.trafficTickets.length;
-                          setCustomMsg(`Olá ${driver.fullName}, identificamos ${count} nova(s) multa(s) de trânsito vinculada(s) ao veículo durante seu período de locação. Por favor, verifique os detalhes no painel ou entre em contato para receber a guia.`);
-                        }}
-                        className="text-xs"
-                      >
-                        Avisar Multa
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMsgType('MAINTENANCE_ALERT');
-                          setCustomMsg(`Olá ${driver.fullName}, lembramos que o veículo está agendado ou necessita de manutenção preventiva em breve. Favor agendar o comparecimento na oficina parceira para garantir sua segurança na via.`);
-                        }}
-                        className="text-xs"
-                      >
-                        Avisar Manutenção
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMsgType('CUSTOM');
-                          setCustomMsg('');
-                        }}
-                        className="text-xs"
-                      >
-                        Personalizada
-                      </Button>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-slate-500">Texto de Mensagem</label>
-                      <textarea
-                        rows={4}
-                        value={customMsg}
-                        onChange={(e) => setCustomMsg(e.target.value)}
-                        placeholder="Selecione um modelo acima ou digite a mensagem personalizada..."
-                        className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      />
-                    </div>
-
-                    <Button
-                      variant="primary"
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                      disabled={!customMsg.trim()}
-                      onClick={() => handleSendWhatsApp(msgType)}
-                    >
-                      <ExternalLink className="w-4 h-4 mr-1.5" />
-                      Abrir no WhatsApp Web/App
-                    </Button>
-                  </div>
-                </Card>
-
-                {/* HISTÓRICO DE COMUNICAÇÕES */}
-                <Card className="p-4 space-y-3">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Histórico de Envio
-                  </h3>
-                  {summary.communicationLogs.length === 0 ? (
-                    <p className="text-xs text-slate-400 text-center py-8">Nenhuma mensagem disparada pelo AutoERP.</p>
-                  ) : (
-                    <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                      {summary.communicationLogs.map((log) => (
-                        <div
-                          key={log.id}
-                          className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-xs"
-                        >
-                          <div className="flex justify-between items-start gap-2">
-                            <div>
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                {log.type === 'RENT_CHARGE' && 'Cobrança de Aluguel'}
-                                {log.type === 'DUE_REMINDER' && 'Lembrete de Vencimento'}
-                                {log.type === 'TICKET_ALERT' && 'Aviso de Multa'}
-                                {log.type === 'MAINTENANCE_ALERT' && 'Aviso de Manutenção'}
-                                {log.type === 'CUSTOM' && 'Personalizada'}
-                              </span>
-                              <span className="text-[10px] text-slate-400 block font-mono">
-                                {new Date(log.dateTime).toLocaleString('pt-BR')}
-                              </span>
-                            </div>
-                            <div className="flex flex-col items-end gap-1.5">
-                              {log.status === 'OPENED_IN_WHATSAPP' && (
-                                <span className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded font-semibold font-mono">
-                                  ABERTO NO WHATSAPP
-                                </span>
-                              )}
-                              {log.status === 'MANUALLY_CONFIRMED_SENT' && (
-                                <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded font-semibold font-mono">
-                                  CONFIRMADO ENVIADO
-                                </span>
-                              )}
-                              {log.status === 'OPENED_IN_WHATSAPP' && (
-                                <button
-                                  onClick={() => handleConfirmCommunicationSent(log.id)}
-                                  className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline"
-                                >
-                                  Confirmar Envio ✓
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          <p className="text-slate-600 dark:text-slate-400 font-sans italic border-l-2 border-slate-300 dark:border-slate-700 pl-2">
-                            "{log.message}"
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Enviado por: {log.user}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              </div>
-            </div>
-          )}
-
-          {/* TAB: SAÚDE & EMERGÊNCIA */}
-          {activeTab === 'health' && (
-            <div className="space-y-4">
-              {!isHealthUnlocked ? (
-                <div className="p-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50 dark:bg-slate-900/20 max-w-lg mx-auto space-y-4">
-                  <ShieldAlert className="w-10 h-10 text-amber-500 mx-auto" />
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                      Informações de Saúde & Emergência (Acesso Restrito)
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Os dados de saúde são protegidos de acordo com políticas de privacidade administrativa. O acesso é auditado na trilha do sistema.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleUnlockHealth}
-                    disabled={actionLoading}
-                    variant="primary"
-                    size="sm"
-                  >
-                    <Unlock className="w-4 h-4 mr-1.5" />
-                    Desbloquear Visualização
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        Dados Médicos e Contatos para Sinistros
-                      </h3>
-                      <button
-                        onClick={() => setIsHealthUnlocked(false)}
-                        className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
-                      >
-                        <Lock className="w-3 h-3" /> Bloquear tela
-                      </button>
-                    </div>
-                    <Button size="sm" onClick={() => setIsEditHealthOpen(true)}>
-                      Editar Informações
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* CLINICOS */}
-                    <Card className="p-4 space-y-3.5">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Activity className="w-4 h-4 text-emerald-600" /> Ficha de Saúde Básica
-                      </h4>
-                      <div className="space-y-2.5 text-xs">
-                        <div>
-                          <span className="text-slate-400 block">Tipo Sanguíneo</span>
-                          <strong className="text-slate-800 dark:text-slate-100 text-sm font-mono">
-                            {healthProfile?.bloodType || 'Não informado'}
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Alergias</span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {healthProfile?.allergies || 'Nenhuma alergia conhecida registrada.'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Condições Médicas Relevantes</span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {healthProfile?.relevantConditions || 'Nenhuma condição reportada.'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Medicamentos de Uso Contínuo</span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium font-mono">
-                            {healthProfile?.continuousMedications || 'Nenhum medicamento registrado.'}
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-
-                    {/* CONTATO DE EMERGENCIA */}
-                    <Card className="p-4 space-y-3.5">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <Phone className="w-4 h-4 text-emerald-600" /> Contato de Emergência (Sinistros)
-                      </h4>
-                      <div className="space-y-2.5 text-xs">
-                        <div>
-                          <span className="text-slate-400 block">Nome do Contato</span>
-                          <strong className="text-slate-800 dark:text-slate-100 text-sm">
-                            {healthProfile?.emergencyContactName || 'Não informado'}
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Parentesco / Relação</span>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium">
-                            {healthProfile?.emergencyContactRelationship || 'Não informado'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Telefone de Emergência</span>
-                          <p className="text-slate-800 dark:text-slate-200 font-bold font-mono text-sm">
-                            {healthProfile?.emergencyContactPhone || 'Não informado'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Observações de Emergência</span>
-                          <p className="text-slate-800 dark:text-slate-200 italic">
-                            {healthProfile?.emergencyNotes || 'Sem observações adicionais.'}
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-                  </div>
-
-                  {healthProfile?.lastUpdateDate && (
-                    <p className="text-[10px] text-slate-400 font-mono text-right">
-                      Última atualização: {new Date(healthProfile.lastUpdateDate + 'T12:00:00').toLocaleDateString('pt-BR')} por {healthProfile.responsibleUser || 'Sistema'}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 7: HISTÓRICO / AUDITORIA */}
-          {activeTab === 'history' && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Trilha de Auditoria & Modificações
-              </h3>
-              {summary.historyLogs.length === 0 ? (
-                <p className="text-xs text-slate-400">Nenhum evento registrado no histórico.</p>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {summary.historyLogs.map((log) => (
-                    <div
-                      key={log.id}
-                      className="p-2.5 bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 rounded-lg text-xs space-y-1"
-                    >
-                      <div className="flex justify-between items-center font-semibold">
-                        <span className="text-emerald-600 dark:text-emerald-400">
-                          {log.action}
-                        </span>
-                        <span className="text-slate-400 font-mono text-[10px]">
-                          {new Date(log.createdAt).toLocaleString('pt-BR')}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 dark:text-slate-400">
-                        Usuário: <span className="font-semibold">{log.userName || log.userId}</span>
-                      </p>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="p-4 space-y-3">
+                <h3 className="text-sm font-bold">Disparador de WhatsApp</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(['RENT_CHARGE','DUE_REMINDER','TICKET_ALERT','MAINTENANCE_ALERT','CUSTOM'] as MessageType[]).map((type) => (
+                    <Button key={type} size="sm" variant="outline" onClick={() => { setMsgType(type); setCustomMsg(buildMessage(type).message); }}>{type}</Button>
                   ))}
                 </div>
-              )}
+                <textarea rows={5} value={customMsg} onChange={(event) => setCustomMsg(event.target.value)} className="w-full p-2 text-xs rounded-lg border bg-transparent" />
+                <Button disabled={!customMsg.trim()} onClick={() => handleSendWhatsApp(msgType)}><ExternalLink className="w-4 h-4 mr-1" />Abrir WhatsApp</Button>
+              </Card>
+              <Card className="p-4 space-y-3">
+                <h3 className="text-sm font-bold">Histórico de Envio</h3>
+                {summary.communicationLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhuma comunicação registrada.</p> : summary.communicationLogs.map((log) => (
+                  <div key={log.id} className="p-2 border rounded-lg text-xs"><strong>{log.type}</strong><p className="text-slate-500">{log.message}</p><span className="text-[10px]">{new Date(log.dateTime).toLocaleString('pt-BR')} • {log.status}</span>{log.status === 'OPENED_IN_WHATSAPP' && <button className="block text-emerald-600 mt-1" onClick={() => handleConfirmCommunicationSent(log.id)}>Confirmar envio ✓</button>}</div>
+                ))}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === 'health' && (
+            !isHealthUnlocked ? (
+              <div className="p-8 text-center border border-dashed rounded-2xl space-y-3">
+                <ShieldAlert className="w-10 h-10 text-amber-500 mx-auto" />
+                <h3 className="text-sm font-bold">Saúde & Emergência — acesso restrito</h3>
+                <p className="text-xs text-slate-500">O acesso é autorizado e auditado no servidor.</p>
+                <Button size="sm" onClick={handleUnlockHealth} disabled={actionLoading}><Unlock className="w-4 h-4 mr-1" />Desbloquear Visualização</Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between"><Button size="sm" variant="ghost" onClick={() => setIsHealthUnlocked(false)}><Lock className="w-4 h-4 mr-1" />Bloquear tela</Button><Button size="sm" onClick={() => setIsEditHealthOpen(true)}>Editar Informações</Button></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Activity className="w-4 h-4 inline mr-1" />Ficha de Saúde</h4><p><strong>Tipo sanguíneo:</strong> {healthProfile.bloodType || 'Não informado'}</p><p><strong>Alergias:</strong> {healthProfile.allergies || 'Não informado'}</p><p><strong>Condições:</strong> {healthProfile.relevantConditions || 'Não informado'}</p><p><strong>Medicamentos:</strong> {healthProfile.continuousMedications || 'Não informado'}</p></Card>
+                  <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Phone className="w-4 h-4 inline mr-1" />Emergência</h4><p><strong>Contato:</strong> {healthProfile.emergencyContactName || 'Não informado'}</p><p><strong>Relação:</strong> {healthProfile.emergencyContactRelationship || 'Não informado'}</p><p><strong>Telefone:</strong> {healthProfile.emergencyContactPhone || 'Não informado'}</p><p><strong>Notas:</strong> {healthProfile.emergencyNotes || 'Sem observações'}</p></Card>
+                </div>
+              </div>
+            )
+          )}
+
+          {activeTab === 'history' && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">Histórico legado disponível</h3>
+              {summary.historyLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhum evento legado registrado.</p> : summary.historyLogs.map((log) => (
+                <Card key={log.id} className="p-2 text-xs"><strong className="text-emerald-600">{log.action}</strong><span className="float-right text-slate-400">{new Date(log.timestamp || log.createdAt).toLocaleString('pt-BR')}</span></Card>
+              ))}
             </div>
           )}
         </div>
       )}
 
-      {/* MODAL DE ADICIONAR DOCUMENTO */}
       {isAddDocOpen && (
-        <ModalContainer
-          isOpen={isAddDocOpen}
-          onClose={() => setIsAddDocOpen(false)}
-          title="Anexar Novo Documento"
-          maxWidth="max-w-md"
-        >
+        <ModalContainer isOpen={isAddDocOpen} onClose={() => setIsAddDocOpen(false)} title="Anexar Novo Documento" maxWidth="max-w-md">
           <form onSubmit={handleAddDocument} className="space-y-4">
-            <Select
-              label="Tipo de Documento *"
-              value={docType}
-              onChange={(e) => setDocType(e.target.value)}
-              required
-            >
+            <Select label="Tipo de Documento *" value={docType} onChange={(event) => setDocType(event.target.value)} required>
               <option value="Comprovante de Residência">Comprovante de Residência</option>
-              <option value="Certidão de Antecedentes Criminais">
-                Certidão de Antecedentes Criminais
-              </option>
+              <option value="Certidão de Antecedentes Criminais">Certidão de Antecedentes Criminais</option>
               <option value="Contrato Assinado">Contrato Assinado</option>
               <option value="Outro Documento">Outro Documento</option>
             </Select>
-
-            <Input
-              label="Número do Documento (opcional)"
-              value={docNumber}
-              onChange={(e) => setDocNumber(e.target.value)}
-              placeholder="Ex: 123456"
-            />
-
-            <Input
-              label="Data de Validade (opcional)"
-              type="date"
-              value={docExpDate}
-              onChange={(e) => setDocExpDate(e.target.value)}
-            />
-
-            <Input
-              label="Observações"
-              value={docNotes}
-              onChange={(e) => setDocNotes(e.target.value)}
-              placeholder="Notas adicionais"
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsAddDocOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" isLoading={actionLoading}>
-                Salvar Documento
-              </Button>
-            </div>
+            <Input label="Número do Documento" value={docNumber} onChange={(event) => setDocNumber(event.target.value)} />
+            <Input label="Data de Validade" type="date" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />
+            <Input label="Observações" value={docNotes} onChange={(event) => setDocNotes(event.target.value)} />
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsAddDocOpen(false)}>Cancelar</Button><Button type="submit" isLoading={actionLoading}>Salvar Documento</Button></div>
           </form>
         </ModalContainer>
       )}
 
-      {/* MODAL DE EDITAR SAÚDE & EMERGÊNCIA */}
       {isEditHealthOpen && (
-        <ModalContainer
-          isOpen={isEditHealthOpen}
-          onClose={() => setIsEditHealthOpen(false)}
-          title="Editar Informações de Saúde & Emergência"
-          maxWidth="max-w-xl"
-        >
+        <ModalContainer isOpen={isEditHealthOpen} onClose={() => setIsEditHealthOpen(false)} title="Editar Saúde & Emergência" maxWidth="max-w-xl">
           <form onSubmit={handleSaveHealthAndEmergency} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Input
-                label="Tipo Sanguíneo"
-                value={bloodType}
-                onChange={(e) => setBloodType(e.target.value)}
-                placeholder="Ex: O+, A-, AB+..."
-              />
-
-              <Input
-                label="Alergias Conhecidas"
-                value={allergies}
-                onChange={(e) => setAllergies(e.target.value)}
-                placeholder="Ex: Dipirona, Corantes, Picada de insetos..."
-              />
-            </div>
-
-            <Input
-              label="Condições Médicas Relevantes"
-              value={relevantConditions}
-              onChange={(e) => setRelevantConditions(e.target.value)}
-              placeholder="Ex: Hipertensão, Diabetes, Cardiopatia..."
-            />
-
-            <Input
-              label="Medicamentos de Uso Contínuo"
-              value={continuousMedications}
-              onChange={(e) => setContinuousMedications(e.target.value)}
-              placeholder="Ex: Losartana 50mg, Insulina..."
-            />
-
-            <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
-              <h4 className="text-xs font-bold uppercase text-slate-400 mb-3">Contato de Emergência</h4>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
-                  label="Nome do Contato *"
-                  value={emergencyContactName}
-                  onChange={(e) => setEmergencyContactName(e.target.value)}
-                  placeholder="Nome do parente/amigo"
-                  required
-                />
-
-                <Input
-                  label="Parentesco / Relação *"
-                  value={emergencyContactRelationship}
-                  onChange={(e) => setEmergencyContactRelationship(e.target.value)}
-                  placeholder="Ex: Cônjuge, Mãe, Filho, Amigo..."
-                  required
-                />
-              </div>
-
-              <div className="mt-4">
-                <Input
-                  label="Telefone do Contato *"
-                  value={emergencyContactPhone}
-                  onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                  placeholder="Ex: (11) 99999-9999"
-                  required
-                />
-              </div>
-            </div>
-
-            <Input
-              label="Observações Adicionais de Emergência"
-              value={emergencyNotes}
-              onChange={(e) => setEmergencyNotes(e.target.value)}
-              placeholder="Notas ou instruções para socorristas"
-            />
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setIsEditHealthOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" isLoading={actionLoading}>
-                Salvar Informações
-              </Button>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Tipo Sanguíneo" value={bloodType} onChange={(event) => setBloodType(event.target.value)} /><Input label="Alergias" value={allergies} onChange={(event) => setAllergies(event.target.value)} /></div>
+            <Input label="Condições Médicas" value={relevantConditions} onChange={(event) => setRelevantConditions(event.target.value)} />
+            <Input label="Medicamentos Contínuos" value={continuousMedications} onChange={(event) => setContinuousMedications(event.target.value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Contato de Emergência *" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} required /><Input label="Relação *" value={emergencyContactRelationship} onChange={(event) => setEmergencyContactRelationship(event.target.value)} required /></div>
+            <Input label="Telefone de Emergência *" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} required />
+            <Input label="Observações de Emergência" value={emergencyNotes} onChange={(event) => setEmergencyNotes(event.target.value)} />
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsEditHealthOpen(false)}>Cancelar</Button><Button type="submit" isLoading={actionLoading}>Salvar Informações</Button></div>
           </form>
         </ModalContainer>
       )}
 
-      {/* CONFIRM DIALOG - BLOQUEAR */}
       <ConfirmDialog
         isOpen={isBlockDialogOpen}
         onClose={() => setIsBlockDialogOpen(false)}
         onConfirm={handleBlockDriver}
         title="Bloquear Motorista"
-        message="Atenção: Ao bloquear o motorista, ele ficará impedido de iniciar novos contratos ou assumir novos veículos. Informe o motivo abaixo:"
+        message="Ao bloquear, o motorista ficará impedido de novas operações. Informe o motivo:"
         confirmText="Confirmar Bloqueio"
         confirmVariant="danger"
         isLoading={actionLoading}
       >
-        <div className="mt-3">
-          <Input
-            label="Motivo do Bloqueio *"
-            value={blockReason}
-            onChange={(e) => setBlockReason(e.target.value)}
-            placeholder="Ex: Inadimplência recorrente, documento suspenso..."
-            required
-          />
-        </div>
+        <div className="mt-3"><Input label="Motivo *" value={blockReason} onChange={(event) => setBlockReason(event.target.value)} required /></div>
       </ConfirmDialog>
 
-      {/* CONFIRM DIALOG - DESBLOQUEAR */}
       <ConfirmDialog
         isOpen={isUnblockDialogOpen}
         onClose={() => setIsUnblockDialogOpen(false)}
         onConfirm={handleUnblockDriver}
         title="Desbloquear Motorista"
-        message="Deseja reativar o motorista no sistema? Informe a justificativa administrativa:"
+        message="Deseja reativar o motorista? Informe a justificativa:"
         confirmText="Confirmar Desbloqueio"
         confirmVariant="primary"
         isLoading={actionLoading}
       >
-        <div className="mt-3">
-          <Input
-            label="Motivo do Desbloqueio *"
-            value={unblockReason}
-            onChange={(e) => setUnblockReason(e.target.value)}
-            placeholder="Ex: Débitos quitados, CNH renovada..."
-            required
-          />
-        </div>
+        <div className="mt-3"><Input label="Motivo *" value={unblockReason} onChange={(event) => setUnblockReason(event.target.value)} required /></div>
       </ConfirmDialog>
     </ModalContainer>
   );

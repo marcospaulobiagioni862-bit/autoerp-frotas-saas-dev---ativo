@@ -4,6 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction, VehicleStatus } from '../types/enums';
 import type { Vehicle } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
+import { registerDriverRoutes } from './driverRoutes';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
@@ -109,6 +110,8 @@ function appendStatusReason(existing: Vehicle, reason?: string): string | undefi
 }
 
 export function registerVehicleRoutes(app: Express): void {
+  registerDriverRoutes(app);
+
   // SECURITY-2I1A-v2 foundation only. Fleet UI/KM switchover remains I1B.
   app.get('/api/fleet/vehicles', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');

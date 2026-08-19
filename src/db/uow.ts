@@ -13,8 +13,9 @@ import {
   PostgresSecurityDepositMovementRepository,
   PostgresDriverHealthProfileRepository,
   PostgresVehicleRepository,
-  PostgresKmRecordRepository
+  PostgresKmRecordRepository,
 } from './repositories/postgresRepositories';
+import { PostgresDriverRepository } from './repositories/postgresDriverRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -25,7 +26,6 @@ export class UnitOfWork {
     options?: { financialPeriodLock?: 'SHARED' | 'EXCLUSIVE' }
   ): Promise<T> {
     return await db.transaction(async (tx) => {
-      // Set RLS for this transaction scope securely parameterized
       await tx.execute(
         sql`SELECT set_config('app.current_tenant', ${companyId}, true)`
       );
@@ -37,8 +37,9 @@ export class UnitOfWork {
           await tx.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${companyId})))`);
         }
       }
-      
+
       const txContext: ITransactionContext = {
+        getDriverRepo: () => new PostgresDriverRepository(tx),
         getVehicleRepo: () => new PostgresVehicleRepository(tx),
         getKmRecordRepo: () => new PostgresKmRecordRepository(tx),
         getReceivableRepo: () => new PostgresAccountReceivableRepository(tx),
@@ -52,9 +53,9 @@ export class UnitOfWork {
         getContractRepo: () => new PostgresContractRepository(tx),
         getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
         getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx),
-        getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx)
+        getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),
       };
-      
+
       return await callback(txContext);
     });
   }

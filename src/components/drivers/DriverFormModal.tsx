@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
-import { DriverService, CreateDriverDTO } from '../../domain/services/DriverService';
+import { DriverClient, type DriverCreateInput } from '../../api/driverClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
 
@@ -9,7 +9,6 @@ interface DriverFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   driverToEdit?: Driver | null;
-  companyId: string;
   onSuccess: () => void;
 }
 
@@ -17,13 +16,11 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
   isOpen,
   onClose,
   driverToEdit,
-  companyId,
   onSuccess,
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form State
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
   const [rg, setRg] = useState('');
@@ -112,22 +109,19 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
     setLoading(true);
 
     try {
-      const driverService = new DriverService();
-
-      const dto: CreateDriverDTO = {
-        companyId,
+      const input: DriverCreateInput = {
         fullName,
         cpf,
-        rg,
+        rg: rg || undefined,
         birthDate,
         phone,
         whatsapp: whatsapp || phone,
-        email,
+        email: email || undefined,
         address: {
           zipCode,
           street,
           number,
-          complement,
+          complement: complement || undefined,
           neighborhood,
           city,
           state,
@@ -136,27 +130,25 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
         cnhCategory,
         cnhExpiration,
         appPlatforms,
-        notes,
+        notes: notes || undefined,
       };
 
       if (driverToEdit) {
-        await driverService.updateDriver(
-          driverToEdit.id,
-          {
-            ...dto,
-            status,
-          },
-          'usr-admin',
-          'Administrador'
-        );
+        await DriverClient.update(driverToEdit.id, input);
+        if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) {
+          await DriverClient.changeStatus(
+            driverToEdit.id,
+            status as Exclude<DriverStatus, DriverStatus.ARCHIVED>
+          );
+        }
       } else {
-        await driverService.createDriver(dto, 'usr-admin', 'Administrador');
+        await DriverClient.create(input);
       }
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Ocorreu um erro ao salvar os dados do motorista.');
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Ocorreu um erro ao salvar os dados do motorista.');
     } finally {
       setLoading(false);
     }
@@ -177,7 +169,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         )}
 
-        {/* 1. DADOS PESSOAIS */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <User className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -247,7 +238,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         </div>
 
-        {/* 2. CNH E DOCUMENTAÇÃO */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -302,7 +292,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         </div>
 
-        {/* 3. ENDEREÇO */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -366,7 +355,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         </div>
 
-        {/* 4. APLICATIVOS & NOTAS */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
@@ -414,7 +402,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         </div>
 
-        {/* CONTROLES DO RODAPÉ */}
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
           <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
             Cancelar
