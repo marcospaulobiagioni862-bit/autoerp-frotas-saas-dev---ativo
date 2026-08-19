@@ -1,0 +1,163 @@
+name: SECURITY-2I5A API and scheduler bootstrap gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i5a-api
+
+permissions:
+  contents: write
+
+jobs:
+  api-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_i5a_api
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_i5a_api"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_i5a_api
+      NODE_ENV: test
+      AUTOERP_SCHEDULER_ENABLED: 'false'
+      PRODUCT_SHA: e5d0ff8d8d7712905546ba774a61e2236d1e24ca
+      PRODUCT_BRANCH: security-2i5a-alert-scheduler-authority
+    steps:
+      - name: Checkout exact product head
+        uses: actions/checkout@v4
+        with:
+          ref: e5d0ff8d8d7712905546ba774a61e2236d1e24ca
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Wire API routes and server scheduler startup
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/server/vehicleRoutes.ts')
+          text = path.read_text()
+          import_anchor = "import { registerContractExecutionRoutes } from './contractExecutionRoutes';"
+          assert text.count(import_anchor) == 1
+          text = text.replace(import_anchor, import_anchor + "\nimport { registerNotificationRoutes } from './notificationRoutes';")
+          call_anchor = "  registerContractExecutionRoutes(app);"
+          assert text.count(call_anchor) == 1
+          text = text.replace(call_anchor, call_anchor + "\n  registerNotificationRoutes(app);")
+          path.write_text(text)
+
+          path = Path('server.ts')
+          text = path.read_text()
+          import_anchor = "import { registerVehicleRoutes } from './src/server/vehicleRoutes';"
+          assert text.count(import_anchor) == 1
+          text = text.replace(import_anchor, import_anchor + "\nimport { startAlertScheduler } from './src/server/alertScheduler';")
+          call_anchor = "  registerVehicleRoutes(app);"
+          assert text.count(call_anchor) == 1
+          text = text.replace(call_anchor, call_anchor + "\n  startAlertScheduler();")
+          path.write_text(text)
+          PY
+
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' server.ts src/server/vehicleRoutes.ts | sort)"
+          printf '%s\n' "$changed"
+          test "$changed" = "$expected"
+          git diff --check
+          test "$(grep -F "registerNotificationRoutes(app);" src/server/vehicleRoutes.ts | wc -l)" = "1"
+          test "$(grep -F "startAlertScheduler();" server.ts | wc -l)" = "1"
+
+      - name: Install, TypeScript and build
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm run lint
+          npm run build
+
+      - name: Notification client fail-closed tests
+        run: |
+          set -euo pipefail
+          npx tsx -e "(async () => { const { NotificationClientTestRunner } = await import('./src/api/__tests__/notificationClientTestRunner.ts'); await NotificationClientTestRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Apply migrations 0000 through 0015
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_i5a_api -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+
+      - name: Notification API authority integration
+        run: |
+          set -euo pipefail
+          npx tsx -e "(async () => { const { NotificationAuthorityIntegrationRunner } = await import('./src/server/__tests__/notificationAuthorityIntegration.ts'); await NotificationAuthorityIntegrationRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Scheduler remains idempotent after API wiring
+        run: |
+          set -euo pipefail
+          npx tsx -e "(async () => { const { AlertSchedulerIntegrationRunner } = await import('./src/server/__tests__/alertSchedulerIntegration.ts'); await AlertSchedulerIntegrationRunner.runAllTests(); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Scheduler disabled startup behavior
+        run: |
+          set -euo pipefail
+          AUTOERP_SCHEDULER_ENABLED=false AUTOERP_SCHEDULER_INSTANCE_ID=i5a-disabled npx tsx -e "(async () => { const { sql } = await import('drizzle-orm'); const { db } = await import('./src/db/index.ts'); const { startAlertScheduler, stopAlertSchedulerForTests } = await import('./src/server/alertScheduler.ts'); startAlertScheduler(); await new Promise(r => setTimeout(r, 150)); const result = await db.execute(sql\`SELECT count(*)::int AS count FROM scheduler_runs WHERE instance_id = 'i5a-disabled'\`); stopAlertSchedulerForTests(); if (Number(result.rows?.[0]?.count || 0) !== 0) throw new Error('disabled scheduler executed'); console.log('I5A scheduler disabled boot PASS'); process.exit(0); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Scheduler enabled startup behavior
+        run: |
+          set -euo pipefail
+          AUTOERP_SCHEDULER_ENABLED=true AUTOERP_SCHEDULER_INSTANCE_ID=i5a-enabled AUTOERP_SCHEDULER_INTERVAL_MS=60000 npx tsx -e "(async () => { const { sql } = await import('drizzle-orm'); const { db } = await import('./src/db/index.ts'); const { startAlertScheduler, stopAlertSchedulerForTests } = await import('./src/server/alertScheduler.ts'); startAlertScheduler(); let count = 0; for (let i=0;i<40;i++) { const result = await db.execute(sql\`SELECT count(*)::int AS count FROM scheduler_runs WHERE instance_id = 'i5a-enabled'\`); count = Number(result.rows?.[0]?.count || 0); if (count > 0) break; await new Promise(r => setTimeout(r, 100)); } stopAlertSchedulerForTests(); if (count !== 1) throw new Error('enabled scheduler did not execute exactly once'); console.log('I5A scheduler enabled boot PASS'); process.exit(0); })().catch((error) => { console.error(error); process.exit(1); });"
+
+      - name: Notification RLS regression
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_i5a_api -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE enabled boolean; forced boolean; pcount int;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO enabled, forced FROM pg_class WHERE oid='notifications'::regclass;
+            IF NOT enabled OR NOT forced THEN RAISE EXCEPTION 'notifications RLS/FORCE missing'; END IF;
+            SELECT count(*) INTO pcount FROM pg_policies WHERE tablename='notifications' AND policyname='tenant_access_notifications' AND permissive='PERMISSIVE' AND qual LIKE '%app.current_tenant%' AND with_check LIKE '%app.current_tenant%';
+            IF pcount <> 1 THEN RAISE EXCEPTION 'notifications permissive policy missing'; END IF;
+          END $$;
+          SQL
+
+      - name: Final scope safety
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' server.ts src/server/vehicleRoutes.ts | sort)"
+          test "$changed" = "$expected"
+
+      - name: Publish validated bootstrap wiring
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server.ts src/server/vehicleRoutes.ts
+          git diff --cached --check
+          git commit -m 'feat(i5a): register notification API and scheduler bootstrap'
+          git push origin HEAD:"$PRODUCT_BRANCH"
