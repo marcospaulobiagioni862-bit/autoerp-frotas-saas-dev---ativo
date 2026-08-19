@@ -1,0 +1,214 @@
+name: SECURITY-2I4C foundation implementation
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4c-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout exact I4C candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 8d763d616e551664ba92505635badd9194156285
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify immutable candidate
+        run: |
+          test "$(git rev-parse HEAD)" = "8d763d616e551664ba92505635badd9194156285"
+          test "$(git merge-base 68b2ab0315bfb9e77cacb760b8f1bffdb4034357 HEAD)" = "68b2ab0315bfb9e77cacb760b8f1bffdb4034357"
+
+      - name: Apply foundation alignment patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          replacements = [
+            ["src/types/entities/contract.ts", "ICBzaWduZWRDb250cmFjdFVybD86IHN0cmluZzsKICBub3Rlcz86IHN0cmluZzs=", "ICBzaWduZWRDb250cmFjdFVybD86IHN0cmluZzsKICBzaWduYXR1cmVSZXF1aXJlZD86IGJvb2xlYW47CiAgbm90ZXM/OiBzdHJpbmc7"],
+            ["src/types/entities/contract.ts", "ZXhwb3J0IGludGVyZmFjZSBDb250cmFjdFRlbXBsYXRlIHsKICBpZDogc3RyaW5nOyAvLyBVVUlECiAgY29tcGFueUlkOiBzdHJpbmc7CiAgdGl0bGU6IHN0cmluZzsKICBjb250ZW50TWFya2Rvd246IHN0cmluZzsKICBhY3RpdmU6IGJvb2xlYW47CiAgY3JlYXRlZEF0OiBzdHJpbmc7CiAgdXBkYXRlZEF0OiBzdHJpbmc7Cn0K", "ZXhwb3J0IGludGVyZmFjZSBDb250cmFjdFRlbXBsYXRlIHsKICBpZDogc3RyaW5nOwogIGNvbXBhbnlJZDogc3RyaW5nOwogIHRlbXBsYXRlS2V5OiBzdHJpbmc7CiAgdGl0bGU6IHN0cmluZzsKICBjb250ZW50TWFya2Rvd246IHN0cmluZzsKICB2ZXJzaW9uTnVtYmVyOiBudW1iZXI7CiAgc3VwZXJzZWRlc1RlbXBsYXRlSWQ/OiBzdHJpbmc7CiAgaXNDdXJyZW50OiBib29sZWFuOwogIGlzQWN0aXZlOiBib29sZWFuOwogIGlzQXJjaGl2ZWQ6IGJvb2xlYW47CiAgY3JlYXRlZEJ5OiBzdHJpbmc7CiAgY3JlYXRlZEF0OiBzdHJpbmc7CiAgdXBkYXRlZEF0OiBzdHJpbmc7Cn0KCmV4cG9ydCB0eXBlIENvbnRyYWN0QXJ0aWZhY3RUeXBlID0gJ0dFTkVSQVRFRF9QREYnIHwgJ1NJR05FRF9FVklERU5DRSc7CmV4cG9ydCB0eXBlIENvbnRyYWN0U2lnbmF0dXJlTWV0aG9kID0gJ1NJR05FRF9QREZfVVBMT0FEJzsKCmV4cG9ydCBpbnRlcmZhY2UgQ29udHJhY3RBcnRpZmFjdCB7CiAgaWQ6IHN0cmluZzsKICBjb21wYW55SWQ6IHN0cmluZzsKICBjb250cmFjdElkOiBzdHJpbmc7CiAgYXJ0aWZhY3RUeXBlOiBDb250cmFjdEFydGlmYWN0VHlwZTsKICBhdHRhY2htZW50SWQ6IHN0cmluZzsKICB0ZW1wbGF0ZUlkPzogc3RyaW5nOwogIHNvdXJjZUFydGlmYWN0SWQ/OiBzdHJpbmc7CiAgc25hcHNob3RKc29uPzogc3RyaW5nOwogIHNuYXBzaG90SGFzaDogc3RyaW5nOwogIGlzQ3VycmVudDogYm9vbGVhbjsKICBpc0FyY2hpdmVkOiBib29sZWFuOwogIHNpZ25hdHVyZU1ldGhvZD86IENvbnRyYWN0U2lnbmF0dXJlTWV0aG9kOwogIHNpZ25lZEJ5TmFtZT86IHN0cmluZzsKICBzaWduZWRBdD86IHN0cmluZzsKICBjcmVhdGVkQnk6IHN0cmluZzsKICBjcmVhdGVkQXQ6IHN0cmluZzsKICB1cGRhdGVkQXQ6IHN0cmluZzsKfQo="],
+            ["src/db/schema.ts", "ZXhwb3J0IGNvbnN0IGNvbnRyYWN0cyA9IHBnVGFibGUoJ2NvbnRyYWN0cycsIHsKICBpZDogdGV4dCgnaWQnKS5wcmltYXJ5S2V5KCksCiAgY29tcGFueUlkOiB0ZXh0KCdjb21wYW55X2lkJykubm90TnVsbCgpLAogIGRyaXZlcklkOiB0ZXh0KCdkcml2ZXJfaWQnKS5ub3ROdWxsKCksCiAgdmVoaWNsZUlkOiB0ZXh0KCd2ZWhpY2xlX2lkJykubm90TnVsbCgpLAogIHN0YXR1czogdGV4dCgnc3RhdHVzJykubm90TnVsbCgpLAogIGNyZWF0ZWRBdDogdGltZXN0YW1wKCdjcmVhdGVkX2F0JywgeyBtb2RlOiAnc3RyaW5nJyB9KS5ub3ROdWxsKCkuZGVmYXVsdE5vdygpLAogIHVwZGF0ZWRBdDogdGltZXN0YW1wKCd1cGRhdGVkX2F0JywgeyBtb2RlOiAnc3RyaW5nJyB9KS5ub3ROdWxsKCkuZGVmYXVsdE5vdygpLAp9LCAodCkgPT4gKHsKICBpZHhfY29tcGFueV9zdGF0dXM6IGluZGV4KCdpZHhfY250X2NvbXBhbnlfc3RhdHVzJykub24odC5jb21wYW55SWQsIHQuc3RhdHVzKSwKfSkpOwo=", "ZXhwb3J0IGNvbnN0IGNvbnRyYWN0cyA9IHBnVGFibGUoJ2NvbnRyYWN0cycsIHsKICBpZDogdGV4dCgnaWQnKS5wcmltYXJ5S2V5KCksCiAgY29tcGFueUlkOiB0ZXh0KCdjb21wYW55X2lkJykubm90TnVsbCgpLAogIGRyaXZlcklkOiB0ZXh0KCdkcml2ZXJfaWQnKS5ub3ROdWxsKCksCiAgdmVoaWNsZUlkOiB0ZXh0KCd2ZWhpY2xlX2lkJykubm90TnVsbCgpLAogIHN0YXR1czogdGV4dCgnc3RhdHVzJykubm90TnVsbCgpLAogIGNvbnRyYWN0TnVtYmVyOiB0ZXh0KCdjb250cmFjdF9udW1iZXInKS5ub3ROdWxsKCksCiAgc3RhcnREYXRlOiB0ZXh0KCdzdGFydF9kYXRlJykubm90TnVsbCgpLAogIGVuZERhdGU6IHRleHQoJ2VuZF9kYXRlJyksCiAgcmVudGFsQW1vdW50OiBudW1lcmljKCdyZW50YWxfYW1vdW50JywgeyBwcmVjaXNpb246IDEyLCBzY2FsZTogMiB9KS5ub3ROdWxsKCkuZGVmYXVsdCgnMCcpLAogIGJpbGxpbmdQZXJpb2RpY2l0eTogdGV4dCgnYmlsbGluZ19wZXJpb2RpY2l0eScpLm5vdE51bGwoKS5kZWZhdWx0KCdXRUVLTFknKSwKICBiaWxsaW5nRHVlRGF5T2ZXZWVrOiBpbnRlZ2VyKCdiaWxsaW5nX2R1ZV9kYXlfb2Zfd2VlaycpLm5vdE51bGwoKS5kZWZhdWx0KDEpLAogIGJpbGxpbmdEdWVEYXlPZk1vbnRoOiBpbnRlZ2VyKCdiaWxsaW5nX2R1ZV9kYXlfb2ZfbW9udGgnKS5ub3ROdWxsKCkuZGVmYXVsdCgxKSwKICBzZWN1cml0eURlcG9zaXRBbW91bnQ6IG51bWVyaWMoJ3NlY3VyaXR5X2RlcG9zaXRfYW1vdW50JywgeyBwcmVjaXNpb246IDEyLCBzY2FsZTogMiB9KS5ub3ROdWxsKCkuZGVmYXVsdCgnMCcpLAogIHNlY3VyaXR5RGVwb3NpdElkOiB0ZXh0KCdzZWN1cml0eV9kZXBvc2l0X2lkJyksCiAgZnJhbmNoaXNlS206IGludGVnZXIoJ2ZyYW5jaGlzZV9rbScpLm5vdE51bGwoKS5kZWZhdWx0KDApLAogIGV4Y2Vzc0ttUmF0ZTogbnVtZXJpYygnZXhjZXNzX2ttX3JhdGUnLCB7IHByZWNpc2lvbjogMTIsIHNjYWxlOiAyIH0pLm5vdE51bGwoKS5kZWZhdWx0KCcwJyksCiAgcGF5bWVudE1ldGhvZElkOiB0ZXh0KCdwYXltZW50X21ldGhvZF9pZCcpLAogIHRlbXBsYXRlSWQ6IHRleHQoJ3RlbXBsYXRlX2lkJyksCiAgZ2VuZXJhdGVkUGRmVXJsOiB0ZXh0KCdnZW5lcmF0ZWRfcGRmX3VybCcpLAogIHNpZ25lZENvbnRyYWN0VXJsOiB0ZXh0KCdzaWduZWRfY29udHJhY3RfdXJsJyksCiAgc2lnbmF0dXJlUmVxdWlyZWQ6IGJvb2xlYW4oJ3NpZ25hdHVyZV9yZXF1aXJlZCcpLm5vdE51bGwoKS5kZWZhdWx0KHRydWUpLAogIG5vdGVzOiB0ZXh0KCdub3RlcycpLAogIGlzQXJjaGl2ZWQ6IGJvb2xlYW4oJ2lzX2FyY2hpdmVkJykubm90TnVsbCgpLmRlZmF1bHQoZmFsc2UpLAogIGNyZWF0ZWRBdDogdGltZXN0YW1wKCdjcmVhdGVkX2F0JywgeyBtb2RlOiAnc3RyaW5nJyB9KS5ub3ROdWxsKCkuZGVmYXVsdE5vdygpLAogIHVwZGF0ZWRBdDogdGltZXN0YW1wKCd1cGRhdGVkX2F0JywgeyBtb2RlOiAnc3RyaW5nJyB9KS5ub3ROdWxsKCkuZGVmYXVsdE5vdygpLAp9LCAodCkgPT4gKHsKICBpZHhfY29tcGFueV9zdGF0dXM6IGluZGV4KCdpZHhfY250X2NvbXBhbnlfc3RhdHVzJykub24odC5jb21wYW55SWQsIHQuc3RhdHVzKSwKICBpZHhDb21wYW55VmVoaWNsZTogaW5kZXgoJ2lkeF9jb250cmFjdF9jb21wYW55X3ZlaGljbGUnKS5vbih0LmNvbXBhbnlJZCwgdC52ZWhpY2xlSWQpLAogIGlkeENvbXBhbnlEcml2ZXI6IGluZGV4KCdpZHhfY29udHJhY3RfY29tcGFueV9kcml2ZXInKS5vbih0LmNvbXBhbnlJZCwgdC5kcml2ZXJJZCksCiAgaWR4Q29tcGFueUFyY2hpdmVkOiBpbmRleCgnaWR4X2NvbnRyYWN0X2NvbXBhbnlfYXJjaGl2ZWQnKS5vbih0LmNvbXBhbnlJZCwgdC5pc0FyY2hpdmVkKSwKICB1bnFDb21wYW55TnVtYmVyOiB1bmlxdWVJbmRleCgndXFfY29udHJhY3RfY29tcGFueV9udW1iZXInKS5vbih0LmNvbXBhbnlJZCwgdC5jb250cmFjdE51bWJlciksCn0pKTsKCmV4cG9ydCBjb25zdCBjb250cmFjdFRlbXBsYXRlcyA9IHBnVGFibGUoJ2NvbnRyYWN0X3RlbXBsYXRlcycsIHsKICBpZDogdGV4dCgnaWQnKS5wcmltYXJ5S2V5KCksCiAgY29tcGFueUlkOiB0ZXh0KCdjb21wYW55X2lkJykubm90TnVsbCgpLAogIHRlbXBsYXRlS2V5OiB0ZXh0KCd0ZW1wbGF0ZV9rZXknKS5ub3ROdWxsKCksCiAgdGl0bGU6IHRleHQoJ3RpdGxlJykubm90TnVsbCgpLAogIGNvbnRlbnRNYXJrZG93bjogdGV4dCgnY29udGVudF9tYXJrZG93bicpLm5vdE51bGwoKSwKICB2ZXJzaW9uTnVtYmVyOiBpbnRlZ2VyKCd2ZXJzaW9uX251bWJlcicpLm5vdE51bGwoKS5kZWZhdWx0KDEpLAogIHN1cGVyc2VkZXNUZW1wbGF0ZUlkOiB0ZXh0KCdzdXBlcnNlZGVzX3RlbXBsYXRlX2lkJyksCiAgaXNDdXJyZW50OiBib29sZWFuKCdpc19jdXJyZW50Jykubm90TnVsbCgpLmRlZmF1bHQodHJ1ZSksCiAgaXNBY3RpdmU6IGJvb2xlYW4oJ2lzX2FjdGl2ZScpLm5vdE51bGwoKS5kZWZhdWx0KHRydWUpLAogIGlzQXJjaGl2ZWQ6IGJvb2xlYW4oJ2lzX2FyY2hpdmVkJykubm90TnVsbCgpLmRlZmF1bHQoZmFsc2UpLAogIGNyZWF0ZWRCeTogdGV4dCgnY3JlYXRlZF9ieScpLm5vdE51bGwoKSwKICBjcmVhdGVkQXQ6IHRpbWVzdGFtcCgnY3JlYXRlZF9hdCcsIHsgbW9kZTogJ3N0cmluZycgfSkubm90TnVsbCgpLmRlZmF1bHROb3coKSwKICB1cGRhdGVkQXQ6IHRpbWVzdGFtcCgndXBkYXRlZF9hdCcsIHsgbW9kZTogJ3N0cmluZycgfSkubm90TnVsbCgpLmRlZmF1bHROb3coKSwKfSwgKHQpID0+ICh7CiAgdW5xVmVyc2lvbjogdW5pcXVlSW5kZXgoJ3VxX2NvbnRyYWN0X3RlbXBsYXRlX3ZlcnNpb24nKS5vbih0LmNvbXBhbnlJZCwgdC50ZW1wbGF0ZUtleSwgdC52ZXJzaW9uTnVtYmVyKSwKICBpZHhDdXJyZW50OiBpbmRleCgnaWR4X2NvbnRyYWN0X3RlbXBsYXRlX2NvbXBhbnlfY3VycmVudCcpLm9uKHQuY29tcGFueUlkLCB0LmlzQ3VycmVudCwgdC5pc0FjdGl2ZSwgdC5pc0FyY2hpdmVkKSwKfSkpOwoKZXhwb3J0IGNvbnN0IGNvbnRyYWN0QXJ0aWZhY3RzID0gcGdUYWJsZSgnY29udHJhY3RfYXJ0aWZhY3RzJywgewogIGlkOiB0ZXh0KCdpZCcpLnByaW1hcnlLZXkoKSwKICBjb21wYW55SWQ6IHRleHQoJ2NvbXBhbnlfaWQnKS5ub3ROdWxsKCksCiAgY29udHJhY3RJZDogdGV4dCgnY29udHJhY3RfaWQnKS5ub3ROdWxsKCksCiAgYXJ0aWZhY3RUeXBlOiB0ZXh0KCdhcnRpZmFjdF90eXBlJykubm90TnVsbCgpLAogIGF0dGFjaG1lbnRJZDogdGV4dCgnYXR0YWNobWVudF9pZCcpLm5vdE51bGwoKSwKICB0ZW1wbGF0ZUlkOiB0ZXh0KCd0ZW1wbGF0ZV9pZCcpLAogIHNvdXJjZUFydGlmYWN0SWQ6IHRleHQoJ3NvdXJjZV9hcnRpZmFjdF9pZCcpLAogIHNuYXBzaG90SnNvbjogdGV4dCgnc25hcHNob3RfanNvbicpLAogIHNuYXBzaG90SGFzaDogdGV4dCgnc25hcHNob3RfaGFzaCcpLm5vdE51bGwoKSwKICBpc0N1cnJlbnQ6IGJvb2xlYW4oJ2lzX2N1cnJlbnQnKS5ub3ROdWxsKCkuZGVmYXVsdCh0cnVlKSwKICBpc0FyY2hpdmVkOiBib29sZWFuKCdpc19hcmNoaXZlZCcpLm5vdE51bGwoKS5kZWZhdWx0KGZhbHNlKSwKICBzaWduYXR1cmVNZXRob2Q6IHRleHQoJ3NpZ25hdHVyZV9tZXRob2QnKSwKICBzaWduZWRCeU5hbWU6IHRleHQoJ3NpZ25lZF9ieV9uYW1lJyksCiAgc2lnbmVkQXQ6IHRpbWVzdGFtcCgnc2lnbmVkX2F0JywgeyBtb2RlOiAnc3RyaW5nJyB9KSwKICBjcmVhdGVkQnk6IHRleHQoJ2NyZWF0ZWRfYnknKS5ub3ROdWxsKCksCiAgY3JlYXRlZEF0OiB0aW1lc3RhbXAoJ2NyZWF0ZWRfYXQnLCB7IG1vZGU6ICdzdHJpbmcnIH0pLm5vdE51bGwoKS5kZWZhdWx0Tm93KCksCiAgdXBkYXRlZEF0OiB0aW1lc3RhbXAoJ3VwZGF0ZWRfYXQnLCB7IG1vZGU6ICdzdHJpbmcnIH0pLm5vdE51bGwoKS5kZWZhdWx0Tm93KCksCn0sICh0KSA9PiAoewogIGlkeENvbnRyYWN0OiBpbmRleCgnaWR4X2NvbnRyYWN0X2FydGlmYWN0X2NvbnRyYWN0Jykub24odC5jb21wYW55SWQsIHQuY29udHJhY3RJZCwgdC5hcnRpZmFjdFR5cGUsIHQuaXNDdXJyZW50LCB0LmlzQXJjaGl2ZWQpLAogIGlkeEF0dGFjaG1lbnQ6IGluZGV4KCdpZHhfY29udHJhY3RfYXJ0aWZhY3RfYXR0YWNobWVudCcpLm9uKHQuY29tcGFueUlkLCB0LmF0dGFjaG1lbnRJZCksCiAgaWR4U291cmNlOiBpbmRleCgnaWR4X2NvbnRyYWN0X2FydGlmYWN0X3NvdXJjZScpLm9uKHQuY29tcGFueUlkLCB0LnNvdXJjZUFydGlmYWN0SWQpLAp9KSk7Cg=="],
+            ["src/domain/finance/ITransactionContext.ts", "ICBDb250cmFjdCwKfSBmcm9tICcuLi8uLi90eXBlcy9lbnRpdGllcyc7", "ICBDb250cmFjdCwKICBDb250cmFjdFRlbXBsYXRlLAogIENvbnRyYWN0QXJ0aWZhY3QsCiAgQ29udHJhY3RBcnRpZmFjdFR5cGUsCn0gZnJvbSAnLi4vLi4vdHlwZXMvZW50aXRpZXMnOw=="],
+            ["src/domain/finance/ITransactionContext.ts", "ZXhwb3J0IGludGVyZmFjZSBJVHJhbnNhY3Rpb25Db250ZXh0IHsK", "ZXhwb3J0IGludGVyZmFjZSBJVHJhbnNhY3Rpb25Db250cmFjdFRlbXBsYXRlUmVwb3NpdG9yeSB7CiAgZmluZEJ5SWRGb3JDb21wYW55KGNvbXBhbnlJZDogc3RyaW5nLCBpZDogc3RyaW5nKTogUHJvbWlzZTxDb250cmFjdFRlbXBsYXRlIHwgbnVsbD47CiAgZmluZEJ5SWRGb3JDb21wYW55V2l0aExvY2soY29tcGFueUlkOiBzdHJpbmcsIGlkOiBzdHJpbmcpOiBQcm9taXNlPENvbnRyYWN0VGVtcGxhdGUgfCBudWxsPjsKICBmaW5kQWxsQnlDb21wYW55KGNvbXBhbnlJZDogc3RyaW5nLCBpbmNsdWRlQXJjaGl2ZWQ/OiBib29sZWFuKTogUHJvbWlzZTxDb250cmFjdFRlbXBsYXRlW10+OwogIGZpbmRWZXJzaW9ucyhjb21wYW55SWQ6IHN0cmluZywgdGVtcGxhdGVLZXk6IHN0cmluZyk6IFByb21pc2U8Q29udHJhY3RUZW1wbGF0ZVtdPjsKICBmaW5kQ3VycmVudFdpdGhMb2NrKGNvbXBhbnlJZDogc3RyaW5nLCB0ZW1wbGF0ZUtleTogc3RyaW5nKTogUHJvbWlzZTxDb250cmFjdFRlbXBsYXRlIHwgbnVsbD47CiAgY3JlYXRlKGl0ZW06IENvbnRyYWN0VGVtcGxhdGUpOiBQcm9taXNlPENvbnRyYWN0VGVtcGxhdGU+OwogIHVwZGF0ZUZvckNvbXBhbnkoCiAgICBjb21wYW55SWQ6IHN0cmluZywKICAgIGlkOiBzdHJpbmcsCiAgICBpdGVtOiBQYXJ0aWFsPFBpY2s8Q29udHJhY3RUZW1wbGF0ZSwgJ2lzQ3VycmVudCcgfCAnaXNBY3RpdmUnIHwgJ2lzQXJjaGl2ZWQnIHwgJ3VwZGF0ZWRBdCc+PgogICk6IFByb21pc2U8Q29udHJhY3RUZW1wbGF0ZSB8IG51bGw+Owp9CgpleHBvcnQgaW50ZXJmYWNlIElUcmFuc2FjdGlvbkNvbnRyYWN0QXJ0aWZhY3RSZXBvc2l0b3J5IHsKICBmaW5kQnlJZEZvckNvbXBhbnkoY29tcGFueUlkOiBzdHJpbmcsIGlkOiBzdHJpbmcpOiBQcm9taXNlPENvbnRyYWN0QXJ0aWZhY3QgfCBudWxsPjsKICBmaW5kQ3VycmVudEZvckNvbnRyYWN0KAogICAgY29tcGFueUlkOiBzdHJpbmcsCiAgICBjb250cmFjdElkOiBzdHJpbmcsCiAgICBhcnRpZmFjdFR5cGU6IENvbnRyYWN0QXJ0aWZhY3RUeXBlLAogICAgbG9jaz86IGJvb2xlYW4KICApOiBQcm9taXNlPENvbnRyYWN0QXJ0aWZhY3QgfCBudWxsPjsKICBmaW5kQWxsRm9yQ29udHJhY3QoY29tcGFueUlkOiBzdHJpbmcsIGNvbnRyYWN0SWQ6IHN0cmluZyk6IFByb21pc2U8Q29udHJhY3RBcnRpZmFjdFtdPjsKICBjcmVhdGUoaXRlbTogQ29udHJhY3RBcnRpZmFjdCk6IFByb21pc2U8Q29udHJhY3RBcnRpZmFjdD47CiAgdXBkYXRlRm9yQ29tcGFueSgKICAgIGNvbXBhbnlJZDogc3RyaW5nLAogICAgaWQ6IHN0cmluZywKICAgIGl0ZW06IFBhcnRpYWw8UGljazxDb250cmFjdEFydGlmYWN0LCAnaXNDdXJyZW50JyB8ICdpc0FyY2hpdmVkJyB8ICd1cGRhdGVkQXQnPj4KICApOiBQcm9taXNlPENvbnRyYWN0QXJ0aWZhY3QgfCBudWxsPjsKfQoKZXhwb3J0IGludGVyZmFjZSBJVHJhbnNhY3Rpb25Db250ZXh0IHsK"],
+            ["src/domain/finance/ITransactionContext.ts", "ICBnZXRDb250cmFjdFJlcG8oKTogSVRyYW5zYWN0aW9uQ29udHJhY3RSZXBvc2l0b3J5Owo=", "ICBnZXRDb250cmFjdFJlcG8oKTogSVRyYW5zYWN0aW9uQ29udHJhY3RSZXBvc2l0b3J5OwogIGdldENvbnRyYWN0VGVtcGxhdGVSZXBvKCk6IElUcmFuc2FjdGlvbkNvbnRyYWN0VGVtcGxhdGVSZXBvc2l0b3J5OwogIGdldENvbnRyYWN0QXJ0aWZhY3RSZXBvKCk6IElUcmFuc2FjdGlvbkNvbnRyYWN0QXJ0aWZhY3RSZXBvc2l0b3J5Owo="],
+            ["src/db/uow.ts", "aW1wb3J0IHsgUG9zdGdyZXNDb250cmFjdFJlcG9zaXRvcnkgfSBmcm9tICcuL3JlcG9zaXRvcmllcy9wb3N0Z3Jlc0NvbnRyYWN0UmVwb3NpdG9yeSc7Cg==", "aW1wb3J0IHsgUG9zdGdyZXNDb250cmFjdFJlcG9zaXRvcnkgfSBmcm9tICcuL3JlcG9zaXRvcmllcy9wb3N0Z3Jlc0NvbnRyYWN0UmVwb3NpdG9yeSc7CmltcG9ydCB7IFBvc3RncmVzQ29udHJhY3RUZW1wbGF0ZVJlcG9zaXRvcnkgfSBmcm9tICcuL3JlcG9zaXRvcmllcy9wb3N0Z3Jlc0NvbnRyYWN0VGVtcGxhdGVSZXBvc2l0b3J5JzsKaW1wb3J0IHsgUG9zdGdyZXNDb250cmFjdEFydGlmYWN0UmVwb3NpdG9yeSB9IGZyb20gJy4vcmVwb3NpdG9yaWVzL3Bvc3RncmVzQ29udHJhY3RBcnRpZmFjdFJlcG9zaXRvcnknOwo="],
+            ["src/db/uow.ts", "ICAgICAgICBnZXRDb250cmFjdFJlcG86ICgpID0+IG5ldyBQb3N0Z3Jlc0NvbnRyYWN0UmVwb3NpdG9yeSh0eCksCg==", "ICAgICAgICBnZXRDb250cmFjdFJlcG86ICgpID0+IG5ldyBQb3N0Z3Jlc0NvbnRyYWN0UmVwb3NpdG9yeSh0eCksCiAgICAgICAgZ2V0Q29udHJhY3RUZW1wbGF0ZVJlcG86ICgpID0+IG5ldyBQb3N0Z3Jlc0NvbnRyYWN0VGVtcGxhdGVSZXBvc2l0b3J5KHR4KSwKICAgICAgICBnZXRDb250cmFjdEFydGlmYWN0UmVwbzogKCkgPT4gbmV3IFBvc3RncmVzQ29udHJhY3RBcnRpZmFjdFJlcG9zaXRvcnkodHgpLAo="],
+            ["src/db/repositories/postgresContractRepository.ts", "ICAgICAgc2lnbmVkQ29udHJhY3RVcmw6IHJvdy5zaWduZWRfY29udHJhY3RfdXJsIHx8IHVuZGVmaW5lZCwKICAgICAgbm90ZXM6IHJvdy5ub3RlcyB8fCB1bmRlZmluZWQs", "ICAgICAgc2lnbmVkQ29udHJhY3RVcmw6IHJvdy5zaWduZWRfY29udHJhY3RfdXJsIHx8IHVuZGVmaW5lZCwKICAgICAgc2lnbmF0dXJlUmVxdWlyZWQ6IEJvb2xlYW4ocm93LnNpZ25hdHVyZV9yZXF1aXJlZCksCiAgICAgIG5vdGVzOiByb3cubm90ZXMgfHwgdW5kZWZpbmVkLA=="],
+            ["src/db/repositories/postgresContractRepository.ts", "ICAgICAgICBwYXltZW50X21ldGhvZF9pZCwgdGVtcGxhdGVfaWQsIGdlbmVyYXRlZF9wZGZfdXJsLCBzaWduZWRfY29udHJhY3RfdXJsLAogICAgICAgIG5vdGVzLCBpc19hcmNoaXZlZCwgY3JlYXRlZF9hdCwgdXBkYXRlZF9hdA==", "ICAgICAgICBwYXltZW50X21ldGhvZF9pZCwgdGVtcGxhdGVfaWQsIGdlbmVyYXRlZF9wZGZfdXJsLCBzaWduZWRfY29udHJhY3RfdXJsLCBzaWduYXR1cmVfcmVxdWlyZWQsCiAgICAgICAgbm90ZXMsIGlzX2FyY2hpdmVkLCBjcmVhdGVkX2F0LCB1cGRhdGVkX2F0"],
+            ["src/db/repositories/postgresContractRepository.ts", "ICAgICAgICAke2l0ZW0ucGF5bWVudE1ldGhvZElkIHx8IG51bGx9LCAke2l0ZW0udGVtcGxhdGVJZCB8fCBudWxsfSwgJHtpdGVtLmdlbmVyYXRlZFBkZlVybCB8fCBudWxsfSwgJHtpdGVtLnNpZ25lZENvbnRyYWN0VXJsIHx8IG51bGx9LAogICAgICAgICR7aXRlbS5ub3RlcyB8fCBudWxsfSwgJHtpdGVtLmlzQXJjaGl2ZWR9LCAke2l0ZW0uY3JlYXRlZEF0fSwgJHtpdGVtLnVwZGF0ZWRBdH0=", "ICAgICAgICAke2l0ZW0ucGF5bWVudE1ldGhvZElkIHx8IG51bGx9LCAke2l0ZW0udGVtcGxhdGVJZCB8fCBudWxsfSwgJHtpdGVtLmdlbmVyYXRlZFBkZlVybCB8fCBudWxsfSwgJHtpdGVtLnNpZ25lZENvbnRyYWN0VXJsIHx8IG51bGx9LCAke2l0ZW0uc2lnbmF0dXJlUmVxdWlyZWQgPz8gdHJ1ZX0sCiAgICAgICAgJHtpdGVtLm5vdGVzIHx8IG51bGx9LCAke2l0ZW0uaXNBcmNoaXZlZH0sICR7aXRlbS5jcmVhdGVkQXR9LCAke2l0ZW0udXBkYXRlZEF0fQ=="],
+            ["src/db/repositories/postgresContractRepository.ts", "ICAgICAgICBzaWduZWRfY29udHJhY3RfdXJsID0gJHtpdGVtLnNpZ25lZENvbnRyYWN0VXJsIHx8IG51bGx9LAogICAgICAgIG5vdGVzID0gJHtpdGVtLm5vdGVzIHx8IG51bGx9LA==", "ICAgICAgICBzaWduZWRfY29udHJhY3RfdXJsID0gJHtpdGVtLnNpZ25lZENvbnRyYWN0VXJsIHx8IG51bGx9LAogICAgICAgIHNpZ25hdHVyZV9yZXF1aXJlZCA9ICR7aXRlbS5zaWduYXR1cmVSZXF1aXJlZCA/PyB0cnVlfSwKICAgICAgICBub3RlcyA9ICR7aXRlbS5ub3RlcyB8fCBudWxsfSw="],
+            ["src/server/contractRoutes.ts", "ICAgICAgICAgIHRlbXBsYXRlSWQ6IG9wdGlvbmFsVGV4dChib2R5LnRlbXBsYXRlSWQpLAogICAgICAgICAgbm90ZXM6IG9wdGlvbmFsVGV4dChib2R5Lm5vdGVzKSwKICAgICAgICAgIGlzQXJjaGl2ZWQ6IGZhbHNlLA==", "ICAgICAgICAgIHRlbXBsYXRlSWQ6IG9wdGlvbmFsVGV4dChib2R5LnRlbXBsYXRlSWQpLAogICAgICAgICAgc2lnbmF0dXJlUmVxdWlyZWQ6IHRydWUsCiAgICAgICAgICBub3Rlczogb3B0aW9uYWxUZXh0KGJvZHkubm90ZXMpLAogICAgICAgICAgaXNBcmNoaXZlZDogZmFsc2Us"],
+            ["drizzle/meta/_journal.json", "ICAgIHsiaWR4IjoxMywidmVyc2lvbiI6IjciLCJ3aGVuIjoxNzg3MTUyMjAwMDAwLCJ0YWciOiIwMDEzX2RvY3VtZW50X3NlbWFudGljcyIsImJyZWFrcG9pbnRzIjp0cnVlfQo=", "ICAgIHsiaWR4IjoxMywidmVyc2lvbiI6IjciLCJ3aGVuIjoxNzg3MTUyMjAwMDAwLCJ0YWciOiIwMDEzX2RvY3VtZW50X3NlbWFudGljcyIsImJyZWFrcG9pbnRzIjp0cnVlfSwKICAgIHsiaWR4IjoxNCwidmVyc2lvbiI6IjciLCJ3aGVuIjoxNzg3MTU3NjAwMDAwLCJ0YWciOiIwMDE0X2NvbnRyYWN0X2V4ZWN1dGlvbl9hdXRob3JpdHkiLCJicmVha3BvaW50cyI6dHJ1ZX0K"]
+          ]
+          def dec(v):
+              return base64.b64decode(v).decode()
+          for path, old64, new64 in replacements:
+              p = Path(path)
+              text = p.read_text()
+              old, new = dec(old64), dec(new64)
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: replacement count={count}")
+              p.write_text(text.replace(old, new))
+          PY
+
+      - name: Scope gate
+        run: |
+          git diff --name-only | sort | tee /tmp/changed.txt
+          cat > /tmp/allowed.txt <<'EOF'
+          drizzle/meta/_journal.json
+          src/db/repositories/postgresContractRepository.ts
+          src/db/schema.ts
+          src/db/uow.ts
+          src/domain/finance/ITransactionContext.ts
+          src/server/contractRoutes.ts
+          src/types/entities/contract.ts
+          EOF
+          sort -o /tmp/allowed.txt /tmp/allowed.txt
+          diff -u /tmp/allowed.txt /tmp/changed.txt
+
+      - name: Install
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply migrations 0000 through 0013
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(ls drizzle/[0-9][0-9][0-9][0-9]_*.sql | sort | grep -v '0014_contract_execution_authority.sql'); do
+            echo "APPLY $f"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+
+      - name: Seed legacy contract before 0014
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO companies(id, document, name, status) VALUES ('tenant-legacy','00','Legacy Co','ACTIVE');
+          INSERT INTO contracts(
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date,
+            rental_amount, billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived
+          ) VALUES (
+            'legacy-contract','tenant-legacy','legacy-driver','legacy-vehicle','DRAFT','LEGACY-I4C','2026-08-01',
+            700,'WEEKLY',1,1,0,0,0,false
+          );
+          SQL
+
+      - name: Apply migration 0014
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f drizzle/0014_contract_execution_authority.sql
+
+      - name: Validate migration semantics and RLS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          test "$(psql -h localhost -U postgres -d autoerp_ci -Atc "SELECT signature_required FROM contracts WHERE id='legacy-contract'")" = "f"
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO contracts(
+            id, company_id, driver_id, vehicle_id, status, contract_number, start_date,
+            rental_amount, billing_periodicity, billing_due_day_of_week, billing_due_day_of_month,
+            security_deposit_amount, franchise_km, excess_km_rate, is_archived
+          ) VALUES (
+            'new-contract','tenant-legacy','driver-new','vehicle-new','DRAFT','NEW-I4C','2026-08-19',
+            700,'WEEKLY',1,1,0,0,0,false
+          );
+          DO $$
+          BEGIN
+            IF (SELECT signature_required FROM contracts WHERE id='new-contract') IS DISTINCT FROM true THEN
+              RAISE EXCEPTION 'new contracts must default signature_required=true';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_class c WHERE c.relname='contract_templates' AND c.relrowsecurity AND c.relforcerowsecurity
+            ) THEN RAISE EXCEPTION 'contract_templates RLS/FORCE missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_class c WHERE c.relname='contract_artifacts' AND c.relrowsecurity AND c.relforcerowsecurity
+            ) THEN RAISE EXCEPTION 'contract_artifacts RLS/FORCE missing'; END IF;
+          END $$;
+          DROP ROLE IF EXISTS autoerp_i4c_rls;
+          CREATE ROLE autoerp_i4c_rls LOGIN PASSWORD 'rls-pass';
+          GRANT USAGE ON SCHEMA public TO autoerp_i4c_rls;
+          GRANT SELECT, INSERT, UPDATE ON contract_templates, contract_artifacts TO autoerp_i4c_rls;
+          SQL
+
+          PGPASSWORD=rls-pass psql -h localhost -U autoerp_i4c_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.current_tenant','tenant-a',false);
+          INSERT INTO contract_templates(
+            id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by
+          ) VALUES ('tpl-a','tenant-a','rental','Rental','Hello',1,true,true,false,'user-a');
+          INSERT INTO contract_artifacts(
+            id,company_id,contract_id,artifact_type,attachment_id,template_id,snapshot_json,snapshot_hash,is_current,is_archived,created_by
+          ) VALUES (
+            'art-a','tenant-a','contract-a','GENERATED_PDF','att-a','tpl-a','{}',
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',true,false,'user-a'
+          );
+          SELECT set_config('app.current_tenant','tenant-b',false);
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM contract_templates) <> 0 THEN RAISE EXCEPTION 'template RLS leak'; END IF;
+            IF (SELECT count(*) FROM contract_artifacts) <> 0 THEN RAISE EXCEPTION 'artifact RLS leak'; END IF;
+          END $$;
+          SQL
+
+          set +e
+          PGPASSWORD=rls-pass psql -h localhost -U autoerp_i4c_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.current_tenant','tenant-b',false);
+          INSERT INTO contract_templates(
+            id,company_id,template_key,title,content_markdown,version_number,is_current,is_active,is_archived,created_by
+          ) VALUES ('tpl-forged','tenant-a','forged','Forged','No',1,true,true,false,'user-x');
+          SQL
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+
+      - name: Static foundation checks
+        run: |
+          grep -q "contractTemplates = pgTable" src/db/schema.ts
+          grep -q "contractArtifacts = pgTable" src/db/schema.ts
+          grep -q "signatureRequired: true" src/server/contractRoutes.ts
+          grep -q "getContractTemplateRepo" src/db/uow.ts
+          grep -q "getContractArtifactRepo" src/db/uow.ts
+          git diff --check
+
+      - name: Publish validated alignment
+        run: |
+          git config user.name "ChatGPT AutoERP"
+          git config user.email "actions@users.noreply.github.com"
+          git add drizzle/meta/_journal.json src/types/entities/contract.ts src/db/schema.ts src/domain/finance/ITransactionContext.ts src/db/uow.ts src/db/repositories/postgresContractRepository.ts src/server/contractRoutes.ts
+          git commit -m "feat(contract): wire I4C execution authority foundation"
+          git push origin HEAD:security-2i4c-contract-execution-authority
