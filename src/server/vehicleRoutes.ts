@@ -5,7 +5,7 @@ import { AuditAction, VehicleStatus } from '../types/enums';
 import type { Vehicle } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 
-type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS';
+type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -78,7 +78,12 @@ function optionalNonNegativeInteger(value: unknown, field: string): number | und
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === '23505');
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
+    if ('code' in current && (current as { code?: unknown }).code === '23505') return true;
+    current = 'cause' in current ? (current as { cause?: unknown }).cause : undefined;
+  }
+  return false;
 }
 
 function sendVehicleError(res: Response, error: unknown): void {
@@ -178,6 +183,16 @@ export function registerVehicleRoutes(app: Express): void {
           createdAt: now,
           updatedAt: now,
         });
+        await txContext.getKmRecordRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: created.id,
+          kmValue: created.currentKm,
+          recordDate: now.split('T')[0],
+          readingType: 'PERIODIC',
+          notes: 'Cadastro inicial do veículo',
+          createdAt: now,
+        });
         await txContext.getAuditLogRepo().create({
           id: randomUUID(),
           companyId: principal.companyId,
@@ -200,6 +215,10 @@ export function registerVehicleRoutes(app: Express): void {
   app.patch('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'EDIT_VEHICLE');
     if (!principal) return;
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'currentKm')) {
+      res.status(400).json({ error: 'Use the KM record endpoint to change currentKm' });
+      return;
+    }
     try {
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
@@ -229,7 +248,6 @@ export function registerVehicleRoutes(app: Express): void {
         if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
         if (req.body?.yearFabrication !== undefined) changes.yearFabrication = optionalNonNegativeInteger(req.body.yearFabrication, 'yearFabrication')!;
         if (req.body?.yearModel !== undefined) changes.yearModel = optionalNonNegativeInteger(req.body.yearModel, 'yearModel')!;
-        if (req.body?.currentKm !== undefined) changes.currentKm = requiredNonNegative(req.body.currentKm, 'currentKm');
         if (req.body?.nextMaintenanceKm !== undefined) changes.nextMaintenanceKm = requiredNonNegative(req.body.nextMaintenanceKm, 'nextMaintenanceKm');
         if (req.body?.acquisitionValue !== undefined) changes.acquisitionValue = requiredNonNegative(req.body.acquisitionValue, 'acquisitionValue');
         if (req.body?.currentValue !== undefined) changes.currentValue = requiredNonNegative(req.body.currentValue, 'currentValue');
@@ -253,6 +271,75 @@ export function registerVehicleRoutes(app: Express): void {
         return updated;
       });
       res.json({ item });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.get('/api/fleet/vehicles/:id/km-records', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const vehicle = await txContext.getVehicleRepo().findByIdForCompany(principal.companyId, req.params.id);
+        if (!vehicle || vehicle.isArchived) throw new VehicleNotFoundError();
+        return await txContext.getKmRecordRepo().findByVehicleIdForCompany(principal.companyId, vehicle.id);
+      });
+      res.json({ items });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
+  app.post('/api/fleet/vehicles/:id/km-records', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'RECORD_VEHICLE_KM');
+    if (!principal) return;
+    const newKm = Number(req.body?.kmValue);
+    const readingType = typeof req.body?.readingType === 'string' ? req.body.readingType : '';
+    const allowedTypes = new Set(['CHECK_IN', 'CHECK_OUT', 'PERIODIC', 'MAINTENANCE']);
+    if (!Number.isInteger(newKm) || newKm < 0 || !allowedTypes.has(readingType)) {
+      res.status(400).json({ error: 'Invalid KM record request' });
+      return;
+    }
+    try {
+      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const vehicleRepo = txContext.getVehicleRepo();
+        const vehicle = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!vehicle || vehicle.isArchived) throw new VehicleNotFoundError();
+        if (newKm < vehicle.currentKm) throw new VehicleValidationError('KM regression');
+        const now = new Date().toISOString();
+        const record = await txContext.getKmRecordRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: vehicle.id,
+          driverId: vehicle.currentDriverId,
+          contractId: vehicle.currentContractId,
+          kmValue: newKm,
+          recordDate: now.split('T')[0],
+          readingType: readingType as 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE',
+          notes: optionalText(req.body?.notes),
+          createdAt: now,
+        });
+        const updated = await vehicleRepo.updateForCompany(principal.companyId, vehicle.id, {
+          currentKm: newKm,
+          updatedAt: now,
+        });
+        if (!updated) throw new VehicleNotFoundError();
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'KmRecord',
+          entityId: record.id,
+          action: AuditAction.CREATE,
+          previousState: JSON.stringify({ vehicleId: vehicle.id, currentKm: vehicle.currentKm }),
+          newState: JSON.stringify({ vehicleId: vehicle.id, currentKm: newKm, readingType }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+        return { record, vehicle: updated };
+      });
+      res.status(201).json(result);
     } catch (error) {
       sendVehicleError(res, error);
     }

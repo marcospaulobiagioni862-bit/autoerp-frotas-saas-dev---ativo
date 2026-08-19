@@ -56,6 +56,23 @@ export const vehicles = pgTable('vehicles', {
   idx_company_status: index('idx_veh_company_status').on(t.companyId, t.status),
 }));
 
+export const vehicleKmRecords = pgTable('vehicle_km_records', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  driverId: text('driver_id'),
+  contractId: text('contract_id'),
+  kmValue: integer('km_value').notNull(),
+  recordDate: text('record_date').notNull(),
+  readingType: text('reading_type').notNull(),
+  photoUrl: text('photo_url'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idxCompanyVehicleDate: index('idx_vehicle_km_company_vehicle_date').on(t.companyId, t.vehicleId, t.recordDate, t.createdAt),
+  unqExactReading: unique('uq_vehicle_km_exact_reading').on(t.companyId, t.vehicleId, t.kmValue, t.readingType, t.recordDate),
+}));
+
 export const drivers = pgTable('drivers', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),

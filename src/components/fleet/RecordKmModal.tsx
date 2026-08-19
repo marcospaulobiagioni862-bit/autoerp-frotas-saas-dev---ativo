@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Vehicle } from '../../types/entities';
-import { VehicleService } from '../../domain/services/VehicleService';
+import { VehicleClient } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -34,15 +34,11 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
     setError(null);
 
     try {
-      const service = new VehicleService();
-      await service.recordKm(
-        vehicle.id,
-        Number(newKm),
+      await VehicleClient.recordKm(vehicle.id, {
+        kmValue: Number(newKm),
         readingType,
         notes,
-        'user-admin-1',
-        'Gestor de Frota'
-      );
+      });
       onSuccess();
       onClose();
     } catch (err: any) {

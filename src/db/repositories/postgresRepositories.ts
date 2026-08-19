@@ -2,10 +2,10 @@ import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
   financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods,
-  securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles
+  securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles, vehicleKmRecords
 } from '../schema';
-import { eq, and, sql, lt } from 'drizzle-orm';
-import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle } from '../../types/entities';
+import { eq, and, sql, lt, desc } from 'drizzle-orm';
+import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle, KmRecord } from '../../types/entities';
 
 // Basic wrapper around Drizzle ORM to satisfy IBaseRepository requirements
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
@@ -100,6 +100,14 @@ export class PostgresVehicleRepository {
     return rows[0] ? this.map(rows[0]) : null;
   }
 
+  async findByIdForCompanyWithLock(companyId: string, id: string): Promise<Vehicle | null> {
+    const rows = await this.tx.select().from(vehicles)
+      .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id)))
+      .for('update')
+      .limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
   async findAllByCompany(companyId: string): Promise<Vehicle[]> {
     const rows = await this.tx.select().from(vehicles).where(eq(vehicles.companyId, companyId));
     return rows.map((row: any) => this.map(row));
@@ -175,6 +183,51 @@ export class PostgresVehicleRepository {
       .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id)))
       .returning();
     return rows[0] ? this.map(rows[0]) : null;
+  }
+}
+
+export class PostgresKmRecordRepository {
+  private tx: any;
+  constructor(tx?: any) { this.tx = tx || db; }
+
+  private map(row: any): KmRecord {
+    return {
+      id: row.id,
+      companyId: row.companyId,
+      vehicleId: row.vehicleId,
+      driverId: row.driverId || undefined,
+      contractId: row.contractId || undefined,
+      kmValue: Number(row.kmValue),
+      recordDate: row.recordDate,
+      readingType: row.readingType as KmRecord['readingType'],
+      photoUrl: row.photoUrl || undefined,
+      notes: row.notes || undefined,
+      createdAt: row.createdAt,
+    };
+  }
+
+  async findByVehicleIdForCompany(companyId: string, vehicleId: string): Promise<KmRecord[]> {
+    const rows = await this.tx.select().from(vehicleKmRecords)
+      .where(and(eq(vehicleKmRecords.companyId, companyId), eq(vehicleKmRecords.vehicleId, vehicleId)))
+      .orderBy(desc(vehicleKmRecords.createdAt), desc(vehicleKmRecords.id));
+    return rows.map((row: any) => this.map(row));
+  }
+
+  async create(item: KmRecord): Promise<KmRecord> {
+    const rows = await this.tx.insert(vehicleKmRecords).values({
+      id: item.id,
+      companyId: item.companyId,
+      vehicleId: item.vehicleId,
+      driverId: item.driverId || null,
+      contractId: item.contractId || null,
+      kmValue: item.kmValue,
+      recordDate: item.recordDate,
+      readingType: item.readingType,
+      photoUrl: item.photoUrl || null,
+      notes: item.notes || null,
+      createdAt: item.createdAt,
+    }).returning();
+    return this.map(rows[0]);
   }
 }
 

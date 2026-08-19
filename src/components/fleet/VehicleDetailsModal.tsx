@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AttachmentList } from '../documents/AttachmentList';
 import { FileUpload } from '../documents/FileUpload';
-import { VehicleService, VehicleDetailedSummary } from '../../domain/services/VehicleService';
+import { VehicleClient } from '../../api/vehicleClient';
+import { VehicleLegacyDetailsBridge, VehicleDetailedSummary } from '../../domain/services/VehicleLegacyDetailsBridge';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -55,8 +56,12 @@ export const VehicleDetailsModal: React.FC<VehicleDetailsModalProps> = ({
     if (!vehicleId) return;
     setLoading(true);
     try {
-      const service = new VehicleService();
-      const data = await service.getVehicleDetailedSummary(vehicleId);
+      const [vehicle, kmRecords] = await Promise.all([
+        VehicleClient.get(vehicleId),
+        VehicleClient.listKm(vehicleId),
+      ]);
+      const bridge = new VehicleLegacyDetailsBridge();
+      const data = await bridge.compose(vehicle, kmRecords);
       setSummary(data);
     } catch (err) {
       console.error('Erro ao carregar detalhes do veículo:', err);
