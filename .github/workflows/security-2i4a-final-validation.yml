@@ -1,0 +1,222 @@
+name: SECURITY-2I4A final validation
+
+on:
+  pull_request:
+    branches:
+      - ci-validate-security-2i4a-final
+
+permissions:
+  contents: read
+
+jobs:
+  final-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: f0a1ba06c73e75012ce9ef4bb44ebb30ec34a26b
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Exact candidate identity and scope
+        run: |
+          test "$(git rev-parse HEAD)" = "f0a1ba06c73e75012ce9ef4bb44ebb30ec34a26b"
+          test "$(git rev-parse HEAD^{tree})" = "5edabe09763b1a9564075273837cdfaed6142fb0"
+          test "$(git merge-base dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4 HEAD)" = "dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4"
+          test "$(git rev-list --count dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4..HEAD)" = "1"
+          changed="$(git diff --name-only dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4..HEAD | sort)"
+          expected="$(printf '%s\n' \
+            .env.example \
+            drizzle/0012_attachment_authority.sql \
+            drizzle/meta/_journal.json \
+            src/api/__tests__/attachmentClientTestRunner.ts \
+            src/api/attachmentClient.ts \
+            src/components/documents/AttachmentList.tsx \
+            src/components/documents/DocumentCenter.tsx \
+            src/components/documents/FileUpload.tsx \
+            src/db/repositories/postgresAttachmentRepository.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/server/__tests__/attachmentAuthorityIntegration.ts \
+            src/server/attachmentRoutes.ts \
+            src/server/attachmentStorage.ts \
+            src/server/vehicleRoutes.ts \
+            src/types/entities/audit.ts | sort)"
+          printf 'FINAL_I4A_DIFF:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+      - name: Static authority gate
+        run: |
+          grep -F '0012_attachment_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE file_attachments FORCE ROW LEVEL SECURITY' drizzle/0012_attachment_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0012_attachment_authority.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0012_attachment_authority.sql >/dev/null
+          grep -F "storageProvider: text('storage_provider').notNull().default('LEGACY_BROWSER')" src/db/schema.ts >/dev/null
+          grep -F "contentState: text('content_state').notNull().default('LEGACY_BROWSER')" src/db/schema.ts >/dev/null
+          grep -F 'getAttachmentRepo()' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'new PostgresAttachmentRepository' src/db/uow.ts >/dev/null
+          grep -F 'registerAttachmentRoutes(app)' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'express.raw' src/server/attachmentRoutes.ts >/dev/null
+          grep -F 'createHash' src/server/attachmentStorage.ts >/dev/null
+          grep -F 'rename(tempPath, finalPath)' src/server/attachmentStorage.ts >/dev/null
+          grep -F 'ATTACHMENT_STORAGE_DIR=' .env.example >/dev/null
+          grep -F "credentials: 'include'" src/api/attachmentClient.ts >/dev/null
+          if grep -E 'AttachmentService|FileAttachmentRepository|StorageAdapter|dataBase64|readAsDataURL' src/components/documents/FileUpload.tsx; then exit 1; fi
+          if grep -E 'AttachmentService|FileAttachmentRepository|StorageAdapter|rawBase64|base64,' src/components/documents/AttachmentList.tsx; then exit 1; fi
+          if grep -E 'AttachmentService|FileAttachmentRepository|StorageAdapter' src/components/documents/DocumentCenter.tsx; then exit 1; fi
+          if grep -E 'AttachmentService|FileAttachmentRepository|StorageAdapter' src/components/documents/AttachmentModal.tsx; then exit 1; fi
+          if grep -F "app.delete('/api/attachments" src/server/attachmentRoutes.ts; then exit 1; fi
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Attachment client transport
+        run: npx tsx src/api/__tests__/attachmentClientTestRunner.ts
+      - name: Apply migrations 0000 through 0011
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' ! -name '0012_attachment_authority.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Seed legacy attachment before 0012
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, mime_type, url, size, created_at)
+          VALUES ('legacy-attachment-i4a-final', 'legacy-company-i4a-final', 'Vehicle', 'legacy-vehicle-i4a-final', 'legacy.pdf', 'application/pdf', 'legacy://browser', 123, NOW());
+          SQL
+      - name: Apply 0012 and verify backfill RLS indexes
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f drizzle/0012_attachment_authority.sql
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            r record;
+            rls_enabled boolean;
+            rls_forced boolean;
+            policy_using text;
+            policy_check text;
+            index_count integer;
+          BEGIN
+            SELECT entity_name, file_size, storage_provider, content_state, is_archived INTO r
+            FROM file_attachments WHERE id='legacy-attachment-i4a-final';
+            IF r.entity_name <> 'Vehicle' OR r.file_size <> 123 OR r.storage_provider <> 'LEGACY_BROWSER'
+               OR r.content_state <> 'LEGACY_BROWSER' OR r.is_archived IS DISTINCT FROM false THEN
+              RAISE EXCEPTION 'legacy attachment backfill failed: %', row_to_json(r);
+            END IF;
+            SELECT relrowsecurity, relforcerowsecurity INTO rls_enabled, rls_forced
+            FROM pg_class WHERE oid='public.file_attachments'::regclass;
+            IF NOT rls_enabled OR NOT rls_forced THEN RAISE EXCEPTION 'file_attachments RLS/FORCE failed'; END IF;
+            SELECT qual, with_check INTO policy_using, policy_check
+            FROM pg_policies WHERE schemaname='public' AND tablename='file_attachments' AND policyname='tenant_isolation_att';
+            IF policy_using IS NULL OR policy_using NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'Attachment USING failed'; END IF;
+            IF policy_check IS NULL OR policy_check NOT LIKE '%app.current_tenant%' THEN RAISE EXCEPTION 'Attachment WITH CHECK failed'; END IF;
+            SELECT count(*) INTO index_count FROM pg_indexes
+            WHERE schemaname='public' AND tablename='file_attachments'
+              AND indexname IN ('idx_att_company_entity','idx_att_company_document','idx_att_company_created');
+            IF index_count <> 3 THEN RAISE EXCEPTION 'Attachment indexes missing: %', index_count; END IF;
+          END $$;
+          SQL
+      - name: Non-superuser RLS enforcement
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='autoerp_i4a_final_rls') THEN
+              CREATE ROLE autoerp_i4a_final_rls LOGIN PASSWORD 'autoerp-i4a-final-rls' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO autoerp_i4a_final_rls;
+          GRANT SELECT, INSERT, UPDATE ON file_attachments TO autoerp_i4a_final_rls;
+          INSERT INTO file_attachments (id, company_id, entity_type, entity_name, entity_id, file_name, mime_type, url, size, file_size, storage_provider, is_archived, content_state, created_at) VALUES
+            ('final-rls-att-a', 'final-rls-company-a', 'Vehicle', 'Vehicle', 'veh-a', 'a.pdf', 'application/pdf', 'x', 1, 1, 'LEGACY_BROWSER', false, 'LEGACY_BROWSER', NOW()),
+            ('final-rls-att-b', 'final-rls-company-b', 'Vehicle', 'Vehicle', 'veh-b', 'b.pdf', 'application/pdf', 'x', 1, 1, 'LEGACY_BROWSER', false, 'LEGACY_BROWSER', NOW())
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+          PGPASSWORD='autoerp-i4a-final-rls' psql -h localhost -U autoerp_i4a_final_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'final-rls-company-a';
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM file_attachments WHERE id IN ('final-rls-att-a','final-rls-att-b');
+            IF c <> 1 THEN RAISE EXCEPTION 'non-superuser RLS read isolation failed: %', c; END IF;
+          END $$;
+          SQL
+          if PGPASSWORD='autoerp-i4a-final-rls' psql -h localhost -U autoerp_i4a_final_rls -d autoerp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          SET app.current_tenant = 'final-rls-company-a';
+          INSERT INTO file_attachments (id, company_id, entity_type, entity_name, entity_id, file_name, mime_type, url, size, file_size, storage_provider, is_archived, content_state, created_at)
+          VALUES ('final-rls-forged-b', 'final-rls-company-b', 'Vehicle', 'Vehicle', 'veh-b', 'forged.pdf', 'application/pdf', 'x', 1, 1, 'LEGACY_BROWSER', false, 'LEGACY_BROWSER', NOW());
+          SQL
+          then
+            echo 'RLS WITH CHECK failed to block cross-tenant insert'
+            exit 1
+          fi
+      - name: Attachment authority integration
+        run: npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+      - name: Driver and Contract PostgreSQL regressions
+        run: |
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Established client domain security auth regressions
+        env:
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i4a-final-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        run: |
+          npx tsx src/api/__tests__/attachmentClientTestRunner.ts
+          npx tsx src/api/__tests__/contractClientTestRunner.ts
+          npx tsx src/api/__tests__/driverClientTestRunner.ts
+          npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Diff safety and candidate immutability
+        run: |
+          git diff --check dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4..HEAD
+          if git diff dba31fff6ac38be86cfa9fdc101ec1a94a97dbb4..HEAD | grep -E '@ts-ignore|ts-ignore'; then exit 1; fi
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse HEAD)" = "f0a1ba06c73e75012ce9ef4bb44ebb30ec34a26b"
+          test "$(git rev-parse HEAD^{tree})" = "5edabe09763b1a9564075273837cdfaed6142fb0"
