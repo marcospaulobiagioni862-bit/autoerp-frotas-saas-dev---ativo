@@ -1,0 +1,104 @@
+name: SECURITY-2I4B PostgreSQL fix gate
+
+on:
+  pull_request:
+    branches:
+      - ci-fix-security-2i4b-pg1
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_ci
+      NODE_ENV: test
+      ALLOW_MOCK_AUTH: 'true'
+      ATTACHMENT_STORAGE_DIR: /tmp/autoerp-attachments-ci
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: c25891d72b843d664769bab7249620507bba1c10
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Apply three surgical fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          test = Path('src/server/__tests__/documentAuthorityIntegration.ts')
+          text = test.read_text()
+          old = "id, company_id, name, cpf, cnh, cnh_category, cnh_expiration, cnh_status,\n        active, status, app_platforms, is_archived, created_at, updated_at"
+          new = "id, company_id, name, cpf, cnh, cnh_category, cnh_expiration,\n        active, status, app_platforms, is_archived, created_at, updated_at"
+          assert text.count(old) == 1, f'driver fixture columns count={text.count(old)}'
+          text = text.replace(old, new)
+          assert text.count("'2027-12-31', 'VALID', true, 'ACTIVE'") == 2
+          text = text.replace("'2027-12-31', 'VALID', true, 'ACTIVE'", "'2027-12-31', true, 'ACTIVE'")
+          assert text.count('FROM accounts_payable') == 1
+          text = text.replace('FROM accounts_payable', 'FROM account_payables')
+          test.write_text(text)
+
+          routes = Path('src/server/documentRoutes.ts')
+          text = routes.read_text()
+          old_import = "  parseReferenceYear,\n} from '../domain/documents/documentPolicy';"
+          new_import = "  parseReferenceYear,\n  DocumentPolicyValidationError,\n} from '../domain/documents/documentPolicy';"
+          assert text.count(old_import) == 1, f'policy import count={text.count(old_import)}'
+          text = text.replace(old_import, new_import)
+          old_error = "  if (error instanceof DocumentValidationError) {"
+          new_error = "  if (error instanceof DocumentValidationError || error instanceof DocumentPolicyValidationError) {"
+          assert text.count(old_error) == 1, f'validation catch count={text.count(old_error)}'
+          text = text.replace(old_error, new_error)
+          routes.write_text(text)
+          PY
+      - name: Exact patch scope
+        run: |
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' src/server/__tests__/documentAuthorityIntegration.ts src/server/documentRoutes.ts | sort)"
+          test "$changed" = "$expected"
+          git diff --check
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Policy and client tests
+        run: |
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+      - name: Apply migrations 0000 through 0013
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            psql -h localhost -U postgres -d autoerp_ci -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Document authority integration
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Publish only after green
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/server/__tests__/documentAuthorityIntegration.ts src/server/documentRoutes.ts
+          git commit -m 'fix(security): align document authority integration with promoted schema'
+          git push origin HEAD:security-2i4b-document-semantics
