@@ -1,0 +1,1 @@
+Retrigger pull_request workflow after CI base workflow registration.
