@@ -13,6 +13,7 @@ import {
   Driver,
   Vehicle,
   KmRecord,
+  Contract,
 } from '../../types/entities';
 
 export interface TransactionFilterOptions {
@@ -25,6 +26,7 @@ export interface TransactionFinancialPeriodFilterOptions {
 
 export interface ITransactionDriverRepository {
   findByIdForCompany(companyId: string, id: string): Promise<Driver | null>;
+  findByIdForCompanyWithLock(companyId: string, id: string): Promise<Driver | null>;
   findAllByCompany(companyId: string): Promise<Driver[]>;
   findByCpf(companyId: string, cpf: string): Promise<Driver | null>;
   findByCnh(companyId: string, cnh: string): Promise<Driver | null>;
@@ -122,12 +124,15 @@ export interface ITransactionDriverHealthProfileRepository {
 }
 
 export interface ITransactionContractRepository {
-  findById(id: string): Promise<{
-    id: string;
-    companyId: string;
-    driverId: string;
-    vehicleId: string;
-  } | null>;
+  findById(id: string): Promise<Contract | null>;
+  findByIdForCompany(companyId: string, id: string): Promise<Contract | null>;
+  findByIdForCompanyWithLock(companyId: string, id: string): Promise<Contract | null>;
+  findAllByCompany(companyId: string): Promise<Contract[]>;
+  findByNumber(companyId: string, contractNumber: string): Promise<Contract | null>;
+  findActiveByVehicle(companyId: string, vehicleId: string, excludeContractId?: string): Promise<Contract | null>;
+  findActiveByDriver(companyId: string, driverId: string, excludeContractId?: string): Promise<Contract | null>;
+  create(item: Contract): Promise<Contract>;
+  updateForCompany(companyId: string, id: string, item: Partial<Contract>): Promise<Contract | null>;
 }
 
 export interface ITransactionContext {

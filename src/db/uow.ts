@@ -8,7 +8,6 @@ import {
   PostgresAuditLogRepository,
   PostgresUserRepository,
   PostgresFinancialPeriodRepository,
-  PostgresContractRepository,
   PostgresSecurityDepositRepository,
   PostgresSecurityDepositMovementRepository,
   PostgresDriverHealthProfileRepository,
@@ -16,6 +15,7 @@ import {
   PostgresKmRecordRepository,
 } from './repositories/postgresRepositories';
 import { PostgresDriverRepository } from './repositories/postgresDriverRepository';
+import { PostgresContractRepository } from './repositories/postgresContractRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 

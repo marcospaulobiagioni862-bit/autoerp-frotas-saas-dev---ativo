@@ -1,627 +1,213 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  FileText,
-  Plus,
-  Search,
-  Filter,
-  Car,
-  User,
-  Calendar,
-  DollarSign,
-  Play,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Edit2,
-  RefreshCw,
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  ShieldCheck,
-  ChevronRight,
-  MoreVertical,
-  Trash2,
-} from 'lucide-react';
-import {
-  Card,
-  Button,
-  Badge,
-  Input,
-  Select,
-  PageHeader,
-} from '../ui';
-import {
-  ContractRepository,
-  VehicleRepository,
-  DriverRepository,
-  AccountReceivableRepository,
-} from '../../persistence/repositories/localRepositories';
-import { ContractService } from '../../domain/services/ContractService';
-import { Contract, Vehicle, Driver, AccountReceivable } from '../../types/entities';
-import { ContractStatus, VehicleStatus, DriverStatus } from '../../types/enums';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Plus, Search, TrendingUp, User } from 'lucide-react';
+import { Badge, Button, Card, Input, PageHeader } from '../ui';
+import { ContractClient } from '../../api/contractClient';
+import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { FinanceObligationClient } from '../../api/financeObligationClient';
+import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
+import { ContractStatus } from '../../types/enums';
 import { ContractFormModal } from './ContractFormModal';
 import { ContractDetailsModal } from './ContractDetailsModal';
-import { ReceiptModal } from '../modals/ReceiptModal';
 
 interface ContractsManagementProps {
   companyId: string;
 }
 
 export const ContractsManagement: React.FC<ContractsManagementProps> = ({ companyId }) => {
-  const dataRequestVersionRef = useRef(0);
-  const activeCompanyIdRef = useRef<string | undefined>(
-    companyId || undefined
-  );
-  activeCompanyIdRef.current = companyId || undefined;
-
-  const clearTenantState = () => {
-    setContracts([]);
-    setVehiclesMap({});
-    setDriversMap({});
-    setReceivablesMap({});
-    setSelectedContractId(null);
-    setSelectedReceivable(null);
-    setContractToEdit(null);
-    setIsFormModalOpen(false);
-    setIsDetailsModalOpen(false);
-    setIsReceiptModalOpen(false);
-  };
+  const requestVersionRef = useRef(0);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [vehiclesMap, setVehiclesMap] = useState<Record<string, Vehicle>>({});
-  const [driversMap, setDriversMap] = useState<Record<string, Driver>>({});
-  const [receivablesMap, setReceivablesMap] = useState<Record<string, AccountReceivable[]>>({});
-
+  const [vehicles, setVehicles] = useState<Record<string, Vehicle>>({});
+  const [drivers, setDrivers] = useState<Record<string, Driver>>({});
+  const [receivables, setReceivables] = useState<Record<string, AccountReceivable[]>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-
-  // Modals state
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [contractToEdit, setContractToEdit] = useState<Contract | null>(null);
-
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [selectedReceivable, setSelectedReceivable] = useState<AccountReceivable | null>(null);
-
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const loadData = async () => {
+    const version = ++requestVersionRef.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const [contractList, vehicleList, driverList, receivableList] = await Promise.all([
+        ContractClient.list(),
+        VehicleClient.list(),
+        DriverClient.list(),
+        FinanceObligationClient.listReceivables(),
+      ]);
+      if (version !== requestVersionRef.current) return;
+      setContracts(contractList);
+      setVehicles(Object.fromEntries(vehicleList.map((item) => [item.id, item])));
+      setDrivers(Object.fromEntries(driverList.map((item) => [item.id, item])));
+      const grouped: Record<string, AccountReceivable[]> = {};
+      for (const item of receivableList) {
+        if (!item.contractId) continue;
+        (grouped[item.contractId] ||= []).push(item);
+      }
+      setReceivables(grouped);
+    } catch (caught) {
+      if (version !== requestVersionRef.current) return;
+      setContracts([]);
+      setVehicles({});
+      setDrivers({});
+      setReceivables({});
+      setError(caught instanceof Error ? caught.message : 'Erro ao carregar contratos.');
+    } finally {
+      if (version === requestVersionRef.current) setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const requestVersion = ++dataRequestVersionRef.current;
-    const companyIdSnapshot = companyId || undefined;
-
-    clearTenantState();
-
-    if (!companyIdSnapshot) {
-      setLoading(false);
-
-      return () => {
-        dataRequestVersionRef.current += 1;
-      };
-    }
-
-    setLoading(true);
-    void loadData(companyIdSnapshot, requestVersion);
-
-    return () => {
-      dataRequestVersionRef.current += 1;
-    };
+    setContracts([]);
+    setVehicles({});
+    setDrivers({});
+    setReceivables({});
+    setSelectedContractId(null);
+    setContractToEdit(null);
+    setFormOpen(false);
+    setDetailsOpen(false);
+    void loadData();
+    return () => { requestVersionRef.current += 1; };
   }, [companyId]);
 
-  const loadData = async (
-    companyIdSnapshot: string,
-    requestVersion: number
-  ) => {
-    try {
-      const contractRepo = new ContractRepository();
-      const vehicleRepo = new VehicleRepository();
-      const driverRepo = new DriverRepository();
-      const receivableRepo = new AccountReceivableRepository();
-
-      const [cList, vList, dList] = await Promise.all([
-        contractRepo.findAllForCompany(companyIdSnapshot),
-        vehicleRepo.findAllForCompany(companyIdSnapshot),
-        driverRepo.findAllForCompany(companyIdSnapshot),
-      ]);
-
-      if (
-        requestVersion !== dataRequestVersionRef.current ||
-        activeCompanyIdRef.current !== companyIdSnapshot
-      ) {
-        return;
-      }
-
-      const vMap: Record<string, Vehicle> = {};
-      vList.forEach((v) => (vMap[v.id] = v));
-
-      const dMap: Record<string, any> = {};
-      dList.forEach((d) => (dMap[d.id] = d));
-
-      const rMap: Record<string, AccountReceivable[]> = {};
-      for (const c of cList) {
-        const recs = await receivableRepo.findByContractIdForCompany(
-          companyIdSnapshot,
-          c.id
-        );
-        
-        if (
-          requestVersion !== dataRequestVersionRef.current ||
-          activeCompanyIdRef.current !== companyIdSnapshot
-        ) {
-          return;
-        }
-        
-        rMap[c.id] = recs;
-      }
-
-      if (
-        requestVersion !== dataRequestVersionRef.current ||
-        activeCompanyIdRef.current !== companyIdSnapshot
-      ) {
-        return;
-      }
-
-      setContracts(cList);
-      setVehiclesMap(vMap);
-      setDriversMap(dMap);
-      setReceivablesMap(rMap);
-    } catch (error) {
-      console.error('Failed to load contracts data', error);
-    } finally {
-      if (
-        requestVersion === dataRequestVersionRef.current &&
-        activeCompanyIdRef.current === companyIdSnapshot
-      ) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const reloadData = async () => {
-    const companyIdSnapshot = activeCompanyIdRef.current;
-
-    if (!companyIdSnapshot) {
-      clearTenantState();
-      setLoading(false);
-      return;
-    }
-
-    const requestVersion = ++dataRequestVersionRef.current;
-    setLoading(true);
-
-    await loadData(companyIdSnapshot, requestVersion);
-  };
-  const handleActivateContract = async (contractId: string) => {
+  const runAction = async (contractId: string, action: () => Promise<unknown>) => {
     setActionLoadingId(contractId);
+    setError(null);
     try {
-      const contractService = new ContractService();
-      await contractService.activateContract({
-        companyId,
-        contractId,
-        userId: 'usr-admin',
-        userName: 'Administrador',
-      });
-      await reloadData();
-    } catch (err: any) {
-      alert(`Erro ao ativar contrato: ${err.message}`);
+      await action();
+      await loadData();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Falha na operação do contrato.');
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleProcessRecurring = async (contractId: string) => {
-    setActionLoadingId(contractId);
-    try {
-      const contractService = new ContractService();
-      const today = new Date().toISOString().split('T')[0];
-      const recs = await contractService.processContractRecurring(
-        contractId,
-        today,
-        'usr-admin',
-        'Administrador'
-      );
-      if (recs.length > 0) {
-        alert('Cobrança de aluguel gerada com sucesso!');
-      } else {
-        alert('Cobrança para a competência de hoje já havia sido gerada.');
-      }
-      await reloadData();
-    } catch (err: any) {
-      alert(`Erro ao faturar aluguel: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
+  const handleActivate = (id: string) => runAction(id, () => ContractClient.activate(id));
+  const handleBill = (id: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    return runAction(id, () => ContractClient.bill(id, today, today));
+  };
+  const handleClose = (id: string) => {
+    if (!confirm('Deseja encerrar este contrato? O vínculo do veículo será liberado de forma atômica.')) return;
+    return runAction(id, () => ContractClient.close(id, { reason: 'Encerrado via gestão de contratos' }));
+  };
+  const handleArchive = (id: string) => {
+    if (!confirm('Deseja arquivar este contrato? O histórico será preservado.')) return;
+    return runAction(id, () => ContractClient.archive(id, 'Arquivado via gestão de contratos'));
   };
 
-  const handleCloseContract = async (contractId: string) => {
-    if (!confirm('Deseja realmente encerrar este contrato? O veículo ficará disponível para novas locações.')) return;
-    setActionLoadingId(contractId);
-    try {
-      const contractService = new ContractService();
-      await contractService.closeContract({
-        companyId,
-        contractId,
-        notes: 'Encerrado via atalho da tabela',
-        userId: 'usr-admin',
-        userName: 'Administrador',
-      });
-      await reloadData();
-    } catch (err: any) {
-      alert(`Erro ao encerrar contrato: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleDeleteOrArchive = async (contractId: string) => {
-    if (!confirm('Deseja excluir ou arquivar este contrato?')) return;
-    setActionLoadingId(contractId);
-    try {
-      const contractService = new ContractService();
-      const res = await contractService.deleteOrArchiveContract(contractId, 'usr-admin', 'Administrador');
-      alert(res.action === 'archived' ? 'Contrato arquivado por possuir histórico financeiro.' : 'Contrato excluído com sucesso.');
-      await reloadData();
-    } catch (err: any) {
-      alert(`Erro: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  // KPIs Calculations
-  const activeContracts = contracts.filter((c) => c.status === ContractStatus.ACTIVE);
-  const draftContracts = contracts.filter((c) => c.status === ContractStatus.DRAFT || c.status === ContractStatus.AWAITING_SIGNATURE);
-  const closedContracts = contracts.filter((c) => c.status === ContractStatus.CLOSED);
-
-  const totalVehiclesCount = Object.keys(vehiclesMap).length || 1;
-  const rawOccupancy = (activeContracts.length / totalVehiclesCount) * 100;
-  const occupancyRate = (isNaN(rawOccupancy) ? 0 : rawOccupancy).toFixed(1);
-
-  const totalActiveWeeklyRevenue = activeContracts.reduce((sum, c) => {
-    if (c.billingPeriodicity === 'WEEKLY') return sum + c.rentalAmount;
-    if (c.billingPeriodicity === 'MONTHLY') return sum + c.rentalAmount / 4;
-    return sum + c.rentalAmount;
+  const activeContracts = contracts.filter((item) => item.status === ContractStatus.ACTIVE);
+  const totalVehicles = Object.keys(vehicles).length;
+  const occupancyRate = totalVehicles ? ((activeContracts.length / totalVehicles) * 100).toFixed(1) : '0.0';
+  const weeklyRevenue = activeContracts.reduce((sum, item) => {
+    if (item.billingPeriodicity === 'MONTHLY') return sum + item.rentalAmount / 4;
+    if (item.billingPeriodicity === 'WEEKLY') return sum + item.rentalAmount;
+    return sum + item.rentalAmount;
   }, 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueContracts = contracts.filter((item) =>
+    (receivables[item.id] || []).some((receivable) => receivable.balanceAmount > 0 && receivable.dueDate < today && receivable.status !== 'CANCELLED')
+  );
 
-  // Contratos com cobranças em atraso
-  const todayStr = new Date().toISOString().split('T')[0];
-  const contractsWithOverdue = contracts.filter((c) => {
-    const recs = receivablesMap[c.id] || [];
-    return recs.some((r) => r.dueDate < todayStr && r.balanceAmount > 0 && r.status !== 'CANCELLED');
-  });
-
-  // Filtered Contracts List
-  const filteredContracts = contracts.filter((c) => {
-    const v = vehiclesMap[c.vehicleId];
-    const d = driversMap[c.driverId];
-
-    const matchesSearch =
-      c.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v && (v.plate.toLowerCase().includes(searchTerm.toLowerCase()) || v.model.toLowerCase().includes(searchTerm.toLowerCase()))) ||
-      (d && d.fullName.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesStatus =
-      statusFilter === 'ALL' || c.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredContracts = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    return contracts.filter((item) => {
+      if (statusFilter !== 'ALL' && item.status !== statusFilter) return false;
+      if (!search) return true;
+      const vehicle = vehicles[item.vehicleId];
+      const driver = drivers[item.driverId];
+      return item.contractNumber.toLowerCase().includes(search)
+        || Boolean(vehicle?.plate.toLowerCase().includes(search))
+        || Boolean(vehicle?.model.toLowerCase().includes(search))
+        || Boolean(driver?.fullName.toLowerCase().includes(search));
+    });
+  }, [contracts, drivers, vehicles, searchTerm, statusFilter]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Contratos"
-        description="Controle do ciclo de vida, vigência, taxas, caução e faturamento recorrente"
+        description="Ciclo de vida, vínculo motorista-veículo e faturamento de locação"
         breadcrumb="Operação • Gestão de Contratos"
         primaryAction={{
           label: 'Novo Contrato',
-          onClick: () => {
-            setContractToEdit(null);
-            setIsFormModalOpen(true);
-          },
-          icon: <Plus className="w-4 h-4" />
+          onClick: () => { setContractToEdit(null); setFormOpen(true); },
+          icon: <Plus className="w-4 h-4" />,
         }}
       />
 
-      {/* KPI Cards */}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+          {error}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card padding="sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-semibold text-slate-500 uppercase block">Contratos Ativos</span>
-              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono tabular-nums">
-                {activeContracts.length}
-              </h3>
-              <span className="text-[10px] text-slate-400">Em locação regular</span>
-            </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 rounded-xl">
-              <FileText className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-semibold text-slate-500 uppercase block">Taxa de Ocupação</span>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5 font-mono tabular-nums">
-                {occupancyRate}%
-              </h3>
-              <span className="text-[10px] text-slate-400">{activeContracts.length} de {totalVehiclesCount} veículos</span>
-            </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 rounded-xl">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-semibold text-slate-500 uppercase block">Receita Estimada / Sem</span>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5 font-mono tabular-nums">
-                R$ {totalActiveWeeklyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </h3>
-              <span className="text-[10px] text-slate-400">Projeção semanal ativa</span>
-            </div>
-            <div className="p-2.5 bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400 rounded-xl">
-              <DollarSign className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
-
-        <Card padding="sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-semibold text-slate-500 uppercase block">Inadimplência / Atraso</span>
-              <h3 className={`text-2xl font-black mt-0.5 font-mono tabular-nums ${contractsWithOverdue.length > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
-                {contractsWithOverdue.length}
-              </h3>
-              <span className="text-[10px] text-slate-400">Contratos com débitos</span>
-            </div>
-            <div className={`p-2.5 rounded-xl ${contractsWithOverdue.length > 0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-        </Card>
+        <Card padding="sm"><Kpi icon={<FileText className="w-5 h-5" />} label="Contratos Ativos" value={String(activeContracts.length)} helper="Em locação" /></Card>
+        <Card padding="sm"><Kpi icon={<TrendingUp className="w-5 h-5" />} label="Taxa de Ocupação" value={`${occupancyRate}%`} helper={`${activeContracts.length} de ${totalVehicles} veículos`} /></Card>
+        <Card padding="sm"><Kpi icon={<DollarSign className="w-5 h-5" />} label="Receita Est. / Sem" value={weeklyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} helper="Contratos ativos" /></Card>
+        <Card padding="sm"><Kpi icon={<AlertTriangle className="w-5 h-5" />} label="Com Atraso" value={String(overdueContracts.length)} helper="Saldo vencido" /></Card>
       </div>
 
-      {/* Filters & Search */}
       <Card padding="sm">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="w-full sm:w-80">
-            <Input
-              type="text"
-              placeholder="Buscar por Nº contrato, placa do veículo ou motorista..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-slate-400" />}
-            />
+        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+          <div className="md:w-96">
+            <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar contrato, placa ou motorista..." icon={<Search className="w-4 h-4" />} />
           </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-            <span className="text-slate-400 font-semibold shrink-0">Status:</span>
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg font-semibold shrink-0 transition-colors focus:outline-hidden ${
-                statusFilter === 'ALL'
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              Todos ({contracts.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter(ContractStatus.ACTIVE)}
-              className={`px-3 py-1.5 rounded-lg font-semibold shrink-0 transition-colors focus:outline-hidden ${
-                statusFilter === ContractStatus.ACTIVE
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              Ativos ({activeContracts.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter(ContractStatus.DRAFT)}
-              className={`px-3 py-1.5 rounded-lg font-semibold shrink-0 transition-colors focus:outline-hidden ${
-                statusFilter === ContractStatus.DRAFT
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              Rascunho ({draftContracts.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter(ContractStatus.CLOSED)}
-              className={`px-3 py-1.5 rounded-lg font-semibold shrink-0 transition-colors focus:outline-hidden ${
-                statusFilter === ContractStatus.CLOSED
-                  ? 'bg-slate-700 text-white shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              Encerrados ({closedContracts.length})
-            </button>
-          </div>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+            <option value="ALL">Todos os status</option>
+            {Object.values(ContractStatus).filter((value) => value !== ContractStatus.ARCHIVED).map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
         </div>
       </Card>
 
-      {/* Contracts Table */}
       <Card padding="none">
         {loading ? (
-          <div className="p-12 text-center text-slate-400 animate-pulse">
-            Carregando lista de contratos de locação...
-          </div>
+          <div className="p-10 text-center text-sm text-slate-500">Carregando contratos...</div>
         ) : filteredContracts.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            Nenhum contrato encontrado para os filtros selecionados.
-          </div>
+          <div className="p-10 text-center text-sm text-slate-500">Nenhum contrato encontrado.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Contrato</th>
-                  <th className="py-3 px-4">Motorista</th>
-                  <th className="py-3 px-4">Veículo</th>
-                  <th className="py-3 px-4">Vigência</th>
-                  <th className="py-3 px-4 text-right">Valor / Freq.</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Ações</th>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-900/70 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th className="px-4 py-3 text-left">Contrato</th>
+                  <th className="px-4 py-3 text-left">Veículo</th>
+                  <th className="px-4 py-3 text-left">Motorista</th>
+                  <th className="px-4 py-3 text-left">Vigência</th>
+                  <th className="px-4 py-3 text-right">Aluguel</th>
+                  <th className="px-4 py-3 text-left">Status</th>
+                  <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredContracts.map((contract) => {
-                  const vehicle = vehiclesMap[contract.vehicleId];
-                  const driver = driversMap[contract.driverId];
-
+                {filteredContracts.map((item) => {
+                  const vehicle = vehicles[item.vehicleId];
+                  const driver = drivers[item.driverId];
+                  const busy = actionLoadingId === item.id;
                   return (
-                    <tr
-                      key={contract.id}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group"
-                    >
-                      {/* Contrato */}
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-slate-100">
-                        {contract.contractNumber}
-                      </td>
-
-                      {/* Motorista */}
-                      <td className="py-3 px-4">
-                        {driver ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-[11px] text-slate-700 dark:text-slate-300">
-                              {driver.fullName.charAt(0)}
-                            </div>
-                            <div>
-                              <span className="font-bold text-slate-900 dark:text-slate-100 block">
-                                {driver.fullName}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                CPF: {driver.cpf}
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">Desconhecido</span>
-                        )}
-                      </td>
-
-                      {/* Veículo */}
-                      <td className="py-3 px-4">
-                        {vehicle ? (
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-slate-100 block">
-                              {vehicle.brand} {vehicle.model}
-                            </span>
-                            <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 font-bold">
-                              {vehicle.plate}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">Desconhecido</span>
-                        )}
-                      </td>
-
-                      {/* Vigência */}
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400 font-mono text-[11px]">
-                        <div>Início: {contract.startDate}</div>
-                        <div className="text-slate-400">Fim: {contract.endDate || 'Indeterminado'}</div>
-                      </td>
-
-                      {/* Valor / Freq */}
-                      <td className="py-3 px-4 text-right font-mono">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">
-                          R$ {contract.rentalAmount.toFixed(2)}
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {contract.billingPeriodicity === 'WEEKLY' ? 'Semanal' : 'Mensal'}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <Badge
-                          variant={
-                            contract.status === ContractStatus.ACTIVE
-                              ? 'success'
-                              : contract.status === ContractStatus.CLOSED
-                              ? 'neutral'
-                              : contract.status === ContractStatus.CANCELLED
-                              ? 'danger'
-                              : 'warning'
-                          }
-                        >
-                          {contract.status}
-                        </Badge>
-                      </td>
-
-                      {/* Ações */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => {
-                              setSelectedContractId(contract.id);
-                              setIsDetailsModalOpen(true);
-                            }}
-                            title="Ver Detalhes"
-                            className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.CANCELLED && (
-                            <button
-                              onClick={() => {
-                                setContractToEdit(contract);
-                                setIsFormModalOpen(true);
-                              }}
-                              title="Editar"
-                              className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {(contract.status === ContractStatus.DRAFT || contract.status === ContractStatus.AWAITING_SIGNATURE) && (
-                            <button
-                              onClick={() => handleActivateContract(contract.id)}
-                              disabled={actionLoadingId === contract.id}
-                              title="Ativar Contrato"
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg"
-                            >
-                              <Play className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {contract.status === ContractStatus.ACTIVE && (
-                            <>
-                              <button
-                                onClick={() => handleProcessRecurring(contract.id)}
-                                disabled={actionLoadingId === contract.id}
-                                title="Faturar Aluguel"
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg"
-                              >
-                                <RefreshCw className="w-4 h-4" />
-                              </button>
-
-                              <button
-                                onClick={() => handleCloseContract(contract.id)}
-                                disabled={actionLoadingId === contract.id}
-                                title="Encerrar Contrato"
-                                className="p-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-
-                          <button
-                            onClick={() => handleDeleteOrArchive(contract.id)}
-                            disabled={actionLoadingId === contract.id}
-                            title="Excluir/Arquivar"
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                    <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
+                      <td className="px-4 py-3 font-mono font-semibold">{item.contractNumber}</td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Car className="w-4 h-4 text-slate-400" /><span>{vehicle ? `${vehicle.plate} • ${vehicle.model}` : '—'}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /><span>{driver?.fullName || '—'}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.startDate}{item.endDate ? ` → ${item.endDate}` : ''}</span></div></td>
+                      <td className="px-4 py-3 text-right font-mono">{item.rentalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{item.status}</Badge></td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1.5 flex-wrap">
+                          <Button size="sm" variant="ghost" onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}><Eye className="w-4 h-4" /></Button>
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && <Button size="sm" variant="primary" isLoading={busy} onClick={() => void handleActivate(item.id)}>Ativar</Button>}
+                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleBill(item.id)}>Faturar</Button>}
+                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
+                          {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
                         </div>
                       </td>
                     </tr>
@@ -633,44 +219,31 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         )}
       </Card>
 
-      {/* MODALS */}
       <ContractFormModal
-        isOpen={isFormModalOpen}
-        onClose={() => setIsFormModalOpen(false)}
+        isOpen={formOpen}
+        onClose={() => setFormOpen(false)}
         contractToEdit={contractToEdit}
         companyId={companyId}
-        onSuccess={() => {
-          reloadData();
-        }}
+        onSuccess={() => void loadData()}
       />
-
       <ContractDetailsModal
-        isOpen={isDetailsModalOpen}
-        onClose={() => setIsDetailsModalOpen(false)}
+        isOpen={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
         contractId={selectedContractId}
         companyId={companyId}
-        onRefresh={reloadData}
-        onOpenReceiptModal={async (receivableId) => {
-          const receivableRepo = new AccountReceivableRepository();
-          const rec = await receivableRepo.findByIdForCompany(receivableId, companyId);
-          if (rec) {
-            setSelectedReceivable(rec);
-            setIsReceiptModalOpen(true);
-          }
-        }}
-      />
-
-      <ReceiptModal
-        isOpen={isReceiptModalOpen}
-        onClose={() => setIsReceiptModalOpen(false)}
-        receivable={selectedReceivable}
-        onSuccess={() => {
-          reloadData();
-          if (selectedContractId) {
-            // refresh details modal if open
-          }
-        }}
+        onRefresh={() => void loadData()}
       />
     </div>
   );
 };
+
+const Kpi: React.FC<{ icon: React.ReactNode; label: string; value: string; helper: string }> = ({ icon, label, value, helper }) => (
+  <div className="flex items-center justify-between gap-3">
+    <div>
+      <span className="text-[11px] font-semibold uppercase text-slate-500">{label}</span>
+      <div className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">{value}</div>
+      <span className="text-[10px] text-slate-400">{helper}</span>
+    </div>
+    <div className="rounded-xl bg-slate-100 p-2.5 text-slate-500 dark:bg-slate-800">{icon}</div>
+  </div>
+);

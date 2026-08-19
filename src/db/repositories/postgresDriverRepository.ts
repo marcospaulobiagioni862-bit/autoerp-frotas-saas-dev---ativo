@@ -96,6 +96,17 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
     return await this.queryOne(companyId, sql`d.id = ${id}`);
   }
 
+  async findByIdForCompanyWithLock(companyId: string, id: string): Promise<Driver | null> {
+    const result = await this.tx.execute(sql`
+      SELECT d.*
+      FROM drivers d
+      WHERE d.company_id = ${companyId} AND d.id = ${id}
+      FOR UPDATE OF d
+    `);
+    const row = rowsOf(result)[0];
+    return row ? this.map(row) : null;
+  }
+
   async findAllByCompany(companyId: string): Promise<Driver[]> {
     const result = await this.tx.execute(sql`
       SELECT d.*,
