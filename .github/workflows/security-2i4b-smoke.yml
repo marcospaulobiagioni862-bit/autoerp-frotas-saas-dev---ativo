@@ -1,0 +1,36 @@
+name: SECURITY-2I4B smoke gate
+
+on:
+  push:
+    branches:
+      - ci-smoke-security-2i4b
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: c25891d72b843d664769bab7249620507bba1c10
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify candidate
+        run: test "$(git rev-parse HEAD)" = "c25891d72b843d664769bab7249620507bba1c10"
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Document policy tests
+        run: npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+      - name: Document client tests
+        run: npx tsx src/api/__tests__/documentClientTestRunner.ts
