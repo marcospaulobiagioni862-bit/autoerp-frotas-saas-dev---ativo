@@ -268,7 +268,7 @@ jobs:
           app.write_text(text)
           PY
 
-          mapfile -t changed < <(git status --porcelain | awk '{print $2}' | sort)
+          mapfile -t changed < <(git status --porcelain -uall | awk '{print $2}' | sort)
           printf '%s\n' "${changed[@]}"
           test "${#changed[@]}" = "3"
           test "${changed[0]}" = "src/App.tsx"
@@ -285,7 +285,7 @@ jobs:
           npm run lint
           npm run build
           npx tsx src/api/__tests__/notificationClientTestRunner.ts
-          test "$(git status --porcelain | wc -l)" = "3"
+          test "$(git status --porcelain -uall | wc -l)" = "3"
 
       - name: Publish validated UI to product branch
         run: |
