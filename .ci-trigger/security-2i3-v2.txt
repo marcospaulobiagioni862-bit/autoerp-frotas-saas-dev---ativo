@@ -1,0 +1,3 @@
+SECURITY-2I3 implementation trigger v2
+candidate=41c846f0c07a7831dd9e9056faf02672e90effa9
+fix=period-scoped-contract-rent-origin
