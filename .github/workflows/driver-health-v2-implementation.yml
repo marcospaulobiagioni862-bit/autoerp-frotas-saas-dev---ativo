@@ -39,7 +39,7 @@ jobs:
         shell: bash
         run: |
           rm -rf .control
-          mapfile -t files < <(git status --porcelain | sed -E 's/^.. //' | sort)
+          mapfile -t files < <(git status --porcelain -uall | sed -E 's/^.. //' | sort)
           printf '%s\n' "${files[@]}"
           expected=$(cat <<'EOF'
           drizzle/0007_driver_health_profiles.sql
