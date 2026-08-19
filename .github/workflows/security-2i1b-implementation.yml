@@ -1,0 +1,211 @@
+name: SECURITY-2I1B implementation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i1b
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  implement-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: security-2i1b-fleet-km-switchover
+          fetch-depth: 0
+
+      - name: Checkout CI control files
+        uses: actions/checkout@v4
+        with:
+          ref: ci-implement-security-2i1b
+          path: .ci-control
+          sparse-checkout: |
+            .ci
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+
+      - name: Exact base gate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "8273b3ca3374cb93fb15e4429463f4fe12432a22"
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Apply exact SECURITY-2I1B patch
+        shell: bash
+        run: |
+          python .ci-control/.ci/apply-security-2i1b-backend.py
+          python .ci-control/.ci/apply-security-2i1b-ui.py
+          python .ci-control/.ci/apply-security-2i1b-tests.py
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          changed="$({ git diff --name-only; git ls-files --others --exclude-standard; } | grep -v '^\.ci-control/' | sort -u)"
+          expected="$(printf '%s\n' \
+            drizzle/0009_vehicle_km_authority.sql \
+            drizzle/meta/_journal.json \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/components/fleet/FleetManagement.tsx \
+            src/components/fleet/RecordKmModal.tsx \
+            src/components/fleet/VehicleDetailsModal.tsx \
+            src/components/fleet/VehicleFormModal.tsx \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/domain/services/VehicleLegacyDetailsBridge.ts \
+            src/server/vehicleRoutes.ts | sort)"
+          printf 'CHANGED:\n%s\n' "$changed"
+          test "$changed" = "$expected"
+
+      - name: I1B authority static gate
+        shell: bash
+        run: |
+          grep -F '0009_vehicle_km_authority' drizzle/meta/_journal.json >/dev/null
+          grep -F 'ALTER TABLE vehicle_km_records FORCE ROW LEVEL SECURITY' drizzle/0009_vehicle_km_authority.sql >/dev/null
+          grep -F 'AS PERMISSIVE' drizzle/0009_vehicle_km_authority.sql >/dev/null
+          grep -F 'WITH CHECK' drizzle/0009_vehicle_km_authority.sql >/dev/null
+          grep -F 'uq_vehicle_km_exact_reading' drizzle/0009_vehicle_km_authority.sql >/dev/null
+          grep -F 'getKmRecordRepo' src/domain/finance/ITransactionContext.ts >/dev/null
+          grep -F 'findByIdForCompanyWithLock' src/db/repositories/postgresRepositories.ts >/dev/null
+          grep -F "app.get('/api/fleet/vehicles/:id/km-records'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F "app.post('/api/fleet/vehicles/:id/km-records'" src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'Use the KM record endpoint to change currentKm' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'getKmRecordRepo().create' src/server/vehicleRoutes.ts >/dev/null
+          grep -F 'static async listKm' src/api/vehicleClient.ts >/dev/null
+          grep -F 'static async recordKm' src/api/vehicleClient.ts >/dev/null
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('src/api/vehicleClient.ts').read_text()
+          block=text.split('export interface VehicleUpdateInput {',1)[1].split('export type VehicleCreateInput',1)[0]
+          assert 'currentKm' not in block
+          PY
+          ! grep -E 'VehicleRepository|VehicleService|useAuth' src/components/fleet/FleetManagement.tsx
+          ! grep -E 'VehicleService|user-admin-1|Gestor de Frota|companyId' src/components/fleet/VehicleFormModal.tsx
+          ! grep -E 'VehicleService|user-admin-1|Gestor de Frota' src/components/fleet/RecordKmModal.tsx
+          ! grep -F 'VehicleService' src/components/fleet/VehicleDetailsModal.tsx
+          grep -F 'VehicleClient.get' src/components/fleet/VehicleDetailsModal.tsx >/dev/null
+          grep -F 'VehicleClient.listKm' src/components/fleet/VehicleDetailsModal.tsx >/dev/null
+          ! grep -E 'new (VehicleRepository|KmRecordRepository)' src/domain/services/VehicleLegacyDetailsBridge.ts
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Vehicle client tests
+        run: npx tsx src/api/__tests__/vehicleClientTestRunner.ts
+
+      - name: PostgreSQL16 session/RLS/RBAC/KM atomicity validation
+        shell: bash
+        run: |
+          mkdir -p .ci
+          cp .ci-control/.ci/security-2i1b-validation.ts .ci/security-2i1b-validation.ts
+          python .ci-control/.ci/prepare-security-2i1b-validation.py
+          npx tsx .ci/security-2i1b-validation.ts
+          rm -rf .ci
+
+      - name: Core regressions
+        env:
+          NODE_ENV: test
+          USE_PGLITE: 'true'
+          ALLOW_MOCK_AUTH: 'false'
+          JWT_SECRET: security-2i1b-regression-secret-at-least-32-bytes
+          JWT_ISSUER: autoerp-ci
+          JWT_AUDIENCE: autoerp-users
+        shell: bash
+        run: |
+          npx tsx src/api/__tests__/driverHealthClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+          npx tsx src/domain/services/__tests__/contractTestRunner.ts
+          npx tsx src/domain/finance/__tests__/financeTestRunner.ts
+          npx tsx src/domain/services/__tests__/securityTestRunner.ts
+          npx tsx src/auth/__tests__/authSessionTestRunner.ts
+          npx tsx src/server/__tests__/bootstrapTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+          npx tsx src/server/__tests__/passwordTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Diff safety
+        shell: bash
+        run: |
+          git diff --check
+          ! git diff --name-only | grep -E '^package(-lock)?\.json$'
+          ! git diff | grep -E '@ts-ignore|ts-ignore'
+          test -z "$(git status --porcelain | grep '^?? \.ci/' || true)"
+
+      - name: Commit validated production candidate
+        shell: bash
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            drizzle/0009_vehicle_km_authority.sql \
+            drizzle/meta/_journal.json \
+            src/api/__tests__/vehicleClientTestRunner.ts \
+            src/api/vehicleClient.ts \
+            src/components/fleet/FleetManagement.tsx \
+            src/components/fleet/RecordKmModal.tsx \
+            src/components/fleet/VehicleDetailsModal.tsx \
+            src/components/fleet/VehicleFormModal.tsx \
+            src/db/repositories/postgresRepositories.ts \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/domain/services/VehicleLegacyDetailsBridge.ts \
+            src/server/vehicleRoutes.ts
+          git commit -m 'feat(security): switch fleet and km to server authority'
+          git push origin HEAD:security-2i1b-fleet-km-switchover
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: CI report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              'AUTOERP_SECURITY_2I1B_IMPLEMENTATION_REPORT',
+              `STATUS=${{ job.status }}`,
+              `RUN_ID=${context.runId}`,
+              `CANDIDATE_SHA=${process.env.CANDIDATE_SHA || 'not-published'}`,
+              'BASE=8273b3ca3374cb93fb15e4429463f4fe12432a22',
+              'SCOPE=Fleet+VehicleForm+VehicleDetailsCore+KmRecord atomic switchover',
+              'PostgreSQL16/RLS/RBAC/KM atomicity required',
+              'VehicleClient=12/12 required',
+              'Contract=20/20, Finance=46/46, Security=35/35 required'
+            ].join('\n');
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, body });
