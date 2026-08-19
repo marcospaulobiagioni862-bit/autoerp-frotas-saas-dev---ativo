@@ -1,0 +1,3 @@
+Trigger SECURITY-2I4C server authority validation.
+Product candidate: 57c051766a7afa1c7b6ecd41d1695af77712a9e7
+Never merge this CI branch.
