@@ -1,0 +1,279 @@
+name: SECURITY-2I4B fleet UI gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i4b-fleet-ui
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 2afae1987d9a336b70413d8228a4fdb411b35de4
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch FleetCompliance document path
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/fleet/FleetComplianceManagement.tsx')
+          text = p.read_text()
+
+          old = '\n'.join([
+              "import {",
+              "  VehicleDocumentRepository,",
+              "  InsuranceRepository,",
+              "  TrackerRepository,",
+              "  VehicleRepository,",
+              "} from '../../persistence/repositories/localRepositories';",
+          ])
+          new = '\n'.join([
+              "import {",
+              "  InsuranceRepository,",
+              "  TrackerRepository,",
+              "} from '../../persistence/repositories/localRepositories';",
+          ])
+          assert text.count(old) == 1, f'local import block count={text.count(old)}'
+          text = text.replace(old, new)
+
+          old = "import { FleetComplianceService } from '../../domain/services/FleetComplianceService';"
+          new = '\n'.join([
+              old,
+              "import { DocumentClient } from '../../api/documentClient';",
+              "import { VehicleClient } from '../../api/vehicleClient';",
+              "import { FileUpload } from '../documents/FileUpload';",
+          ])
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "import { VehicleDocument, Insurance, Tracker, Vehicle } from '../../types/entities';"
+          new = "import type { DocumentRecord, Insurance, Tracker, Vehicle } from '../../types/entities';"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "  const [documents, setDocuments] = useState<VehicleDocument[]>([]);"
+          new = "  const [documents, setDocuments] = useState<DocumentRecord[]>([]);"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "  const [docNotes, setDocNotes] = useState<string>('');"
+          new = old + "\n  const [docReferenceYear, setDocReferenceYear] = useState<string>(String(new Date().getFullYear()));\n  const [docAttachmentId, setDocAttachmentId] = useState<string>('');"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = '\n'.join([
+              "  const companyId = 'company-main-uuid';",
+              "  const userId = 'usr-admin';",
+              "  const userName = 'Gestor de Frota';",
+          ])
+          new = '\n'.join([
+              "  // Temporary legacy authority only for Insurance/Tracker until their server-side wave.",
+              "  const legacyCompanyId = 'company-main-uuid';",
+              "  const legacyUserId = 'usr-admin';",
+              "  const legacyUserName = 'Gestor de Frota';",
+          ])
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = '\n'.join([
+              "      const docRepo = new VehicleDocumentRepository();",
+              "      const insRepo = new InsuranceRepository();",
+              "      const trkRepo = new TrackerRepository();",
+              "      const vehRepo = new VehicleRepository();",
+              "",
+              "      const [docsList, insList, trkList, vehList] = await Promise.all([",
+              "        docRepo.findAll({ companyId }),",
+              "        insRepo.findAll({ companyId }),",
+              "        trkRepo.findAll({ companyId }),",
+              "        vehRepo.findAll({ companyId }),",
+              "      ]);",
+          ])
+          new = '\n'.join([
+              "      const insRepo = new InsuranceRepository();",
+              "      const trkRepo = new TrackerRepository();",
+              "",
+              "      const [docsList, insList, trkList, vehList] = await Promise.all([",
+              "        DocumentClient.list({ subjectType: 'VEHICLE' }),",
+              "        insRepo.findAll({ companyId: legacyCompanyId }),",
+              "        trkRepo.findAll({ companyId: legacyCompanyId }),",
+              "        VehicleClient.list(),",
+              "      ]);",
+          ])
+          assert text.count(old) == 1, f'load authority block count={text.count(old)}'
+          text = text.replace(old, new)
+
+          old = '\n'.join([
+              "      await FleetComplianceService.createDocument({",
+              "        companyId,",
+              "        vehicleId: docVehicleId,",
+              "        documentType: docType,",
+              "        documentNumber: docNumber,",
+              "        expirationDate: docExpDate,",
+              "        cost: docCost ? parseFloat(docCost) : 0,",
+              "        notes: docNotes,",
+              "        generatePayable: docGeneratePayable,",
+              "        userId,",
+              "        userName,",
+              "      });",
+          ])
+          new = '\n'.join([
+              "      const annual = ['CRLV', 'IPVA', 'LICENCIAMENTO'].includes(docType);",
+              "      if (annual && !docReferenceYear) {",
+              "        alert('Informe o ano de referência para este documento anual.');",
+              "        return;",
+              "      }",
+              "      await DocumentClient.create({",
+              "        subjectType: 'VEHICLE',",
+              "        subjectId: docVehicleId,",
+              "        documentType: docType,",
+              "        documentNumber: docNumber || undefined,",
+              "        referenceYear: docReferenceYear ? Number(docReferenceYear) : undefined,",
+              "        expirationDate: docExpDate,",
+              "        attachmentId: docAttachmentId || undefined,",
+              "        cost: docCost ? parseFloat(docCost) : 0,",
+              "        notes: docNotes || undefined,",
+              "        generatePayable: docGeneratePayable,",
+              "      });",
+          ])
+          assert text.count(old) == 1, f'create document block count={text.count(old)}'
+          text = text.replace(old, new)
+
+          # Restrict hard-coded legacy identity to Insurance/Tracker only.
+          for old_value, new_value in [
+              ('        companyId,\n        vehicleId: insVehicleId,', '        companyId: legacyCompanyId,\n        vehicleId: insVehicleId,'),
+              ('        userId,\n        userName,\n      });\n      setIsInsModalOpen', '        userId: legacyUserId,\n        userName: legacyUserName,\n      });\n      setIsInsModalOpen'),
+              ('        companyId,\n        vehicleId: trkVehicleId,', '        companyId: legacyCompanyId,\n        vehicleId: trkVehicleId,'),
+              ('        userId,\n        userName,\n      });\n      setIsTrackerModalOpen', '        userId: legacyUserId,\n        userName: legacyUserName,\n      });\n      setIsTrackerModalOpen'),
+          ]:
+              assert text.count(old_value) == 1, f'legacy replacement count={text.count(old_value)} for {old_value[:20]}'
+              text = text.replace(old_value, new_value)
+
+          old = "    setDocNotes('');"
+          new = old + "\n    setDocReferenceYear(String(new Date().getFullYear()));\n    setDocAttachmentId('');"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          text = text.replace('d.status === DocumentStatus.VALID', 'd.complianceStatus === DocumentStatus.VALID')
+          text = text.replace('d.status === DocumentStatus.EXPIRING_SOON', 'd.complianceStatus === DocumentStatus.EXPIRING_SOON')
+          text = text.replace('d.status === DocumentStatus.EXPIRED', 'd.complianceStatus === DocumentStatus.EXPIRED')
+          assert 'documents.filter((d) => d.status' not in text
+
+          old = '{getVehiclePlate(doc.vehicleId)}'
+          new = '{getVehiclePlate(doc.subjectId)}'
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "{new Date(doc.expirationDate).toLocaleDateString('pt-BR')}"
+          new = "{doc.expirationDate ? new Date(`${doc.expirationDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          text = text.replace('doc.status === DocumentStatus.VALID', 'doc.complianceStatus === DocumentStatus.VALID')
+          text = text.replace('doc.status === DocumentStatus.EXPIRING_SOON', 'doc.complianceStatus === DocumentStatus.EXPIRING_SOON')
+          text = text.replace('{doc.status === DocumentStatus.VALID', '{doc.complianceStatus === DocumentStatus.VALID')
+          text = text.replace(': doc.status === DocumentStatus.EXPIRING_SOON', ': doc.complianceStatus === DocumentStatus.EXPIRING_SOON')
+          assert 'doc.status' not in text
+
+          old = '\n'.join([
+              "                            onClick={async () => {",
+              "                              if (confirm('Deseja excluir este documento?')) {",
+              "                                await FleetComplianceService.deleteDocument(doc.id, userId, userName);",
+              "                                await loadData();",
+              "                              }",
+              "                            }}",
+          ])
+          new = '\n'.join([
+              "                            onClick={async () => {",
+              "                              if (confirm('Deseja arquivar este documento? O histórico será preservado.')) {",
+              "                                await DocumentClient.archive(doc.id);",
+              "                                await loadData();",
+              "                              }",
+              "                            }}",
+          ])
+          assert text.count(old) == 1, f'archive block count={text.count(old)}'
+          text = text.replace(old, new)
+          text = text.replace('title="Excluir"', 'title="Arquivar"', 1)
+
+          old = "                <option value=\"IPVA\">IPVA</option>"
+          new = old + "\n                <option value=\"LICENCIAMENTO\">Licenciamento</option>"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          old = "              onChange={(e) => setDocVehicleId(e.target.value)}"
+          new = "              onChange={(e) => { setDocVehicleId(e.target.value); setDocAttachmentId(''); }}"
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          # Add reference-year input and server FileUpload before the payable checkbox.
+          marker = "          <div className=\"flex items-center gap-2 pt-1\">\n            <input\n              type=\"checkbox\"\n              id=\"genPayableDoc\""
+          assert text.count(marker) == 1, f'document payable marker count={text.count(marker)}'
+          insertion = '\n'.join([
+              "          <div className=\"grid grid-cols-2 gap-3\">",
+              "            <div>",
+              "              <label className=\"block text-slate-700 dark:text-slate-300 font-medium mb-1\">Ano de Referência</label>",
+              "              <Input type=\"number\" min=\"1900\" max=\"2200\" value={docReferenceYear} onChange={(e) => setDocReferenceYear(e.target.value)} />",
+              "            </div>",
+              "            <div className=\"flex items-end text-[11px] text-slate-500\">Obrigatório para CRLV, IPVA e Licenciamento.</div>",
+              "          </div>",
+              "",
+              "          {docVehicleId ? (",
+              "            <div className=\"space-y-2\">",
+              "              <FileUpload entityType=\"Vehicle\" entityId={docVehicleId} documentType={docType} onUploadComplete={(attachment) => setDocAttachmentId(attachment.id)} />",
+              "              {docAttachmentId && <p className=\"text-xs text-emerald-600\">Arquivo enviado e vinculado ao servidor.</p>}",
+              "            </div>",
+              "          ) : <p className=\"text-xs text-slate-500\">Selecione o veículo antes de enviar o arquivo.</p>}",
+              "",
+          ])
+          text = text.replace(marker, insertion + marker)
+
+          # Show version and alert stage next to document type.
+          old = '<td className="p-3 font-semibold">{doc.documentType}</td>'
+          new = '<td className="p-3 font-semibold">{doc.documentType}<span className="block text-[10px] text-slate-400">v{doc.versionNumber} • {doc.alertStage}</span></td>'
+          assert text.count(old) == 1
+          text = text.replace(old, new)
+
+          p.write_text(text)
+          PY
+      - name: Static authority gate
+        run: |
+          test "$(git diff --name-only)" = "src/components/fleet/FleetComplianceManagement.tsx"
+          grep -F "DocumentClient.list({ subjectType: 'VEHICLE' })" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F "VehicleClient.list()" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F "DocumentClient.create" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F "DocumentClient.archive" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          grep -F "<FileUpload entityType=\"Vehicle\"" src/components/fleet/FleetComplianceManagement.tsx >/dev/null
+          if grep -E 'VehicleDocumentRepository|VehicleRepository' src/components/fleet/FleetComplianceManagement.tsx; then exit 1; fi
+          if grep -E 'FleetComplianceService\.(createDocument|deleteDocument|updateDocument)' src/components/fleet/FleetComplianceManagement.tsx; then exit 1; fi
+          if grep -E '\bcompanyId\b|\buserId\b|\buserName\b' src/components/fleet/FleetComplianceManagement.tsx | grep -v -E 'legacyCompanyId|legacyUserId|legacyUserName'; then
+            echo 'Unscoped legacy authority identifier remains in FleetCompliance'
+            exit 1
+          fi
+          git diff --check
+      - name: Install
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: TypeScript
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Document regressions
+        run: |
+          npx tsx src/api/__tests__/documentClientTestRunner.ts
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+      - name: Publish after green
+        run: |
+          git config user.name 'autoerp-security-controller'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/fleet/FleetComplianceManagement.tsx
+          git commit -m 'feat(fleet): switch vehicle document UI to server authority'
+          git push origin HEAD:security-2i4b-document-semantics
