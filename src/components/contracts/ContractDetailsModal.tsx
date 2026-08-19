@@ -9,6 +9,7 @@ import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { ContractLegacyDetailsBridge } from './ContractLegacyDetailsBridge';
 import { AttachmentList } from '../documents/AttachmentList';
 import { FileUpload } from '../documents/FileUpload';
+import { ContractExecutionPanel } from './ContractExecutionPanel';
 import type { AccountReceivable, AuditLog, Contract, Driver, SecurityDeposit, TrafficTicket, Vehicle } from '../../types/entities';
 import { ContractStatus, ObligationStatus } from '../../types/enums';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -128,7 +129,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       </div>
 
       {contract && <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-        {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="primary" isLoading={actionLoading} onClick={() => void activate()}>Ativar</Button>}
+        {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} onClick={() => void activate()}>Ativar legado</Button>}
         {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={bill}>Faturar competência</Button>}
         {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
         {contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.ARCHIVED && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
@@ -151,6 +152,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       <div className="max-h-[65vh] overflow-y-auto p-5">
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
+            <ContractExecutionPanel contract={contract} onChanged={async () => { await load(); onRefresh(); }} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado" value={formatCurrencyBRL(totalBilled)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
             <div className="grid gap-4 md:grid-cols-2">
               <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>

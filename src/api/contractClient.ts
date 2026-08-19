@@ -37,6 +37,7 @@ function validateContract(value: unknown): Contract {
     typeof item.securityDepositAmount !== 'number' || !Number.isFinite(item.securityDepositAmount) ||
     typeof item.franchiseKm !== 'number' || !Number.isFinite(item.franchiseKm) ||
     typeof item.excessKmRate !== 'number' || !Number.isFinite(item.excessKmRate) ||
+    typeof item.signatureRequired !== 'boolean' ||
     typeof item.isArchived !== 'boolean' ||
     typeof item.createdAt !== 'string' ||
     typeof item.updatedAt !== 'string'

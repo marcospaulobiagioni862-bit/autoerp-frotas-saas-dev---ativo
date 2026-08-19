@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Plus, Search, TrendingUp, User } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
 import { Badge, Button, Card, Input, PageHeader } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
@@ -9,6 +9,7 @@ import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/e
 import { ContractStatus } from '../../types/enums';
 import { ContractFormModal } from './ContractFormModal';
 import { ContractDetailsModal } from './ContractDetailsModal';
+import { ContractTemplateManagementModal } from './ContractTemplateManagementModal';
 
 interface ContractsManagementProps {
   companyId: string;
@@ -27,6 +28,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [contractToEdit, setContractToEdit] = useState<Contract | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
@@ -72,6 +74,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     setContractToEdit(null);
     setFormOpen(false);
     setDetailsOpen(false);
+    setTemplateManagerOpen(false);
     void loadData();
     return () => { requestVersionRef.current += 1; };
   }, [companyId]);
@@ -142,6 +145,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
           icon: <Plus className="w-4 h-4" />,
         }}
       />
+      <div className="flex justify-end"><Button variant="secondary" onClick={() => setTemplateManagerOpen(true)}><Settings2 className="w-4 h-4" />Modelos de Contrato</Button></div>
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
@@ -203,8 +207,9 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5 flex-wrap">
                           <Button size="sm" variant="ghost" onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}><Eye className="w-4 h-4" /></Button>
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && <Button size="sm" variant="primary" isLoading={busy} onClick={() => void handleActivate(item.id)}>Ativar</Button>}
+                          {item.status === ContractStatus.DRAFT && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" isLoading={busy} onClick={() => void handleActivate(item.id)}>Ativar legado</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}>PDF / Assinatura</Button>}
                           {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleBill(item.id)}>Faturar</Button>}
                           {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
                           {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
@@ -226,6 +231,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         companyId={companyId}
         onSuccess={() => void loadData()}
       />
+      <ContractTemplateManagementModal isOpen={templateManagerOpen} onClose={() => setTemplateManagerOpen(false)} />
       <ContractDetailsModal
         isOpen={detailsOpen}
         onClose={() => setDetailsOpen(false)}

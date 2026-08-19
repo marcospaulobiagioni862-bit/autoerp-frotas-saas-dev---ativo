@@ -4,7 +4,8 @@ import { Button, Input, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
-import type { Contract, Driver, Vehicle } from '../../types/entities';
+import { ContractTemplateClient } from '../../api/contractTemplateClient';
+import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
 interface ContractFormModalProps {
@@ -18,6 +19,7 @@ interface ContractFormModalProps {
 export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '700',
     billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
-    securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', notes: '',
+    securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', templateId: '', notes: '',
   });
 
   const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
@@ -35,13 +37,14 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     let active = true;
     setError(null);
     setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list()])
-      .then(([vehicleList, driverList]) => {
+    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.list()])
+      .then(([vehicleList, driverList, templateList]) => {
         if (!active) return;
         const validVehicles = vehicleList.filter((item) => !item.isArchived && (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId));
         const validDrivers = driverList.filter((item) => !item.isArchived && (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId));
         setVehicles(validVehicles);
         setDrivers(validDrivers);
+        setTemplates(templateList);
         if (contractToEdit) {
           setForm({
             contractNumber: contractToEdit.contractNumber,
@@ -57,6 +60,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             franchiseKm: String(contractToEdit.franchiseKm),
             excessKmRate: String(contractToEdit.excessKmRate),
             paymentMethodId: contractToEdit.paymentMethodId || '',
+            templateId: contractToEdit.templateId || '',
             notes: contractToEdit.notes || '',
           });
         } else {
@@ -64,7 +68,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             contractNumber: '', vehicleId: validVehicles[0]?.id || '', driverId: validDrivers[0]?.id || '',
             startDate: new Date().toISOString().slice(0, 10), endDate: '', rentalAmount: '700',
             billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
-            securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', notes: '',
+            securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', templateId: templateList[0]?.id || '', notes: '',
           });
         }
         setActivateAfterSave(false);
@@ -101,6 +105,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         franchiseKm: Number(form.franchiseKm || 0),
         excessKmRate: Number(form.excessKmRate || 0),
         paymentMethodId: form.paymentMethodId || undefined,
+        templateId: form.templateId || undefined,
         notes: form.notes || undefined,
       };
       const saved = contractToEdit ? await ContractClient.update(contractToEdit.id, input) : await ContractClient.create(input);
@@ -114,7 +119,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     }
   };
 
-  const canActivate = !contractToEdit || [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contractToEdit.status);
+  const canActivate = Boolean(contractToEdit?.signatureRequired === false && [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contractToEdit.status));
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
@@ -126,6 +131,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
+          <Field label="Modelo de contrato"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}</select></Field>
           <Field label="Data inicial"><Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
           <Field label="Veículo"><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
           <Field label="Motorista"><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
