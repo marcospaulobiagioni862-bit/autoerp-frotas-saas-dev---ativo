@@ -11,6 +11,7 @@ import {
   normalizeDocumentType,
   parseIsoDate,
   parseReferenceYear,
+  DocumentPolicyValidationError,
 } from '../domain/documents/documentPolicy';
 
 type DocumentAction = 'VIEW_DOCUMENT' | 'CREATE_DOCUMENT' | 'VERSION_DOCUMENT' | 'ARCHIVE_DOCUMENT' | 'RESTORE_DOCUMENT';
@@ -88,7 +89,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function sendError(res: Response, error: unknown): void {
-  if (error instanceof DocumentValidationError) {
+  if (error instanceof DocumentValidationError || error instanceof DocumentPolicyValidationError) {
     res.status(400).json({ error: 'Invalid document request' });
     return;
   }

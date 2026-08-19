@@ -52,11 +52,11 @@ export class DocumentAuthorityIntegrationRunner {
     `);
     await db.execute(sql`
       INSERT INTO drivers (
-        id, company_id, name, cpf, cnh, cnh_category, cnh_expiration, cnh_status,
+        id, company_id, name, cpf, cnh, cnh_category, cnh_expiration,
         active, status, app_platforms, is_archived, created_at, updated_at
       ) VALUES
-        ('i4b-drv-a1', ${companyA}, 'Driver I4B A1', '52998224725', '12345678900', 'AB', '2027-12-31', 'VALID', true, 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW()),
-        ('i4b-drv-b1', ${companyB}, 'Driver I4B B1', '11144477735', '02650306461', 'B', '2027-12-31', 'VALID', true, 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW())
+        ('i4b-drv-a1', ${companyA}, 'Driver I4B A1', '52998224725', '12345678900', 'AB', '2027-12-31', true, 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW()),
+        ('i4b-drv-b1', ${companyB}, 'Driver I4B B1', '11144477735', '02650306461', 'B', '2027-12-31', true, 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
@@ -214,7 +214,7 @@ export class DocumentAuthorityIntegrationRunner {
       const payableDoc = (await json(response)).item;
       assert(typeof payableDoc.payableId === 'string' && payableDoc.payableId.length > 0, 'document payable linkage missing');
       const payableCount = Number((await scalar(sql`
-        SELECT count(*)::int AS count FROM accounts_payable
+        SELECT count(*)::int AS count FROM account_payables
         WHERE company_id=${companyA} AND origin_type='DOCUMENTATION' AND origin_id=${payableDoc.id}
       `))?.count || 0);
       assert(payableCount === 1, `document payable expected exactly 1, got ${payableCount}`);
