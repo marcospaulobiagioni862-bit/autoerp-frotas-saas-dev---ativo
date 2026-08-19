@@ -85,6 +85,13 @@
       "when": 1787143800000,
       "tag": "0011_contract_core_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787148600000,
+      "tag": "0012_attachment_authority",
+      "breakpoints": true
     }
   ]
 }

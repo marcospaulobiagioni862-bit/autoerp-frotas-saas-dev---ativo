@@ -405,13 +405,29 @@ export const fileAttachments = pgTable('file_attachments', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
   entityType: text('entity_type').notNull(),
+  entityName: text('entity_name').notNull(),
   entityId: text('entity_id').notNull(),
+  documentType: text('document_type'),
   fileName: text('file_name').notNull(),
   mimeType: text('mime_type').notNull(),
   url: text('url').notNull(),
   size: integer('size'),
+  fileSize: integer('file_size').notNull().default(0),
+  storageProvider: text('storage_provider').notNull().default('LEGACY_BROWSER'),
+  storageKey: text('storage_key'),
+  checksum: text('checksum'),
+  description: text('description'),
+  issueDate: text('issue_date'),
+  expirationDate: text('expiration_date'),
+  createdBy: text('created_by'),
+  isArchived: boolean('is_archived').notNull().default(false),
+  contentState: text('content_state').notNull().default('LEGACY_BROWSER'),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
-});
+}, (t) => ({
+  idxCompanyEntity: index('idx_att_company_entity').on(t.companyId, t.entityType, t.entityId, t.isArchived),
+  idxCompanyDocument: index('idx_att_company_document').on(t.companyId, t.documentType, t.isArchived),
+  idxCompanyCreated: index('idx_att_company_created').on(t.companyId, t.createdAt),
+}));
 
 export const communicationLogs = pgTable('communication_logs', {
   id: text('id').primaryKey(),
