@@ -1,0 +1,257 @@
+name: SECURITY-2I5A foundation gate
+
+on:
+  pull_request:
+    branches:
+      - ci-implement-security-2i5a-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_i5a
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d autoerp_i5a"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/autoerp_i5a
+      NODE_ENV: test
+      AUTOERP_SCHEDULER_ENABLED: 'false'
+      PRODUCT_SHA: 341f505f793e37057050d189848f6840dac68430
+      PRODUCT_BRANCH: security-2i5a-alert-scheduler-authority
+    steps:
+      - name: Checkout exact I5A product head
+        uses: actions/checkout@v4
+        with:
+          ref: 341f505f793e37057050d189848f6840dac68430
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Exact candidate identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Wire notification authority into canonical source
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          # 1) Entity exports
+          path = Path('src/types/entities/index.ts')
+          text = path.read_text()
+          needle = "export * from './audit';"
+          assert text.count(needle) == 1
+          text = text.replace(needle, needle + "\nexport * from './notifications';")
+          path.write_text(text)
+
+          # 2) Transaction context types/interfaces/getter
+          path = Path('src/domain/finance/ITransactionContext.ts')
+          text = path.read_text()
+          import_needle = "  ContractArtifactType,\n} from '../../types/entities';"
+          assert text.count(import_needle) == 1
+          text = text.replace(import_needle, "  ContractArtifactType,\n  PersistentNotification,\n  NotificationStatus,\n} from '../../types/entities';")
+
+          interface_anchor = "export interface ITransactionContext {"
+          assert text.count(interface_anchor) == 1
+          notification_interfaces = '''export interface TransactionNotificationFilters {\n  status?: NotificationStatus;\n  limit?: number;\n  includeArchived?: boolean;\n  recipientUserId?: string;\n}\n\nexport interface ITransactionNotificationRepository {\n  findByIdForCompany(companyId: string, id: string): Promise<PersistentNotification | null>;\n  findByIdempotencyKey(companyId: string, key: string): Promise<PersistentNotification | null>;\n  findAllByCompany(companyId: string, filters?: TransactionNotificationFilters): Promise<PersistentNotification[]>;\n  countUnread(companyId: string, recipientUserId?: string): Promise<number>;\n  create(item: PersistentNotification): Promise<PersistentNotification>;\n  updateStatusForCompany(\n    companyId: string,\n    id: string,\n    status: NotificationStatus,\n    now: string\n  ): Promise<PersistentNotification | null>;\n  markAllRead(companyId: string, recipientUserId: string | undefined, now: string): Promise<number>;\n}\n\n'''
+          text = text.replace(interface_anchor, notification_interfaces + interface_anchor)
+          getter_needle = "  getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;\n}"
+          assert text.count(getter_needle) == 1
+          text = text.replace(getter_needle, "  getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;\n  getNotificationRepo(): ITransactionNotificationRepository;\n}")
+          path.write_text(text)
+
+          # 3) UnitOfWork wiring
+          path = Path('src/db/uow.ts')
+          text = path.read_text()
+          import_anchor = "import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';"
+          assert text.count(import_anchor) == 1
+          text = text.replace(import_anchor, import_anchor + "\nimport { PostgresNotificationRepository } from './repositories/postgresNotificationRepository';")
+          getter_anchor = "        getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),"
+          assert text.count(getter_anchor) == 1
+          text = text.replace(getter_anchor, getter_anchor + "\n        getNotificationRepo: () => new PostgresNotificationRepository(tx),")
+          path.write_text(text)
+
+          # 4) Canonical Drizzle schema
+          path = Path('src/db/schema.ts')
+          text = path.read_text()
+          schema_anchor = "export const communicationLogs = pgTable('communication_logs', {"
+          assert text.count(schema_anchor) == 1
+          schema_block = '''export const notifications = pgTable('notifications', {\n  id: text('id').primaryKey(),\n  companyId: text('company_id').notNull(),\n  recipientUserId: text('recipient_user_id'),\n  sourceType: text('source_type').notNull(),\n  sourceId: text('source_id').notNull(),\n  sourceVersion: text('source_version'),\n  alertStage: text('alert_stage').notNull(),\n  title: text('title').notNull(),\n  message: text('message').notNull(),\n  severity: text('severity').notNull(),\n  dueDate: text('due_date'),\n  destinationTab: text('destination_tab'),\n  idempotencyKey: text('idempotency_key').notNull(),\n  status: text('status').notNull().default('UNREAD'),\n  readAt: timestamp('read_at', { mode: 'string' }),\n  dismissedAt: timestamp('dismissed_at', { mode: 'string' }),\n  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),\n  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),\n}, (t) => ({\n  unqIdempotency: unique('notifications_idempotency_unique').on(t.companyId, t.idempotencyKey),\n  idxCompanyStatusCreated: index('idx_notifications_company_status_created').on(t.companyId, t.status, t.createdAt),\n  idxCompanySource: index('idx_notifications_company_source').on(t.companyId, t.sourceType, t.sourceId),\n  idxCompanyDue: index('idx_notifications_company_due').on(t.companyId, t.dueDate),\n  idxCompanyRecipient: index('idx_notifications_company_recipient').on(t.companyId, t.recipientUserId, t.status, t.createdAt),\n}));\n\nexport const schedulerRuns = pgTable('scheduler_runs', {\n  id: text('id').primaryKey(),\n  jobKey: text('job_key').notNull(),\n  executionBucket: text('execution_bucket').notNull(),\n  startedAt: timestamp('started_at', { mode: 'string' }).notNull(),\n  finishedAt: timestamp('finished_at', { mode: 'string' }),\n  status: text('status').notNull(),\n  instanceId: text('instance_id').notNull(),\n  errorMessage: text('error_message'),\n  metricsJson: text('metrics_json'),\n  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),\n}, (t) => ({\n  unqJobBucket: unique('scheduler_runs_job_bucket_unique').on(t.jobKey, t.executionBucket),\n  idxJobStarted: index('idx_scheduler_runs_job_started').on(t.jobKey, t.startedAt),\n  idxStatusStarted: index('idx_scheduler_runs_status_started').on(t.status, t.startedAt),\n}));\n\n'''
+          text = text.replace(schema_anchor, schema_block + schema_anchor)
+          path.write_text(text)
+
+          # 5) Drizzle journal
+          path = Path('drizzle/meta/_journal.json')
+          journal = json.loads(path.read_text())
+          assert journal['entries'][-1]['idx'] == 14
+          assert journal['entries'][-1]['tag'] == '0014_contract_execution_authority'
+          journal['entries'].append({
+              'idx': 15,
+              'version': '7',
+              'when': 1787188800000,
+              'tag': '0015_scheduler_notifications',
+              'breakpoints': True,
+          })
+          path.write_text(json.dumps(journal, indent=2) + '\n')
+          PY
+
+          changed="$(git diff --name-only | sort)"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            drizzle/meta/_journal.json \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/types/entities/index.ts | sort)"
+          test "$changed" = "$expected"
+          git diff --check
+
+      - name: Install, TypeScript and build
+        run: |
+          set -euo pipefail
+          npm install --no-package-lock --no-audit --no-fund
+          npm run lint
+          npm run build
+
+      - name: Apply migrations 0000 through 0015
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for file in $(find drizzle -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $file"
+            psql -h localhost -U postgres -d autoerp_i5a -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+
+      - name: Assert notification schema and RLS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_i5a -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE enabled boolean; forced boolean; pcount int;
+          BEGIN
+            SELECT relrowsecurity, relforcerowsecurity INTO enabled, forced
+            FROM pg_class WHERE oid = 'notifications'::regclass;
+            IF NOT enabled OR NOT forced THEN
+              RAISE EXCEPTION 'notifications RLS/FORCE missing';
+            END IF;
+            SELECT count(*) INTO pcount FROM pg_policies
+            WHERE tablename='notifications'
+              AND policyname='tenant_access_notifications'
+              AND permissive='PERMISSIVE'
+              AND qual LIKE '%app.current_tenant%'
+              AND with_check LIKE '%app.current_tenant%';
+            IF pcount <> 1 THEN RAISE EXCEPTION 'permissive notification tenant policy missing'; END IF;
+          END $$;
+
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='i5a_app') THEN
+              CREATE ROLE i5a_app LOGIN PASSWORD 'i5a_test';
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO i5a_app;
+          GRANT SELECT, INSERT, UPDATE ON notifications TO i5a_app;
+
+          INSERT INTO notifications (
+            id,company_id,source_type,source_id,alert_stage,title,message,severity,idempotency_key,status
+          ) VALUES
+            ('rls-a','rls-company-a','DOCUMENT','doc-a','D7','A','A','WARNING','RLS:A','UNREAD'),
+            ('rls-b','rls-company-b','DOCUMENT','doc-b','D7','B','B','WARNING','RLS:B','UNREAD');
+
+          SET ROLE i5a_app;
+          SELECT set_config('app.current_tenant','rls-company-a',false);
+          DO $$
+          DECLARE c int;
+          BEGIN
+            SELECT count(*) INTO c FROM notifications;
+            IF c <> 1 THEN RAISE EXCEPTION 'non-superuser RLS isolation failed: %', c; END IF;
+          END $$;
+          INSERT INTO notifications (
+            id,company_id,source_type,source_id,alert_stage,title,message,severity,idempotency_key,status
+          ) VALUES ('rls-a-write','rls-company-a','DOCUMENT','doc-aw','D30','AW','AW','WARNING','RLS:AW','UNREAD');
+          DO $$
+          BEGIN
+            BEGIN
+              INSERT INTO notifications (
+                id,company_id,source_type,source_id,alert_stage,title,message,severity,idempotency_key,status
+              ) VALUES ('rls-b-denied','rls-company-b','DOCUMENT','doc-bd','D30','BD','BD','WARNING','RLS:BD','UNREAD');
+              RAISE EXCEPTION 'cross-tenant insert unexpectedly succeeded';
+            EXCEPTION WHEN insufficient_privilege THEN
+              NULL;
+            END;
+          END $$;
+          RESET ROLE;
+          SQL
+
+      - name: Notification UnitOfWork integration
+        run: |
+          set -euo pipefail
+          npx tsx -e "import { NotificationFoundationIntegrationRunner } from './src/server/__tests__/notificationFoundationIntegration.ts'; await NotificationFoundationIntegrationRunner.runAllTests();"
+
+      - name: Scheduler global uniqueness smoke
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          psql -h localhost -U postgres -d autoerp_i5a -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO scheduler_runs (id,job_key,execution_bucket,started_at,status,instance_id)
+          VALUES ('run-a','ALERT_MATERIALIZATION','2026-08-19T21:00Z',NOW(),'RUNNING','instance-a');
+          DO $$
+          BEGIN
+            BEGIN
+              INSERT INTO scheduler_runs (id,job_key,execution_bucket,started_at,status,instance_id)
+              VALUES ('run-b','ALERT_MATERIALIZATION','2026-08-19T21:00Z',NOW(),'RUNNING','instance-b');
+              RAISE EXCEPTION 'same scheduler bucket unexpectedly duplicated';
+            EXCEPTION WHEN unique_violation THEN
+              NULL;
+            END;
+          END $$;
+          SQL
+
+      - name: Final diff safety
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            drizzle/meta/_journal.json \
+            src/db/schema.ts \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/types/entities/index.ts | sort)"
+          test "$changed" = "$expected"
+
+      - name: Publish validated wiring to product branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add drizzle/meta/_journal.json src/db/schema.ts src/db/uow.ts src/domain/finance/ITransactionContext.ts src/types/entities/index.ts
+          git diff --cached --check
+          git commit -m 'feat(i5a): wire persistent notification authority'
+          git push origin HEAD:"$PRODUCT_BRANCH"
