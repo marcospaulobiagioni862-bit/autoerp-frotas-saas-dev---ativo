@@ -1,0 +1,4 @@
+Trigger SECURITY-2I4C UI switchover validation.
+Product candidate: ce8a597ffddc04570679b120a3376a9adedd9921
+CI base: bb304d843cf260e04d3ecd80e7d0d68214a54ad3
+Never merge this CI branch.
