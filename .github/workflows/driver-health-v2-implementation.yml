@@ -34,7 +34,9 @@ jobs:
       - name: Install
         run: npm install --no-package-lock --no-audit --no-fund
       - name: Apply exact H1-v2 patch
-        run: python .control/ci/apply_driver_health_v2.py
+        run: |
+          python .control/ci/apply_driver_health_v2.py
+          python .control/ci/fix_driver_health_v2_import.py
       - name: Scope gate
         shell: bash
         run: |
@@ -87,7 +89,7 @@ jobs:
         shell: bash
         run: |
           git diff --check
-          ! git diff -- server.ts src/domain/services/DriverService.ts | grep -E '^\+.*(ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true)' 
+          ! git diff -- server.ts src/domain/services/DriverService.ts | grep -E '^\+.*(ts-ignore|@ts-ignore|ALLOW_MOCK_AUTH.*true)'
       - name: Commit validated production candidate
         shell: bash
         run: |
