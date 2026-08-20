@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { alertStageForDays, daysUntilExpiration } from '../domain/documents/documentPolicy';
+import { materializeMaintenanceAlerts } from './maintenancePreventiveAlerts';
 
 const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','DUE_TODAY','POST_DUE']);
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
@@ -11,7 +12,7 @@ function message(company:string,policy:string,days:number):string{if(days<0)retu
 
 export async function materializeInsuranceAlerts(companyId:string,today:string):Promise<number>{
   const now=new Date(`${today}T00:00:00Z`);if(!Number.isFinite(now.getTime()))throw new Error('Invalid insurance alert date');
-  return await UnitOfWork.run(companyId,async txContext=>{
+  const insuranceInserted=await UnitOfWork.run(companyId,async txContext=>{
     const rawTx=txContext.getRawTransaction?.();if(!rawTx)throw new Error('Notification persistence unavailable');
     const insuranceResult=await rawTx.execute(sql`SELECT id,insurance_company,policy_number,end_date,status FROM insurances WHERE company_id=${companyId} AND status <> 'CANCELLED' ORDER BY end_date,id`);
     const userResult=await rawTx.execute(sql`SELECT id FROM users WHERE company_id=${companyId} AND active=true AND role IN ('ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY','FINANCIAL_MANAGER')`);
@@ -28,4 +29,7 @@ export async function materializeInsuranceAlerts(companyId:string,today:string):
     }
     return inserted;
   },{trustedSystemActor:'RECURRING'});
+  // SECURITY-2J2 extends the existing I5 compliance sweep; this preserves one scheduler/timer.
+  await materializeMaintenanceAlerts(companyId,today);
+  return insuranceInserted;
 }

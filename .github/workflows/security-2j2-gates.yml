@@ -1,0 +1,90 @@
+name: SECURITY-2J2 Gates
+
+on:
+  push:
+    branches:
+      - security-2j2-preventive-maintenance-authority
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: security-2j2-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-security-2j2-test
+      JWT_AUDIENCE: autoerp-security-2j2-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 169 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2J2 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Apply migrations 0000 through 0020
+        run: node migrate_test_db.cjs
+      - name: SECURITY-2J2 preventive maintenance integration
+        run: npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
+      - name: SECURITY-2J1 maintenance and KM regression
+        run: npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
+      - name: SECURITY-2I5 recurring regression
+        run: npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
+      - name: SECURITY-2M traffic ticket regression
+        run: npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
+      - name: SECURITY-2L insurance regression
+        run: npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
+      - name: SECURITY-2K tracker regression
+        run: npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+      - name: Driver authority regression
+        run: npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+      - name: Document authority regression
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Contract authority regression
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 169 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2J2 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 169 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2J2 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

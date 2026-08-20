@@ -21,6 +21,7 @@ import { PostgresContractArtifactRepository } from './repositories/postgresContr
 import { PostgresAttachmentRepository } from './repositories/postgresAttachmentRepository';
 import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
 import { PostgresPartRepository, PostgresSupplierRepository, PostgresWorkOrderRepository } from './repositories/postgresMaintenanceRepository';
+import { PostgresMaintenancePlanRepository, PostgresOilChangeRepository, PostgresTireRepository } from './repositories/postgresMaintenancePreventiveRepository';
 import { PostgresTrackerRepository } from './repositories/postgresTrackerRepository';
 import { PostgresInsuranceRepository } from './repositories/postgresInsuranceRepository';
 import { PostgresTrafficTicketRepository } from './repositories/postgresTrafficTicketRepository';
@@ -63,6 +64,9 @@ export class UnitOfWork {
         getWorkOrderRepo:()=>new PostgresWorkOrderRepository(tx),
         getSupplierRepo:()=>new PostgresSupplierRepository(tx),
         getPartRepo:()=>new PostgresPartRepository(tx),
+        getMaintenancePlanRepo:()=>new PostgresMaintenancePlanRepository(tx),
+        getOilChangeRepo:()=>new PostgresOilChangeRepository(tx),
+        getTireRepo:()=>new PostgresTireRepository(tx),
         getTrackerRepo:()=>new PostgresTrackerRepository(tx),
         getInsuranceRepo:()=>new PostgresInsuranceRepository(tx),
         getTrafficTicketRepo:()=>new PostgresTrafficTicketRepository(tx),
