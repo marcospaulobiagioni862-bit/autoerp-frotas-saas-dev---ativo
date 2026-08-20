@@ -124,7 +124,11 @@ async function testRls():Promise<void>{
     catch { rejected=true; }
     assert(rejected,'RLS allowed cross-tenant insert');
     await client.query('ROLLBACK');
-  } finally { await client.end(); await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`)); }
+  } finally {
+    await client.end();
+    await db.execute(sql.raw(`DROP OWNED BY ${roleName}`));
+    await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`));
+  }
 }
 
 async function main():Promise<void>{
