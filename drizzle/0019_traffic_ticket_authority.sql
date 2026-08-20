@@ -21,7 +21,9 @@ ALTER TABLE traffic_tickets
   ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
   ADD COLUMN IF NOT EXISTS cancel_reason text,
   ADD COLUMN IF NOT EXISTS responsibility_version integer NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS canonical_ready boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS canonical_ready boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 -- Deterministic legacy backfill only. Missing business facts remain fail-closed.
 UPDATE traffic_tickets
