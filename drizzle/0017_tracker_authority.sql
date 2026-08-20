@@ -56,3 +56,35 @@ CREATE POLICY tenant_isolation_trackers ON trackers
   FOR ALL
   USING (company_id = current_setting('app.current_tenant', true))
   WITH CHECK (company_id = current_setting('app.current_tenant', true));
+
+-- The original payable-installment invariant predates periodized expense recurrence.
+-- It made installment #1 for October collide with installment #1 for September when
+-- both belonged to the same TRACKER origin. Preserve the old invariant for ordinary
+-- non-periodized titles and let the existing unq_payable_recurring index own periodic
+-- uniqueness by (tenant, origin, period).
+DROP INDEX IF EXISTS unq_payable_installments;
+CREATE UNIQUE INDEX unq_payable_installments
+  ON account_payables(company_id, origin_type, origin_id, installment_number)
+  WHERE installment_number IS NOT NULL AND period_ref IS NULL;
+
+-- TRACKER is a monthly recurring expense in SECURITY-2K. Stamp the canonical period
+-- before PostgreSQL evaluates unique indexes, so the title is born periodized instead
+-- of being inserted as NULL and patched afterwards by the scheduler.
+CREATE OR REPLACE FUNCTION autoerp_set_tracker_payable_period_ref()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.origin_type = 'TRACKER' AND NEW.period_ref IS NULL THEN
+    NEW.period_ref := to_char(NEW.competence_date::date, 'YYYY-MM');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_tracker_payable_period_ref ON account_payables;
+CREATE TRIGGER trg_tracker_payable_period_ref
+BEFORE INSERT OR UPDATE OF competence_date, origin_type, period_ref
+ON account_payables
+FOR EACH ROW
+EXECUTE FUNCTION autoerp_set_tracker_payable_period_ref();
