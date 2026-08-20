@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
-import { NotificationClient, type NotificationItem } from '../../api/notificationClient';
+import { NotificationClient, type NotificationItem, type NotificationSeverity } from '../../api/notificationClient';
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
@@ -8,6 +8,30 @@ function formatTimestamp(value: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   }).format(date);
+}
+
+function severityLabel(severity: NotificationSeverity): string {
+  switch (severity) {
+    case 'DANGER': return 'Crítica';
+    case 'WARNING': return 'Atenção';
+    case 'SUCCESS': return 'Sucesso';
+    default: return 'Informação';
+  }
+}
+
+function severityClasses(severity: NotificationSeverity): string {
+  switch (severity) {
+    case 'DANGER': return 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300';
+    case 'WARNING': return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+    case 'SUCCESS': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
+    default: return 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+  }
+}
+
+function entityLabel(item: NotificationItem): string | undefined {
+  if (!item.entityType && !item.entityId) return undefined;
+  if (item.entityType && item.entityId) return `${item.entityType} · ${item.entityId}`;
+  return item.entityType || item.entityId;
 }
 
 export const NotificationBell: React.FC = () => {
@@ -137,23 +161,35 @@ export const NotificationBell: React.FC = () => {
                 Nenhuma notificação.
               </div>
             )}
-            {!loading && !error && items.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => { void markRead(item); }}
-                className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
-              >
-                <div className="flex gap-2 items-start">
-                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600'}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{item.title}</p>
-                    <p className="mt-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-300">{item.message}</p>
-                    <p className="mt-1 text-[10px] text-slate-400">{formatTimestamp(item.createdAt)}</p>
+            {!loading && !error && items.map((item) => {
+              const entity = entityLabel(item);
+              return (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => { void markRead(item); }}
+                  className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
+                >
+                  <div className="flex gap-2 items-start">
+                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">{item.title}</p>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${severityClasses(item.severity)}`}>
+                          {severityLabel(item.severity)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-300">{item.message}</p>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400 min-w-0">
+                        <span>{formatTimestamp(item.createdAt)}</span>
+                        {entity && <span className="truncate" title={entity}>{entity}</span>}
+                        <span>{item.readAt ? 'Lida' : 'Não lida'}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
