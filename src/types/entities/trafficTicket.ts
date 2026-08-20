@@ -1,13 +1,13 @@
 import { TicketResponsibility, TicketStatus } from '../enums';
 
 export interface TrafficTicket {
-  id: string; // UUID
+  id: string;
   companyId: string;
   vehicleId: string;
   driverId?: string;
   contractId?: string;
-  autoNumber: string; // Auto de infração
-  organName: string; // DETRAN, PRF, EPTC, etc.
+  autoNumber: string;
+  organName: string;
   infractionCode: string;
   description: string;
   infractionDate: string;
@@ -19,10 +19,14 @@ export interface TrafficTicket {
   points: number;
   responsibility: TicketResponsibility;
   status: TicketStatus;
-  receivableId?: string; // If charged to driver
-  payableId?: string; // If paid by company
-  nicPayableId?: string; // If NIC penalty generated for company
+  receivableId?: string;
+  payableId?: string;
+  nicPayableId?: string;
   notes?: string;
+  createdBy?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+  responsibilityVersion?: number;
   createdAt: string;
   updatedAt: string;
 }

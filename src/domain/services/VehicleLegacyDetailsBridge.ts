@@ -1,7 +1,6 @@
 import {
   DriverRepository,
   ContractRepository,
-  TrafficTicketRepository,
   VehicleDocumentRepository,
   AccountReceivableRepository,
   AccountPayableRepository,
@@ -9,6 +8,7 @@ import {
 import { MaintenanceClient } from '../../api/maintenanceClient';
 import { TrackerClient } from '../../api/trackerClient';
 import { InsuranceClient } from '../../api/insuranceClient';
+import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import type { Vehicle, KmRecord } from '../../types/entities';
 import { ObligationStatus } from '../../types/enums';
 
@@ -26,11 +26,10 @@ export interface VehicleDetailedSummary {
   financialSummary: { totalRevenue:number; totalExpenses:number; netProfit:number; profitMargin:number; };
 }
 
-/** Transitional details bridge. Vehicle/KM, maintenance, Tracker and Insurance are server-authoritative. */
+/** Transitional details bridge. Vehicle/KM, maintenance, Tracker, Insurance and TrafficTicket are server-authoritative. */
 export class VehicleLegacyDetailsBridge {
   private driverRepo=new DriverRepository();
   private contractRepo=new ContractRepository();
-  private ticketRepo=new TrafficTicketRepository();
   private documentRepo=new VehicleDocumentRepository();
   private receivableRepo=new AccountReceivableRepository();
   private payableRepo=new AccountPayableRepository();
@@ -40,7 +39,7 @@ export class VehicleLegacyDetailsBridge {
     const [driver,activeContract,allContracts,workOrders,trafficTickets,documents,insurances,trackers,receivables,payables]=await Promise.all([
       vehicle.currentDriverId?this.driverRepo.findById(vehicle.currentDriverId):Promise.resolve(null),
       vehicle.currentContractId?this.contractRepo.findById(vehicle.currentContractId):Promise.resolve(null),
-      this.contractRepo.findAll({vehicleId}),MaintenanceClient.listWorkOrders({vehicleId}),this.ticketRepo.findAll({vehicleId}),
+      this.contractRepo.findAll({vehicleId}),MaintenanceClient.listWorkOrders({vehicleId}),TrafficTicketClient.list({vehicleId}),
       this.documentRepo.findAll({vehicleId}),InsuranceClient.listByVehicle(vehicleId),TrackerClient.listByVehicle(vehicleId),
       this.receivableRepo.findAll({vehicleId}),this.payableRepo.findAll({vehicleId}),
     ]);

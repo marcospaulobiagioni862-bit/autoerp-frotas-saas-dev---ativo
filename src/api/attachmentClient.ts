@@ -52,7 +52,7 @@ async function apiError(response: Response): Promise<AttachmentApiError> {
 }
 
 export interface AttachmentUploadInput {
-  entityType: 'Vehicle' | 'Driver' | 'Contract' | 'HealthAndEmergency';
+  entityType: 'Vehicle' | 'Driver' | 'Contract' | 'HealthAndEmergency' | 'TrafficTicket';
   entityId: string;
   documentType?: string;
   fileName: string;
