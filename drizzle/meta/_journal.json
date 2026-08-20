@@ -20,6 +20,7 @@
     {"idx":15,"version":"7","when":1787180400000,"tag":"0015_recurring_scheduler_notifications","breakpoints":true},
     {"idx":16,"version":"7","when":1787206500000,"tag":"0016_maintenance_core_authority","breakpoints":true},
     {"idx":17,"version":"7","when":1787224800000,"tag":"0017_tracker_authority","breakpoints":true},
-    {"idx":18,"version":"7","when":1787232000000,"tag":"0018_insurance_authority","breakpoints":true}
+    {"idx":18,"version":"7","when":1787232000000,"tag":"0018_insurance_authority","breakpoints":true},
+    {"idx":19,"version":"7","when":1787257200000,"tag":"0019_traffic_ticket_authority","breakpoints":true}
   ]
 }
