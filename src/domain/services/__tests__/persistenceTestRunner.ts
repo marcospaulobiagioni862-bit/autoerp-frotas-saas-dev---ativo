@@ -210,7 +210,7 @@ export class PersistenceTestRunner {
         installmentsCount: 3,
         startDate: '2026-01-01',
         endDate: '2027-01-01',
-        status: DocumentStatus.VALID,
+        status: 'ACTIVE',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });

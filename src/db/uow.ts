@@ -22,6 +22,7 @@ import { PostgresAttachmentRepository } from './repositories/postgresAttachmentR
 import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
 import { PostgresPartRepository, PostgresSupplierRepository, PostgresWorkOrderRepository } from './repositories/postgresMaintenanceRepository';
 import { PostgresTrackerRepository } from './repositories/postgresTrackerRepository';
+import { PostgresInsuranceRepository } from './repositories/postgresInsuranceRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -38,8 +39,6 @@ export class UnitOfWork {
         if(options.financialPeriodLock==='SHARED')await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(abs(hashtext(${companyId})))`);
         else await tx.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${companyId})))`);
       }
-      // Authority waves may expose transaction-scoped repositories without widening
-      // the stable finance interface for every operational module.
       const txContext:any={
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
@@ -64,6 +63,7 @@ export class UnitOfWork {
         getSupplierRepo:()=>new PostgresSupplierRepository(tx),
         getPartRepo:()=>new PostgresPartRepository(tx),
         getTrackerRepo:()=>new PostgresTrackerRepository(tx),
+        getInsuranceRepo:()=>new PostgresInsuranceRepository(tx),
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };

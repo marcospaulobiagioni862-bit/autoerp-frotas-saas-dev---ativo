@@ -1,6 +1,5 @@
 import {
   VehicleDocumentRepository,
-  InsuranceRepository,
   FileAttachmentRepository,
 } from '../../persistence/repositories/localRepositories';
 import { VehicleDocument, Insurance, FileAttachment, Tracker } from '../../types/entities';
@@ -19,14 +18,9 @@ export interface CreateTrackerParams {
   companyId:string;vehicleId:string;equipmentModel:string;imei:string;chipCarrier:string;chipNumber:string;monthlyCost:number;installationDate:string;supplierId?:string;notes?:string;userId:string;userName:string;categoryId?:string;
 }
 
-/**
- * Transitional service retained only for Document/Insurance legacy callers.
- * SECURITY-2K removed every Tracker/RecurringRule browser-local pathway from this service.
- * Tracker commands must use TrackerClient -> authenticated server authority.
- */
+/** Transitional compatibility service. Migrated Insurance/Tracker commands fail closed. */
 export class FleetComplianceService {
   private static docRepo=new VehicleDocumentRepository();
-  private static insuranceRepo=new InsuranceRepository();
   private static attachmentRepo=new FileAttachmentRepository();
 
   static calculateDocumentStatus(expirationDate:string):DocumentStatus{
@@ -42,33 +36,16 @@ export class FleetComplianceService {
     if(params.generatePayable&&params.cost&&params.cost>0)await PayableService.create({companyId:params.companyId,originType:OriginType.DOCUMENTATION,originId:saved.id,vehicleId:params.vehicleId,categoryId:params.categoryId||'cat-doc-default',description:`Obrigação Documental: ${params.documentType} (${params.documentNumber||'N/A'})`,totalAmount:params.cost,dueDate:params.expirationDate,userId:params.userId,userName:params.userName});
     await AuditLogger.logAction(params.companyId,'VehicleDocument',saved.id,AuditAction.CREATE,params.userId,params.userName,null,saved);return saved;
   }
-
-  static async updateDocument(id:string,partialData:Partial<VehicleDocument>,userId:string,userName:string):Promise<VehicleDocument>{
-    const existing=await this.docRepo.findById(id);if(!existing)throw new Error(`Documento ${id} não encontrado`);if(partialData.expirationDate)partialData.status=this.calculateDocumentStatus(partialData.expirationDate);const updated=await this.docRepo.update(id,partialData);await AuditLogger.logAction(updated.companyId,'VehicleDocument',id,AuditAction.UPDATE,userId,userName,existing,updated);return updated;
-  }
+  static async updateDocument(id:string,partialData:Partial<VehicleDocument>,userId:string,userName:string):Promise<VehicleDocument>{const existing=await this.docRepo.findById(id);if(!existing)throw new Error(`Documento ${id} não encontrado`);if(partialData.expirationDate)partialData.status=this.calculateDocumentStatus(partialData.expirationDate);const updated=await this.docRepo.update(id,partialData);await AuditLogger.logAction(updated.companyId,'VehicleDocument',id,AuditAction.UPDATE,userId,userName,existing,updated);return updated;}
   static async deleteDocument(id:string,userId:string,userName:string):Promise<boolean>{const existing=await this.docRepo.findById(id);if(!existing)throw new Error(`Documento ${id} não encontrado`);await this.docRepo.delete(id);await AuditLogger.logAction(existing.companyId,'VehicleDocument',id,AuditAction.DELETE,userId,userName,existing,null);return true;}
 
-  static async createInsurance(params:CreateInsuranceParams):Promise<Insurance>{
-    if(!params.vehicleId)throw new Error('Veículo é obrigatório para apólice de seguro');if(!params.policyNumber)throw new Error('Número da apólice é obrigatório');const now=new Date().toISOString();
-    const insurance:Insurance={id:generateUUID(),companyId:params.companyId,vehicleId:params.vehicleId,insuranceCompany:params.insuranceCompany,policyNumber:params.policyNumber,coverageDetails:params.coverageDetails,deductibleAmount:params.deductibleAmount,totalPremiumAmount:params.totalPremiumAmount,installmentsCount:params.installmentsCount,startDate:params.startDate,endDate:params.endDate,status:this.calculateDocumentStatus(params.endDate),brokerName:params.brokerName,brokerPhone:params.brokerPhone,fileUrl:params.fileUrl,createdAt:now,updatedAt:now};
-    const saved=await this.insuranceRepo.create(insurance);
-    if(params.generatePayable&&params.totalPremiumAmount>0)await PayableService.create({companyId:params.companyId,originType:OriginType.INSURANCE,originId:saved.id,vehicleId:params.vehicleId,categoryId:params.categoryId||'cat-insurance-default',description:`Apólice de Seguro: ${params.insuranceCompany} (${params.policyNumber})`,totalAmount:params.totalPremiumAmount,dueDate:params.startDate,installmentsCount:params.installmentsCount||1,userId:params.userId,userName:params.userName});
-    await AuditLogger.logAction(params.companyId,'Insurance',saved.id,AuditAction.CREATE,params.userId,params.userName,null,saved);return saved;
+  static async createInsurance(_params:CreateInsuranceParams):Promise<Insurance>{
+    throw new Error('SECURITY-2L: criação de seguro é server-authoritative; use InsuranceClient.create');
   }
-  static async cancelInsurance(id:string,reason:string,userId:string,userName:string):Promise<Insurance>{const existing=await this.insuranceRepo.findById(id);if(!existing)throw new Error(`Seguro ${id} não encontrado`);const updated=await this.insuranceRepo.update(id,{status:DocumentStatus.EXPIRED,updatedAt:new Date().toISOString()});await AuditLogger.logAction(existing.companyId,'Insurance',id,AuditAction.CANCEL,userId,userName,existing,{...updated,cancelReason:reason});return updated;}
-
-  /**
-   * Compatibility-only signatures for legacy verification code.
-   * SECURITY-2K deliberately fails closed: Tracker writes are server-authoritative
-   * and must go through TrackerClient / authenticated HTTP routes.
-   */
-  static async createTracker(_params:CreateTrackerParams):Promise<Tracker>{
-    throw new Error('SECURITY-2K: criação de rastreador é server-authoritative; use TrackerClient.create');
+  static async cancelInsurance(_id:string,_reason:string,_userId:string,_userName:string):Promise<Insurance>{
+    throw new Error('SECURITY-2L: cancelamento de seguro é server-authoritative; use InsuranceClient.cancel');
   }
-  static async removeTracker(_id:string,_reason:string,_userId:string,_userName:string):Promise<Tracker>{
-    throw new Error('SECURITY-2K: remoção de rastreador é server-authoritative; use TrackerClient.remove');
-  }
-  static async updateTrackerCost(_id:string,_newMonthlyCost:number,_userId:string,_userName:string):Promise<Tracker>{
-    throw new Error('SECURITY-2K: alteração de mensalidade é server-authoritative; use TrackerClient.update');
-  }
+  static async createTracker(_params:CreateTrackerParams):Promise<Tracker>{throw new Error('SECURITY-2K: criação de rastreador é server-authoritative; use TrackerClient.create');}
+  static async removeTracker(_id:string,_reason:string,_userId:string,_userName:string):Promise<Tracker>{throw new Error('SECURITY-2K: remoção de rastreador é server-authoritative; use TrackerClient.remove');}
+  static async updateTrackerCost(_id:string,_newMonthlyCost:number,_userId:string,_userName:string):Promise<Tracker>{throw new Error('SECURITY-2K: alteração de mensalidade é server-authoritative; use TrackerClient.update');}
 }
