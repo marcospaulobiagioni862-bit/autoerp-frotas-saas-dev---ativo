@@ -1,7 +1,10 @@
 export interface Tracker {
-  id: string; // UUID
+  id: string;
   companyId: string;
   vehicleId: string;
+  /** Preserved legacy serial number when present. */
+  serialNumber?: string;
+  /** DB columns may be NULL on legacy rows; API normalizes them to empty values for safe display. */
   equipmentModel: string;
   imei: string;
   chipCarrier: string;
@@ -11,6 +14,8 @@ export interface Tracker {
   status: 'ACTIVE' | 'INACTIVE' | 'REMOVED';
   supplierId?: string;
   notes?: string;
+  lastPing?: string;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
