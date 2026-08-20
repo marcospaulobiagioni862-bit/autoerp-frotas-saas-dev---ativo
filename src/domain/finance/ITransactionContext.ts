@@ -58,6 +58,7 @@ export interface ITransactionKmRecordRepository {
 export interface ITransactionReceivableRepository {
   findById(id: string): Promise<AccountReceivable | null>;
   findByIdempotencyKey(key: string): Promise<AccountReceivable | null>;
+  findByContractId(contractId: string): Promise<AccountReceivable[]>;
   findAll(filters?: TransactionFilterOptions): Promise<AccountReceivable[]>;
   create(item: AccountReceivable): Promise<AccountReceivable>;
   update(id: string, item: Partial<AccountReceivable>): Promise<AccountReceivable>;
@@ -218,6 +219,8 @@ export interface ITransactionContractArtifactRepository {
   ): Promise<ContractArtifact | null>;
 }
 
+export type TrustedSystemActor = 'RECURRING';
+
 export interface ITransactionContext {
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
@@ -238,4 +241,8 @@ export interface ITransactionContext {
   getContractTemplateRepo(): ITransactionContractTemplateRepository;
   getContractArtifactRepo(): ITransactionContractArtifactRepository;
   getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
+  /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
+  getRawTransaction?(): any;
+  /** Capability is minted only by UnitOfWork options inside trusted server code. */
+  trustedSystemActor?: TrustedSystemActor;
 }

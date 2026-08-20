@@ -1,4 +1,4 @@
-import { ITransactionContext } from '../domain/finance/ITransactionContext';
+import { ITransactionContext, TrustedSystemActor } from '../domain/finance/ITransactionContext';
 import {
   PostgresAccountReceivableRepository,
   PostgresAccountPayableRepository,
@@ -23,11 +23,16 @@ import { PostgresDocumentRepository } from './repositories/postgresDocumentRepos
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
+export interface UnitOfWorkOptions {
+  financialPeriodLock?: 'SHARED' | 'EXCLUSIVE';
+  trustedSystemActor?: TrustedSystemActor;
+}
+
 export class UnitOfWork {
   static async run<T>(
     companyId: string,
     callback: (tx: any | ITransactionContext) => Promise<T>,
-    options?: { financialPeriodLock?: 'SHARED' | 'EXCLUSIVE' }
+    options?: UnitOfWorkOptions
   ): Promise<T> {
     return await db.transaction(async (tx) => {
       await tx.execute(
@@ -62,6 +67,8 @@ export class UnitOfWork {
         getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
         getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx),
         getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),
+        getRawTransaction: () => tx,
+        trustedSystemActor: options?.trustedSystemActor,
       };
 
       return await callback(txContext);

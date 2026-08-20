@@ -10,6 +10,7 @@ import { registerAttachmentRoutes } from './attachmentRoutes';
 import { registerDocumentRoutes } from './documentRoutes';
 import { registerContractTemplateRoutes } from './contractTemplateRoutes';
 import { registerContractExecutionRoutes } from './contractExecutionRoutes';
+import { registerRecurringRoutes } from './recurringRoutes';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
@@ -121,6 +122,7 @@ export function registerVehicleRoutes(app: Express): void {
   registerDocumentRoutes(app);
   registerContractTemplateRoutes(app);
   registerContractExecutionRoutes(app);
+  registerRecurringRoutes(app);
 
   // SECURITY-2I1A-v2 foundation only. Fleet UI/KM switchover remains I1B.
   app.get('/api/fleet/vehicles', async (req: Request, res: Response) => {

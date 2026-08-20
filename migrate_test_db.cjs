@@ -12,7 +12,9 @@ async function run() {
   await client.connect();
 
   const migrationsDir = path.join(__dirname, 'drizzle');
-  const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
+  const files = fs.readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
 
   for (const file of files) {
     console.log('Applying ' + file);
@@ -20,12 +22,17 @@ async function run() {
     await client.query(sql);
   }
 
-  // Also apply RLS
-  console.log('Applying rls.sql');
-  const rlsSql = fs.readFileSync(path.join(__dirname, 'rls.sql'), 'utf8');
-  await client.query(rlsSql);
+  // Historical repositories could have a standalone rls.sql. Current AutoERP
+  // manages RLS in numbered migrations, so keep this compatibility hook optional.
+  const legacyRlsPath = path.join(__dirname, 'rls.sql');
+  if (fs.existsSync(legacyRlsPath)) {
+    console.log('Applying legacy rls.sql');
+    await client.query(fs.readFileSync(legacyRlsPath, 'utf8'));
+  } else {
+    console.log('No legacy rls.sql found; RLS is managed by numbered migrations.');
+  }
 
   await client.end();
-  console.log('Migrations and RLS applied successfully.');
+  console.log('Migrations applied successfully.');
 }
 run().catch(e => { console.error(e); process.exit(1); });
