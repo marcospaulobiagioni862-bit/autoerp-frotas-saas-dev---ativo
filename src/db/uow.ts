@@ -20,6 +20,11 @@ import { PostgresContractTemplateRepository } from './repositories/postgresContr
 import { PostgresContractArtifactRepository } from './repositories/postgresContractArtifactRepository';
 import { PostgresAttachmentRepository } from './repositories/postgresAttachmentRepository';
 import { PostgresDocumentRepository } from './repositories/postgresDocumentRepository';
+import {
+  PostgresPartRepository,
+  PostgresSupplierRepository,
+  PostgresWorkOrderRepository,
+} from './repositories/postgresMaintenanceRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -47,7 +52,9 @@ export class UnitOfWork {
         }
       }
 
-      const txContext: ITransactionContext = {
+      // Authority modules may add transaction-scoped repositories beyond the
+      // stable finance interface without widening that interface for every wave.
+      const txContext: any = {
         getDriverRepo: () => new PostgresDriverRepository(tx),
         getVehicleRepo: () => new PostgresVehicleRepository(tx),
         getKmRecordRepo: () => new PostgresKmRecordRepository(tx),
@@ -67,6 +74,9 @@ export class UnitOfWork {
         getSecurityDepositRepo: () => new PostgresSecurityDepositRepository(tx),
         getSecurityDepositMovementRepo: () => new PostgresSecurityDepositMovementRepository(tx),
         getDriverHealthRepo: () => new PostgresDriverHealthProfileRepository(tx),
+        getWorkOrderRepo: () => new PostgresWorkOrderRepository(tx),
+        getSupplierRepo: () => new PostgresSupplierRepository(tx),
+        getPartRepo: () => new PostgresPartRepository(tx),
         getRawTransaction: () => tx,
         trustedSystemActor: options?.trustedSystemActor,
       };

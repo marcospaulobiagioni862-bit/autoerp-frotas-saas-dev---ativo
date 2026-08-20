@@ -1,809 +1,216 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  Wrench,
-  FileText,
-  Users,
-  Package,
-  Droplet,
-  Disc,
-  Plus,
-  Search,
-  CheckCircle2,
-  Clock,
-  AlertTriangle,
-  XCircle,
-  Play,
-  DollarSign,
-  Car,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FileText, FolderOpen, Package, Plus, Search, Users, Wrench } from 'lucide-react';
+import { MaintenanceClient } from '../../api/maintenanceClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { FinanceObligationClient } from '../../api/financeObligationClient';
+import type { AccountPayable, Part, Supplier, Vehicle, WorkOrder } from '../../types/entities';
 import { AttachmentModal } from '../documents/AttachmentModal';
-import { FolderOpen } from 'lucide-react';
-import { Card, Button, Badge, Input, PageHeader } from '../ui';
-import {
-  WorkOrderRepository,
-  SupplierRepository,
-  PartRepository,
-  VehicleRepository,
-  AccountPayableRepository,
-} from '../../persistence/repositories/localRepositories';
-import { WorkOrder, Supplier, Part, Vehicle, AccountPayable } from '../../types/entities';
-import { MaintenanceService } from '../../domain/services/MaintenanceService';
+import { Badge, Button, Card, Input, PageHeader } from '../ui';
+import { formatCurrencyBRL } from '../../shared/utils/currency';
 
 interface MaintenanceManagementProps {
-  companyId?: string;
+  companyId?: string; // compatibility only; tenant authority comes from the authenticated server session.
   onOpenPaymentModal?: (payable: AccountPayable) => void;
 }
 
-export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({
-  companyId,
-  onOpenPaymentModal,
-}) => {
-  const maintenanceRequestVersionRef = useRef(0);
+type Tab = 'workOrders' | 'suppliers' | 'parts' | 'oilTires';
 
-  const activeCompanyIdRef = useRef<string | undefined>(companyId);
-  activeCompanyIdRef.current = companyId;
+function statusBadge(status: WorkOrder['status']) {
+  if (status === 'COMPLETED') return <Badge variant="success">Concluída</Badge>;
+  if (status === 'CANCELLED') return <Badge variant="danger">Cancelada</Badge>;
+  if (status === 'IN_PROGRESS') return <Badge variant="warning">Em andamento</Badge>;
+  if (status === 'WAITING_PARTS') return <Badge variant="warning">Aguardando peças</Badge>;
+  if (status === 'WAITING_APPROVAL') return <Badge variant="warning">Aguardando aprovação</Badge>;
+  return <Badge variant="neutral">Aberta</Badge>;
+}
 
-  const clearMaintenanceTenantState = () => {
-    setWorkOrders([]);
-    setSuppliers([]);
-    setParts([]);
-    setVehicles([]);
-    setPayables([]);
-    setWoVehicleId('');
-    setWoSupplierId('');
-    setWoPartId('');
-    setCompleteWoTarget(null);
-    setExitKmInput('');
-  };
-  const [activeSubTab, setActiveSubTab] = useState<'workOrders' | 'suppliers' | 'parts' | 'oilTires'>('workOrders');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
-
-
+export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({ onOpenPaymentModal }) => {
+  const [tab, setTab] = useState<Tab>('workOrders');
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [payables, setPayables] = useState<AccountPayable[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const [attachmentEntity, setAttachmentEntity] = useState<WorkOrder | null>(null);
+  const [newWoOpen, setNewWoOpen] = useState(false);
+  const [newSupplierOpen, setNewSupplierOpen] = useState(false);
+  const [newPartOpen, setNewPartOpen] = useState(false);
+  const [completeTarget, setCompleteTarget] = useState<WorkOrder | null>(null);
 
-  // Modals state
-  const [isNewWoOpen, setIsNewWoOpen] = useState(false);
-  const [isNewSupplierOpen, setIsNewSupplierOpen] = useState(false);
-  const [isNewPartOpen, setIsNewPartOpen] = useState(false);
-  const [completeWoTarget, setCompleteWoTarget] = useState<WorkOrder | null>(null);
-  const [exitKmInput, setExitKmInput] = useState('');
-
-  // Form states for New WO
-  const [woNumber, setWoNumber] = useState(`OS-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
+  const [woNumber, setWoNumber] = useState('');
   const [woVehicleId, setWoVehicleId] = useState('');
   const [woSupplierId, setWoSupplierId] = useState('');
-  const [woEntryKm, setWoEntryKm] = useState('10000');
+  const [woEntryKm, setWoEntryKm] = useState('0');
   const [woDescription, setWoDescription] = useState('');
   const [woPartId, setWoPartId] = useState('');
   const [woPartQty, setWoPartQty] = useState('1');
   const [woLaborCost, setWoLaborCost] = useState('150');
-
-  // Supplier form
-  const [supName, setSupName] = useState('');
-  const [supDoc, setSupDoc] = useState('');
-  const [supPhone, setSupPhone] = useState('');
-  const [supCategory, setSupCategory] = useState('Oficina Mecânica');
-
-  // Part form
+  const [exitKm, setExitKm] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [installments, setInstallments] = useState('1');
+  const [categoryId, setCategoryId] = useState('cat-maint-exp');
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierDocument, setSupplierDocument] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierCategory, setSupplierCategory] = useState('Oficina Mecânica');
   const [partCode, setPartCode] = useState('');
   const [partName, setPartName] = useState('');
   const [partCost, setPartCost] = useState('');
-  const [partStock, setPartStock] = useState('10');
+  const [partStock, setPartStock] = useState('0');
 
-  useEffect(() => {
-    const requestVersion = ++maintenanceRequestVersionRef.current;
-    const companyIdSnapshot = companyId;
-
-    clearMaintenanceTenantState();
-
-    if (!companyIdSnapshot) {
-      setIsLoading(false);
-
-      return () => {
-        maintenanceRequestVersionRef.current += 1;
-      };
-    }
-
-    setIsLoading(true);
-
-    void loadData(companyIdSnapshot, requestVersion);
-
-    return () => {
-      maintenanceRequestVersionRef.current += 1;
-    };
-  }, [companyId]);
-
-  const loadData = async (
-    companyIdSnapshot: string,
-    requestVersion: number
-  ) => {
+  const load = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const woRepo = new WorkOrderRepository();
-      const supRepo = new SupplierRepository();
-      const partRepo = new PartRepository();
-      const vehRepo = new VehicleRepository();
-      const payRepo = new AccountPayableRepository();
-
-      const [woList, supList, partList, vehList, payList] =
-        await Promise.all([
-          woRepo.findAllForCompany(companyIdSnapshot),
-          supRepo.findAllForCompany(companyIdSnapshot),
-          partRepo.findAllForCompany(companyIdSnapshot),
-          vehRepo.findAllForCompany(companyIdSnapshot),
-          payRepo.findAllForCompany(companyIdSnapshot),
-        ]);
-
-      if (
-        requestVersion !== maintenanceRequestVersionRef.current ||
-        activeCompanyIdRef.current !== companyIdSnapshot
-      ) {
-        return;
+      const [wo, sup, prt, veh, pay] = await Promise.all([
+        MaintenanceClient.listWorkOrders(),
+        MaintenanceClient.listSuppliers(),
+        MaintenanceClient.listParts(),
+        VehicleClient.list(),
+        FinanceObligationClient.listPayables(),
+      ]);
+      setWorkOrders(wo);
+      setSuppliers(sup);
+      setParts(prt);
+      setVehicles(veh.filter((item) => !item.isArchived));
+      setPayables(pay);
+      if (!woVehicleId && veh[0]) {
+        setWoVehicleId(veh[0].id);
+        setWoEntryKm(String(veh[0].currentKm));
       }
-
-      setWorkOrders(woList);
-      setSuppliers(supList);
-      setParts(partList);
-      setVehicles(vehList);
-      setPayables(payList);
-
-      setWoVehicleId(vehList[0]?.id ?? '');
-      setWoSupplierId(supList[0]?.id ?? '');
-
-      if (vehList[0]) {
-        setWoEntryKm(
-          vehList[0].currentKm?.toString() || '10000'
-        );
-      }
+      if (!woSupplierId && sup[0]) setWoSupplierId(sup[0].id);
+      if (!woNumber) setWoNumber(`OS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`);
     } catch (err) {
-      if (
-        requestVersion === maintenanceRequestVersionRef.current &&
-        activeCompanyIdRef.current === companyIdSnapshot
-      ) {
-        console.error('Error loading maintenance data:', err);
-      }
-    } finally {
-      if (
-        requestVersion === maintenanceRequestVersionRef.current &&
-        activeCompanyIdRef.current === companyIdSnapshot
-      ) {
-        setIsLoading(false);
-      }
-    }
+      setError(err instanceof Error ? err.message : 'Falha ao carregar manutenção.');
+      setWorkOrders([]); setSuppliers([]); setParts([]); setVehicles([]); setPayables([]);
+    } finally { setLoading(false); }
   };
 
-  const reloadData = async () => {
-    const companyIdSnapshot = activeCompanyIdRef.current;
+  useEffect(() => { void load(); }, []);
 
-    if (!companyIdSnapshot) {
-      clearMaintenanceTenantState();
-      setIsLoading(false);
-      return;
-    }
-
-    const requestVersion =
-      ++maintenanceRequestVersionRef.current;
-
-    setIsLoading(true);
-
-    await loadData(companyIdSnapshot, requestVersion);
+  const vehicleLabel = (id: string) => {
+    const vehicle = vehicles.find((item) => item.id === id);
+    return vehicle ? `${vehicle.plate} — ${vehicle.brand} ${vehicle.model}` : id;
   };
-  const handleCreateWorkOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const selectedPart = parts.find((p) => p.id === woPartId);
-      const partsArr = selectedPart
-        ? [{ partId: selectedPart.id, description: selectedPart.name, quantity: Number(woPartQty) || 1, unitCost: selectedPart.currentCost }]
-        : [];
+  const supplierLabel = (id?: string) => suppliers.find((item) => item.id === id)?.name || 'Sem fornecedor';
+  const payableFor = (wo: WorkOrder) => {
+    if (wo.accountPayableId) return payables.find((item) => item.id === wo.accountPayableId);
+    return payables.find((item) => String(item.originType) === 'MAINTENANCE' && item.originId === wo.id);
+  };
 
-      await MaintenanceService.createWorkOrder({
-        companyId,
-        number: woNumber,
-        vehicleId: woVehicleId,
-        supplierId: woSupplierId || undefined,
-        entryKm: Number(woEntryKm) || 10000,
-        description: woDescription || 'Manutenção Corretiva/Preventiva',
-        parts: partsArr,
-        laborItems: [{ description: 'Mão de Obra Mecânica', hours: 1, hourlyRate: Number(woLaborCost) || 150 }],
-        userId: 'user-admin-1',
-        userName: 'Gestor da Frota',
+  const filteredOrders = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return workOrders;
+    return workOrders.filter((wo) =>
+      wo.number.toLowerCase().includes(term) || wo.description.toLowerCase().includes(term) ||
+      vehicleLabel(wo.vehicleId).toLowerCase().includes(term) || supplierLabel(wo.supplierId).toLowerCase().includes(term)
+    );
+  }, [workOrders, search, vehicles, suppliers]);
+
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true); setError(null);
+    try { await action(); await load(); }
+    catch (err) { setError(err instanceof Error ? err.message : 'Operação de manutenção falhou.'); }
+    finally { setBusy(false); }
+  };
+
+  const createWorkOrder = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const selectedPart = parts.find((item) => item.id === woPartId);
+    await run(async () => {
+      await MaintenanceClient.createWorkOrder({
+        number: woNumber, vehicleId: woVehicleId, supplierId: woSupplierId || undefined,
+        entryKm: Number(woEntryKm), description: woDescription || 'Manutenção preventiva/corretiva',
+        parts: selectedPart ? [{ partId: selectedPart.id, quantity: Number(woPartQty) || 1 }] : [],
+        laborItems: Number(woLaborCost) > 0 ? [{ description:'Mão de obra mecânica', hours:1, hourlyRate:Number(woLaborCost) }] : [],
       });
-
-      setIsNewWoOpen(false);
-      setWoDescription('');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao criar OS: ' + err.message);
-    }
+      setNewWoOpen(false); setWoDescription(''); setWoPartId('');
+      setWoNumber(`OS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`);
+    });
   };
 
-  const handleStartWo = async (id: string) => {
-    try {
-      await MaintenanceService.startWorkOrder(id, 'user-admin-1', 'Gestor da Frota');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao iniciar OS: ' + err.message);
-    }
+  const createSupplier = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await run(async () => {
+      await MaintenanceClient.createSupplier({ name:supplierName, document:supplierDocument, phone:supplierPhone, category:supplierCategory });
+      setNewSupplierOpen(false); setSupplierName(''); setSupplierDocument(''); setSupplierPhone('');
+    });
+  };
+  const createPart = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await run(async () => {
+      await MaintenanceClient.createPart({ code:partCode, name:partName, category:'Geral', unit:'UN', currentCost:Number(partCost), minimumStock:0, currentStock:Number(partStock) });
+      setNewPartOpen(false); setPartCode(''); setPartName(''); setPartCost(''); setPartStock('0');
+    });
+  };
+  const complete = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!completeTarget) return;
+    await run(async () => {
+      await MaintenanceClient.completeWorkOrder(completeTarget.id, { exitKm:Number(exitKm), dueDate, categoryId, installmentsCount:Number(installments) || 1 });
+      setCompleteTarget(null); setExitKm('');
+    });
   };
 
-  const handleCompleteWo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!completeWoTarget) return;
-    try {
-      await MaintenanceService.completeWorkOrder({
-        workOrderId: completeWoTarget.id,
-        exitKm: Number(exitKmInput) || (completeWoTarget.entryKm + 50),
-        categoryId: 'cat-maint-exp',
-        dueDate: new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
-        userId: 'user-admin-1',
-        userName: 'Gestor da Frota',
-      });
-      setCompleteWoTarget(null);
-      setExitKmInput('');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao concluir OS: ' + err.message);
-    }
-  };
-
-  const handleCancelWo = async (id: string) => {
-    const reason = prompt('Informe o motivo do cancelamento da OS:');
-    if (!reason) return;
-    try {
-      await MaintenanceService.cancelWorkOrder(id, reason, 'user-admin-1', 'Gestor da Frota');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao cancelar OS: ' + err.message);
-    }
-  };
-
-  const handleCreateSupplier = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await MaintenanceService.createSupplier({
-        companyId,
-        name: supName,
-        document: supDoc,
-        phone: supPhone,
-        category: supCategory,
-        status: 'ACTIVE',
-      }, 'user-admin-1', 'Gestor da Frota');
-      setIsNewSupplierOpen(false);
-      setSupName('');
-      setSupDoc('');
-      setSupPhone('');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao criar fornecedor: ' + err.message);
-    }
-  };
-
-  const handleCreatePart = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await MaintenanceService.createPart({
-        companyId,
-        code: partCode,
-        name: partName,
-        category: 'Geral',
-        unit: 'UN',
-        currentCost: Number(partCost) || 0,
-        minimumStock: 2,
-        currentStock: Number(partStock) || 10,
-        status: 'ACTIVE',
-      }, 'user-admin-1', 'Gestor da Frota');
-      setIsNewPartOpen(false);
-      setPartCode('');
-      setPartName('');
-      setPartCost('');
-      await reloadData();
-    } catch (err: any) {
-      alert('Erro ao cadastrar peça: ' + err.message);
-    }
-  };
-
-  const getVehiclePlate = (vid: string) => {
-    const v = vehicles.find((x) => x.id === vid);
-    return v ? `${v.plate} (${v.model})` : 'Veículo não encontrado';
-  };
-
-  const getSupplierName = (sid?: string) => {
-    if (!sid) return 'N/A';
-    const s = suppliers.find((x) => x.id === sid);
-    return s ? s.name : 'N/A';
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return <Badge variant="neutral">Aberta</Badge>;
-      case 'IN_PROGRESS':
-        return <Badge variant="warning">Em Andamento</Badge>;
-      case 'WAITING_PARTS':
-        return <Badge variant="warning">Aguardando Peças</Badge>;
-      case 'WAITING_APPROVAL':
-        return <Badge variant="warning">Aguardando Aprovação</Badge>;
-      case 'COMPLETED':
-        return <Badge variant="success">Concluída</Badge>;
-      case 'CANCELLED':
-        return <Badge variant="danger">Cancelada</Badge>;
-      default:
-        return <Badge variant="neutral">{status}</Badge>;
-    }
-  };
-
-  // Metrics
-  const openWos = workOrders.filter((w) => w.status !== 'COMPLETED' && w.status !== 'CANCELLED').length;
-  const vehiclesInMaint = vehicles.filter((v) => v.status === 'MAINTENANCE').length;
-  const totalMaintCost = workOrders
-    .filter((w) => w.status === 'COMPLETED')
-    .reduce((acc, w) => acc + w.total, 0);
+  const activeCount = workOrders.filter((wo) => !['COMPLETED','CANCELLED'].includes(wo.status)).length;
+  const vehicleMaintenanceCount = vehicles.filter((vehicle) => vehicle.status === 'MAINTENANCE').length;
+  const totalCompleted = workOrders.filter((wo) => wo.status === 'COMPLETED').reduce((sum, wo) => sum + wo.total, 0);
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-      <PageHeader
-        title="Manutenção & Oficinas"
-        description="Ordens de serviço, peças, fornecedores, troca de óleo, pneus e integração controlada com Contas a Pagar"
-        breadcrumb="Operação • Gestão de Manutenção"
-        primaryAction={{
-          label: 'Nova Ordem de Serviço',
-          onClick: () => setIsNewWoOpen(true),
-          icon: <Plus className="w-4 h-4" />
-        }}
-      />
+      <PageHeader title="Manutenção & Oficinas" description="Ordens de serviço, peças e fornecedores com autoridade server-side e integração atômica com Contas a Pagar." breadcrumb="Operação • Gestão de Manutenção" primaryAction={{ label:'Nova Ordem de Serviço', onClick:()=>setNewWoOpen(true), icon:<Plus className="w-4 h-4"/> }} />
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card padding="sm">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase block">OS Abertas / Ativas</span>
-          <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{openWos}</h3>
-        </Card>
-        <Card padding="sm">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase block">Veículos em Manutenção</span>
-          <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 font-mono">{vehiclesInMaint}</h3>
-        </Card>
-        <Card padding="sm">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase block">Fornecedores Cadastrados</span>
-          <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{suppliers.length}</h3>
-        </Card>
-        <Card padding="sm">
-          <span className="text-[11px] font-semibold text-slate-500 uppercase block">Custo Total Concluído</span>
-          <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
-            R$ {totalMaintCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </h3>
-        </Card>
-      </div>
+      {error && <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs">{error}</div>}
+      {loading && <div className="p-8 text-center text-xs text-slate-500">Carregando manutenção...</div>}
 
-      {/* Subtabs navigation */}
-      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6">
-        <button
-          onClick={() => setActiveSubTab('workOrders')}
-          className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeSubTab === 'workOrders'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          Ordens de Serviço ({workOrders.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('suppliers')}
-          className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeSubTab === 'suppliers'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Fornecedores / Oficinas ({suppliers.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('parts')}
-          className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeSubTab === 'parts'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <Package className="w-4 h-4" />
-          Catálogo de Peças ({parts.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('oilTires')}
-          className={`pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-2 ${
-            activeSubTab === 'oilTires'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
-          }`}
-        >
-          <Droplet className="w-4 h-4" />
-          Óleo & Pneus
-        </button>
-      </div>
-
-      {/* Subtab Content */}
-      {activeSubTab === 'workOrders' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="w-full max-w-sm">
-              <Input
-                placeholder="Buscar por número da OS, veículo ou fornecedor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search className="w-4 h-4 text-slate-400" />}
-              />
-            </div>
-          </div>
-
-          <Card padding="none">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                    <th className="p-3.5">Número / Data</th>
-                    <th className="p-3.5">Veículo</th>
-                    <th className="p-3.5">Fornecedor</th>
-                    <th className="p-3.5">Descrição</th>
-                    <th className="p-3.5">KM (Entrada/Saída)</th>
-                    <th className="p-3.5">Total</th>
-                    <th className="p-3.5">Status</th>
-                    <th className="p-3.5 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
-                  {workOrders.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="p-6 text-center text-slate-500">
-                        Nenhuma ordem de serviço cadastrada.
-                      </td>
-                    </tr>
-                  ) : (
-                    workOrders.map((wo) => {
-                      const payable = payables.find((p) => p.id === wo.accountPayableId);
-                      return (
-                        <tr key={wo.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/50">
-                          <td className="p-3.5 font-mono font-medium text-slate-900 dark:text-slate-100">
-                            {wo.number}
-                            <span className="block text-[10px] text-slate-400 font-sans">
-                              {new Date(wo.openedAt).toLocaleDateString('pt-BR')}
-                            </span>
-                          </td>
-                          <td className="p-3.5 font-medium text-slate-800 dark:text-slate-200">
-                            {getVehiclePlate(wo.vehicleId)}
-                          </td>
-                          <td className="p-3.5 text-slate-600 dark:text-slate-400">
-                            {getSupplierName(wo.supplierId)}
-                          </td>
-                          <td className="p-3.5 text-slate-600 dark:text-slate-400 max-w-xs truncate">
-                            {wo.description}
-                          </td>
-                          <td className="p-3.5 font-mono text-slate-600 dark:text-slate-400">
-                            {wo.entryKm} km {wo.exitKm ? `→ ${wo.exitKm} km` : ''}
-                          </td>
-                          <td className="p-3.5 font-mono font-semibold text-slate-900 dark:text-slate-100">
-                            R$ {wo.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-3.5">{getStatusBadge(wo.status)}</td>
-                          <td className="p-3.5 text-right space-x-2">
-                            {wo.status === 'OPEN' && (
-                              <button
-                                onClick={() => handleStartWo(wo.id)}
-                                className="text-blue-600 hover:underline font-medium"
-                              >
-                                Iniciar
-                              </button>
-                            )}
-                            {wo.status === 'IN_PROGRESS' && (
-                              <button
-                                onClick={() => setCompleteWoTarget(wo)}
-                                className="text-emerald-600 hover:underline font-medium"
-                              >
-                                Concluir
-                              </button>
-                            )}
-                            {wo.status !== 'COMPLETED' && wo.status !== 'CANCELLED' && (
-                              <button
-                                onClick={() => handleCancelWo(wo.id)}
-                                className="text-red-600 hover:underline font-medium"
-                              >
-                                Cancelar
-                              </button>
-                            )}
-                            {wo.status === 'COMPLETED' && payable && onOpenPaymentModal && (
-                              <button
-                                onClick={() => onOpenPaymentModal(payable)}
-                                className="text-indigo-600 hover:underline font-medium"
-                              >
-                                Pagar Título
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+      {!loading && <>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card padding="sm"><span className="text-[11px] text-slate-500">OS ATIVAS</span><strong className="block text-2xl font-mono">{activeCount}</strong></Card>
+          <Card padding="sm"><span className="text-[11px] text-slate-500">VEÍCULOS EM MANUTENÇÃO</span><strong className="block text-2xl font-mono text-amber-600">{vehicleMaintenanceCount}</strong></Card>
+          <Card padding="sm"><span className="text-[11px] text-slate-500">FORNECEDORES</span><strong className="block text-2xl font-mono">{suppliers.length}</strong></Card>
+          <Card padding="sm"><span className="text-[11px] text-slate-500">CUSTO CONCLUÍDO</span><strong className="block text-xl font-mono text-emerald-600">{formatCurrencyBRL(totalCompleted)}</strong></Card>
         </div>
-      )}
 
-      {activeSubTab === 'suppliers' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Lista de Fornecedores & Oficinas</h3>
-            <Button
-              onClick={() => setIsNewSupplierOpen(true)}
-              variant="primary"
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              icon={<Plus className="w-4 h-4" />}
-            >
-              Novo Fornecedor
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {suppliers.map((sup) => (
-              <Card key={sup.id} padding="md" className="space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{sup.name}</h4>
-                    <span className="text-[11px] text-slate-500 font-mono">{sup.document}</span>
-                  </div>
-                  <Badge variant={sup.status === 'ACTIVE' ? 'success' : 'neutral'}>{sup.status}</Badge>
-                </div>
-                <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <p>Categoria: {sup.category}</p>
-                  <p>Telefone: {sup.phone}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2 border-b pb-2 border-slate-200 dark:border-slate-800">
+          <Button size="sm" variant={tab==='workOrders'?'primary':'ghost'} onClick={()=>setTab('workOrders')} icon={<FileText className="w-4 h-4"/>}>Ordens</Button>
+          <Button size="sm" variant={tab==='suppliers'?'primary':'ghost'} onClick={()=>setTab('suppliers')} icon={<Users className="w-4 h-4"/>}>Fornecedores</Button>
+          <Button size="sm" variant={tab==='parts'?'primary':'ghost'} onClick={()=>setTab('parts')} icon={<Package className="w-4 h-4"/>}>Peças</Button>
+          <Button size="sm" variant={tab==='oilTires'?'primary':'ghost'} onClick={()=>setTab('oilTires')} icon={<Wrench className="w-4 h-4"/>}>Preventivas / Óleo / Pneus</Button>
         </div>
-      )}
 
-      {activeSubTab === 'parts' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Catálogo de Peças e Insumos</h3>
-            <Button
-              onClick={() => setIsNewPartOpen(true)}
-              variant="primary"
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              icon={<Plus className="w-4 h-4" />}
-            >
-              Nova Peça
-            </Button>
-          </div>
+        {tab==='workOrders' && <div className="space-y-3">
+          <div className="relative max-w-md"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400"/><Input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar OS, placa, fornecedor..." className="pl-9"/></div>
+          <Card padding="none"><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 dark:bg-slate-800/50"><tr><th className="p-3 text-left">OS</th><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Fornecedor</th><th className="p-3 text-left">KM</th><th className="p-3 text-left">Total</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {filteredOrders.length===0 && <tr><td colSpan={7} className="p-8 text-center text-slate-500">Nenhuma ordem de serviço.</td></tr>}
+            {filteredOrders.map((wo)=>{ const payable=payableFor(wo); return <tr key={wo.id}><td className="p-3"><strong>{wo.number}</strong><div className="text-slate-500 max-w-xs truncate">{wo.description}</div></td><td className="p-3">{vehicleLabel(wo.vehicleId)}</td><td className="p-3">{supplierLabel(wo.supplierId)}</td><td className="p-3 font-mono">{wo.entryKm.toLocaleString('pt-BR')}{wo.exitKm!==undefined?` → ${wo.exitKm.toLocaleString('pt-BR')}`:''}</td><td className="p-3 font-mono">{formatCurrencyBRL(wo.total)}</td><td className="p-3">{statusBadge(wo.status)}</td><td className="p-3"><div className="flex justify-end gap-2 flex-wrap">
+              <Button size="sm" variant="ghost" onClick={()=>setAttachmentEntity(wo)} icon={<FolderOpen className="w-3.5 h-3.5"/>}>Anexos</Button>
+              {['OPEN','WAITING_APPROVAL','WAITING_PARTS'].includes(wo.status) && <Button size="sm" disabled={busy} onClick={()=>void run(async()=>{await MaintenanceClient.startWorkOrder(wo.id);})}>Iniciar</Button>}
+              {wo.status==='IN_PROGRESS' && <Button size="sm" disabled={busy} onClick={()=>{ setCompleteTarget(wo); setExitKm(String(Math.max(wo.entryKm, vehicles.find(v=>v.id===wo.vehicleId)?.currentKm||wo.entryKm))); const d=new Date(); d.setUTCDate(d.getUTCDate()+30); setDueDate(d.toISOString().slice(0,10)); }}>Concluir</Button>}
+              {!['COMPLETED','CANCELLED'].includes(wo.status) && <Button size="sm" variant="danger" disabled={busy} onClick={()=>{const reason=window.prompt('Motivo do cancelamento:'); if(reason) void run(async()=>{await MaintenanceClient.cancelWorkOrder(wo.id,reason);});}}>Cancelar</Button>}
+              {wo.status==='COMPLETED' && payable && onOpenPaymentModal && <Button size="sm" variant="outline" onClick={()=>onOpenPaymentModal(payable)}>Pagar título</Button>}
+            </div></td></tr>; })}
+          </tbody></table></div></Card>
+        </div>}
 
-          <Card padding="none">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                  <th className="p-3.5">Código</th>
-                  <th className="p-3.5">Nome da Peça</th>
-                  <th className="p-3.5">Categoria</th>
-                  <th className="p-3.5">Custo Unitário</th>
-                  <th className="p-3.5">Estoque Atual</th>
-                  <th className="p-3.5">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
-                {parts.map((p) => (
-                  <tr key={p.id}>
-                    <td className="p-3.5 font-mono font-medium">{p.code}</td>
-                    <td className="p-3.5 font-medium text-slate-900 dark:text-slate-100">{p.name}</td>
-                    <td className="p-3.5 text-slate-600 dark:text-slate-400">{p.category}</td>
-                    <td className="p-3.5 font-mono">R$ {p.currentCost.toFixed(2)}</td>
-                    <td className="p-3.5 font-mono font-bold text-slate-800 dark:text-slate-200">{p.currentStock} {p.unit}</td>
-                    <td className="p-3.5"><Badge variant="success">{p.status}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-        </div>
-      )}
+        {tab==='suppliers' && <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Fornecedores & Oficinas</h3><Button size="sm" onClick={()=>setNewSupplierOpen(true)} icon={<Plus className="w-4 h-4"/>}>Novo fornecedor</Button></div><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{suppliers.map((s)=><Card key={s.id} padding="md"><div className="flex justify-between"><strong>{s.name}</strong><Badge variant={s.status==='ACTIVE'?'success':'neutral'}>{s.status}</Badge></div><div className="mt-2 text-xs text-slate-500">{s.document}<br/>{s.category}<br/>{s.phone||'Sem telefone'}</div></Card>)}</div></div>}
 
-      {activeSubTab === 'oilTires' && (
-        <div className="space-y-4">
-          <Card padding="md" className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <Droplet className="w-4 h-4 text-blue-500" /> Histórico de Trocas de Óleo & Pneus
-            </h3>
-            <p className="text-xs text-slate-500">
-              Registros integrados por veículo para monitoramento de quilometragem e preventivas.
-            </p>
-          </Card>
-        </div>
-      )}
+        {tab==='parts' && <div className="space-y-3"><div className="flex justify-between"><h3 className="font-semibold">Catálogo de peças</h3><Button size="sm" onClick={()=>setNewPartOpen(true)} icon={<Plus className="w-4 h-4"/>}>Nova peça</Button></div><Card padding="none"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Código</th><th className="p-3 text-left">Peça</th><th className="p-3 text-left">Custo</th><th className="p-3 text-left">Estoque</th><th className="p-3 text-left">Status</th></tr></thead><tbody>{parts.map((p)=><tr key={p.id} className="border-t"><td className="p-3 font-mono">{p.code}</td><td className="p-3">{p.name}</td><td className="p-3 font-mono">{formatCurrencyBRL(p.currentCost)}</td><td className="p-3 font-mono">{p.currentStock} {p.unit}</td><td className="p-3"><Badge variant={p.status==='ACTIVE'?'success':'neutral'}>{p.status}</Badge></td></tr>)}</tbody></table></div></Card></div>}
 
-      {/* New Work Order Modal */}
-      {isNewWoOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-lg space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Nova Ordem de Serviço</h3>
-            <form onSubmit={handleCreateWorkOrder} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Número da OS</label>
-                <Input value={woNumber} onChange={(e) => setWoNumber(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Veículo</label>
-                <select
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs"
-                  value={woVehicleId}
-                  onChange={(e) => setWoVehicleId(e.target.value)}
-                >
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.plate} — {v.model} ({v.currentKm || 0} km)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Fornecedor / Oficina</label>
-                <select
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs"
-                  value={woSupplierId}
-                  onChange={(e) => setWoSupplierId(e.target.value)}
-                >
-                  <option value="">Selecione...</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">KM de Entrada</label>
-                  <Input type="number" value={woEntryKm} onChange={(e) => setWoEntryKm(e.target.value)} required />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Peça Principal</label>
-                  <select
-                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs"
-                    value={woPartId}
-                    onChange={(e) => setWoPartId(e.target.value)}
-                  >
-                    <option value="">Nenhuma peça</option>
-                    {parts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name} (R$ {p.currentCost})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Descrição / Diagnóstico</label>
-                <textarea
-                  className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg p-2 text-xs"
-                  rows={3}
-                  value={woDescription}
-                  onChange={(e) => setWoDescription(e.target.value)}
-                  placeholder="Relate os serviços ou defeitos a serem reparados..."
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="ghost" onClick={() => setIsNewWoOpen(false)}>Cancelar</Button>
-                <Button type="submit" variant="primary" className="bg-blue-600 text-white">Criar OS (FinancialTransaction = 0)</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+        {tab==='oilTires' && <Card padding="md"><h3 className="font-semibold flex gap-2 items-center"><Wrench className="w-4 h-4"/>Preventivas, óleo e pneus</h3><p className="mt-2 text-xs text-slate-500">A autoridade detalhada de preventivas, óleo e pneus será promovida na SECURITY-2J2. A J1 mantém esta área somente informativa para não misturar autoridades.</p></Card>}
+      </>}
 
-      {/* Complete Work Order Modal */}
-      {completeWoTarget && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-              Concluir OS #{completeWoTarget.number}
-            </h3>
-            <p className="text-xs text-slate-500">
-              Ao concluir a OS, o veículo retornará ao status disponível e será gerado um título em <strong>Contas a Pagar (AccountPayable)</strong>. Nenhuma movimentação de caixa é realizada até a liquidação efetiva.
-            </p>
-            <form onSubmit={handleCompleteWo} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">KM de Saída</label>
-                <Input
-                  type="number"
-                  value={exitKmInput}
-                  onChange={(e) => setExitKmInput(e.target.value)}
-                  placeholder={(completeWoTarget.entryKm + 50).toString()}
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="ghost" onClick={() => setCompleteWoTarget(null)}>Cancelar</Button>
-                <Button type="submit" variant="primary" className="bg-emerald-600 text-white">Confirmar Conclusão & Gerar Payable</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      {newWoOpen && <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4"><Card className="w-full max-w-lg"><form onSubmit={createWorkOrder} className="space-y-3"><h3 className="font-bold">Nova Ordem de Serviço</h3><Input value={woNumber} onChange={(e)=>setWoNumber(e.target.value)} placeholder="Número da OS" required/><select className="w-full p-2 border rounded-lg bg-white dark:bg-slate-900" value={woVehicleId} onChange={(e)=>{setWoVehicleId(e.target.value); const v=vehicles.find(x=>x.id===e.target.value); if(v)setWoEntryKm(String(v.currentKm));}} required><option value="">Veículo...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{vehicleLabel(v.id)}</option>)}</select><select className="w-full p-2 border rounded-lg bg-white dark:bg-slate-900" value={woSupplierId} onChange={(e)=>setWoSupplierId(e.target.value)}><option value="">Sem fornecedor</option>{suppliers.filter(s=>s.status==='ACTIVE').map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select><Input type="number" min="0" value={woEntryKm} onChange={(e)=>setWoEntryKm(e.target.value)} placeholder="KM de entrada" required/><Input value={woDescription} onChange={(e)=>setWoDescription(e.target.value)} placeholder="Descrição / diagnóstico" required/><select className="w-full p-2 border rounded-lg bg-white dark:bg-slate-900" value={woPartId} onChange={(e)=>setWoPartId(e.target.value)}><option value="">Sem peça do catálogo</option>{parts.filter(p=>p.status==='ACTIVE').map(p=><option key={p.id} value={p.id}>{p.name} — {formatCurrencyBRL(p.currentCost)}</option>)}</select>{woPartId && <Input type="number" min="0.001" step="0.001" value={woPartQty} onChange={(e)=>setWoPartQty(e.target.value)} placeholder="Quantidade"/>}<Input type="number" min="0" step="0.01" value={woLaborCost} onChange={(e)=>setWoLaborCost(e.target.value)} placeholder="Mão de obra"/><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setNewWoOpen(false)}>Cancelar</Button><Button type="submit" isLoading={busy}>Criar OS</Button></div></form></Card></div>}
 
-      {/* New Supplier Modal */}
-      {isNewSupplierOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Cadastrar Fornecedor / Oficina</h3>
-            <form onSubmit={handleCreateSupplier} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Nome / Razão Social</label>
-                <Input value={supName} onChange={(e) => setSupName(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">CNPJ / CPF</label>
-                <Input value={supDoc} onChange={(e) => setSupDoc(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Telefone</label>
-                <Input value={supPhone} onChange={(e) => setSupPhone(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Categoria</label>
-                <Input value={supCategory} onChange={(e) => setSupCategory(e.target.value)} required />
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="ghost" onClick={() => setIsNewSupplierOpen(false)}>Cancelar</Button>
-                <Button type="submit" variant="primary" className="bg-blue-600 text-white">Salvar Fornecedor</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      {completeTarget && <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4"><Card className="w-full max-w-md"><form onSubmit={complete} className="space-y-3"><h3 className="font-bold">Concluir {completeTarget.number}</h3><p className="text-xs text-slate-500">A conclusão cria a Conta a Pagar, atualiza veículo/KM e auditoria em uma única transação.</p><Input type="number" min={completeTarget.entryKm} value={exitKm} onChange={(e)=>setExitKm(e.target.value)} placeholder="KM de saída" required/><Input type="date" value={dueDate} onChange={(e)=>setDueDate(e.target.value)} required/><Input type="number" min="1" max="60" value={installments} onChange={(e)=>setInstallments(e.target.value)} placeholder="Parcelas" required/><Input value={categoryId} onChange={(e)=>setCategoryId(e.target.value)} placeholder="Categoria financeira de manutenção" required/><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setCompleteTarget(null)}>Cancelar</Button><Button type="submit" isLoading={busy}>Concluir & gerar CP</Button></div></form></Card></div>}
 
-      {/* New Part Modal */}
-      {isNewPartOpen && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Cadastrar Peça</h3>
-            <form onSubmit={handleCreatePart} className="space-y-3 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Código da Peça</label>
-                <Input value={partCode} onChange={(e) => setPartCode(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Nome da Peça</label>
-                <Input value={partName} onChange={(e) => setPartName(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Custo Unitário (R$)</label>
-                <Input type="number" step="0.01" value={partCost} onChange={(e) => setPartCost(e.target.value)} required />
-              </div>
-              <div>
-                <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">Estoque Inicial</label>
-                <Input type="number" value={partStock} onChange={(e) => setPartStock(e.target.value)} required />
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <Button type="button" variant="ghost" onClick={() => setIsNewPartOpen(false)}>Cancelar</Button>
-                <Button type="submit" variant="primary" className="bg-blue-600 text-white">Salvar Peça</Button>
-              </div>
-            </form>
-          </Card>
-        </div>
-      )}
+      {newSupplierOpen && <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4"><Card className="w-full max-w-md"><form onSubmit={createSupplier} className="space-y-3"><h3 className="font-bold">Novo fornecedor / oficina</h3><Input value={supplierName} onChange={(e)=>setSupplierName(e.target.value)} placeholder="Nome" required/><Input value={supplierDocument} onChange={(e)=>setSupplierDocument(e.target.value)} placeholder="CNPJ / CPF" required/><Input value={supplierPhone} onChange={(e)=>setSupplierPhone(e.target.value)} placeholder="Telefone"/><Input value={supplierCategory} onChange={(e)=>setSupplierCategory(e.target.value)} placeholder="Categoria" required/><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setNewSupplierOpen(false)}>Cancelar</Button><Button type="submit" isLoading={busy}>Salvar</Button></div></form></Card></div>}
 
-      {attachmentEntity && (
-        <AttachmentModal
-          isOpen={!!attachmentEntity}
-          onClose={() => setAttachmentEntity(null)}
-          entityType="MaintenanceWorkOrder"
-          entityId={attachmentEntity.id}
-          documentType="MAINTENANCE_DOCUMENT"
-          title={`Anexos: OS ${attachmentEntity.osNumber}`}
-        />
-      )}
+      {newPartOpen && <div className="fixed inset-0 z-50 bg-slate-950/60 flex items-center justify-center p-4"><Card className="w-full max-w-md"><form onSubmit={createPart} className="space-y-3"><h3 className="font-bold">Nova peça</h3><Input value={partCode} onChange={(e)=>setPartCode(e.target.value)} placeholder="Código" required/><Input value={partName} onChange={(e)=>setPartName(e.target.value)} placeholder="Nome" required/><Input type="number" min="0" step="0.01" value={partCost} onChange={(e)=>setPartCost(e.target.value)} placeholder="Custo" required/><Input type="number" min="0" step="0.001" value={partStock} onChange={(e)=>setPartStock(e.target.value)} placeholder="Estoque" required/><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setNewPartOpen(false)}>Cancelar</Button><Button type="submit" isLoading={busy}>Salvar</Button></div></form></Card></div>}
+
+      {attachmentEntity && <AttachmentModal isOpen={true} onClose={()=>setAttachmentEntity(null)} entityType="MaintenanceWorkOrder" entityId={attachmentEntity.id} documentType="MAINTENANCE_DOCUMENT" title={`Anexos: OS ${attachmentEntity.number}`} />}
     </div>
   );
 };

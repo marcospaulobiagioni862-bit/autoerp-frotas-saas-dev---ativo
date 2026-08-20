@@ -1,7 +1,6 @@
 import {
   DriverRepository,
   ContractRepository,
-  MaintenanceRepository,
   TrafficTicketRepository,
   VehicleDocumentRepository,
   InsuranceRepository,
@@ -9,6 +8,7 @@ import {
   AccountReceivableRepository,
   AccountPayableRepository,
 } from '../../persistence/repositories/localRepositories';
+import { MaintenanceClient } from '../../api/maintenanceClient';
 import type { Vehicle, KmRecord } from '../../types/entities';
 import { ObligationStatus } from '../../types/enums';
 
@@ -33,13 +33,12 @@ export interface VehicleDetailedSummary {
 
 /**
  * Transitional supplement bridge for details tabs not migrated yet.
- * SECURITY-2I1B invariant: Vehicle and KmRecord are supplied by the server caller.
- * This class MUST NOT instantiate VehicleRepository or KmRecordRepository.
+ * Vehicle/KM and SECURITY-2J1 maintenance history are server-authoritative.
+ * Remaining legacy tabs are removed in their own security waves.
  */
 export class VehicleLegacyDetailsBridge {
   private driverRepo = new DriverRepository();
   private contractRepo = new ContractRepository();
-  private maintenanceRepo = new MaintenanceRepository();
   private ticketRepo = new TrafficTicketRepository();
   private documentRepo = new VehicleDocumentRepository();
   private insuranceRepo = new InsuranceRepository();
@@ -49,22 +48,11 @@ export class VehicleLegacyDetailsBridge {
 
   async compose(vehicle: Vehicle, kmRecords: KmRecord[]): Promise<VehicleDetailedSummary> {
     const vehicleId = vehicle.id;
-    const [
-      driver,
-      activeContract,
-      allContracts,
-      maintenances,
-      trafficTickets,
-      documents,
-      insurances,
-      trackers,
-      receivables,
-      payables,
-    ] = await Promise.all([
+    const [driver, activeContract, allContracts, workOrders, trafficTickets, documents, insurances, trackers, receivables, payables] = await Promise.all([
       vehicle.currentDriverId ? this.driverRepo.findById(vehicle.currentDriverId) : Promise.resolve(null),
       vehicle.currentContractId ? this.contractRepo.findById(vehicle.currentContractId) : Promise.resolve(null),
       this.contractRepo.findAll({ vehicleId }),
-      this.maintenanceRepo.findAll({ vehicleId }),
+      MaintenanceClient.listWorkOrders({ vehicleId }),
       this.ticketRepo.findAll({ vehicleId }),
       this.documentRepo.findAll({ vehicleId }),
       this.insuranceRepo.findAll({ vehicleId }),
@@ -73,12 +61,28 @@ export class VehicleLegacyDetailsBridge {
       this.payableRepo.findAll({ vehicleId }),
     ]);
 
-    const totalRevenue = receivables
-      .filter((item) => item.status === ObligationStatus.PAID)
-      .reduce((sum, item) => sum + item.paidAmount, 0);
-    const totalExpenses = payables
-      .filter((item) => item.status === ObligationStatus.PAID)
-      .reduce((sum, item) => sum + item.paidAmount, 0);
+    const maintenances = workOrders.map((item) => ({
+      id: item.id,
+      companyId: item.companyId,
+      vehicleId: item.vehicleId,
+      supplierId: item.supplierId,
+      type: 'WORK_ORDER',
+      description: item.description,
+      kmAtMaintenance: item.exitKm ?? item.entryKm,
+      partsCost: item.subtotalParts,
+      laborCost: item.subtotalLabor + item.subtotalServices,
+      totalCost: item.total,
+      status: item.status,
+      startDate: item.startedAt || item.openedAt,
+      completionDate: item.completedAt,
+      accountPayableId: item.accountPayableId,
+      notes: item.notes,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+
+    const totalRevenue = receivables.filter((item) => item.status === ObligationStatus.PAID).reduce((sum, item) => sum + item.paidAmount, 0);
+    const totalExpenses = payables.filter((item) => item.status === ObligationStatus.PAID).reduce((sum, item) => sum + item.paidAmount, 0);
     const netProfit = totalRevenue - totalExpenses;
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
