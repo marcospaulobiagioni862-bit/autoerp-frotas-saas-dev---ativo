@@ -7,6 +7,7 @@ import {
   type CreateRecurringRuleInput,
   type UpdateRecurringRuleInput,
 } from './recurringAuthority';
+import { registerMaintenanceRoutes } from './maintenanceRoutes';
 
 type RecurringAction = 'VIEW_RECURRING' | 'MUTATE_RECURRING' | 'VIEW_NOTIFICATIONS' | 'READ_NOTIFICATIONS';
 const READ_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
@@ -109,6 +110,8 @@ function sendError(res: Response, error: unknown): void {
 
 export function registerRecurringRoutes(app: Express): void {
   startRecurringScheduler();
+  // SECURITY-2J1 route registration is kept behind the already-authenticated /api bootstrap chain.
+  registerMaintenanceRoutes(app);
 
   app.get('/api/recurring-rules', async (req, res) => {
     const actor = requirePrincipal(req, res, 'VIEW_RECURRING'); if (!actor) return;

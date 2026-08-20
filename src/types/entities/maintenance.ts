@@ -98,6 +98,7 @@ export interface WorkOrder {
   total: number;
   accountPayableId?: string;
   receiptUrls?: string[];
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,4 +168,3 @@ export interface TireRecord {
   createdAt: string;
   updatedAt: string;
 }
-
