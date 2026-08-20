@@ -12,7 +12,7 @@ interface FileUploadProps {
   multiple?: boolean;
 }
 
-const SERVER_ENTITY_TYPES = new Set(['Vehicle', 'Driver', 'Contract', 'HealthAndEmergency']);
+const SERVER_ENTITY_TYPES = new Set(['Vehicle', 'Driver', 'Contract', 'HealthAndEmergency', 'TrafficTicket']);
 
 export function FileUpload({
   entityType,
