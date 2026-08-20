@@ -1,4 +1,4 @@
-import { alertStageForDays, daysUntilExpiration } from './documentPolicy';
+import { alertStageForDays, daysUntilExpiration } from '../documents/documentPolicy';
 import type { MaintenanceDueStage, MaintenancePlan, MaintenanceProjectedStatus } from '../../types/entities';
 
 export interface MaintenancePlanProjection {
