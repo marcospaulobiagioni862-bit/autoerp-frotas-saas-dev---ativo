@@ -23,6 +23,7 @@ import { PostgresDocumentRepository } from './repositories/postgresDocumentRepos
 import { PostgresPartRepository, PostgresSupplierRepository, PostgresWorkOrderRepository } from './repositories/postgresMaintenanceRepository';
 import { PostgresTrackerRepository } from './repositories/postgresTrackerRepository';
 import { PostgresInsuranceRepository } from './repositories/postgresInsuranceRepository';
+import { PostgresTrafficTicketRepository } from './repositories/postgresTrafficTicketRepository';
 import { db } from './index';
 import { sql } from 'drizzle-orm';
 
@@ -64,6 +65,7 @@ export class UnitOfWork {
         getPartRepo:()=>new PostgresPartRepository(tx),
         getTrackerRepo:()=>new PostgresTrackerRepository(tx),
         getInsuranceRepo:()=>new PostgresInsuranceRepository(tx),
+        getTrafficTicketRepo:()=>new PostgresTrafficTicketRepository(tx),
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };
