@@ -3,12 +3,12 @@ import {
   ContractRepository,
   TrafficTicketRepository,
   VehicleDocumentRepository,
-  InsuranceRepository,
   AccountReceivableRepository,
   AccountPayableRepository,
 } from '../../persistence/repositories/localRepositories';
 import { MaintenanceClient } from '../../api/maintenanceClient';
 import { TrackerClient } from '../../api/trackerClient';
+import { InsuranceClient } from '../../api/insuranceClient';
 import type { Vehicle, KmRecord } from '../../types/entities';
 import { ObligationStatus } from '../../types/enums';
 
@@ -26,13 +26,12 @@ export interface VehicleDetailedSummary {
   financialSummary: { totalRevenue:number; totalExpenses:number; netProfit:number; profitMargin:number; };
 }
 
-/** Transitional details bridge. Vehicle/KM, maintenance and Tracker are now server-authoritative. */
+/** Transitional details bridge. Vehicle/KM, maintenance, Tracker and Insurance are server-authoritative. */
 export class VehicleLegacyDetailsBridge {
   private driverRepo=new DriverRepository();
   private contractRepo=new ContractRepository();
   private ticketRepo=new TrafficTicketRepository();
   private documentRepo=new VehicleDocumentRepository();
-  private insuranceRepo=new InsuranceRepository();
   private receivableRepo=new AccountReceivableRepository();
   private payableRepo=new AccountPayableRepository();
 
@@ -42,7 +41,7 @@ export class VehicleLegacyDetailsBridge {
       vehicle.currentDriverId?this.driverRepo.findById(vehicle.currentDriverId):Promise.resolve(null),
       vehicle.currentContractId?this.contractRepo.findById(vehicle.currentContractId):Promise.resolve(null),
       this.contractRepo.findAll({vehicleId}),MaintenanceClient.listWorkOrders({vehicleId}),this.ticketRepo.findAll({vehicleId}),
-      this.documentRepo.findAll({vehicleId}),this.insuranceRepo.findAll({vehicleId}),TrackerClient.listByVehicle(vehicleId),
+      this.documentRepo.findAll({vehicleId}),InsuranceClient.listByVehicle(vehicleId),TrackerClient.listByVehicle(vehicleId),
       this.receivableRepo.findAll({vehicleId}),this.payableRepo.findAll({vehicleId}),
     ]);
     const maintenances=workOrders.map(item=>({id:item.id,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'WORK_ORDER',description:item.description,kmAtMaintenance:item.exitKm??item.entryKm,partsCost:item.subtotalParts,laborCost:item.subtotalLabor+item.subtotalServices,totalCost:item.total,status:item.status,startDate:item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,createdAt:item.createdAt,updatedAt:item.updatedAt}));
