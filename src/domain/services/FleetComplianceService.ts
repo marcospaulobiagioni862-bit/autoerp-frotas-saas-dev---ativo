@@ -3,7 +3,7 @@ import {
   InsuranceRepository,
   FileAttachmentRepository,
 } from '../../persistence/repositories/localRepositories';
-import { VehicleDocument, Insurance, FileAttachment } from '../../types/entities';
+import { VehicleDocument, Insurance, FileAttachment, Tracker } from '../../types/entities';
 import { DocumentStatus, OriginType, AuditAction } from '../../types/enums';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -14,6 +14,9 @@ export interface CreateVehicleDocumentParams {
 }
 export interface CreateInsuranceParams {
   companyId:string;vehicleId:string;insuranceCompany:string;policyNumber:string;coverageDetails:string;deductibleAmount:number;totalPremiumAmount:number;installmentsCount:number;startDate:string;endDate:string;brokerName?:string;brokerPhone?:string;fileUrl?:string;generatePayable?:boolean;categoryId?:string;userId:string;userName:string;
+}
+export interface CreateTrackerParams {
+  companyId:string;vehicleId:string;equipmentModel:string;imei:string;chipCarrier:string;chipNumber:string;monthlyCost:number;installationDate:string;supplierId?:string;notes?:string;userId:string;userName:string;categoryId?:string;
 }
 
 /**
@@ -53,4 +56,19 @@ export class FleetComplianceService {
     await AuditLogger.logAction(params.companyId,'Insurance',saved.id,AuditAction.CREATE,params.userId,params.userName,null,saved);return saved;
   }
   static async cancelInsurance(id:string,reason:string,userId:string,userName:string):Promise<Insurance>{const existing=await this.insuranceRepo.findById(id);if(!existing)throw new Error(`Seguro ${id} não encontrado`);const updated=await this.insuranceRepo.update(id,{status:DocumentStatus.EXPIRED,updatedAt:new Date().toISOString()});await AuditLogger.logAction(existing.companyId,'Insurance',id,AuditAction.CANCEL,userId,userName,existing,{...updated,cancelReason:reason});return updated;}
+
+  /**
+   * Compatibility-only signatures for legacy verification code.
+   * SECURITY-2K deliberately fails closed: Tracker writes are server-authoritative
+   * and must go through TrackerClient / authenticated HTTP routes.
+   */
+  static async createTracker(_params:CreateTrackerParams):Promise<Tracker>{
+    throw new Error('SECURITY-2K: criação de rastreador é server-authoritative; use TrackerClient.create');
+  }
+  static async removeTracker(_id:string,_reason:string,_userId:string,_userName:string):Promise<Tracker>{
+    throw new Error('SECURITY-2K: remoção de rastreador é server-authoritative; use TrackerClient.remove');
+  }
+  static async updateTrackerCost(_id:string,_newMonthlyCost:number,_userId:string,_userName:string):Promise<Tracker>{
+    throw new Error('SECURITY-2K: alteração de mensalidade é server-authoritative; use TrackerClient.update');
+  }
 }
