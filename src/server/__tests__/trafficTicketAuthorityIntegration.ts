@@ -90,10 +90,13 @@ async function atomicityAndRules():Promise<string>{
 }
 
 async function overlappingContractIsFailClosed():Promise<void>{
-  for(const id of ['security-2m-contract-1','security-2m-contract-2'])await db.execute(sql`
+  const historical=[['security-2m-contract-1','FINISHED'],['security-2m-contract-2','CLOSED']] as const;
+  for(const [id,status] of historical)await db.execute(sql`
     INSERT INTO contracts(id,company_id,driver_id,vehicle_id,status,contract_number,start_date,end_date,rental_amount,billing_periodicity,billing_due_day_of_week,billing_due_day_of_month,security_deposit_amount,franchise_km,excess_km_rate,signature_required,is_archived,created_at,updated_at)
-    VALUES(${id},${companyA},${driverA},${vehicleA},'ACTIVE',${id},'2026-07-01','2026-09-30',1000,'WEEKLY',1,1,0,0,0,true,false,NOW(),NOW()) ON CONFLICT(id) DO NOTHING
+    VALUES(${id},${companyA},${driverA},${vehicleA},${status},${id},'2026-07-01','2026-09-30',1000,'WEEKLY',1,1,0,0,0,true,false,NOW(),NOW()) ON CONFLICT(id) DO NOTHING
   `);
+  const count=await one(sql`SELECT count(*)::int count FROM contracts WHERE company_id=${companyA} AND vehicle_id=${vehicleA} AND id IN ('security-2m-contract-1','security-2m-contract-2')`);
+  assert(Number(count.count)===2,'historical overlap fixture was not created');
   let rejected=false;try{await TrafficTicketAuthorityService.create(admin,input('M-OVERLAP',TicketResponsibility.DRIVER,{driverIncomeCategoryId:incomeA}));}catch{rejected=true;}
   assert(rejected,'overlapping contracts assigned driver arbitrarily');
 }
