@@ -5,6 +5,7 @@ import { SettlementService } from './src/domain/finance/SettlementService';
 import { TransferService } from './src/domain/finance/TransferService';
 import { ReversalService } from './src/domain/finance/ReversalService';
 import { RenegotiationService } from './src/domain/finance/RenegotiationService';
+import { isRenegotiationInstallmentFrequency } from './src/shared/utils/renegotiationSchedule';
 import { DREService } from './src/domain/finance/DREService';
 import { ProfitabilityService } from './src/domain/finance/ProfitabilityService';
 import { DepositService } from './src/domain/finance/DepositService';
@@ -623,6 +624,12 @@ async function startServer() {
     const newTotalAmount = Number(req.body?.newTotalAmount);
     const installmentsCount = Number(req.body?.installmentsCount);
     const firstDueDate = typeof req.body?.firstDueDate === 'string' ? req.body.firstDueDate : '';
+    const rawInstallmentFrequency = req.body?.installmentFrequency;
+    const installmentFrequency = rawInstallmentFrequency === undefined || rawInstallmentFrequency === null || rawInstallmentFrequency === ''
+      ? 'MONTHLY'
+      : isRenegotiationInstallmentFrequency(rawInstallmentFrequency)
+        ? rawInstallmentFrequency
+        : null;
     const categoryId = typeof req.body?.categoryId === 'string' ? req.body.categoryId : '';
     const description = typeof req.body?.description === 'string' ? req.body.description : '';
 
@@ -634,7 +641,8 @@ async function startServer() {
       installmentsCount < 1 ||
       installmentsCount > 24 ||
       !firstDueDate ||
-      !categoryId
+      !categoryId ||
+      installmentFrequency === null
     ) {
       res.status(400).json({ error: 'Payload de renegociação inválido' });
       return;
@@ -652,6 +660,7 @@ async function startServer() {
               newTotalAmount,
               installmentsCount,
               firstDueDate,
+              installmentFrequency,
               categoryId,
               description,
               userId: principal.userId,
