@@ -1,277 +1,37 @@
-import type { Express, Request, Response } from 'express';
-import type { AuthenticatedPrincipal } from './auth';
-import {
-  MaintenanceAuthorityService,
-  MaintenanceConflictError,
-  MaintenanceNotFoundError,
-  MaintenanceValidationError,
-  type CreatePartInput,
-  type CreateSupplierInput,
-  type CreateWorkOrderInput,
-  type UpdatePartInput,
-  type UpdateSupplierInput,
-} from './maintenanceAuthority';
+import type {Express,Request,Response} from 'express';
+import type {AuthenticatedPrincipal} from './auth';
+import {MaintenanceAuthorityService,MaintenanceConflictError,MaintenanceNotFoundError,MaintenanceValidationError,type CreatePartInput,type CreateSupplierInput,type CreateWorkOrderInput,type UpdatePartInput,type UpdateSupplierInput} from './maintenanceAuthority';
+import {registerMaintenancePreventiveRoutes} from './maintenancePreventiveRoutes';
 
-type MaintenanceAction = 'VIEW_MAINTENANCE' | 'MUTATE_MAINTENANCE';
-const READ_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
-const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL']);
-const FORBIDDEN_AUTHORITY_FIELDS = new Set([
-  'companyId', 'userId', 'userName', 'role', 'status', 'total', 'subtotalParts', 'subtotalServices',
-  'subtotalLabor', 'accountPayableId', 'createdBy', 'createdAt', 'updatedAt', 'openedAt', 'startedAt',
-  'completedAt', 'cancelledAt',
-]);
+type Action='VIEW_MAINTENANCE'|'MUTATE_MAINTENANCE';
+const READ=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']),WRITE=new Set(['ADMIN','MANAGER','OPERATIONAL']);
+const PROTECTED=new Set(['companyId','userId','userName','role','status','total','subtotalParts','subtotalServices','subtotalLabor','accountPayableId','createdBy','createdAt','updatedAt','openedAt','startedAt','completedAt','cancelledAt']);
+function actor(req:Request,res:Response,action:Action):AuthenticatedPrincipal|null{const p=(req as Request&{principal?:AuthenticatedPrincipal}).principal;if(!p){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}const role=String(p.role||'').toUpperCase(),permissions=Array.isArray(p.permissions)?p.permissions:[],ok=permissions.includes('*')||permissions.includes(action)||(action==='VIEW_MAINTENANCE'?READ.has(role):WRITE.has(role));if(!ok){res.status(403).json({error:'Forbidden'});return null;}return p;}
+function reject(body:unknown){if(!body||typeof body!=='object'||Array.isArray(body))throw new MaintenanceValidationError('Invalid payload');for(const key of Object.keys(body as Record<string,unknown>))if(PROTECTED.has(key))throw new MaintenanceValidationError(`Protected field: ${key}`);}
+function text(v:unknown,max=1000):string{const s=typeof v==='string'?v.trim():'';if(!s||s.length>max)throw new MaintenanceValidationError('Invalid text');return s;}
+function opt(v:unknown,max=1000):string|undefined{if(v===undefined||v===null||v==='')return undefined;return text(String(v),max);}
+function nullable(v:unknown,max=1000):string|null|undefined{if(v===undefined)return undefined;if(v===null||v==='')return null;return text(String(v),max);}
+function nonneg(v:unknown):number{const n=Number(v);if(!Number.isFinite(n)||n<0)throw new MaintenanceValidationError('Invalid number');return n;}
+function pos(v:unknown):number{const n=Number(v);if(!Number.isFinite(n)||n<=0)throw new MaintenanceValidationError('Invalid number');return n;}
+function status(v:unknown):'ACTIVE'|'INACTIVE'|undefined{if(v===undefined)return undefined;if(v!=='ACTIVE'&&v!=='INACTIVE')throw new MaintenanceValidationError('Invalid status');return v;}
+function items(value:unknown,kind:'parts'|'services'|'labor'):any[]|undefined{if(value===undefined)return undefined;if(!Array.isArray(value)||value.length>100)throw new MaintenanceValidationError('Invalid work order items');return value.map(raw=>{if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new MaintenanceValidationError('Invalid item');const x=raw as Record<string,unknown>;if(kind==='parts')return{partId:opt(x.partId,200),description:opt(x.description,500),quantity:pos(x.quantity),unitCost:x.unitCost===undefined?undefined:nonneg(x.unitCost)};if(kind==='services')return{serviceId:opt(x.serviceId,200),description:text(x.description,500),quantity:pos(x.quantity),unitCost:nonneg(x.unitCost)};return{description:text(x.description,500),hours:pos(x.hours),hourlyRate:nonneg(x.hourlyRate)};});}
+function unique(e:unknown):boolean{let c:unknown=e;for(let i=0;i<6&&c&&typeof c==='object';i++){if('code'in c&&(c as any).code==='23505')return true;c='cause'in c?(c as any).cause:undefined;}return false;}
+function send(res:Response,e:unknown){const m=e instanceof Error?e.message:'';if(e instanceof MaintenanceValidationError){res.status(400).json({error:'Invalid maintenance request'});return;}if(e instanceof MaintenanceNotFoundError||m.includes('não encontrado')||m.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}if(e instanceof MaintenanceConflictError||unique(e)||m.includes('período financeiro')||m.includes('Período')){res.status(409).json({error:'Maintenance command conflict'});return;}if(m.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}console.error('AUTOERP_MAINTENANCE_AUTHORITY_FAILURE',e);res.status(500).json({error:'Maintenance operation failed'});}
 
-function principal(req: Request): AuthenticatedPrincipal | undefined {
-  return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
-}
+export function registerMaintenanceRoutes(app:Express):void{
+  registerMaintenancePreventiveRoutes(app);
+  app.get('/api/maintenance/work-orders',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const vehicleId=typeof req.query.vehicleId==='string'&&req.query.vehicleId.trim()?req.query.vehicleId.trim():undefined;res.json({items:await MaintenanceAuthorityService.listWorkOrders(p.companyId,vehicleId)});}catch(e){send(res,e);}});
+  app.get('/api/maintenance/work-orders/:id',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const item=await MaintenanceAuthorityService.getWorkOrder(p.companyId,req.params.id);if(!item)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');res.json({item});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/work-orders',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:CreateWorkOrderInput={number:text(req.body?.number,80),vehicleId:text(req.body?.vehicleId,200),supplierId:opt(req.body?.supplierId,200),entryKm:nonneg(req.body?.entryKm),description:text(req.body?.description,1000),diagnosis:opt(req.body?.diagnosis,1000),notes:opt(req.body?.notes,2000),parts:items(req.body?.parts,'parts'),services:items(req.body?.services,'services'),laborItems:items(req.body?.laborItems,'labor'),discount:req.body?.discount===undefined?undefined:nonneg(req.body.discount)};res.status(201).json({item:await MaintenanceAuthorityService.createWorkOrder(p,input)});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/work-orders/:id/start',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body||{});res.json({item:await MaintenanceAuthorityService.startWorkOrder(p,req.params.id)});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/work-orders/:id/complete',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);res.json({item:await MaintenanceAuthorityService.completeWorkOrder(p,req.params.id,{exitKm:nonneg(req.body?.exitKm),categoryId:text(req.body?.categoryId,200),dueDate:text(req.body?.dueDate,10),installmentsCount:req.body?.installmentsCount===undefined?undefined:Number(req.body.installmentsCount)})});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/work-orders/:id/cancel',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);res.json({item:await MaintenanceAuthorityService.cancelWorkOrder(p,req.params.id,text(req.body?.reason,500))});}catch(e){send(res,e);}});
 
-function requirePrincipal(req: Request, res: Response, action: MaintenanceAction): AuthenticatedPrincipal | null {
-  const actor = principal(req);
-  if (!actor) {
-    res.status(401).json({ error: 'Unauthorized: Authentication required' });
-    return null;
-  }
-  const role = String(actor.role || '').toUpperCase();
-  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
-  const explicit = permissions.includes('*') || permissions.includes(action);
-  const roleAllowed = action === 'VIEW_MAINTENANCE' ? READ_ROLES.has(role) : WRITE_ROLES.has(role);
-  if (!explicit && !roleAllowed) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
-  }
-  return actor;
-}
+  app.get('/api/maintenance/suppliers',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{res.json({items:await MaintenanceAuthorityService.listSuppliers(p.companyId)});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/suppliers',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:CreateSupplierInput={name:text(req.body?.name,200),document:text(req.body?.document,64),tradeName:opt(req.body?.tradeName,200),phone:opt(req.body?.phone,80),email:opt(req.body?.email,200),address:opt(req.body?.address,500),category:text(req.body?.category,120),notes:opt(req.body?.notes,1000)};res.status(201).json({item:await MaintenanceAuthorityService.createSupplier(p,input)});}catch(e){send(res,e);}});
+  app.patch('/api/maintenance/suppliers/:id',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:UpdateSupplierInput={name:req.body?.name===undefined?undefined:text(req.body.name,200),document:req.body?.document===undefined?undefined:text(req.body.document,64),tradeName:nullable(req.body?.tradeName,200),phone:nullable(req.body?.phone,80),email:nullable(req.body?.email,200),address:nullable(req.body?.address,500),category:req.body?.category===undefined?undefined:text(req.body.category,120),status:status(req.body?.status),notes:nullable(req.body?.notes,1000)};if(Object.values(input).every(v=>v===undefined))throw new MaintenanceValidationError('No changes');res.json({item:await MaintenanceAuthorityService.updateSupplier(p,req.params.id,input)});}catch(e){send(res,e);}});
 
-function rejectAuthorityFields(body: unknown): void {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new MaintenanceValidationError('Invalid payload');
-  for (const key of Object.keys(body as Record<string, unknown>)) {
-    if (FORBIDDEN_AUTHORITY_FIELDS.has(key)) throw new MaintenanceValidationError(`Protected field: ${key}`);
-  }
-}
-
-function requiredText(value: unknown, max = 1000): string {
-  const text = typeof value === 'string' ? value.trim() : '';
-  if (!text || text.length > max) throw new MaintenanceValidationError('Invalid text');
-  return text;
-}
-function optionalText(value: unknown, max = 1000): string | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  const text = String(value).trim();
-  if (!text || text.length > max) throw new MaintenanceValidationError('Invalid text');
-  return text;
-}
-function nonNegative(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) throw new MaintenanceValidationError('Invalid number');
-  return n;
-}
-function positive(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) throw new MaintenanceValidationError('Invalid number');
-  return n;
-}
-function optionalNullableText(value: unknown, max = 1000): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  return optionalText(value, max)!;
-}
-function parseStatus(value: unknown): 'ACTIVE' | 'INACTIVE' | undefined {
-  if (value === undefined) return undefined;
-  if (value !== 'ACTIVE' && value !== 'INACTIVE') throw new MaintenanceValidationError('Invalid status');
-  return value;
-}
-function parseItems(value: unknown, kind: 'parts' | 'services' | 'labor'): any[] | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value) || value.length > 100) throw new MaintenanceValidationError('Invalid work order items');
-  return value.map((raw) => {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new MaintenanceValidationError('Invalid item');
-    const item = raw as Record<string, unknown>;
-    if (kind === 'parts') {
-      return {
-        partId: optionalText(item.partId, 200),
-        description: optionalText(item.description, 500),
-        quantity: positive(item.quantity),
-        unitCost: item.unitCost === undefined ? undefined : nonNegative(item.unitCost),
-      };
-    }
-    if (kind === 'services') {
-      return {
-        serviceId: optionalText(item.serviceId, 200),
-        description: requiredText(item.description, 500),
-        quantity: positive(item.quantity),
-        unitCost: nonNegative(item.unitCost),
-      };
-    }
-    return {
-      description: requiredText(item.description, 500),
-      hours: positive(item.hours),
-      hourlyRate: nonNegative(item.hourlyRate),
-    };
-  });
-}
-function isUniqueViolation(error: unknown): boolean {
-  let current: unknown = error;
-  for (let depth = 0; depth < 6 && current && typeof current === 'object'; depth++) {
-    if ('code' in current && (current as { code?: unknown }).code === '23505') return true;
-    current = 'cause' in current ? (current as { cause?: unknown }).cause : undefined;
-  }
-  return false;
-}
-function sendError(res: Response, error: unknown): void {
-  const message = error instanceof Error ? error.message : '';
-  if (error instanceof MaintenanceValidationError) { res.status(400).json({ error: 'Invalid maintenance request' }); return; }
-  if (error instanceof MaintenanceNotFoundError || message.includes('não encontrado') || message.includes('não encontrada')) {
-    res.status(404).json({ error: 'Not found' }); return;
-  }
-  if (error instanceof MaintenanceConflictError || isUniqueViolation(error) || message.includes('período financeiro') || message.includes('Período')) {
-    res.status(409).json({ error: 'Maintenance command conflict' }); return;
-  }
-  if (message.startsWith('Acesso negado:')) { res.status(403).json({ error: 'Forbidden' }); return; }
-  console.error('AUTOERP_MAINTENANCE_AUTHORITY_FAILURE', error);
-  res.status(500).json({ error: 'Maintenance operation failed' });
-}
-
-export function registerMaintenanceRoutes(app: Express): void {
-  app.get('/api/maintenance/work-orders', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'VIEW_MAINTENANCE'); if (!actor) return;
-    try {
-      const vehicleId = typeof req.query.vehicleId === 'string' && req.query.vehicleId.trim() ? req.query.vehicleId.trim() : undefined;
-      res.json({ items: await MaintenanceAuthorityService.listWorkOrders(actor.companyId, vehicleId) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.get('/api/maintenance/work-orders/:id', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'VIEW_MAINTENANCE'); if (!actor) return;
-    try {
-      const item = await MaintenanceAuthorityService.getWorkOrder(actor.companyId, req.params.id);
-      if (!item) throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');
-      res.json({ item });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/work-orders', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      const input: CreateWorkOrderInput = {
-        number: requiredText(req.body?.number, 80),
-        vehicleId: requiredText(req.body?.vehicleId, 200),
-        supplierId: optionalText(req.body?.supplierId, 200),
-        entryKm: nonNegative(req.body?.entryKm),
-        description: requiredText(req.body?.description, 1000),
-        diagnosis: optionalText(req.body?.diagnosis, 1000),
-        notes: optionalText(req.body?.notes, 2000),
-        parts: parseItems(req.body?.parts, 'parts'),
-        services: parseItems(req.body?.services, 'services'),
-        laborItems: parseItems(req.body?.laborItems, 'labor'),
-        discount: req.body?.discount === undefined ? undefined : nonNegative(req.body.discount),
-      };
-      res.status(201).json({ item: await MaintenanceAuthorityService.createWorkOrder(actor, input) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/work-orders/:id/start', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try { rejectAuthorityFields(req.body || {}); res.json({ item: await MaintenanceAuthorityService.startWorkOrder(actor, req.params.id) }); }
-    catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/work-orders/:id/complete', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      res.json({ item: await MaintenanceAuthorityService.completeWorkOrder(actor, req.params.id, {
-        exitKm: nonNegative(req.body?.exitKm),
-        categoryId: requiredText(req.body?.categoryId, 200),
-        dueDate: requiredText(req.body?.dueDate, 10),
-        installmentsCount: req.body?.installmentsCount === undefined ? undefined : Number(req.body.installmentsCount),
-      }) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/work-orders/:id/cancel', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      res.json({ item: await MaintenanceAuthorityService.cancelWorkOrder(actor, req.params.id, requiredText(req.body?.reason, 500)) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.get('/api/maintenance/suppliers', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'VIEW_MAINTENANCE'); if (!actor) return;
-    try { res.json({ items: await MaintenanceAuthorityService.listSuppliers(actor.companyId) }); }
-    catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/suppliers', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      const input: CreateSupplierInput = {
-        name: requiredText(req.body?.name, 200), document: requiredText(req.body?.document, 64),
-        tradeName: optionalText(req.body?.tradeName, 200), phone: optionalText(req.body?.phone, 80),
-        email: optionalText(req.body?.email, 200), address: optionalText(req.body?.address, 500),
-        category: requiredText(req.body?.category, 120), notes: optionalText(req.body?.notes, 1000),
-      };
-      res.status(201).json({ item: await MaintenanceAuthorityService.createSupplier(actor, input) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.patch('/api/maintenance/suppliers/:id', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      const input: UpdateSupplierInput = {
-        name: req.body?.name === undefined ? undefined : requiredText(req.body.name, 200),
-        document: req.body?.document === undefined ? undefined : requiredText(req.body.document, 64),
-        tradeName: optionalNullableText(req.body?.tradeName, 200), phone: optionalNullableText(req.body?.phone, 80),
-        email: optionalNullableText(req.body?.email, 200), address: optionalNullableText(req.body?.address, 500),
-        category: req.body?.category === undefined ? undefined : requiredText(req.body.category, 120),
-        status: parseStatus(req.body?.status), notes: optionalNullableText(req.body?.notes, 1000),
-      };
-      if (Object.values(input).every((value) => value === undefined)) throw new MaintenanceValidationError('No changes');
-      res.json({ item: await MaintenanceAuthorityService.updateSupplier(actor, req.params.id, input) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.get('/api/maintenance/parts', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'VIEW_MAINTENANCE'); if (!actor) return;
-    try { res.json({ items: await MaintenanceAuthorityService.listParts(actor.companyId) }); }
-    catch (error) { sendError(res, error); }
-  });
-
-  app.post('/api/maintenance/parts', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      const input: CreatePartInput = {
-        code: requiredText(req.body?.code, 80), name: requiredText(req.body?.name, 200),
-        description: optionalText(req.body?.description, 500), manufacturer: optionalText(req.body?.manufacturer, 200),
-        category: requiredText(req.body?.category, 120), unit: requiredText(req.body?.unit, 30),
-        currentCost: nonNegative(req.body?.currentCost), minimumStock: nonNegative(req.body?.minimumStock),
-        currentStock: nonNegative(req.body?.currentStock),
-      };
-      res.status(201).json({ item: await MaintenanceAuthorityService.createPart(actor, input) });
-    } catch (error) { sendError(res, error); }
-  });
-
-  app.patch('/api/maintenance/parts/:id', async (req, res) => {
-    const actor = requirePrincipal(req, res, 'MUTATE_MAINTENANCE'); if (!actor) return;
-    try {
-      rejectAuthorityFields(req.body);
-      const input: UpdatePartInput = {
-        code: req.body?.code === undefined ? undefined : requiredText(req.body.code, 80),
-        name: req.body?.name === undefined ? undefined : requiredText(req.body.name, 200),
-        description: optionalNullableText(req.body?.description, 500), manufacturer: optionalNullableText(req.body?.manufacturer, 200),
-        category: req.body?.category === undefined ? undefined : requiredText(req.body.category, 120),
-        unit: req.body?.unit === undefined ? undefined : requiredText(req.body.unit, 30),
-        currentCost: req.body?.currentCost === undefined ? undefined : nonNegative(req.body.currentCost),
-        minimumStock: req.body?.minimumStock === undefined ? undefined : nonNegative(req.body.minimumStock),
-        currentStock: req.body?.currentStock === undefined ? undefined : nonNegative(req.body.currentStock),
-        status: parseStatus(req.body?.status),
-      };
-      if (Object.values(input).every((value) => value === undefined)) throw new MaintenanceValidationError('No changes');
-      res.json({ item: await MaintenanceAuthorityService.updatePart(actor, req.params.id, input) });
-    } catch (error) { sendError(res, error); }
-  });
+  app.get('/api/maintenance/parts',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{res.json({items:await MaintenanceAuthorityService.listParts(p.companyId)});}catch(e){send(res,e);}});
+  app.post('/api/maintenance/parts',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:CreatePartInput={code:text(req.body?.code,80),name:text(req.body?.name,200),description:opt(req.body?.description,500),manufacturer:opt(req.body?.manufacturer,200),category:text(req.body?.category,120),unit:text(req.body?.unit,30),currentCost:nonneg(req.body?.currentCost),minimumStock:nonneg(req.body?.minimumStock),currentStock:nonneg(req.body?.currentStock)};res.status(201).json({item:await MaintenanceAuthorityService.createPart(p,input)});}catch(e){send(res,e);}});
+  app.patch('/api/maintenance/parts/:id',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:UpdatePartInput={code:req.body?.code===undefined?undefined:text(req.body.code,80),name:req.body?.name===undefined?undefined:text(req.body.name,200),description:nullable(req.body?.description,500),manufacturer:nullable(req.body?.manufacturer,200),category:req.body?.category===undefined?undefined:text(req.body.category,120),unit:req.body?.unit===undefined?undefined:text(req.body.unit,30),currentCost:req.body?.currentCost===undefined?undefined:nonneg(req.body.currentCost),minimumStock:req.body?.minimumStock===undefined?undefined:nonneg(req.body.minimumStock),currentStock:req.body?.currentStock===undefined?undefined:nonneg(req.body.currentStock),status:status(req.body?.status)};if(Object.values(input).every(v=>v===undefined))throw new MaintenanceValidationError('No changes');res.json({item:await MaintenanceAuthorityService.updatePart(p,req.params.id,input)});}catch(e){send(res,e);}});
 }
