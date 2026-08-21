@@ -104,7 +104,8 @@ jobs:
           const path = require('node:path');
           const root = 'dist/assets';
           const files = fs.readdirSync(root).filter((file) => fs.statSync(path.join(root, file)).isFile());
-          const bundle = files.map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
+          const chunks = files.map((file) => ({ file, text: fs.readFileSync(path.join(root, file), 'utf8') }));
+          const bundle = chunks.map(({ text }) => text).join('\n');
 
           const forbidden = [
             ['AutoERP_DB', 'legacy StorageAdapter/IndexedDB graph'],
@@ -122,8 +123,16 @@ jobs:
           ];
 
           for (const [marker, label] of forbidden) {
-            if (bundle.includes(marker)) {
+            const matches = chunks.filter(({ text }) => text.includes(marker));
+            if (matches.length > 0) {
               console.error(`FAIL: ${label} found in production frontend bundle (${marker})`);
+              for (const { file, text } of matches) {
+                const index = text.indexOf(marker);
+                const start = Math.max(0, index - 700);
+                const end = Math.min(text.length, index + marker.length + 700);
+                console.error(`FORBIDDEN_MARKER_FILE=${file}`);
+                console.error(`FORBIDDEN_MARKER_CONTEXT=${text.slice(start, end)}`);
+              }
               process.exit(1);
             }
           }
