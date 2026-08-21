@@ -1,10 +1,15 @@
 import type { AccountReceivable } from '../types/entities';
+import {
+  isRenegotiationInstallmentFrequency,
+  type RenegotiationInstallmentFrequency,
+} from '../shared/utils/renegotiationSchedule';
 
 export interface ReceivableRenegotiationInput {
   obligationIds: string[];
   newTotalAmount: number;
   installmentsCount: number;
   firstDueDate: string;
+  installmentFrequency: RenegotiationInstallmentFrequency;
   categoryId: string;
   description: string;
 }
@@ -76,6 +81,13 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
 
 export class FinanceRenegotiationClient {
   static async renegotiateReceivables(input: ReceivableRenegotiationInput): Promise<AccountReceivable[]> {
+    if (!isRenegotiationInstallmentFrequency(input.installmentFrequency)) {
+      throw new Error('Invalid renegotiation installment frequency');
+    }
+    if (!input.categoryId.trim()) {
+      throw new Error('Renegotiation category is required');
+    }
+
     const payload = asRecord(await requestJson('/api/finance/receivables/renegotiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
