@@ -97,6 +97,13 @@ export const SystemIntegrityAuditView: React.FC<LegacyViewProps> = () => (
   />
 );
 
+export const SystemHealthCenterView: React.FC<LegacyViewProps> = () => (
+  <ServerAuthorityUnavailableView
+    title="Saúde e Diagnóstico Técnico"
+    description="Saúde de persistência, backup, RBAC e infraestrutura não é inferida de LocalStorage ou constantes do navegador. Esta superfície aguarda telemetria e evidência server-side canônicas."
+  />
+);
+
 export const EnterpriseConsolidationView: React.FC<LegacyViewProps> = () => (
   <ServerAuthorityUnavailableView
     title="Consolidação Empresarial"
