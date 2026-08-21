@@ -3,7 +3,7 @@ name: FINANCE-R2 Fixture Patcher
 on:
   pull_request:
     branches: [main]
-    types: [synchronize]
+    types: [synchronize, reopened]
 
 permissions:
   contents: write
