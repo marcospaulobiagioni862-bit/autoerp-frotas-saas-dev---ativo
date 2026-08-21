@@ -92,19 +92,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -R -q "AutoERP_DB" dist/assets; then
-            echo "FAIL: legacy StorageAdapter/IndexedDB marker found in production frontend bundle"
-            exit 1
-          fi
-          if grep -R -q "Reset Seed" dist/assets; then
-            echo "FAIL: Reset Seed control found in production frontend bundle"
-            exit 1
-          fi
-          if grep -R -q "Carlos Silva" dist/assets; then
-            echo "FAIL: simulated production user identity found in frontend bundle"
-            exit 1
-          fi
-          echo "PASS: production frontend bundle is free of legacy browser authority markers"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'dist/assets';
+          const forbidden = [
+            ['AutoERP_DB', 'legacy StorageAdapter/IndexedDB database'],
+            ['__autoerp_backup_records_v1__', 'browser-local backup store'],
+            ['Reset Seed', 'production Reset Seed control'],
+            ['Carlos Silva', 'simulated production user identity'],
+          ];
+          let failed = false;
+          for (const file of fs.readdirSync(root)) {
+            const full = path.join(root, file);
+            if (!fs.statSync(full).isFile()) continue;
+            const text = fs.readFileSync(full, 'utf8');
+            for (const [marker, label] of forbidden) {
+              const index = text.indexOf(marker);
+              if (index < 0) continue;
+              const from = Math.max(0, index - 120);
+              const to = Math.min(text.length, index + marker.length + 120);
+              console.error(`FAIL: ${label} found in ${file}`);
+              console.error(text.slice(from, to).replace(/\s+/g, ' '));
+              failed = true;
+            }
+          }
+          if (failed) process.exit(1);
+          console.log('PASS: production frontend bundle is free of legacy browser authority markers');
+          NODE
       - name: Report gate success
         if: success()
         env:

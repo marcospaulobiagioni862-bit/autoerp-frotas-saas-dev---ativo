@@ -12,6 +12,14 @@ export default defineConfig(() => {
     __dirname,
     'src/persistence/seed/productionSeedStub.ts'
   );
+  const productionTestRunnerPanel = path.resolve(
+    __dirname,
+    'src/components/tests/ProductionTestRunnerPanel.tsx'
+  );
+  const productionResilienceCenter = path.resolve(
+    __dirname,
+    'src/components/resilience/ProductionResilienceCenterView.tsx'
+  );
 
   return {
     plugins: [react(), tailwindcss()],
@@ -29,6 +37,20 @@ export default defineConfig(() => {
         {
           find: /^(?:\.\.?\/)*persistence\/seed\/seedData(?:\.ts)?$/,
           replacement: browserSeedStub,
+        },
+        // SECURITY-2N: browser test suites import local persistence fixtures and
+        // are excluded from the production graph. CI/GitHub Actions is the
+        // authoritative test environment.
+        {
+          find: /^(?:\.\.?\/)*components\/tests\/TestRunnerPanel(?:\.tsx)?$/,
+          replacement: productionTestRunnerPanel,
+        },
+        // SECURITY-2N: the historical disaster-recovery screen performs local
+        // backup/restore with simulated tenant identity. Production stays
+        // fail-closed until a dedicated server-authoritative DR wave.
+        {
+          find: /^(?:\.\.?\/)*components\/resilience\/ResilienceCenterView(?:\.tsx)?$/,
+          replacement: productionResilienceCenter,
         },
         {
           find: '@',

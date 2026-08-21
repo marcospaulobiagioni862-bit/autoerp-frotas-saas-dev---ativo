@@ -8,6 +8,8 @@ const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8'
 const vite = read('vite.config.ts');
 assert.match(vite, /serverReadModelRepositories\.ts/, 'Vite must route browser legacy repository imports to the server read-model adapter');
 assert.match(vite, /productionSeedStub\.ts/, 'Vite must disable browser seed authority');
+assert.match(vite, /ProductionTestRunnerPanel\.tsx/, 'Production build must exclude the historical browser test runner graph');
+assert.match(vite, /ProductionResilienceCenterView\.tsx/, 'Production build must exclude browser-local backup/restore authority');
 assert.match(vite, /localRepositories/, 'The compatibility alias must explicitly match the historical repository import');
 
 const adapter = read('src/persistence/repositories/serverReadModelRepositories.ts');
@@ -24,10 +26,19 @@ const seedStub = read('src/persistence/seed/productionSeedStub.ts');
 assert.doesNotMatch(seedStub, /StorageAdapter|indexedDB|localStorage/i, 'Production seed stub must have no browser persistence path');
 assert.match(seedStub, /BROWSER_SEED_RESET_DISABLED_SERVER_AUTHORITY_REQUIRED/, 'Browser reset must fail closed');
 
+const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
+assert.doesNotMatch(testPanel, /PersistenceTestRunner|StorageAdapter|seedAutoERPTestData/, 'Production test panel must not pull browser test persistence');
+assert.match(testPanel, /GitHub Actions/, 'Production test panel must direct technical authority to CI');
+
+const resiliencePanel = read('src/components/resilience/ProductionResilienceCenterView.tsx');
+assert.doesNotMatch(resiliencePanel, /BackupService|StorageAdapter|company-default|admin-user-01/, 'Production resilience panel must not load local backup authority or simulated tenant identity');
+assert.match(resiliencePanel, /fail-closed/i, 'Production resilience panel must explicitly remain fail-closed');
+
 const header = read('src/components/layout/Header.tsx');
 assert.doesNotMatch(header, /Reset Seed/, 'Production header must not expose Reset Seed');
 assert.doesNotMatch(header, /Carlos Silva|Gestor de Operações/, 'Production header must not contain a simulated operator identity');
 assert.match(header, /useAuth\(\)/, 'Header identity must come from the authenticated session');
+assert.match(header, /GitHub Actions/, 'Header must point test status to the authoritative CI environment when browser tests are disabled');
 
 await assert.rejects(
   () => new VehicleRepository().create({} as never),
