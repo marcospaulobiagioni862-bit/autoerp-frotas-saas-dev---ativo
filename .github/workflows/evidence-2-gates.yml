@@ -1,0 +1,94 @@
+name: EVIDENCE-2 Gates
+
+on:
+  push:
+    branches:
+      - evidence-2-tracker-evidence-ui
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: evidence-2-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-evidence-2-test
+      JWT_AUDIENCE: autoerp-evidence-2-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 183 --repo "$GITHUB_REPOSITORY" --body "EVIDENCE-2 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: EVIDENCE-2 tracker UI invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=src/components/fleet/FleetComplianceManagement.tsx
+          grep -q 'FileUpload entityType="Tracker"' "$FILE"
+          grep -q 'AttachmentList.*entityType="Tracker"' "$FILE"
+          grep -q 'documentType="TRACKER_EVIDENCE"' "$FILE"
+          grep -q 'trackerAttachmentRefresh' "$FILE"
+          grep -q 'onUploadComplete.*setTrackerAttachmentRefresh' "$FILE"
+          echo "EVIDENCE-2 tracker UI invariant: PASS"
+      - name: Apply migrations 0000 through 0021
+        run: node migrate_test_db.cjs
+      - name: EVIDENCE-1 attachment expansion regression
+        run: npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
+      - name: Existing attachment authority regression
+        run: npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+      - name: Tracker authority regression
+        run: npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+      - name: Document authority regression
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 183 --repo "$GITHUB_REPOSITORY" --body "EVIDENCE-2 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 183 --repo "$GITHUB_REPOSITORY" --body "EVIDENCE-2 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
