@@ -26,6 +26,7 @@ async function main(): Promise<void> {
     'components/execution/OperationalExecutionCenterView',
     'components/release/ReleaseGovernanceCenterView',
     'components/audit/SystemIntegrityAuditView',
+    'components/admin/SystemHealthCenterView',
     'components/consolidation/EnterpriseConsolidationView',
     'components/observability/PostGoLiveObservabilityView',
     'components/governance/GovernanceCenterView',
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
     'OperationalExecutionCenterView',
     'ReleaseGovernanceCenterView',
     'SystemIntegrityAuditView',
+    'SystemHealthCenterView',
     'EnterpriseConsolidationView',
     'PostGoLiveObservabilityView',
     'GovernanceCenterView',
@@ -99,6 +101,7 @@ async function main(): Promise<void> {
     assert(!sidebar.includes(label), `Legacy cockpit remains exposed in production navigation: ${label}`);
   }
 
+  assert(!sidebar.includes("id: 'system-health'"), 'Browser-derived system health remains exposed in production navigation');
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
   assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
   assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
