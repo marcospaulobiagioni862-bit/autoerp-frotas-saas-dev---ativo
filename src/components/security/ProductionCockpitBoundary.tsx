@@ -61,7 +61,14 @@ export const ExecutiveDashboardView: React.FC<LegacyViewProps> = () => (
   <ExecutiveOperationsCenterView />
 );
 
-// Experimental Phase 3.x surfaces remain fail-closed until promoted separately.
+// Experimental/browser-authoritative surfaces remain fail-closed until promoted separately.
+export const AdministrationCenterView: React.FC<LegacyViewProps> = () => (
+  <ServerAuthorityUnavailableView
+    title="Administração de Produção"
+    description="Usuários, RBAC, tenant configuration, backup e auditoria desta central legada ainda combinam serviços client-side. A administração de produção permanece isolada até possuir uma authority server-side única e auditável."
+  />
+);
+
 export const PerformanceManagementCenterView: React.FC<LegacyViewProps> = () => (
   <ServerAuthorityUnavailableView
     title="Gestão de Resultados"
