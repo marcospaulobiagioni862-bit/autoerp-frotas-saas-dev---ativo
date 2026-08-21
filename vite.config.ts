@@ -12,6 +12,10 @@ export default defineConfig(() => {
     __dirname,
     'src/persistence/seed/productionSeedStub.ts'
   );
+  const operationalPendingProjection = path.resolve(
+    __dirname,
+    'src/domain/operations/serverOperationalPendingProjection.ts'
+  );
   const productionTestRunnerPanel = path.resolve(
     __dirname,
     'src/components/tests/ProductionTestRunnerPanel.tsx'
@@ -25,29 +29,31 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: [
-        // SECURITY-2N: any browser import that still names the historical
-        // repository module resolves to an authenticated server-read adapter.
-        // Match the complete relative specifier so Vite never leaves a leading
-        // './' or '../' attached to the absolute replacement path.
+        // SECURITY-2N compatibility bridge: historical read-only repository
+        // imports resolve to authenticated server clients. Browser writes fail closed.
         {
           find: /^(?:\.\.?\/)*persistence\/repositories\/localRepositories(?:\.ts)?$/,
           replacement: browserReadModelRepositories,
         },
-        // SECURITY-2N: the React runtime can no longer seed/reset business data.
+        // SECURITY-2N: startup/reset seed authority is disabled in production.
         {
           find: /^(?:\.\.?\/)*persistence\/seed\/seedData(?:\.ts)?$/,
           replacement: browserSeedStub,
         },
-        // SECURITY-2N: browser test suites import local persistence fixtures and
-        // are excluded from the production graph. CI/GitHub Actions is the
-        // authoritative test environment.
+        // SECURITY-2N: operational pendings remain a pure projection, but tenant
+        // identity is derived/validated from canonical server payloads and IDs are
+        // deterministic. No fixed tenant fallback is allowed in the runtime graph.
+        {
+          find: /^(?:\.\.?\/)*domain\/operations\/OperationalPendingService(?:\.ts)?$/,
+          replacement: operationalPendingProjection,
+        },
+        // Browser test suites import local persistence fixtures; CI/GitHub Actions
+        // is the production test authority.
         {
           find: /^(?:\.\.?\/)*components\/tests\/TestRunnerPanel(?:\.tsx)?$/,
           replacement: productionTestRunnerPanel,
         },
-        // SECURITY-2N: the historical disaster-recovery screen performs local
-        // backup/restore with simulated tenant identity. Production stays
-        // fail-closed until a dedicated server-authoritative DR wave.
+        // Historical browser-local backup/restore is not production authority.
         {
           find: /^(?:\.\.?\/)*components\/resilience\/ResilienceCenterView(?:\.tsx)?$/,
           replacement: productionResilienceCenter,
