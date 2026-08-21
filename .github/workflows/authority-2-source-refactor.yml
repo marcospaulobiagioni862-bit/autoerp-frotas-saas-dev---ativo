@@ -1,0 +1,121 @@
+name: AUTHORITY-2 Source Refactor
+
+on:
+  push:
+    branches:
+      - authority-2-explicit-runtime-server-read-model
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: ${{ !contains(github.event.head_commit.message, 'AUTHORITY-2: complete explicit runtime source refactor') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: authority-2-explicit-runtime-server-read-model
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply scoped source refactor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          runtime_files = [
+              Path('src/components/dashboard/OverviewDashboard.tsx'),
+              Path('src/components/dashboard/PerformanceMetricsWidget.tsx'),
+              Path('src/components/operations/PendingCenterView.tsx'),
+              Path('src/components/operations/DailyOperationsView.tsx'),
+              Path('src/components/rental/RentalLifecycleView.tsx'),
+              Path('src/components/operations/RentalControlCenterView.tsx'),
+              Path('src/components/reports/ManagementReportsView.tsx'),
+          ]
+
+          for path in runtime_files:
+              text = path.read_text()
+              text = text.replace(
+                  'persistence/repositories/localRepositories',
+                  'persistence/repositories/serverReadModelRepositories',
+              )
+              path.write_text(text)
+
+          overview = Path('src/components/dashboard/OverviewDashboard.tsx')
+          text = overview.read_text().replace(
+              '../../domain/operations/OperationalPendingService',
+              '../../domain/operations/serverOperationalPendingProjection',
+          )
+          marker = 'const opPendings = generateOperationalPendings({\n        vehicles: vehs,'
+          replacement = 'const opPendings = generateOperationalPendings({\n        companyId: companyIdSnapshot,\n        vehicles: vehs,'
+          if marker not in text and replacement not in text:
+              raise SystemExit('Overview pending projection marker not found')
+          text = text.replace(marker, replacement)
+          overview.write_text(text)
+
+          pending = Path('src/components/operations/PendingCenterView.tsx')
+          pending.write_text(pending.read_text().replace(
+              '../../domain/operations/OperationalPendingService',
+              '../../domain/operations/serverOperationalPendingProjection',
+          ))
+
+          test = Path('src/server/__tests__/runtimeReadModelAuthority.ts')
+          text = test.read_text()
+          old = """for (const path of migratedRuntimeFiles) {\n  const source = read(path);\n  assert.doesNotMatch(source, /StorageAdapter|indexedDB|localStorage/i, `${path} must not directly access browser persistence`);\n}\n"""
+          new = """for (const path of migratedRuntimeFiles) {\n  const source = read(path);\n  assert.doesNotMatch(source, /StorageAdapter|indexedDB|localStorage/i, `${path} must not directly access browser persistence`);\n  assert.doesNotMatch(source, /persistence\\/repositories\\/localRepositories/, `${path} must not depend on the legacy repository alias`);\n  assert.match(source, /serverReadModelRepositories/, `${path} must import the explicit authenticated server read-model adapter`);\n}\n\nconst appSource = read('src/App.tsx');\nassert.doesNotMatch(appSource, /persistence\\/seed\\/seedData|seedAutoERPTestData|handleResetSeedData/, 'App runtime must not depend on browser seed/reset authority');\nassert.match(appSource, /domain\\/operations\\/serverOperationalPendingProjection/, 'App must import the tenant-safe pending projection explicitly');\nconst overviewSource = read('src/components/dashboard/OverviewDashboard.tsx');\nassert.match(overviewSource, /domain\\/operations\\/serverOperationalPendingProjection/, 'Overview must import the tenant-safe pending projection explicitly');\nassert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');\nconst pendingSource = read('src/components/operations/PendingCenterView.tsx');\nassert.match(pendingSource, /domain\\/operations\\/serverOperationalPendingProjection/, 'Pending center must import the tenant-safe pending projection explicitly');\n"""
+          if old not in text:
+              raise SystemExit('runtimeReadModelAuthority loop marker not found')
+          test.write_text(text.replace(old, new))
+          PY
+
+          files=(
+            src/App.tsx
+            src/components/dashboard/OverviewDashboard.tsx
+            src/components/dashboard/PerformanceMetricsWidget.tsx
+            src/components/operations/PendingCenterView.tsx
+            src/components/operations/DailyOperationsView.tsx
+            src/components/rental/RentalLifecycleView.tsx
+            src/components/operations/RentalControlCenterView.tsx
+            src/components/reports/ManagementReportsView.tsx
+            src/server/__tests__/runtimeReadModelAuthority.ts
+          )
+
+          for file in "${files[@]}"; do
+            if grep -q 'persistence/repositories/localRepositories' "$file"; then
+              echo "FAIL legacy repository import: $file"
+              exit 1
+            fi
+            grep -q 'serverReadModelRepositories' "$file"
+          done
+          ! grep -qE 'seedAutoERPTestData|persistence/seed/seedData|handleResetSeedData' src/App.tsx
+          grep -q 'serverOperationalPendingProjection' src/App.tsx
+          grep -q 'serverOperationalPendingProjection' src/components/dashboard/OverviewDashboard.tsx
+          grep -q 'serverOperationalPendingProjection' src/components/operations/PendingCenterView.tsx
+          grep -q 'companyId: companyIdSnapshot' src/components/dashboard/OverviewDashboard.tsx
+
+      - name: Remove temporary helper and commit scoped files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/authority-2-source-refactor.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            .github/workflows/authority-2-source-refactor.yml \
+            src/components/dashboard/OverviewDashboard.tsx \
+            src/components/operations/PendingCenterView.tsx \
+            src/components/operations/DailyOperationsView.tsx \
+            src/components/rental/RentalLifecycleView.tsx \
+            src/components/operations/RentalControlCenterView.tsx \
+            src/components/reports/ManagementReportsView.tsx \
+            src/server/__tests__/runtimeReadModelAuthority.ts
+          if git diff --cached --quiet; then
+            echo 'No additional changes required.'
+            exit 0
+          fi
+          git commit -m 'AUTHORITY-2: complete explicit runtime source refactor'
+          git push origin HEAD:authority-2-explicit-runtime-server-read-model
