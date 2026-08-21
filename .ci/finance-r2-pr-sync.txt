@@ -1,1 +1,0 @@
-Synchronize trigger for PR #194. Temporary; remove before final homologation.
