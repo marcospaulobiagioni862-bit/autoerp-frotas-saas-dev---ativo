@@ -123,7 +123,7 @@ export class DREService {
       const payablesById = new Map<string, AccountPayable>(
         pays
           .filter((p) => p.companyId === companyId)
-          .map((p) => [p.id, p])
+          .map((p): [string, AccountPayable] => [p.id, p])
       );
       const isDepositTx = (desc?: string) => {
         const text = (desc || '').toLowerCase();
