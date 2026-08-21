@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - security-2o-incident-task-executive-authority
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
