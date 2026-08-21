@@ -28,6 +28,10 @@ export default defineConfig(({ command }) => {
     __dirname,
     'src/components/security/ProductionCockpitBoundary.tsx'
   );
+  const productionSidebar = path.resolve(
+    __dirname,
+    'src/components/layout/ProductionSidebar.tsx'
+  );
 
   // SECURITY-2P: historical Phase 3.x cockpit sources remain available to the
   // development server for inspection, but production builds replace every
@@ -50,10 +54,20 @@ export default defineConfig(({ command }) => {
       ].map((find) => ({ find, replacement: productionCockpitBoundary }))
     : [];
 
+  const productionNavigationAliases = command === 'build'
+    ? [
+        {
+          find: /^(?:\.\.?\/)*components\/layout\/Sidebar(?:\.tsx)?$/,
+          replacement: productionSidebar,
+        },
+      ]
+    : [];
+
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: [
+        ...productionNavigationAliases,
         ...productionCockpitAliases,
         // SECURITY-2N compatibility bridge: historical read-only repository
         // imports resolve to authenticated server clients. Browser writes fail closed.
