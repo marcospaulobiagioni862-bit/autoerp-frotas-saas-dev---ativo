@@ -8,6 +8,7 @@ import { IdempotencyService } from '../services/IdempotencyService';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { ITransactionContext } from './ITransactionContext';
+import { assertFinancialCategoryForObligation } from './FinancialCategoryAuthority';
 
 export interface CreateReceivableParams {
   companyId: string;
@@ -40,6 +41,14 @@ export class ReceivableService {
       'RECEIVABLE_CREATE',
       txContext
     );
+
+    const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
+    if (params.originType === OriginType.MANUAL) {
+      if (!txContext?.getRawTransaction) {
+        throw new Error('Autoridade de categoria financeira indisponível para Conta a Receber manual');
+      }
+      await assertFinancialCategoryForObligation(params.companyId, categoryId, 'RECEIVABLE', txContext);
+    }
 
     const installments = Math.max(1, params.installmentsCount || 1);
     const baseAmount = roundCurrency(params.totalAmount / installments);
@@ -106,7 +115,7 @@ export class ReceivableService {
           vehicleId: params.vehicleId,
           driverId: params.driverId,
           contractId: params.contractId,
-          categoryId: params.categoryId,
+          categoryId,
           description: installments > 1 ? `${params.description} (${i}/${installments})` : params.description,
           originalAmount: amountForThisInstallment,
           discountAmount: 0,

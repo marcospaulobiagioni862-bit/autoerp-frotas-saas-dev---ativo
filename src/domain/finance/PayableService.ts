@@ -8,6 +8,7 @@ import { IdempotencyService } from '../services/IdempotencyService';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { ITransactionContext } from './ITransactionContext';
+import { assertFinancialCategoryForObligation } from './FinancialCategoryAuthority';
 
 export interface CreatePayableParams {
   companyId: string;
@@ -42,6 +43,14 @@ export class PayableService {
       'PAYABLE_CREATE',
       txContext
     );
+
+    const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
+    if (params.originType === OriginType.MANUAL) {
+      if (!txContext?.getRawTransaction) {
+        throw new Error('Autoridade de categoria financeira indisponível para Conta a Pagar manual');
+      }
+      await assertFinancialCategoryForObligation(params.companyId, categoryId, 'PAYABLE', txContext);
+    }
 
     const installments = Math.max(1, params.installmentsCount || 1);
     const baseAmount = roundCurrency(params.totalAmount / installments);
@@ -109,7 +118,7 @@ export class PayableService {
           supplierId: params.supplierId,
           driverId: params.driverId,
           contractId: params.contractId,
-          categoryId: params.categoryId,
+          categoryId,
           description: installments > 1 ? `${params.description} (${i}/${installments})` : params.description,
           originalAmount: amountForThisInstallment,
           discountAmount: 0,

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import {
   TrendingUp,
   Search,
@@ -30,6 +31,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
 
   // Manual Creation State
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
@@ -37,7 +39,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [competenceDate, setCompetenceDate] = useState<string>('');
-  const [categoryId, setCategoryId] = useState<string>('cat-manual');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('1');
   const [driverId, setDriverId] = useState<string>('');
   const [vehicleId, setVehicleId] = useState<string>('');
@@ -54,12 +56,20 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const loadReceivables = async () => {
     setLoading(true);
     try {
-      const list = await FinanceObligationClient.listReceivables();
+      const [list, categoryList] = await Promise.all([
+        FinanceObligationClient.listReceivables(),
+        TrafficTicketClient.categories(),
+      ]);
+      const incomeCategories = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
+      setCategories(incomeCategories);
+      setCategoryId((current) => incomeCategories.some((category) => category.id === current) ? current : (incomeCategories[0]?.id || ''));
       setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar contas a receber.';
       alert(message);
       setReceivables([]);
+      setCategories([]);
+      setCategoryId('');
     } finally {
       setLoading(false);
     }
@@ -67,7 +77,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
 
   const handleCreateReceivable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim() || !totalAmount || !dueDate) {
+    if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -93,7 +103,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
       setTotalAmount('');
       setDueDate('');
       setCompetenceDate('');
-      setCategoryId('cat-manual');
+      setCategoryId(categories[0]?.id || '');
       setInstallmentsCount('1');
       setDriverId('');
       setVehicleId('');
@@ -400,10 +410,10 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
                   required
                 >
-                  <option value="cat-rent">Aluguel / Locação</option>
-                  <option value="cat-deposit">Caução / Depósito</option>
-                  <option value="cat-ticket">Multa de Trânsito</option>
-                  <option value="cat-manual">Outros Recebimentos</option>
+                  <option value="">Selecione uma categoria de receita</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

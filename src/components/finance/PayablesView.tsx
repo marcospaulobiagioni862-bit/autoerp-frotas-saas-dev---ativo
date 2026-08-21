@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccountPayable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
 import { FolderOpen } from 'lucide-react';
@@ -18,6 +19,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [loading, setLoading] = useState<boolean>(true);
   const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
 
   // Manual Creation State
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
@@ -25,7 +27,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [competenceDate, setCompetenceDate] = useState<string>('');
-  const [categoryId, setCategoryId] = useState<string>('cat-manual-payable');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('1');
   const [supplierId, setSupplierId] = useState<string>('');
   const [driverId, setDriverId] = useState<string>('');
@@ -43,12 +45,20 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const loadPayables = async () => {
     setLoading(true);
     try {
-      const list = await FinanceObligationClient.listPayables();
+      const [list, categoryList] = await Promise.all([
+        FinanceObligationClient.listPayables(),
+        TrafficTicketClient.categories(),
+      ]);
+      const expenseCategories = categoryList.filter((category) => category.type === 'EXPENSE' || category.type === 'BOTH');
+      setCategories(expenseCategories);
+      setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));
       setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar contas a pagar.';
       alert(message);
       setPayables([]);
+      setCategories([]);
+      setCategoryId('');
     } finally {
       setLoading(false);
     }
@@ -56,7 +66,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
 
   const handleCreatePayable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim() || !totalAmount || !dueDate) {
+    if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
@@ -83,7 +93,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       setTotalAmount('');
       setDueDate('');
       setCompetenceDate('');
-      setCategoryId('cat-manual-payable');
+      setCategoryId(categories[0]?.id || '');
       setInstallmentsCount('1');
       setSupplierId('');
       setDriverId('');
@@ -356,10 +366,10 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
                   required
                 >
-                  <option value="cat-maintenance">Manutenção / Peças</option>
-                  <option value="cat-insurance">Seguro Frota</option>
-                  <option value="cat-tracker">Rastreador</option>
-                  <option value="cat-manual-payable">Administrativo / Outros</option>
+                  <option value="">Selecione uma categoria de despesa</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
