@@ -6,6 +6,7 @@ import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { FinanceDepositClient } from '../../api/financeDepositClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { FinanceSettlementClient, type SettlementOptions } from '../../api/financeSettlementClient';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { ContractLegacyDetailsBridge } from './ContractLegacyDetailsBridge';
 import { AttachmentList } from '../documents/AttachmentList';
@@ -26,6 +27,7 @@ interface ContractDetailsModalProps {
 
 type Tab = 'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT';
 const bridge = new ContractLegacyDetailsBridge();
+const EMPTY_SETTLEMENT_OPTIONS: SettlementOptions = { accounts: [], paymentMethods: [] };
 
 export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal }) => {
   const versionRef = useRef(0);
@@ -39,6 +41,10 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const [history, setHistory] = useState<AuditLog[]>([]);
   const [incomeCategories, setIncomeCategories] = useState<TrafficTicketFinancialCategory[]>([]);
   const [incomeCategoryId, setIncomeCategoryId] = useState('');
+  const [settlementOptions, setSettlementOptions] = useState<SettlementOptions>(EMPTY_SETTLEMENT_OPTIONS);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState('');
+  const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,16 +58,18 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     setError(null);
     try {
       const core = await ContractClient.get(contractId);
-      const [v, d, allReceivables, dep, supplemental, categoryList] = await Promise.all([
+      const [v, d, allReceivables, dep, supplemental, categoryList, options] = await Promise.all([
         VehicleClient.get(core.vehicleId),
         DriverClient.get(core.driverId),
         FinanceObligationClient.listReceivables(),
         FinanceDepositClient.getByContract(core.id),
         bridge.load(companyId, core.id),
         TrafficTicketClient.categories(),
+        FinanceSettlementClient.getOptions(),
       ]);
       if (version !== versionRef.current) return;
       const eligible = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
+      const remainingDeposit = Math.max(0, core.securityDepositAmount - (dep?.receivedAmount || 0));
       setContract(core);
       setVehicle(v);
       setDriver(d);
@@ -71,6 +79,10 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       setHistory(supplemental.history);
       setIncomeCategories(eligible);
       setIncomeCategoryId((current) => eligible.some((category) => category.id === current) ? current : (eligible[0]?.id || ''));
+      setSettlementOptions(options);
+      setDepositAccountId((current) => options.accounts.some((item) => item.id === current) ? current : (options.accounts[0]?.id || ''));
+      setDepositPaymentMethodId((current) => options.paymentMethods.some((item) => item.id === current) ? current : (options.paymentMethods[0]?.id || ''));
+      setDepositAmount(remainingDeposit > 0 ? String(remainingDeposit) : '');
     } catch (caught) {
       if (version === versionRef.current) setError(caught instanceof Error ? caught.message : 'Erro ao carregar contrato.');
     } finally {
@@ -82,6 +94,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     setTab('OVERVIEW');
     setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
     setIncomeCategories([]); setIncomeCategoryId('');
+    setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');
     setError(null); setSuccess(null);
     if (isOpen && contractId) void load();
     return () => { versionRef.current += 1; };
@@ -119,11 +132,22 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   };
   const receiveDeposit = () => {
     if (!contract) return;
-    const raw = prompt('Valor da caução a receber:', String(Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0))));
-    if (!raw) return;
-    const amount = Number(raw);
-    if (!Number.isFinite(amount) || amount <= 0) { setError('Valor de caução inválido.'); return; }
-    void action(() => FinanceDepositClient.receive({ contractId: contract.id, amount, financialAccountId: 'acc-nubank-1', paymentMethodId: 'pm-pix' }), 'Caução recebida com sucesso.');
+    const amount = Number(depositAmount);
+    const remaining = Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0));
+    if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) {
+      setError(`Informe um valor de caução entre R$ 0,01 e ${formatCurrencyBRL(remaining)}.`);
+      return;
+    }
+    if (!depositAccountId || !depositPaymentMethodId) {
+      setError('Selecione a conta financeira e a forma de pagamento da caução.');
+      return;
+    }
+    void action(() => FinanceDepositClient.receive({
+      contractId: contract.id,
+      amount,
+      financialAccountId: depositAccountId,
+      paymentMethodId: depositPaymentMethodId,
+    }), 'Caução recebida com sucesso.');
   };
 
   if (!contractId) return null;
@@ -133,6 +157,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const totalPaid = receivables.reduce((sum, item) => sum + item.paidAmount, 0);
   const pending = receivables.reduce((sum, item) => sum + item.balanceAmount, 0);
   const overdue = receivables.filter((item) => item.dueDate < today && item.balanceAmount > 0 && item.status !== ObligationStatus.CANCELLED).reduce((sum, item) => sum + item.balanceAmount, 0);
+  const depositRemaining = contract ? Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)) : 0;
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="xl">
@@ -155,7 +180,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={bill}>Faturar competência</Button>}
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
           {contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.ARCHIVED && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
-          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={receiveDeposit}>Receber caução</Button>}
+          {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
         </div>
       </div>}
 
@@ -186,7 +211,18 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
 
           {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3>{contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="primary" onClick={bill} isLoading={actionLoading} disabled={!incomeCategoryId}>Nova competência</Button>}</div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{item.status}</Badge></div><p className="mt-1 text-[11px] text-slate-500">Venc. {item.dueDate} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
 
-          {tab === 'DEPOSIT' && <Card padding="md"><div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)))} /></div><div className="mt-4"><Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading}>Registrar recebimento</Button></div></Card>}
+          {tab === 'DEPOSIT' && <Card padding="md">
+            <div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(depositRemaining)} /></div>
+            {depositRemaining > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <label className="text-xs font-semibold text-slate-600">Valor a receber<input type="number" min="0.01" max={depositRemaining} step="0.01" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700" /></label>
+              <label className="text-xs font-semibold text-slate-600">Conta financeira<select value={depositAccountId} onChange={(event) => setDepositAccountId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.accounts.map((item) => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
+              <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select value={depositPaymentMethodId} onChange={(event) => setDepositPaymentMethodId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.paymentMethods.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <div className="md:col-span-3 flex items-center justify-between gap-3">
+                {(settlementOptions.accounts.length === 0 || settlementOptions.paymentMethods.length === 0) && <p className="text-[11px] text-rose-600">Cadastre uma conta financeira e uma forma de pagamento ativas antes de receber a caução.</p>}
+                <Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading} disabled={!depositAccountId || !depositPaymentMethodId || !depositAmount}>Registrar recebimento</Button>
+              </div>
+            </div> : <p className="mt-4 text-xs font-semibold text-emerald-700">Caução prevista integralmente recebida.</p>}
+          </Card>}
 
           {tab === 'TICKETS' && <div className="space-y-2">{tickets.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma multa vinculada.</p></Card> : tickets.map((item) => <Card key={item.id} padding="sm"><div className="flex justify-between gap-3 text-xs"><div><b>Auto {item.autoNumber}</b><p className="mt-1 text-slate-500">{item.description}</p></div><span className="font-mono font-bold">{formatCurrencyBRL(item.originalAmount)}</span></div></Card>)}</div>}
 
