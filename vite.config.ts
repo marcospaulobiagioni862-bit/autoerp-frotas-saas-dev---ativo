@@ -19,16 +19,15 @@ export default defineConfig(() => {
       alias: [
         // SECURITY-2N: any browser import that still names the historical
         // repository module resolves to an authenticated server-read adapter.
-        // This removes StorageAdapter/IndexedDB/localStorage authority from the
-        // production frontend bundle while preserving compatibility during the
-        // remaining UI migration waves.
+        // Match the complete relative specifier so Vite never leaves a leading
+        // './' or '../' attached to the absolute replacement path.
         {
-          find: /(^|\/)persistence\/repositories\/localRepositories(?:\.ts)?$/,
+          find: /^(?:\.\.?\/)*persistence\/repositories\/localRepositories(?:\.ts)?$/,
           replacement: browserReadModelRepositories,
         },
         // SECURITY-2N: the React runtime can no longer seed/reset business data.
         {
-          find: /(^|\/)persistence\/seed\/seedData(?:\.ts)?$/,
+          find: /^(?:\.\.?\/)*persistence\/seed\/seedData(?:\.ts)?$/,
           replacement: browserSeedStub,
         },
         {
