@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   const browserReadModelRepositories = path.resolve(
     __dirname,
     'src/persistence/repositories/serverReadModelRepositories.ts'
@@ -24,11 +24,53 @@ export default defineConfig(() => {
     __dirname,
     'src/components/resilience/ProductionResilienceCenterView.tsx'
   );
+  const productionCockpitBoundary = path.resolve(
+    __dirname,
+    'src/components/security/ProductionCockpitBoundary.tsx'
+  );
+  const productionSidebar = path.resolve(
+    __dirname,
+    'src/components/layout/ProductionSidebar.tsx'
+  );
+
+  // SECURITY-2P: historical Phase 3.x and browser-authoritative admin sources
+  // remain available to the development server for inspection, but production
+  // builds replace every unsafe entry module before Rollup can include its graph.
+  const productionCockpitAliases = command === 'build'
+    ? [
+        /^(?:\.\.?\/)*components\/incident-management\/IncidentManagementCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/workflow\/OperationalWorkflowCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/executive\/ExecutiveDashboardView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/admin\/AdministrationCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/performance\/PerformanceManagementCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/release\/ReleaseGovernanceCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/audit\/SystemIntegrityAuditView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/admin\/SystemHealthCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/consolidation\/EnterpriseConsolidationView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/observability\/PostGoLiveObservabilityView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/governance\/GovernanceCenterView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/productivity\/OperationalProductivityView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/goals\/ManagementGoalsView(?:\.tsx)?$/,
+      ].map((find) => ({ find, replacement: productionCockpitBoundary }))
+    : [];
+
+  const productionNavigationAliases = command === 'build'
+    ? [
+        {
+          find: /^(?:\.\.?\/)*components\/layout\/Sidebar(?:\.tsx)?$/,
+          replacement: productionSidebar,
+        },
+      ]
+    : [];
 
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: [
+        ...productionNavigationAliases,
+        ...productionCockpitAliases,
         // SECURITY-2N compatibility bridge: historical read-only repository
         // imports resolve to authenticated server clients. Browser writes fail closed.
         {
