@@ -4,14 +4,47 @@ import {
   AccountPayableRepository,
   FinancialTransactionRepository,
 } from '../../persistence/repositories/localRepositories';
-import { AccountingRegime, TransactionType, ObligationStatus } from '../../types/enums';
+import { AccountingRegime, TransactionType, ObligationStatus, OriginType } from '../../types/enums';
 import { DREReport, DREItem } from '../../types/reports';
+import { AccountPayable } from '../../types/entities';
 import { roundCurrency } from '../../shared/utils/currency';
+
+type DRECostBreakdown = {
+  maintenanceCosts: number;
+  insuranceCosts: number;
+  trackerCosts: number;
+  trafficTicketCosts: number;
+};
 
 export class DREService {
   private static recRepo = new AccountReceivableRepository();
   private static payRepo = new AccountPayableRepository();
   private static txRepo = new FinancialTransactionRepository();
+
+  private static addExpenseToBreakdown(
+    breakdown: DRECostBreakdown,
+    originType: OriginType | string | undefined,
+    amount: number
+  ): void {
+    switch (originType) {
+      case OriginType.MAINTENANCE:
+        breakdown.maintenanceCosts += amount;
+        break;
+      case OriginType.INSURANCE:
+        breakdown.insuranceCosts += amount;
+        break;
+      case OriginType.TRACKER:
+        breakdown.trackerCosts += amount;
+        break;
+      case OriginType.TRAFFIC_TICKET_COMPANY:
+      case OriginType.TRAFFIC_TICKET_NIC:
+        breakdown.trafficTicketCosts += amount;
+        break;
+      default:
+        // Other expenses remain in directCosts, but are not fabricated into named buckets.
+        break;
+    }
+  }
 
   public static async getDREReport(
     companyId: string,
@@ -25,6 +58,12 @@ export class DREService {
     let directCostsAmount = 0;
     let operatingExpensesAmount = 0;
     let financialResultAmount = 0;
+    const breakdown: DRECostBreakdown = {
+      maintenanceCosts: 0,
+      insuranceCosts: 0,
+      trackerCosts: 0,
+      trafficTicketCosts: 0,
+    };
 
     const dateKey = (value?: string) => (value || '').slice(0, 10);
 
@@ -38,11 +77,12 @@ export class DREService {
 
       const isDeposit = (desc?: string, origin?: string) => {
         const text = (desc || '').toLowerCase();
-        return text.includes('caução') || text.includes('caucao') || origin === 'SECURITY_DEPOSIT';
+        return text.includes('caução') || text.includes('caucao') || origin === OriginType.SECURITY_DEPOSIT;
       };
 
       const periodRecs = recs.filter(
         (r) =>
+          r.companyId === companyId &&
           r.status !== ObligationStatus.CANCELLED &&
           dateKey(r.competenceDate) >= periodStart &&
           dateKey(r.competenceDate) <= periodEnd &&
@@ -51,6 +91,7 @@ export class DREService {
 
       const periodPays = pays.filter(
         (p) =>
+          p.companyId === companyId &&
           p.status !== ObligationStatus.CANCELLED &&
           dateKey(p.competenceDate) >= periodStart &&
           dateKey(p.competenceDate) <= periodEnd &&
@@ -67,13 +108,23 @@ export class DREService {
       }
 
       for (const p of periodPays) {
-        directCostsAmount += Number(p.originalAmount || 0);
+        const amount = Number(p.originalAmount || 0);
+        directCostsAmount += amount;
+        this.addExpenseToBreakdown(breakdown, p.originType, amount);
       }
     } else {
       // CASH REGIME
       const txs = txContext
         ? await txContext.getTransactionRepo().findAll()
         : await this.txRepo.findAllForCompany(companyId);
+      const pays = txContext
+        ? await txContext.getPayableRepo().findAll()
+        : await this.payRepo.findAllForCompany(companyId);
+      const payablesById = new Map<string, AccountPayable>(
+        pays
+          .filter((p) => p.companyId === companyId)
+          .map((p): [string, AccountPayable] => [p.id, p])
+      );
       const isDepositTx = (desc?: string) => {
         const text = (desc || '').toLowerCase();
         return text.includes('caução') || text.includes('caucao');
@@ -81,6 +132,7 @@ export class DREService {
 
       const periodTxs = txs.filter(
         (t) =>
+          t.companyId === companyId &&
           !t.isReversed &&
           dateKey(t.transactionDate) >= periodStart &&
           dateKey(t.transactionDate) <= periodEnd &&
@@ -88,8 +140,16 @@ export class DREService {
       );
 
       for (const t of periodTxs) {
-        if (t.type === TransactionType.INCOME) grossRevenueAmount += Number(t.amount || 0);
-        else if (t.type === TransactionType.EXPENSE) directCostsAmount += Number(t.amount || 0);
+        const amount = Number(t.amount || 0);
+        if (t.type === TransactionType.INCOME) {
+          grossRevenueAmount += amount;
+        } else if (t.type === TransactionType.EXPENSE) {
+          directCostsAmount += amount;
+          const payable = t.payableId ? payablesById.get(t.payableId) : undefined;
+          if (payable) {
+            this.addExpenseToBreakdown(breakdown, payable.originType, amount);
+          }
+        }
       }
     }
 
@@ -123,10 +183,10 @@ export class DREService {
       netIncome,
       netProfit: netIncomeAmount,
       breakdown: {
-        maintenanceCosts: roundCurrency(directCostsAmount * 0.4),
-        insuranceCosts: roundCurrency(directCostsAmount * 0.3),
-        trackerCosts: roundCurrency(directCostsAmount * 0.2),
-        trafficTicketCosts: roundCurrency(directCostsAmount * 0.1),
+        maintenanceCosts: roundCurrency(breakdown.maintenanceCosts),
+        insuranceCosts: roundCurrency(breakdown.insuranceCosts),
+        trackerCosts: roundCurrency(breakdown.trackerCosts),
+        trafficTicketCosts: roundCurrency(breakdown.trafficTicketCosts),
       },
     };
   }
