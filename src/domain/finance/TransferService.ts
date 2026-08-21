@@ -72,6 +72,12 @@ export class TransferService {
     ) {
       throw new Error('Acesso negado: Transferência entre contas de empresas diferentes ou não autorizadas');
     }
+    if (sourceAcc.status !== 'ACTIVE') {
+      throw new Error('Conta financeira de origem inativa');
+    }
+    if (destAcc.status !== 'ACTIVE') {
+      throw new Error('Conta financeira de destino inativa');
+    }
 
     if (txContext) {
       const paymentMethodRepo = txContext.getPaymentMethodRepo?.();

@@ -78,6 +78,9 @@ export class SettlementService {
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
     }
+    if (account.status !== 'ACTIVE') {
+      throw new Error('Conta financeira inativa');
+    }
 
     if (txContext) {
       const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
@@ -235,6 +238,9 @@ export class SettlementService {
     if (!account) throw new Error('Conta financeira não encontrada');
     if (!account.companyId || account.companyId !== params.companyId) {
       throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
+    }
+    if (account.status !== 'ACTIVE') {
+      throw new Error('Conta financeira inativa');
     }
 
     if (txContext) {
