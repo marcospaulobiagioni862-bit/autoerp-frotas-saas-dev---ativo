@@ -17,7 +17,6 @@ import {
   LifeBuoy,
   PieChart,
   ShieldCheck,
-  Sliders,
   TrendingUp,
   Users,
   Wrench,
@@ -149,9 +148,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      title: 'ADMINISTRAÇÃO',
+      title: 'VALIDAÇÃO',
       items: [
-        { id: 'administration', label: 'Usuários e Permissões', icon: Sliders },
         {
           id: 'tests',
           label: 'Validação Técnica',
