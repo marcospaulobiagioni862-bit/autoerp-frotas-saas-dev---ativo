@@ -40,16 +40,15 @@ import { PaymentModal } from './components/modals/PaymentModal';
 import { TransferModal } from './components/modals/TransferModal';
 import { RenegotiationModal } from './components/modals/RenegotiationModal';
 import { AccountReceivable, AccountPayable } from './types/entities';
-import { seedAutoERPTestData } from './persistence/seed/seedData';
 import { useAuth } from './hooks/useAuth';
 import {
   AccountReceivableRepository, AccountPayableRepository, VehicleRepository, ContractRepository,
   MaintenanceRepository, VehicleDocumentRepository, DriverDocumentRepository, TrafficTicketRepository,
   DriverRepository, InsuranceRepository,
-} from './persistence/repositories/localRepositories';
+} from './persistence/repositories/serverReadModelRepositories';
 import { TrackerClient } from './api/trackerClient';
 import { ObligationStatus } from './types/enums';
-import { generateOperationalPendings } from './domain/operations/OperationalPendingService';
+import { generateOperationalPendings } from './domain/operations/serverOperationalPendingProjection';
 
 export default function App(){
   const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);
@@ -58,8 +57,7 @@ export default function App(){
   const badgesRequestVersionRef=useRef(0),activeCompanyIdRef=useRef<string|undefined>(user?.companyId);activeCompanyIdRef.current=user?.companyId;
   const clearBadgeState=()=>{setPendingReceivablesCount(0);setPendingPayablesCount(0);setPendingPendingsCount(0);};
 
-  useEffect(()=>{const requestVersion=++badgesRequestVersionRef.current,companyIdSnapshot=user?.companyId;clearBadgeState();const init=async()=>{await seedAutoERPTestData(false);if(requestVersion!==badgesRequestVersionRef.current||activeCompanyIdRef.current!==companyIdSnapshot||!companyIdSnapshot)return;await refreshBadges(companyIdSnapshot,requestVersion);};void init();return()=>{badgesRequestVersionRef.current+=1;};},[user?.companyId]);
-  const initApp=async()=>{await seedAutoERPTestData(false);const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;clearBadgeState();if(companyIdSnapshot)await refreshBadges(companyIdSnapshot,requestVersion);};
+  useEffect(()=>{const requestVersion=++badgesRequestVersionRef.current,companyIdSnapshot=user?.companyId;clearBadgeState();if(companyIdSnapshot)void refreshBadges(companyIdSnapshot,requestVersion);return()=>{badgesRequestVersionRef.current+=1;};},[user?.companyId]);
   const refreshBadges=async(companyIdSnapshot:string,requestVersion:number)=>{
     const recRepo=new AccountReceivableRepository(),payRepo=new AccountPayableRepository(),vehRepo=new VehicleRepository(),contractRepo=new ContractRepository(),maintRepo=new MaintenanceRepository(),vehDocRepo=new VehicleDocumentRepository(),drvDocRepo=new DriverDocumentRepository(),ticketRepo=new TrafficTicketRepository(),drvRepo=new DriverRepository(),insRepo=new InsuranceRepository();
     const [recs,pays,vehicles,contracts,maintenances,vehicleDocuments,driverDocuments,tickets,drivers,insurances,trackers]=await Promise.all([
@@ -67,14 +65,13 @@ export default function App(){
     ]);
     if(requestVersion!==badgesRequestVersionRef.current||activeCompanyIdRef.current!==companyIdSnapshot)return;
     const pendingRecs=recs.filter(r=>r.status===ObligationStatus.PENDING||r.status===ObligationStatus.PARTIALLY_PAID),pendingPays=pays.filter(p=>p.status===ObligationStatus.PENDING||p.status===ObligationStatus.PARTIALLY_PAID);
-    const opPendings=generateOperationalPendings({vehicles,contracts,maintenances,vehicleDocuments,driverDocuments,tickets,drivers,insurances,trackers});
+    const opPendings=generateOperationalPendings({companyId:companyIdSnapshot,vehicles,contracts,maintenances,vehicleDocuments,driverDocuments,tickets,drivers,insurances,trackers});
     if(requestVersion!==badgesRequestVersionRef.current||activeCompanyIdRef.current!==companyIdSnapshot)return;setPendingReceivablesCount(pendingRecs.length);setPendingPayablesCount(pendingPays.length);setPendingPendingsCount(opPendings.length);
   };
-  const handleResetSeedData=async()=>{if(confirm('Deseja realmente reiniciar os dados de teste da base de dados?')){await seedAutoERPTestData(true);await initApp();alert('Banco de dados do AutoERP restaurado com sucesso!');}};
   const handleOperationSuccess=async()=>{const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;if(!companyIdSnapshot){clearBadgeState();return;}await refreshBadges(companyIdSnapshot,requestVersion);};
 
   return <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
-    <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onResetSeedData={handleResetSeedData} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
+    <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
     <div className="flex-1 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
       <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
