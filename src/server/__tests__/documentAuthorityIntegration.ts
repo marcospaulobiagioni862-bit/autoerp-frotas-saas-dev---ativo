@@ -11,6 +11,10 @@ const companyB = 'security-2i4b-company-b';
 const adminAId = 'security-2i4b-admin-a';
 const adminBId = 'security-2i4b-admin-b';
 const readonlyAId = 'security-2i4b-readonly-a';
+const expenseCategoryA = 'finance-r3-doc-expense-a';
+const incomeCategoryA = 'finance-r3-doc-income-a';
+const inactiveExpenseA = 'finance-r3-doc-inactive-a';
+const expenseCategoryB = 'finance-r3-doc-expense-b';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -39,6 +43,14 @@ export class DocumentAuthorityIntegrationRunner {
         (${adminAId}, ${companyA}, 'I4B Admin A', 'i4b-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
         (${adminBId}, ${companyB}, 'I4B Admin B', 'i4b-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
         (${readonlyAId}, ${companyA}, 'I4B Readonly A', 'i4b-readonly-a@example.test', 'READONLY', true, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES
+        (${expenseCategoryA}, ${companyA}, 'Documentação Veicular', 'EXPENSE', true, NOW(), NOW()),
+        (${incomeCategoryA}, ${companyA}, 'Receita Teste', 'INCOME', true, NOW(), NOW()),
+        (${inactiveExpenseA}, ${companyA}, 'Documentação Inativa', 'EXPENSE', false, NOW(), NOW()),
+        (${expenseCategoryB}, ${companyB}, 'Documentação B', 'EXPENSE', true, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
@@ -205,11 +217,24 @@ export class DocumentAuthorityIntegrationRunner {
       const cnh = (await json(response)).item;
       assert(cnh.documentNumber === '12345678900' && cnh.expirationDate === '2027-12-31', 'CNH not derived from Driver core');
 
-      response = await postJson('/api/documents', {
+      const payablePayload = {
         subjectType: 'VEHICLE', subjectId: 'i4b-veh-a2', documentType: 'LICENCIAMENTO', referenceYear: 2027,
         documentNumber: 'LIC-2027', attachmentId: 'i4b-att-veh-a2', expirationDate: '2027-12-31',
-        cost: 250, generatePayable: true, categoryId: 'cat-doc-default',
-      });
+        cost: 250, generatePayable: true,
+      };
+      const beforeInvalidCategoryDocs = Number((await scalar(sql`SELECT count(*)::int AS count FROM documents WHERE company_id=${companyA} AND subject_id='i4b-veh-a2' AND document_type='LICENCIAMENTO'`))?.count || 0);
+      response = await postJson('/api/documents', payablePayload);
+      assert(response.status === 400, `document payable without category expected 400, got ${response.status}`);
+      response = await postJson('/api/documents', { ...payablePayload, categoryId: expenseCategoryB });
+      assert(response.status === 400, `document payable cross-tenant category expected 400, got ${response.status}`);
+      response = await postJson('/api/documents', { ...payablePayload, categoryId: incomeCategoryA });
+      assert(response.status === 400, `document payable income category expected 400, got ${response.status}`);
+      response = await postJson('/api/documents', { ...payablePayload, categoryId: inactiveExpenseA });
+      assert(response.status === 400, `document payable inactive category expected 400, got ${response.status}`);
+      const afterInvalidCategoryDocs = Number((await scalar(sql`SELECT count(*)::int AS count FROM documents WHERE company_id=${companyA} AND subject_id='i4b-veh-a2' AND document_type='LICENCIAMENTO'`))?.count || 0);
+      assert(afterInvalidCategoryDocs === beforeInvalidCategoryDocs, 'invalid document category survived transaction rollback');
+
+      response = await postJson('/api/documents', { ...payablePayload, categoryId: expenseCategoryA });
       assert(response.status === 201, `document payable create expected 201, got ${response.status}`);
       const payableDoc = (await json(response)).item;
       assert(typeof payableDoc.payableId === 'string' && payableDoc.payableId.length > 0, 'document payable linkage missing');
@@ -218,6 +243,8 @@ export class DocumentAuthorityIntegrationRunner {
         WHERE company_id=${companyA} AND origin_type='DOCUMENTATION' AND origin_id=${payableDoc.id}
       `))?.count || 0);
       assert(payableCount === 1, `document payable expected exactly 1, got ${payableCount}`);
+      const payableCategory = await scalar(sql`SELECT category_id FROM account_payables WHERE id=${payableDoc.payableId}`);
+      assert(payableCategory?.category_id === expenseCategoryA, 'document payable did not persist canonical category');
 
       response = await postJson(`/api/documents/${encodeURIComponent(v2.id)}/archive`, {});
       assert(response.status === 200 && (await json(response)).item.isArchived === true, 'archive failed');
