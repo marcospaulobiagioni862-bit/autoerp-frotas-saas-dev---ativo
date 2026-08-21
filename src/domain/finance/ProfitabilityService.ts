@@ -23,6 +23,10 @@ export class ProfitabilityService {
     regime: AccountingRegime = AccountingRegime.CASH,
     txContext?: ITransactionContext
   ): Promise<VehicleProfitabilityReport> {
+    if (regime !== AccountingRegime.CASH && regime !== AccountingRegime.ACCRUAL) {
+      throw new Error('Unsupported accounting regime');
+    }
+
     // Vehicle metadata is display-only in the current report UI. The trusted
     // server path does not depend on browser/local vehicle metadata for any
     // financial calculation. Local lookup remains only for legacy test/DEV.
