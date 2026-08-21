@@ -45,7 +45,7 @@ export class PayableService {
     );
 
     const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
-    if (txContext) {
+    if (txContext?.getRawTransaction) {
       await assertFinancialCategoryForObligation(params.companyId, categoryId, 'PAYABLE', txContext);
     }
 
