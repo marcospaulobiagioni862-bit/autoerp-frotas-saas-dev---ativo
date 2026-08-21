@@ -36,6 +36,7 @@ import { DriverHealthClient } from '../../api/driverHealthClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
 import { FileUpload } from '../documents/FileUpload';
+import { AttachmentList } from '../documents/AttachmentList';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
 import type { DriverHealthAndEmergency } from '../../types/entities';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -90,6 +91,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [docExpDate, setDocExpDate] = useState('');
   const [docNotes, setDocNotes] = useState('');
   const [docAttachmentId, setDocAttachmentId] = useState('');
+  const [driverAttachmentRefresh, setDriverAttachmentRefresh] = useState(0);
 
   const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
   const [isEditHealthOpen, setIsEditHealthOpen] = useState(false);
@@ -239,6 +241,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
       setDocExpDate('');
       setDocNotes('');
       setDocAttachmentId('');
+      setDriverAttachmentRefresh((value) => value + 1);
       await loadData();
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao adicionar documento.');
@@ -455,6 +458,10 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                   </div>
                 ))}
               </div>
+              <Card className="p-4 space-y-3">
+                <h4 className="text-xs font-bold uppercase text-slate-400">Arquivos do Motorista — authority do servidor</h4>
+                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList entityType="Driver" entityId={driver.id} /></div>
+              </Card>
             </div>
           )}
 
