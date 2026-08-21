@@ -12,6 +12,7 @@ import { registerTrackerRoutes } from './trackerRoutes';
 import { registerInsuranceRoutes } from './insuranceRoutes';
 import { registerTrafficTicketRoutes } from './trafficTicketRoutes';
 import { registerOperationalRoutes } from './operationalRoutes';
+import { registerDetailAuthorityRoutes } from './detailAuthorityRoutes';
 
 type RecurringAction = 'VIEW_RECURRING' | 'MUTATE_RECURRING' | 'VIEW_NOTIFICATIONS' | 'READ_NOTIFICATIONS';
 const READ_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
@@ -119,6 +120,7 @@ export function registerRecurringRoutes(app: Express): void {
   registerInsuranceRoutes(app);
   registerTrafficTicketRoutes(app);
   registerOperationalRoutes(app);
+  registerDetailAuthorityRoutes(app);
 
   app.get('/api/recurring-rules', async (req, res) => {
     const actor = requirePrincipal(req, res, 'VIEW_RECURRING'); if (!actor) return;
