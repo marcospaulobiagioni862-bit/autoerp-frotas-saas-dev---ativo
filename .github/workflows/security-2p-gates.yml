@@ -53,6 +53,13 @@ jobs:
         run: gh issue comment 179 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2P GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
+      - name: Trace residual browser-storage authority imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== STORAGE_AUTHORITY_REFERENCES_START ==='
+          grep -RInE 'StorageAdapter|storageAdapter|BackupService|AutoERP_DB' src --include='*.ts' --include='*.tsx' || true
+          echo '=== STORAGE_AUTHORITY_REFERENCES_END ==='
       - name: SECURITY-2P production trust-boundary invariant gate
         run: npx tsx src/server/__tests__/productionTrustBoundary.ts
       - name: SECURITY-2N runtime read-model regression
