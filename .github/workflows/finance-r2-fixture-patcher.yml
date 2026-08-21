@@ -1,0 +1,53 @@
+name: FINANCE-R2 Fixture Patcher
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'finance-r2-canonical-manual-categories'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r2-canonical-manual-categories
+          fetch-depth: 0
+      - name: Align legacy fixtures with canonical category validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          block = """    await db.execute(sql`\n      INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES\n        ('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())\n      ON CONFLICT (id) DO NOTHING\n    `);\n"""
+
+          for path in [
+              Path('src/server/__tests__/contractAuthorityIntegration.ts'),
+              Path('src/server/__tests__/recurringAuthorityIntegration.ts'),
+          ]:
+              text = path.read_text()
+              if "('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME'" in text:
+                  continue
+              marker = "    await db.execute(sql`\n      INSERT INTO vehicles"
+              if marker not in text:
+                  raise SystemExit(f'fixture insertion marker missing: {path}')
+              text = text.replace(marker, block + marker, 1)
+              path.write_text(text)
+          PY
+          rm .github/workflows/finance-r2-fixture-patcher.yml
+
+          grep -q "INSERT INTO financial_categories" src/server/__tests__/contractAuthorityIntegration.ts
+          grep -q "INSERT INTO financial_categories" src/server/__tests__/recurringAuthorityIntegration.ts
+          test ! -e .github/workflows/finance-r2-fixture-patcher.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/server/__tests__/contractAuthorityIntegration.ts src/server/__tests__/recurringAuthorityIntegration.ts .github/workflows/finance-r2-fixture-patcher.yml
+          git diff --cached --check
+          git commit -m "test(finance-r2): align contract and recurring category fixtures"
+          git push origin HEAD:finance-r2-canonical-manual-categories
