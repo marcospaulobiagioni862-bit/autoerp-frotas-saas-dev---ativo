@@ -9,7 +9,7 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import { generateDailyOperations, DailyOperationsSummary, DailyActionItem } from '../../domain/operations/DailyOperationsService';
 import { 
   Calendar, 

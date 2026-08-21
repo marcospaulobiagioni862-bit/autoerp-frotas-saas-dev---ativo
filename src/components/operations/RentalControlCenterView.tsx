@@ -9,7 +9,7 @@ import {
   TrafficTicketRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import { generateRentalControlSummary, RentalControlSummary, RentalControlItem, RentalControlOperationalStatus } from '../../domain/operations/RentalControlCenterService';
 import { 
   ShieldAlert, 

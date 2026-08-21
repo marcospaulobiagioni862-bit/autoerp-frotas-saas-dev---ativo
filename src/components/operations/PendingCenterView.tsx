@@ -9,8 +9,8 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
-import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/OperationalPendingService';
+} from '../../persistence/repositories/serverReadModelRepositories';
+import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
 import { 
   AlertTriangle, 
   ShieldAlert, 

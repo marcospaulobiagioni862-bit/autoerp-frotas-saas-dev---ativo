@@ -48,7 +48,18 @@ const migratedRuntimeFiles = [
 for (const path of migratedRuntimeFiles) {
   const source = read(path);
   assert.doesNotMatch(source, /StorageAdapter|indexedDB|localStorage/i, `${path} must not directly access browser persistence`);
+  assert.doesNotMatch(source, /persistence\/repositories\/localRepositories/, `${path} must not depend on the legacy repository alias`);
+  assert.match(source, /serverReadModelRepositories/, `${path} must import the explicit authenticated server read-model adapter`);
 }
+
+const appSource = read('src/App.tsx');
+assert.doesNotMatch(appSource, /persistence\/seed\/seedData|seedAutoERPTestData|handleResetSeedData/, 'App runtime must not depend on browser seed/reset authority');
+assert.match(appSource, /domain\/operations\/serverOperationalPendingProjection/, 'App must import the tenant-safe pending projection explicitly');
+const overviewSource = read('src/components/dashboard/OverviewDashboard.tsx');
+assert.match(overviewSource, /domain\/operations\/serverOperationalPendingProjection/, 'Overview must import the tenant-safe pending projection explicitly');
+assert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');
+const pendingSource = read('src/components/operations/PendingCenterView.tsx');
+assert.match(pendingSource, /domain\/operations\/serverOperationalPendingProjection/, 'Pending center must import the tenant-safe pending projection explicitly');
 
 const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
 assert.doesNotMatch(testPanel, /PersistenceTestRunner|StorageAdapter|seedAutoERPTestData/, 'Production test panel must not pull browser test persistence');

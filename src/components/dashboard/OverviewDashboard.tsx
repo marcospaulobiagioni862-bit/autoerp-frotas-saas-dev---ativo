@@ -14,7 +14,7 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import {
   AccountReceivable,
   AccountPayable,
@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
 import { PerformanceMetricsWidget } from './PerformanceMetricsWidget';
-import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/OperationalPendingService';
+import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
 
 interface OverviewDashboardProps {
   onNavigate: (tab: any) => void;
@@ -173,6 +173,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setContracts(conts);
       
       const opPendings = generateOperationalPendings({
+        companyId: companyIdSnapshot,
         vehicles: vehs,
         contracts: conts,
         maintenances,
