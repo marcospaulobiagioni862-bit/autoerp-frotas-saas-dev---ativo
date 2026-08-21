@@ -16,7 +16,6 @@ import {
   LayoutDashboard,
   LifeBuoy,
   PieChart,
-  ShieldAlert,
   ShieldCheck,
   Sliders,
   TrendingUp,
@@ -153,7 +152,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'ADMINISTRAÇÃO',
       items: [
         { id: 'administration', label: 'Usuários e Permissões', icon: Sliders },
-        { id: 'system-health', label: 'Configurações', icon: Sliders },
         {
           id: 'tests',
           label: 'Validação Técnica',
