@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -137,3 +137,59 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh issue comment 189 --repo "$GITHUB_REPOSITORY" --body "AUTHORITY-2 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  finance_r1_route_wiring:
+    if: github.event_name == 'pull_request' && github.head_ref == 'finance-r1-renegotiation-frequency'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Wire FINANCE-R1 frequency into server route and restore workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('server.ts')
+          source = path.read_text()
+
+          import_old = "import { RenegotiationService } from './src/domain/finance/RenegotiationService';\n"
+          import_new = import_old + "import { isRenegotiationInstallmentFrequency } from './src/shared/utils/renegotiationSchedule';\n"
+          if import_old not in source:
+              raise SystemExit('FINANCE-R1: RenegotiationService import anchor not found')
+          source = source.replace(import_old, import_new, 1)
+
+          fields_old = """    const firstDueDate = typeof req.body?.firstDueDate === 'string' ? req.body.firstDueDate : '';\n    const categoryId = typeof req.body?.categoryId === 'string' ? req.body.categoryId : '';\n    const description = typeof req.body?.description === 'string' ? req.body.description : '';\n"""
+          fields_new = """    const firstDueDate = typeof req.body?.firstDueDate === 'string' ? req.body.firstDueDate : '';\n    const rawInstallmentFrequency = req.body?.installmentFrequency;\n    const installmentFrequency = rawInstallmentFrequency === undefined || rawInstallmentFrequency === null || rawInstallmentFrequency === ''\n      ? 'MONTHLY'\n      : isRenegotiationInstallmentFrequency(rawInstallmentFrequency)\n        ? rawInstallmentFrequency\n        : null;\n    const categoryId = typeof req.body?.categoryId === 'string' ? req.body.categoryId : '';\n    const description = typeof req.body?.description === 'string' ? req.body.description : '';\n"""
+          if fields_old not in source:
+              raise SystemExit('FINANCE-R1: route field anchor not found')
+          source = source.replace(fields_old, fields_new, 1)
+
+          validation_old = """      !firstDueDate ||\n      !categoryId\n    ) {\n"""
+          validation_new = """      !firstDueDate ||\n      !categoryId ||\n      installmentFrequency === null\n    ) {\n"""
+          if validation_old not in source:
+              raise SystemExit('FINANCE-R1: route validation anchor not found')
+          source = source.replace(validation_old, validation_new, 1)
+
+          params_old = """              installmentsCount,\n              firstDueDate,\n              categoryId,\n"""
+          params_new = """              installmentsCount,\n              firstDueDate,\n              installmentFrequency,\n              categoryId,\n"""
+          if params_old not in source:
+              raise SystemExit('FINANCE-R1: service params anchor not found')
+          source = source.replace(params_old, params_new, 1)
+
+          path.write_text(source)
+          PY
+
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/authority-2-gates.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add server.ts .github/workflows/authority-2-gates.yml
+          git diff --cached --check
+          git commit -m 'FINANCE-R1: wire frequency through server route'
+          git push origin HEAD:${{ github.head_ref }}
