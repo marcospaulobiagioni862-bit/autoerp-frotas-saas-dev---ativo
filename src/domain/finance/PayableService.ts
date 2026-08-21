@@ -45,7 +45,10 @@ export class PayableService {
     );
 
     const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
-    if (txContext?.getRawTransaction) {
+    if (params.originType === OriginType.MANUAL) {
+      if (!txContext?.getRawTransaction) {
+        throw new Error('Autoridade de categoria financeira indisponível para Conta a Pagar manual');
+      }
       await assertFinancialCategoryForObligation(params.companyId, categoryId, 'PAYABLE', txContext);
     }
 
