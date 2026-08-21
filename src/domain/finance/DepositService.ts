@@ -223,15 +223,16 @@ export class DepositService {
     const previousState = { ...deposit };
 
     const account = await accountRepo.findById(financialAccountId);
-    if (!account) {
+    if (!account || account.companyId !== companyId || account.status !== 'ACTIVE') {
       throw new Error('Conta financeira não encontrada ou pertence a outra empresa');
     }
 
-    if (paymentMethodRepo) {
-      const paymentMethod = await paymentMethodRepo.findById(paymentMethodId);
-      if (!paymentMethod) {
-        throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
-      }
+    if (!paymentMethodRepo) {
+      throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
+    }
+    const paymentMethod = await paymentMethodRepo.findById(paymentMethodId);
+    if (!paymentMethod || paymentMethod.companyId !== companyId || !paymentMethod.active) {
+      throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
     }
 
     const tx: FinancialTransaction = {
