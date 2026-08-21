@@ -110,6 +110,11 @@ export class DREService {
       for (const p of periodPays) {
         const amount = Number(p.originalAmount || 0);
         directCostsAmount += amount;
+        financialResultAmount += (
+          Number(p.discountAmount || 0) -
+          Number(p.fineAmount || 0) -
+          Number(p.interestAmount || 0)
+        );
         this.addExpenseToBreakdown(breakdown, p.originType, amount);
       }
     } else {
