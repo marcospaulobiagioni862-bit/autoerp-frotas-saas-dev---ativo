@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { ReceivableService } from '../domain/finance/ReceivableService';
+import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
 import type { Contract, Driver, Vehicle } from '../types/entities';
 import {
   AuditAction,
@@ -165,6 +166,10 @@ function sendContractError(res: Response, error: unknown): void {
   const message = error instanceof Error ? error.message : '';
   if (message.startsWith('Acesso negado:')) {
     res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  if (message.startsWith('Categoria financeira') || message === 'Financial category authority unavailable') {
+    res.status(400).json({ error: 'Invalid contract financial category' });
     return;
   }
   if (message.includes('período financeiro') || message.includes('Período')) {
@@ -417,6 +422,8 @@ export function registerContractRoutes(app: Express): void {
         }
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
         validateDateRange(contract.startDate, contract.endDate);
+        const categoryId = requiredText(req.body?.categoryId, 'categoryId');
+        await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
 
         // Deterministic lock order: Contract -> Vehicle -> Driver.
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
@@ -452,7 +459,7 @@ export function registerContractRoutes(app: Express): void {
           vehicleId: active.vehicleId,
           driverId: active.driverId,
           contractId: active.id,
-          categoryId: 'cat-rent-inc',
+          categoryId,
           description: `Aluguel Contrato ${active.contractNumber} (${active.billingPeriodicity})`,
           totalAmount: active.rentalAmount,
           dueDate: active.startDate,
@@ -604,10 +611,12 @@ export function registerContractRoutes(app: Express): void {
       const competenceDate = req.body?.competenceDate === undefined
         ? dueDate
         : normalizeDate(req.body.competenceDate, 'competenceDate');
+      const categoryId = requiredText(req.body?.categoryId, 'categoryId');
       const items = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status !== ContractStatus.ACTIVE) throw new ContractConflictError('Contract must be active');
+        await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         if (!vehicle || !driver) throw new ContractNotFoundError();
@@ -622,7 +631,7 @@ export function registerContractRoutes(app: Express): void {
           vehicleId: contract.vehicleId,
           driverId: contract.driverId,
           contractId: contract.id,
-          categoryId: 'cat-rent-inc',
+          categoryId,
           description: `Aluguel Recorrente - Contrato ${contract.contractNumber}`,
           totalAmount: contract.rentalAmount,
           dueDate,
