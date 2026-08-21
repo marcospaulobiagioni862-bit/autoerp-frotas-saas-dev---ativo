@@ -203,7 +203,7 @@ async function run(): Promise<void> {
       userName: 'Finance R5 Admin',
     }, tx)
   );
-  assert(receipt.receivable.paidAmount === 100, 'active-account receipt did not settle 100');
+  assert(Number(receipt.receivable.paidAmount) === 100, 'active-account receipt did not settle 100');
 
   const payment = await UnitOfWork.run(companyId, async (tx) =>
     await SettlementService.registerPayment({
@@ -217,7 +217,7 @@ async function run(): Promise<void> {
       userName: 'Finance R5 Admin',
     }, tx)
   );
-  assert(payment.payable.paidAmount === 100, 'active-account payment did not settle 100');
+  assert(Number(payment.payable.paidAmount) === 100, 'active-account payment did not settle 100');
 
   const transfer = await UnitOfWork.run(companyId, async (tx) =>
     await TransferService.transferFunds({
@@ -232,7 +232,7 @@ async function run(): Promise<void> {
       userName: 'Finance R5 Admin',
     }, tx)
   );
-  assert(transfer.amount === 50, 'active-account transfer amount mismatch');
+  assert(Number(transfer.amount) === 50, 'active-account transfer amount mismatch');
 
   const finalState = await snapshot();
   assert(finalState.recPaid === 100 && finalState.recBalance === 900, 'active receipt final obligation state mismatch');
