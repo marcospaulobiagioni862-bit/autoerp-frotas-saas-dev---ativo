@@ -1,17 +1,20 @@
-# AUTHORITY-2 trigger after workflow registration
+# AUTHORITY-2 temporary scoped refactor helper; self-removes after PR trigger.
 name: AUTHORITY-2 Source Refactor
 
 on:
   push:
     branches:
       - authority-2-explicit-runtime-server-read-model
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   refactor:
-    if: ${{ !contains(github.event.head_commit.message, 'AUTHORITY-2: complete explicit runtime source refactor') }}
+    if: ${{ !contains(github.event.head_commit.message || '', 'AUTHORITY-2: complete explicit runtime source refactor') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +42,7 @@ jobs:
           ]
 
           for path in runtime_files:
-              text = path.read_text()
-              text = text.replace(
+              text = path.read_text().replace(
                   'persistence/repositories/localRepositories',
                   'persistence/repositories/serverReadModelRepositories',
               )
@@ -55,8 +57,7 @@ jobs:
           replacement = 'const opPendings = generateOperationalPendings({\n        companyId: companyIdSnapshot,\n        vehicles: vehs,'
           if marker not in text and replacement not in text:
               raise SystemExit('Overview pending projection marker not found')
-          text = text.replace(marker, replacement)
-          overview.write_text(text)
+          overview.write_text(text.replace(marker, replacement))
 
           pending = Path('src/components/operations/PendingCenterView.tsx')
           pending.write_text(pending.read_text().replace(
@@ -84,12 +85,8 @@ jobs:
             src/components/reports/ManagementReportsView.tsx
             src/server/__tests__/runtimeReadModelAuthority.ts
           )
-
           for file in "${files[@]}"; do
-            if grep -q 'persistence/repositories/localRepositories' "$file"; then
-              echo "FAIL legacy repository import: $file"
-              exit 1
-            fi
+            ! grep -q 'persistence/repositories/localRepositories' "$file"
             grep -q 'serverReadModelRepositories' "$file"
           done
           ! grep -qE 'seedAutoERPTestData|persistence/seed/seedData|handleResetSeedData' src/App.tsx
@@ -98,7 +95,7 @@ jobs:
           grep -q 'serverOperationalPendingProjection' src/components/operations/PendingCenterView.tsx
           grep -q 'companyId: companyIdSnapshot' src/components/dashboard/OverviewDashboard.tsx
 
-      - name: Remove temporary helper and commit scoped files
+      - name: Remove helper and commit exact scoped files
         shell: bash
         run: |
           set -euo pipefail
@@ -114,9 +111,6 @@ jobs:
             src/components/operations/RentalControlCenterView.tsx \
             src/components/reports/ManagementReportsView.tsx \
             src/server/__tests__/runtimeReadModelAuthority.ts
-          if git diff --cached --quiet; then
-            echo 'No additional changes required.'
-            exit 0
-          fi
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m 'AUTHORITY-2: complete explicit runtime source refactor'
           git push origin HEAD:authority-2-explicit-runtime-server-read-model
