@@ -68,6 +68,10 @@ jobs:
           grep -q "findByIdForCompanyWithLock(companyId, contractId)" src/domain/finance/DepositService.ts
           grep -q "contract.securityDepositAmount" src/domain/finance/DepositService.ts
           grep -q "newReceived > originalAmount" src/domain/finance/DepositService.ts
+          grep -q "account.companyId !== companyId" src/domain/finance/DepositService.ts
+          grep -q "paymentMethod.companyId !== companyId" src/domain/finance/DepositService.ts
+          grep -q "account.status !== 'ACTIVE'" src/domain/finance/DepositService.ts
+          grep -q "!paymentMethod.active" src/domain/finance/DepositService.ts
           grep -q "Principal da caução diverge do contrato" src/domain/finance/DepositService.ts
           echo "FINANCE-R4 source invariants: PASS"
 
