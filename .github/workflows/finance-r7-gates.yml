@@ -1,0 +1,165 @@
+name: FINANCE-R7 Gates
+
+on:
+  push:
+    branches:
+      - finance-r7-payable-financial-adjustments
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r7-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r7-test
+      JWT_AUDIENCE: autoerp-finance-r7-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 206 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R7 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: FINANCE-R7 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "Number(p.discountAmount || 0)" src/domain/finance/DREService.ts
+          grep -q "Number(p.fineAmount || 0)" src/domain/finance/DREService.ts
+          grep -q "Number(p.interestAmount || 0)" src/domain/finance/DREService.ts
+          if grep -Eq "directCostsAmount[[:space:]]*\+=[[:space:]]*Number\(p.updatedAmount" src/domain/finance/DREService.ts; then
+            echo "FAIL: payable updatedAmount must not replace original direct cost"
+            exit 1
+          fi
+          echo "FINANCE-R7 source invariants: PASS"
+
+      - name: Apply migrations 0000 through 0022
+        run: node migrate_test_db.cjs
+
+      - name: FINANCE-R7 payable financial adjustment regression
+        run: npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
+
+      - name: FINANCE-R6 DRE evidence-backed breakdown regression
+        run: npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
+
+      - name: FINANCE-R5 active account authority regression
+        run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+
+      - name: FINANCE-R4 security deposit authority regression
+        run: npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
+
+      - name: Finance settlement client regression
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+
+      - name: Finance transaction client regression
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+
+      - name: FINANCE-R3 contract authority regression
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: FINANCE-R3 document authority regression
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+
+      - name: FINANCE-R2 category authority regression
+        run: npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+
+      - name: FINANCE-R1 schedule regression
+        run: npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
+
+      - name: FINANCE-R1 domain regression
+        run: npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
+
+      - name: Finance overview client regression
+        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+
+      - name: Finance reporting client regression
+        run: npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+
+      - name: Finance deposit client regression
+        run: npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+
+      - name: AUTHORITY-1 regression
+        run: npx tsx src/server/__tests__/detailAuthorityIntegration.ts
+
+      - name: AUTHORITY-2 regression
+        run: npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
+
+      - name: SECURITY-2O regression
+        run: npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
+
+      - name: SECURITY-2P regression
+        run: npx tsx src/server/__tests__/productionTrustBoundary.ts
+
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Production build gate
+        run: npm run build
+
+      - name: Production bundle authority guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r7_bundle_hits.txt; then
+            echo "FAIL: legacy browser database marker found in production bundle"
+            cat /tmp/finance_r7_bundle_hits.txt
+            exit 1
+          fi
+          echo "FINANCE-R7 production bundle authority guard: PASS"
+
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 206 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R7 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 206 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R7 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
