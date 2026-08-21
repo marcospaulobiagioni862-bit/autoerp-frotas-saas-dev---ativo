@@ -53,6 +53,10 @@ export class DREService {
     regime: AccountingRegime = AccountingRegime.ACCRUAL,
     txContext?: ITransactionContext
   ): Promise<DREReport> {
+    if (regime !== AccountingRegime.CASH && regime !== AccountingRegime.ACCRUAL) {
+      throw new Error('Unsupported accounting regime');
+    }
+
     let grossRevenueAmount = 0;
     let deductionsAmount = 0;
     let directCostsAmount = 0;
