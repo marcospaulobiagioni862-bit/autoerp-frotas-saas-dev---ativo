@@ -176,8 +176,20 @@ export class DepositService {
     const accountRepo = txContext.getAccountRepo();
     const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
     const auditRepo = txContext.getAuditLogRepo();
+    const contractRepo = txContext.getContractRepo();
 
     await depositRepo.lockContract(companyId, contractId);
+
+    const contract = await contractRepo.findByIdForCompanyWithLock(companyId, contractId);
+    if (!contract || contract.isArchived) {
+      throw new Error('Contrato não encontrado ou pertence a outra empresa');
+    }
+    const originalAmount = roundCurrency(contract.securityDepositAmount);
+    if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+      throw new Error('Contrato não possui caução a receber');
+    }
+    const canonicalDriverId = contract.driverId;
+    const canonicalVehicleId = contract.vehicleId;
 
     let deposit = await depositRepo.findByContractId(contractId);
     const now = new Date().toISOString();
@@ -188,9 +200,9 @@ export class DepositService {
         id: generateUUID(),
         companyId,
         contractId,
-        driverId,
-        vehicleId,
-        originalAmount: amount,
+        driverId: canonicalDriverId,
+        vehicleId: canonicalVehicleId,
+        originalAmount,
         receivedAmount: 0,
         usedAmount: 0,
         returnedAmount: 0,
@@ -198,20 +210,29 @@ export class DepositService {
         createdAt: now,
         updatedAt: now,
       });
+    } else if (roundCurrency(deposit.originalAmount) !== originalAmount) {
+      throw new Error('Principal da caução diverge do contrato');
+    }
+
+    const newReceived = roundCurrency(deposit.receivedAmount + amount);
+    if (newReceived > originalAmount) {
+      const remaining = roundCurrency(Math.max(0, originalAmount - deposit.receivedAmount));
+      throw new Error(`Valor de recebimento excede o saldo da caução (R$ ${remaining.toFixed(2)})`);
     }
 
     const previousState = { ...deposit };
 
     const account = await accountRepo.findById(financialAccountId);
-    if (!account) {
+    if (!account || account.companyId !== companyId || account.status !== 'ACTIVE') {
       throw new Error('Conta financeira não encontrada ou pertence a outra empresa');
     }
 
-    if (paymentMethodRepo) {
-      const paymentMethod = await paymentMethodRepo.findById(paymentMethodId);
-      if (!paymentMethod) {
-        throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
-      }
+    if (!paymentMethodRepo) {
+      throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
+    }
+    const paymentMethod = await paymentMethodRepo.findById(paymentMethodId);
+    if (!paymentMethod || paymentMethod.companyId !== companyId || !paymentMethod.active) {
+      throw new Error('Forma de pagamento não encontrada ou pertence a outra empresa');
     }
 
     const tx: FinancialTransaction = {
@@ -225,8 +246,8 @@ export class DepositService {
       competenceDate: today,
       description: `Recebimento de Caução (Contrato: ${contractId})`,
       isReversed: false,
-      vehicleId,
-      driverId,
+      vehicleId: canonicalVehicleId,
+      driverId: canonicalDriverId,
       createdById: userId,
       createdAt: now,
       updatedAt: now,
@@ -235,8 +256,7 @@ export class DepositService {
     const savedTx = await transactionRepo.create(tx);
     await accountRepo.updateBalance(financialAccountId, amount);
 
-    const newReceived = roundCurrency(deposit.receivedAmount + amount);
-    const newStatus = newReceived >= deposit.originalAmount
+    const newStatus = newReceived >= originalAmount
       ? SecurityDepositStatus.RECEIVED
       : SecurityDepositStatus.PENDING;
 
