@@ -14,7 +14,7 @@ type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp']);
-const ENTITY_TYPES=new Set(['Vehicle','Driver','Contract','HealthAndEmergency','TrafficTicket']);
+const ENTITY_TYPES=new Set(['Vehicle','Driver','Contract','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
@@ -47,6 +47,9 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
   if(entityType==='Vehicle'){const item=await tx.getVehicleRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
   if(entityType==='Contract'){const item=await tx.getContractRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
   if(entityType==='TrafficTicket'){const item=await tx.getTrafficTicketRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
+  if(entityType==='MaintenanceWorkOrder'){const item=await tx.getWorkOrderRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
+  if(entityType==='Insurance'){const item=await tx.getInsuranceRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
+  if(entityType==='Tracker'){const item=await tx.getTrackerRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,entityId);if(!driver||driver.isArchived)throw new AttachmentNotFoundError();
   if(entityType==='HealthAndEmergency'){const action=write?'EDIT_DRIVER_HEALTH':'VIEW_DRIVER_HEALTH';if(!hasDriverHealthPermission(action,healthContext(principal)))throw new AttachmentForbiddenError();}
 }
