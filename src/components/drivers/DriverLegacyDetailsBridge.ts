@@ -1,14 +1,10 @@
-import {
-  ContractRepository,
-  TrafficTicketRepository,
-  AccountReceivableRepository,
-  SecurityDepositRepository,
-  AuditLogRepository,
-  CommunicationLogRepository,
-} from '../../persistence/repositories/localRepositories';
+import { ContractClient } from '../../api/contractClient';
+import { DetailAuthorityClient } from '../../api/detailAuthorityClient';
+import { FinanceDepositClient } from '../../api/financeDepositClient';
+import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import type { CommunicationLog, DocumentRecord, Driver } from '../../types/entities';
 import { DocumentStatus, DriverStatus, ObligationStatus } from '../../types/enums';
-import { generateUUID } from '../../shared/utils/uuid';
 
 export interface DriverLegacyDetailedSummary {
   driver: Driver;
@@ -65,37 +61,35 @@ function evaluateExpiration(expirationDate: string): {
 }
 
 function obligationBalance(item: any): number {
+  const explicit = Number(item.balanceAmount);
+  if (Number.isFinite(explicit)) return explicit;
   return Number(item.updatedAmount ?? item.originalAmount ?? 0) - Number(item.paidAmount ?? 0);
 }
 
 /**
- * Temporary bridge only for Driver-adjacent entities that remain outside the
- * server-authority waves. SECURITY-2I4B explicitly removed all document reads
- * and writes from this bridge; `documents` is filled by DocumentClient.
+ * Compatibility adapter for the existing Driver details UI. Every source in
+ * this adapter is server-authoritative and fail-closed; there is deliberately
+ * no localRepositories/IndexedDB/localStorage fallback.
  */
 export class DriverLegacyDetailsBridge {
-  private readonly contractRepo = new ContractRepository();
-  private readonly ticketRepo = new TrafficTicketRepository();
-  private readonly receivableRepo = new AccountReceivableRepository();
-  private readonly depositRepo = new SecurityDepositRepository();
-  private readonly auditRepo = new AuditLogRepository();
-  private readonly commRepo = new CommunicationLogRepository();
-
   async getSupplementalSummary(driver: Driver): Promise<DriverLegacyDetailedSummary> {
     const driverId = driver.id;
-    const [currentContract, allContracts, trafficTickets, securityDeposits, receivables, allAuditLogs, communicationLogs] = await Promise.all([
-      driver.currentContractId ? this.contractRepo.findById(driver.currentContractId) : Promise.resolve(null),
-      this.contractRepo.findAll({ driverId }),
-      this.ticketRepo.findAll({ driverId }),
-      this.depositRepo.findAll({ driverId }),
-      this.receivableRepo.findAll({ driverId }),
-      this.auditRepo.findAll(),
-      this.commRepo.findByDriverId(driverId),
+    const [contracts, trafficTickets, allReceivables, historyLogs, communicationLogs] = await Promise.all([
+      ContractClient.list(),
+      TrafficTicketClient.list({ driverId }),
+      FinanceObligationClient.listReceivables(),
+      DetailAuthorityClient.listAudit('Driver', driverId),
+      DetailAuthorityClient.listDriverCommunications(driverId),
     ]);
 
-    const historyLogs = allAuditLogs
-      .filter((log) => log.entityId === driverId)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const contractHistory = contracts.filter((item) => item.driverId === driverId);
+    const currentContract = driver.currentContractId
+      ? contractHistory.find((item) => item.id === driver.currentContractId)
+      : contractHistory.find((item) => item.status === 'ACTIVE');
+    const receivables = allReceivables.filter((item) => item.driverId === driverId);
+    const securityDeposits = (await Promise.all(
+      contractHistory.map((contract) => FinanceDepositClient.getByContract(contract.id))
+    )).filter((item): item is NonNullable<typeof item> => item !== null);
 
     const today = new Date().toISOString().slice(0, 10);
     const pendingReceivables = receivables.filter((item) =>
@@ -121,7 +115,7 @@ export class DriverLegacyDetailsBridge {
       driver,
       currentVehicle: undefined,
       currentContract: currentContract || undefined,
-      contractHistory: allContracts,
+      contractHistory,
       documents: [],
       trafficTickets,
       securityDeposits,
@@ -139,13 +133,13 @@ export class DriverLegacyDetailsBridge {
     };
   }
 
-  async addCommunicationLog(driver: Driver, logData: Omit<CommunicationLog, 'id' | 'dateTime' | 'companyId' | 'driverId'>): Promise<CommunicationLog> {
-    return await this.commRepo.create({
-      ...logData,
-      id: generateUUID(),
-      companyId: driver.companyId,
-      driverId: driver.id,
-      dateTime: new Date().toISOString(),
+  async addCommunicationLog(
+    driver: Driver,
+    logData: Omit<CommunicationLog, 'id' | 'dateTime' | 'companyId' | 'driverId'>
+  ): Promise<CommunicationLog> {
+    return await DetailAuthorityClient.createDriverCommunication(driver.id, {
+      type: logData.type,
+      message: logData.message,
     });
   }
 
@@ -153,8 +147,9 @@ export class DriverLegacyDetailsBridge {
     logId: string,
     status: 'DRAFT' | 'OPENED_IN_WHATSAPP' | 'MANUALLY_CONFIRMED_SENT'
   ): Promise<CommunicationLog> {
-    const existing = await this.commRepo.findById(logId);
-    if (!existing) throw new Error('Log de comunicação não encontrado.');
-    return await this.commRepo.update(logId, { status });
+    if (status !== 'MANUALLY_CONFIRMED_SENT') {
+      throw new Error('Transição de comunicação não autorizada nesta tela.');
+    }
+    return await DetailAuthorityClient.confirmCommunicationSent(logId);
   }
 }

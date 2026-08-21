@@ -1,10 +1,7 @@
-import {
-  DriverRepository,
-  ContractRepository,
-  VehicleDocumentRepository,
-  AccountReceivableRepository,
-  AccountPayableRepository,
-} from '../../persistence/repositories/localRepositories';
+import { ContractClient } from '../../api/contractClient';
+import { DocumentClient } from '../../api/documentClient';
+import { DriverClient } from '../../api/driverClient';
+import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { MaintenanceClient } from '../../api/maintenanceClient';
 import { TrackerClient } from '../../api/trackerClient';
 import { InsuranceClient } from '../../api/insuranceClient';
@@ -26,27 +23,69 @@ export interface VehicleDetailedSummary {
   financialSummary: { totalRevenue:number; totalExpenses:number; netProfit:number; profitMargin:number; };
 }
 
-/** Transitional details bridge. Vehicle/KM, maintenance, Tracker, Insurance and TrafficTicket are server-authoritative. */
+/**
+ * Compatibility adapter for VehicleDetailsModal. All operational data comes
+ * from authenticated server clients. Legacy aliases below are presentation
+ * aliases only and never become a second persistence authority.
+ */
 export class VehicleLegacyDetailsBridge {
-  private driverRepo=new DriverRepository();
-  private contractRepo=new ContractRepository();
-  private documentRepo=new VehicleDocumentRepository();
-  private receivableRepo=new AccountReceivableRepository();
-  private payableRepo=new AccountPayableRepository();
-
   async compose(vehicle:Vehicle,kmRecords:KmRecord[]):Promise<VehicleDetailedSummary>{
     const vehicleId=vehicle.id;
-    const [driver,activeContract,allContracts,workOrders,trafficTickets,documents,insurances,trackers,receivables,payables]=await Promise.all([
-      vehicle.currentDriverId?this.driverRepo.findById(vehicle.currentDriverId):Promise.resolve(null),
-      vehicle.currentContractId?this.contractRepo.findById(vehicle.currentContractId):Promise.resolve(null),
-      this.contractRepo.findAll({vehicleId}),MaintenanceClient.listWorkOrders({vehicleId}),TrafficTicketClient.list({vehicleId}),
-      this.documentRepo.findAll({vehicleId}),InsuranceClient.listByVehicle(vehicleId),TrackerClient.listByVehicle(vehicleId),
-      this.receivableRepo.findAll({vehicleId}),this.payableRepo.findAll({vehicleId}),
+    const [driverCore,contracts,workOrders,canonicalTickets,documents,insurances,trackers,allReceivables,allPayables]=await Promise.all([
+      vehicle.currentDriverId?DriverClient.get(vehicle.currentDriverId):Promise.resolve(null),
+      ContractClient.list(),
+      MaintenanceClient.listWorkOrders({vehicleId}),
+      TrafficTicketClient.list({vehicleId}),
+      DocumentClient.list({subjectType:'VEHICLE',subjectId:vehicleId}),
+      InsuranceClient.listByVehicle(vehicleId),
+      TrackerClient.listByVehicle(vehicleId),
+      FinanceObligationClient.listReceivables(),
+      FinanceObligationClient.listPayables(),
     ]);
-    const maintenances=workOrders.map(item=>({id:item.id,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'WORK_ORDER',description:item.description,kmAtMaintenance:item.exitKm??item.entryKm,partsCost:item.subtotalParts,laborCost:item.subtotalLabor+item.subtotalServices,totalCost:item.total,status:item.status,startDate:item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,createdAt:item.createdAt,updatedAt:item.updatedAt}));
+
+    const contractHistory=contracts.filter(item=>item.vehicleId===vehicleId);
+    const activeCanonical=vehicle.currentContractId
+      ? contractHistory.find(item=>item.id===vehicle.currentContractId)
+      : contractHistory.find(item=>item.status==='ACTIVE');
+    const receivables=allReceivables.filter(item=>item.vehicleId===vehicleId);
+    const payables=allPayables.filter(item=>item.vehicleId===vehicleId);
+
+    const maintenances=workOrders.map(item=>({
+      id:item.id,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'WORK_ORDER',description:item.description,
+      kmAtMaintenance:item.exitKm??item.entryKm,partsCost:item.subtotalParts,laborCost:item.subtotalLabor+item.subtotalServices,totalCost:item.total,
+      status:item.status,startDate:item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,
+      createdAt:item.createdAt,updatedAt:item.updatedAt,
+    }));
+
+    const driver=driverCore?{...driverCore,name:driverCore.fullName}:undefined;
+    const activeContract=activeCanonical?{
+      ...activeCanonical,
+      recurringValue:activeCanonical.rentalAmount,
+      securityDepositValue:activeCanonical.securityDepositAmount,
+    }:undefined;
+    const trafficTickets=canonicalTickets.map(item=>({
+      ...item,
+      noticeNumber:item.autoNumber,
+      ticketDate:item.infractionDate,
+      amount:item.originalAmount,
+    }));
+
     const totalRevenue=receivables.filter(item=>item.status===ObligationStatus.PAID).reduce((sum,item)=>sum+item.paidAmount,0);
     const totalExpenses=payables.filter(item=>item.status===ObligationStatus.PAID).reduce((sum,item)=>sum+item.paidAmount,0);
     const netProfit=totalRevenue-totalExpenses,profitMargin=totalRevenue>0?(netProfit/totalRevenue)*100:0;
-    return {vehicle,driver:driver||undefined,activeContract:activeContract||undefined,contractHistory:allContracts,maintenances,trafficTickets,documents,insurances,trackers,kmRecords:[...kmRecords],financialSummary:{totalRevenue,totalExpenses,netProfit,profitMargin}};
+
+    return {
+      vehicle,
+      driver,
+      activeContract,
+      contractHistory,
+      maintenances,
+      trafficTickets,
+      documents,
+      insurances,
+      trackers,
+      kmRecords:[...kmRecords],
+      financialSummary:{totalRevenue,totalExpenses,netProfit,profitMargin},
+    };
   }
 }

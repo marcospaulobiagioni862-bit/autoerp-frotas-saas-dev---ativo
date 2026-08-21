@@ -1,0 +1,129 @@
+name: AUTHORITY-1 Gates
+
+on:
+  push:
+    branches:
+      - authority-1-detail-views-server-authority
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: authority-1-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-authority-1-test
+      JWT_AUDIENCE: autoerp-authority-1-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 187 --repo "$GITHUB_REPOSITORY" --body "AUTHORITY-1 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: AUTHORITY-1 detail trust-boundary invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(
+            src/components/drivers/DriverLegacyDetailsBridge.ts
+            src/components/contracts/ContractLegacyDetailsBridge.ts
+            src/domain/services/VehicleLegacyDetailsBridge.ts
+          )
+          for file in "${FILES[@]}"; do
+            if grep -q "persistence/repositories/localRepositories" "$file"; then
+              echo "FAIL: localRepositories authority remains in $file"
+              exit 1
+            fi
+          done
+          grep -q "DetailAuthorityClient" src/components/drivers/DriverLegacyDetailsBridge.ts
+          grep -q "DetailAuthorityClient" src/components/contracts/ContractLegacyDetailsBridge.ts
+          grep -q "DriverClient" src/domain/services/VehicleLegacyDetailsBridge.ts
+          grep -q "ContractClient" src/domain/services/VehicleLegacyDetailsBridge.ts
+          grep -q "DocumentClient" src/domain/services/VehicleLegacyDetailsBridge.ts
+          grep -q "FinanceObligationClient" src/domain/services/VehicleLegacyDetailsBridge.ts
+          grep -q "registerDetailAuthorityRoutes(app)" src/server/recurringRoutes.ts
+          grep -q "authority_1_communication_tenant" drizzle/0022_detail_view_authority.sql
+          echo "AUTHORITY-1 detail trust-boundary invariant: PASS"
+      - name: SECURITY-2P source trust-boundary regression
+        run: npx tsx src/server/__tests__/productionTrustBoundary.ts
+      - name: Apply migrations 0000 through 0022
+        run: node migrate_test_db.cjs
+      - name: AUTHORITY-1 detail authority integration
+        run: npx tsx src/server/__tests__/detailAuthorityIntegration.ts
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+      - name: Maintenance and vehicle/KM regression
+        run: npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
+      - name: Traffic ticket regression
+        run: npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
+      - name: Insurance regression
+        run: npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
+      - name: Tracker regression
+        run: npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+      - name: Driver authority regression
+        run: npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+      - name: Document authority regression
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Contract authority regression
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Production bundle legacy-authority guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIl "AutoERP_DB" dist/assets >/tmp/authority1_bundle_hits.txt; then
+            echo "FAIL: legacy browser database marker found in production bundle"
+            cat /tmp/authority1_bundle_hits.txt
+            exit 1
+          fi
+          echo "AUTHORITY-1 production bundle legacy-authority guard: PASS"
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 187 --repo "$GITHUB_REPOSITORY" --body "AUTHORITY-1 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 187 --repo "$GITHUB_REPOSITORY" --body "AUTHORITY-1 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
