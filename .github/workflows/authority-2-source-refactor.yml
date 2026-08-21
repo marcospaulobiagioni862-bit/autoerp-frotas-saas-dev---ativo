@@ -1,3 +1,4 @@
+# AUTHORITY-2 trigger after workflow registration
 name: AUTHORITY-2 Source Refactor
 
 on:
