@@ -5,7 +5,7 @@ import {
   VehicleRepository, 
   AccountReceivableRepository, 
   AccountPayableRepository 
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import { Contract, Vehicle, AccountReceivable, AccountPayable } from '../../types/entities';
 import { ContractStatus, ObligationStatus, VehicleStatus } from '../../types/enums';
 import { Gauge, TrendingUp, ShieldCheck, CheckCircle2, AlertTriangle, FileText, Car, DollarSign } from 'lucide-react';
