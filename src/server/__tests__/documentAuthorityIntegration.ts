@@ -42,6 +42,11 @@ export class DocumentAuthorityIntegrationRunner {
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
+      INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES
+        ('cat-doc-default', ${companyA}, 'Documentação de Veículos', 'EXPENSE', true, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
       INSERT INTO vehicles (
         id, company_id, plate, renavam, status, is_archived, created_at, updated_at
       ) VALUES
