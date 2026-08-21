@@ -11,10 +11,11 @@ import { FileUpload } from '../documents/FileUpload';
 
 interface ContractExecutionPanelProps {
   contract: Contract;
+  incomeCategoryId: string;
   onChanged: () => Promise<void> | void;
 }
 
-export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, onChanged }) => {
+export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged }) => {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(contract.templateId || '');
@@ -114,9 +115,15 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     }, 'Evidência do PDF assinado registrada e vinculada ao PDF gerado.');
   };
 
-  const activate = () => void run(async () => {
-    await ContractClient.activate(contract.id);
-  }, 'Contrato ativado com assinatura, vínculo e cobrança confirmados.');
+  const activate = () => {
+    if (!incomeCategoryId) {
+      setError('Selecione a categoria financeira de receita do aluguel antes de ativar.');
+      return;
+    }
+    void run(async () => {
+      await ContractClient.activate(contract.id, incomeCategoryId);
+    }, 'Contrato ativado com assinatura, vínculo e cobrança confirmados.');
+  };
 
   const canGenerate = [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && !signed;
   const canActivate = [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)
@@ -209,7 +216,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       {canActivate && contract.status !== ContractStatus.ACTIVE && (
         <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
           <div className="text-xs"><b>Contrato apto para ativação</b><p className="mt-0.5 text-slate-500">O servidor repetirá todos os gates antes de vincular veículo, motorista e cobrança.</p></div>
-          <Button size="sm" variant="primary" isLoading={loading} onClick={activate}>Ativar contrato</Button>
+          <Button size="sm" variant="primary" isLoading={loading} onClick={activate} disabled={!incomeCategoryId}>Ativar contrato</Button>
         </div>
       )}
 

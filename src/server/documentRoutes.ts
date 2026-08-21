@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { PayableService } from '../domain/finance/PayableService';
+import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
 import { AuditAction, DocumentStatus, OriginType } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import type { DocumentRecord, DocumentSubjectType, Driver } from '../types/entities';
@@ -103,6 +104,11 @@ function sendError(res: Response, error: unknown): void {
   }
   if (error instanceof DocumentConflictError || isUniqueViolation(error)) {
     res.status(409).json({ error: 'Document conflict' });
+    return;
+  }
+  const message = error instanceof Error ? error.message : '';
+  if (message.startsWith('Categoria financeira') || message === 'Financial category authority unavailable') {
+    res.status(400).json({ error: 'Invalid document financial category' });
     return;
   }
   console.error('AUTOERP_DOCUMENT_AUTHORITY_FAILURE', error);
@@ -239,7 +245,9 @@ async function createPayableIfRequested(
 ): Promise<DocumentRecord> {
   if (body?.generatePayable !== true || item.subjectType !== 'VEHICLE' || item.cost <= 0) return item;
   if (!item.expirationDate) throw new DocumentValidationError('expirationDate is required for payable generation');
-  const categoryId = optionalText(body?.categoryId, 120) || 'cat-doc-default';
+  const categoryId = optionalText(body?.categoryId, 120);
+  if (!categoryId) throw new DocumentValidationError('categoryId is required for payable generation');
+  await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'PAYABLE', tx);
   const payables = await PayableService.create({
     companyId: principal.companyId,
     originType: OriginType.DOCUMENTATION,

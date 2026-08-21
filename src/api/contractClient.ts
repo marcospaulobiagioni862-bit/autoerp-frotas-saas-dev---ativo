@@ -132,9 +132,12 @@ export class ContractClient {
     });
   }
 
-  static async activate(id: string): Promise<{ item: Contract; receivables: AccountReceivable[] }> {
+  static async activate(id: string, categoryId: string): Promise<{ item: Contract; receivables: AccountReceivable[] }> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(id)}/activate`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}',
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ categoryId }),
     });
     if (!response.ok) throw await apiError(response);
     const payload = asRecord(await response.json());
@@ -160,12 +163,12 @@ export class ContractClient {
     });
   }
 
-  static async bill(id: string, dueDate: string, competenceDate?: string): Promise<AccountReceivable[]> {
+  static async bill(id: string, dueDate: string, competenceDate: string | undefined, categoryId: string): Promise<AccountReceivable[]> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(id)}/bill`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dueDate, competenceDate }),
+      body: JSON.stringify({ dueDate, competenceDate, categoryId }),
     });
     if (!response.ok) throw await apiError(response);
     const payload = asRecord(await response.json());

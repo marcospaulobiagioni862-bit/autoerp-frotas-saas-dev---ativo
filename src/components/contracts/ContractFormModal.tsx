@@ -6,7 +6,7 @@ import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
-import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -23,7 +23,6 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activateAfterSave, setActivateAfterSave] = useState(false);
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '700',
     billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
@@ -71,7 +70,6 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', templateId: templateList[0]?.id || '', notes: '',
           });
         }
-        setActivateAfterSave(false);
       })
       .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
       .finally(() => { if (active) setLoadingOptions(false); });
@@ -108,8 +106,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         templateId: form.templateId || undefined,
         notes: form.notes || undefined,
       };
-      const saved = contractToEdit ? await ContractClient.update(contractToEdit.id, input) : await ContractClient.create(input);
-      if (activateAfterSave) await ContractClient.activate(saved.id);
+      if (contractToEdit) await ContractClient.update(contractToEdit.id, input);
+      else await ContractClient.create(input);
       onSuccess();
       onClose();
     } catch (caught) {
@@ -118,8 +116,6 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       setLoading(false);
     }
   };
-
-  const canActivate = Boolean(contractToEdit?.signatureRequired === false && [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contractToEdit.status));
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
@@ -146,8 +142,10 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
         </div>
         <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
-        {canActivate && <label className="flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm"><input type="checkbox" checked={activateAfterSave} onChange={(e) => setActivateAfterSave(e.target.checked)} /><span><strong>Ativar após salvar</strong><br /><span className="text-xs text-slate-500">Contrato, vínculo do veículo, cobrança inicial e auditoria só confirmam juntos.</span></span></label>}
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />{activateAfterSave ? 'Salvar e ativar' : 'Salvar'}</Button></div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
+          Após salvar, a ativação e o faturamento são realizados no detalhe do contrato, onde a categoria financeira canônica da receita é selecionada.
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />Salvar</Button></div>
       </form>
       <style>{`.control{width:100%;border:1px solid rgb(226 232 240);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem}`}</style>
     </ModalContainer>

@@ -6,6 +6,7 @@ import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { FinanceDepositClient } from '../../api/financeDepositClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { ContractLegacyDetailsBridge } from './ContractLegacyDetailsBridge';
 import { AttachmentList } from '../documents/AttachmentList';
 import { FileUpload } from '../documents/FileUpload';
@@ -36,6 +37,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const [deposit, setDeposit] = useState<SecurityDeposit | null>(null);
   const [tickets, setTickets] = useState<TrafficTicket[]>([]);
   const [history, setHistory] = useState<AuditLog[]>([]);
+  const [incomeCategories, setIncomeCategories] = useState<TrafficTicketFinancialCategory[]>([]);
+  const [incomeCategoryId, setIncomeCategoryId] = useState('');
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,14 +52,16 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     setError(null);
     try {
       const core = await ContractClient.get(contractId);
-      const [v, d, allReceivables, dep, supplemental] = await Promise.all([
+      const [v, d, allReceivables, dep, supplemental, categoryList] = await Promise.all([
         VehicleClient.get(core.vehicleId),
         DriverClient.get(core.driverId),
         FinanceObligationClient.listReceivables(),
         FinanceDepositClient.getByContract(core.id),
         bridge.load(companyId, core.id),
+        TrafficTicketClient.categories(),
       ]);
       if (version !== versionRef.current) return;
+      const eligible = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
       setContract(core);
       setVehicle(v);
       setDriver(d);
@@ -64,6 +69,8 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       setDeposit(dep);
       setTickets(supplemental.tickets);
       setHistory(supplemental.history);
+      setIncomeCategories(eligible);
+      setIncomeCategoryId((current) => eligible.some((category) => category.id === current) ? current : (eligible[0]?.id || ''));
     } catch (caught) {
       if (version === versionRef.current) setError(caught instanceof Error ? caught.message : 'Erro ao carregar contrato.');
     } finally {
@@ -74,6 +81,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   useEffect(() => {
     setTab('OVERVIEW');
     setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
+    setIncomeCategories([]); setIncomeCategoryId('');
     setError(null); setSuccess(null);
     if (isOpen && contractId) void load();
     return () => { versionRef.current += 1; };
@@ -86,7 +94,11 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     finally { setActionLoading(false); }
   };
 
-  const activate = () => contract && action(() => ContractClient.activate(contract.id), 'Contrato ativado com vínculo e cobrança confirmados.');
+  const activate = () => {
+    if (!contract) return;
+    if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
+    void action(() => ContractClient.activate(contract.id, incomeCategoryId), 'Contrato ativado com vínculo e cobrança confirmados.');
+  };
   const closeContract = () => {
     if (!contract || !confirm('Deseja encerrar este contrato e liberar o veículo?')) return;
     void action(() => ContractClient.close(contract.id, { reason: 'Encerrado manualmente no painel' }), 'Contrato encerrado e veículo liberado.');
@@ -99,10 +111,11 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   };
   const bill = () => {
     if (!contract) return;
+    if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
     const today = new Date().toISOString().slice(0, 10);
     const dueDate = prompt('Data de vencimento da nova competência (AAAA-MM-DD):', today);
     if (!dueDate) return;
-    void action(() => ContractClient.bill(contract.id, dueDate, dueDate), 'Faturamento processado com idempotência.');
+    void action(() => ContractClient.bill(contract.id, dueDate, dueDate, incomeCategoryId), 'Faturamento processado com idempotência.');
   };
   const receiveDeposit = () => {
     if (!contract) return;
@@ -128,12 +141,22 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
-      {contract && <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-        {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} onClick={() => void activate()}>Ativar legado</Button>}
-        {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={bill}>Faturar competência</Button>}
-        {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
-        {contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.ARCHIVED && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
-        {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={receiveDeposit}>Receber caução</Button>}
+      {contract && <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+        <div className="mb-3 max-w-md">
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300">Categoria financeira da receita de aluguel</label>
+          <select value={incomeCategoryId} onChange={(event) => setIncomeCategoryId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700">
+            <option value="">Selecione uma categoria INCOME/BOTH</option>
+            {incomeCategories.map((category) => <option key={category.id} value={category.id}>{category.name} • {category.type}</option>)}
+          </select>
+          {incomeCategories.length === 0 && <p className="mt-1 text-[11px] text-rose-600">Nenhuma categoria de receita ativa disponível para este tenant.</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={() => void activate()}>Ativar legado</Button>}
+          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={bill}>Faturar competência</Button>}
+          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
+          {contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.ARCHIVED && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
+          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={receiveDeposit}>Receber caução</Button>}
+        </div>
       </div>}
 
       <div className="px-5 pt-3 space-y-2">
@@ -152,7 +175,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       <div className="max-h-[65vh] overflow-y-auto p-5">
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
-            <ContractExecutionPanel contract={contract} onChanged={async () => { await load(); onRefresh(); }} />
+            <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} onChanged={async () => { await load(); onRefresh(); }} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado" value={formatCurrencyBRL(totalBilled)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
             <div className="grid gap-4 md:grid-cols-2">
               <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
@@ -161,7 +184,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
             <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Calendar className="w-4 h-4 text-emerald-600" />Condições</h3><div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><Info label="Início" value={contract.startDate} /><Info label="Término" value={contract.endDate || 'Indeterminado'} /><Info label="Franquia" value={`${contract.franchiseKm} km`} /><Info label="KM excedente" value={formatCurrencyBRL(contract.excessKmRate)} /></div>{contract.notes && <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-2 text-xs text-slate-500">{contract.notes}</p>}</Card>
           </div>}
 
-          {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3>{contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="primary" onClick={bill} isLoading={actionLoading}>Nova competência</Button>}</div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{item.status}</Badge></div><p className="mt-1 text-[11px] text-slate-500">Venc. {item.dueDate} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
+          {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3>{contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="primary" onClick={bill} isLoading={actionLoading} disabled={!incomeCategoryId}>Nova competência</Button>}</div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{item.status}</Badge></div><p className="mt-1 text-[11px] text-slate-500">Venc. {item.dueDate} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
 
           {tab === 'DEPOSIT' && <Card padding="md"><div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)))} /></div><div className="mt-4"><Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading}>Registrar recebimento</Button></div></Card>}
 

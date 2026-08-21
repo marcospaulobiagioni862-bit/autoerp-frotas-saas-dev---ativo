@@ -12,6 +12,9 @@ const companyB = 'security-2i3-company-b';
 const adminAId = 'security-2i3-admin-a';
 const adminBId = 'security-2i3-admin-b';
 const readonlyAId = 'security-2i3-readonly-a';
+const incomeCategoryA = 'finance-r3-contract-income-a';
+const expenseCategoryA = 'finance-r3-contract-expense-a';
+const incomeCategoryB = 'finance-r3-contract-income-b';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -44,6 +47,13 @@ export class ContractAuthorityIntegrationRunner {
         (${adminAId}, ${companyA}, 'I3 Admin A', 'i3-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
         (${adminBId}, ${companyB}, 'I3 Admin B', 'i3-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
         (${readonlyAId}, ${companyA}, 'I3 Readonly A', 'i3-readonly-a@example.test', 'READONLY', true, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES
+        (${incomeCategoryA}, ${companyA}, 'Receita de Aluguel', 'INCOME', true, NOW(), NOW()),
+        (${expenseCategoryA}, ${companyA}, 'Despesa Operacional', 'EXPENSE', true, NOW(), NOW()),
+        (${incomeCategoryB}, ${companyB}, 'Receita de Aluguel B', 'INCOME', true, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
@@ -159,10 +169,24 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 400, `generic PATCH lifecycle expected 400, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
+      assert(response.status === 400, `activate without category expected 400, got ${response.status}`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryB }) }, adminA);
+      assert(response.status === 400, `cross-tenant income category expected 400, got ${response.status}`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: expenseCategoryA }) }, adminA);
+      assert(response.status === 400, `expense category for contract expected 400, got ${response.status}`);
+      const beforeValidActivation = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const vehicleBeforeValidActivation = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const receivablesBeforeValidActivation = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(beforeValidActivation?.status === ContractStatus.DRAFT, 'invalid category mutated contract');
+      assert(vehicleBeforeValidActivation?.status === VehicleStatus.AVAILABLE && !vehicleBeforeValidActivation?.current_contract_id, 'invalid category mutated vehicle');
+      assert(Number(receivablesBeforeValidActivation?.count) === 0, 'invalid category created receivable');
+
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
       const activation = await json(response);
       assert(activation.item.status === ContractStatus.ACTIVE, 'activation did not persist ACTIVE');
       assert(Array.isArray(activation.receivables) && activation.receivables.length === 1, 'activation did not create initial receivable');
+      assert(activation.receivables[0]?.categoryId === incomeCategoryA, 'activation did not persist canonical category');
 
       const vehicleAfterActivation = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
       assert(vehicleAfterActivation?.status === VehicleStatus.RENTED, 'Vehicle not RENTED after activation');
@@ -177,15 +201,15 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 201, `conflict draft create expected 201, got ${response.status}`);
       const conflictContract = (await json(response)).item;
       await markLegacyContract(conflictContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
+      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 409, `vehicle active conflict expected 409, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
-        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08' }),
+        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
       }, adminA);
       assert(response.status === 200, `first bill expected 200, got ${response.status}`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
-        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08' }),
+        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
       }, adminA);
       assert(response.status === 200, `idempotent second bill expected 200, got ${response.status}`);
       const billedCount = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
@@ -224,7 +248,7 @@ export class ContractAuthorityIntegrationRunner {
         throw new Error('FORCED_CONTRACT_AUDIT_FAILURE');
       };
       try {
-        response = await request(`/api/contracts/${encodeURIComponent(rollbackContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
+        response = await request(`/api/contracts/${encodeURIComponent(rollbackContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
         assert(response.status === 500, `forced audit failure expected 500, got ${response.status}`);
       } finally {
         PostgresAuditLogRepository.prototype.create = originalAuditCreate;
@@ -248,7 +272,7 @@ export class ContractAuthorityIntegrationRunner {
         throw new Error('FORCED_CONTRACT_VEHICLE_FAILURE');
       };
       try {
-        response = await request(`/api/contracts/${encodeURIComponent(vehicleRollbackContract.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
+        response = await request(`/api/contracts/${encodeURIComponent(vehicleRollbackContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
         assert(response.status === 500, `forced Vehicle failure expected 500, got ${response.status}`);
       } finally {
         PostgresVehicleRepository.prototype.updateForCompany = originalVehicleUpdate;

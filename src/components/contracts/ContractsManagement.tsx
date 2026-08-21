@@ -92,10 +92,9 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     }
   };
 
-  const handleActivate = (id: string) => runAction(id, () => ContractClient.activate(id));
-  const handleBill = (id: string) => {
-    const today = new Date().toISOString().slice(0, 10);
-    return runAction(id, () => ContractClient.bill(id, today, today));
+  const openFinancialDetails = (id: string) => {
+    setSelectedContractId(id);
+    setDetailsOpen(true);
   };
   const handleClose = (id: string) => {
     if (!confirm('Deseja encerrar este contrato? O vínculo do veículo será liberado de forma atômica.')) return;
@@ -206,11 +205,11 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                       <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{item.status}</Badge></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5 flex-wrap">
-                          <Button size="sm" variant="ghost" onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}><Eye className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => openFinancialDetails(item.id)}><Eye className="w-4 h-4" /></Button>
                           {item.status === ContractStatus.DRAFT && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" isLoading={busy} onClick={() => void handleActivate(item.id)}>Ativar legado</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}>PDF / Assinatura</Button>}
-                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleBill(item.id)}>Faturar</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" onClick={() => openFinancialDetails(item.id)}>Ativar / Categoria</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => openFinancialDetails(item.id)}>PDF / Assinatura</Button>}
+                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" onClick={() => openFinancialDetails(item.id)}>Faturar / Categoria</Button>}
                           {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
                           {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
                         </div>
