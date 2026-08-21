@@ -1,149 +1,175 @@
-name: FINANCE-R2 Gates
+name: FINANCE-R2 Contract Category Fixer
 
 on:
   push:
     branches:
       - finance-r2-canonical-manual-categories
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
 
 jobs:
-  validate:
+  patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: autoerp_phase1_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      NODE_ENV: test
-      USE_PGLITE: "false"
-      SQL_USER: postgres
-      SQL_PASSWORD: postgres
-      SQL_HOST: 127.0.0.1
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
-      RECURRING_SCHEDULER_ENABLED: "false"
-      JWT_SECRET: finance-r2-test-jwt-secret-that-is-long-enough
-      JWT_ISSUER: autoerp-finance-r2-test
-      JWT_AUDIENCE: autoerp-finance-r2-test-client
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-
-      - name: Report gate start
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 193 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R2 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
-
-      - name: Install dependencies
-        run: npm install --ignore-scripts --package-lock=false
-
-      - name: FINANCE-R2 source invariants
+          ref: finance-r2-canonical-manual-categories
+          fetch-depth: 2
+      - name: Apply canonical contract income category transport
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -E "cat-(rent|deposit|ticket|manual)" src/components/finance/ReceivablesView.tsx
-          ! grep -E "cat-(maintenance|insurance|tracker|manual-payable)" src/components/finance/PayablesView.tsx
-          grep -q "TrafficTicketClient.categories" src/components/finance/ReceivablesView.tsx
-          grep -q "TrafficTicketClient.categories" src/components/finance/PayablesView.tsx
-          grep -q "assertFinancialCategoryForObligation" src/domain/finance/ReceivableService.ts
-          grep -q "assertFinancialCategoryForObligation" src/domain/finance/PayableService.ts
-          grep -q "type IN ('INCOME', 'BOTH')\|type === 'INCOME'\|type==='INCOME'" src/components/finance/ReceivablesView.tsx || true
-          grep -q "type === 'EXPENSE'\|type==='EXPENSE'" src/components/finance/PayablesView.tsx || true
-          test ! -e .github/workflows/finance-r2-implementation.yml
-          test ! -e .github/workflows/finance-r2-pr-executor.yml
-          test ! -e .ci/finance-r2-trigger.txt
-          test ! -e .ci/finance-r2-pr-sync.txt
-          echo "FINANCE-R2 source invariants: PASS"
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Apply migrations 0000 through 0022
-        run: node migrate_test_db.cjs
+          def replace(path, old, new, count=None):
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual == 0:
+                  raise SystemExit(f'marker missing in {path}: {old[:80]!r}')
+              if count is not None and actual != count:
+                  raise SystemExit(f'unexpected marker count in {path}: expected {count}, got {actual}')
+              p.write_text(text.replace(old, new, count if count is not None else -1))
 
-      - name: FINANCE-R2 category authority integration
-        run: npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+          # Contract API client: category is explicit for activation and manual billing.
+          replace('src/api/contractClient.ts',
+              "  static async activate(id: string): Promise<{ item: Contract; receivables: AccountReceivable[] }> {\n",
+              "  static async activate(id: string, incomeCategoryId: string): Promise<{ item: Contract; receivables: AccountReceivable[] }> {\n", 1)
+          replace('src/api/contractClient.ts',
+              "      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}',\n",
+              "      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ incomeCategoryId }),\n", 1)
+          replace('src/api/contractClient.ts',
+              "  static async bill(id: string, dueDate: string, competenceDate?: string): Promise<AccountReceivable[]> {\n",
+              "  static async bill(id: string, dueDate: string, competenceDate: string | undefined, incomeCategoryId: string): Promise<AccountReceivable[]> {\n", 1)
+          replace('src/api/contractClient.ts',
+              "      body: JSON.stringify({ dueDate, competenceDate }),\n",
+              "      body: JSON.stringify({ dueDate, competenceDate, incomeCategoryId }),\n", 1)
 
-      - name: Finance obligation client regression
-        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          # Contract server route: remove fixed global category ID and require tenant-selected canonical category.
+          replace('src/server/contractRoutes.ts',
+              "    try {\n      const result = await UnitOfWork.run(principal.companyId, async (tx) => {\n",
+              "    try {\n      const incomeCategoryId = requiredText(req.body?.incomeCategoryId, 'incomeCategoryId');\n      const result = await UnitOfWork.run(principal.companyId, async (tx) => {\n", 1)
+          replace('src/server/contractRoutes.ts', "          categoryId: 'cat-rent-inc',\n", "          categoryId: incomeCategoryId,\n", 1)
+          replace('src/server/contractRoutes.ts',
+              "    try {\n      const dueDate = normalizeDate(req.body?.dueDate, 'dueDate');\n",
+              "    try {\n      const incomeCategoryId = requiredText(req.body?.incomeCategoryId, 'incomeCategoryId');\n      const dueDate = normalizeDate(req.body?.dueDate, 'dueDate');\n", 1)
+          replace('src/server/contractRoutes.ts', "          categoryId: 'cat-rent-inc',\n", "          categoryId: incomeCategoryId,\n", 1)
 
-      - name: FINANCE-R1 schedule regression
-        run: npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
+          # Execution panel receives the selected canonical category from the details view.
+          replace('src/components/contracts/ContractExecutionPanel.tsx',
+              "interface ContractExecutionPanelProps {\n  contract: Contract;\n  onChanged: () => Promise<void> | void;\n}\n\nexport const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, onChanged }) => {\n",
+              "interface ContractExecutionPanelProps {\n  contract: Contract;\n  incomeCategoryId: string;\n  onChanged: () => Promise<void> | void;\n}\n\nexport const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged }) => {\n", 1)
+          replace('src/components/contracts/ContractExecutionPanel.tsx',
+              "  const activate = () => void run(async () => {\n    await ContractClient.activate(contract.id);\n  }, 'Contrato ativado com assinatura, vínculo e cobrança confirmados.');\n",
+              "  const activate = () => {\n    if (!incomeCategoryId) {\n      setError('Selecione uma categoria de receita canônica antes de ativar o contrato.');\n      return;\n    }\n    void run(async () => {\n      await ContractClient.activate(contract.id, incomeCategoryId);\n    }, 'Contrato ativado com assinatura, vínculo e cobrança confirmados.');\n  };\n", 1)
+          replace('src/components/contracts/ContractExecutionPanel.tsx',
+              "          <Button size=\"sm\" variant=\"primary\" isLoading={loading} onClick={activate}>Ativar contrato</Button>\n",
+              "          <Button size=\"sm\" variant=\"primary\" isLoading={loading} onClick={activate} disabled={!incomeCategoryId}>Ativar contrato</Button>\n", 1)
+          replace('src/components/contracts/ContractExecutionPanel.tsx',
+              "          <div className=\"text-xs\"><b>Contrato apto para ativação</b><p className=\"mt-0.5 text-slate-500\">O servidor repetirá todos os gates antes de vincular veículo, motorista e cobrança.</p></div>\n",
+              "          <div className=\"text-xs\"><b>Contrato apto para ativação</b><p className=\"mt-0.5 text-slate-500\">O servidor repetirá todos os gates e validará a categoria de receita do tenant antes de vincular veículo, motorista e cobrança.</p></div>\n", 1)
 
-      - name: FINANCE-R1 domain regression
-        run: npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
+          # Details modal loads canonical categories, never auto-invents a default, and reuses a valid category from existing receivables when available.
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "import { FinanceObligationClient } from '../../api/financeObligationClient';\n",
+              "import { FinanceObligationClient } from '../../api/financeObligationClient';\nimport { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "  const [uploadCount, setUploadCount] = useState(0);\n",
+              "  const [uploadCount, setUploadCount] = useState(0);\n  const [incomeCategories, setIncomeCategories] = useState<TrafficTicketFinancialCategory[]>([]);\n  const [incomeCategoryId, setIncomeCategoryId] = useState('');\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "      const [v, d, allReceivables, dep, supplemental] = await Promise.all([\n        VehicleClient.get(core.vehicleId),\n        DriverClient.get(core.driverId),\n        FinanceObligationClient.listReceivables(),\n        FinanceDepositClient.getByContract(core.id),\n        bridge.load(companyId, core.id),\n      ]);\n",
+              "      const [v, d, allReceivables, dep, supplemental, categoryList] = await Promise.all([\n        VehicleClient.get(core.vehicleId),\n        DriverClient.get(core.driverId),\n        FinanceObligationClient.listReceivables(),\n        FinanceDepositClient.getByContract(core.id),\n        bridge.load(companyId, core.id),\n        TrafficTicketClient.categories(),\n      ]);\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "      setReceivables(allReceivables.filter((item) => item.contractId === core.id).sort((a, b) => b.dueDate.localeCompare(a.dueDate)));\n      setDeposit(dep);\n",
+              "      const contractReceivables = allReceivables.filter((item) => item.contractId === core.id).sort((a, b) => b.dueDate.localeCompare(a.dueDate));\n      const canonicalIncome = categoryList.filter((item) => item.type === 'INCOME' || item.type === 'BOTH');\n      setReceivables(contractReceivables);\n      setIncomeCategories(canonicalIncome);\n      setIncomeCategoryId((current) => {\n        if (current && canonicalIncome.some((item) => item.id === current)) return current;\n        const existing = contractReceivables.find((item) => canonicalIncome.some((category) => category.id === item.categoryId));\n        return existing?.categoryId || '';\n      });\n      setDeposit(dep);\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "    setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);\n",
+              "    setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]); setIncomeCategories([]); setIncomeCategoryId('');\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "  const activate = () => contract && action(() => ContractClient.activate(contract.id), 'Contrato ativado com vínculo e cobrança confirmados.');\n",
+              "", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "  const bill = () => {\n    if (!contract) return;\n",
+              "  const bill = () => {\n    if (!contract) return;\n    if (!incomeCategoryId) { setError('Selecione uma categoria de receita canônica antes de faturar.'); return; }\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "    void action(() => ContractClient.bill(contract.id, dueDate, dueDate), 'Faturamento processado com idempotência.');\n",
+              "    void action(() => ContractClient.bill(contract.id, dueDate, dueDate, incomeCategoryId), 'Faturamento processado com idempotência.');\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "        {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size=\"sm\" variant=\"primary\" isLoading={actionLoading} onClick={() => void activate()}>Ativar legado</Button>}\n",
+              "", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "      {contract && <div className=\"flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 dark:border-slate-800\">\n",
+              "      {contract && <div className=\"flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3 dark:border-slate-800\">\n        <label className=\"min-w-64 text-xs font-semibold text-slate-600 dark:text-slate-300\">Categoria de receita\n          <select className=\"ml-2 rounded-lg border border-slate-200 bg-transparent px-2 py-1.5 text-xs dark:border-slate-700\" value={incomeCategoryId} onChange={(event) => setIncomeCategoryId(event.target.value)}>\n            <option value=\"\">Selecione</option>\n            {incomeCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}\n          </select>\n        </label>\n", 1)
+          replace('src/components/contracts/ContractDetailsModal.tsx',
+              "            <ContractExecutionPanel contract={contract} onChanged={async () => { await load(); onRefresh(); }} />\n",
+              "            <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} onChanged={async () => { await load(); onRefresh(); }} />\n", 1)
 
-      - name: Finance settlement client regression
-        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          # List shortcuts open details instead of bypassing category selection.
+          replace('src/components/contracts/ContractsManagement.tsx',
+              "  const handleActivate = (id: string) => runAction(id, () => ContractClient.activate(id));\n  const handleBill = (id: string) => {\n    const today = new Date().toISOString().slice(0, 10);\n    return runAction(id, () => ContractClient.bill(id, today, today));\n  };\n",
+              "  const openDetails = (id: string) => { setSelectedContractId(id); setDetailsOpen(true); };\n", 1)
+          replace('src/components/contracts/ContractsManagement.tsx',
+              "onClick={() => { setSelectedContractId(item.id); setDetailsOpen(true); }}",
+              "onClick={() => openDetails(item.id)}")
+          replace('src/components/contracts/ContractsManagement.tsx',
+              "onClick={() => void handleActivate(item.id)}",
+              "onClick={() => openDetails(item.id)}", 1)
+          replace('src/components/contracts/ContractsManagement.tsx',
+              "onClick={() => void handleBill(item.id)}",
+              "onClick={() => openDetails(item.id)}", 1)
 
-      - name: Finance transaction client regression
-        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          # Contract integration fixture uses a tenant-unique canonical category and explicit transport.
+          p = Path('src/server/__tests__/contractAuthorityIntegration.ts')
+          text = p.read_text()
+          text = text.replace("const readonlyAId = 'security-2i3-readonly-a';\n", "const readonlyAId = 'security-2i3-readonly-a';\nconst rentIncomeCategoryA = 'security-2i3-rent-income';\n", 1)
+          text = text.replace("('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())", "(${rentIncomeCategoryA}, ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())", 1)
+          text = text.replace("body: '{}' }, adminA)", "body: JSON.stringify({ incomeCategoryId: rentIncomeCategoryA }) }, adminA)")
+          text = text.replace("body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08' })", "body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', incomeCategoryId: rentIncomeCategoryA })")
+          marker = "      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ incomeCategoryId: rentIncomeCategoryA }) }, adminA);\n      assert(response.status === 200, `activate expected 200, got ${response.status}`);\n"
+          if marker not in text:
+              raise SystemExit('contract activation marker missing')
+          text = text.replace(marker,
+              "      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: '{}' }, adminA);\n"
+              "      assert(response.status === 400, `activation without income category expected 400, got ${response.status}`);\n"
+              "      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ incomeCategoryId: rentIncomeCategoryA }) }, adminA);\n"
+              "      assert(response.status === 200, `activate expected 200, got ${response.status}`);\n", 1)
+          p.write_text(text)
 
-      - name: Finance overview client regression
-        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          # Recurring fixture uses its own tenant-unique category to avoid global-PK collisions.
+          p = Path('src/server/__tests__/recurringAuthorityIntegration.ts')
+          text = p.read_text()
+          text = text.replace("const driverA = 'security-2i5-driver-a';\n", "const driverA = 'security-2i5-driver-a';\nconst rentIncomeCategoryA = 'security-2i5-rent-income';\n", 1)
+          text = text.replace("('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())", "(${rentIncomeCategoryA}, ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())", 1)
+          text = text.replace("'cat-rent-inc'", "${rentIncomeCategoryA}")
+          text = text.replace("rule.category_id === ${rentIncomeCategoryA}", "rule.category_id === rentIncomeCategoryA")
+          text = text.replace("categoryId: ${rentIncomeCategoryA}", "categoryId: rentIncomeCategoryA")
+          p.write_text(text)
 
-      - name: Finance reporting client regression
-        run: npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          # Restore permanent FINANCE-R2 workflow from parent, then strengthen it for contract category transport.
+          import subprocess
+          workflow = subprocess.check_output(['git','show','HEAD^:.github/workflows/finance-r2-gates.yml'], text=True)
+          workflow = workflow.replace(
+              '          test ! -e .ci/finance-r2-pr-sync.txt\n',
+              '          test ! -e .ci/finance-r2-pr-sync.txt\n          ! grep -q "cat-rent-inc" src/server/contractRoutes.ts\n          grep -q "incomeCategoryId" src/api/contractClient.ts\n', 1)
+          workflow = workflow.replace(
+              '      - name: Finance obligation client regression\n',
+              '      - name: Contract category transport regression\n        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts\n\n      - name: Finance obligation client regression\n', 1)
+          Path('.github/workflows/finance-r2-gates.yml').write_text(workflow)
 
-      - name: Finance deposit client regression
-        run: npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          # Fail closed if production contract route still has a fixed category ID.
+          route = Path('src/server/contractRoutes.ts').read_text()
+          if "cat-rent-inc" in route:
+              raise SystemExit('fixed contract category remains in production route')
+          if route.count('categoryId: incomeCategoryId') < 2:
+              raise SystemExit('contract route did not transport canonical category twice')
+          PY
 
-      - name: AUTHORITY-1 regression
-        run: npx tsx src/server/__tests__/detailAuthorityIntegration.ts
-
-      - name: AUTHORITY-2 regression
-        run: npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
-
-      - name: SECURITY-2P regression
-        run: npx tsx src/server/__tests__/productionTrustBoundary.ts
-
-      - name: Authentication regression
-        run: npx tsx src/server/__tests__/authTestRunner.ts
-
-      - name: Session login regression
-        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
-
-      - name: TypeScript gate
-        run: npm run lint
-
-      - name: Production build gate
-        run: npm run build
-
-      - name: Production bundle authority guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r2_bundle_hits.txt; then
-            echo "FAIL: legacy browser database marker found in production bundle"
-            cat /tmp/finance_r2_bundle_hits.txt
-            exit 1
-          fi
-          echo "FINANCE-R2 production bundle authority guard: PASS"
-
-      - name: Report gate success
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 193 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R2 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
-
-      - name: Report gate failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 193 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R2 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/api/contractClient.ts src/server/contractRoutes.ts src/components/contracts/ContractExecutionPanel.tsx src/components/contracts/ContractDetailsModal.tsx src/components/contracts/ContractsManagement.tsx src/server/__tests__/contractAuthorityIntegration.ts src/server/__tests__/recurringAuthorityIntegration.ts .github/workflows/finance-r2-gates.yml
+          git commit -m "fix(finance-r2): require canonical contract income category"
+          git push origin HEAD:finance-r2-canonical-manual-categories
