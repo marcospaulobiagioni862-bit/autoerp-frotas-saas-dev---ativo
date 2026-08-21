@@ -9,7 +9,7 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import { generateManagementReport, ManagementReportData } from '../../domain/reports/ManagementReportsService';
 import { VehicleStatus, DocumentStatus } from '../../types/enums';
 import { 

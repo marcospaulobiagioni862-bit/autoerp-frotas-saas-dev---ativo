@@ -8,7 +8,7 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
-} from '../../persistence/repositories/localRepositories';
+} from '../../persistence/repositories/serverReadModelRepositories';
 import { generateRentalLifecycleSummary, RentalLifecycleSummary, RentalLifecycleItem, RentalLifecycleStage } from '../../domain/rental/RentalLifecycleService';
 import { 
   Layers, 
