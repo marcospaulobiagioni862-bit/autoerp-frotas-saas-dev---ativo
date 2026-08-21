@@ -1,0 +1,158 @@
+name: SECURITY-2P Gates
+
+on:
+  push:
+    branches:
+      - security-2p-production-trust-boundary-closure
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: security-2p-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-security-2p-test
+      JWT_AUDIENCE: autoerp-security-2p-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 179 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2P GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: SECURITY-2P production trust-boundary invariant gate
+        run: npx tsx src/server/__tests__/productionTrustBoundary.ts
+      - name: SECURITY-2N runtime read-model regression
+        run: npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
+      - name: Apply migrations 0000 through 0021
+        run: node migrate_test_db.cjs
+      - name: SECURITY-2O operational authority regression
+        run: npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+      - name: Finance overview client regression
+        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+      - name: Finance transaction client regression
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+      - name: Finance settlement client regression
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+      - name: SECURITY-2J2 preventive maintenance regression
+        run: npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
+      - name: SECURITY-2J1 maintenance and KM regression
+        run: npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
+      - name: SECURITY-2I5 recurring regression
+        run: npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
+      - name: SECURITY-2M traffic ticket regression
+        run: npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
+      - name: SECURITY-2L insurance regression
+        run: npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
+      - name: SECURITY-2K tracker regression
+        run: npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+      - name: Driver authority regression
+        run: npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+      - name: Document authority regression
+        run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+      - name: Contract authority regression
+        run: npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: SECURITY-2P production bundle trust-boundary gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'dist/assets';
+          const files = fs.readdirSync(root).filter((file) => fs.statSync(path.join(root, file)).isFile());
+          const bundle = files.map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n');
+
+          const forbidden = [
+            ['AutoERP_DB', 'legacy StorageAdapter/IndexedDB graph'],
+            ['__autoerp_executive_decisions_v1_', 'browser-local decision authority'],
+            ['__autoerp_goals_v1_', 'browser-local goals authority'],
+            ['usr-sre-admin', 'simulated SRE admin identity'],
+            ['usr-exec-1', 'simulated workflow identity'],
+            ['usr-admin-default', 'simulated execution/release admin identity'],
+            ['comp-main-tenant-360', 'simulated performance tenant'],
+            ['admin-consolidator', 'simulated consolidation identity'],
+            ['EnterpriseWorkflowTestRunner', 'workflow browser test runner'],
+            ['EnterpriseExecutionTestRunner', 'execution browser test runner'],
+            ['EnterprisePerformanceTestRunner', 'performance browser test runner'],
+            ['42/42', 'fabricated production test badge'],
+          ];
+
+          for (const [marker, label] of forbidden) {
+            if (bundle.includes(marker)) {
+              console.error(`FAIL: ${label} found in production frontend bundle (${marker})`);
+              process.exit(1);
+            }
+          }
+
+          const required = [
+            ['COCKPIT SERVER AUTHORITY', 'trusted production navigation'],
+            ['Server authority required', 'fail-closed experimental cockpit boundary'],
+            ['/api/operations/tasks', 'SECURITY-2O task authority'],
+            ['/api/operations/incidents', 'SECURITY-2O incident authority'],
+            ['/api/operations/executive/snapshot', 'SECURITY-2O executive authority'],
+            ['BROWSER_WRITE_DISABLED_SERVER_AUTHORITY_REQUIRED', 'SECURITY-2N legacy write fail-closed bridge'],
+          ];
+
+          for (const [marker, label] of required) {
+            if (!bundle.includes(marker)) {
+              console.error(`FAIL: ${label} is missing from production frontend bundle (${marker})`);
+              process.exit(1);
+            }
+          }
+
+          console.log('PASS: SECURITY-2P production bundle excludes legacy browser authorities and exposes only trusted cockpit entrypoints');
+          NODE
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 179 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2P GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 179 --repo "$GITHUB_REPOSITORY" --body "SECURITY-2P GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
