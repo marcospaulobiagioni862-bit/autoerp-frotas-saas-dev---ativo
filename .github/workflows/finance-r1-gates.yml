@@ -1,0 +1,159 @@
+name: FINANCE-R1 Gates
+
+on:
+  push:
+    branches:
+      - finance-r1-renegotiation-frequency
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r1-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r1-test
+      JWT_AUDIENCE: autoerp-finance-r1-test-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Report gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 191 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R1 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: FINANCE-R1 source invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "installmentFrequency" src/api/financeRenegotiationClient.ts
+          grep -q "isRenegotiationInstallmentFrequency" src/api/financeRenegotiationClient.ts
+          grep -q "isRenegotiationInstallmentFrequency" server.ts
+          grep -q "installmentFrequency === null" server.ts
+          grep -q "installmentFrequency," server.ts
+          grep -q "calculateRenegotiationDueDate" src/domain/finance/RenegotiationService.ts
+          grep -q "resolveRenegotiationInstallmentFrequency" src/domain/finance/RenegotiationService.ts
+          if grep -q "setMonth(" src/domain/finance/RenegotiationService.ts; then
+            echo "FAIL: legacy monthly-only scheduling remains in RenegotiationService"
+            exit 1
+          fi
+          grep -q 'value="WEEKLY"' src/components/modals/RenegotiationModal.tsx
+          grep -q 'value="BIWEEKLY"' src/components/modals/RenegotiationModal.tsx
+          grep -q 'value="MONTHLY"' src/components/modals/RenegotiationModal.tsx
+          if grep -q "cat-rec-1" src/components/modals/RenegotiationModal.tsx; then
+            echo "FAIL: fabricated category fallback remains in RenegotiationModal"
+            exit 1
+          fi
+          if grep -q "recurrenceInterval" src/components/modals/RenegotiationModal.tsx; then
+            echo "FAIL: obsolete recurrenceInterval remains in RenegotiationModal"
+            exit 1
+          fi
+          echo "FINANCE-R1 source invariant: PASS"
+
+      - name: FINANCE-R1 deterministic schedule unit test
+        run: npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
+
+      - name: FINANCE-R1 domain frequency regression
+        run: npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
+
+      - name: FINANCE-R1 transport regression
+        run: npx tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts
+
+      - name: Apply migrations 0000 through 0022
+        run: node migrate_test_db.cjs
+
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+
+      - name: Finance settlement client regression
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+
+      - name: Finance transaction client regression
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+
+      - name: Finance overview client regression
+        run: npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+
+      - name: Finance reporting client regression
+        run: npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+
+      - name: Finance deposit client regression
+        run: npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+
+      - name: AUTHORITY-1 detail authority regression
+        run: npx tsx src/server/__tests__/detailAuthorityIntegration.ts
+
+      - name: AUTHORITY-2 runtime read-model regression
+        run: npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
+
+      - name: SECURITY-2P source trust-boundary regression
+        run: npx tsx src/server/__tests__/productionTrustBoundary.ts
+
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Session login regression
+        run: npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Production build gate
+        run: npm run build
+
+      - name: Production bundle authority guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r1_bundle_hits.txt; then
+            echo "FAIL: legacy browser database marker found in production bundle"
+            cat /tmp/finance_r1_bundle_hits.txt
+            exit 1
+          fi
+          echo "FINANCE-R1 production bundle authority guard: PASS"
+
+      - name: Report gate success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 191 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R1 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Report gate failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 191 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R1 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | run=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

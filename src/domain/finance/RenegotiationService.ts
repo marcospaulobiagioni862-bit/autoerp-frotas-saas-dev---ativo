@@ -6,6 +6,11 @@ import {
 import { ObligationStatus, OriginType, AuditAction } from '../../types/enums';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
+import {
+  calculateRenegotiationDueDate,
+  resolveRenegotiationInstallmentFrequency,
+  type RenegotiationInstallmentFrequency,
+} from '../../shared/utils/renegotiationSchedule';
 import { IdempotencyService } from '../services/IdempotencyService';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
@@ -17,6 +22,7 @@ export interface RenegotiateParams {
   newTotalAmount: number;
   installmentsCount: number;
   firstDueDate: string;
+  installmentFrequency?: RenegotiationInstallmentFrequency;
   categoryId: string;
   description: string;
   userId: string;
@@ -28,6 +34,10 @@ export class RenegotiationService {
   private static payRepo = new AccountPayableRepository();
 
   public static async renegociate(params: RenegotiateParams, txContext?: ITransactionContext) {
+    const installmentFrequency = resolveRenegotiationInstallmentFrequency(params.installmentFrequency);
+    // Validate the date before any obligation is mutated, including legacy/local test paths.
+    calculateRenegotiationDueDate(params.firstDueDate, 1, installmentFrequency);
+
     await FinancialAuthorizationService.authorize(params.userId, params.companyId, 'FINANCIAL_RENEGOTIATION', txContext);
 
     await FinancialPeriodService.assertDateOpen(params.companyId, params.firstDueDate, txContext);
@@ -82,10 +92,11 @@ export class RenegotiationService {
         const installmentAmount = installmentCents / 100;
 
         const idempotencyKey = IdempotencyService.buildKey(OriginType.RENEGOTIATION, renegotiationId, i, undefined, params.companyId);
-
-        const dueDateObj = new Date(params.firstDueDate);
-        if (i > 1) dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
-        const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
+        const calculatedDueDate = calculateRenegotiationDueDate(
+          params.firstDueDate,
+          i,
+          installmentFrequency
+        );
 
         const createPayload = {
           id: generateUUID(),
@@ -130,7 +141,7 @@ export class RenegotiationService {
         params.userId,
         params.userName,
         null,
-        { obligationIds: params.obligationIds, newInstallments: createdList },
+        { obligationIds: params.obligationIds, installmentFrequency, newInstallments: createdList },
         txContext
       );
 
@@ -179,10 +190,11 @@ export class RenegotiationService {
         const installmentAmount = installmentCents / 100;
 
         const idempotencyKey = IdempotencyService.buildKey(OriginType.RENEGOTIATION, renegotiationId, i, undefined, params.companyId);
-
-        const dueDateObj = new Date(params.firstDueDate);
-        if (i > 1) dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
-        const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
+        const calculatedDueDate = calculateRenegotiationDueDate(
+          params.firstDueDate,
+          i,
+          installmentFrequency
+        );
 
         const createPayload = {
           id: generateUUID(),
@@ -227,7 +239,7 @@ export class RenegotiationService {
         params.userId,
         params.userName,
         null,
-        { obligationIds: params.obligationIds, newInstallments: createdList },
+        { obligationIds: params.obligationIds, installmentFrequency, newInstallments: createdList },
         txContext
       );
 

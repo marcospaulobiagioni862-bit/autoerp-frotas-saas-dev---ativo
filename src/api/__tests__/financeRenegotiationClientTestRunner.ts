@@ -35,6 +35,16 @@ const item = {
   updatedAt: '2026-08-18T00:00:00.000Z',
 };
 
+const baseInput = {
+  obligationIds: ['x'],
+  newTotalAmount: 1,
+  installmentsCount: 1,
+  firstDueDate: '2026-09-15',
+  installmentFrequency: 'MONTHLY' as const,
+  categoryId: 'c',
+  description: 'x',
+};
+
 async function run() {
   let passed = 0;
   try {
@@ -45,41 +55,56 @@ async function run() {
       newTotalAmount: 100.01,
       installmentsCount: 2,
       firstDueDate: '2026-09-15',
+      installmentFrequency: 'BIWEEKLY',
       categoryId: 'cat-income',
       description: 'Acordo',
     });
     assert(calls[0].url === '/api/finance/receivables/renegotiate', 'URL');
     assert(calls[0].init?.credentials === 'include', 'credentials');
     const body = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    assert(body.installmentFrequency === 'BIWEEKLY', 'frequency must be transported explicitly');
     assert(!('companyId' in body) && !('userId' in body) && !('userName' in body), 'browser identity must not be sent');
     assert(result[0].originalAmount === 50.01 && result[0].dueDate === '2026-09-15', 'normalization');
     passed++;
 
+    calls = [];
+    let invalid = false;
+    try {
+      await FinanceRenegotiationClient.renegotiateReceivables({
+        ...baseInput,
+        installmentFrequency: 'INVALID' as never,
+      });
+    } catch (error) {
+      invalid = error instanceof Error && error.message.includes('frequency');
+    }
+    assert(invalid && calls.length === 0, 'invalid frequency must fail before network');
+    passed++;
+
     responder = async () => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     let failed = false;
-    try { await FinanceRenegotiationClient.renegotiateReceivables({ obligationIds: ['x'], newTotalAmount: 1, installmentsCount: 1, firstDueDate: '2026-09-15', categoryId: 'c', description: 'x' }); } catch (error) { failed = error instanceof FinanceRenegotiationApiError && error.status === 401; }
+    try { await FinanceRenegotiationClient.renegotiateReceivables(baseInput); } catch (error) { failed = error instanceof FinanceRenegotiationApiError && error.status === 401; }
     assert(failed, '401 fail closed');
     passed++;
 
     responder = async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     failed = false;
-    try { await FinanceRenegotiationClient.renegotiateReceivables({ obligationIds: ['x'], newTotalAmount: 1, installmentsCount: 1, firstDueDate: '2026-09-15', categoryId: 'c', description: 'x' }); } catch (error) { failed = error instanceof FinanceRenegotiationApiError && error.status === 403; }
+    try { await FinanceRenegotiationClient.renegotiateReceivables(baseInput); } catch (error) { failed = error instanceof FinanceRenegotiationApiError && error.status === 403; }
     assert(failed, '403 fail closed');
     passed++;
 
     responder = async () => new Response(JSON.stringify({ items: 'bad' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
-    let invalid = false;
-    try { await FinanceRenegotiationClient.renegotiateReceivables({ obligationIds: ['x'], newTotalAmount: 1, installmentsCount: 1, firstDueDate: '2026-09-15', categoryId: 'c', description: 'x' }); } catch { invalid = true; }
+    invalid = false;
+    try { await FinanceRenegotiationClient.renegotiateReceivables(baseInput); } catch { invalid = true; }
     assert(invalid, 'invalid payload fail closed');
     passed++;
 
     responder = async () => { throw new Error('network down'); };
     failed = false;
-    try { await FinanceRenegotiationClient.renegotiateReceivables({ obligationIds: ['x'], newTotalAmount: 1, installmentsCount: 1, firstDueDate: '2026-09-15', categoryId: 'c', description: 'x' }); } catch (error) { failed = error instanceof Error && error.message === 'network down'; }
+    try { await FinanceRenegotiationClient.renegotiateReceivables(baseInput); } catch (error) { failed = error instanceof Error && error.message === 'network down'; }
     assert(failed, 'network fail closed');
     passed++;
 
-    console.log(`FinanceRenegotiationClient ${passed}/5 PASS`);
+    console.log(`FinanceRenegotiationClient ${passed}/6 PASS`);
   } finally {
     globalThis.fetch = originalFetch;
   }
