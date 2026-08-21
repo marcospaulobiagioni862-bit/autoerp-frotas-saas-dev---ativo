@@ -33,14 +33,15 @@ export default defineConfig(({ command }) => {
     'src/components/layout/ProductionSidebar.tsx'
   );
 
-  // SECURITY-2P: historical Phase 3.x cockpit sources remain available to the
-  // development server for inspection, but production builds replace every
-  // browser-authoritative entry module before Rollup can include its graph.
+  // SECURITY-2P: historical Phase 3.x and browser-authoritative admin sources
+  // remain available to the development server for inspection, but production
+  // builds replace every unsafe entry module before Rollup can include its graph.
   const productionCockpitAliases = command === 'build'
     ? [
         /^(?:\.\.?\/)*components\/incident-management\/IncidentManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/workflow\/OperationalWorkflowCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/executive\/ExecutiveDashboardView(?:\.tsx)?$/,
+        /^(?:\.\.?\/)*components\/admin\/AdministrationCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/performance\/PerformanceManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
