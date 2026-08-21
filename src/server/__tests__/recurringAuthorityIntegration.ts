@@ -52,6 +52,11 @@ async function seed(): Promise<void> {
     ON CONFLICT (id) DO NOTHING
   `);
   await db.execute(sql`
+    INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES
+      ('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())
+    ON CONFLICT (id) DO NOTHING
+  `);
+  await db.execute(sql`
     INSERT INTO vehicles (id, company_id, plate, renavam, status, created_at, updated_at)
     VALUES (${vehicleA}, ${companyA}, 'I5A1A01', 'I5RENAVAM-A1', 'AVAILABLE', NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
