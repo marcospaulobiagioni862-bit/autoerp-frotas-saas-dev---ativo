@@ -47,6 +47,11 @@ export class ContractAuthorityIntegrationRunner {
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
+      INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at) VALUES
+        ('cat-rent-inc', ${companyA}, 'Aluguel de Veículos', 'INCOME', true, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
       INSERT INTO vehicles (id, company_id, plate, renavam, status, created_at, updated_at) VALUES
         ('i3-veh-a1', ${companyA}, 'I3A1A01', 'I3RENAVAM-A1', 'AVAILABLE', NOW(), NOW()),
         ('i3-veh-a2', ${companyA}, 'I3A2A02', 'I3RENAVAM-A2', 'AVAILABLE', NOW(), NOW()),
