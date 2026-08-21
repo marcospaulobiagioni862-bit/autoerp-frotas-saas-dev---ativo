@@ -69,6 +69,7 @@ jobs:
           grep -q "TrafficTicketClient.categories" src/components/fleet/FleetComplianceManagement.tsx
           grep -q "incomeCategoryId" src/components/contracts/ContractExecutionPanel.tsx
           grep -q "docCategoryId" src/components/fleet/FleetComplianceManagement.tsx
+          ! grep -q "ContractClient.activate" src/components/contracts/ContractFormModal.tsx
           echo "FINANCE-R3 source invariants: PASS"
 
       - name: Apply migrations 0000 through 0022
@@ -79,6 +80,9 @@ jobs:
 
       - name: FINANCE-R3 document authority integration
         run: npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+
+      - name: FINANCE-R3 contract client transport regression
+        run: npx tsx src/api/__tests__/contractClientTestRunner.ts
 
       - name: FINANCE-R2 category authority regression
         run: npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
