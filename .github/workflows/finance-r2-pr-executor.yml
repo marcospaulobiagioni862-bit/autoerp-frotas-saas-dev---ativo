@@ -1,0 +1,96 @@
+name: FINANCE-R2 PR Executor
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  implement:
+    if: github.event.pull_request.head.ref == 'finance-r2-canonical-manual-categories'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r2-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r2-test
+      JWT_AUDIENCE: autoerp-finance-r2-test-client
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r2-canonical-manual-categories
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Extract and execute stored implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+          text = Path('.github/workflows/finance-r2-implementation.yml').read_text()
+          start_marker = "          python - <<'PY'\n"
+          end_marker = "\n          PY\n"
+          start = text.index(start_marker) + len(start_marker)
+          end = text.index(end_marker, start)
+          Path('/tmp/finance_r2_impl.py').write_text(textwrap.dedent(text[start:end]))
+          PY
+          python /tmp/finance_r2_impl.py
+      - name: Source invariants
+        run: |
+          set -euo pipefail
+          ! grep -E "cat-(rent|deposit|ticket|manual)" src/components/finance/ReceivablesView.tsx
+          ! grep -E "cat-(maintenance|insurance|tracker|manual-payable)" src/components/finance/PayablesView.tsx
+          grep -q "listFinancialCategories" src/api/financeObligationClient.ts
+          grep -q "assertFinancialCategoryForObligation" src/domain/finance/ReceivableService.ts
+          grep -q "assertFinancialCategoryForObligation" src/domain/finance/PayableService.ts
+          grep -q "/api/finance/categories" server.ts
+      - name: Apply migrations 0000 through 0022
+        run: node migrate_test_db.cjs
+      - name: FINANCE-R2 category authority integration
+        run: npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Publish validated branch and remove temporary executor files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/finance-r2-implementation.yml .github/workflows/finance-r2-pr-executor.yml .ci/finance-r2-trigger.txt
+          git add -- server.ts src/api/financeObligationClient.ts src/api/__tests__/financeObligationClientTestRunner.ts src/components/finance/ReceivablesView.tsx src/components/finance/PayablesView.tsx src/domain/finance/ReceivableService.ts src/domain/finance/PayableService.ts src/domain/finance/FinancialCategoryAuthority.ts src/server/__tests__/financeCategoryAuthorityIntegration.ts
+          git diff --cached --check
+          git commit -m "fix(finance): use canonical categories for manual obligations"
+          git push origin HEAD:finance-r2-canonical-manual-categories
