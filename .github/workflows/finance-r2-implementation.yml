@@ -1,0 +1,343 @@
+name: FINANCE-R2 Temporary Implementation
+
+on:
+  push:
+    branches:
+      - finance-r2-canonical-manual-categories
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r2-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r2-test
+      JWT_AUDIENCE: autoerp-finance-r2-test-client
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Apply FINANCE-R2 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one anchor, got {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          Path('src/domain/finance/FinancialCategoryAuthority.ts').write_text("""import { sql } from 'drizzle-orm';
+import type { ITransactionContext } from './ITransactionContext';
+
+export type FinancialCategoryUsage = 'RECEIVABLE' | 'PAYABLE';
+
+export interface CanonicalFinancialCategory {
+  id: string;
+  name: string;
+  type: 'INCOME' | 'EXPENSE' | 'BOTH';
+}
+
+function rows(result: any): any[] {
+  return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+function rawTransaction(txContext: ITransactionContext): any {
+  const raw = txContext.getRawTransaction?.();
+  if (!raw) throw new Error('Financial category authority unavailable');
+  return raw;
+}
+
+function isAllowed(type: string, usage: FinancialCategoryUsage): boolean {
+  return type === 'BOTH' || (usage === 'RECEIVABLE' ? type === 'INCOME' : type === 'EXPENSE');
+}
+
+export async function listActiveFinancialCategories(
+  companyId: string,
+  txContext: ITransactionContext
+): Promise<CanonicalFinancialCategory[]> {
+  const raw = rawTransaction(txContext);
+  const result = await raw.execute(sql`
+    SELECT id, name, type
+    FROM financial_categories
+    WHERE company_id = ${companyId}
+      AND active = true
+      AND type IN ('INCOME', 'EXPENSE', 'BOTH')
+    ORDER BY name, id
+  `);
+  return rows(result).map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    type: String(row.type) as CanonicalFinancialCategory['type'],
+  }));
+}
+
+export async function assertFinancialCategoryForObligation(
+  companyId: string,
+  categoryId: string,
+  usage: FinancialCategoryUsage,
+  txContext: ITransactionContext
+): Promise<void> {
+  const normalizedId = typeof categoryId === 'string' ? categoryId.trim() : '';
+  if (!normalizedId) throw new Error('Categoria financeira não encontrada');
+  const raw = rawTransaction(txContext);
+  const result = await raw.execute(sql`
+    SELECT id, type, active
+    FROM financial_categories
+    WHERE company_id = ${companyId}
+      AND id = ${normalizedId}
+    LIMIT 1
+  `);
+  const category = rows(result)[0];
+  if (!category) throw new Error('Categoria financeira não encontrada');
+  if (category.active !== true) throw new Error('Categoria financeira inativa');
+  const type = String(category.type);
+  if (!isAllowed(type, usage)) {
+    throw new Error(
+      usage === 'RECEIVABLE'
+        ? 'Categoria financeira incompatível com Conta a Receber'
+        : 'Categoria financeira incompatível com Conta a Pagar'
+    );
+  }
+}
+""")
+
+          for path, usage in [
+              ('src/domain/finance/ReceivableService.ts', 'RECEIVABLE'),
+              ('src/domain/finance/PayableService.ts', 'PAYABLE'),
+          ]:
+              replace_once(
+                  path,
+                  "import { ITransactionContext } from './ITransactionContext';",
+                  "import { ITransactionContext } from './ITransactionContext';\nimport { assertFinancialCategoryForObligation } from './FinancialCategoryAuthority';"
+              )
+              permission = 'RECEIVABLE_CREATE' if usage == 'RECEIVABLE' else 'PAYABLE_CREATE'
+              old = f"""    await FinancialAuthorizationService.authorize(\n      params.userId,\n      params.companyId,\n      '{permission}',\n      txContext\n    );\n\n    const installments"""
+              new = f"""    await FinancialAuthorizationService.authorize(\n      params.userId,\n      params.companyId,\n      '{permission}',\n      txContext\n    );\n\n    if (txContext?.getRawTransaction) {{\n      await assertFinancialCategoryForObligation(params.companyId, params.categoryId, '{usage}', txContext);\n    }}\n\n    const installments"""
+              replace_once(path, old, new)
+
+          replace_once(
+              'server.ts',
+              "import { DepositService } from './src/domain/finance/DepositService';",
+              "import { DepositService } from './src/domain/finance/DepositService';\nimport { listActiveFinancialCategories } from './src/domain/finance/FinancialCategoryAuthority';"
+          )
+          overview_anchor = """  // SECURITY-2G7B1: DRE is server-authoritative and tenant-scoped.\n"""
+          categories_route = """  // FINANCE-R2: canonical active financial categories are server-authoritative.\n  app.get('/api/finance/categories', async (req: Request, res: Response) => {\n    const principal = requireFinancePrincipal(req, res);\n    if (!principal) return;\n\n    try {\n      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>\n        await listActiveFinancialCategories(principal.companyId, txContext)\n      );\n      res.json({ items });\n    } catch (error) {\n      sendFinanceCommandError(res, error);\n    }\n  });\n\n"""
+          replace_once('server.ts', overview_anchor, categories_route + overview_anchor)
+
+          client = Path('src/api/financeObligationClient.ts')
+          text = client.read_text()
+          text = text.replace(
+              "export interface CreatePayableRequest extends CreateReceivableRequest {\n  supplierId?: string;\n  idempotencyKey?: string;\n}\n",
+              "export interface CreatePayableRequest extends CreateReceivableRequest {\n  supplierId?: string;\n  idempotencyKey?: string;\n}\n\nexport interface FinanceCategoryOption {\n  id: string;\n  name: string;\n  type: 'INCOME' | 'EXPENSE' | 'BOTH';\n}\n",
+              1
+          )
+          marker = "function normalizeReceivable(value: unknown): AccountReceivable {"
+          normalizer = """function normalizeCategory(value: unknown): FinanceCategoryOption {\n  const record = asRecord(value);\n  const id = typeof record.id === 'string' ? record.id.trim() : '';\n  const name = typeof record.name === 'string' ? record.name.trim() : '';\n  const type = record.type;\n  if (!id || !name || (type !== 'INCOME' && type !== 'EXPENSE' && type !== 'BOTH')) {\n    throw new Error('Invalid finance category response');\n  }\n  return { id, name, type };\n}\n\n"""
+          if text.count(marker) != 1: raise SystemExit('client normalizer anchor mismatch')
+          text = text.replace(marker, normalizer + marker, 1)
+          method_anchor = "export class FinanceObligationClient {\n"
+          method = """export class FinanceObligationClient {\n  static async listFinancialCategories(): Promise<FinanceCategoryOption[]> {\n    return itemsFromPayload(await requestJson('/api/finance/categories')).map(normalizeCategory);\n  }\n\n"""
+          if text.count(method_anchor) != 1: raise SystemExit('client class anchor mismatch')
+          text = text.replace(method_anchor, method, 1)
+          client.write_text(text)
+
+          test = Path('src/api/__tests__/financeObligationClientTestRunner.ts')
+          text = test.read_text()
+          anchor = """    responder = async () => new Response(JSON.stringify({ items: [row] }), { status: 200, headers: { 'Content-Type': 'application/json' } });\n    calls = [];\n    const receivables = await FinanceObligationClient.listReceivables();\n"""
+          addition = """    responder = async () => new Response(JSON.stringify({ items: [{ id: 'cat-income', name: 'Receitas', type: 'INCOME' }, { id: 'cat-both', name: 'Mista', type: 'BOTH' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });\n    calls = [];\n    const categories = await FinanceObligationClient.listFinancialCategories();\n    assert(calls[0].url === '/api/finance/categories', 'category list URL');\n    assert(calls[0].init?.credentials === 'include', 'category list credentials');\n    assert(categories.length === 2 && categories[0].type === 'INCOME', 'category normalization');\n    passed++;\n\n"""
+          if text.count(anchor) != 1: raise SystemExit('client test anchor mismatch')
+          text = text.replace(anchor, addition + anchor, 1)
+          text = text.replace('FinanceObligationClient ${passed}/7 PASS', 'FinanceObligationClient ${passed}/8 PASS', 1)
+          test.write_text(text)
+
+          # Receivables UI
+          p = Path('src/components/finance/ReceivablesView.tsx')
+          text = p.read_text()
+          text = text.replace(
+              "import { FinanceObligationClient } from '../../api/financeObligationClient';",
+              "import { FinanceObligationClient, type FinanceCategoryOption } from '../../api/financeObligationClient';", 1)
+          text = text.replace(
+              "  const [actionMessage, setActionMessage] = useState<string | null>(null);",
+              "  const [actionMessage, setActionMessage] = useState<string | null>(null);\n  const [categories, setCategories] = useState<FinanceCategoryOption[]>([]);", 1)
+          text = text.replace("useState<string>('cat-manual')", "useState<string>('')", 1)
+          old_load = """      const list = await FinanceObligationClient.listReceivables();\n      setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));"""
+          new_load = """      const [list, categoryList] = await Promise.all([\n        FinanceObligationClient.listReceivables(),\n        FinanceObligationClient.listFinancialCategories(),\n      ]);\n      const incomeCategories = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');\n      setCategories(incomeCategories);\n      setCategoryId((current) => incomeCategories.some((category) => category.id === current) ? current : (incomeCategories[0]?.id || ''));\n      setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));"""
+          if text.count(old_load) != 1: raise SystemExit('receivable load anchor mismatch')
+          text = text.replace(old_load, new_load, 1)
+          text = text.replace("if (!description.trim() || !totalAmount || !dueDate) {", "if (!description.trim() || !totalAmount || !dueDate || !categoryId) {", 1)
+          text = text.replace("setCategoryId('cat-manual');", "setCategoryId('');", 1)
+          old_options = """                  <option value=\"cat-rent\">Aluguel / Locação</option>\n                  <option value=\"cat-deposit\">Caução / Depósito</option>\n                  <option value=\"cat-ticket\">Multa de Trânsito</option>\n                  <option value=\"cat-manual\">Outros Recebimentos</option>"""
+          new_options = """                  <option value=\"\">Selecione uma categoria de receita</option>\n                  {categories.map((category) => (\n                    <option key={category.id} value={category.id}>{category.name}</option>\n                  ))}"""
+          if text.count(old_options) != 1: raise SystemExit('receivable options anchor mismatch')
+          text = text.replace(old_options, new_options, 1)
+          p.write_text(text)
+
+          # Payables UI
+          p = Path('src/components/finance/PayablesView.tsx')
+          text = p.read_text()
+          text = text.replace(
+              "import { FinanceObligationClient } from '../../api/financeObligationClient';",
+              "import { FinanceObligationClient, type FinanceCategoryOption } from '../../api/financeObligationClient';", 1)
+          text = text.replace(
+              "  const [actionMessage, setActionMessage] = useState<string | null>(null);",
+              "  const [actionMessage, setActionMessage] = useState<string | null>(null);\n  const [categories, setCategories] = useState<FinanceCategoryOption[]>([]);", 1)
+          text = text.replace("useState<string>('cat-manual-payable')", "useState<string>('')", 1)
+          old_load = """      const list = await FinanceObligationClient.listPayables();\n      setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));"""
+          new_load = """      const [list, categoryList] = await Promise.all([\n        FinanceObligationClient.listPayables(),\n        FinanceObligationClient.listFinancialCategories(),\n      ]);\n      const expenseCategories = categoryList.filter((category) => category.type === 'EXPENSE' || category.type === 'BOTH');\n      setCategories(expenseCategories);\n      setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));\n      setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));"""
+          if text.count(old_load) != 1: raise SystemExit('payable load anchor mismatch')
+          text = text.replace(old_load, new_load, 1)
+          text = text.replace("if (!description.trim() || !totalAmount || !dueDate) {", "if (!description.trim() || !totalAmount || !dueDate || !categoryId) {", 1)
+          text = text.replace("setCategoryId('cat-manual-payable');", "setCategoryId('');", 1)
+          old_options = """                  <option value=\"cat-maintenance\">Manutenção / Peças</option>\n                  <option value=\"cat-insurance\">Seguro Frota</option>\n                  <option value=\"cat-tracker\">Rastreador</option>\n                  <option value=\"cat-manual-payable\">Administrativo / Outros</option>"""
+          new_options = """                  <option value=\"\">Selecione uma categoria de despesa</option>\n                  {categories.map((category) => (\n                    <option key={category.id} value={category.id}>{category.name}</option>\n                  ))}"""
+          if text.count(old_options) != 1: raise SystemExit('payable options anchor mismatch')
+          text = text.replace(old_options, new_options, 1)
+          p.write_text(text)
+
+          Path('src/server/__tests__/financeCategoryAuthorityIntegration.ts').write_text("""import { sql } from 'drizzle-orm';
+import { db } from '../../db';
+import { UnitOfWork } from '../../db/uow';
+import { assertFinancialCategoryForObligation, listActiveFinancialCategories } from '../../domain/finance/FinancialCategoryAuthority';
+import { ReceivableService } from '../../domain/finance/ReceivableService';
+import { PayableService } from '../../domain/finance/PayableService';
+import { OriginType } from '../../types/enums';
+
+const companyA = 'finance-r2-company-a';
+const companyB = 'finance-r2-company-b';
+const adminA = 'finance-r2-admin-a';
+const incomeA = 'finance-r2-income-a';
+const expenseA = 'finance-r2-expense-a';
+const bothA = 'finance-r2-both-a';
+const inactiveA = 'finance-r2-inactive-a';
+const incomeB = 'finance-r2-income-b';
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
+
+async function rejects(fn: () => Promise<unknown>, contains: string): Promise<void> {
+  let failed = false;
+  try { await fn(); } catch (error) { failed = String(error).includes(contains); }
+  assert(failed, `expected rejection containing ${contains}`);
+}
+
+async function seed(): Promise<void> {
+  await db.execute(sql`INSERT INTO companies(id,name,status,created_at,updated_at) VALUES
+    (${companyA},'Finance R2 A','ACTIVE',NOW(),NOW()),(${companyB},'Finance R2 B','ACTIVE',NOW(),NOW()) ON CONFLICT(id) DO NOTHING`);
+  await db.execute(sql`INSERT INTO users(id,company_id,name,email,role,active,created_at,updated_at) VALUES
+    (${adminA},${companyA},'Finance R2 Admin','finance-r2-admin@example.test','ADMIN',true,NOW(),NOW()) ON CONFLICT(id) DO NOTHING`);
+  await db.execute(sql`INSERT INTO financial_categories(id,company_id,name,type,active,created_at,updated_at) VALUES
+    (${incomeA},${companyA},'Receita R2','INCOME',true,NOW(),NOW()),
+    (${expenseA},${companyA},'Despesa R2','EXPENSE',true,NOW(),NOW()),
+    (${bothA},${companyA},'Mista R2','BOTH',true,NOW(),NOW()),
+    (${inactiveA},${companyA},'Inativa R2','INCOME',false,NOW(),NOW()),
+    (${incomeB},${companyB},'Receita B','INCOME',true,NOW(),NOW()) ON CONFLICT(id) DO NOTHING`);
+}
+
+async function run(): Promise<void> {
+  await seed();
+  await UnitOfWork.run(companyA, async (tx) => {
+    const categories = await listActiveFinancialCategories(companyA, tx);
+    const ids = new Set(categories.map((category) => category.id));
+    assert(ids.has(incomeA) && ids.has(expenseA) && ids.has(bothA), 'active tenant categories missing');
+    assert(!ids.has(inactiveA) && !ids.has(incomeB), 'inactive/cross-tenant category leaked');
+
+    await assertFinancialCategoryForObligation(companyA, incomeA, 'RECEIVABLE', tx);
+    await assertFinancialCategoryForObligation(companyA, bothA, 'RECEIVABLE', tx);
+    await assertFinancialCategoryForObligation(companyA, expenseA, 'PAYABLE', tx);
+    await assertFinancialCategoryForObligation(companyA, bothA, 'PAYABLE', tx);
+    await rejects(() => assertFinancialCategoryForObligation(companyA, expenseA, 'RECEIVABLE', tx), 'incompatível');
+    await rejects(() => assertFinancialCategoryForObligation(companyA, incomeA, 'PAYABLE', tx), 'incompatível');
+    await rejects(() => assertFinancialCategoryForObligation(companyA, inactiveA, 'RECEIVABLE', tx), 'inativa');
+    await rejects(() => assertFinancialCategoryForObligation(companyA, incomeB, 'RECEIVABLE', tx), 'não encontrada');
+    await rejects(() => assertFinancialCategoryForObligation(companyA, 'missing-r2', 'PAYABLE', tx), 'não encontrada');
+
+    const beforeReceivable = await tx.getReceivableRepo().findAll();
+    await rejects(() => ReceivableService.create({
+      companyId: companyA, originType: OriginType.MANUAL, originId: 'finance-r2-invalid-ar', categoryId: expenseA,
+      description: 'Invalid AR category', totalAmount: 100, dueDate: '2026-09-20', userId: adminA, userName: 'Finance R2 Admin',
+    }, tx), 'incompatível');
+    const afterReceivable = await tx.getReceivableRepo().findAll();
+    assert(afterReceivable.length === beforeReceivable.length, 'invalid AR category created an obligation');
+
+    const beforePayable = await tx.getPayableRepo().findAll();
+    await rejects(() => PayableService.create({
+      companyId: companyA, originType: OriginType.MANUAL, originId: 'finance-r2-invalid-ap', categoryId: incomeA,
+      description: 'Invalid AP category', totalAmount: 100, dueDate: '2026-09-20', userId: adminA, userName: 'Finance R2 Admin',
+    }, tx), 'incompatível');
+    const afterPayable = await tx.getPayableRepo().findAll();
+    assert(afterPayable.length === beforePayable.length, 'invalid AP category created an obligation');
+  });
+  console.log('FINANCE-R2 category authority integration PASS');
+}
+
+run().catch((error) => { console.error(error); process.exit(1); });
+""")
+          PY
+      - name: Source invariants
+        run: |
+          set -euo pipefail
+          ! grep -E "cat-(rent|deposit|ticket|manual)" src/components/finance/ReceivablesView.tsx
+          ! grep -E "cat-(maintenance|insurance|tracker|manual-payable)" src/components/finance/PayablesView.tsx
+          grep -q "listFinancialCategories" src/api/financeObligationClient.ts
+          grep -q "assertFinancialCategoryForObligation" src/domain/finance/ReceivableService.ts
+          grep -q "assertFinancialCategoryForObligation" src/domain/finance/PayableService.ts
+          grep -q "/api/finance/categories" server.ts
+      - name: Apply migrations 0000 through 0022
+        run: node migrate_test_db.cjs
+      - name: FINANCE-R2 category authority integration
+        run: npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+      - name: Finance obligation client regression
+        run: npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Commit validated implementation and remove executor
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/finance-r2-implementation.yml
+          git add -- server.ts src/api/financeObligationClient.ts src/api/__tests__/financeObligationClientTestRunner.ts src/components/finance/ReceivablesView.tsx src/components/finance/PayablesView.tsx src/domain/finance/ReceivableService.ts src/domain/finance/PayableService.ts src/domain/finance/FinancialCategoryAuthority.ts src/server/__tests__/financeCategoryAuthorityIntegration.ts
+          git diff --cached --check
+          git commit -m "fix(finance): use canonical categories for manual obligations"
+          git push origin HEAD:finance-r2-canonical-manual-categories
