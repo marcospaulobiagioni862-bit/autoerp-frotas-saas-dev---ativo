@@ -14,7 +14,6 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
 }
 
 function makeContext(
-  companyId: string,
   receivables: Array<Record<string, any>>,
   payables: Array<Record<string, any>>,
   transactions: Array<Record<string, any>>
@@ -101,7 +100,7 @@ const transactions = [
 }));
 
 async function run(): Promise<void> {
-  const context = makeContext(companyId, receivables, payables, transactions);
+  const context = makeContext(receivables, payables, transactions);
 
   const accrual = await DREService.getDREReport(
     companyId,
