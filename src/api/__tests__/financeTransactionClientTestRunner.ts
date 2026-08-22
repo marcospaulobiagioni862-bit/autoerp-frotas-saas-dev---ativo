@@ -1,8 +1,5 @@
-import {
-  FinanceTransactionApiError,
-  FinanceTransactionClient,
-  createReversalIdempotencyKey,
-} from '../financeTransactionClient';
+import { FinanceTransactionApiError, FinanceTransactionClient } from '../financeTransactionClient';
+import { createReversalIdempotencyKey } from '../financeTransactionClient';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -57,9 +54,17 @@ async function run() {
 
     responder = async () => new Response(JSON.stringify({ item: txPayload }), { status: 201, headers: { 'Content-Type': 'application/json' } });
     calls = [];
-    await FinanceTransactionClient.transfer({ sourceAccountId: 'acc-a', destinationAccountId: 'acc-b', amount: 55.25, transferDate: '2026-08-18', paymentMethodId: 'pm-a', description: 'Transferência' });
+    await FinanceTransactionClient.transfer({
+      sourceAccountId: 'acc-a',
+      destinationAccountId: 'acc-b',
+      amount: 55.25,
+      transferDate: '2026-08-18',
+      paymentMethodId: 'pm-a',
+      description: 'Internal transfer',
+    });
     assert(calls[0].url === '/api/finance/transfers', 'transfer URL');
     const transferBody = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    assert(transferBody.sourceAccountId === 'acc-a' && transferBody.destinationAccountId === 'acc-b', 'transfer body');
     assert(!('companyId' in transferBody) && !('userId' in transferBody) && !('userName' in transferBody), 'transfer identity must not come from browser');
     assert(calls[0].init?.credentials === 'include', 'transfer credentials');
     passed++;
@@ -98,7 +103,17 @@ async function run() {
 
     responder = async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     failedClosed = false;
-    try { await FinanceTransactionClient.transfer({ sourceAccountId: 'a', destinationAccountId: 'b', amount: 1, transferDate: '2026-08-18', paymentMethodId: 'm', description: 'x' }); } catch (error) { failedClosed = error instanceof FinanceTransactionApiError && error.status === 403; }
+    try {
+      await FinanceTransactionClient.transfer({
+        sourceAccountId: 'a',
+        destinationAccountId: 'b',
+        amount: 1,
+        transferDate: '2026-08-18',
+        paymentMethodId: 'm',
+        description: 'x',
+        idempotencyKey: 'transfer-forbidden-test-key',
+      } as any);
+    } catch (error) { failedClosed = error instanceof FinanceTransactionApiError && error.status === 403; }
     assert(failedClosed, '403 must fail closed');
     passed++;
 
