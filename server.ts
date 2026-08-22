@@ -9,6 +9,8 @@ import { isRenegotiationInstallmentFrequency } from './src/shared/utils/renegoti
 import { DREService } from './src/domain/finance/DREService';
 import { ProfitabilityService } from './src/domain/finance/ProfitabilityService';
 import { DepositService } from './src/domain/finance/DepositService';
+import { FinancialPeriodService } from './src/domain/finance/FinancialPeriodService';
+import { FinancialAuthorizationService } from './src/domain/finance/FinancialAuthorizationService';
 import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime, AuditAction } from './src/types/enums';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
@@ -551,6 +553,93 @@ async function startServer() {
     } catch { res.status(400).json({error:'Driver health request failed'}); }
   });
 
+  // FINANCE-R15: financial-period administration uses the same PostgreSQL
+  // source and advisory-lock boundary enforced by money-moving commands.
+  app.get('/api/finance/periods', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        await FinancialAuthorizationService.authorize(
+          principal.userId,
+          principal.companyId,
+          'VIEW_FINANCIAL',
+          txContext
+        );
+        return FinancialPeriodService.getPeriods(principal.companyId, txContext);
+      });
+      res.json({ items });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/periods/close', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const startDate = typeof req.body?.startDate === 'string' ? req.body.startDate.trim() : '';
+    const endDate = typeof req.body?.endDate === 'string' ? req.body.endDate.trim() : '';
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (!datePattern.test(startDate) || !datePattern.test(endDate) || startDate > endDate) {
+      res.status(400).json({ error: 'Invalid financial period close request' });
+      return;
+    }
+
+    try {
+      const item = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) => FinancialPeriodService.closePeriod(
+          {
+            companyId: principal.companyId,
+            startDate,
+            endDate,
+            userId: principal.userId,
+            userName: principal.name,
+          },
+          txContext
+        ),
+        { financialPeriodLock: 'EXCLUSIVE' }
+      );
+      res.status(201).json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
+  app.post('/api/finance/periods/:id/reopen', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const periodId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!periodId || !reason || reason.length > 1000) {
+      res.status(400).json({ error: 'Invalid financial period reopen request' });
+      return;
+    }
+
+    try {
+      const item = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) => FinancialPeriodService.reopenPeriod(
+          {
+            companyId: principal.companyId,
+            periodId,
+            reason,
+            userId: principal.userId,
+            userName: principal.name,
+          },
+          txContext
+        ),
+        { financialPeriodLock: 'EXCLUSIVE' }
+      );
+      res.json({ item });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
   // SECURITY-2G8: security-deposit read/receipt are server-authoritative.
   app.get('/api/finance/security-deposits/by-contract/:contractId', async (req: Request, res: Response) => {
     const principal = requireFinancePrincipal(req, res);
@@ -878,27 +967,30 @@ async function startServer() {
     if (!principal) return;
 
     try {
-      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
-        await ReceivableService.create(
-          {
-            companyId: principal.companyId,
-            originType: req.body?.originType,
-            originId: req.body?.originId,
-            vehicleId: req.body?.vehicleId,
-            driverId: req.body?.driverId,
-            contractId: req.body?.contractId,
-            categoryId: req.body?.categoryId,
-            description: req.body?.description,
-            totalAmount: req.body?.totalAmount,
-            dueDate: req.body?.dueDate,
-            competenceDate: req.body?.competenceDate,
-            installmentsCount: req.body?.installmentsCount,
-            recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
-            userId: principal.userId,
-            userName: principal.name,
-          },
-          txContext
-        )
+      const items = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await ReceivableService.create(
+            {
+              companyId: principal.companyId,
+              originType: req.body?.originType,
+              originId: req.body?.originId,
+              vehicleId: req.body?.vehicleId,
+              driverId: req.body?.driverId,
+              contractId: req.body?.contractId,
+              categoryId: req.body?.categoryId,
+              description: req.body?.description,
+              totalAmount: req.body?.totalAmount,
+              dueDate: req.body?.dueDate,
+              competenceDate: req.body?.competenceDate,
+              installmentsCount: req.body?.installmentsCount,
+              recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
       );
       res.status(201).json({ items });
     } catch (error) {
@@ -932,29 +1024,32 @@ async function startServer() {
     if (!principal) return;
 
     try {
-      const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
-        await PayableService.create(
-          {
-            companyId: principal.companyId,
-            originType: req.body?.originType,
-            originId: req.body?.originId,
-            vehicleId: req.body?.vehicleId,
-            supplierId: req.body?.supplierId,
-            driverId: req.body?.driverId,
-            contractId: req.body?.contractId,
-            categoryId: req.body?.categoryId,
-            description: req.body?.description,
-            totalAmount: req.body?.totalAmount,
-            dueDate: req.body?.dueDate,
-            competenceDate: req.body?.competenceDate,
-            installmentsCount: req.body?.installmentsCount,
-            recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
-            idempotencyKey: req.body?.idempotencyKey,
-            userId: principal.userId,
-            userName: principal.name,
-          },
-          txContext
-        )
+      const items = await UnitOfWork.run(
+        principal.companyId,
+        async (txContext) =>
+          await PayableService.create(
+            {
+              companyId: principal.companyId,
+              originType: req.body?.originType,
+              originId: req.body?.originId,
+              vehicleId: req.body?.vehicleId,
+              supplierId: req.body?.supplierId,
+              driverId: req.body?.driverId,
+              contractId: req.body?.contractId,
+              categoryId: req.body?.categoryId,
+              description: req.body?.description,
+              totalAmount: req.body?.totalAmount,
+              dueDate: req.body?.dueDate,
+              competenceDate: req.body?.competenceDate,
+              installmentsCount: req.body?.installmentsCount,
+              recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
+              idempotencyKey: req.body?.idempotencyKey,
+              userId: principal.userId,
+              userName: principal.name,
+            },
+            txContext
+          ),
+        { financialPeriodLock: 'SHARED' }
       );
       res.status(201).json({ items });
     } catch (error) {
