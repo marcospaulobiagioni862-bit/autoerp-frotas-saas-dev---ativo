@@ -850,6 +850,7 @@ export async function runWave5Verification() {
       transferDate: '2026-08-10',
       paymentMethodId: 'pm-pix',
       description: 'Transferência de saldo interna',
+      idempotencyKey: 'r19-compat-wave5Verification-ts-1',
       userId,
       userName: 'Admin',
     });

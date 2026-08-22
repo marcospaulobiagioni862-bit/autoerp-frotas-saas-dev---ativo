@@ -847,6 +847,7 @@ export class FinanceTestRunner {
         transferDate: '2026-08-25',
         paymentMethodId: defaultMethod,
         description: 'Pagamento de Fatura de Cartão de Crédito',
+        idempotencyKey: 'r19-compat-financeTestRunner-ts-1',
         userId,
         userName,
       });

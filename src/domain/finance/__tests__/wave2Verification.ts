@@ -186,6 +186,7 @@ export class Wave2VerificationRunner {
         transferDate: '2026-08-12',
         paymentMethodId: 'pm-1',
         description: 'Transferência Atômica',
+        idempotencyKey: 'r19-compat-wave2Verification-ts-1',
         userId: 'usr-1',
         userName: 'Tester',
       });

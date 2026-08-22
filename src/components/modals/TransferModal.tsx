@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import { FinanceTransactionClient, createTransferIdempotencyKey } from '../../api/financeTransactionClient';
 import type {
   SettlementAccountOption,
   SettlementPaymentMethodOption,
@@ -23,6 +23,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
   const [description, setDescription] = useState<string>('Pagamento de Fatura de Cartão / Transferência Interna');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [transferCommandKey, setTransferCommandKey] = useState<string>(() => createTransferIdempotencyKey());
 
   useEffect(() => {
     if (isOpen) {
@@ -30,6 +31,14 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
       setError(null);
     }
   }, [isOpen]);
+
+  // A changed command gets a fresh key. A failed/retried submit with unchanged
+  // fields keeps the same key and therefore converges server-side.
+  useEffect(() => {
+    if (isOpen) {
+      setTransferCommandKey(createTransferIdempotencyKey());
+    }
+  }, [isOpen, sourceAccountId, destinationAccountId, methodId, amount, transferDate, description]);
 
   const loadOptions = async () => {
     try {
@@ -87,6 +96,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
         transferDate,
         paymentMethodId: methodId,
         description: description || 'Transferência entre contas financeiras',
+        idempotencyKey: transferCommandKey,
       });
 
       onSuccess();

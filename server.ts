@@ -788,6 +788,29 @@ async function startServer() {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
 
+    const sourceAccountId = typeof req.body?.sourceAccountId === 'string' ? req.body.sourceAccountId.trim() : '';
+    const destinationAccountId = typeof req.body?.destinationAccountId === 'string' ? req.body.destinationAccountId.trim() : '';
+    const amount = Number(req.body?.amount);
+    const transferDate = typeof req.body?.transferDate === 'string' ? req.body.transferDate.trim() : '';
+    const paymentMethodId = typeof req.body?.paymentMethodId === 'string' ? req.body.paymentMethodId.trim() : '';
+    const description = typeof req.body?.description === 'string' ? req.body.description.trim() : '';
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+
+    if (
+      !sourceAccountId ||
+      !destinationAccountId ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !transferDate ||
+      !paymentMethodId ||
+      !idempotencyKey ||
+      idempotencyKey.length > 200 ||
+      description.length > 1000
+    ) {
+      res.status(400).json({ error: 'Invalid financial transfer request' });
+      return;
+    }
+
     try {
       const item = await UnitOfWork.run(
         principal.companyId,
@@ -795,12 +818,13 @@ async function startServer() {
           await TransferService.transferFunds(
             {
               companyId: principal.companyId,
-              sourceAccountId: req.body?.sourceAccountId,
-              destinationAccountId: req.body?.destinationAccountId,
-              amount: Number(req.body?.amount),
-              transferDate: req.body?.transferDate,
-              paymentMethodId: req.body?.paymentMethodId,
-              description: typeof req.body?.description === 'string' ? req.body.description : '',
+              sourceAccountId,
+              destinationAccountId,
+              amount,
+              transferDate,
+              paymentMethodId,
+              description,
+              idempotencyKey,
               userId: principal.userId,
               userName: principal.name,
             },

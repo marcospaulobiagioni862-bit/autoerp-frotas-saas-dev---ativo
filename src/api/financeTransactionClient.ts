@@ -11,6 +11,15 @@ export interface TransferCommandInput {
   transferDate: string;
   paymentMethodId: string;
   description: string;
+  idempotencyKey: string;
+}
+
+export function createTransferIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return `transfer-${cryptoApi.randomUUID()}`;
+  }
+  return `transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export interface ReversalCommandInput {

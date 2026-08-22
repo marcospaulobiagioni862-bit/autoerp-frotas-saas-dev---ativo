@@ -770,6 +770,7 @@ export async function runWave3BVerification() {
       transferDate: '2026-08-22',
       paymentMethodId: 'pm-pix',
       description: 'Transferência de Saldo para Cartão',
+      idempotencyKey: 'r19-compat-wave3bVerification-ts-1',
       userId,
       userName,
     });
