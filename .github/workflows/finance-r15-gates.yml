@@ -1,3 +1,4 @@
+# FINANCE-R15 authoritative PostgreSQL period gate
 name: FINANCE-R15 Gates
 
 on:
