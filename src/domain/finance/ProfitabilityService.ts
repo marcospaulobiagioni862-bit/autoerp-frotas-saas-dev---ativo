@@ -55,13 +55,19 @@ export class ProfitabilityService {
 
     if (regime === AccountingRegime.CASH) {
       const allTx = txContext
-        ? (await txContext.getTransactionRepo().findAll()).filter((t) => t.vehicleId === vehicleId)
+        ? (await txContext.getTransactionRepo().findAll()).filter(
+            (t) => t.companyId === companyId && t.vehicleId === vehicleId
+          )
         : await this.txRepo.findByVehicleIdForCompany(companyId, vehicleId);
       const allPayables = txContext
-        ? (await txContext.getPayableRepo().findAll()).filter((p) => p.vehicleId === vehicleId)
+        ? (await txContext.getPayableRepo().findAll()).filter(
+            (p) => p.companyId === companyId && p.vehicleId === vehicleId
+          )
         : await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
       const allReceivables = txContext
-        ? (await txContext.getReceivableRepo().findAll()).filter((r) => r.vehicleId === vehicleId)
+        ? (await txContext.getReceivableRepo().findAll()).filter(
+            (r) => r.companyId === companyId && r.vehicleId === vehicleId
+          )
         : await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const payMap = new Map(allPayables.map((p) => [p.id, p]));
@@ -69,6 +75,7 @@ export class ProfitabilityService {
 
       const periodTx = allTx.filter(
         (t) =>
+          t.companyId === companyId &&
           t.vehicleId === vehicleId &&
           !t.isReversed &&
           dateKey(t.transactionDate) >= periodStart &&
@@ -121,14 +128,19 @@ export class ProfitabilityService {
     } else {
       // ACCRUAL REGIME
       const receivables = txContext
-        ? (await txContext.getReceivableRepo().findAll()).filter((r) => r.vehicleId === vehicleId)
+        ? (await txContext.getReceivableRepo().findAll()).filter(
+            (r) => r.companyId === companyId && r.vehicleId === vehicleId
+          )
         : await this.recRepo.findByVehicleIdForCompany(companyId, vehicleId);
       const payables = txContext
-        ? (await txContext.getPayableRepo().findAll()).filter((p) => p.vehicleId === vehicleId)
+        ? (await txContext.getPayableRepo().findAll()).filter(
+            (p) => p.companyId === companyId && p.vehicleId === vehicleId
+          )
         : await this.payRepo.findByVehicleIdForCompany(companyId, vehicleId);
 
       const periodRec = receivables.filter(
         (r) =>
+          r.companyId === companyId &&
           r.vehicleId === vehicleId &&
           r.status !== ObligationStatus.CANCELLED &&
           dateKey(r.competenceDate) >= periodStart &&
@@ -149,6 +161,7 @@ export class ProfitabilityService {
 
       const periodPay = payables.filter(
         (p) =>
+          p.companyId === companyId &&
           p.vehicleId === vehicleId &&
           p.status !== ObligationStatus.CANCELLED &&
           dateKey(p.competenceDate) >= periodStart &&
