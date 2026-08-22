@@ -23,6 +23,15 @@ export interface SettlementCommandInput {
   paymentAmount: number;
   paymentDate: string;
   description?: string;
+  idempotencyKey: string;
+}
+
+export function createSettlementIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return `settlement-${cryptoApi.randomUUID()}`;
+  }
+  return `settlement-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export class FinanceSettlementApiError extends Error {
