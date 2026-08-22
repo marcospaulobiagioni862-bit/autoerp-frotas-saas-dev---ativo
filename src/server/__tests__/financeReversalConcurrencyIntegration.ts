@@ -133,7 +133,7 @@ async function seed(): Promise<void> {
       ('finance-r18-expense',${companyA},'Expense R18','EXPENSE',true,NOW(),NOW())
   `);
 
-  const accounts: Array<[string, number, 'ACTIVE' | 'INACTIVE'?]> = [
+  const accounts: Array<[string, number, ('ACTIVE' | 'INACTIVE')?]> = [
     ['r18-over-acc', 100],
     ['r18-exact-acc', 100],
     ['r18-retry-acc', 100],
