@@ -82,6 +82,7 @@ async function runTests() {
       transferDate: new Date().toISOString(),
       paymentMethodId: 'pm1',
       description: 'Transfer',
+      idempotencyKey: 'r19-compat-phase1-closure-test-ts-1',
       userId: 'u1',
       userName: 'User 1'
     });
@@ -94,10 +95,10 @@ async function runTests() {
     
     // Concurrent Deadlock test
     const p1 = FinanceEngine.transferFunds({
-      companyId: 'tenant-X', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 10, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T1', userId: 'u1', userName: 'User 1'
+      companyId: 'tenant-X', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 10, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T1', idempotencyKey: 'r19-compat-phase1-closure-test-ts-2', userId: 'u1', userName: 'User 1'
     });
     const p2 = FinanceEngine.transferFunds({
-      companyId: 'tenant-X', sourceAccountId: 'acc2', destinationAccountId: 'acc1', amount: 5, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T2', userId: 'u1', userName: 'User 1'
+      companyId: 'tenant-X', sourceAccountId: 'acc2', destinationAccountId: 'acc1', amount: 5, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T2', idempotencyKey: 'r19-compat-phase1-closure-test-ts-3', userId: 'u1', userName: 'User 1'
     });
     
     await Promise.all([p1, p2]);

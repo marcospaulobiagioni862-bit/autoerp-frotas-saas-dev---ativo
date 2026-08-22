@@ -284,6 +284,7 @@ export class Wave1VerificationRunner {
           transferDate: '2026-08-12',
           paymentMethodId: 'pm-1',
           description: 'Transferência Cross',
+          idempotencyKey: 'r19-compat-wave1Verification-ts-1',
           userId: 'usr-1',
           userName: 'Test User',
         });
@@ -317,6 +318,7 @@ export class Wave1VerificationRunner {
         transferDate: '2026-08-12',
         paymentMethodId: 'pm-1',
         description: 'Transferência Interna Tenant A',
+        idempotencyKey: 'r19-compat-wave1Verification-ts-2',
         userId: 'usr-1',
         userName: 'Test User',
       });

@@ -71,7 +71,7 @@ async function runTests() {
     });
 
     // TRANSFER
-    await FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 30, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T1', userId: 'usr-admin', userName: 'U1' });
+    await FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 30, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T1', idempotencyKey: 'r19-compat-phase1-cloudsql-test-ts-1', userId: 'usr-admin', userName: 'U1' });
     await asTenant('tenant-A', async (tx) => {
       const acc1 = (await tx.execute(sql`SELECT current_balance FROM financial_accounts WHERE id = 'acc1'`)).rows[0]; // 110 - 30 = 80
       const acc2 = (await tx.execute(sql`SELECT current_balance FROM financial_accounts WHERE id = 'acc2'`)).rows[0]; // 100 + 30 = 130
@@ -79,8 +79,8 @@ async function runTests() {
     });
 
     // TRANSFER CONCURRENCY
-    const p1 = FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 10, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T2', userId: 'usr-admin', userName: 'U1' });
-    const p2 = FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc2', destinationAccountId: 'acc1', amount: 5, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T3', userId: 'usr-admin', userName: 'U1' });
+    const p1 = FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc1', destinationAccountId: 'acc2', amount: 10, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T2', idempotencyKey: 'r19-compat-phase1-cloudsql-test-ts-2', userId: 'usr-admin', userName: 'U1' });
+    const p2 = FinanceEngine.transferFunds({ companyId: 'tenant-A', sourceAccountId: 'acc2', destinationAccountId: 'acc1', amount: 5, transferDate: new Date().toISOString(), paymentMethodId: 'pm1', description: 'T3', idempotencyKey: 'r19-compat-phase1-cloudsql-test-ts-3', userId: 'usr-admin', userName: 'U1' });
     await Promise.all([p1, p2]);
     await asTenant('tenant-A', async (tx) => {
       const acc1 = (await tx.execute(sql`SELECT current_balance FROM financial_accounts WHERE id = 'acc1'`)).rows[0]; // 80 - 10 + 5 = 75

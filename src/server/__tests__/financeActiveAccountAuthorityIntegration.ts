@@ -167,6 +167,7 @@ async function run(): Promise<void> {
         transferDate: '2026-08-21',
         paymentMethodId,
         description: 'Inactive source transfer',
+        idempotencyKey: 'r19-compat-financeActiveAccountAuthorityIntegration-1',
         userId: adminId,
         userName: 'Finance R5 Admin',
       }, tx)
@@ -185,6 +186,7 @@ async function run(): Promise<void> {
         transferDate: '2026-08-21',
         paymentMethodId,
         description: 'Inactive destination transfer',
+        idempotencyKey: 'r19-compat-financeActiveAccountAuthorityIntegration-2',
         userId: adminId,
         userName: 'Finance R5 Admin',
       }, tx)
@@ -232,6 +234,7 @@ async function run(): Promise<void> {
       transferDate: '2026-08-21',
       paymentMethodId,
       description: 'Active R5 transfer',
+      idempotencyKey: 'r19-compat-financeActiveAccountAuthorityIntegration-3',
       userId: adminId,
       userName: 'Finance R5 Admin',
     }, tx)

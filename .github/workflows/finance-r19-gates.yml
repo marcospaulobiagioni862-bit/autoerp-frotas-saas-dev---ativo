@@ -79,6 +79,9 @@ jobs:
       - name: Finance transaction client regression
         run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
 
+      - name: FINANCE-R5 active account authority regression
+        run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+
       - name: FINANCE-R18 reversal concurrency regression
         run: npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
 

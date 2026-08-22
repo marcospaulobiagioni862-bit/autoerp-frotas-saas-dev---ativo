@@ -80,8 +80,8 @@ async function seed(): Promise<void> {
   await seedAccount('r19-b-source', companyB, 400);
   await seedAccount('r19-b-dest', companyB, 50);
 
-  await db.execute(sql`INSERT INTO financial_periods(id,company_id,name,start_date,end_date,status,closed_at,closed_by_id,created_at,updated_at)
-    VALUES('r19-closed-period',${companyA},'Closed R19','2026-07-01','2026-07-31','CLOSED',NOW(),${adminA},NOW(),NOW())`);
+  await db.execute(sql`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status,closed_at,closed_by)
+    VALUES('r19-closed-period',${companyA},2026,7,'2026-07-01','2026-07-31','CLOSED',NOW(),${adminA})`);
 }
 
 function transfer(input: {
@@ -189,7 +189,7 @@ async function run(): Promise<void> {
   );
   await rejects(
     () => transfer({ source: 'r19-source', dest: 'r19-dest', amount: 1, key: 'r19-foreign-method', method: paymentMethodB }),
-    'não encontrada'
+    'Acesso negado'
   );
   await rejects(
     () => transfer({ source: 'r19-closed-source', dest: 'r19-closed-dest', amount: 1, key: 'r19-closed', date: '2026-07-15' }),

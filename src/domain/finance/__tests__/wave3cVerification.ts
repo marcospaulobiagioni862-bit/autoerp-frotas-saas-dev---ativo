@@ -472,6 +472,7 @@ export async function runWave3CVerification() {
       transferDate: '2026-03-25',
       paymentMethodId: 'pm-ted',
       description: 'Transferência entre contas',
+      idempotencyKey: 'r19-compat-wave3cVerification-ts-1',
       userId: 'u-1',
       userName: 'User 1',
     });
@@ -844,6 +845,7 @@ export async function runWave3CVerification() {
         transferDate: '2026-01-18',
         paymentMethodId: 'pm-ted',
         description: 'Transferência retroativa em período fechado',
+        idempotencyKey: 'r19-compat-wave3cVerification-ts-2',
         userId: 'u-1',
         userName: 'User 1',
       });
