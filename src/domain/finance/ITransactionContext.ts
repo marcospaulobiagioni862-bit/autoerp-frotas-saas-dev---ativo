@@ -241,6 +241,14 @@ export interface ITransactionContext {
   getContractTemplateRepo(): ITransactionContractTemplateRepository;
   getContractArtifactRepo(): ITransactionContractArtifactRepository;
   getDriverHealthRepo(): ITransactionDriverHealthProfileRepository;
+  /** Server-only settlement capability: tenant-scoped row lock for Accounts Receivable. */
+  findReceivableByIdWithLock?(id: string): Promise<AccountReceivable | null>;
+  /** Server-only settlement capability: tenant-scoped row lock for Accounts Payable. */
+  findPayableByIdWithLock?(id: string): Promise<AccountPayable | null>;
+  /** Server-only settlement capability: tenant-scoped row lock for Financial Accounts. */
+  findFinancialAccountByIdWithLock?(id: string): Promise<FinancialAccount | null>;
+  /** Server-only settlement capability: durable lookup of a financial command idempotency key. */
+  findFinancialTransactionByIdempotencyKey?(key: string): Promise<FinancialTransaction | null>;
   /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
   getRawTransaction?(): any;
   /** Capability is minted only by UnitOfWork options inside trusted server code. */
