@@ -1,4 +1,5 @@
 # FINANCE-R18 concurrency-safe and retry-idempotent reversal gate
+# exact-head validation trigger
 name: FINANCE-R18 Gates
 
 on:
