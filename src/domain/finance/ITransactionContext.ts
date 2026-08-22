@@ -252,8 +252,6 @@ export interface ITransactionContext {
   findFinancialTransactionByIdWithLock?(id: string): Promise<FinancialTransaction | null>;
   /** Server-only settlement/reversal capability: durable lookup of a financial command idempotency key. */
   findFinancialTransactionByIdempotencyKey?(key: string): Promise<FinancialTransaction | null>;
-  /** Server-only financial-command capability: serialize reuse of one tenant-scoped idempotency key. */
-  lockFinancialCommandIdempotencyKey?(key: string): Promise<void>;
   /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
   getRawTransaction?(): any;
   /** Capability is minted only by UnitOfWork options inside trusted server code. */
