@@ -1,0 +1,208 @@
+name: FINANCE-R22 Surgical Implementation Patch V2
+
+on:
+  push:
+    branches:
+      - finance-r22-deposit-receipt-idempotency
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r22-deposit-receipt-idempotency
+          fetch-depth: 0
+
+      - name: Report patch start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 226 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R22 PATCH V2 START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+
+      - name: Patch scoped R22 implementation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def one(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'FAIL {label}: anchor count={count}, expected=1')
+              return text.replace(old, new, 1)
+
+          def section(path_s, start_marker, end_marker):
+              path = Path(path_s)
+              text = path.read_text(encoding='utf-8')
+              start = text.index(start_marker)
+              end = text.index(end_marker, start)
+              return path, text, start, end, text[start:end]
+
+          # Transaction context movement lookup.
+          path = Path('src/domain/finance/ITransactionContext.ts')
+          text = path.read_text(encoding='utf-8')
+          text = one(text,
+              "export interface ITransactionSecurityDepositMovementRepository {\n  create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;\n}",
+              "export interface ITransactionSecurityDepositMovementRepository {\n  findByFinancialTransactionId(financialTransactionId: string): Promise<SecurityDepositMovement | null>;\n  create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;\n}",
+              'movement interface')
+          path.write_text(text, encoding='utf-8')
+
+          # PostgreSQL movement lookup.
+          path, text, start, end, body = section(
+              'src/db/repositories/postgresRepositories.ts',
+              'export class PostgresSecurityDepositMovementRepository {',
+              'export class PostgresDriverHealthProfileRepository'
+          )
+          body = one(body,
+              "  async create(item: SecurityDepositMovement): Promise<SecurityDepositMovement> {",
+              "  async findByFinancialTransactionId(financialTransactionId: string): Promise<SecurityDepositMovement | null> {\n    const rows = await this.tx.select().from(securityDepositMovements)\n      .where(eq(securityDepositMovements.financialTransactionId, financialTransactionId))\n      .limit(1);\n    return rows[0] ? this.map(rows[0]) : null;\n  }\n\n  async create(item: SecurityDepositMovement): Promise<SecurityDepositMovement> {",
+              'movement repository create')
+          path.write_text(text[:start] + body + text[end:], encoding='utf-8')
+
+          # Public receipt entrypoint: optional final key preserves legacy callers.
+          path, text, start, end, body = section(
+              'src/domain/finance/DepositService.ts',
+              '  public static async receiveSecurityDeposit(',
+              '  public static async getSecurityDepositByContract('
+          )
+          body = one(body,
+              "    userName: string,\n    txContext?: ITransactionContext\n  ):",
+              "    userName: string,\n    txContext?: ITransactionContext,\n    idempotencyKey?: string\n  ):",
+              'public receipt signature')
+          body = one(body,
+              "        userName,\n        txContext\n      );",
+              "        userName,\n        txContext,\n        idempotencyKey\n      );",
+              'public receipt delegation')
+          path.write_text(text[:start] + body + text[end:], encoding='utf-8')
+
+          # Authoritative transactional receipt path only.
+          path, text, start, end, body = section(
+              'src/domain/finance/DepositService.ts',
+              '  private static async receiveSecurityDepositTransactional(',
+              '  public static async returnSecurityDeposit('
+          )
+          body = one(body,
+              "    userName: string,\n    txContext: ITransactionContext\n  ):",
+              "    userName: string,\n    txContext: ITransactionContext,\n    idempotencyKey?: string\n  ):",
+              'transactional signature')
+          body = one(body,
+              "    const contractRepo = txContext.getContractRepo();\n\n    await depositRepo.lockContract(companyId, contractId);",
+              "    const contractRepo = txContext.getContractRepo();\n\n    const commandKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';\n    if (!commandKey || commandKey.length > 200) {\n      throw new Error('Chave de idempotência do recebimento de caução é obrigatória e deve ter até 200 caracteres');\n    }\n    if (!txContext.findFinancialTransactionByIdempotencyKey || !txContext.findFinancialAccountByIdWithLock || !movementRepo.findByFinancialTransactionId) {\n      throw new Error('Autoridade transacional idempotente da caução indisponível');\n    }\n\n    await depositRepo.lockContract(companyId, contractId);",
+              'transactional capability gate')
+          body = one(body,
+              "    const newReceived = roundCurrency(deposit.receivedAmount + amount);\n    if (newReceived > originalAmount) {",
+              "    const description = `Recebimento de Caução (Contrato: ${contractId})`;\n    const existingTx = await txContext.findFinancialTransactionByIdempotencyKey(commandKey);\n    if (existingTx) {\n      const sameCommand =\n        existingTx.companyId === companyId &&\n        existingTx.type === TransactionType.INCOME &&\n        !existingTx.receivableId &&\n        !existingTx.payableId &&\n        existingTx.financialAccountId === financialAccountId &&\n        existingTx.paymentMethodId === paymentMethodId &&\n        roundCurrency(Number(existingTx.amount)) === roundCurrency(amount) &&\n        existingTx.description === description &&\n        existingTx.vehicleId === canonicalVehicleId &&\n        existingTx.driverId === canonicalDriverId;\n      if (!sameCommand) {\n        throw new Error('Chave de idempotência reutilizada com recebimento de caução diferente');\n      }\n      const originalMovement = await movementRepo.findByFinancialTransactionId(existingTx.id);\n      if (!originalMovement || originalMovement.companyId !== companyId || originalMovement.securityDepositId !== deposit.id || originalMovement.type !== SecurityDepositMovementType.RECEIPT || originalMovement.financialTransactionId !== existingTx.id || roundCurrency(Number(originalMovement.amount)) !== roundCurrency(amount)) {\n        throw new Error('Evidência idempotente do recebimento de caução está inconsistente');\n      }\n      return { deposit, movement: originalMovement };\n    }\n\n    const newReceived = roundCurrency(deposit.receivedAmount + amount);\n    if (newReceived > originalAmount) {",
+              'transactional retry boundary')
+          body = one(body,
+              "    const account = await accountRepo.findById(financialAccountId);",
+              "    const account = await txContext.findFinancialAccountByIdWithLock(financialAccountId);",
+              'locked financial account')
+          body = one(body,
+              "      description: `Recebimento de Caução (Contrato: ${contractId})`,",
+              "      description,",
+              'transaction description')
+          body = one(body,
+              "      createdById: userId,\n      createdAt: now,",
+              "      createdById: userId,\n      idempotencyKey: commandKey,\n      createdAt: now,",
+              'transaction idempotency persistence')
+          path.write_text(text[:start] + body + text[end:], encoding='utf-8')
+
+          # Server security-deposit receive endpoint only.
+          path, text, start, end, body = section(
+              'server.ts',
+              "  app.post('/api/finance/security-deposits/receive'",
+              '  // SECURITY-2G6:'
+          )
+          body = one(body,
+              "    const paymentMethodId = typeof req.body?.paymentMethodId === 'string' ? req.body.paymentMethodId.trim() : '';\n\n    if (!contractId || !Number.isFinite(amount) || amount <= 0 || !financialAccountId || !paymentMethodId) {",
+              "    const paymentMethodId = typeof req.body?.paymentMethodId === 'string' ? req.body.paymentMethodId.trim() : '';\n    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';\n\n    if (!contractId || !Number.isFinite(amount) || amount <= 0 || !financialAccountId || !paymentMethodId || !idempotencyKey || idempotencyKey.length > 200) {",
+              'server request validation')
+          body = one(body,
+              "          principal.name,\n          txContext\n        );",
+              "          principal.name,\n          txContext,\n          idempotencyKey\n        );",
+              'server command forwarding')
+          path.write_text(text[:start] + body + text[end:], encoding='utf-8')
+
+          # Contract UI mirrors R21 command-key lifecycle.
+          path = Path('src/components/contracts/ContractDetailsModal.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = one(text,
+              "import { FinanceDepositClient } from '../../api/financeDepositClient';",
+              "import { FinanceDepositClient, createDepositReceiptIdempotencyKey } from '../../api/financeDepositClient';",
+              'deposit client import')
+          text = one(text,
+              "  const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');\n  const [loading, setLoading] = useState(false);",
+              "  const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');\n  const [depositIdempotencyKey, setDepositIdempotencyKey] = useState(() => createDepositReceiptIdempotencyKey());\n  const [loading, setLoading] = useState(false);",
+              'deposit key state')
+          text = one(text,
+              "    setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');\n    setError(null); setSuccess(null);",
+              "    setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');\n    setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());\n    setError(null); setSuccess(null);",
+              'deposit key reset')
+          text = one(text,
+              "    void action(() => FinanceDepositClient.receive({\n      contractId: contract.id,\n      amount,\n      financialAccountId: depositAccountId,\n      paymentMethodId: depositPaymentMethodId,\n    }), 'Caução recebida com sucesso.');",
+              "    void action(async () => {\n      await FinanceDepositClient.receive({\n        contractId: contract.id,\n        amount,\n        financialAccountId: depositAccountId,\n        paymentMethodId: depositPaymentMethodId,\n        idempotencyKey: depositIdempotencyKey,\n      });\n      setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());\n    }, 'Caução recebida com sucesso.');",
+              'deposit submit')
+          text = one(text,
+              "onChange={(event) => setDepositAmount(event.target.value)}",
+              "onChange={(event) => { setDepositAmount(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }}",
+              'deposit amount edit')
+          text = one(text,
+              "onChange={(event) => setDepositAccountId(event.target.value)}",
+              "onChange={(event) => { setDepositAccountId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }}",
+              'deposit account edit')
+          text = one(text,
+              "onChange={(event) => setDepositPaymentMethodId(event.target.value)}",
+              "onChange={(event) => { setDepositPaymentMethodId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }}",
+              'deposit method edit')
+          path.write_text(text, encoding='utf-8')
+
+          # Preserve R4 authority regression under the now-required UOW command key.
+          path = Path('src/server/__tests__/securityDepositAuthorityIntegration.ts')
+          text = path.read_text(encoding='utf-8')
+          first = "'Finance R4 Admin A',\n      tx\n    )"
+          if text.count(first) != 2:
+              raise SystemExit(f'FAIL R4 multiline receipt anchors={text.count(first)} expected=2')
+          text = text.replace(first, "'Finance R4 Admin A',\n      tx,\n      'finance-r4-receipt-1'\n    )", 1)
+          text = text.replace(first, "'Finance R4 Admin A',\n      tx,\n      'finance-r4-receipt-2'\n    )", 1)
+          inline = [
+            ("companyA, contractA1, 'ignored', 'ignored', 0.01, accountA, paymentA, adminA, 'Finance R4 Admin A', tx", "companyA, contractA1, 'ignored', 'ignored', 0.01, accountA, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-over'"),
+            ("companyA, contractA2, 'ignored', 'ignored', 100, accountB, paymentA, adminA, 'Finance R4 Admin A', tx", "companyA, contractA2, 'ignored', 'ignored', 100, accountB, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-account'"),
+            ("companyA, contractA2, 'ignored', 'ignored', 100, accountA, paymentB, adminA, 'Finance R4 Admin A', tx", "companyA, contractA2, 'ignored', 'ignored', 100, accountA, paymentB, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-method'"),
+            ("companyA, 'finance-r4-contract-b1', 'ignored', 'ignored', 100, accountA, paymentA, adminA, 'Finance R4 Admin A', tx", "companyA, 'finance-r4-contract-b1', 'ignored', 'ignored', 100, accountA, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-contract'"),
+          ]
+          for old, new in inline:
+              text = one(text, old, new, 'R4 inline key')
+          path.write_text(text, encoding='utf-8')
+
+      - name: Prove scope and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git diff --name-only | wc -l)" -eq 6
+          grep -q "findByFinancialTransactionId" src/domain/finance/ITransactionContext.ts
+          grep -q "idempotencyKey: commandKey" src/domain/finance/DepositService.ts
+          grep -q "findFinancialAccountByIdWithLock" src/domain/finance/DepositService.ts
+          grep -q "idempotencyKey: depositIdempotencyKey" src/components/contracts/ContractDetailsModal.tsx
+          grep -q "idempotencyKey.length > 200" server.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/domain/finance/ITransactionContext.ts src/db/repositories/postgresRepositories.ts src/domain/finance/DepositService.ts server.ts src/components/contracts/ContractDetailsModal.tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
+          git commit -m "FINANCE-R22 make deposit receipt durably idempotent"
+          git push origin HEAD:finance-r22-deposit-receipt-idempotency
+
+      - name: Report patch success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 226 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R22 PATCH V2 PASS | source_commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+
+      - name: Report patch failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 226 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R22 PATCH V2 FAIL | source_commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
