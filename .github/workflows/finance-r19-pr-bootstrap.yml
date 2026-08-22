@@ -1,0 +1,106 @@
+name: FINANCE-R19 PR Bootstrap
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  implement:
+    if: github.head_ref == 'finance-r19-transfer-idempotency-concurrency' && !contains(github.event.pull_request.head.label, 'fork:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r19-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r19-test
+      JWT_AUDIENCE: autoerp-finance-r19-test-client
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r19-transfer-idempotency-concurrency
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Detect implementation state
+        id: detect
+        shell: bash
+        run: |
+          if grep -q "lockFinancialCommandIdempotencyKey" src/domain/finance/TransferService.ts 2>/dev/null; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Extract and apply authoritative implementation script
+        if: steps.detect.outputs.needed == 'true'
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          lines = Path('.github/workflows/finance-r19-gates.yml').read_text().splitlines()
+          start = next(i for i,l in enumerate(lines) if "python3 <<'PY'" in l) + 1
+          end = next(i for i in range(start, len(lines)) if lines[i].strip() == 'PY')
+          body = []
+          for line in lines[start:end]:
+              body.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/finance_r19_apply.py').write_text('\n'.join(body) + '\n')
+          PY
+          python3 /tmp/finance_r19_apply.py
+      - name: Install dependencies
+        if: steps.detect.outputs.needed == 'true'
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Apply migrations
+        if: steps.detect.outputs.needed == 'true'
+        run: node migrate_test_db.cjs
+      - name: Focused R19 PostgreSQL gate
+        if: steps.detect.outputs.needed == 'true'
+        run: npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+      - name: Finance transaction client gate
+        if: steps.detect.outputs.needed == 'true'
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+      - name: TypeScript gate
+        if: steps.detect.outputs.needed == 'true'
+        run: npm run lint
+      - name: Production build gate
+        if: steps.detect.outputs.needed == 'true'
+        run: npm run build
+      - name: Commit implementation after focused gates
+        if: steps.detect.outputs.needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .finance-r19-trigger
+          git add -A
+          git diff --cached --check
+          git commit -m "FINANCE-R19 implementation: durable transfer idempotency and deterministic locking"
+          git push origin HEAD:finance-r19-transfer-idempotency-concurrency
+      - name: Already implemented
+        if: steps.detect.outputs.needed == 'false'
+        run: echo "FINANCE-R19 implementation already present; validation workflow owns the gates."
