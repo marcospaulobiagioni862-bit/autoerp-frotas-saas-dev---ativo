@@ -6,7 +6,7 @@ on:
       - finance-r20-cancellation-metadata
     paths:
       - .github/workflows/r20-apply-validate.yml
-      - .github/r20_apply.py
+      - .github/r20_apply_v2.py
 
 permissions:
   contents: write
@@ -55,13 +55,13 @@ jobs:
       - name: Report apply start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
 
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
 
       - name: Apply exact R20 patch
-        run: python3 .github/r20_apply.py
+        run: python3 .github/r20_apply_v2.py
 
       - name: Scope gate
         shell: bash
@@ -113,10 +113,10 @@ jobs:
       - name: Report apply success
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY PASS | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 PASS | run_id=$GITHUB_RUN_ID"
 
       - name: Report apply failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY FAIL | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 FAIL | run_id=$GITHUB_RUN_ID"
