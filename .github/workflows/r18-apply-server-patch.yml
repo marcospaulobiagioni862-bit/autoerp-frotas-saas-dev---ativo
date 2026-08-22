@@ -1,0 +1,143 @@
+name: FINANCE-R18 Apply Server Patch
+
+on:
+  push:
+    branches:
+      - finance-r18-reversal-idempotency-concurrency
+    paths:
+      - .github/workflows/r18-apply-server-patch.yml
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'FINANCE-R18 stage surgical server patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r18-reversal-idempotency-concurrency
+          fetch-depth: 0
+
+      - name: Report patch start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 222 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R18 SERVER PATCH START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+
+      - name: Apply exact R18 patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          server_path = Path('server.ts')
+          server = server_path.read_text()
+          old = """  app.post('/api/finance/transactions/:id/reverse', async (req: Request, res: Response) => {
+            const principal = requireFinancePrincipal(req, res);
+            if (!principal) return;
+
+            try {
+              const item = await UnitOfWork.run(
+                principal.companyId,
+                async (txContext) =>
+                  await ReversalService.reverseTransaction(
+                    principal.companyId,
+                    req.params.id,
+                    Number(req.body?.reversalAmount),
+                    typeof req.body?.reason === 'string' ? req.body.reason : '',
+                    principal.userId,
+                    principal.name,
+                    txContext
+                  ),
+                { financialPeriodLock: 'SHARED' }
+              );
+              res.status(201).json({ item });
+            } catch (error) {
+              sendFinanceCommandError(res, error);
+            }
+          });
+          """
+          new = """  app.post('/api/finance/transactions/:id/reverse', async (req: Request, res: Response) => {
+            const principal = requireFinancePrincipal(req, res);
+            if (!principal) return;
+
+            const transactionId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+            const reversalAmount = Number(req.body?.reversalAmount);
+            const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+            const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+            if (
+              !transactionId ||
+              !Number.isFinite(reversalAmount) ||
+              reversalAmount <= 0 ||
+              !reason ||
+              reason.length > 1000 ||
+              !idempotencyKey ||
+              idempotencyKey.length > 200
+            ) {
+              res.status(400).json({ error: 'Invalid financial reversal request' });
+              return;
+            }
+
+            try {
+              const item = await UnitOfWork.run(
+                principal.companyId,
+                async (txContext) =>
+                  await ReversalService.reverseTransaction(
+                    principal.companyId,
+                    transactionId,
+                    reversalAmount,
+                    reason,
+                    principal.userId,
+                    principal.name,
+                    txContext,
+                    idempotencyKey
+                  ),
+                { financialPeriodLock: 'SHARED' }
+              );
+              res.status(201).json({ item });
+            } catch (error) {
+              sendFinanceCommandError(res, error);
+            }
+          });
+          """
+          if server.count(old) != 1:
+              raise SystemExit(f'Expected exactly one reversal route anchor, found {server.count(old)}')
+          server_path.write_text(server.replace(old, new))
+
+          test_path = Path('src/server/__tests__/financeReversalConcurrencyIntegration.ts')
+          test = test_path.read_text()
+          old_type = "const accounts: Array<[string, number, 'ACTIVE' | 'INACTIVE'?]> = ["
+          new_type = "const accounts: Array<[string, number, ('ACTIVE' | 'INACTIVE')?]> = ["
+          if test.count(old_type) != 1:
+              raise SystemExit(f'Expected exactly one tuple type anchor, found {test.count(old_type)}')
+          test_path.write_text(test.replace(old_type, new_type))
+          PY
+
+      - name: Scope and whitespace gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' server.ts src/server/__tests__/financeReversalConcurrencyIntegration.ts | sort)"
+          test "$changed" = "$expected"
+          git diff -- server.ts src/server/__tests__/financeReversalConcurrencyIntegration.ts
+
+      - name: Commit exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- server.ts src/server/__tests__/financeReversalConcurrencyIntegration.ts
+          git diff --cached --check
+          git commit -m "[r18-patch-applied] FINANCE-R18 wire reversal API"
+          git push origin HEAD:finance-r18-reversal-idempotency-concurrency
+
+      - name: Report patch success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 222 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R18 SERVER PATCH PASS | run_id=$GITHUB_RUN_ID"
