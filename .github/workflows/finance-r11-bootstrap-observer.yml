@@ -1,0 +1,35 @@
+name: FINANCE-R11 Bootstrap Observer
+
+on:
+  push:
+    branches:
+      - ci-observe-finance-r11-bootstrap
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect FINANCE-R11 bootstrap run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TARGET_SHA: 5615052f0233f303eb0565425fe14975860dd322
+        shell: bash
+        run: |
+          set -euo pipefail
+          json="$(gh api "repos/$REPO/actions/runs?branch=finance-r11-traffic-ticket-discount&per_page=100")"
+          row="$(printf '%s' "$json" | jq -c --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha==$sha and .name=="FINANCE-R11 Bootstrap")][0] // empty')"
+          if [ -z "$row" ]; then
+            gh issue comment 215 --repo "$REPO" --body "FINANCE-R11 BOOTSTRAP OBSERVER | target=$TARGET_SHA | run=NOT_FOUND"
+            exit 0
+          fi
+          id="$(printf '%s' "$row" | jq -r '.id')"
+          status="$(printf '%s' "$row" | jq -r '.status')"
+          conclusion="$(printf '%s' "$row" | jq -r '.conclusion // "pending"')"
+          url="$(printf '%s' "$row" | jq -r '.html_url')"
+          gh issue comment 215 --repo "$REPO" --body "FINANCE-R11 BOOTSTRAP OBSERVER | target=$TARGET_SHA | run_id=$id | status=$status | conclusion=$conclusion | $url"
