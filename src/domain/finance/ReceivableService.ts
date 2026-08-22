@@ -183,6 +183,11 @@ export class ReceivableService {
       txContext
     );
 
+    const cancellationReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!cancellationReason || cancellationReason.length > 1000) {
+      throw new Error('Motivo de cancelamento é obrigatório e deve ter no máximo 1000 caracteres');
+    }
+
     let receivable: AccountReceivable | null;
     if (txContext) {
       if (!txContext.findReceivableByIdWithLock) {
@@ -209,15 +214,20 @@ export class ReceivableService {
     }
 
     const previousState = { ...receivable };
+    const cancelledAt = new Date().toISOString();
 
     const updatedReceivable = txContext
       ? await txContext.getReceivableRepo().update(receivableId, {
           status: ObligationStatus.CANCELLED,
-          updatedAt: new Date().toISOString(),
+          cancelledAt,
+          cancelReason: cancellationReason,
+          updatedAt: cancelledAt,
         })
       : await this.repo.updateForCompany(receivableId, companyId, {
           status: ObligationStatus.CANCELLED,
-          updatedAt: new Date().toISOString(),
+          cancelledAt,
+          cancelReason: cancellationReason,
+          updatedAt: cancelledAt,
         });
 
     await AuditLogger.logAction(

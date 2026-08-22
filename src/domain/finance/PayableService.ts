@@ -186,6 +186,11 @@ export class PayableService {
       txContext
     );
 
+    const cancellationReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!cancellationReason || cancellationReason.length > 1000) {
+      throw new Error('Motivo de cancelamento é obrigatório e deve ter no máximo 1000 caracteres');
+    }
+
     let payable: AccountPayable | null;
     if (txContext) {
       if (!txContext.findPayableByIdWithLock) {
@@ -212,15 +217,20 @@ export class PayableService {
     }
 
     const previousState = { ...payable };
+    const cancelledAt = new Date().toISOString();
 
     const updatedPayable = txContext
       ? await txContext.getPayableRepo().update(payableId, {
           status: ObligationStatus.CANCELLED,
-          updatedAt: new Date().toISOString(),
+          cancelledAt,
+          cancelReason: cancellationReason,
+          updatedAt: cancelledAt,
         })
       : await this.repo.updateForCompany(payableId, companyId, {
           status: ObligationStatus.CANCELLED,
-          updatedAt: new Date().toISOString(),
+          cancelledAt,
+          cancelReason: cancellationReason,
+          updatedAt: cancelledAt,
         });
 
     await AuditLogger.logAction(
