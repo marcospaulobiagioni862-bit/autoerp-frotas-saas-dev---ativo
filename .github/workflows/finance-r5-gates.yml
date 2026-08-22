@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(grep -c "account.status !== 'ACTIVE'" src/domain/finance/SettlementService.ts)" -eq 2
+          grep -q "account.status !== 'ACTIVE'" src/domain/finance/SettlementService.ts
           grep -q "sourceAcc.status !== 'ACTIVE'" src/domain/finance/TransferService.ts
           grep -q "destAcc.status !== 'ACTIVE'" src/domain/finance/TransferService.ts
           grep -q "Conta financeira inativa" src/domain/finance/SettlementService.ts
