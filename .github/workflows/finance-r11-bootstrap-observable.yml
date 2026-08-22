@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - finance-r11-traffic-ticket-discount
+  pull_request:
+    branches:
+      - main
 
 concurrency:
   group: finance-r11-authoritative-bootstrap
@@ -47,6 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: finance-r11-traffic-ticket-discount
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
@@ -56,7 +60,7 @@ jobs:
       - name: Report bootstrap start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 215 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R11 BOOTSTRAP START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 215 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R11 BOOTSTRAP START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID | event=$GITHUB_EVENT_NAME"
 
       - name: Reuse prior FINANCE-R11 implementation script
         shell: bash
@@ -66,8 +70,9 @@ jobs:
           from pathlib import Path
           import subprocess
 
+          source_sha = '5615052f0233f303eb0565425fe14975860dd322'
           source = subprocess.check_output(
-              ['git', 'show', 'HEAD^:.github/workflows/finance-r11-bootstrap.yml'],
+              ['git', 'show', f'{source_sha}:.github/workflows/finance-r11-bootstrap.yml'],
               text=True,
           )
           marker = '      - name: Apply FINANCE-R11 implementation\n'
