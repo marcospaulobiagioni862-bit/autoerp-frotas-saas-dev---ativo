@@ -22,6 +22,35 @@ export interface ReopenPeriodParams {
   userName?: string;
 }
 
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeFinancialDate(value: string, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label} é obrigatória para o período financeiro`);
+  }
+
+  const candidate = value.trim().slice(0, 10);
+  if (!DATE_PATTERN.test(candidate)) {
+    throw new Error(`${label} deve usar o formato YYYY-MM-DD`);
+  }
+
+  const [year, month, day] = candidate.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error(`${label} contém uma data inválida`);
+  }
+
+  return candidate;
+}
+
+function overlaps(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart <= bEnd && aEnd >= bStart;
+}
+
 export class FinancialPeriodService {
   private static repo = new FinancialPeriodRepository();
 
@@ -35,26 +64,23 @@ export class FinancialPeriodService {
   }
 
   public static async assertDateOpen(companyId: string, date: string, txContext?: ITransactionContext): Promise<void> {
-    if (!companyId) {
+    const tenantId = typeof companyId === 'string' ? companyId.trim() : '';
+    if (!tenantId) {
       throw new Error('companyId é obrigatório para verificar status do período financeiro');
     }
-    if (!date) return;
 
-    // Normalize date to YYYY-MM-DD
-    const dateStr = date.split('T')[0];
+    const dateStr = normalizeFinancialDate(date, 'date');
 
-    let periods: FinancialPeriod[];
-    if (txContext) {
-      periods = await txContext.getFinancialPeriodRepo().findAll({ companyId });
-    } else {
-      periods = await this.repo.findAllForCompany(companyId);
-    }
+    const periods = txContext
+      ? await txContext.getFinancialPeriodRepo().findAll({ companyId: tenantId })
+      : await this.repo.findAllForCompany(tenantId);
 
     const closedPeriod = periods.find(
       (p) =>
-        p.companyId === companyId &&
+        p.companyId === tenantId &&
         p.status === FinancialPeriodStatus.CLOSED &&
-        p.startDate && p.endDate &&
+        Boolean(p.startDate) &&
+        Boolean(p.endDate) &&
         p.startDate <= dateStr &&
         p.endDate >= dateStr
     );
@@ -67,50 +93,67 @@ export class FinancialPeriodService {
   }
 
   public static async closePeriod(params: ClosePeriodParams, txContext?: ITransactionContext): Promise<FinancialPeriod> {
-    const { companyId, startDate, endDate } = params;
-    const userId = params.userId || 'system';
-    const userName = params.userName || 'System';
-
-    await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_PERIOD_CLOSE', txContext);
-
-    if (!params.companyId) {
+    const companyId = typeof params.companyId === 'string' ? params.companyId.trim() : '';
+    if (!companyId) {
       throw new Error('companyId é obrigatório para fechar período financeiro');
     }
-    if (!params.startDate || !params.endDate) {
-      throw new Error('startDate e endDate são obrigatórios para fechar período financeiro');
-    }
-    if (params.startDate > params.endDate) {
+
+    const startDate = normalizeFinancialDate(params.startDate, 'startDate');
+    const endDate = normalizeFinancialDate(params.endDate, 'endDate');
+    if (startDate > endDate) {
       throw new Error('startDate não pode ser posterior a endDate');
     }
 
-    let periods: FinancialPeriod[];
-    if (txContext) {
-      periods = await txContext.getFinancialPeriodRepo().findAll({ companyId });
-    } else {
-      periods = await this.repo.findAllForCompany(companyId);
+    const userId = typeof params.userId === 'string' && params.userId.trim() ? params.userId.trim() : 'system';
+    const userName = typeof params.userName === 'string' && params.userName.trim() ? params.userName.trim() : 'System';
+
+    await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_PERIOD_CLOSE', txContext);
+
+    const periods = txContext
+      ? await txContext.getFinancialPeriodRepo().findAll({ companyId })
+      : await this.repo.findAllForCompany(companyId);
+
+    const tenantPeriods = periods.filter(
+      (p) => p.companyId === companyId && Boolean(p.startDate) && Boolean(p.endDate)
+    );
+
+    const exact = tenantPeriods.find((p) => p.startDate === startDate && p.endDate === endDate);
+    const conflictingOverlap = tenantPeriods.find(
+      (p) => p.id !== exact?.id && overlaps(startDate, endDate, p.startDate, p.endDate)
+    );
+    if (conflictingOverlap) {
+      throw new Error(
+        `Período financeiro sobreposto: já existe ${conflictingOverlap.startDate} a ${conflictingOverlap.endDate}`
+      );
     }
 
-    let existing = periods.find(
-      (p) => p.companyId === companyId && p.startDate === startDate && p.endDate === endDate
+    const year = Number(startDate.slice(0, 4));
+    const month = Number(startDate.slice(5, 7));
+    const conflictingMonth = tenantPeriods.find(
+      (p) => p.id !== exact?.id && p.year === year && p.month === month
     );
+    if (conflictingMonth) {
+      throw new Error('Já existe um período financeiro diferente para o mesmo mês de referência');
+    }
+
+    if (exact?.status === FinancialPeriodStatus.CLOSED) {
+      return exact;
+    }
 
     const now = new Date().toISOString();
 
-    if (existing) {
-      if (existing.status === FinancialPeriodStatus.CLOSED) {
-        return existing;
-      }
-      existing.status = FinancialPeriodStatus.CLOSED;
-      existing.closedAt = now;
-      existing.closedBy = userName;
-      existing.updatedAt = now;
+    if (exact) {
+      const previousState = { ...exact };
+      const updatedPayload: Partial<FinancialPeriod> = {
+        status: FinancialPeriodStatus.CLOSED,
+        closedAt: now,
+        closedBy: userName,
+        updatedAt: now,
+      };
 
-      let updated: FinancialPeriod;
-      if (txContext) {
-        updated = await txContext.getFinancialPeriodRepo().update(existing.id, existing);
-      } else {
-        updated = await this.repo.updateForCompany(existing.id, companyId, existing);
-      }
+      const updated = txContext
+        ? await txContext.getFinancialPeriodRepo().update(exact.id, updatedPayload)
+        : await this.repo.updateForCompany(exact.id, companyId, updatedPayload);
 
       await AuditLogger.logAction(
         companyId,
@@ -119,61 +162,71 @@ export class FinancialPeriodService {
         AuditAction.PERIOD_CLOSED,
         userId,
         userName,
-        null,
+        previousState,
         updated,
         txContext
       );
       return updated;
-    } else {
-      const newPeriod: FinancialPeriod = {
-        id: generateUUID(),
-        companyId,
-        year: new Date(startDate).getFullYear(),
-        month: new Date(startDate).getMonth() + 1,
-        startDate,
-        endDate,
-        status: FinancialPeriodStatus.CLOSED,
-        closedAt: now,
-        closedBy: userName,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      let created: FinancialPeriod;
-      if (txContext) {
-        created = await txContext.getFinancialPeriodRepo().create(newPeriod);
-      } else {
-        created = await this.repo.createForCompany(companyId, newPeriod);
-      }
-
-      await AuditLogger.logAction(
-        companyId,
-        'FinancialPeriod',
-        created.id,
-        AuditAction.PERIOD_CLOSED,
-        userId,
-        userName,
-        null,
-        created,
-        txContext
-      );
-      return created;
     }
+
+    const newPeriod: FinancialPeriod = {
+      id: generateUUID(),
+      companyId,
+      year,
+      month,
+      startDate,
+      endDate,
+      status: FinancialPeriodStatus.CLOSED,
+      closedAt: now,
+      closedBy: userName,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const created = txContext
+      ? await txContext.getFinancialPeriodRepo().create(newPeriod)
+      : await this.repo.createForCompany(companyId, newPeriod);
+
+    await AuditLogger.logAction(
+      companyId,
+      'FinancialPeriod',
+      created.id,
+      AuditAction.PERIOD_CLOSED,
+      userId,
+      userName,
+      null,
+      created,
+      txContext
+    );
+    return created;
   }
 
   public static async reopenPeriod(params: ReopenPeriodParams, txContext?: ITransactionContext): Promise<FinancialPeriod> {
-    const { companyId, periodId, reason } = params;
-    const userId = params.userId || 'system';
-    const userName = params.userName || 'System';
+    const companyId = typeof params.companyId === 'string' ? params.companyId.trim() : '';
+    const periodId = typeof params.periodId === 'string' ? params.periodId.trim() : '';
+    const reason = typeof params.reason === 'string' ? params.reason.trim() : '';
+
+    if (!companyId) {
+      throw new Error('companyId é obrigatório para reabrir período financeiro');
+    }
+    if (!periodId) {
+      throw new Error('periodId é obrigatório para reabrir período financeiro');
+    }
+    if (!reason) {
+      throw new Error('Motivo da reabertura do período financeiro é obrigatório');
+    }
+    if (reason.length > 1000) {
+      throw new Error('Motivo da reabertura do período financeiro excede o limite permitido');
+    }
+
+    const userId = typeof params.userId === 'string' && params.userId.trim() ? params.userId.trim() : 'system';
+    const userName = typeof params.userName === 'string' && params.userName.trim() ? params.userName.trim() : 'System';
 
     await FinancialAuthorizationService.authorize(userId, companyId, 'FINANCIAL_PERIOD_REOPEN', txContext);
 
-    let period: FinancialPeriod | null;
-    if (txContext) {
-      period = await txContext.getFinancialPeriodRepo().findById(periodId);
-    } else {
-      period = await this.repo.findByIdForCompany(periodId, companyId);
-    }
+    const period = txContext
+      ? await txContext.getFinancialPeriodRepo().findById(periodId)
+      : await this.repo.findByIdForCompany(periodId, companyId);
 
     if (!period) {
       throw new Error('Período financeiro não encontrado');
@@ -182,20 +235,26 @@ export class FinancialPeriodService {
       throw new Error('Descompasso de tenant no período financeiro');
     }
 
+    if (period.status === FinancialPeriodStatus.OPEN) {
+      if (period.reopenedAt && period.reopenReason === reason) {
+        return period;
+      }
+      throw new Error('Período financeiro já se encontra aberto');
+    }
+
     const now = new Date().toISOString();
     const previousState = { ...period };
-    period.status = FinancialPeriodStatus.OPEN;
-    period.reopenedAt = now as any;
-    period.reopenedBy = userName;
-    period.reopenReason = reason;
-    period.updatedAt = now;
+    const updatedPayload: Partial<FinancialPeriod> = {
+      status: FinancialPeriodStatus.OPEN,
+      reopenedAt: now,
+      reopenedBy: userName,
+      reopenReason: reason,
+      updatedAt: now,
+    };
 
-    let updated: FinancialPeriod;
-    if (txContext) {
-      updated = await txContext.getFinancialPeriodRepo().update(periodId, period);
-    } else {
-      updated = await this.repo.updateForCompany(periodId, companyId, period);
-    }
+    const updated = txContext
+      ? await txContext.getFinancialPeriodRepo().update(periodId, updatedPayload)
+      : await this.repo.updateForCompany(periodId, companyId, updatedPayload);
 
     await AuditLogger.logAction(
       companyId,
@@ -212,10 +271,15 @@ export class FinancialPeriodService {
   }
 
   public static async getPeriods(companyId: string, txContext?: ITransactionContext): Promise<FinancialPeriod[]> {
-    if (!companyId) return [];
-    if (txContext) {
-      return txContext.getFinancialPeriodRepo().findAll({ companyId });
-    }
-    return this.repo.findAllForCompany(companyId);
+    const tenantId = typeof companyId === 'string' ? companyId.trim() : '';
+    if (!tenantId) return [];
+
+    const periods = txContext
+      ? await txContext.getFinancialPeriodRepo().findAll({ companyId: tenantId })
+      : await this.repo.findAllForCompany(tenantId);
+
+    return periods
+      .filter((period) => period.companyId === tenantId)
+      .sort((a, b) => `${b.startDate}:${b.id}`.localeCompare(`${a.startDate}:${a.id}`));
   }
 }
