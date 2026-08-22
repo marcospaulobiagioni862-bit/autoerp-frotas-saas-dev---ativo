@@ -1,0 +1,125 @@
+name: FINANCE-R12 Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r12-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r12-test
+      JWT_AUDIENCE: autoerp-finance-r12-test-client
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: FINANCE-R12 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "finance_late_charge_rules" drizzle/0023_finance_overdue_authority.sql
+          grep -F "financialPeriodLock: 'SHARED'" src/server/financeOverdueAuthority.ts
+          grep -F "FOR UPDATE" src/server/financeOverdueAuthority.ts
+          grep -F "AUTHORITATIVE_OVERDUE_RECALCULATION" src/server/financeOverdueAuthority.ts
+          grep -F "registerFinanceOverdueRoutes" src/server/trafficTicketRoutes.ts
+          grep -F "/api/finance/overdue/process" src/server/financeOverdueRoutes.ts
+          if grep -Eq "(finePercent|dailyInterestPercent|gracePeriod).*req\.body" src/server/financeOverdueRoutes.ts; then
+            echo "FAIL: overdue HTTP command must not accept client-provided late-charge rules"
+            exit 1
+          fi
+          if grep -Fq "localRepositories" src/server/financeOverdueAuthority.ts; then
+            echo "FAIL: authoritative overdue processing must not use browser/local repositories"
+            exit 1
+          fi
+          echo "FINANCE-R12 source invariants: PASS"
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Apply migrations
+        run: node migrate_test_db.cjs
+
+      - name: FINANCE-R12 authoritative overdue PostgreSQL regression
+        run: npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
+
+      - name: FINANCE-R11 traffic-ticket discount regression
+        run: npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
+
+      - name: FINANCE-R11 authority boundary regression
+        run: npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
+
+      - name: FINANCE-R21 settlement concurrency regression
+        run: npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
+
+      - name: FINANCE-R20 cancellation metadata regression
+        run: npx tsx src/server/__tests__/financeCancellationMetadataIntegration.ts
+
+      - name: FINANCE-R19 transfer concurrency regression
+        run: npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+
+      - name: FINANCE-R18 reversal concurrency regression
+        run: npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
+
+      - name: FINANCE-R15 financial-period regression
+        run: npx tsx src/server/__tests__/financialPeriodAuthorityIntegration.ts
+
+      - name: FINANCE-R10 NIC profitability regression
+        run: npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
+
+      - name: FINANCE-R5 active-account regression
+        run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+
+      - name: Authentication regression
+        run: npx tsx src/server/__tests__/authTestRunner.ts
+
+      - name: Production build gate
+        run: npm run build
+
+      - name: Production bundle authority guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r12_bundle_hits.txt; then
+            echo "FAIL: legacy browser database marker found in production bundle"
+            cat /tmp/finance_r12_bundle_hits.txt
+            exit 1
+          fi
+          echo "FINANCE-R12 production bundle authority guard: PASS"
