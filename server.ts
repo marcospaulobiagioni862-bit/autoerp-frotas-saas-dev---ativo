@@ -1044,6 +1044,12 @@ async function startServer() {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
 
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason || reason.length > 1000) {
+      res.status(400).json({ error: 'Invalid receivable cancellation request' });
+      return;
+    }
+
     try {
       const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
         await ReceivableService.cancelReceivable(
@@ -1102,6 +1108,12 @@ async function startServer() {
   app.post('/api/finance/payables/:id/cancel', async (req: Request, res: Response) => {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
+
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason || reason.length > 1000) {
+      res.status(400).json({ error: 'Invalid payable cancellation request' });
+      return;
+    }
 
     try {
       const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
