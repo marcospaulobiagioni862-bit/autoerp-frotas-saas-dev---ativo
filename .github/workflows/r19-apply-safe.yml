@@ -1,0 +1,120 @@
+name: FINANCE-R19 Safe Apply
+
+on:
+  push:
+    branches:
+      - finance-r19-transfer-idempotency-concurrency
+    paths:
+      - .github/workflows/r19-apply-safe.yml
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'FINANCE-R19 apply safe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r19-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r19-test
+      JWT_AUDIENCE: autoerp-finance-r19-test-client
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r19-transfer-idempotency-concurrency
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Report start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 SAFE APPLY START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+      - name: Extract authoritative R19 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          lines = Path('.github/workflows/finance-r19-gates.yml').read_text().splitlines()
+          start = next(i for i,l in enumerate(lines) if "python3 <<'PY'" in l) + 1
+          end = next(i for i in range(start, len(lines)) if lines[i].strip() == 'PY')
+          body = []
+          for line in lines[start:end]:
+              body.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/finance_r19_apply.py').write_text('\n'.join(body) + '\n')
+          PY
+          python3 /tmp/finance_r19_apply.py
+      - name: Scope gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            server.ts \
+            src/api/__tests__/financeTransactionClientTestRunner.ts \
+            src/api/financeTransactionClient.ts \
+            src/components/modals/TransferModal.tsx \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/domain/finance/TransferService.ts \
+            src/server/__tests__/financeTransferConcurrencyIntegration.ts | sort)"
+          test "$changed" = "$expected"
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Apply migrations
+        run: node migrate_test_db.cjs
+      - name: Focused R19 PostgreSQL regression
+        run: npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+      - name: Finance transaction client regression
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
+      - name: Commit exact implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            server.ts \
+            src/api/__tests__/financeTransactionClientTestRunner.ts \
+            src/api/financeTransactionClient.ts \
+            src/components/modals/TransferModal.tsx \
+            src/db/uow.ts \
+            src/domain/finance/ITransactionContext.ts \
+            src/domain/finance/TransferService.ts \
+            src/server/__tests__/financeTransferConcurrencyIntegration.ts
+          git diff --cached --check
+          git commit -m "FINANCE-R19 implementation: durable transfer idempotency and deterministic locking"
+          git push origin HEAD:finance-r19-transfer-idempotency-concurrency
+      - name: Report success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 SAFE APPLY PASS | run_id=$GITHUB_RUN_ID"
