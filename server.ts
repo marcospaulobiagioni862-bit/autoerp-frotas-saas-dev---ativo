@@ -88,6 +88,7 @@ function sendFinanceCommandError(res: Response, error: unknown): void {
   if (
     message.includes('já se encontra') ||
     message.includes('Não é possível cancelar') ||
+    message.includes('Chave de idempotência reutilizada') ||
     message.includes('período financeiro') ||
     message.includes('Período')
   ) {
@@ -792,6 +793,7 @@ async function startServer() {
               paymentAmount: Number(req.body?.paymentAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
+              idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',
               userId: principal.userId,
               userName: principal.name,
             },
@@ -822,6 +824,7 @@ async function startServer() {
               paymentAmount: Number(req.body?.paymentAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
+              idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',
               userId: principal.userId,
               userName: principal.name,
             },

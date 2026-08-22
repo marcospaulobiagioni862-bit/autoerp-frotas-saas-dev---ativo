@@ -1,9 +1,9 @@
-name: FINANCE-R5 Gates
+name: FINANCE-R21 Gates
 
 on:
   push:
     branches:
-      - finance-r5-active-account-authority
+      - finance-r21-settlement-idempotency-concurrency
   pull_request:
     branches:
       - main
@@ -39,9 +39,9 @@ jobs:
       SQL_HOST: 127.0.0.1
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
       RECURRING_SCHEDULER_ENABLED: "false"
-      JWT_SECRET: finance-r5-test-jwt-secret-that-is-long-enough
-      JWT_ISSUER: autoerp-finance-r5-test
-      JWT_AUDIENCE: autoerp-finance-r5-test-client
+      JWT_SECRET: finance-r21-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r21-test
+      JWT_AUDIENCE: autoerp-finance-r21-test-client
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,34 +51,51 @@ jobs:
       - name: Report gate start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 202 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R5 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 225 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R21 GATES START | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
 
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
 
-      - name: FINANCE-R5 source invariants
+      - name: FINANCE-R21 source invariants
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "account.status !== 'ACTIVE'" src/domain/finance/SettlementService.ts
-          grep -q "sourceAcc.status !== 'ACTIVE'" src/domain/finance/TransferService.ts
-          grep -q "destAcc.status !== 'ACTIVE'" src/domain/finance/TransferService.ts
-          grep -q "Conta financeira inativa" src/domain/finance/SettlementService.ts
-          grep -q "Conta financeira de origem inativa" src/domain/finance/TransferService.ts
-          grep -q "Conta financeira de destino inativa" src/domain/finance/TransferService.ts
-          echo "FINANCE-R5 source invariants: PASS"
+          grep -q "findReceivableByIdWithLock" src/domain/finance/SettlementService.ts
+          grep -q "findPayableByIdWithLock" src/domain/finance/SettlementService.ts
+          grep -q "findFinancialAccountByIdWithLock" src/domain/finance/SettlementService.ts
+          grep -q "findFinancialTransactionByIdempotencyKey" src/domain/finance/SettlementService.ts
+          grep -q "idempotencyKey," src/domain/finance/SettlementService.ts
+          grep -q "idempotencyKey: typeof req.body?.idempotencyKey" server.ts
+          grep -q "idempotencyKey: string" src/api/financeSettlementClient.ts
+          test "$(grep -c "idempotencyKey: typeof req.body?.idempotencyKey" server.ts)" = "2"
+          echo "FINANCE-R21 source invariants: PASS"
 
       - name: Apply migrations 0000 through 0022
         run: node migrate_test_db.cjs
 
-      - name: FINANCE-R5 active account authority integration
+      - name: FINANCE-R21 PostgreSQL concurrency and idempotency regression
+        run: npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
+
+      - name: Finance settlement client regression
+        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+
+      - name: FINANCE-R9 profitability tenant isolation regression
+        run: npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
+
+      - name: FINANCE-R8 unsupported reporting regime regression
+        run: npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
+
+      - name: FINANCE-R7 payable financial adjustment regression
+        run: npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
+
+      - name: FINANCE-R6 DRE evidence-backed breakdown regression
+        run: npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
+
+      - name: FINANCE-R5 active account authority regression
         run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
 
       - name: FINANCE-R4 security deposit authority regression
         run: npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
-
-      - name: Finance settlement client regression
-        run: npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
 
       - name: Finance transaction client regression
         run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
@@ -138,21 +155,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r5_bundle_hits.txt; then
+          if grep -RIl "AutoERP_DB" dist/assets >/tmp/finance_r21_bundle_hits.txt; then
             echo "FAIL: legacy browser database marker found in production bundle"
-            cat /tmp/finance_r5_bundle_hits.txt
+            cat /tmp/finance_r21_bundle_hits.txt
             exit 1
           fi
-          echo "FINANCE-R5 production bundle authority guard: PASS"
+          echo "FINANCE-R21 production bundle authority guard: PASS"
 
       - name: Report gate success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 202 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R5 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 225 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R21 GATES PASS | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
 
       - name: Report gate failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 202 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R5 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 225 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R21 GATES FAIL | commit=$GITHUB_SHA | run_id=$GITHUB_RUN_ID"

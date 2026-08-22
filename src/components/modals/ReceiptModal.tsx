@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
-import { FinanceSettlementClient, SettlementAccountOption, SettlementPaymentMethodOption } from '../../api/financeSettlementClient';
+import {
+  FinanceSettlementClient,
+  SettlementAccountOption,
+  SettlementPaymentMethodOption,
+  createSettlementIdempotencyKey,
+} from '../../api/financeSettlementClient';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -18,16 +23,20 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [amount, setAmount] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (receivable) {
       setAmount(receivable.balanceAmount || receivable.updatedAmount);
+      setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
     }
   }, [receivable]);
+
+  const rotateCommandKey = () => setIdempotencyKey(createSettlementIdempotencyKey());
 
   const loadOptions = async () => {
     try {
@@ -66,11 +75,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
+        idempotencyKey,
       });
 
       onSuccess();
       onClose();
     } catch (err: any) {
+      // Preserve the same command key on an ambiguous/network failure. A retry
+      // with unchanged fields therefore converges to the first committed result.
       setError(err.message || 'Erro ao registrar o recebimento.');
     } finally {
       setIsSubmitting(false);
@@ -130,7 +142,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               type="number"
               step="0.01"
               value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); rotateCommandKey(); }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
@@ -147,7 +159,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               </label>
               <select
                 value={selectedAccountId}
-                onChange={(e) => setSelectedAccountId(e.target.value)}
+                onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
@@ -165,7 +177,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               </label>
               <select
                 value={selectedMethodId}
-                onChange={(e) => setSelectedMethodId(e.target.value)}
+                onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
@@ -185,7 +197,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             <input
               type="date"
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
@@ -197,7 +209,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
               placeholder="Ex: Recebido via Pix, comprovante anexado..."
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none h-16"
             />

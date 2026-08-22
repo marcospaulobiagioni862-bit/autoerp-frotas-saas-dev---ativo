@@ -130,6 +130,7 @@ async function run(): Promise<void> {
         paymentMethodId,
         paymentAmount: 100,
         paymentDate: '2026-08-21',
+        idempotencyKey: 'finance-r5-inactive-receipt',
         userId: adminId,
         userName: 'Finance R5 Admin',
       }, tx)
@@ -147,6 +148,7 @@ async function run(): Promise<void> {
         paymentMethodId,
         paymentAmount: 100,
         paymentDate: '2026-08-21',
+        idempotencyKey: 'finance-r5-inactive-payment',
         userId: adminId,
         userName: 'Finance R5 Admin',
       }, tx)
@@ -199,6 +201,7 @@ async function run(): Promise<void> {
       paymentMethodId,
       paymentAmount: 100,
       paymentDate: '2026-08-21',
+      idempotencyKey: 'finance-r5-valid-receipt',
       userId: adminId,
       userName: 'Finance R5 Admin',
     }, tx)
@@ -213,6 +216,7 @@ async function run(): Promise<void> {
       paymentMethodId,
       paymentAmount: 100,
       paymentDate: '2026-08-21',
+      idempotencyKey: 'finance-r5-valid-payment',
       userId: adminId,
       userName: 'Finance R5 Admin',
     }, tx)

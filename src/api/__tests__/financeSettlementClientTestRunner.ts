@@ -32,19 +32,27 @@ async function run() {
 
     responder = async () => new Response(JSON.stringify({ item: {}, transaction: {} }), { status: 201, headers: { 'Content-Type': 'application/json' } });
     calls = [];
-    await FinanceSettlementClient.registerReceipt('ar/1', { financialAccountId: 'acc-1', paymentMethodId: 'pm-1', paymentAmount: 50, paymentDate: '2026-08-18', description: 'receipt' });
+    await FinanceSettlementClient.registerReceipt('ar/1', {
+      financialAccountId: 'acc-1', paymentMethodId: 'pm-1', paymentAmount: 50,
+      paymentDate: '2026-08-18', description: 'receipt', idempotencyKey: 'receipt-key-1',
+    });
     assert(calls[0].url === '/api/finance/receivables/ar%2F1/receipt', 'receipt URL');
     const rb = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
     assert(!('companyId' in rb) && !('userId' in rb) && !('userName' in rb), 'receipt identity must not come from browser');
+    assert(rb.idempotencyKey === 'receipt-key-1', 'receipt idempotency key must cross API boundary unchanged');
     assert(calls[0].init?.credentials === 'include', 'receipt credentials');
     passed++;
 
     responder = async () => new Response(JSON.stringify({ item: {}, transaction: {} }), { status: 201, headers: { 'Content-Type': 'application/json' } });
     calls = [];
-    await FinanceSettlementClient.registerPayment('ap-1', { financialAccountId: 'acc-1', paymentMethodId: 'pm-1', paymentAmount: 40, paymentDate: '2026-08-18' });
+    await FinanceSettlementClient.registerPayment('ap-1', {
+      financialAccountId: 'acc-1', paymentMethodId: 'pm-1', paymentAmount: 40,
+      paymentDate: '2026-08-18', idempotencyKey: 'payment-key-1',
+    });
     assert(calls[0].url === '/api/finance/payables/ap-1/payment', 'payment URL');
     const pb = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
     assert(!('companyId' in pb) && !('userId' in pb) && !('userName' in pb), 'payment identity must not come from browser');
+    assert(pb.idempotencyKey === 'payment-key-1', 'payment idempotency key must cross API boundary unchanged');
     passed++;
 
     responder = async () => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -55,7 +63,14 @@ async function run() {
 
     responder = async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     failedClosed = false;
-    try { await FinanceSettlementClient.registerPayment('ap-1', { financialAccountId: 'a', paymentMethodId: 'm', paymentAmount: 1, paymentDate: '2026-08-18' }); } catch (error) { failedClosed = error instanceof FinanceSettlementApiError && error.status === 403; }
+    try {
+      await FinanceSettlementClient.registerPayment('ap-1', {
+        financialAccountId: 'a', paymentMethodId: 'm', paymentAmount: 1,
+        paymentDate: '2026-08-18', idempotencyKey: 'payment-key-forbidden',
+      });
+    } catch (error) {
+      failedClosed = error instanceof FinanceSettlementApiError && error.status === 403;
+    }
     assert(failedClosed, '403 must fail closed');
     passed++;
 
