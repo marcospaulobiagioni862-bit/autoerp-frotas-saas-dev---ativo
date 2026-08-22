@@ -584,8 +584,9 @@ async function startServer() {
     const amount = Number(req.body?.amount);
     const financialAccountId = typeof req.body?.financialAccountId === 'string' ? req.body.financialAccountId.trim() : '';
     const paymentMethodId = typeof req.body?.paymentMethodId === 'string' ? req.body.paymentMethodId.trim() : '';
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
 
-    if (!contractId || !Number.isFinite(amount) || amount <= 0 || !financialAccountId || !paymentMethodId) {
+    if (!contractId || !Number.isFinite(amount) || amount <= 0 || !financialAccountId || !paymentMethodId || !idempotencyKey || idempotencyKey.length > 200) {
       res.status(400).json({ error: 'Invalid security deposit request' });
       return;
     }
@@ -605,7 +606,8 @@ async function startServer() {
           paymentMethodId,
           principal.userId,
           principal.name,
-          txContext
+          txContext,
+          idempotencyKey
         );
       });
       res.status(201).json(result);

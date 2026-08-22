@@ -4,7 +4,7 @@ import { Badge, Button, Card, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
-import { FinanceDepositClient } from '../../api/financeDepositClient';
+import { FinanceDepositClient, createDepositReceiptIdempotencyKey } from '../../api/financeDepositClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { FinanceSettlementClient, type SettlementOptions } from '../../api/financeSettlementClient';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
@@ -45,6 +45,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const [depositAmount, setDepositAmount] = useState('');
   const [depositAccountId, setDepositAccountId] = useState('');
   const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');
+  const [depositIdempotencyKey, setDepositIdempotencyKey] = useState(() => createDepositReceiptIdempotencyKey());
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
     setIncomeCategories([]); setIncomeCategoryId('');
     setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');
+    setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
     setError(null); setSuccess(null);
     if (isOpen && contractId) void load();
     return () => { versionRef.current += 1; };
@@ -142,12 +144,10 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       setError('Selecione a conta financeira e a forma de pagamento da caução.');
       return;
     }
-    void action(() => FinanceDepositClient.receive({
-      contractId: contract.id,
-      amount,
-      financialAccountId: depositAccountId,
-      paymentMethodId: depositPaymentMethodId,
-    }), 'Caução recebida com sucesso.');
+    void action(async () => {
+      await FinanceDepositClient.receive({ contractId: contract.id, amount, financialAccountId: depositAccountId, paymentMethodId: depositPaymentMethodId, idempotencyKey: depositIdempotencyKey });
+      setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
+    }, 'Caução recebida com sucesso.');
   };
 
   if (!contractId) return null;
@@ -214,9 +214,9 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {tab === 'DEPOSIT' && <Card padding="md">
             <div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(depositRemaining)} /></div>
             {depositRemaining > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="text-xs font-semibold text-slate-600">Valor a receber<input type="number" min="0.01" max={depositRemaining} step="0.01" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700" /></label>
-              <label className="text-xs font-semibold text-slate-600">Conta financeira<select value={depositAccountId} onChange={(event) => setDepositAccountId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.accounts.map((item) => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
-              <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select value={depositPaymentMethodId} onChange={(event) => setDepositPaymentMethodId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.paymentMethods.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label className="text-xs font-semibold text-slate-600">Valor a receber<input type="number" min="0.01" max={depositRemaining} step="0.01" value={depositAmount} onChange={(event) => { setDepositAmount(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700" /></label>
+              <label className="text-xs font-semibold text-slate-600">Conta financeira<select value={depositAccountId} onChange={(event) => { setDepositAccountId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.accounts.map((item) => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
+              <label className="text-xs font-semibold text-slate-600">Forma de pagamento<select value={depositPaymentMethodId} onChange={(event) => { setDepositPaymentMethodId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"><option value="">Selecione...</option>{settlementOptions.paymentMethods.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
               <div className="md:col-span-3 flex items-center justify-between gap-3">
                 {(settlementOptions.accounts.length === 0 || settlementOptions.paymentMethods.length === 0) && <p className="text-[11px] text-rose-600">Cadastre uma conta financeira e uma forma de pagamento ativas antes de receber a caução.</p>}
                 <Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading} disabled={!depositAccountId || !depositPaymentMethodId || !depositAmount}>Registrar recebimento</Button>

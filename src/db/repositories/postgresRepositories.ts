@@ -440,6 +440,13 @@ export class PostgresSecurityDepositMovementRepository {
     } as SecurityDepositMovement;
   }
 
+  async findByFinancialTransactionId(financialTransactionId: string): Promise<SecurityDepositMovement | null> {
+    const rows = await this.tx.select().from(securityDepositMovements)
+      .where(eq(securityDepositMovements.financialTransactionId, financialTransactionId))
+      .limit(1);
+    return rows[0] ? this.map(rows[0]) : null;
+  }
+
   async create(item: SecurityDepositMovement): Promise<SecurityDepositMovement> {
     const rows = await this.tx.insert(securityDepositMovements).values({
       id: item.id,

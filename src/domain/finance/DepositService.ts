@@ -30,7 +30,8 @@ export class DepositService {
     paymentMethodId: string,
     userId: string,
     userName: string,
-    txContext?: ITransactionContext
+    txContext?: ITransactionContext,
+    idempotencyKey?: string
   ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
     if (txContext) {
       return this.receiveSecurityDepositTransactional(
@@ -43,7 +44,8 @@ export class DepositService {
         paymentMethodId,
         userId,
         userName,
-        txContext
+        txContext,
+        idempotencyKey
       );
     }
 
@@ -161,7 +163,8 @@ export class DepositService {
     paymentMethodId: string,
     userId: string,
     userName: string,
-    txContext: ITransactionContext
+    txContext: ITransactionContext,
+    idempotencyKey?: string
   ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
     await FinancialAuthorizationService.authorize(
       userId,
@@ -177,6 +180,14 @@ export class DepositService {
     const paymentMethodRepo = txContext.getPaymentMethodRepo?.();
     const auditRepo = txContext.getAuditLogRepo();
     const contractRepo = txContext.getContractRepo();
+
+    const commandKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (!commandKey || commandKey.length > 200) {
+      throw new Error('Chave de idempotência do recebimento de caução é obrigatória e deve ter até 200 caracteres');
+    }
+    if (!txContext.findFinancialTransactionByIdempotencyKey || !txContext.findFinancialAccountByIdWithLock || !movementRepo.findByFinancialTransactionId) {
+      throw new Error('Autoridade transacional idempotente da caução indisponível');
+    }
 
     await depositRepo.lockContract(companyId, contractId);
 
@@ -214,6 +225,16 @@ export class DepositService {
       throw new Error('Principal da caução diverge do contrato');
     }
 
+    const description = `Recebimento de Caução (Contrato: ${contractId})`;
+    const existingTx = await txContext.findFinancialTransactionByIdempotencyKey(commandKey);
+    if (existingTx) {
+      const sameCommand = existingTx.companyId === companyId && existingTx.type === TransactionType.INCOME && !existingTx.receivableId && !existingTx.payableId && existingTx.financialAccountId === financialAccountId && existingTx.paymentMethodId === paymentMethodId && roundCurrency(Number(existingTx.amount)) === roundCurrency(amount) && existingTx.description === description && existingTx.vehicleId === canonicalVehicleId && existingTx.driverId === canonicalDriverId;
+      if (!sameCommand) throw new Error('Chave de idempotência reutilizada com recebimento de caução diferente');
+      const originalMovement = await movementRepo.findByFinancialTransactionId(existingTx.id);
+      if (!originalMovement || originalMovement.companyId !== companyId || originalMovement.securityDepositId !== deposit.id || originalMovement.type !== SecurityDepositMovementType.RECEIPT || originalMovement.financialTransactionId !== existingTx.id || roundCurrency(Number(originalMovement.amount)) !== roundCurrency(amount)) throw new Error('Evidência idempotente do recebimento de caução está inconsistente');
+      return { deposit, movement: originalMovement };
+    }
+
     const newReceived = roundCurrency(deposit.receivedAmount + amount);
     if (newReceived > originalAmount) {
       const remaining = roundCurrency(Math.max(0, originalAmount - deposit.receivedAmount));
@@ -222,7 +243,7 @@ export class DepositService {
 
     const previousState = { ...deposit };
 
-    const account = await accountRepo.findById(financialAccountId);
+    const account = await txContext.findFinancialAccountByIdWithLock(financialAccountId);
     if (!account || account.companyId !== companyId || account.status !== 'ACTIVE') {
       throw new Error('Conta financeira não encontrada ou pertence a outra empresa');
     }
@@ -244,11 +265,12 @@ export class DepositService {
       paymentMethodId,
       transactionDate: today,
       competenceDate: today,
-      description: `Recebimento de Caução (Contrato: ${contractId})`,
+      description,
       isReversed: false,
       vehicleId: canonicalVehicleId,
       driverId: canonicalDriverId,
       createdById: userId,
+      idempotencyKey: commandKey,
       createdAt: now,
       updatedAt: now,
     };
