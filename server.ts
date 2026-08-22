@@ -818,18 +818,36 @@ async function startServer() {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
 
+    const transactionId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+    const reversalAmount = Number(req.body?.reversalAmount);
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    const idempotencyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
+    if (
+      !transactionId ||
+      !Number.isFinite(reversalAmount) ||
+      reversalAmount <= 0 ||
+      !reason ||
+      reason.length > 1000 ||
+      !idempotencyKey ||
+      idempotencyKey.length > 200
+    ) {
+      res.status(400).json({ error: 'Invalid financial reversal request' });
+      return;
+    }
+
     try {
       const item = await UnitOfWork.run(
         principal.companyId,
         async (txContext) =>
           await ReversalService.reverseTransaction(
             principal.companyId,
-            req.params.id,
-            Number(req.body?.reversalAmount),
-            typeof req.body?.reason === 'string' ? req.body.reason : '',
+            transactionId,
+            reversalAmount,
+            reason,
             principal.userId,
             principal.name,
-            txContext
+            txContext,
+            idempotencyKey
           ),
         { financialPeriodLock: 'SHARED' }
       );

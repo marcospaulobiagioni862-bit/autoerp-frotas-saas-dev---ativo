@@ -13,6 +13,20 @@ export interface TransferCommandInput {
   description: string;
 }
 
+export interface ReversalCommandInput {
+  reversalAmount: number;
+  reason: string;
+  idempotencyKey: string;
+}
+
+export function createReversalIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return `reversal-${cryptoApi.randomUUID()}`;
+  }
+  return `reversal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export class FinanceTransactionApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -108,10 +122,10 @@ export class FinanceTransactionClient {
     return normalizeTransaction(payload.item);
   }
 
-  static async reverse(transactionId: string, reversalAmount: number, reason: string): Promise<FinancialTransaction> {
+  static async reverse(transactionId: string, input: ReversalCommandInput): Promise<FinancialTransaction> {
     const payload = asRecord(await requestJson(
       `/api/finance/transactions/${encodeURIComponent(transactionId)}/reverse`,
-      postJson({ reversalAmount, reason })
+      postJson(input)
     ));
     return normalizeTransaction(payload.item);
   }

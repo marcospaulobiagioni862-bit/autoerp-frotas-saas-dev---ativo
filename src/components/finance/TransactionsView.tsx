@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { FinancialTransaction } from '../../types/entities';
 import { TransactionType } from '../../types/enums';
-import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import {
+  FinanceTransactionClient,
+  createReversalIdempotencyKey,
+} from '../../api/financeTransactionClient';
 import type { SettlementAccountOption } from '../../api/financeSettlementClient';
 import {
   ArrowRightLeft,
@@ -24,6 +27,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
   const [loading, setLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<string | null>(null);
   const [reversalTargetTx, setReversalTargetTx] = useState<FinancialTransaction | null>(null);
+  const [reversalCommandKey, setReversalCommandKey] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -47,22 +51,33 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     }
   };
 
+  const openReversal = (transaction: FinancialTransaction) => {
+    setReversalTargetTx(transaction);
+    setReversalCommandKey(createReversalIdempotencyKey());
+  };
+
+  const closeReversal = () => {
+    setReversalTargetTx(null);
+    setReversalCommandKey(null);
+  };
+
   const confirmReverse = async () => {
-    if (!reversalTargetTx) return;
+    if (!reversalTargetTx || !reversalCommandKey) return;
 
     try {
-      await FinanceTransactionClient.reverse(
-        reversalTargetTx.id,
-        Number(reversalTargetTx.amount),
-        'Estorno operacional solicitado via extrato'
-      );
+      await FinanceTransactionClient.reverse(reversalTargetTx.id, {
+        reversalAmount: Number(reversalTargetTx.amount),
+        reason: 'Estorno operacional solicitado via extrato',
+        idempotencyKey: reversalCommandKey,
+      });
 
       setMessage('Transação estornada com sucesso!');
-      setReversalTargetTx(null);
+      closeReversal();
       await loadData();
     } catch (err) {
+      // Keep target + command key intact so an uncertain network retry converges
+      // to the same authoritative reversal instead of creating a new command.
       alert(err instanceof Error ? err.message : 'Erro ao realizar estorno');
-      setReversalTargetTx(null);
     }
   };
 
@@ -257,7 +272,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setReversalTargetTx(tx)}
+                            onClick={() => openReversal(tx)}
                             className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
                           >
                             Estornar
@@ -280,7 +295,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         confirmText="Confirmar Estorno"
         confirmVariant="danger"
         onConfirm={confirmReverse}
-        onCancel={() => setReversalTargetTx(null)}
+        onCancel={closeReversal}
       />
     </div>
   );

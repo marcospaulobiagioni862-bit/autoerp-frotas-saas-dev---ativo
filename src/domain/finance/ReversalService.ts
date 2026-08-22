@@ -5,7 +5,12 @@ import {
   AccountReceivableRepository,
   AccountPayableRepository,
 } from '../../persistence/repositories/localRepositories';
-import { FinancialTransaction } from '../../types/entities';
+import {
+  AccountPayable,
+  AccountReceivable,
+  FinancialAccount,
+  FinancialTransaction,
+} from '../../types/entities';
 import { TransactionType, ObligationStatus, AuditAction } from '../../types/enums';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
@@ -19,6 +24,137 @@ export class ReversalService {
   private static receivableRepo = new AccountReceivableRepository();
   private static payableRepo = new AccountPayableRepository();
 
+  private static requireIdempotencyKey(
+    idempotencyKey: string | undefined,
+    txContext?: ITransactionContext
+  ): string | undefined {
+    const key = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (!txContext) return key || undefined;
+    if (!key || key.length > 200) {
+      throw new Error('Chave de idempotência do estorno é obrigatória e deve ter até 200 caracteres');
+    }
+    return key;
+  }
+
+  private static normalizeReason(reason: string): string {
+    const normalized = typeof reason === 'string' ? reason.trim() : '';
+    if (!normalized || normalized.length > 1000) {
+      throw new Error('Motivo do estorno é obrigatório e deve ter até 1000 caracteres');
+    }
+    return normalized;
+  }
+
+  private static assertAuthoritativeCapabilities(txContext: ITransactionContext): void {
+    if (
+      !txContext.findFinancialTransactionByIdWithLock ||
+      !txContext.findFinancialTransactionByIdempotencyKey ||
+      !txContext.findFinancialAccountByIdWithLock
+    ) {
+      throw new Error('Autoridade transacional de estorno indisponível');
+    }
+  }
+
+  private static assertRetryMatches(
+    existing: FinancialTransaction,
+    originalTx: FinancialTransaction,
+    companyId: string,
+    reversalAmount: number,
+    reason: string,
+    userId: string
+  ): void {
+    const expectedDescription = `ESTORNO (${reason}): ${originalTx.description}`;
+    const matches =
+      existing.companyId === companyId &&
+      existing.type === TransactionType.REVERSAL &&
+      existing.reversalTransactionId === originalTx.id &&
+      existing.financialAccountId === originalTx.financialAccountId &&
+      (existing.destinationAccountId || '') === (originalTx.destinationAccountId || '') &&
+      (existing.receivableId || '') === (originalTx.receivableId || '') &&
+      (existing.payableId || '') === (originalTx.payableId || '') &&
+      existing.paymentMethodId === originalTx.paymentMethodId &&
+      roundCurrency(Number(existing.amount)) === roundCurrency(reversalAmount) &&
+      existing.description === expectedDescription &&
+      existing.createdById === userId;
+
+    if (!matches) {
+      throw new Error('Chave de idempotência reutilizada com comando de estorno diferente');
+    }
+  }
+
+  private static async lockAndValidateAccount(
+    companyId: string,
+    accountId: string,
+    txContext?: ITransactionContext
+  ): Promise<FinancialAccount> {
+    let account: FinancialAccount | null;
+    if (txContext) {
+      if (!txContext.findFinancialAccountByIdWithLock) {
+        throw new Error('Autoridade transacional de conta financeira indisponível');
+      }
+      account = await txContext.findFinancialAccountByIdWithLock(accountId);
+    } else {
+      account = await this.accountRepo.findByIdForCompany(accountId, companyId);
+    }
+
+    if (!account) throw new Error('Conta financeira não encontrada');
+    if (!account.companyId || account.companyId !== companyId) {
+      throw new Error('Acesso negado: Conta financeira pertence a outra empresa ou tenant inválido');
+    }
+    if (txContext && account.status !== 'ACTIVE') {
+      throw new Error('Conta financeira inativa');
+    }
+    return account;
+  }
+
+  private static async lockLinkedObligation(
+    companyId: string,
+    originalTx: FinancialTransaction,
+    txContext?: ITransactionContext
+  ): Promise<{ receivable: AccountReceivable | null; payable: AccountPayable | null }> {
+    if (originalTx.receivableId) {
+      let receivable: AccountReceivable | null;
+      if (txContext) {
+        if (!txContext.findReceivableByIdWithLock) {
+          throw new Error('Autoridade transacional de Conta a Receber indisponível');
+        }
+        receivable = await txContext.findReceivableByIdWithLock(originalTx.receivableId);
+      } else {
+        receivable = await this.receivableRepo.findByIdForCompany(originalTx.receivableId, companyId);
+      }
+      if (receivable && (!receivable.companyId || receivable.companyId !== companyId)) {
+        throw new Error('Acesso negado: Conta a Receber pertence a outra empresa ou tenant inválido');
+      }
+      return { receivable, payable: null };
+    }
+
+    if (originalTx.payableId) {
+      let payable: AccountPayable | null;
+      if (txContext) {
+        if (!txContext.findPayableByIdWithLock) {
+          throw new Error('Autoridade transacional de Conta a Pagar indisponível');
+        }
+        payable = await txContext.findPayableByIdWithLock(originalTx.payableId);
+      } else {
+        payable = await this.payableRepo.findByIdForCompany(originalTx.payableId, companyId);
+      }
+      if (payable && (!payable.companyId || payable.companyId !== companyId)) {
+        throw new Error('Acesso negado: Conta a Pagar pertence a outra empresa ou tenant inválido');
+      }
+      return { receivable: null, payable };
+    }
+
+    return { receivable: null, payable: null };
+  }
+
+  private static obligationStateAfterReversal(updatedAmount: number, currentPaid: number, reversalAmount: number) {
+    const newPaid = roundCurrency(Math.max(0, currentPaid - reversalAmount));
+    const newBalance = roundCurrency(Math.max(0, updatedAmount - newPaid));
+    const newStatus = newBalance >= roundCurrency(updatedAmount)
+      ? ObligationStatus.PENDING
+      : ObligationStatus.PARTIALLY_PAID;
+    return { newPaid, newBalance, newStatus };
+  }
+
   public static async reverseTransaction(
     companyId: string,
     transactionId: string,
@@ -26,7 +162,8 @@ export class ReversalService {
     reason: string,
     userId: string,
     userName: string,
-    txContext?: ITransactionContext
+    txContext?: ITransactionContext,
+    idempotencyKey?: string
   ): Promise<FinancialTransaction> {
     await FinancialAuthorizationService.authorize(
       userId,
@@ -38,10 +175,17 @@ export class ReversalService {
     if (!Number.isFinite(reversalAmount) || reversalAmount <= 0) {
       throw new Error('Valor de estorno inválido');
     }
+    if (!transactionId || typeof transactionId !== 'string') {
+      throw new Error('Transação não encontrada');
+    }
+
+    const normalizedReason = this.normalizeReason(reason);
+    const commandKey = this.requireIdempotencyKey(idempotencyKey, txContext);
+    if (txContext) this.assertAuthoritativeCapabilities(txContext);
 
     let originalTx: FinancialTransaction | null;
     if (txContext) {
-      originalTx = await txContext.getTransactionRepo().findById(transactionId);
+      originalTx = await txContext.findFinancialTransactionByIdWithLock!(transactionId);
     } else {
       originalTx = await this.transactionRepo.findByIdForCompany(transactionId, companyId);
     }
@@ -52,14 +196,27 @@ export class ReversalService {
     if (originalTx.type === TransactionType.REVERSAL) {
       throw new Error('Transação do tipo REVERSAL não pode ser estornada');
     }
+
+    if (txContext && commandKey) {
+      const existing = await txContext.findFinancialTransactionByIdempotencyKey!(commandKey);
+      if (existing) {
+        this.assertRetryMatches(
+          existing,
+          originalTx,
+          companyId,
+          reversalAmount,
+          normalizedReason,
+          userId
+        );
+        return existing;
+      }
+    }
+
     if (originalTx.isReversed) throw new Error('Transação já foi estornada');
 
+    const reversalDate = new Date().toISOString().split('T')[0];
     await FinancialPeriodService.assertDateOpen(companyId, originalTx.transactionDate, txContext);
-    await FinancialPeriodService.assertDateOpen(
-      companyId,
-      new Date().toISOString().split('T')[0],
-      txContext
-    );
+    await FinancialPeriodService.assertDateOpen(companyId, reversalDate, txContext);
 
     let allTxs: FinancialTransaction[];
     if (txContext) {
@@ -71,17 +228,35 @@ export class ReversalService {
       (t) => t.type === TransactionType.REVERSAL && t.reversalTransactionId === originalTx!.id
     );
     const reversedAmount = roundCurrency(
-      previousReversals.reduce((sum, r) => sum + Number(r.amount), 0)
+      previousReversals.reduce((sum, reversal) => sum + Number(reversal.amount), 0)
     );
-    const originalAmount = Number(originalTx.amount);
+    const originalAmount = roundCurrency(Number(originalTx.amount));
+    const normalizedReversalAmount = roundCurrency(reversalAmount);
     const reversibleRemaining = roundCurrency(originalAmount - reversedAmount);
 
-    if (roundCurrency(reversalAmount) > roundCurrency(reversibleRemaining)) {
+    if (normalizedReversalAmount > reversibleRemaining) {
       throw new Error(`Valor de estorno inválido (Disponível para estorno: R$ ${reversibleRemaining})`);
     }
 
-    const totalReversedAfter = roundCurrency(reversedAmount + reversalAmount);
+    const totalReversedAfter = roundCurrency(reversedAmount + normalizedReversalAmount);
     const isFullReversal = Math.abs(totalReversedAfter - originalAmount) < 0.01;
+
+    // Lock the linked obligation before accounts. Settlement uses obligation -> account,
+    // so keeping the same order avoids an account/obligation deadlock.
+    const linked = await this.lockLinkedObligation(companyId, originalTx, txContext);
+
+    if (originalTx.type === TransactionType.TRANSFER) {
+      if (!originalTx.destinationAccountId) {
+        throw new Error('Transferência original sem conta de destino');
+      }
+      const accountIds = [originalTx.financialAccountId, originalTx.destinationAccountId].sort();
+      for (const accountId of accountIds) {
+        await this.lockAndValidateAccount(companyId, accountId, txContext);
+      }
+    } else {
+      await this.lockAndValidateAccount(companyId, originalTx.financialAccountId, txContext);
+    }
+
     if (txContext) {
       await txContext.getTransactionRepo().update(originalTx.id, {
         isReversed: isFullReversal,
@@ -92,6 +267,7 @@ export class ReversalService {
       });
     }
 
+    const now = new Date().toISOString();
     const reversalTx: FinancialTransaction = {
       id: generateUUID(),
       companyId,
@@ -100,19 +276,20 @@ export class ReversalService {
       receivableId: originalTx.receivableId,
       payableId: originalTx.payableId,
       type: TransactionType.REVERSAL,
-      amount: reversalAmount,
+      amount: normalizedReversalAmount,
       paymentMethodId: originalTx.paymentMethodId,
-      transactionDate: new Date().toISOString().split('T')[0],
+      transactionDate: reversalDate,
       competenceDate: originalTx.competenceDate,
-      description: `ESTORNO (${reason}): ${originalTx.description}`,
+      description: `ESTORNO (${normalizedReason}): ${originalTx.description}`,
       isReversed: false,
       reversalTransactionId: originalTx.id,
       vehicleId: originalTx.vehicleId,
       driverId: originalTx.driverId,
       supplierId: originalTx.supplierId,
       createdById: userId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      idempotencyKey: commandKey,
+      createdAt: now,
+      updatedAt: now,
     };
 
     let savedReversal: FinancialTransaction;
@@ -123,32 +300,17 @@ export class ReversalService {
     }
 
     if (originalTx.type === TransactionType.TRANSFER) {
-      if (!originalTx.destinationAccountId) {
-        throw new Error('Transferência original sem conta de destino');
-      }
-
       if (txContext) {
-        const source = await txContext.getAccountRepo().findById(originalTx.financialAccountId);
-        const destination = await txContext.getAccountRepo().findById(originalTx.destinationAccountId);
-        if (!source || !destination) throw new Error('Conta financeira de origem ou destino não encontrada');
-        if (
-          source.companyId !== companyId ||
-          destination.companyId !== companyId ||
-          source.companyId !== destination.companyId
-        ) {
-          throw new Error('Acesso negado: Transferência pertence a contas de outro tenant');
-        }
-        await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, reversalAmount);
-        await txContext.getAccountRepo().updateBalance(originalTx.destinationAccountId, -reversalAmount);
+        await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, normalizedReversalAmount);
+        await txContext.getAccountRepo().updateBalance(originalTx.destinationAccountId!, -normalizedReversalAmount);
       } else {
-        const source = await this.accountRepo.findByIdForCompany(originalTx.financialAccountId, companyId);
-        const destination = await this.accountRepo.findByIdForCompany(originalTx.destinationAccountId, companyId);
-        if (!source || !destination) throw new Error('Conta financeira de origem ou destino não encontrada');
-        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, reversalAmount);
-        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.destinationAccountId, -reversalAmount);
+        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.financialAccountId, normalizedReversalAmount);
+        await this.accountRepo.updateBalanceForCompany(companyId, originalTx.destinationAccountId!, -normalizedReversalAmount);
       }
     } else {
-      const balanceDelta = originalTx.type === TransactionType.INCOME ? -reversalAmount : reversalAmount;
+      const balanceDelta = originalTx.type === TransactionType.INCOME
+        ? -normalizedReversalAmount
+        : normalizedReversalAmount;
       if (txContext) {
         await txContext.getAccountRepo().updateBalance(originalTx.financialAccountId, balanceDelta);
       } else {
@@ -156,57 +318,45 @@ export class ReversalService {
       }
     }
 
-    if (originalTx.receivableId) {
+    if (linked.receivable) {
+      const receivable = linked.receivable;
+      const state = this.obligationStateAfterReversal(
+        Number(receivable.updatedAmount),
+        Number(receivable.paidAmount),
+        normalizedReversalAmount
+      );
       if (txContext) {
-        const rec = await txContext.getReceivableRepo().findById(originalTx.receivableId);
-        if (rec) {
-          const newPaid = Math.max(0, Number(rec.paidAmount) - reversalAmount);
-          const newBalance = roundCurrency(Number(rec.updatedAmount) - newPaid);
-          const newStatus = newBalance >= Number(rec.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-          await txContext.getReceivableRepo().update(rec.id, {
-            paidAmount: newPaid,
-            balanceAmount: newBalance,
-            status: newStatus,
-          });
-        }
+        await txContext.getReceivableRepo().update(receivable.id, {
+          paidAmount: state.newPaid,
+          balanceAmount: state.newBalance,
+          status: state.newStatus,
+        });
       } else {
-        const rec = await this.receivableRepo.findByIdForCompany(originalTx.receivableId, companyId);
-        if (rec) {
-          const newPaid = Math.max(0, Number(rec.paidAmount) - reversalAmount);
-          const newBalance = roundCurrency(Number(rec.updatedAmount) - newPaid);
-          const newStatus = newBalance >= Number(rec.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-          await this.receivableRepo.updateForCompany(rec.id, companyId, {
-            paidAmount: newPaid,
-            balanceAmount: newBalance,
-            status: newStatus,
-          });
-        }
+        await this.receivableRepo.updateForCompany(receivable.id, companyId, {
+          paidAmount: state.newPaid,
+          balanceAmount: state.newBalance,
+          status: state.newStatus,
+        });
       }
-    } else if (originalTx.payableId) {
+    } else if (linked.payable) {
+      const payable = linked.payable;
+      const state = this.obligationStateAfterReversal(
+        Number(payable.updatedAmount),
+        Number(payable.paidAmount),
+        normalizedReversalAmount
+      );
       if (txContext) {
-        const pay = await txContext.getPayableRepo().findById(originalTx.payableId);
-        if (pay) {
-          const newPaid = Math.max(0, Number(pay.paidAmount) - reversalAmount);
-          const newBalance = roundCurrency(Number(pay.updatedAmount) - newPaid);
-          const newStatus = newBalance >= Number(pay.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-          await txContext.getPayableRepo().update(pay.id, {
-            paidAmount: newPaid,
-            balanceAmount: newBalance,
-            status: newStatus,
-          });
-        }
+        await txContext.getPayableRepo().update(payable.id, {
+          paidAmount: state.newPaid,
+          balanceAmount: state.newBalance,
+          status: state.newStatus,
+        });
       } else {
-        const pay = await this.payableRepo.findByIdForCompany(originalTx.payableId, companyId);
-        if (pay) {
-          const newPaid = Math.max(0, Number(pay.paidAmount) - reversalAmount);
-          const newBalance = roundCurrency(Number(pay.updatedAmount) - newPaid);
-          const newStatus = newBalance >= Number(pay.updatedAmount) ? ObligationStatus.PENDING : ObligationStatus.PARTIALLY_PAID;
-          await this.payableRepo.updateForCompany(pay.id, companyId, {
-            paidAmount: newPaid,
-            balanceAmount: newBalance,
-            status: newStatus,
-          });
-        }
+        await this.payableRepo.updateForCompany(payable.id, companyId, {
+          paidAmount: state.newPaid,
+          balanceAmount: state.newBalance,
+          status: state.newStatus,
+        });
       }
     }
 

@@ -1,4 +1,8 @@
-import { FinanceTransactionApiError, FinanceTransactionClient } from '../financeTransactionClient';
+import {
+  FinanceTransactionApiError,
+  FinanceTransactionClient,
+  createReversalIdempotencyKey,
+} from '../financeTransactionClient';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -60,13 +64,30 @@ async function run() {
     assert(calls[0].init?.credentials === 'include', 'transfer credentials');
     passed++;
 
+    const reversalKey = 'reversal-client-test-key';
     responder = async () => new Response(JSON.stringify({ item: { ...txPayload, type: 'REVERSAL', destinationAccountId: 'acc-b' } }), { status: 201, headers: { 'Content-Type': 'application/json' } });
     calls = [];
-    await FinanceTransactionClient.reverse('tx/1', 25, 'Correção');
+    await FinanceTransactionClient.reverse('tx/1', {
+      reversalAmount: 25,
+      reason: 'Correção',
+      idempotencyKey: reversalKey,
+    });
     assert(calls[0].url === '/api/finance/transactions/tx%2F1/reverse', 'reversal URL');
     const reversalBody = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
-    assert(reversalBody.reversalAmount === 25 && reversalBody.reason === 'Correção', 'reversal body');
+    assert(
+      reversalBody.reversalAmount === 25 &&
+      reversalBody.reason === 'Correção' &&
+      reversalBody.idempotencyKey === reversalKey,
+      'reversal body'
+    );
     assert(!('companyId' in reversalBody) && !('userId' in reversalBody) && !('userName' in reversalBody), 'reversal identity must not come from browser');
+    assert(calls[0].init?.credentials === 'include', 'reversal credentials');
+    passed++;
+
+    const generatedKeyA = createReversalIdempotencyKey();
+    const generatedKeyB = createReversalIdempotencyKey();
+    assert(generatedKeyA.startsWith('reversal-'), 'generated reversal key prefix');
+    assert(generatedKeyA !== generatedKeyB, 'generated reversal keys must differ');
     passed++;
 
     responder = async () => new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
@@ -93,7 +114,7 @@ async function run() {
     assert(networkClosed, 'network error must propagate without local fallback');
     passed++;
 
-    console.log(`FinanceTransactionClient ${passed}/8 PASS`);
+    console.log(`FinanceTransactionClient ${passed}/9 PASS`);
   } finally {
     globalThis.fetch = originalFetch;
   }
