@@ -94,6 +94,12 @@ export class UnitOfWork {
             .for('update').limit(1);
           return rows[0]||null;
         },
+        findFinancialTransactionByIdWithLock:async(id:string)=>{
+          const rows=await tx.select().from(financialTransactions)
+            .where(and(eq(financialTransactions.companyId,companyId),eq(financialTransactions.id,id)))
+            .for('update').limit(1);
+          return rows[0]||null;
+        },
         findFinancialTransactionByIdempotencyKey:async(key:string)=>{
           const rows=await tx.select().from(financialTransactions)
             .where(and(eq(financialTransactions.companyId,companyId),eq(financialTransactions.idempotencyKey,key)))
