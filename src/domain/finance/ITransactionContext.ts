@@ -246,9 +246,11 @@ export interface ITransactionContext {
   findReceivableByIdWithLock?(id: string): Promise<AccountReceivable | null>;
   /** Server-only settlement capability: tenant-scoped row lock for Accounts Payable. */
   findPayableByIdWithLock?(id: string): Promise<AccountPayable | null>;
-  /** Server-only settlement capability: tenant-scoped row lock for Financial Accounts. */
+  /** Server-only settlement/reversal capability: tenant-scoped row lock for Financial Accounts. */
   findFinancialAccountByIdWithLock?(id: string): Promise<FinancialAccount | null>;
-  /** Server-only settlement capability: durable lookup of a financial command idempotency key. */
+  /** Server-only reversal capability: tenant-scoped row lock for the original Financial Transaction. */
+  findFinancialTransactionByIdWithLock?(id: string): Promise<FinancialTransaction | null>;
+  /** Server-only settlement/reversal capability: durable lookup of a financial command idempotency key. */
   findFinancialTransactionByIdempotencyKey?(key: string): Promise<FinancialTransaction | null>;
   /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
   getRawTransaction?(): any;
