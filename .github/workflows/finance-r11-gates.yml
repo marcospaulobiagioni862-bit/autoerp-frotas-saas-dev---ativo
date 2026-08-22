@@ -77,6 +77,9 @@ jobs:
       - name: FINANCE-R11 traffic-ticket discount regression
         run: npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
 
+      - name: FINANCE-R11 authority boundary regression
+        run: npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
+
       - name: Traffic-ticket authority regression
         run: npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
 
