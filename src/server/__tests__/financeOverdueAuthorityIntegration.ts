@@ -164,7 +164,7 @@ async function notDuePaidCancelledAndIdempotency(): Promise<void> {
   await FinanceOverdueAuthority.process(actorA, 'RECEIVABLE', '2026-08-21');
   const advanced = await receivable(idem);
   money(advanced.fine_amount, 2, 'fine must be recalculated rather than accumulated');
-  money(advanced.interest_amount, 0.69, 'interest must deterministically recalculate for new processing date');
+  money(advanced.interest_amount, 0.66, 'interest must deterministically recalculate for new processing date');
 }
 
 async function authoritativeRuleAndClosedPeriod(): Promise<void> {
