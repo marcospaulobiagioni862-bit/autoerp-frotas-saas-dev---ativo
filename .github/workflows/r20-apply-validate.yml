@@ -55,7 +55,7 @@ jobs:
       - name: Report apply start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
 
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          changed="$(git diff --name-only | sort)"
+          changed="$( { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)"
           expected="$(printf '%s\n' server.ts src/domain/finance/PayableService.ts src/domain/finance/ReceivableService.ts src/server/__tests__/financeCancellationMetadataIntegration.ts | sort)"
           test "$changed" = "$expected"
           echo "FINANCE-R20 scope gate: 4/4 expected files"
@@ -113,10 +113,10 @@ jobs:
       - name: Report apply success
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 PASS | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 PASS | run_id=$GITHUB_RUN_ID"
 
       - name: Report apply failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V2 FAIL | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 FAIL | run_id=$GITHUB_RUN_ID"
