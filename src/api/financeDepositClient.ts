@@ -57,6 +57,15 @@ export interface ReceiveSecurityDepositInput {
   amount: number;
   financialAccountId: string;
   paymentMethodId: string;
+  idempotencyKey: string;
+}
+
+export function createDepositReceiptIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
+    return `deposit-receipt-${cryptoApi.randomUUID()}`;
+  }
+  return `deposit-receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export class FinanceDepositClient {
