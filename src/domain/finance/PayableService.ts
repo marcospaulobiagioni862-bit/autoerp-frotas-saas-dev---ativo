@@ -186,9 +186,15 @@ export class PayableService {
       txContext
     );
 
-    const payable = txContext
-      ? await txContext.getPayableRepo().findById(payableId)
-      : await this.repo.findByIdForCompany(payableId, companyId);
+    let payable: AccountPayable | null;
+    if (txContext) {
+      if (!txContext.findPayableByIdWithLock) {
+        throw new Error('Autoridade transacional de Conta a Pagar indisponível');
+      }
+      payable = await txContext.findPayableByIdWithLock(payableId);
+    } else {
+      payable = await this.repo.findByIdForCompany(payableId, companyId);
+    }
 
     if (!payable) {
       throw new Error('Conta a Pagar não encontrada');
