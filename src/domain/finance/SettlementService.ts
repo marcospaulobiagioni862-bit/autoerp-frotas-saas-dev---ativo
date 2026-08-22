@@ -12,6 +12,7 @@ import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
+import { resolveAuthoritativeTrafficTicketDiscount } from './TrafficTicketSettlementDiscount';
 
 export interface SettlementParams {
   companyId: string;
@@ -339,7 +340,7 @@ export class SettlementService {
 
     const fine = params.fineAmount || 0;
     const interest = params.interestAmount || 0;
-    const discount = params.discountAmount || 0;
+    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, params, txContext);
 
     const newFineAmount = Number(payable.fineAmount) + fine;
     const newInterestAmount = Number(payable.interestAmount) + interest;
