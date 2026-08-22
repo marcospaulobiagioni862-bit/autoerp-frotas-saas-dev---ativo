@@ -1,0 +1,181 @@
+name: AutoERP PR Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autoerp-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: autoerp-pr-gates-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-pr-gates-test
+      JWT_AUDIENCE: autoerp-pr-gates-test-client
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies once
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Apply migrations once
+        run: node migrate_test_db.cjs
+
+      - name: Core authority regressions
+        run: |
+          npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
+          npx tsx src/server/__tests__/productionTrustBoundary.ts
+          npx tsx src/server/__tests__/detailAuthorityIntegration.ts
+          npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
+
+      - name: Evidence and attachment regressions
+        run: |
+          npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
+          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+
+      - name: Fleet domain regressions
+        run: |
+          npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
+          npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
+          npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
+          npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
+          npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
+          npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+
+      - name: Finance authority regressions
+        run: |
+          npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+          npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financialPeriodAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeDepositIdempotencyIntegration.ts
+          npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeCancellationMetadataIntegration.ts
+          npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
+          npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
+
+      - name: Finance domain regressions
+        run: |
+          npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
+          npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
+          npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
+          npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
+          npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
+          npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
+          npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
+
+      - name: Finance client regressions
+        run: |
+          npx tsx src/api/__tests__/financePeriodClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+
+      - name: Authentication regressions
+        run: |
+          npx tsx src/server/__tests__/authTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+
+      - name: Production build gate
+        run: npm run build
+
+      - name: Production bundle authority guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'dist/assets';
+          const files = fs.readdirSync(root).filter((file) => fs.statSync(path.join(root, file)).isFile());
+          const chunks = files.map((file) => ({ file, text: fs.readFileSync(path.join(root, file), 'utf8') }));
+          const bundle = chunks.map(({ text }) => text).join('\n');
+
+          const forbidden = [
+            ['AutoERP_DB', 'legacy StorageAdapter/IndexedDB graph'],
+            ['__autoerp_executive_decisions_v1_', 'browser-local decision authority'],
+            ['__autoerp_goals_v1_', 'browser-local goals authority'],
+            ['usr-sre-admin', 'simulated SRE admin identity'],
+            ['usr-exec-1', 'simulated workflow identity'],
+            ['usr-admin-default', 'simulated execution/release admin identity'],
+            ['comp-main-tenant-360', 'simulated performance tenant'],
+            ['admin-consolidator', 'simulated consolidation identity'],
+            ['EnterpriseWorkflowTestRunner', 'workflow browser test runner'],
+            ['EnterpriseExecutionTestRunner', 'execution browser test runner'],
+            ['EnterprisePerformanceTestRunner', 'performance browser test runner'],
+            ['42/42', 'fabricated production test badge'],
+          ];
+
+          for (const [marker, label] of forbidden) {
+            if (chunks.some(({ text }) => text.includes(marker))) {
+              console.error(`FAIL: ${label} found in production frontend bundle (${marker})`);
+              process.exit(1);
+            }
+          }
+
+          const required = [
+            ['COCKPIT SERVER AUTHORITY', 'trusted production navigation'],
+            ['Server authority required', 'fail-closed experimental cockpit boundary'],
+            ['/api/operations/tasks', 'task authority'],
+            ['/api/operations/incidents', 'incident authority'],
+            ['/api/operations/executive/snapshot', 'executive authority'],
+            ['BROWSER_WRITE_DISABLED_SERVER_AUTHORITY_REQUIRED', 'legacy write fail-closed bridge'],
+          ];
+
+          for (const [marker, label] of required) {
+            if (!bundle.includes(marker)) {
+              console.error(`FAIL: ${label} missing from production frontend bundle (${marker})`);
+              process.exit(1);
+            }
+          }
+
+          console.log('PASS: AutoERP consolidated production trust boundary');
+          NODE
