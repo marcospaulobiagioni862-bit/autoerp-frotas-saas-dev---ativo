@@ -1,3 +1,4 @@
+# Retry after aligning the foreign payment-method fail-closed expectation.
 name: FINANCE-R19 Fixture Repair V3
 
 on:
@@ -54,7 +55,7 @@ jobs:
       - name: Report start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 CLEAN START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
 
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
@@ -270,10 +271,10 @@ jobs:
       - name: Report success
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 PASS | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 CLEAN PASS | run_id=$GITHUB_RUN_ID"
 
       - name: Report failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 FAIL | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 CLEAN FAIL | run_id=$GITHUB_RUN_ID"
