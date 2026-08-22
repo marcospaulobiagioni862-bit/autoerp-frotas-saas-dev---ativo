@@ -1,0 +1,43 @@
+name: FINANCE-R22 Fix Patch V2 Anchor
+
+on:
+  push:
+    branches:
+      - finance-r22-deposit-receipt-idempotency
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r22-deposit-receipt-idempotency
+          fetch-depth: 0
+      - name: Narrow FinancialTransaction idempotency anchor
+        shell: python
+        run: |
+          from pathlib import Path
+          path=Path('.github/workflows/finance-r22-surgical-patch-v2.yml')
+          text=path.read_text(encoding='utf-8')
+          old='''          body = one(body,\n              "      createdById: userId,\\n      createdAt: now,",\n              "      createdById: userId,\\n      idempotencyKey: commandKey,\\n      createdAt: now,",\n              'transaction idempotency persistence')'''
+          new='''          body = one(body,\n              "      driverId: canonicalDriverId,\\n      createdById: userId,\\n      createdAt: now,\\n      updatedAt: now,",\n              "      driverId: canonicalDriverId,\\n      createdById: userId,\\n      idempotencyKey: commandKey,\\n      createdAt: now,\\n      updatedAt: now,",\n              'transaction idempotency persistence')'''
+          if old not in text:
+              print('FINANCE-R22 patch anchor already narrowed; no change')
+          else:
+              path.write_text(text.replace(old,new,1),encoding='utf-8')
+      - name: Commit only when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then exit 0; fi
+          git diff --check
+          test "$(git diff --name-only)" = ".github/workflows/finance-r22-surgical-patch-v2.yml"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/finance-r22-surgical-patch-v2.yml
+          git commit -m "FINANCE-R22 narrow transaction patch anchor"
+          git push origin HEAD:finance-r22-deposit-receipt-idempotency
