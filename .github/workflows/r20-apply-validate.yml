@@ -55,13 +55,31 @@ jobs:
       - name: Report apply start
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V4 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
 
       - name: Install dependencies
         run: npm install --ignore-scripts --package-lock=false
 
       - name: Apply exact R20 patch
         run: python3 .github/r20_apply_v2.py
+
+      - name: Repair audit regression for authoritative audit schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/server/__tests__/financeCancellationMetadataIntegration.ts')
+          s = p.read_text()
+          old_ar = """  const arAudit = await row(sql`SELECT new_state FROM audit_logs WHERE company_id=${companyA} AND entity_id='r20-rec-manual' AND action='CANCEL' ORDER BY timestamp DESC LIMIT 1`);\n  const arAuditState = typeof arAudit?.new_state === 'string' ? JSON.parse(arAudit.new_state) : arAudit?.new_state;"""
+          new_ar = """  const arAudit = await row(sql`SELECT changes FROM audit_logs WHERE company_id=${companyA} AND entity_id='r20-rec-manual' AND action='CANCEL' ORDER BY timestamp DESC LIMIT 1`);\n  const arChanges = typeof arAudit?.changes === 'string' ? JSON.parse(arAudit.changes) : arAudit?.changes;\n  const arAuditState = typeof arChanges?.newState === 'string' ? JSON.parse(arChanges.newState) : arChanges?.newState;"""
+          old_ap = """  const apAudit = await row(sql`SELECT new_state FROM audit_logs WHERE company_id=${companyA} AND entity_id='r20-pay-manual' AND action='CANCEL' ORDER BY timestamp DESC LIMIT 1`);\n  const apAuditState = typeof apAudit?.new_state === 'string' ? JSON.parse(apAudit.new_state) : apAudit?.new_state;"""
+          new_ap = """  const apAudit = await row(sql`SELECT changes FROM audit_logs WHERE company_id=${companyA} AND entity_id='r20-pay-manual' AND action='CANCEL' ORDER BY timestamp DESC LIMIT 1`);\n  const apChanges = typeof apAudit?.changes === 'string' ? JSON.parse(apAudit.changes) : apAudit?.changes;\n  const apAuditState = typeof apChanges?.newState === 'string' ? JSON.parse(apChanges.newState) : apChanges?.newState;"""
+          if s.count(old_ar) != 1 or s.count(old_ap) != 1:
+              raise SystemExit('audit regression anchors not found exactly once')
+          p.write_text(s.replace(old_ar, new_ar, 1).replace(old_ap, new_ap, 1))
+          print('FINANCE-R20 audit fixture: authoritative changes/newState schema applied')
+          PY
 
       - name: Scope gate
         shell: bash
@@ -96,6 +114,9 @@ jobs:
       - name: FINANCE-R19 transfer regression
         run: npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
 
+      - name: FINANCE-R18 reversal regression
+        run: npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
+
       - name: Production build gate
         run: npm run build
 
@@ -113,10 +134,10 @@ jobs:
       - name: Report apply success
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 PASS | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V4 PASS | run_id=$GITHUB_RUN_ID"
 
       - name: Report apply failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V3 FAIL | run_id=$GITHUB_RUN_ID"
+        run: gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 APPLY V4 FAIL | run_id=$GITHUB_RUN_ID"
