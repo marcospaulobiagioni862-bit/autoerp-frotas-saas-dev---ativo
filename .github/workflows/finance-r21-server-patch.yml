@@ -1,0 +1,58 @@
+name: FINANCE-R21 Surgical Server Patch
+
+on:
+  push:
+    branches:
+      - finance-r21-settlement-idempotency-concurrency
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-r21-settlement-idempotency-concurrency
+          fetch-depth: 0
+
+      - name: Patch only FINANCE-R21 server trust-boundary fields
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('server.ts')
+          text = path.read_text(encoding='utf-8')
+
+          conflict_old = """    message.includes('Não é possível cancelar') ||\n    message.includes('período financeiro') ||"""
+          conflict_new = """    message.includes('Não é possível cancelar') ||\n    message.includes('Chave de idempotência reutilizada') ||\n    message.includes('período financeiro') ||"""
+          if text.count(conflict_old) != 1:
+              raise SystemExit(f'FAIL: conflict mapping anchor count={text.count(conflict_old)} expected=1')
+          text = text.replace(conflict_old, conflict_new, 1)
+
+          command_old = """              description: req.body?.description,\n              userId: principal.userId,"""
+          command_new = """              description: req.body?.description,\n              idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',\n              userId: principal.userId,"""
+          if text.count(command_old) != 2:
+              raise SystemExit(f'FAIL: settlement command anchor count={text.count(command_old)} expected=2')
+          text = text.replace(command_old, command_new)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Prove surgical diff and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = "server.ts"
+          added_key_count="$(git diff -- server.ts | grep -c '^+.*idempotencyKey:' || true)"
+          test "$added_key_count" = "2"
+          git diff -- server.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server.ts
+          git commit -m "FINANCE-R21 wire settlement idempotency through server"
+          git push origin HEAD:finance-r21-settlement-idempotency-concurrency
