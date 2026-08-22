@@ -168,6 +168,7 @@ export interface FinancialTransaction {
   driverId?: string;
   supplierId?: string;
   createdById: string;
+  idempotencyKey?: string;
   createdAt: string;
   updatedAt: string;
 }
