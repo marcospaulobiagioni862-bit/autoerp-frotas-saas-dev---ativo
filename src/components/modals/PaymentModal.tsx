@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
-import { FinanceSettlementClient, SettlementAccountOption, SettlementPaymentMethodOption } from '../../api/financeSettlementClient';
+import {
+  FinanceSettlementClient,
+  SettlementAccountOption,
+  SettlementPaymentMethodOption,
+  createSettlementIdempotencyKey,
+} from '../../api/financeSettlementClient';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -18,16 +23,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const [amount, setAmount] = useState<number>(0);
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (payable) {
       setAmount(payable.balanceAmount || payable.updatedAmount);
+      setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
     }
   }, [payable]);
+
+  const rotateCommandKey = () => setIdempotencyKey(createSettlementIdempotencyKey());
 
   const loadOptions = async () => {
     try {
@@ -66,11 +75,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Pagamento efetuado via portal operacional',
+        idempotencyKey,
       });
 
       onSuccess();
       onClose();
     } catch (err: any) {
+      // Keep the key after an ambiguous failure so an unchanged retry cannot
+      // debit the financial account twice.
       setError(err.message || 'Erro ao registrar o pagamento.');
     } finally {
       setIsSubmitting(false);
@@ -130,7 +142,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               type="number"
               step="0.01"
               value={amount}
-              onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+              onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); rotateCommandKey(); }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
@@ -143,7 +155,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               </label>
               <select
                 value={selectedAccountId}
-                onChange={(e) => setSelectedAccountId(e.target.value)}
+                onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 required
               >
@@ -161,7 +173,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               </label>
               <select
                 value={selectedMethodId}
-                onChange={(e) => setSelectedMethodId(e.target.value)}
+                onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 required
               >
@@ -181,7 +193,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             <input
               type="date"
               value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
+              onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
@@ -193,7 +205,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
               placeholder="Ex: Pagamento autorizado pelo gerência..."
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-16"
             />
