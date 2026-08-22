@@ -33,8 +33,15 @@ export type CreateObligationParams = CreateReceivableParams & CreatePayableParam
 export type PaymentParams = SettlementParams;
 export type { TransferParams };
 
+type FinanceUowOptions = { financialPeriodLock?: 'SHARED' | 'EXCLUSIVE' };
+
 export class FinanceEngine {
-  public static uowRunner: ((companyId: string, callback: (txContext: ITransactionContext) => Promise<any>) => Promise<any>) | null = null;
+  public static uowRunner: ((
+    companyId: string,
+    callback: (txContext: ITransactionContext) => Promise<any>,
+    options?: FinanceUowOptions
+  ) => Promise<any>) | null = null;
+
   // 0. Recurring Rules Processing
   public static async processRecurringRules(params: ProcessRecurringRulesParams): Promise<RecurringProcessingResult> {
     return RecurringProcessingService.processRecurringRules(params);
@@ -49,6 +56,7 @@ export class FinanceEngine {
     }
     return TransferService.transferFunds(params);
   }
+
   // 1. Receivables
   public static async createReceivable(params: CreateReceivableParams): Promise<AccountReceivable[]> {
     return ReceivableService.create(params);
@@ -305,18 +313,44 @@ export class FinanceEngine {
 
   // 13. Financial Period Closing
   public static async closeFinancialPeriod(params: ClosePeriodParams): Promise<FinancialPeriod> {
+    if (this.uowRunner) {
+      return this.uowRunner(
+        params.companyId,
+        async (txContext) => FinancialPeriodService.closePeriod(params, txContext),
+        { financialPeriodLock: 'EXCLUSIVE' }
+      );
+    }
     return FinancialPeriodService.closePeriod(params);
   }
 
   public static async reopenFinancialPeriod(params: ReopenPeriodParams): Promise<FinancialPeriod> {
+    if (this.uowRunner) {
+      return this.uowRunner(
+        params.companyId,
+        async (txContext) => FinancialPeriodService.reopenPeriod(params, txContext),
+        { financialPeriodLock: 'EXCLUSIVE' }
+      );
+    }
     return FinancialPeriodService.reopenPeriod(params);
   }
 
   public static async getFinancialPeriods(companyId: string): Promise<FinancialPeriod[]> {
+    if (this.uowRunner) {
+      return this.uowRunner(companyId, async (txContext) =>
+        FinancialPeriodService.getPeriods(companyId, txContext)
+      );
+    }
     return FinancialPeriodService.getPeriods(companyId);
   }
 
   public static async assertFinancialPeriodOpen(companyId: string, date: string): Promise<void> {
+    if (this.uowRunner) {
+      return this.uowRunner(
+        companyId,
+        async (txContext) => FinancialPeriodService.assertDateOpen(companyId, date, txContext),
+        { financialPeriodLock: 'SHARED' }
+      );
+    }
     return FinancialPeriodService.assertDateOpen(companyId, date);
   }
 
