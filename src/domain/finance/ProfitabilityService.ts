@@ -116,7 +116,7 @@ export class ProfitabilityService {
             trackerExpense += amount;
           } else if (payOrigin === OriginType.DOCUMENTATION || desc.includes('ipva') || desc.includes('licenciamento') || desc.includes('documentação')) {
             documentationExpense += amount;
-          } else if (payOrigin === OriginType.TRAFFIC_TICKET_COMPANY || desc.includes('multa')) {
+          } else if (payOrigin === OriginType.TRAFFIC_TICKET_COMPANY || payOrigin === OriginType.TRAFFIC_TICKET_NIC || desc.includes('multa')) {
             finesCompanyExpense += amount;
           } else if (payOrigin === OriginType.FINANCING || desc.includes('financiamento')) {
             financingExpense += amount;
@@ -179,7 +179,7 @@ export class ProfitabilityService {
           trackerExpense += amount;
         } else if (p.originType === OriginType.DOCUMENTATION) {
           documentationExpense += amount;
-        } else if (p.originType === OriginType.TRAFFIC_TICKET_COMPANY) {
+        } else if (p.originType === OriginType.TRAFFIC_TICKET_COMPANY || p.originType === OriginType.TRAFFIC_TICKET_NIC) {
           finesCompanyExpense += amount;
         } else if (p.originType === OriginType.FINANCING) {
           financingExpense += amount;
