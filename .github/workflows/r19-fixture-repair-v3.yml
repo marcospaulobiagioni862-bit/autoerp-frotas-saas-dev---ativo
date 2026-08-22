@@ -1,0 +1,279 @@
+name: FINANCE-R19 Fixture Repair V3
+
+on:
+  push:
+    branches:
+      - finance-r19-fixture-repair-v3
+    paths:
+      - .github/workflows/r19-fixture-repair-v3.yml
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: finance-r19-v3-test-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-finance-r19-v3
+      JWT_AUDIENCE: autoerp-finance-r19-v3-client
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Report start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 START | run_id=$GITHUB_RUN_ID | commit=$GITHUB_SHA"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Patch exact historical transfer fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const ts = require('typescript');
+
+          const targets = [
+            'src/domain/finance/__tests__/financeTestRunner.ts',
+            'src/domain/finance/__tests__/wave1Verification.ts',
+            'src/domain/finance/__tests__/wave2Verification.ts',
+            'src/domain/finance/__tests__/wave3bVerification.ts',
+            'src/domain/finance/__tests__/wave3cVerification.ts',
+            'src/domain/finance/__tests__/wave3dVerification.ts',
+            'src/domain/finance/__tests__/wave5Verification.ts',
+            'src/server/__tests__/financeActiveAccountAuthorityIntegration.ts',
+            'tests/phase1_closure.test.ts',
+            'tests/phase1_cloudsql.test.ts',
+          ];
+
+          function isTransferCall(node, sf) {
+            if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return false;
+            if (node.expression.name.text !== 'transferFunds') return false;
+            const receiver = node.expression.expression.getText(sf).replace(/\s+/g, '');
+            return receiver === 'TransferService' || receiver === 'FinanceEngine';
+          }
+
+          let patched = 0;
+          for (const file of targets) {
+            let source = fs.readFileSync(file, 'utf8');
+            const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+            const edits = [];
+            let ordinal = 0;
+
+            function visit(node) {
+              if (isTransferCall(node, sf)) {
+                const arg = node.arguments[0];
+                if (arg && ts.isObjectLiteralExpression(arg)) {
+                  const hasKey = arg.properties.some((prop) => prop.name && prop.name.getText(sf) === 'idempotencyKey');
+                  if (!hasKey) {
+                    const userProp = arg.properties.find((prop) => prop.name && prop.name.getText(sf) === 'userId');
+                    if (!userProp) {
+                      const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+                      throw new Error(`No userId insertion anchor in ${file}:${line}`);
+                    }
+                    ordinal += 1;
+                    const start = userProp.getStart(sf);
+                    const lineStart = source.lastIndexOf('\n', start - 1) + 1;
+                    const beforeOnLine = source.slice(lineStart, start);
+                    const slug = path.basename(file).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+                    const key = `r19-compat-${slug}-${ordinal}`;
+                    const text = beforeOnLine.trim() === ''
+                      ? `idempotencyKey: '${key}',\n${beforeOnLine}`
+                      : `idempotencyKey: '${key}', `;
+                    edits.push({ pos: start, text });
+                    patched += 1;
+                  }
+                }
+              }
+              ts.forEachChild(node, visit);
+            }
+            visit(sf);
+
+            edits.sort((a, b) => b.pos - a.pos);
+            for (const edit of edits) {
+              source = source.slice(0, edit.pos) + edit.text + source.slice(edit.pos);
+            }
+            fs.writeFileSync(file, source);
+          }
+
+          if (patched !== 20) {
+            throw new Error(`Expected exactly 20 missing transfer idempotency keys, patched ${patched}`);
+          }
+
+          const r19Path = 'src/server/__tests__/financeTransferConcurrencyIntegration.ts';
+          let r19 = fs.readFileSync(r19Path, 'utf8');
+          const oldPeriod = "await db.execute(sql`INSERT INTO financial_periods(id,company_id,name,start_date,end_date,status,closed_at,closed_by_id,created_at,updated_at)\n    VALUES('r19-closed-period',${companyA},'Closed R19','2026-07-01','2026-07-31','CLOSED',NOW(),${adminA},NOW(),NOW())`);";
+          const newPeriod = "await db.execute(sql`INSERT INTO financial_periods(id,company_id,year,month,start_date,end_date,status,closed_at,closed_by)\n    VALUES('r19-closed-period',${companyA},2026,7,'2026-07-01','2026-07-31','CLOSED',NOW(),${adminA})`);";
+          if (!r19.includes(oldPeriod)) throw new Error('R19 legacy financial_periods fixture not found exactly once');
+          r19 = r19.replace(oldPeriod, newPeriod);
+          fs.writeFileSync(r19Path, r19);
+
+          const gatePath = '.github/workflows/finance-r19-gates.yml';
+          let gate = fs.readFileSync(gatePath, 'utf8');
+          const anchor = "      - name: FINANCE-R18 reversal concurrency regression\n        run: npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts\n";
+          const step = "      - name: FINANCE-R5 active account authority regression\n        run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts\n\n";
+          if (!gate.includes('FINANCE-R5 active account authority regression')) {
+            if (!gate.includes(anchor)) throw new Error('R19 gate insertion anchor missing');
+            gate = gate.replace(anchor, step + anchor);
+            fs.writeFileSync(gatePath, gate);
+          }
+
+          console.log(`Patched ${patched}/20 historical transfer callers and corrected R19 period fixture`);
+          NODE
+
+      - name: Verify transfer callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const ts = require('typescript');
+          const missing = [];
+          function isTransferCall(node, sf) {
+            if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return false;
+            if (node.expression.name.text !== 'transferFunds') return false;
+            const receiver = node.expression.expression.getText(sf).replace(/\s+/g, '');
+            return receiver === 'TransferService' || receiver === 'FinanceEngine';
+          }
+          function inspect(file) {
+            const source = fs.readFileSync(file, 'utf8');
+            const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+            function visit(node) {
+              if (isTransferCall(node, sf)) {
+                const arg = node.arguments[0];
+                if (arg && ts.isObjectLiteralExpression(arg)) {
+                  const hasKey = arg.properties.some((prop) => prop.name && prop.name.getText(sf) === 'idempotencyKey');
+                  if (!hasKey) missing.push(`${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`);
+                }
+              }
+              ts.forEachChild(node, visit);
+            }
+            visit(sf);
+          }
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (entry.name === 'node_modules' || entry.name === 'dist') continue;
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(full);
+              else if (/\.(ts|tsx)$/.test(entry.name)) inspect(full);
+            }
+          }
+          ['src', 'tests'].forEach((root) => fs.existsSync(root) && walk(root));
+          if (missing.length) throw new Error(`Transfer calls missing idempotencyKey:\n${missing.join('\n')}`);
+          console.log('All FinanceEngine/TransferService transfer callers carry idempotencyKey: PASS');
+          NODE
+
+      - name: Scope gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/finance-r19-gates.yml \
+            src/domain/finance/__tests__/financeTestRunner.ts \
+            src/domain/finance/__tests__/wave1Verification.ts \
+            src/domain/finance/__tests__/wave2Verification.ts \
+            src/domain/finance/__tests__/wave3bVerification.ts \
+            src/domain/finance/__tests__/wave3cVerification.ts \
+            src/domain/finance/__tests__/wave3dVerification.ts \
+            src/domain/finance/__tests__/wave5Verification.ts \
+            src/server/__tests__/financeActiveAccountAuthorityIntegration.ts \
+            src/server/__tests__/financeTransferConcurrencyIntegration.ts \
+            tests/phase1_closure.test.ts \
+            tests/phase1_cloudsql.test.ts | sort)"
+          test "$changed" = "$expected"
+          echo "FINANCE-R19 V3 scope gate: 12/12 expected files"
+
+      - name: TypeScript gate
+        run: npm run lint
+
+      - name: Apply migrations
+        run: node migrate_test_db.cjs
+
+      - name: FINANCE-R5 compatibility regression
+        run: npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+
+      - name: FINANCE-R19 PostgreSQL regression
+        run: npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+
+      - name: Finance transaction client regression
+        run: npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+
+      - name: FINANCE-R18 reversal regression
+        run: npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
+
+      - name: Production build gate
+        run: npm run build
+
+      - name: Commit exact validated repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/r19-fixture-repair-v3.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            .github/workflows/finance-r19-gates.yml \
+            .github/workflows/r19-fixture-repair-v3.yml \
+            src/domain/finance/__tests__/financeTestRunner.ts \
+            src/domain/finance/__tests__/wave1Verification.ts \
+            src/domain/finance/__tests__/wave2Verification.ts \
+            src/domain/finance/__tests__/wave3bVerification.ts \
+            src/domain/finance/__tests__/wave3cVerification.ts \
+            src/domain/finance/__tests__/wave3dVerification.ts \
+            src/domain/finance/__tests__/wave5Verification.ts \
+            src/server/__tests__/financeActiveAccountAuthorityIntegration.ts \
+            src/server/__tests__/financeTransferConcurrencyIntegration.ts \
+            tests/phase1_closure.test.ts \
+            tests/phase1_cloudsql.test.ts
+          git diff --cached --check
+          git commit -m "[skip ci] FINANCE-R19 repair transfer idempotency compatibility fixtures"
+          git push origin HEAD:finance-r19-fixture-repair-v3
+
+      - name: Report success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 PASS | run_id=$GITHUB_RUN_ID"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 223 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R19 FIXTURE REPAIR V3 FAIL | run_id=$GITHUB_RUN_ID"
