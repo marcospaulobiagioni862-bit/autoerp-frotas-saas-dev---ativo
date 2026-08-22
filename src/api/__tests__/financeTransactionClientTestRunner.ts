@@ -1,5 +1,9 @@
-import { FinanceTransactionApiError, FinanceTransactionClient } from '../financeTransactionClient';
-import { createReversalIdempotencyKey } from '../financeTransactionClient';
+import {
+  FinanceTransactionApiError,
+  FinanceTransactionClient,
+  createTransferIdempotencyKey,
+  createReversalIdempotencyKey,
+} from '../financeTransactionClient';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -61,12 +65,18 @@ async function run() {
       transferDate: '2026-08-18',
       paymentMethodId: 'pm-a',
       description: 'Internal transfer',
+      idempotencyKey: 'transfer-client-test-key',
     });
     assert(calls[0].url === '/api/finance/transfers', 'transfer URL');
     const transferBody = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
     assert(transferBody.sourceAccountId === 'acc-a' && transferBody.destinationAccountId === 'acc-b', 'transfer body');
+    assert(transferBody.idempotencyKey === 'transfer-client-test-key', 'transfer idempotency key');
     assert(!('companyId' in transferBody) && !('userId' in transferBody) && !('userName' in transferBody), 'transfer identity must not come from browser');
     assert(calls[0].init?.credentials === 'include', 'transfer credentials');
+    const transferKeyA = createTransferIdempotencyKey();
+    const transferKeyB = createTransferIdempotencyKey();
+    assert(transferKeyA.startsWith('transfer-'), 'generated transfer key prefix');
+    assert(transferKeyA !== transferKeyB, 'generated transfer keys must differ');
     passed++;
 
     const reversalKey = 'reversal-client-test-key';
@@ -112,7 +122,7 @@ async function run() {
         paymentMethodId: 'm',
         description: 'x',
         idempotencyKey: 'transfer-forbidden-test-key',
-      } as any);
+      });
     } catch (error) { failedClosed = error instanceof FinanceTransactionApiError && error.status === 403; }
     assert(failedClosed, '403 must fail closed');
     passed++;
