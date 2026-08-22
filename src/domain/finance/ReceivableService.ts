@@ -183,9 +183,15 @@ export class ReceivableService {
       txContext
     );
 
-    const receivable = txContext
-      ? await txContext.getReceivableRepo().findById(receivableId)
-      : await this.repo.findByIdForCompany(receivableId, companyId);
+    let receivable: AccountReceivable | null;
+    if (txContext) {
+      if (!txContext.findReceivableByIdWithLock) {
+        throw new Error('Autoridade transacional de Conta a Receber indisponível');
+      }
+      receivable = await txContext.findReceivableByIdWithLock(receivableId);
+    } else {
+      receivable = await this.repo.findByIdForCompany(receivableId, companyId);
+    }
 
     if (!receivable) {
       throw new Error('Conta a Receber não encontrada');
