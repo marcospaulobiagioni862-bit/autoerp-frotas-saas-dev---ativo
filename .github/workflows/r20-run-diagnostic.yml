@@ -1,0 +1,28 @@
+name: FINANCE-R20 Run Diagnostic
+
+on:
+  push:
+    branches:
+      - finance-r20-cancellation-metadata
+    paths:
+      - .github/workflows/r20-run-diagnostic.yml
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report latest isolated executor run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow r20-apply-validate.yml --branch finance-r20-cancellation-metadata --limit 1 --json databaseId --jq '.[0].databaseId')"
+          status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+          conclusion="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')"
+          gh issue comment 224 --repo "$GITHUB_REPOSITORY" --body "FINANCE-R20 RUN DIAGNOSTIC | run_id=$run_id | status=$status | conclusion=$conclusion"
