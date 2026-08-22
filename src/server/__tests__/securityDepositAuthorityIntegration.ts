@@ -106,7 +106,8 @@ async function run(): Promise<void> {
       paymentA,
       adminA,
       'Finance R4 Admin A',
-      tx
+      tx,
+      'finance-r4-receipt-1'
     )
   );
 
@@ -133,7 +134,8 @@ async function run(): Promise<void> {
       paymentA,
       adminA,
       'Finance R4 Admin A',
-      tx
+      tx,
+      'finance-r4-receipt-2'
     )
   );
   assert(second.deposit.originalAmount === 1000, 'principal changed after final receipt');
@@ -153,7 +155,7 @@ async function run(): Promise<void> {
   await rejects(
     () => UnitOfWork.run(companyA, async (tx) =>
       await DepositService.receiveSecurityDeposit(
-        companyA, contractA1, 'ignored', 'ignored', 0.01, accountA, paymentA, adminA, 'Finance R4 Admin A', tx
+        companyA, contractA1, 'ignored', 'ignored', 0.01, accountA, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-over'
       )
     ),
     'excede o saldo'
@@ -175,7 +177,7 @@ async function run(): Promise<void> {
   await rejects(
     () => UnitOfWork.run(companyA, async (tx) =>
       await DepositService.receiveSecurityDeposit(
-        companyA, contractA2, 'ignored', 'ignored', 100, accountB, paymentA, adminA, 'Finance R4 Admin A', tx
+        companyA, contractA2, 'ignored', 'ignored', 100, accountB, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-account'
       )
     ),
     'Conta financeira não encontrada'
@@ -183,7 +185,7 @@ async function run(): Promise<void> {
   await rejects(
     () => UnitOfWork.run(companyA, async (tx) =>
       await DepositService.receiveSecurityDeposit(
-        companyA, contractA2, 'ignored', 'ignored', 100, accountA, paymentB, adminA, 'Finance R4 Admin A', tx
+        companyA, contractA2, 'ignored', 'ignored', 100, accountA, paymentB, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-method'
       )
     ),
     'Forma de pagamento não encontrada'
@@ -191,7 +193,7 @@ async function run(): Promise<void> {
   await rejects(
     () => UnitOfWork.run(companyA, async (tx) =>
       await DepositService.receiveSecurityDeposit(
-        companyA, 'finance-r4-contract-b1', 'ignored', 'ignored', 100, accountA, paymentA, adminA, 'Finance R4 Admin A', tx
+        companyA, 'finance-r4-contract-b1', 'ignored', 'ignored', 100, accountA, paymentA, adminA, 'Finance R4 Admin A', tx, 'finance-r4-foreign-contract'
       )
     ),
     'Contrato não encontrado'

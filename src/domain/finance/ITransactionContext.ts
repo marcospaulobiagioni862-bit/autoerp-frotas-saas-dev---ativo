@@ -160,6 +160,7 @@ export interface ITransactionSecurityDepositRepository {
 }
 
 export interface ITransactionSecurityDepositMovementRepository {
+  findByFinancialTransactionId(financialTransactionId: string): Promise<SecurityDepositMovement | null>;
   create(item: SecurityDepositMovement): Promise<SecurityDepositMovement>;
 }
 

@@ -24,20 +24,21 @@ export class FinanceDepositClientTestRunner {
     tests.push(async () => {
       let url='';let credentials:RequestCredentials|undefined;let body:any;
       globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{url=String(input);credentials=init?.credentials;body=JSON.parse(String(init?.body));return new Response(JSON.stringify({deposit,movement}),{status:201})}) as typeof fetch;
-      const result=await FinanceDepositClient.receive({contractId:'contract-a',amount:400,financialAccountId:'acc-a',paymentMethodId:'pm-pix'});
+      const result=await FinanceDepositClient.receive({contractId:'contract-a',amount:400,financialAccountId:'acc-a',paymentMethodId:'pm-pix',idempotencyKey:'deposit-key-1'});
       if(url!=='/api/finance/security-deposits/receive'||credentials!=='include'||result.deposit.id!=='dep-1'||result.movement.id!=='mov-1')throw Error('deposit receive transport');
+      if(body.idempotencyKey!=='deposit-key-1')throw Error('deposit idempotency key missing from transport');
       for(const key of ['companyId','userId','userName','driverId','vehicleId'])if(key in body)throw Error(`browser authority leaked: ${key}`);
     });
 
     tests.push(async () => {
       globalThis.fetch=(async()=>new Response(JSON.stringify({error:'Unauthorized'}),{status:401})) as typeof fetch;
-      let thrown:unknown;try{await FinanceDepositClient.receive({contractId:'c',amount:1,financialAccountId:'a',paymentMethodId:'p'})}catch(e){thrown=e}
+      let thrown:unknown;try{await FinanceDepositClient.receive({contractId:'c',amount:1,financialAccountId:'a',paymentMethodId:'p',idempotencyKey:'deposit-key-401'})}catch(e){thrown=e}
       if(!(thrown instanceof FinanceDepositApiError)||thrown.status!==401)throw Error('receive must fail closed on 401');
     });
 
     tests.push(async () => {
       globalThis.fetch=(async()=>new Response(JSON.stringify({deposit:{id:'bad'},movement:{}}),{status:201})) as typeof fetch;
-      let failed=false;try{await FinanceDepositClient.receive({contractId:'c',amount:1,financialAccountId:'a',paymentMethodId:'p'})}catch{failed=true}
+      let failed=false;try{await FinanceDepositClient.receive({contractId:'c',amount:1,financialAccountId:'a',paymentMethodId:'p',idempotencyKey:'deposit-key-malformed'})}catch{failed=true}
       if(!failed)throw Error('malformed receive must fail closed');
     });
 
