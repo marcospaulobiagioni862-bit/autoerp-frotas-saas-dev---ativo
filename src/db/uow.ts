@@ -26,7 +26,13 @@ import { PostgresTrackerRepository } from './repositories/postgresTrackerReposit
 import { PostgresInsuranceRepository } from './repositories/postgresInsuranceRepository';
 import { PostgresTrafficTicketRepository } from './repositories/postgresTrafficTicketRepository';
 import { db } from './index';
-import { sql } from 'drizzle-orm';
+import {
+  accountPayables,
+  accountReceivables,
+  financialAccounts,
+  financialTransactions,
+} from './schema';
+import { and, eq, sql } from 'drizzle-orm';
 
 export interface UnitOfWorkOptions {
   financialPeriodLock?: 'SHARED' | 'EXCLUSIVE';
@@ -70,6 +76,30 @@ export class UnitOfWork {
         getTrackerRepo:()=>new PostgresTrackerRepository(tx),
         getInsuranceRepo:()=>new PostgresInsuranceRepository(tx),
         getTrafficTicketRepo:()=>new PostgresTrafficTicketRepository(tx),
+        findReceivableByIdWithLock:async(id:string)=>{
+          const rows=await tx.select().from(accountReceivables)
+            .where(and(eq(accountReceivables.companyId,companyId),eq(accountReceivables.id,id)))
+            .for('update').limit(1);
+          return rows[0]||null;
+        },
+        findPayableByIdWithLock:async(id:string)=>{
+          const rows=await tx.select().from(accountPayables)
+            .where(and(eq(accountPayables.companyId,companyId),eq(accountPayables.id,id)))
+            .for('update').limit(1);
+          return rows[0]||null;
+        },
+        findFinancialAccountByIdWithLock:async(id:string)=>{
+          const rows=await tx.select().from(financialAccounts)
+            .where(and(eq(financialAccounts.companyId,companyId),eq(financialAccounts.id,id)))
+            .for('update').limit(1);
+          return rows[0]||null;
+        },
+        findFinancialTransactionByIdempotencyKey:async(key:string)=>{
+          const rows=await tx.select().from(financialTransactions)
+            .where(and(eq(financialTransactions.companyId,companyId),eq(financialTransactions.idempotencyKey,key)))
+            .limit(1);
+          return rows[0]||null;
+        },
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };
