@@ -133,14 +133,6 @@ function dateOnly(value: unknown): string {
   return normalizeDate(String(value || '').slice(0, 10), 'Data financeira');
 }
 
-function daysBetween(start: unknown, end: unknown): number {
-  const startDate = dateOnly(start);
-  const endDate = dateOnly(end);
-  const [sy, sm, sd] = startDate.split('-').map(Number);
-  const [ey, em, ed] = endDate.split('-').map(Number);
-  return Math.floor((Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, ed)) / MS_PER_DAY);
-}
-
 function deterministicDaysBetween(start: unknown, end: unknown): number {
   const startDate = dateOnly(start);
   const endDate = dateOnly(end);
@@ -155,11 +147,9 @@ function numberValue(value: unknown, label = 'Valor financeiro'): number {
   return parsed;
 }
 
-function percent(value: unknown, label: string, max: number, decimals: number): number {
+function normalizePercent(value: unknown, label: string, max: number, decimals: number): number {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) {
-    throw new Error(`${label} inválido`);
-  }
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > max) throw new Error(`${label} inválido`);
   return Number(parsed.toFixed(decimals));
 }
 
@@ -171,10 +161,21 @@ function normalizeRuleInput(input: LateChargeRuleInput): LateChargeRuleInput {
   if (typeof input?.active !== 'boolean') throw new Error('Status da regra de atraso inválido');
   return {
     gracePeriodDays,
-    finePercent: percent(input.finePercent, 'Percentual de multa', 100, 4),
-    dailyInterestPercent: percent(input.dailyInterestPercent, 'Percentual diário de juros', 10, 6),
+    finePercent: normalizePercent(input.finePercent, 'Percentual de multa', 100, 4),
+    dailyInterestPercent: normalizePercent(input.dailyInterestPercent, 'Percentual diário de juros', 10, 6),
     active: input.active,
   };
+}
+
+function assertType(value: unknown): OverdueObligationType {
+  if (value === 'RECEIVABLE' || value === 'PAYABLE') return value;
+  throw new Error('Tipo de obrigação inválido para encargos de atraso');
+}
+
+function rawTransaction(txContext: any): any {
+  const tx = txContext?.getRawTransaction?.();
+  if (!tx) throw new Error('Autoridade PostgreSQL de encargos por atraso indisponível');
+  return tx;
 }
 
 function mapRule(row: RuleRow): LateChargeRule {
@@ -193,62 +194,7 @@ function mapRule(row: RuleRow): LateChargeRule {
   };
 }
 
-function assertType(value: unknown): OverdueObligationType {
-  if (value === 'RECEIVABLE' || value === 'PAYABLE') return value;
-  throw new Error('Tipo de obrigação inválido para encargos de atraso');
-}
-
-function rawTransaction(txContext: any): any {
-  const tx = txContext?.getRawTransaction?.();
-  if (!tx) throw new Error('Autoridade PostgreSQL de encargos por atraso indisponível');
-  return tx;
-}
-
-async function selectRules(tx: any, companyId: string, lock = false): Promise<LateChargeRule[]> {
-  const result = lock
-    ? await tx.execute(sql`
-        SELECT id,
-          company_id AS "companyId",
-          obligation_type AS "obligationType",
-          grace_period_days AS "gracePeriodDays",
-          fine_percent AS "finePercent",
-          daily_interest_percent AS "dailyInterestPercent",
-          active,
-          created_by AS "createdBy",
-          updated_by AS "updatedBy",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM finance_late_charge_rules
-        WHERE company_id = ${companyId}
-        ORDER BY obligation_type
-        FOR SHARE
-      `)
-    : await tx.execute(sql`
-        SELECT id,
-          company_id AS "companyId",
-          obligation_type AS "obligationType",
-          grace_period_days AS "gracePeriodDays",
-          fine_percent AS "finePercent",
-          daily_interest_percent AS "dailyInterestPercent",
-          active,
-          created_by AS "createdBy",
-          updated_by AS "updatedBy",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM finance_late_charge_rules
-        WHERE company_id = ${companyId}
-        ORDER BY obligation_type
-      `);
-  return ((result.rows || []) as RuleRow[])
-    .filter((row) => row.companyId === companyId)
-    .map(mapRule);
-}
-
-async function requireActiveRule(
-  tx: any,
-  companyId: string,
-  type: OverdueObligationType
-): Promise<LateChargeRule> {
+async function listRulesForCompany(tx: any, companyId: string): Promise<LateChargeRule[]> {
   const result = await tx.execute(sql`
     SELECT id,
       company_id AS "companyId",
@@ -259,8 +205,30 @@ async function requireActiveRule(
       active,
       created_by AS "createdBy",
       updated_by AS "updatedBy",
-      created_at AS "createdAt",
-      updated_at AS "updatedAt"
+      created_at::text AS "createdAt",
+      updated_at::text AS "updatedAt"
+    FROM finance_late_charge_rules
+    WHERE company_id = ${companyId}
+    ORDER BY obligation_type
+  `);
+  return ((result.rows || []) as RuleRow[])
+    .filter((row) => row.companyId === companyId)
+    .map(mapRule);
+}
+
+async function requireActiveRule(tx: any, companyId: string, type: OverdueObligationType): Promise<LateChargeRule> {
+  const result = await tx.execute(sql`
+    SELECT id,
+      company_id AS "companyId",
+      obligation_type AS "obligationType",
+      grace_period_days AS "gracePeriodDays",
+      fine_percent AS "finePercent",
+      daily_interest_percent AS "dailyInterestPercent",
+      active,
+      created_by AS "createdBy",
+      updated_by AS "updatedBy",
+      created_at::text AS "createdAt",
+      updated_at::text AS "updatedAt"
     FROM finance_late_charge_rules
     WHERE company_id = ${companyId} AND obligation_type = ${type}
     LIMIT 1
@@ -273,57 +241,31 @@ async function requireActiveRule(
   return mapRule(row);
 }
 
-async function lockedRows(
-  tx: any,
-  companyId: string,
-  type: OverdueObligationType
-): Promise<ObligationRow[]> {
+async function lockedRows(tx: any, companyId: string, type: OverdueObligationType): Promise<ObligationRow[]> {
   const result = type === 'RECEIVABLE'
     ? await tx.execute(sql`
         SELECT id,
-          company_id AS "companyId",
-          origin_type AS "originType",
-          origin_id AS "originId",
-          vehicle_id AS "vehicleId",
-          driver_id AS "driverId",
-          contract_id AS "contractId",
-          original_amount AS "originalAmount",
-          discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount",
-          interest_amount AS "interestAmount",
-          updated_amount AS "updatedAmount",
-          paid_amount AS "paidAmount",
-          balance_amount AS "balanceAmount",
-          due_date AS "dueDate",
-          competence_date AS "competenceDate",
-          status
+          company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
+          vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
+          original_amount AS "originalAmount", discount_amount AS "discountAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
+          due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_receivables
-        WHERE company_id = ${companyId}
-          AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
+        WHERE company_id = ${companyId} AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
         ORDER BY id
         FOR UPDATE
       `)
     : await tx.execute(sql`
         SELECT id,
-          company_id AS "companyId",
-          origin_type AS "originType",
-          origin_id AS "originId",
-          vehicle_id AS "vehicleId",
-          driver_id AS "driverId",
-          contract_id AS "contractId",
-          original_amount AS "originalAmount",
-          discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount",
-          interest_amount AS "interestAmount",
-          updated_amount AS "updatedAmount",
-          paid_amount AS "paidAmount",
-          balance_amount AS "balanceAmount",
-          due_date AS "dueDate",
-          competence_date AS "competenceDate",
-          status
+          company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
+          vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
+          original_amount AS "originalAmount", discount_amount AS "discountAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
+          due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_payables
-        WHERE company_id = ${companyId}
-          AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
+        WHERE company_id = ${companyId} AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
         ORDER BY id
         FOR UPDATE
       `);
@@ -336,43 +278,26 @@ async function persistObligation(
   actor: OverdueActor,
   type: OverdueObligationType,
   row: ObligationRow,
-  next: {
-    status: string;
-    fineAmount: number;
-    interestAmount: number;
-    updatedAmount: number;
-    balanceAmount: number;
-  },
+  next: { status: string; fineAmount: number; interestAmount: number; updatedAmount: number; balanceAmount: number },
   processingDate: string
 ): Promise<void> {
   const now = new Date().toISOString();
-  if (type === 'RECEIVABLE') {
-    const result = await tx.execute(sql`
-      UPDATE account_receivables
-      SET status = ${next.status},
-          fine_amount = ${next.fineAmount},
-          interest_amount = ${next.interestAmount},
-          updated_amount = ${next.updatedAmount},
-          balance_amount = ${next.balanceAmount},
-          updated_at = ${now}
-      WHERE company_id = ${actor.companyId} AND id = ${row.id}
-      RETURNING id
-    `);
-    if (!result.rows?.[0]) throw new Error('Conta a Receber não encontrada durante atualização de atraso');
-  } else {
-    const result = await tx.execute(sql`
-      UPDATE account_payables
-      SET status = ${next.status},
-          fine_amount = ${next.fineAmount},
-          interest_amount = ${next.interestAmount},
-          updated_amount = ${next.updatedAmount},
-          balance_amount = ${next.balanceAmount},
-          updated_at = ${now}
-      WHERE company_id = ${actor.companyId} AND id = ${row.id}
-      RETURNING id
-    `);
-    if (!result.rows?.[0]) throw new Error('Conta a Pagar não encontrada durante atualização de atraso');
-  }
+  const result = type === 'RECEIVABLE'
+    ? await tx.execute(sql`
+        UPDATE account_receivables
+        SET status=${next.status}, fine_amount=${next.fineAmount}, interest_amount=${next.interestAmount},
+            updated_amount=${next.updatedAmount}, balance_amount=${next.balanceAmount}, updated_at=${now}
+        WHERE company_id=${actor.companyId} AND id=${row.id}
+        RETURNING id
+      `)
+    : await tx.execute(sql`
+        UPDATE account_payables
+        SET status=${next.status}, fine_amount=${next.fineAmount}, interest_amount=${next.interestAmount},
+            updated_amount=${next.updatedAmount}, balance_amount=${next.balanceAmount}, updated_at=${now}
+        WHERE company_id=${actor.companyId} AND id=${row.id}
+        RETURNING id
+      `);
+  if (!result.rows?.[0]) throw new Error('Obrigação financeira não encontrada durante atualização de atraso');
 
   await txContext.getAuditLogRepo().create({
     id: generateUUID(),
@@ -387,11 +312,7 @@ async function persistObligation(
       updatedAmount: numberValue(row.updatedAmount),
       balanceAmount: numberValue(row.balanceAmount),
     }),
-    newState: JSON.stringify({
-      reason: 'AUTHORITATIVE_OVERDUE_RECALCULATION',
-      processingDate,
-      ...next,
-    }),
+    newState: JSON.stringify({ reason: 'AUTHORITATIVE_OVERDUE_RECALCULATION', processingDate, ...next }),
     userId: actor.userId,
     userName: actor.name,
     timestamp: now,
@@ -413,12 +334,7 @@ async function processType(
 
   for (const row of rows) {
     if (row.companyId !== actor.companyId) throw new Error('Descompasso de tenant na obrigação financeira');
-
-    // Preserve FINANCE-R15 policy: titles whose competence belongs to a closed
-    // period are skipped rather than retroactively mutated. The surrounding UOW
-    // holds the shared financial-period advisory lock during the whole batch.
-    const competenceDate = dateOnly(row.competenceDate);
-    if (!(await FinancialPeriodService.isDateOpen(actor.companyId, competenceDate, txContext))) {
+    if (!(await FinancialPeriodService.isDateOpen(actor.companyId, row.competenceDate, txContext))) {
       skippedClosedPeriod += 1;
       continue;
     }
@@ -428,24 +344,18 @@ async function processType(
     const paidAmount = numberValue(row.paidAmount);
     const discountAmount = numberValue(row.discountAmount);
 
-    // Deliberately preserve the pre-R12 business equation for the charge base:
-    // outstanding principal = original face value minus amounts already settled.
-    // Discount remains a separate authoritative adjustment in updatedAmount.
+    // FINANCE-R12 intentionally preserves the proven legacy charge-base equation:
+    // face value minus amounts already settled. Discount remains a separate
+    // authoritative adjustment in updatedAmount until a future business rule says otherwise.
     const outstandingPrincipal = roundCurrency(Math.max(0, originalAmount - paidAmount));
     const chargeable = daysOverdue > rule.gracePeriodDays;
-    const fineAmount = chargeable
-      ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100))
-      : 0;
+    const fineAmount = chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
     const interestAmount = chargeable
       ? roundCurrency(outstandingPrincipal * (rule.dailyInterestPercent / 100) * daysOverdue)
       : 0;
-    const updatedAmount = roundCurrency(
-      Math.max(0, originalAmount + fineAmount + interestAmount - discountAmount)
-    );
+    const updatedAmount = roundCurrency(Math.max(0, originalAmount + fineAmount + interestAmount - discountAmount));
     const balanceAmount = roundCurrency(Math.max(0, updatedAmount - paidAmount));
-    const status = daysOverdue > 0
-      ? 'OVERDUE'
-      : paidAmount > 0 ? 'PARTIALLY_PAID' : 'PENDING';
+    const status = daysOverdue > 0 ? 'OVERDUE' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'PENDING';
 
     const changed =
       row.status !== status ||
@@ -458,64 +368,38 @@ async function processType(
       unchanged += 1;
       continue;
     }
-
-    await persistObligation(
-      tx,
-      txContext,
-      actor,
-      type,
-      row,
-      { status, fineAmount, interestAmount, updatedAmount, balanceAmount },
-      processingDate
-    );
+    await persistObligation(tx, txContext, actor, type, row, { status, fineAmount, interestAmount, updatedAmount, balanceAmount }, processingDate);
     updated += 1;
   }
 
-  return {
-    type,
-    processingDate,
-    examined: rows.length,
-    updated,
-    unchanged,
-    skippedClosedPeriod,
-  };
+  return { type, processingDate, examined: rows.length, updated, unchanged, skippedClosedPeriod };
 }
 
-async function activeReportRows(
-  tx: any,
-  companyId: string,
-  type: OverdueObligationType
-): Promise<ObligationRow[]> {
+async function reportRows(tx: any, companyId: string, type: OverdueObligationType): Promise<ObligationRow[]> {
   const result = type === 'RECEIVABLE'
     ? await tx.execute(sql`
         SELECT id,
-          company_id AS "companyId",
-          origin_type AS "originType", origin_id AS "originId",
+          company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
           fine_amount AS "fineAmount", interest_amount AS "interestAmount",
-          updated_amount AS "updatedAmount", paid_amount AS "paidAmount",
-          balance_amount AS "balanceAmount", due_date AS "dueDate", competence_date AS "competenceDate", status
+          updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
+          due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_receivables
-        WHERE company_id = ${companyId}
-          AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
-          AND balance_amount > 0
-        ORDER BY due_date, id
+        WHERE company_id=${companyId} AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE') AND balance_amount > 0
+        ORDER BY due_date,id
       `)
     : await tx.execute(sql`
         SELECT id,
-          company_id AS "companyId",
-          origin_type AS "originType", origin_id AS "originId",
+          company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
           fine_amount AS "fineAmount", interest_amount AS "interestAmount",
-          updated_amount AS "updatedAmount", paid_amount AS "paidAmount",
-          balance_amount AS "balanceAmount", due_date AS "dueDate", competence_date AS "competenceDate", status
+          updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
+          due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_payables
-        WHERE company_id = ${companyId}
-          AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')
-          AND balance_amount > 0
-        ORDER BY due_date, id
+        WHERE company_id=${companyId} AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE') AND balance_amount > 0
+        ORDER BY due_date,id
       `);
   return ((result.rows || []) as ObligationRow[]).filter((row) => row.companyId === companyId);
 }
@@ -527,21 +411,12 @@ export class FinanceOverdueAuthority {
 
   static async listRules(actor: OverdueActor): Promise<LateChargeRule[]> {
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
-      await FinancialAuthorizationService.authorize(
-        actor.userId,
-        actor.companyId,
-        'VIEW_FINANCIAL',
-        txContext
-      );
-      return await selectRules(rawTransaction(txContext), actor.companyId);
+      await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'VIEW_FINANCIAL', txContext);
+      return await listRulesForCompany(rawTransaction(txContext), actor.companyId);
     });
   }
 
-  static async upsertRule(
-    actor: OverdueActor,
-    typeInput: OverdueObligationType,
-    input: LateChargeRuleInput
-  ): Promise<LateChargeRule> {
+  static async upsertRule(actor: OverdueActor, typeInput: OverdueObligationType, input: LateChargeRuleInput): Promise<LateChargeRule> {
     const type = assertType(typeInput);
     const ruleInput = normalizeRuleInput(input);
 
@@ -559,9 +434,9 @@ export class FinanceOverdueAuthority {
           grace_period_days AS "gracePeriodDays", fine_percent AS "finePercent",
           daily_interest_percent AS "dailyInterestPercent", active,
           created_by AS "createdBy", updated_by AS "updatedBy",
-          created_at AS "createdAt", updated_at AS "updatedAt"
+          created_at::text AS "createdAt", updated_at::text AS "updatedAt"
         FROM finance_late_charge_rules
-        WHERE company_id = ${actor.companyId} AND obligation_type = ${type}
+        WHERE company_id=${actor.companyId} AND obligation_type=${type}
         LIMIT 1
         FOR UPDATE
       `);
@@ -570,76 +445,56 @@ export class FinanceOverdueAuthority {
       const id = existing?.id || generateUUID();
       const now = new Date().toISOString();
 
-      const result = await tx.execute(sql`
+      const savedResult = await tx.execute(sql`
         INSERT INTO finance_late_charge_rules(
-          id, company_id, obligation_type, grace_period_days, fine_percent,
-          daily_interest_percent, active, created_by, updated_by, created_at, updated_at
+          id,company_id,obligation_type,grace_period_days,fine_percent,daily_interest_percent,
+          active,created_by,updated_by,created_at,updated_at
         ) VALUES (
-          ${id}, ${actor.companyId}, ${type}, ${ruleInput.gracePeriodDays}, ${ruleInput.finePercent},
-          ${ruleInput.dailyInterestPercent}, ${ruleInput.active}, ${existing?.createdBy || actor.userId},
-          ${actor.userId}, ${existing?.createdAt || now}, ${now}
+          ${id},${actor.companyId},${type},${ruleInput.gracePeriodDays},${ruleInput.finePercent},
+          ${ruleInput.dailyInterestPercent},${ruleInput.active},${existing?.createdBy || actor.userId},
+          ${actor.userId},${existing?.createdAt || now},${now}
         )
         ON CONFLICT (company_id, obligation_type) DO UPDATE SET
-          grace_period_days = EXCLUDED.grace_period_days,
-          fine_percent = EXCLUDED.fine_percent,
-          daily_interest_percent = EXCLUDED.daily_interest_percent,
-          active = EXCLUDED.active,
-          updated_by = EXCLUDED.updated_by,
-          updated_at = EXCLUDED.updated_at
+          grace_period_days=EXCLUDED.grace_period_days,
+          fine_percent=EXCLUDED.fine_percent,
+          daily_interest_percent=EXCLUDED.daily_interest_percent,
+          active=EXCLUDED.active,
+          updated_by=EXCLUDED.updated_by,
+          updated_at=EXCLUDED.updated_at
         RETURNING id,
           company_id AS "companyId", obligation_type AS "obligationType",
           grace_period_days AS "gracePeriodDays", fine_percent AS "finePercent",
           daily_interest_percent AS "dailyInterestPercent", active,
           created_by AS "createdBy", updated_by AS "updatedBy",
-          created_at AS "createdAt", updated_at AS "updatedAt"
+          created_at::text AS "createdAt", updated_at::text AS "updatedAt"
       `);
-      const row = result.rows?.[0] as RuleRow | undefined;
-      if (!row || row.companyId !== actor.companyId) throw new Error('Falha ao persistir regra autoritativa de atraso');
-      const saved = mapRule(row);
+      const savedRow = savedResult.rows?.[0] as RuleRow | undefined;
+      if (!savedRow || savedRow.companyId !== actor.companyId) throw new Error('Falha ao persistir regra autoritativa de atraso');
+      const saved = mapRule(savedRow);
 
       await txContext.getAuditLogRepo().create({
-        id: generateUUID(),
-        companyId: actor.companyId,
-        entityName: 'FinancialLateChargeRule',
-        entityId: saved.id,
+        id: generateUUID(), companyId: actor.companyId,
+        entityName: 'FinancialLateChargeRule', entityId: saved.id,
         action: existing ? AuditAction.UPDATE : AuditAction.CREATE,
         previousState: existing ? JSON.stringify(existing) : undefined,
-        newState: JSON.stringify(saved),
-        userId: actor.userId,
-        userName: actor.name,
-        timestamp: now,
+        newState: JSON.stringify(saved), userId: actor.userId, userName: actor.name, timestamp: now,
       });
       return saved;
     });
   }
 
-  static async process(
-    actor: OverdueActor,
-    typeInput: OverdueProcessType,
-    processingDateInput: unknown
-  ): Promise<OverdueProcessResult[]> {
+  static async process(actor: OverdueActor, typeInput: OverdueProcessType, processingDateInput: unknown): Promise<OverdueProcessResult[]> {
     const processingDate = normalizeDate(processingDateInput);
-    const types: OverdueObligationType[] = typeInput === 'BOTH'
-      ? ['RECEIVABLE', 'PAYABLE']
-      : [assertType(typeInput)];
+    const types: OverdueObligationType[] = typeInput === 'BOTH' ? ['RECEIVABLE', 'PAYABLE'] : [assertType(typeInput)];
 
     return await UnitOfWork.run(
       actor.companyId,
       async (txContext: any) => {
-        await FinancialAuthorizationService.authorize(
-          actor.userId,
-          actor.companyId,
-          'FINANCIAL_OVERDUE_PROCESS',
-          txContext
-        );
+        await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_OVERDUE_PROCESS', txContext);
         const tx = rawTransaction(txContext);
-
-        // Resolve every required rule before any title mutation so BOTH fails
-        // atomically if either side has no explicit active configuration.
         const rules = new Map<OverdueObligationType, LateChargeRule>();
-        for (const type of types) {
-          rules.set(type, await requireActiveRule(tx, actor.companyId, type));
-        }
+        // Resolve all rules before the first mutation so BOTH is atomic if one side is unconfigured.
+        for (const type of types) rules.set(type, await requireActiveRule(tx, actor.companyId, type));
 
         const results: OverdueProcessResult[] = [];
         for (const type of types) {
@@ -651,14 +506,11 @@ export class FinanceOverdueAuthority {
     );
   }
 
-  static async getDelinquentReceivables(
-    actor: OverdueActor,
-    processingDateInput: unknown
-  ): Promise<DelinquentReceivable[]> {
+  static async getDelinquentReceivables(actor: OverdueActor, processingDateInput: unknown): Promise<DelinquentReceivable[]> {
     const processingDate = normalizeDate(processingDateInput);
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'VIEW_FINANCIAL', txContext);
-      const rows = await activeReportRows(rawTransaction(txContext), actor.companyId, 'RECEIVABLE');
+      const rows = await reportRows(rawTransaction(txContext), actor.companyId, 'RECEIVABLE');
       return rows.flatMap((row) => {
         const daysOverdue = deterministicDaysBetween(row.dueDate, processingDate);
         if (daysOverdue <= 0) return [];
@@ -670,7 +522,7 @@ export class FinanceOverdueAuthority {
           driverId: row.driverId || undefined,
           vehicleId: row.vehicleId || undefined,
           contractId: row.contractId || undefined,
-          dueDate: dateOnly(row.dueDate),
+          dueDate: row.dueDate,
           daysOverdue,
           originalAmount: numberValue(row.originalAmount),
           receivedAmount: numberValue(row.paidAmount),
@@ -691,50 +543,24 @@ export class FinanceOverdueAuthority {
     const processingDate = normalizeDate(processingDateInput);
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'VIEW_FINANCIAL', txContext);
-      const rows = await activeReportRows(rawTransaction(txContext), actor.companyId, type);
-      let aVencer = 0;
-      let u1_7 = 0;
-      let u8_15 = 0;
-      let u16_30 = 0;
-      let u31_60 = 0;
-      let u61_90 = 0;
-      let u90Plus = 0;
-
+      const rows = await reportRows(rawTransaction(txContext), actor.companyId, type);
+      let aVencer=0,u1_7=0,u8_15=0,u16_30=0,u31_60=0,u61_90=0,u90Plus=0;
       for (const row of rows) {
         const value = numberValue(row.balanceAmount);
-        const overdueDays = deterministicDaysBetween(row.dueDate, processingDate);
-        if (overdueDays <= 0) aVencer += value;
-        else if (overdueDays <= 7) u1_7 += value;
-        else if (overdueDays <= 15) u8_15 += value;
-        else if (overdueDays <= 30) u16_30 += value;
-        else if (overdueDays <= 60) u31_60 += value;
-        else if (overdueDays <= 90) u61_90 += value;
+        const days = deterministicDaysBetween(row.dueDate, processingDate);
+        if (days <= 0) aVencer += value;
+        else if (days <= 7) u1_7 += value;
+        else if (days <= 15) u8_15 += value;
+        else if (days <= 30) u16_30 += value;
+        else if (days <= 60) u31_60 += value;
+        else if (days <= 90) u61_90 += value;
         else u90Plus += value;
       }
-
-      aVencer = roundCurrency(aVencer);
-      u1_7 = roundCurrency(u1_7);
-      u8_15 = roundCurrency(u8_15);
-      u16_30 = roundCurrency(u16_30);
-      u31_60 = roundCurrency(u31_60);
-      u61_90 = roundCurrency(u61_90);
-      u90Plus = roundCurrency(u90Plus);
-
+      aVencer=roundCurrency(aVencer);u1_7=roundCurrency(u1_7);u8_15=roundCurrency(u8_15);
+      u16_30=roundCurrency(u16_30);u31_60=roundCurrency(u31_60);u61_90=roundCurrency(u61_90);u90Plus=roundCurrency(u90Plus);
       return {
-        'A VENCER': aVencer,
-        '1-7': u1_7,
-        '8-15': u8_15,
-        '16-30': u16_30,
-        '31-60': u31_60,
-        '61-90': u61_90,
-        '90+': u90Plus,
-        aVencer,
-        '1_7': u1_7,
-        '8_15': u8_15,
-        '16_30': u16_30,
-        '31_60': u31_60,
-        '61_90': u61_90,
-        '90_plus': u90Plus,
+        'A VENCER':aVencer,'1-7':u1_7,'8-15':u8_15,'16-30':u16_30,'31-60':u31_60,'61-90':u61_90,'90+':u90Plus,
+        aVencer,'1_7':u1_7,'8_15':u8_15,'16_30':u16_30,'31_60':u31_60,'61_90':u61_90,'90_plus':u90Plus,
       };
     });
   }
