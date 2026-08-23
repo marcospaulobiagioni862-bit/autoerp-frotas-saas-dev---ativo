@@ -72,7 +72,7 @@ jobs:
           grep -F "FOR UPDATE" src/server/financeOverdueAuthority.ts
           grep -F "AUTHORITATIVE_OVERDUE_RECALCULATION" src/server/financeOverdueAuthority.ts
           grep -F "const allowed = new Set(['type', 'processingDate']);" src/server/financeOverdueRoutes.ts
-          grep -F "registerFinanceOverdueRoutes" src/server/trafficTicketRoutes.ts
+          grep -F "registerFinanceOverdueRoutes" src/server/recurringRoutes.ts
           if grep -Fq "localRepositories" src/server/financeOverdueAuthority.ts; then
             echo "FAIL: R12 authoritative overdue processing references local/browser repositories"
             exit 1
