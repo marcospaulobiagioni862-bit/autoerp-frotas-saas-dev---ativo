@@ -83,7 +83,7 @@ export async function runAdminUserAuthorityIntegration(): Promise<void> {
   assert(deactivated.active === false, 'target user must be returned inactive');
   const persistedInactive = await row(sql`SELECT active FROM users WHERE id=${userA} AND company_id=${companyA}`);
   assert(persistedInactive?.active === false, 'target user must persist active=false');
-  const deactivationAudit = await row(sql`SELECT entity_type,entity_id,action,changes FROM audit_logs WHERE company_id=${companyA} AND entity_id=${userA} ORDER BY created_at DESC LIMIT 1`);
+  const deactivationAudit = await row(sql`SELECT entity_type,entity_id,action,changes FROM audit_logs WHERE company_id=${companyA} AND entity_id=${userA} ORDER BY timestamp DESC LIMIT 1`);
   assert(deactivationAudit?.entity_type === 'User' && deactivationAudit?.action === 'UPDATE', 'status mutation must append User UPDATE audit');
   const changeText = JSON.stringify(deactivationAudit?.changes || {});
   assert(changeText.includes('false'), 'audit evidence must contain resulting inactive state');
