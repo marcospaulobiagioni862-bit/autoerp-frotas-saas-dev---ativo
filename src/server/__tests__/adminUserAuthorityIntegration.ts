@@ -45,7 +45,8 @@ async function rejects<T extends Error>(fn: () => Promise<unknown>, type: new (.
 
 async function seed(): Promise<void> {
   await db.execute(sql`DELETE FROM audit_logs WHERE company_id IN (${companyA}, ${companyB})`);
-  await db.execute(sql`DELETE FROM auth_credentials WHERE company_id IN (${companyA}, ${companyB})`);
+  // user_credentials references users with ON DELETE CASCADE, so deleting the
+  // tenant-scoped fixture users also removes any credential rows safely.
   await db.execute(sql`DELETE FROM users WHERE company_id IN (${companyA}, ${companyB})`);
   await db.execute(sql`DELETE FROM companies WHERE id IN (${companyA}, ${companyB})`);
   await db.execute(sql`INSERT INTO companies(id,name,status,created_at,updated_at) VALUES
