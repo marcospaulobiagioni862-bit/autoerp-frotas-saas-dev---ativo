@@ -6,10 +6,11 @@ import { PayablesView } from './PayablesView';
 import { TransactionsView } from './TransactionsView';
 import { DREReportView } from './DREReportView';
 import { FinancialPeriodsView } from './FinancialPeriodsView';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange } from 'lucide-react';
+import { FinancialMasterDataView } from './FinancialMasterDataView';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
-type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'periods' | 'dre';
+type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
   initialSubTab?: FinanceSubTab;
@@ -35,6 +36,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
     { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
+    { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
   ];
 
   return (
@@ -82,12 +84,9 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         {activeSubTab === 'transactions' && (
           <TransactionsView onOpenTransferModal={onOpenTransferModal} />
         )}
-        {activeSubTab === 'periods' && (
-          <FinancialPeriodsView />
-        )}
-        {activeSubTab === 'dre' && (
-          <DREReportView />
-        )}
+        {activeSubTab === 'periods' && <FinancialPeriodsView />}
+        {activeSubTab === 'dre' && <DREReportView />}
+        {activeSubTab === 'settings' && <FinancialMasterDataView />}
       </div>
     </div>
   );
