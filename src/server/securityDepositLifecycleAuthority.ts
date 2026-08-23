@@ -52,6 +52,12 @@ const financialDate = (value?: string): string => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) throw new Error('Data da devolução inválida');
   return date;
 };
+const persistedFinancialDate = (value: unknown): string => {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const text = String(value ?? '');
+  const match = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return match?.[0] || text;
+};
 
 export class SecurityDepositLifecycleAuthority {
   static async returnDeposit(actor: AuthenticatedPrincipal, command: ReturnSecurityDepositCommand): Promise<Result> {
@@ -73,7 +79,7 @@ export class SecurityDepositLifecycleAuthority {
         const tx = await ctx.getTransactionRepo().findById(prior.financial_transaction_id);
         const movement = await ctx.getSecurityDepositMovementRepo().findByFinancialTransactionId(prior.financial_transaction_id);
         const deposit = await ctx.getSecurityDepositRepo().findById(command.depositId);
-        if (!tx || !movement || !deposit || tx.financialAccountId !== command.financialAccountId || tx.paymentMethodId !== command.paymentMethodId || tx.transactionDate !== transactionDate || roundCurrency(Number(tx.amount)) !== amount) throw new Error('Evidência idempotente da devolução de caução está inconsistente');
+        if (!tx || !movement || !deposit || tx.financialAccountId !== command.financialAccountId || tx.paymentMethodId !== command.paymentMethodId || persistedFinancialDate(tx.transactionDate) !== transactionDate || roundCurrency(Number(tx.amount)) !== amount) throw new Error('Evidência idempotente da devolução de caução está inconsistente');
         return { deposit, movement };
       }
 
