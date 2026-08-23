@@ -156,7 +156,7 @@ export class SecurityDepositLifecycleAuthority {
       `);
       await auditRepo.create({
         id: generateUUID(), companyId, entityName: 'SecurityDeposit', entityId: deposit.id,
-        action: AuditAction.UPDATE, userId: actor.userId, userName: actor.userName,
+        action: AuditAction.UPDATE, userId: actor.userId, userName: actor.name,
         timestamp: now, previousState: JSON.stringify(previousState), newState: JSON.stringify(updatedDeposit),
       });
       return { deposit: updatedDeposit, movement };
@@ -249,7 +249,7 @@ export class SecurityDepositLifecycleAuthority {
       `);
       await auditRepo.create({
         id: generateUUID(), companyId, entityName: 'SecurityDeposit', entityId: deposit.id,
-        action: AuditAction.UPDATE, userId: actor.userId, userName: actor.userName,
+        action: AuditAction.UPDATE, userId: actor.userId, userName: actor.name,
         timestamp: now, previousState: JSON.stringify(previousState), newState: JSON.stringify(updatedDeposit),
       });
       return { deposit: updatedDeposit, movement };
