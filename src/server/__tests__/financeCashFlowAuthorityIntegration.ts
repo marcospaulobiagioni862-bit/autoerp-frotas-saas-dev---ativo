@@ -54,8 +54,8 @@ async function seed(): Promise<void> {
     (${categoryExpenseA},${companyA},'Despesas R24','EXPENSE',true,NOW(),NOW()),
     (${categoryIncomeB},${companyB},'Receitas R24 B','INCOME',true,NOW(),NOW())`);
 
-  -- initial balance is the accounting source; current balance is seeded to the
-  -- fully reconciled post-period balance only as an independent consistency check.
+  // initial balance is the accounting source; current balance is seeded to the
+  // fully reconciled post-period balance only as an independent consistency check.
   await db.execute(sql`INSERT INTO financial_accounts(
     id,company_id,name,type,initial_balance,current_balance,status,created_at,updated_at
   ) VALUES
