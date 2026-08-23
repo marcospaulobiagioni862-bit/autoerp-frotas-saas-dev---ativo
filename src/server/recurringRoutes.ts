@@ -208,7 +208,7 @@ export function registerRecurringRoutes(app: Express): void {
 
   app.get('/api/notifications/unread-count', async (req, res) => {
     const actor = requirePrincipal(req, res, 'VIEW_NOTIFICATIONS'); if (!actor) return;
-    try { res.json({ count: await RecurringAuthorityService.unreadCount(actor.companyId, actor.userId, limit) }); }
+    try { res.json({ count: await RecurringAuthorityService.unreadCount(actor.companyId, actor.userId) }); }
     catch (error) { sendError(res, error); }
   });
 
