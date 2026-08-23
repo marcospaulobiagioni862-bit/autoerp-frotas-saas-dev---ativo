@@ -58,6 +58,10 @@ const persistedFinancialDate = (value: unknown): string => {
   const match = text.match(/^\d{4}-\d{2}-\d{2}/);
   return match?.[0] || text;
 };
+const lockLifecycleCommand = async (raw: any, companyId: string, idempotencyKey: string): Promise<void> => {
+  const lockKey = `security-deposit:${companyId}:${idempotencyKey}`;
+  await raw.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+};
 
 export class SecurityDepositLifecycleAuthority {
   static async returnDeposit(actor: AuthenticatedPrincipal, command: ReturnSecurityDepositCommand): Promise<Result> {
@@ -72,6 +76,7 @@ export class SecurityDepositLifecycleAuthority {
       const raw = ctx.getRawTransaction?.();
       if (!raw) throw new Error('Autoridade PostgreSQL da caução indisponível');
 
+      await lockLifecycleCommand(raw, companyId, idempotencyKey);
       const priorRows = await raw.execute(sql`SELECT * FROM security_deposit_commands WHERE company_id=${companyId} AND idempotency_key=${idempotencyKey} FOR UPDATE`);
       const prior = priorRows.rows?.[0];
       if (prior) {
@@ -142,6 +147,7 @@ export class SecurityDepositLifecycleAuthority {
       const raw = ctx.getRawTransaction?.();
       if (!raw) throw new Error('Autoridade PostgreSQL da caução indisponível');
 
+      await lockLifecycleCommand(raw, companyId, idempotencyKey);
       const priorRows = await raw.execute(sql`SELECT * FROM security_deposit_commands WHERE company_id=${companyId} AND idempotency_key=${idempotencyKey} FOR UPDATE`);
       const prior = priorRows.rows?.[0];
       if (prior) {
