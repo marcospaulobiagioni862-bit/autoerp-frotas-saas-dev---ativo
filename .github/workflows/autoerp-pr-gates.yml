@@ -127,6 +127,22 @@ jobs:
           fi
           echo "FINANCE-R14 source invariants: PASS"
 
+      - name: FINANCE-R16 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "security_deposit_commands" drizzle/0025_finance_security_deposit_lifecycle_authority.sql
+          grep -F "FOR UPDATE" src/server/securityDepositLifecycleAuthority.ts
+          grep -F "financialPeriodLock: 'SHARED'" src/server/securityDepositLifecycleAuthority.ts
+          grep -F "registerSecurityDepositLifecycleRoutes" src/server/recurringRoutes.ts
+          grep -F "/api/finance/security-deposits/return" src/server/securityDepositLifecycleRoutes.ts
+          grep -F "/api/finance/security-deposits/compensate" src/server/securityDepositLifecycleRoutes.ts
+          if grep -Fq "localRepositories" src/server/securityDepositLifecycleAuthority.ts src/server/securityDepositLifecycleRoutes.ts; then
+            echo "FAIL: R16 lifecycle authority references browser/local repositories"
+            exit 1
+          fi
+          echo "FINANCE-R16 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -164,6 +180,7 @@ jobs:
           npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
           npx tsx src/server/__tests__/financialPeriodAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeDepositIdempotencyIntegration.ts
+          npx tsx src/server/__tests__/financeDepositLifecycleAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
           npx tsx src/server/__tests__/financeCancellationMetadataIntegration.ts
           npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
@@ -213,7 +230,6 @@ jobs:
           const files = fs.readdirSync(root).filter((file) => fs.statSync(path.join(root, file)).isFile());
           const chunks = files.map((file) => ({ file, text: fs.readFileSync(path.join(root, file), 'utf8') }));
           const bundle = chunks.map(({ text }) => text).join('\n');
-
           const forbidden = [
             ['AutoERP_DB', 'legacy StorageAdapter/IndexedDB graph'],
             ['__autoerp_executive_decisions_v1_', 'browser-local decision authority'],
@@ -228,14 +244,7 @@ jobs:
             ['EnterprisePerformanceTestRunner', 'performance browser test runner'],
             ['42/42', 'fabricated production test badge'],
           ];
-
-          for (const [marker, label] of forbidden) {
-            if (chunks.some(({ text }) => text.includes(marker))) {
-              console.error(`FAIL: ${label} found in production frontend bundle (${marker})`);
-              process.exit(1);
-            }
-          }
-
+          for (const [marker, label] of forbidden) if (chunks.some(({ text }) => text.includes(marker))) { console.error(`FAIL: ${label} found in production frontend bundle (${marker})`); process.exit(1); }
           const required = [
             ['COCKPIT SERVER AUTHORITY', 'trusted production navigation'],
             ['Server authority required', 'fail-closed experimental cockpit boundary'],
@@ -244,13 +253,6 @@ jobs:
             ['/api/operations/executive/snapshot', 'executive authority'],
             ['BROWSER_WRITE_DISABLED_SERVER_AUTHORITY_REQUIRED', 'legacy write fail-closed bridge'],
           ];
-
-          for (const [marker, label] of required) {
-            if (!bundle.includes(marker)) {
-              console.error(`FAIL: ${label} missing from production frontend bundle (${marker})`);
-              process.exit(1);
-            }
-          }
-
+          for (const [marker, label] of required) if (!bundle.includes(marker)) { console.error(`FAIL: ${label} missing from production frontend bundle (${marker})`); process.exit(1); }
           console.log('PASS: AutoERP consolidated production trust boundary');
           NODE
