@@ -3,7 +3,7 @@ import { LockKeyhole, Server, ShieldAlert } from 'lucide-react';
 import { OperationalIncidentCenterView } from '../incidents/OperationalIncidentCenterView';
 import { ExecutiveOperationsCenterView } from '../operations/ExecutiveOperationsCenterView';
 import { OperationalTasksView } from '../tasks/OperationalTasksView';
-import { ProductionUserAdministrationView } from '../admin/ProductionUserAdministrationView';
+import { ProductionAdministrationView } from '../admin/ProductionAdministrationView';
 
 type LegacyViewProps = { [key: string]: unknown };
 
@@ -60,10 +60,10 @@ export const ExecutiveDashboardView: React.FC<LegacyViewProps> = () => (
   <ExecutiveOperationsCenterView />
 );
 
-// SECURITY-2Q1 promotes only the production Users slice. The rendered view itself
-// makes the remaining administration surfaces explicitly unavailable.
+// SECURITY-2Q1/Q2 promote only Users and Empresa/Tenant. The composed production
+// view keeps every remaining administration function explicitly fail-closed.
 export const AdministrationCenterView: React.FC<LegacyViewProps> = () => (
-  <ProductionUserAdministrationView />
+  <ProductionAdministrationView />
 );
 
 // Experimental/browser-authoritative surfaces remain fail-closed until promoted separately.
