@@ -100,6 +100,33 @@ jobs:
           fi
           echo "FINANCE-R13 source invariants: PASS"
 
+      - name: FINANCE-R14 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .github/workflows -maxdepth 1 -type f -name '*.yml' | wc -l | tr -d ' ')" -eq 1
+          grep -F "uq_bank_statement_entry_dedup" drizzle/0024_finance_bank_reconciliation_authority.sql
+          grep -F "uq_bank_statement_match_scope" drizzle/0024_finance_bank_reconciliation_authority.sql
+          grep -F "tenant_access_bank_statement_entries" drizzle/0024_finance_bank_reconciliation_authority.sql
+          grep -F "class PostgresBankStatementRepository" src/db/repositories/postgresBankStatementRepository.ts
+          grep -F "class BankReconciliationAuthority" src/server/bankReconciliationAuthority.ts
+          grep -F "findFinancialTransactionByIdWithLock" src/server/bankReconciliationAuthority.ts
+          grep -F "registerBankReconciliationRoutes" src/server/recurringRoutes.ts
+          grep -F "const allowed = new Set(['financialAccountId', 'entries']);" src/server/bankReconciliationRoutes.ts
+          if grep -Fq "localRepositories" src/server/bankReconciliationAuthority.ts src/db/repositories/postgresBankStatementRepository.ts src/server/bankReconciliationRoutes.ts; then
+            echo "FAIL: R14 server reconciliation authority references local/browser repositories"
+            exit 1
+          fi
+          if grep -Fq "updateBalance" src/server/bankReconciliationAuthority.ts; then
+            echo "FAIL: R14 reconciliation authority must never mutate financial account balances"
+            exit 1
+          fi
+          if grep -Fq "getTransactionRepo().create" src/server/bankReconciliationAuthority.ts; then
+            echo "FAIL: R14 reconciliation authority must never create financial transactions"
+            exit 1
+          fi
+          echo "FINANCE-R14 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -145,6 +172,7 @@ jobs:
           npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
