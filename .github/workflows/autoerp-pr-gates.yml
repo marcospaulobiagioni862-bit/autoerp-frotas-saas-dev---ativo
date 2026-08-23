@@ -55,6 +55,30 @@ jobs:
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
 
+      - name: FINANCE-R12 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .github/workflows -maxdepth 1 -type f -name '*.yml' | wc -l | tr -d ' ')" -eq 1
+          grep -F "finance_late_charge_rules" drizzle/0023_finance_overdue_authority.sql
+          grep -F "UNIQUE (company_id, obligation_type)" drizzle/0023_finance_overdue_authority.sql
+          if grep -Eq "DEFAULT (2|0\.033)|INSERT INTO finance_late_charge_rules.*SELECT|DEFAULT_RULE" drizzle/0023_finance_overdue_authority.sql src/server/financeOverdueAuthority.ts; then
+            echo "FAIL: R12 must not invent or seed business late-charge rates"
+            exit 1
+          fi
+          grep -F "FINANCIAL_OVERDUE_PROCESS" src/domain/finance/FinancialAuthorizationService.ts
+          grep -F "FINANCIAL_LATE_CHARGE_RULE_MANAGE" src/domain/finance/FinancialAuthorizationService.ts
+          grep -F "financialPeriodLock: 'SHARED'" src/server/financeOverdueAuthority.ts
+          grep -F "FOR UPDATE" src/server/financeOverdueAuthority.ts
+          grep -F "AUTHORITATIVE_OVERDUE_RECALCULATION" src/server/financeOverdueAuthority.ts
+          grep -F "const allowed = new Set(['type', 'processingDate']);" src/server/financeOverdueRoutes.ts
+          grep -F "registerFinanceOverdueRoutes" src/server/recurringRoutes.ts
+          if grep -Fq "localRepositories" src/server/financeOverdueAuthority.ts; then
+            echo "FAIL: R12 authoritative overdue processing references local/browser repositories"
+            exit 1
+          fi
+          echo "FINANCE-R12 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -98,6 +122,7 @@ jobs:
           npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
           npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
           npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
