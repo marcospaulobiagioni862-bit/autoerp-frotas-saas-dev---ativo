@@ -3,6 +3,7 @@ import { LockKeyhole, Server, ShieldAlert } from 'lucide-react';
 import { OperationalIncidentCenterView } from '../incidents/OperationalIncidentCenterView';
 import { ExecutiveOperationsCenterView } from '../operations/ExecutiveOperationsCenterView';
 import { OperationalTasksView } from '../tasks/OperationalTasksView';
+import { ProductionUserAdministrationView } from '../admin/ProductionUserAdministrationView';
 
 type LegacyViewProps = { [key: string]: unknown };
 
@@ -39,14 +40,12 @@ const ServerAuthorityUnavailableView: React.FC<UnavailableViewProps> = ({ title,
 );
 
 /**
- * SECURITY-2P production compatibility module.
- *
- * Legacy source files remain available for development/history, but Vite aliases
- * production builds to this module so browser-local authorities and embedded test
- * runners never enter the production runtime graph.
+ * SECURITY-2P production compatibility module, progressively promoted by later
+ * server-authority waves. Legacy source files remain available for development/history,
+ * but production never treats their browser-local stores as source of truth.
  */
 
-// Canonical replacements backed by SECURITY-2O server authorities.
+// Canonical replacements backed by server authorities.
 export const IncidentManagementCenterView: React.FC<LegacyViewProps> = () => (
   <OperationalIncidentCenterView />
 );
@@ -61,14 +60,13 @@ export const ExecutiveDashboardView: React.FC<LegacyViewProps> = () => (
   <ExecutiveOperationsCenterView />
 );
 
-// Experimental/browser-authoritative surfaces remain fail-closed until promoted separately.
+// SECURITY-2Q1 promotes only the production Users slice. The rendered view itself
+// makes the remaining administration surfaces explicitly unavailable.
 export const AdministrationCenterView: React.FC<LegacyViewProps> = () => (
-  <ServerAuthorityUnavailableView
-    title="Administração de Produção"
-    description="Usuários, RBAC, tenant configuration, backup e auditoria desta central legada ainda combinam serviços client-side. A administração de produção permanece isolada até possuir uma authority server-side única e auditável."
-  />
+  <ProductionUserAdministrationView />
 );
 
+// Experimental/browser-authoritative surfaces remain fail-closed until promoted separately.
 export const PerformanceManagementCenterView: React.FC<LegacyViewProps> = () => (
   <ServerAuthorityUnavailableView
     title="Gestão de Resultados"
