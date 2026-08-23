@@ -1,5 +1,5 @@
 import { AccountingRegime } from '../types/enums';
-import { DREReport, VehicleProfitabilityReport } from '../types/reports';
+import { CashFlowReport, DREReport, VehicleProfitabilityReport } from '../types/reports';
 
 export class FinanceReportingApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -62,6 +62,40 @@ function validateVehicleProfitabilityReport(value: unknown): VehicleProfitabilit
   return report as unknown as VehicleProfitabilityReport;
 }
 
+function validateCashFlowReport(value: unknown): CashFlowReport {
+  const report = asRecord(value);
+  if (
+    typeof report.periodStart !== 'string' ||
+    typeof report.periodEnd !== 'string' ||
+    !finite(report.initialCashBalance) ||
+    !finite(report.totalRealizedIncomes) ||
+    !finite(report.totalRealizedExpenses) ||
+    !finite(report.finalRealizedCashBalance) ||
+    !Array.isArray(report.dailyFlows)
+  ) {
+    throw new Error('Invalid cash-flow report payload');
+  }
+
+  for (const rawDaily of report.dailyFlows) {
+    const daily = asRecord(rawDaily);
+    if (
+      typeof daily.date !== 'string' ||
+      !finite(daily.openingBalance) ||
+      !finite(daily.realizedIncomes) ||
+      !finite(daily.realizedExpenses) ||
+      !finite(daily.realizedNet) ||
+      !finite(daily.closingBalance) ||
+      !finite(daily.predictedIncomes) ||
+      !finite(daily.predictedExpenses) ||
+      !finite(daily.predictedClosingBalance)
+    ) {
+      throw new Error('Invalid cash-flow daily payload');
+    }
+  }
+
+  return report as unknown as CashFlowReport;
+}
+
 async function errorMessage(response: Response, fallback: string): Promise<string> {
   try {
     const payload = asRecord(await response.json());
@@ -116,5 +150,23 @@ export class FinanceReportingClient {
 
     const payload = asRecord(await response.json());
     return validateVehicleProfitabilityReport(payload.report);
+  }
+
+  static async getCashFlow(periodStart: string, periodEnd: string): Promise<CashFlowReport> {
+    const params = new URLSearchParams({ start: periodStart, end: periodEnd });
+    const response = await fetch(`/api/finance/reports/cash-flow?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new FinanceReportingApiError(
+        response.status,
+        await errorMessage(response, `Cash-flow report request failed (${response.status})`)
+      );
+    }
+
+    const payload = asRecord(await response.json());
+    return validateCashFlowReport(payload.report);
   }
 }
