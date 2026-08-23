@@ -60,7 +60,7 @@ async function seed(): Promise<void> {
     (${foreignUserB},${companyB},'User B','2q1-user-b@example.test','OPERATIONAL',true,ARRAY['FLEET_READ'],NOW(),NOW())`);
 }
 
-async function run(): Promise<void> {
+export async function runAdminUserAuthorityIntegration(): Promise<void> {
   await seed();
 
   const listed = await AdminUserAuthority.list(actorA1);
@@ -87,7 +87,7 @@ async function run(): Promise<void> {
   const changeText = JSON.stringify(deactivationAudit?.changes || {});
   assert(changeText.includes('false'), 'audit evidence must contain resulting inactive state');
 
-  await rejects(
+  const authError = await rejects(
     () => authenticateTokenPrincipal(
       issuedBeforeDeactivation,
       config,
@@ -98,6 +98,7 @@ async function run(): Promise<void> {
     ),
     Error
   );
+  assert(authError.message.includes('inactive'), 'session revalidation must reject the newly inactive user');
 
   const reactivated = await AdminUserAuthority.setActive(actorA1, userA, true);
   assert(reactivated.active === true, 'reactivation must persist active=true');
@@ -125,7 +126,9 @@ async function run(): Promise<void> {
   console.log('SECURITY-2Q1 PostgreSQL user administration authority integration: PASS');
 }
 
-run().then(() => process.exit(0)).catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1]?.includes('adminUserAuthorityIntegration')) {
+  runAdminUserAuthorityIntegration().then(() => process.exit(0)).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
