@@ -8,6 +8,9 @@ const companyA = 'finance-r13-company-a';
 const companyB = 'finance-r13-company-b';
 const adminA = 'finance-r13-admin-a';
 const vehicleA = 'finance-r13-vehicle-a';
+const vehicleCatchup = 'finance-r13-vehicle-catchup';
+const vehicleRollback = 'finance-r13-vehicle-rollback';
+const vehicleClosedPeriod = 'finance-r13-vehicle-closed-period';
 const vehicleB = 'finance-r13-vehicle-b';
 const driverA = 'finance-r13-driver-a';
 const expenseCategoryA = 'finance-r13-expense-category-a';
@@ -52,6 +55,9 @@ async function seed(): Promise<void> {
   await db.execute(sql`
     INSERT INTO vehicles (id, company_id, plate, renavam, status, created_at, updated_at) VALUES
       (${vehicleA}, ${companyA}, 'R13A1A1', 'R13RENAVAMA', 'AVAILABLE', NOW(), NOW()),
+      (${vehicleCatchup}, ${companyA}, 'R13C1C1', 'R13RENAVAMC', 'AVAILABLE', NOW(), NOW()),
+      (${vehicleRollback}, ${companyA}, 'R13R1R1', 'R13RENAVAMR', 'AVAILABLE', NOW(), NOW()),
+      (${vehicleClosedPeriod}, ${companyA}, 'R13D1D1', 'R13RENAVAMD', 'AVAILABLE', NOW(), NOW()),
       (${vehicleB}, ${companyB}, 'R13B1B1', 'R13RENAVAMB', 'AVAILABLE', NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
   `);
@@ -61,7 +67,7 @@ async function seed(): Promise<void> {
       id, company_id, name, cpf, cnh, active, cnh_expiration, status, app_platforms,
       is_archived, created_at, updated_at
     ) VALUES (
-      ${driverA}, ${companyA}, 'FINANCE-R13 Driver', '12345678909', 'R13CNH00001', true,
+      ${driverA}, ${companyA}, 'FINANCE-R13 Driver', '91300000001', 'R13CNH00001', true,
       '2035-01-01', 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW()
     ) ON CONFLICT (id) DO NOTHING
   `);
@@ -75,9 +81,9 @@ async function seed(): Promise<void> {
 
   await db.execute(sql`
     INSERT INTO trackers (id, company_id, vehicle_id, serial_number, status, created_at, updated_at) VALUES
-      (${trackerCatchup}, ${companyA}, ${vehicleA}, 'R13-CATCHUP', 'ACTIVE', NOW(), NOW()),
-      (${trackerRollback}, ${companyA}, ${vehicleA}, 'R13-ROLLBACK', 'ACTIVE', NOW(), NOW()),
-      (${trackerClosedPeriod}, ${companyA}, ${vehicleA}, 'R13-CLOSED', 'ACTIVE', NOW(), NOW()),
+      (${trackerCatchup}, ${companyA}, ${vehicleCatchup}, 'R13-CATCHUP', 'ACTIVE', NOW(), NOW()),
+      (${trackerRollback}, ${companyA}, ${vehicleRollback}, 'R13-ROLLBACK', 'ACTIVE', NOW(), NOW()),
+      (${trackerClosedPeriod}, ${companyA}, ${vehicleClosedPeriod}, 'R13-CLOSED', 'ACTIVE', NOW(), NOW()),
       (${trackerForeign}, ${companyB}, ${vehicleB}, 'R13-FOREIGN', 'ACTIVE', NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
   `);
@@ -102,13 +108,13 @@ async function seed(): Promise<void> {
     ) VALUES
       (${ruleCatchup}, ${companyA}, 'R13 catch-up tracker', 50, 'MONTHLY', true, '2026-02-01',
        'TRACKER', ${trackerCatchup}, 'MONTHLY', '2026-01-01', '2026-02-01',
-       ${expenseCategoryA}, ${vehicleA}, 'ACTIVE', ${adminA}, NOW(), NOW()),
+       ${expenseCategoryA}, ${vehicleCatchup}, 'ACTIVE', ${adminA}, NOW(), NOW()),
       (${ruleRollback}, ${companyA}, 'R13 rollback tracker', 60, 'MONTHLY', true, '2026-06-01',
        'TRACKER', ${trackerRollback}, 'MONTHLY', '2026-06-01', '2026-06-01',
-       ${expenseCategoryA}, ${vehicleA}, 'ACTIVE', ${adminA}, NOW(), NOW()),
+       ${expenseCategoryA}, ${vehicleRollback}, 'ACTIVE', ${adminA}, NOW(), NOW()),
       (${ruleClosedPeriod}, ${companyA}, 'R13 closed-period tracker', 70, 'MONTHLY', true, '2026-07-10',
        'TRACKER', ${trackerClosedPeriod}, 'MONTHLY', '2026-07-10', '2026-07-10',
-       ${expenseCategoryA}, ${vehicleA}, 'ACTIVE', ${adminA}, NOW(), NOW()),
+       ${expenseCategoryA}, ${vehicleClosedPeriod}, 'ACTIVE', ${adminA}, NOW(), NOW()),
       (${ruleDeferred}, ${companyA}, 'R13 deferred contract', 750, 'MONTHLY', true, '2026-08-01',
        'CONTRACT_RENT', ${contractDeferred}, 'MONTHLY', '2026-08-01', '2026-08-01',
        ${incomeCategoryA}, ${vehicleA}, 'ACTIVE', ${adminA}, NOW(), NOW()),
