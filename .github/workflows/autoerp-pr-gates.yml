@@ -143,6 +143,23 @@ jobs:
           fi
           echo "FINANCE-R16 source invariants: PASS"
 
+      - name: FINANCE-R17 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "/api/finance/payables/renegotiate" src/server/financePayableRenegotiationRoutes.ts
+          grep -F "type: 'PAYABLE'" src/server/financePayableRenegotiationRoutes.ts
+          grep -F "registerFinancePayableRenegotiationRoutes" src/server/recurringRoutes.ts
+          grep -F "pg_advisory_xact_lock" src/domain/finance/RenegotiationService.ts
+          grep -F "findPayableByIdWithLock" src/domain/finance/RenegotiationService.ts
+          grep -F "saldo devedor autoritativo" src/domain/finance/RenegotiationService.ts
+          grep -F "renegotiatePayables" src/api/financeRenegotiationClient.ts
+          if grep -Fq "companyId: req.body" src/server/financePayableRenegotiationRoutes.ts || grep -Fq "userId: req.body" src/server/financePayableRenegotiationRoutes.ts; then
+            echo "FAIL: R17 payable renegotiation trusts browser tenant/actor identity"
+            exit 1
+          fi
+          echo "FINANCE-R17 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -190,6 +207,7 @@ jobs:
           npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
