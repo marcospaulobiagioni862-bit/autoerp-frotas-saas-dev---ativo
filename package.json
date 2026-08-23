@@ -12,7 +12,8 @@
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
     "start": "node dist/server.mjs",
     "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:deploy": "node migrate_deploy.cjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.5",
