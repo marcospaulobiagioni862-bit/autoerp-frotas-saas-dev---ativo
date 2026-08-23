@@ -183,6 +183,30 @@ jobs:
           fi
           echo "FINANCE-R23 source invariants: PASS"
 
+      - name: FINANCE-R24 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .github/workflows -maxdepth 1 -type f -name '*.yml' | wc -l | tr -d ' ')" -eq 1
+          grep -F "/api/finance/reports/cash-flow" src/server/financeCashFlowRoutes.ts
+          grep -F "UnitOfWork.run(actor.companyId" src/server/financeCashFlowRoutes.ts
+          grep -F "CashFlowService.getCashFlowReport(" src/server/financeCashFlowRoutes.ts
+          grep -F "registerFinanceCashFlowRoutes" src/server/recurringRoutes.ts
+          grep -F "getCashFlow(periodStart" src/api/financeReportingClient.ts
+          grep -F "account.initialBalance" src/domain/finance/CashFlowService.ts
+          grep -F "TransactionType.TRANSFER" src/domain/finance/CashFlowService.ts
+          grep -F "TransactionType.REVERSAL" src/domain/finance/CashFlowService.ts
+          grep -F "balanceAmount" src/domain/finance/CashFlowService.ts
+          if grep -Fq "localRepositories" src/server/financeCashFlowRoutes.ts src/api/financeReportingClient.ts src/components/finance/CashFlowView.tsx; then
+            echo "FAIL: R24 production cash-flow path references browser/local repositories"
+            exit 1
+          fi
+          if grep -Eq "companyId=|userId=|userName=" src/api/financeReportingClient.ts; then
+            echo "FAIL: R24 reporting client must not send browser tenant/actor authority"
+            exit 1
+          fi
+          echo "FINANCE-R24 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -232,6 +256,7 @@ jobs:
           npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
           npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeCashFlowAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
