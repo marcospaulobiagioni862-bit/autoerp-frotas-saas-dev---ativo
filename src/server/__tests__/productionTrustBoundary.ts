@@ -1,15 +1,22 @@
 import { readFile } from 'node:fs/promises';
+import { runAdminUserAuthorityIntegration } from './adminUserAuthorityIntegration';
+import { AdminUserClientTestRunner } from '../../api/__tests__/adminUserClientTestRunner';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function main(): Promise<void> {
-  const [vite, boundary, sidebar, app] = await Promise.all([
+  const [vite, boundary, sidebar, app, adminAuthority, adminRoutes, adminClient, adminView, cashFlowRoutes] = await Promise.all([
     readFile('vite.config.ts', 'utf8'),
     readFile('src/components/security/ProductionCockpitBoundary.tsx', 'utf8'),
     readFile('src/components/layout/ProductionSidebar.tsx', 'utf8'),
     readFile('src/App.tsx', 'utf8'),
+    readFile('src/server/adminUserAuthority.ts', 'utf8'),
+    readFile('src/server/adminUserRoutes.ts', 'utf8'),
+    readFile('src/api/adminUserClient.ts', 'utf8'),
+    readFile('src/components/admin/ProductionUserAdministrationView.tsx', 'utf8'),
+    readFile('src/server/financeCashFlowRoutes.ts', 'utf8'),
   ]);
 
   assert(vite.includes("defineConfig(({ command })"), 'Vite config must distinguish production build from development runtime');
@@ -62,6 +69,7 @@ async function main(): Promise<void> {
   assert(boundary.includes('OperationalIncidentCenterView'), 'Incident duplicate is not routed to SECURITY-2O authority');
   assert(boundary.includes('OperationalTasksView'), 'Workflow duplicate is not routed to SECURITY-2O task authority');
   assert(boundary.includes('ExecutiveOperationsCenterView'), 'Executive duplicate is not routed to SECURITY-2O authority');
+  assert(boundary.includes('ProductionUserAdministrationView'), 'SECURITY-2Q1 production Users slice is not routed to server authority');
 
   const forbiddenBoundaryMarkers = [
     'localStorage',
@@ -106,11 +114,39 @@ async function main(): Promise<void> {
   assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
   assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
 
+  // SECURITY-2Q1 source invariants. Browser identity must never be authority,
+  // credentials must not be returned, and no local/browser repository may appear
+  // anywhere in the promoted production path.
+  assert(adminAuthority.includes("String(actor.role || '').toUpperCase() !== 'ADMIN'"), 'SECURITY-2Q1 authority must be ADMIN-only');
+  assert(adminAuthority.includes('pg_advisory_xact_lock'), 'SECURITY-2Q1 must serialize tenant ADMIN status races');
+  assert(adminAuthority.includes("eq(users.companyId, actor.companyId)"), 'SECURITY-2Q1 authority lacks explicit tenant predicate');
+  assert(adminAuthority.includes("eq(users.id, targetUserId)"), 'SECURITY-2Q1 mutation lacks target row predicate');
+  assert(adminAuthority.includes(".for('update')"), 'SECURITY-2Q1 target mutation must lock rows');
+  assert(adminAuthority.includes('Administrador não pode desativar a própria conta autenticada'), 'SECURITY-2Q1 self-lockout guard missing');
+  assert(adminAuthority.includes('Não é possível desativar o último administrador ativo'), 'SECURITY-2Q1 last-admin guard missing');
+  assert(adminRoutes.includes("app.get('/api/admin/users'"), 'SECURITY-2Q1 ADMIN list route missing');
+  assert(adminRoutes.includes("app.patch('/api/admin/users/:id/status'"), 'SECURITY-2Q1 ADMIN status route missing');
+  assert(adminRoutes.includes("Object.keys(body).length !== 1"), 'SECURITY-2Q1 route must reject forged extra authority fields');
+  assert(adminClient.includes("credentials: 'include'"), 'SECURITY-2Q1 client must use authenticated cookie transport');
+  assert(adminView.includes('somente Usuários foi promovido'), 'SECURITY-2Q1 UI must keep unpromoted admin slices visibly fail-closed');
+  assert(cashFlowRoutes.includes('registerAdminUserRoutes(app)'), 'SECURITY-2Q1 routes are not mounted in production bootstrap');
+  for (const [name, source] of Object.entries({ adminAuthority, adminRoutes, adminClient, adminView })) {
+    assert(!source.includes('localRepositories'), `SECURITY-2Q1 ${name} references localRepositories`);
+    assert(!source.includes('localStorage'), `SECURITY-2Q1 ${name} references localStorage`);
+  }
+  assert(!adminClient.includes('companyId'), 'SECURITY-2Q1 client must not transmit browser tenant authority');
+  assert(!adminClient.includes('passwordHash'), 'SECURITY-2Q1 client contract must not contain credential material');
+
+  const clientResult = await AdminUserClientTestRunner.runAllTests();
+  assert(clientResult.failed === 0, 'SECURITY-2Q1 administration client transport regression failed');
+  await runAdminUserAuthorityIntegration();
+
   console.log(JSON.stringify({
-    suite: 'SECURITY-2P production trust-boundary invariants',
+    suite: 'SECURITY-2P/2Q1 production trust-boundary invariants',
     status: 'PASS',
     aliasedLegacyEntries: cockpitEntries.length,
     trustedCockpitRoutes: safeProductionRoutes,
+    security2q1: 'PostgreSQL user administration authority PASS',
   }));
 }
 
