@@ -79,6 +79,27 @@ jobs:
           fi
           echo "FINANCE-R12 source invariants: PASS"
 
+      - name: FINANCE-R13 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find .github/workflows -maxdepth 1 -type f -name '*.yml' | wc -l | tr -d ' ')" -eq 1
+          grep -F "FOR UPDATE SKIP LOCKED" src/server/recurringAuthority.ts
+          grep -F "MAX_GENERATIONS_PER_RULE_PER_CYCLE = 52" src/server/recurringAuthority.ts
+          grep -F "financialPeriodLock:'SHARED'" src/server/recurringAuthority.ts
+          grep -F "startRecurringScheduler();" src/server/recurringRoutes.ts
+          grep -F "UNIQUE(company_id, rule_id, period_ref)" drizzle/0015_recurring_scheduler_notifications.sql
+          grep -F "uq_receivable_contract_period" drizzle/0015_recurring_scheduler_notifications.sql
+          if grep -Fq "localRepositories" src/server/recurringAuthority.ts; then
+            echo "FAIL: R13 authoritative recurring processing references local/browser repositories"
+            exit 1
+          fi
+          if grep -Fq "processTenant(" src/server/recurringRoutes.ts; then
+            echo "FAIL: R13 recurring money generation must not be exposed as a browser-triggered route"
+            exit 1
+          fi
+          echo "FINANCE-R13 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -123,6 +144,7 @@ jobs:
           npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
           npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
