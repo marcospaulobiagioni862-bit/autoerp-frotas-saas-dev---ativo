@@ -76,30 +76,25 @@ async function seed(): Promise<void> {
       (${companyA},'Finance R12 A','ACTIVE',NOW(),NOW()),
       (${companyB},'Finance R12 B','ACTIVE',NOW(),NOW())
   `);
-
   await db.execute(sql`
     INSERT INTO users(id,company_id,name,email,role,active,created_at,updated_at) VALUES
       (${adminA},${companyA},'Finance R12 Admin A',${`${adminA}@example.test`},'ADMIN',true,NOW(),NOW()),
       (${adminB},${companyB},'Finance R12 Admin B',${`${adminB}@example.test`},'ADMIN',true,NOW(),NOW()),
       (${operatorA},${companyA},'Finance R12 Operator A',${`${operatorA}@example.test`},'FINANCIAL_OPERATOR',true,NOW(),NOW())
   `);
-
   await db.execute(sql`
     INSERT INTO financial_categories(id,company_id,name,type,active,created_at,updated_at) VALUES
       (${categoryA},${companyA},'R12 A','BOTH',true,NOW(),NOW()),
       (${categoryB},${companyB},'R12 B','BOTH',true,NOW(),NOW())
   `);
-
   await db.execute(sql`
     INSERT INTO vehicles(id,company_id,plate,renavam,status,current_km,created_at,updated_at)
     VALUES(${vehicleA},${companyA},${`R12${suffix.slice(0,4).toUpperCase()}`},${`R12-REN-${suffix}`},'AVAILABLE',1000,NOW(),NOW())
   `);
-
   await db.execute(sql`
     INSERT INTO payment_methods(id,company_id,name,type,fee_percentage,active)
     VALUES(${paymentMethodA},${companyA},'PIX R12','PIX',0,true)
   `);
-
   await db.execute(sql`
     INSERT INTO financial_accounts(id,company_id,name,type,initial_balance,current_balance,status,created_at,updated_at)
     VALUES(${financialAccountA},${companyA},'R12 Bank','BANK',1000,1000,'ACTIVE',NOW(),NOW())
@@ -107,16 +102,8 @@ async function seed(): Promise<void> {
 }
 
 async function insertReceivable(args: {
-  id: string;
-  companyId?: string;
-  status?: string;
-  original?: number;
-  paid?: number;
-  discount?: number;
-  fine?: number;
-  interest?: number;
-  due?: string;
-  competence?: string;
+  id: string; companyId?: string; status?: string; original?: number; paid?: number; discount?: number;
+  fine?: number; interest?: number; due?: string; competence?: string;
 }): Promise<void> {
   const companyId = args.companyId || companyA;
   const original = args.original ?? 100;
@@ -139,16 +126,8 @@ async function insertReceivable(args: {
 }
 
 async function insertPayable(args: {
-  id: string;
-  companyId?: string;
-  status?: string;
-  original?: number;
-  paid?: number;
-  discount?: number;
-  fine?: number;
-  interest?: number;
-  due?: string;
-  competence?: string;
+  id: string; companyId?: string; status?: string; original?: number; paid?: number; discount?: number;
+  fine?: number; interest?: number; due?: string; competence?: string;
 }): Promise<void> {
   const companyId = args.companyId || companyA;
   const original = args.original ?? 100;
@@ -173,18 +152,15 @@ async function insertPayable(args: {
 async function receivable(id: string, companyId = companyA): Promise<any> {
   return one(sql`SELECT * FROM account_receivables WHERE company_id=${companyId} AND id=${id}`);
 }
-
 async function payable(id: string, companyId = companyA): Promise<any> {
   return one(sql`SELECT * FROM account_payables WHERE company_id=${companyId} AND id=${id}`);
 }
-
 async function transactionCount(args: { receivableId?: string; payableId?: string }): Promise<number> {
   const row = args.receivableId
     ? await one(sql`SELECT count(*)::int AS count FROM financial_transactions WHERE company_id=${companyA} AND receivable_id=${args.receivableId}`)
     : await one(sql`SELECT count(*)::int AS count FROM financial_transactions WHERE company_id=${companyA} AND payable_id=${args.payableId}`);
   return Number(row?.count || 0);
 }
-
 async function accountBalance(): Promise<number> {
   const row = await one(sql`SELECT current_balance FROM financial_accounts WHERE company_id=${companyA} AND id=${financialAccountA}`);
   return Number(row?.current_balance || 0);
@@ -192,7 +168,7 @@ async function accountBalance(): Promise<number> {
 
 async function noImplicitDefaultsAndForgeryBlocked(): Promise<void> {
   const initialRules = await FinanceOverdueAuthority.listRules(actorA);
-  assert(initialRules.length === 0, 'R12 migration or authority silently created a default late-charge rule');
+  assert(initialRules.length === 0, 'R12 silently created a default late-charge rule');
 
   const before = `${companyA}-before-rule`;
   await insertReceivable({ id: before });
@@ -204,55 +180,30 @@ async function noImplicitDefaultsAndForgeryBlocked(): Promise<void> {
   money(untouched.fine_amount, 0, 'missing rule mutated fine');
   money(untouched.interest_amount, 0, 'missing rule mutated interest');
 
+  rejectsSync(() => parseOverdueProcessRequest({ type: 'RECEIVABLE', processingDate: '2026-08-11', companyId: companyB }));
   rejectsSync(() => parseOverdueProcessRequest({
-    type: 'RECEIVABLE',
-    processingDate: '2026-08-11',
-    companyId: companyB,
-  }));
-  rejectsSync(() => parseOverdueProcessRequest({
-    type: 'RECEIVABLE',
-    processingDate: '2026-08-11',
-    finePercent: 99,
-    dailyInterestPercent: 9,
-    gracePeriodDays: 0,
+    type: 'RECEIVABLE', processingDate: '2026-08-11', finePercent: 99, dailyInterestPercent: 9, gracePeriodDays: 0,
   }));
 
   await FinanceOverdueAuthority.upsertRule(actorA, 'RECEIVABLE', {
-    gracePeriodDays: 0,
-    finePercent: 2,
-    dailyInterestPercent: 0.1,
-    active: true,
+    gracePeriodDays: 0, finePercent: 2, dailyInterestPercent: 0.1, active: true,
   });
 
-  // BOTH must fail before mutating AR when PAYABLE has not been explicitly configured.
   const beforeBoth = await receivable(before);
-  await rejects(
-    () => FinanceOverdueAuthority.process(actorA, 'BOTH', '2026-08-11'),
-    'PAYABLE'
-  );
+  await rejects(() => FinanceOverdueAuthority.process(actorA, 'BOTH', '2026-08-11'), 'PAYABLE');
   const afterBoth = await receivable(before);
   money(afterBoth.fine_amount, beforeBoth.fine_amount, 'BOTH partially mutated before missing rule failure');
 
   await FinanceOverdueAuthority.upsertRule(actorA, 'PAYABLE', {
-    gracePeriodDays: 0,
-    finePercent: 2,
-    dailyInterestPercent: 0.1,
-    active: true,
+    gracePeriodDays: 0, finePercent: 2, dailyInterestPercent: 0.1, active: true,
   });
-
   await FinanceOverdueAuthority.upsertRule(actorB, 'RECEIVABLE', {
-    gracePeriodDays: 0,
-    finePercent: 99,
-    dailyInterestPercent: 9,
-    active: true,
+    gracePeriodDays: 0, finePercent: 99, dailyInterestPercent: 9, active: true,
   });
 
   await rejects(
     () => FinanceOverdueAuthority.upsertRule(operatorActorA, 'RECEIVABLE', {
-      gracePeriodDays: 0,
-      finePercent: 1,
-      dailyInterestPercent: 0.01,
-      active: true,
+      gracePeriodDays: 0, finePercent: 1, dailyInterestPercent: 0.01, active: true,
     }),
     'Permissão insuficiente'
   );
@@ -310,18 +261,13 @@ async function payableNotDuePaidCancelledAndClosedPeriod(): Promise<void> {
   const period = await UnitOfWork.run(
     companyA,
     async (tx) => FinancialPeriodService.closePeriod({
-      companyId: companyA,
-      startDate: '2026-10-01',
-      endDate: '2026-10-31',
-      userId: adminA,
-      userName: actorA.name,
+      companyId: companyA, startDate: '2026-10-01', endDate: '2026-10-31', userId: adminA, userName: actorA.name,
     }, tx),
     { financialPeriodLock: 'EXCLUSIVE' }
   );
   assert(period.status === 'CLOSED', 'R12 closed-period fixture failed');
 
-  const results = await FinanceOverdueAuthority.process(actorA, 'PAYABLE', '2026-08-11');
-  const result = results[0];
+  const result = (await FinanceOverdueAuthority.process(actorA, 'PAYABLE', '2026-08-11'))[0];
   assert(result.skippedClosedPeriod >= 1, 'closed-period title was not reported as skipped');
 
   const overdueRow = await payable(overdue);
@@ -350,15 +296,9 @@ async function persistedChargesAreConsumedBySettlement(): Promise<void> {
   const settled = await UnitOfWork.run(
     companyA,
     async (tx) => SettlementService.registerReceipt({
-      companyId: companyA,
-      obligationId: id,
-      financialAccountId: financialAccountA,
-      paymentMethodId: paymentMethodA,
-      paymentAmount: 103,
-      paymentDate: '2026-09-15',
-      idempotencyKey: `r12-receipt-${suffix}`,
-      userId: adminA,
-      userName: actorA.name,
+      companyId: companyA, obligationId: id, financialAccountId: financialAccountA,
+      paymentMethodId: paymentMethodA, paymentAmount: 103, paymentDate: '2026-09-15',
+      idempotencyKey: `r12-receipt-${suffix}`, userId: adminA, userName: actorA.name,
     }, tx),
     { financialPeriodLock: 'SHARED' }
   );
@@ -368,15 +308,15 @@ async function persistedChargesAreConsumedBySettlement(): Promise<void> {
   assert(await transactionCount({ receivableId: id }) === 1, 'settlement produced unexpected transaction count');
 }
 
-async function r11TrafficTicketDiscountWithR12Charges(): Promise<void> {
-  const ticket = await TrafficTicketAuthorityService.create(principalA, {
+async function r11TrafficTicketInteraction(): Promise<void> {
+  const discounted = await TrafficTicketAuthorityService.create(principalA, {
     vehicleId: vehicleA,
-    autoNumber: `R12-TICKET-${suffix}`,
+    autoNumber: `R12-DISCOUNTED-${suffix}`,
     organName: 'DETRAN',
     infractionCode: '745-50',
-    description: 'R12 + R11 compatibility',
+    description: 'R12 preserves already-settled R11 discount',
     infractionDate: '2026-08-01',
-    dueDate: '2026-08-10',
+    dueDate: '2026-08-20',
     discountDueDate: '2026-08-20',
     originalAmount: 200,
     discountedAmount: 160,
@@ -384,37 +324,66 @@ async function r11TrafficTicketDiscountWithR12Charges(): Promise<void> {
     responsibility: TicketResponsibility.COMPANY,
     baseExpenseCategoryId: categoryA,
   });
-  const payableId = ticket.item.payableId!;
+  const discountedPayableId = discounted.item.payableId!;
 
-  await FinanceOverdueAuthority.process(actorA, 'PAYABLE', '2026-08-15');
-  const processed = await payable(payableId);
-  money(processed.fine_amount, 4, 'R12 did not persist ticket overdue fine');
-  money(processed.interest_amount, 1, 'R12 did not persist ticket overdue interest');
-  money(processed.discount_amount, 0, 'R12 prematurely consumed R11 traffic-ticket discount');
-  money(processed.updated_amount, 205, 'R12 ticket total before discount is incorrect');
-
-  const beforeBalance = await accountBalance();
-  const settled = await UnitOfWork.run(
+  const discountedSettlement = await UnitOfWork.run(
     companyA,
     async (tx) => SettlementService.registerPayment({
-      companyId: companyA,
-      obligationId: payableId,
-      financialAccountId: financialAccountA,
-      paymentMethodId: paymentMethodA,
-      paymentAmount: 165,
-      paymentDate: '2026-08-20',
-      idempotencyKey: `r12-ticket-payment-${suffix}`,
-      userId: adminA,
-      userName: actorA.name,
+      companyId: companyA, obligationId: discountedPayableId, financialAccountId: financialAccountA,
+      paymentMethodId: paymentMethodA, paymentAmount: 160, paymentDate: '2026-08-20',
+      idempotencyKey: `r12-discounted-payment-${suffix}`, userId: adminA, userName: actorA.name,
     }, tx),
     { financialPeriodLock: 'SHARED' }
   );
-  assert(settled.payable.status === 'PAID', 'R11 discounted settlement failed after R12 overdue charges');
-  money(settled.payable.discountAmount, 40, 'R11 authoritative ticket discount was not applied');
-  money(settled.payable.updatedAmount, 165, 'R11/R12 final payable target is incorrect');
-  money(settled.transaction.amount, 165, 'R11/R12 payment transaction differs from cash paid');
-  money(await accountBalance(), beforeBalance - 165, 'R11/R12 payment cash movement is incorrect');
-  assert(await transactionCount({ payableId }) === 1, 'R11/R12 produced unexpected transaction count');
+  assert(discountedSettlement.payable.status === 'PAID', 'R11 eligible discounted title did not close');
+  money(discountedSettlement.payable.discountAmount, 40, 'R11 eligible discount was not persisted');
+
+  const overdue = await TrafficTicketAuthorityService.create(principalA, {
+    vehicleId: vehicleA,
+    autoNumber: `R12-OVERDUE-${suffix}`,
+    organName: 'DETRAN',
+    infractionCode: '745-50',
+    description: 'R12 respects expired R11 discount',
+    infractionDate: '2026-08-01',
+    dueDate: '2026-08-20',
+    discountDueDate: '2026-08-20',
+    originalAmount: 200,
+    discountedAmount: 160,
+    points: 4,
+    responsibility: TicketResponsibility.COMPANY,
+    baseExpenseCategoryId: categoryA,
+  });
+  const overduePayableId = overdue.item.payableId!;
+
+  await FinanceOverdueAuthority.process(actorA, 'PAYABLE', '2026-08-25');
+  const paidDiscountedAfterR12 = await payable(discountedPayableId);
+  assert(paidDiscountedAfterR12.status === 'PAID', 'R12 mutated an R11 title already settled with discount');
+  money(paidDiscountedAfterR12.discount_amount, 40, 'R12 changed persisted R11 discount');
+  money(paidDiscountedAfterR12.fine_amount, 0, 'R12 charged fine on PAID discounted ticket');
+  money(paidDiscountedAfterR12.interest_amount, 0, 'R12 charged interest on PAID discounted ticket');
+
+  const processed = await payable(overduePayableId);
+  assert(processed.status === 'OVERDUE', 'unpaid traffic ticket was not marked overdue');
+  money(processed.fine_amount, 4, 'R12 did not persist overdue ticket fine');
+  money(processed.interest_amount, 1, 'R12 did not persist overdue ticket interest');
+  money(processed.discount_amount, 0, 'R12 manufactured an expired traffic-ticket discount');
+  money(processed.updated_amount, 205, 'R12 overdue ticket total is incorrect');
+
+  const beforeBalance = await accountBalance();
+  const expiredSettlement = await UnitOfWork.run(
+    companyA,
+    async (tx) => SettlementService.registerPayment({
+      companyId: companyA, obligationId: overduePayableId, financialAccountId: financialAccountA,
+      paymentMethodId: paymentMethodA, paymentAmount: 205, paymentDate: '2026-08-25',
+      idempotencyKey: `r12-expired-payment-${suffix}`, userId: adminA, userName: actorA.name,
+    }, tx),
+    { financialPeriodLock: 'SHARED' }
+  );
+  assert(expiredSettlement.payable.status === 'PAID', 'expired discounted ticket did not settle at R12 full target');
+  money(expiredSettlement.payable.discountAmount, 0, 'expired R11 discount was resurrected');
+  money(expiredSettlement.transaction.amount, 205, 'R11/R12 payment transaction differs from cash paid');
+  money(await accountBalance(), beforeBalance - 205, 'R11/R12 payment cash movement is incorrect');
+  assert(await transactionCount({ payableId: overduePayableId }) === 1, 'R11/R12 produced unexpected transaction count');
 }
 
 async function reportsRemainTenantScoped(): Promise<void> {
@@ -433,7 +402,7 @@ async function run(): Promise<void> {
   await receivableTenantPartialAndIdempotency();
   await payableNotDuePaidCancelledAndClosedPeriod();
   await persistedChargesAreConsumedBySettlement();
-  await r11TrafficTicketDiscountWithR12Charges();
+  await r11TrafficTicketInteraction();
   await reportsRemainTenantScoped();
   console.log('FINANCE-R12 authoritative overdue PostgreSQL integration: PASS');
 }
