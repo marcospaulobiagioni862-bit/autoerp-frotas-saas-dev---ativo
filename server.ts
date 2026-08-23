@@ -117,7 +117,10 @@ async function startServer() {
 
   const app = express();
   app.use(express.json());
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
+  if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+    throw new Error('FATAL: PORT must be a valid TCP port.');
+  }
 
   // One-time first-admin credential provisioning. Disabled unless a strong
   // server-only bootstrap secret is explicitly configured. The endpoint never
@@ -323,6 +326,27 @@ async function startServer() {
   app.post('/api/auth/logout', (_req: Request, res: Response) => {
     res.setHeader('Set-Cookie', buildExpiredSessionCookie(isSecureCookieRuntime()));
     res.status(204).end();
+  });
+
+  // Public low-detail readiness endpoint. It proves the server and PostgreSQL
+  // authority are available without exposing tenant, credential or topology data.
+  app.get('/api/health', async (_req: Request, res: Response) => {
+    try {
+      await db.execute(sql`SELECT 1`);
+      res.json({
+        status: 'ok',
+        application: 'AutoERP',
+        environment: process.env.APP_ENV || 'unknown',
+        commit: process.env.RENDER_GIT_COMMIT || null,
+      });
+    } catch {
+      res.status(503).json({
+        status: 'unavailable',
+        application: 'AutoERP',
+        environment: process.env.APP_ENV || 'unknown',
+        commit: process.env.RENDER_GIT_COMMIT || null,
+      });
+    }
   });
 
   // Middleware for injecting tenant context securely
