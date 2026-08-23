@@ -15,6 +15,7 @@ import { registerOperationalRoutes } from './operationalRoutes';
 import { registerDetailAuthorityRoutes } from './detailAuthorityRoutes';
 import { registerFinanceOverdueRoutes } from './financeOverdueRoutes';
 import { registerBankReconciliationRoutes } from './bankReconciliationRoutes';
+import { registerSecurityDepositLifecycleRoutes } from './securityDepositLifecycleRoutes';
 
 type RecurringAction = 'VIEW_RECURRING' | 'MUTATE_RECURRING' | 'VIEW_NOTIFICATIONS' | 'READ_NOTIFICATIONS';
 const READ_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
@@ -125,6 +126,7 @@ export function registerRecurringRoutes(app: Express): void {
   registerDetailAuthorityRoutes(app);
   registerFinanceOverdueRoutes(app);
   registerBankReconciliationRoutes(app);
+  registerSecurityDepositLifecycleRoutes(app);
 
   app.get('/api/recurring-rules', async (req, res) => {
     const actor = requirePrincipal(req, res, 'VIEW_RECURRING'); if (!actor) return;
@@ -206,7 +208,7 @@ export function registerRecurringRoutes(app: Express): void {
 
   app.get('/api/notifications/unread-count', async (req, res) => {
     const actor = requirePrincipal(req, res, 'VIEW_NOTIFICATIONS'); if (!actor) return;
-    try { res.json({ count: await RecurringAuthorityService.unreadCount(actor.companyId, actor.userId) }); }
+    try { res.json({ count: await RecurringAuthorityService.unreadCount(actor.companyId, actor.userId, limit) }); }
     catch (error) { sendError(res, error); }
   });
 
