@@ -117,7 +117,7 @@ async function startServer() {
 
   const app = express();
   app.use(express.json());
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
 
   // One-time first-admin credential provisioning. Disabled unless a strong
   // server-only bootstrap secret is explicitly configured. The endpoint never
