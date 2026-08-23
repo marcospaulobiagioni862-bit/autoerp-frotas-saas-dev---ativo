@@ -5,12 +5,13 @@ import { ReceivablesView } from './ReceivablesView';
 import { PayablesView } from './PayablesView';
 import { TransactionsView } from './TransactionsView';
 import { DREReportView } from './DREReportView';
+import { CashFlowView } from './CashFlowView';
 import { FinancialPeriodsView } from './FinancialPeriodsView';
 import { FinancialMasterDataView } from './FinancialMasterDataView';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
-type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'periods' | 'dre' | 'settings';
+type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
   initialSubTab?: FinanceSubTab;
@@ -34,6 +35,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'receivables' as const, label: 'Contas a Receber', icon: TrendingUp },
     { id: 'payables' as const, label: 'Contas a Pagar', icon: CreditCard },
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
+    { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
     { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
     { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
     { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
@@ -84,6 +86,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         {activeSubTab === 'transactions' && (
           <TransactionsView onOpenTransferModal={onOpenTransferModal} />
         )}
+        {activeSubTab === 'cashflow' && <CashFlowView />}
         {activeSubTab === 'periods' && <FinancialPeriodsView />}
         {activeSubTab === 'dre' && <DREReportView />}
         {activeSubTab === 'settings' && <FinancialMasterDataView />}
