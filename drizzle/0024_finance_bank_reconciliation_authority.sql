@@ -48,11 +48,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_bank_statement_match_scope
 CREATE INDEX IF NOT EXISTS idx_bank_statement_reconciliation_inbox
   ON bank_statement_entries(company_id, account_id, status, date, id);
 
--- RLS/FORCE RLS and tenant_isolation_policy were introduced for this table by 0002.
--- Keep them explicit here so R14 remains safe even if an older environment missed it.
+-- RLS/FORCE RLS and the restrictive tenant guard were introduced for this table by
+-- 0002. Add the required permissive tenant policy as well: PostgreSQL combines at
+-- least one PERMISSIVE policy with every RESTRICTIVE policy, otherwise a normal
+-- non-superuser role is deny-all even when app.current_tenant is correct.
 ALTER TABLE bank_statement_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_statement_entries FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_policy ON bank_statement_entries;
 CREATE POLICY tenant_isolation_policy ON bank_statement_entries AS RESTRICTIVE
+  USING (company_id = current_setting('app.current_tenant', true))
+  WITH CHECK (company_id = current_setting('app.current_tenant', true));
+
+DROP POLICY IF EXISTS tenant_access_bank_statement_entries ON bank_statement_entries;
+CREATE POLICY tenant_access_bank_statement_entries ON bank_statement_entries AS PERMISSIVE
+  FOR ALL
   USING (company_id = current_setting('app.current_tenant', true))
   WITH CHECK (company_id = current_setting('app.current_tenant', true));
