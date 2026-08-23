@@ -60,12 +60,60 @@ export interface ReceiveSecurityDepositInput {
   idempotencyKey: string;
 }
 
-export function createDepositReceiptIdempotencyKey(): string {
+export interface ReturnSecurityDepositInput {
+  depositId: string;
+  amount: number;
+  financialAccountId: string;
+  paymentMethodId: string;
+  transactionDate?: string;
+  notes?: string;
+  idempotencyKey: string;
+}
+
+export interface CompensateSecurityDepositInput {
+  depositId: string;
+  receivableId: string;
+  amount: number;
+  notes?: string;
+  idempotencyKey: string;
+}
+
+function createCommandKey(prefix: string): string {
   const cryptoApi = globalThis.crypto;
   if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
-    return `deposit-receipt-${cryptoApi.randomUUID()}`;
+    return `${prefix}-${cryptoApi.randomUUID()}`;
   }
-  return `deposit-receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function createDepositReceiptIdempotencyKey(): string {
+  return createCommandKey('deposit-receipt');
+}
+
+export function createDepositReturnIdempotencyKey(): string {
+  return createCommandKey('deposit-return');
+}
+
+export function createDepositCompensationIdempotencyKey(): string {
+  return createCommandKey('deposit-compensation');
+}
+
+async function lifecycleCommand(
+  path: 'return' | 'compensate',
+  input: ReturnSecurityDepositInput | CompensateSecurityDepositInput
+): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+  const response = await fetch(`/api/finance/security-deposits/${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw await apiError(response);
+  const payload = asRecord(await response.json());
+  return {
+    deposit: validateDeposit(payload.deposit),
+    movement: validateMovement(payload.movement),
+  };
 }
 
 export class FinanceDepositClient {
@@ -92,5 +140,13 @@ export class FinanceDepositClient {
       deposit: validateDeposit(payload.deposit),
       movement: validateMovement(payload.movement),
     };
+  }
+
+  static async returnDeposit(input: ReturnSecurityDepositInput): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+    return lifecycleCommand('return', input);
+  }
+
+  static async compensate(input: CompensateSecurityDepositInput): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+    return lifecycleCommand('compensate', input);
   }
 }
