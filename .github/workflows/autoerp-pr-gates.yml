@@ -160,6 +160,29 @@ jobs:
           fi
           echo "FINANCE-R17 source invariants: PASS"
 
+      - name: FINANCE-R23 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "tenant_access_financial_accounts" drizzle/0026_finance_master_data_authority.sql
+          grep -F "tenant_access_financial_categories" drizzle/0026_finance_master_data_authority.sql
+          grep -F "FINANCIAL_MASTER_DATA_MANAGE" src/domain/finance/FinancialAuthorizationService.ts
+          grep -F "registerFinanceMasterDataRoutes" src/server/recurringRoutes.ts
+          grep -F "/api/finance/master-data/accounts" src/server/financeMasterDataRoutes.ts
+          grep -F "/api/finance/master-data/payment-methods" src/server/financeMasterDataRoutes.ts
+          grep -F "/api/finance/master-data/categories" src/server/financeMasterDataRoutes.ts
+          grep -F "openingBalancePolicy: 'INITIAL_EQUALS_CURRENT_AT_CREATION'" src/server/financeMasterDataAuthority.ts
+          grep -F "pg_advisory_xact_lock" src/server/financeMasterDataAuthority.ts
+          if grep -Fq "currentBalance" src/server/financeMasterDataRoutes.ts; then
+            echo "FAIL: R23 route contract must never accept direct currentBalance mutation"
+            exit 1
+          fi
+          if grep -Fq "localRepositories" src/server/financeMasterDataAuthority.ts src/server/financeMasterDataRoutes.ts src/api/financeMasterDataClient.ts; then
+            echo "FAIL: R23 master-data authority references browser/local repositories"
+            exit 1
+          fi
+          echo "FINANCE-R23 source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -208,6 +231,7 @@ jobs:
           npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
           npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
