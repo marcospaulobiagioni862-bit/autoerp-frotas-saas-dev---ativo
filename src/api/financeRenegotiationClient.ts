@@ -1,4 +1,4 @@
-import type { AccountReceivable } from '../types/entities';
+import type { AccountPayable, AccountReceivable } from '../types/entities';
 import {
   isRenegotiationInstallmentFrequency,
   type RenegotiationInstallmentFrequency,
@@ -12,6 +12,10 @@ export interface ReceivableRenegotiationInput {
   installmentFrequency: RenegotiationInstallmentFrequency;
   categoryId: string;
   description: string;
+}
+
+export interface PayableRenegotiationInput extends ReceivableRenegotiationInput {
+  idempotencyKey: string;
 }
 
 export class FinanceRenegotiationApiError extends Error {
@@ -30,7 +34,7 @@ function asRecord(value: unknown): JsonRecord {
   return value as JsonRecord;
 }
 
-function normalizeReceivable(value: unknown): AccountReceivable {
+function normalizeObligation<T extends AccountReceivable | AccountPayable>(value: unknown, kind: 'receivable' | 'payable'): T {
   const row = asRecord(value);
   const originalAmount = Number(row.originalAmount);
   const updatedAmount = Number(row.updatedAmount);
@@ -48,7 +52,7 @@ function normalizeReceivable(value: unknown): AccountReceivable {
     !Number.isFinite(paidAmount) ||
     !Number.isFinite(balanceAmount)
   ) {
-    throw new Error('Invalid renegotiated receivable response');
+    throw new Error(`Invalid renegotiated ${kind} response`);
   }
   return {
     ...row,
@@ -61,7 +65,7 @@ function normalizeReceivable(value: unknown): AccountReceivable {
     interestAmount: Number(row.interestAmount ?? 0),
     dueDate: row.dueDate.slice(0, 10),
     competenceDate: row.competenceDate.slice(0, 10),
-  } as unknown as AccountReceivable;
+  } as unknown as T;
 }
 
 async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
@@ -79,15 +83,18 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return await response.json();
 }
 
+function validateCommon(input: ReceivableRenegotiationInput): void {
+  if (!isRenegotiationInstallmentFrequency(input.installmentFrequency)) {
+    throw new Error('Invalid renegotiation installment frequency');
+  }
+  if (!input.categoryId.trim()) {
+    throw new Error('Renegotiation category is required');
+  }
+}
+
 export class FinanceRenegotiationClient {
   static async renegotiateReceivables(input: ReceivableRenegotiationInput): Promise<AccountReceivable[]> {
-    if (!isRenegotiationInstallmentFrequency(input.installmentFrequency)) {
-      throw new Error('Invalid renegotiation installment frequency');
-    }
-    if (!input.categoryId.trim()) {
-      throw new Error('Renegotiation category is required');
-    }
-
+    validateCommon(input);
     const payload = asRecord(await requestJson('/api/finance/receivables/renegotiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -96,6 +103,23 @@ export class FinanceRenegotiationClient {
     if (!Array.isArray(payload.items)) {
       throw new Error('Invalid renegotiation items response');
     }
-    return payload.items.map(normalizeReceivable);
+    return payload.items.map((item) => normalizeObligation<AccountReceivable>(item, 'receivable'));
+  }
+
+  static async renegotiatePayables(input: PayableRenegotiationInput): Promise<AccountPayable[]> {
+    validateCommon(input);
+    const key = input.idempotencyKey.trim();
+    if (!key || key.length > 160) {
+      throw new Error('Payable renegotiation idempotency key is required');
+    }
+    const payload = asRecord(await requestJson('/api/finance/payables/renegotiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...input, idempotencyKey: key }),
+    }));
+    if (!Array.isArray(payload.items)) {
+      throw new Error('Invalid payable renegotiation items response');
+    }
+    return payload.items.map((item) => normalizeObligation<AccountPayable>(item, 'payable'));
   }
 }

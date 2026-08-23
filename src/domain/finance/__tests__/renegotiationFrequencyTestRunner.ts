@@ -35,6 +35,9 @@ function makeContext(kind: 'RECEIVABLE' | 'PAYABLE') {
     async findById(id: string) {
       return id === original.id ? original : null;
     },
+    async findByIdempotencyKey(key: string) {
+      return created.find((item) => item.idempotencyKey === key) ?? null;
+    },
     async create(item: MutableObligation) {
       created.push({ ...item });
       return item;
@@ -48,6 +51,7 @@ function makeContext(kind: 'RECEIVABLE' | 'PAYABLE') {
 
   const unusedRepository = {
     async findById() { return null; },
+    async findByIdempotencyKey() { return null; },
     async create() { throw new Error('unexpected repository create'); },
     async update() { throw new Error('unexpected repository update'); },
   };
@@ -77,6 +81,10 @@ function makeContext(kind: 'RECEIVABLE' | 'PAYABLE') {
     }),
     getReceivableRepo: () => kind === 'RECEIVABLE' ? repository : unusedRepository,
     getPayableRepo: () => kind === 'PAYABLE' ? repository : unusedRepository,
+    getRawTransaction: () => ({
+      async execute() { return { rows: [] }; },
+    }),
+    findPayableByIdWithLock: async (id: string) => kind === 'PAYABLE' && id === original.id ? original : null,
     getAuditLogRepo: () => ({
       async create(item: MutableObligation) {
         audits.push({ ...item });
@@ -107,6 +115,7 @@ async function renegotiate(
       installmentFrequency: frequency,
       categoryId: 'cat-finance',
       description: 'Acordo teste',
+      idempotencyKey: kind === 'PAYABLE' ? `r1-frequency-${frequency ?? 'monthly'}-${firstDueDate}` : undefined,
       userId: 'user-admin',
       userName: 'Admin',
     },
@@ -125,7 +134,7 @@ async function run() {
   const biweekly = await renegotiate('RECEIVABLE', 'BIWEEKLY', '2026-09-15');
   assertEqual(biweekly.items.map((item: any) => item.dueDate).join(','), '2026-09-15,2026-09-29,2026-10-13', 'biweekly receivable dates');
 
-  const monthlyPayable = await renegotiate('PAYABLE', 'MONTHLY', '2026-01-31');
+  const monthlyPayable = await renegotiate('PAYABLE', 'MONTHLY', '2026-01-31', 3, 100);
   assertEqual(monthlyPayable.items.map((item: any) => item.dueDate).join(','), '2026-01-31,2026-02-28,2026-03-31', 'monthly payable end-of-month clamp');
   assertEqual(monthlyPayable.original.status, ObligationStatus.CANCELLED, 'monthly original payable cancelled');
 
