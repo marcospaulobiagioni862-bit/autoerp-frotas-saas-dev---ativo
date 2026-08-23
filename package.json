@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
     "start": "node dist/server.mjs",
+    "db:migrate": "node migrate_db.cjs",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate"
   },
