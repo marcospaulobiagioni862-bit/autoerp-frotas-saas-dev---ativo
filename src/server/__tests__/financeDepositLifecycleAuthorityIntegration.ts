@@ -68,12 +68,14 @@ async function run(){
     SecurityDepositLifecycleAuthority.compensateDeposit(actorA,{depositId:receipt2.deposit.id,receivableId:'r16-ar-a2',amount:600,idempotencyKey:'r16-race-comp'}),
   ]);
   assert(race.filter(x=>x.status==='fulfilled').length===1,'return-vs-compensation race must allow exactly one 600 operation');
-  const dep2=await UnitOfWork.run(companyA,tx=>tx.getSecurityDepositRepo().findById(receipt2.deposit.id));
+  const dep2:any=await UnitOfWork.run(companyA,tx=>tx.getSecurityDepositRepo().findById(receipt2.deposit.id));
   assert(dep2 && Number(dep2.usedAmount)+Number(dep2.returnedAmount)===600,'race overspent or lost deposit value');
 
+  const depB:any=await UnitOfWork.run(companyB,tx=>tx.getSecurityDepositRepo().findByContractId(contractB1));
+  assert(depB?.id,'company B deposit missing');
   const same=await Promise.all([
-    SecurityDepositLifecycleAuthority.returnDeposit(actorB,{depositId:(await UnitOfWork.run(companyB,tx=>tx.getSecurityDepositRepo().findByContractId(contractB1)))!.id,amount:200,financialAccountId:accountB,paymentMethodId:methodB,transactionDate:'2026-08-23',idempotencyKey:'r16-return-same'}),
-    SecurityDepositLifecycleAuthority.returnDeposit(actorB,{depositId:(await UnitOfWork.run(companyB,tx=>tx.getSecurityDepositRepo().findByContractId(contractB1)))!.id,amount:200,financialAccountId:accountB,paymentMethodId:methodB,transactionDate:'2026-08-23',idempotencyKey:'r16-return-same'}),
+    SecurityDepositLifecycleAuthority.returnDeposit(actorB,{depositId:depB.id,amount:200,financialAccountId:accountB,paymentMethodId:methodB,transactionDate:'2026-08-23',idempotencyKey:'r16-return-same'}),
+    SecurityDepositLifecycleAuthority.returnDeposit(actorB,{depositId:depB.id,amount:200,financialAccountId:accountB,paymentMethodId:methodB,transactionDate:'2026-08-23',idempotencyKey:'r16-return-same'}),
   ]);
   assert(same[0].movement.id===same[1].movement.id,'concurrent same-key return did not converge');
   assert(await balance(accountB)===500,'concurrent same-key return duplicated cash');
