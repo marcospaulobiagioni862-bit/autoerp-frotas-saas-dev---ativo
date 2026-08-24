@@ -1,5 +1,5 @@
 import { isNotNull } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -520,6 +520,34 @@ export const documents = pgTable('documents', {
   idxCompanyTypeCurrent: index('idx_documents_company_type_current').on(t.companyId, t.documentType, t.isCurrent, t.isArchived),
   idxCompanyExpiration: index('idx_documents_company_expiration').on(t.companyId, t.expirationDate, t.isCurrent, t.isArchived),
   idxAttachment: index('idx_documents_attachment').on(t.companyId, t.attachmentId),
+}));
+
+export const documentAiExtractions = pgTable('document_ai_extractions', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  attachmentId: text('attachment_id').notNull(),
+  attachmentChecksum: text('attachment_checksum').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  status: text('status').notNull().default('PENDING'),
+  requestedBy: text('requested_by').notNull(),
+  provider: text('provider'),
+  model: text('model'),
+  modelVersion: text('model_version'),
+  detectedDocumentType: text('detected_document_type'),
+  rawExtraction: jsonb('raw_extraction').notNull().default({}),
+  proposedFields: jsonb('proposed_fields').notNull().default({}),
+  fieldConfidence: jsonb('field_confidence').notNull().default({}),
+  failureCode: text('failure_code'),
+  reviewedBy: text('reviewed_by'),
+  corrections: jsonb('corrections'),
+  reviewNotes: text('review_notes'),
+  approvedAt: timestamp('approved_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  unqCompanyIdempotency: unique('uq_document_ai_company_idempotency').on(t.companyId, t.idempotencyKey),
+  idxCompanyStatusCreated: index('idx_document_ai_company_status_created').on(t.companyId, t.status, t.createdAt),
+  idxCompanyAttachment: index('idx_document_ai_company_attachment').on(t.companyId, t.attachmentId, t.createdAt),
 }));
 
 export const communicationLogs = pgTable('communication_logs', {

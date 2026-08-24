@@ -224,6 +224,7 @@ jobs:
         run: |
           npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
           npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/documentAiAuthorityIntegration.ts
 
       - name: Fleet domain regressions
         run: |
