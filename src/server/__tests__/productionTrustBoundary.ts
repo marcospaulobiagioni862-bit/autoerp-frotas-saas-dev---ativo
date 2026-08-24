@@ -91,10 +91,18 @@ async function main(): Promise<void> {
     assert(!boundary.includes(marker), `Production boundary reintroduced forbidden marker: ${marker}`);
   }
 
-  const safeProductionRoutes = ['executive-operations', 'incident-management', 'workflow-center', 'resilience'];
+  const safeProductionRoutes = ['administration', 'executive-operations', 'incident-management', 'workflow-center', 'resilience'];
   for (const route of safeProductionRoutes) {
     assert(sidebar.includes(`id: '${route}'`), `Trusted production route missing: ${route}`);
   }
+  assert(
+    sidebar.includes("const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';"),
+    'Production administration navigation must derive visibility from the authenticated ADMIN principal'
+  );
+  assert(
+    sidebar.includes("label: 'Administração de Usuários'"),
+    'Production ADMIN navigation label for the promoted Users slice is missing'
+  );
 
   const quarantinedNavigationLabels = [
     'Gestão de Resultados (3.60)',
