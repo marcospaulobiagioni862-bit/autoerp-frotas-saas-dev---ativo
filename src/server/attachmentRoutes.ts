@@ -7,8 +7,9 @@ import {AuditAction} from '../types/enums';
 import {hasDriverHealthPermission} from '../shared/security/driverHealthAuthorization';
 import {
   AttachmentStorageNotFoundError,AttachmentStorageUnavailableError,AttachmentStorageValidationError,
-  getAttachmentStorageConfiguration,MAX_ATTACHMENT_BYTES,ServerAttachmentStorage,
+  MAX_ATTACHMENT_BYTES,type AttachmentByteStorage,
 } from './attachmentStorage';
+import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
 
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -70,11 +71,10 @@ function sendAttachmentError(res:Response,error:unknown):void{
 }
 function auditState(item:FileAttachment):string{return JSON.stringify({entityType:item.entityType,entityId:item.entityId,documentType:item.documentType,fileName:item.fileName,fileSize:item.fileSize,mimeType:item.mimeType,checksum:item.checksum,storageProvider:item.storageProvider,contentState:item.contentState,isArchived:item.isArchived});}
 
-export function registerAttachmentRoutes(app:Express):void{
-  const storage=new ServerAttachmentStorage();
+export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStorage=createAttachmentStorageFromEnvironment()):void{
   app.get('/api/attachments/storage/status',(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
-    const status=getAttachmentStorageConfiguration();
+    const status=storage.getConfiguration();
     res.json({storage:status});
   });
   app.get('/api/attachments',async(req,res)=>{
@@ -94,13 +94,13 @@ export function registerAttachmentRoutes(app:Express):void{
       const id=randomUUID(),stored=await storage.write(principal.companyId,id,req.body);storageKey=stored.storageKey;const now=new Date().toISOString();
       const item=await UnitOfWork.run(principal.companyId,async tx=>{
         await validateEntity(tx,principal,entityType,entityId,true);
-        const created=await tx.getAttachmentRepo().create({id,companyId:principal.companyId,entityName:entityType,entityType,entityId,documentType,fileName,fileSize:stored.fileSize,mimeType,uploadedBy:principal.name,storageProvider:'SERVER_FS',storageKey:stored.storageKey,checksum:stored.checksum,createdBy:principal.userId,isArchived:false,contentState:'AVAILABLE',description,issueDate,expirationDate,createdAt:now});
+        const created=await tx.getAttachmentRepo().create({id,companyId:principal.companyId,entityName:entityType,entityType,entityId,documentType,fileName,fileSize:stored.fileSize,mimeType,uploadedBy:principal.name,storageProvider:storage.provider,storageKey:stored.storageKey,checksum:stored.checksum,createdBy:principal.userId,isArchived:false,contentState:'AVAILABLE',description,issueDate,expirationDate,createdAt:now});
         await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:created.id,action:AuditAction.CREATE,newState:auditState(created),userId:principal.userId,userName:principal.name,timestamp:now});return created;
       });res.status(201).json({item});
     }catch(error){if(storageKey)await storage.remove(principal.companyId,storageKey).catch(cleanup=>console.error('AUTOERP_ATTACHMENT_COMPENSATION_FAILURE',cleanup));sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/:id/content',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{
-    const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found||found.isArchived)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);if(found.storageProvider!=='SERVER_FS'||found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();return found;});
+    const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found||found.isArchived)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);if(found.storageProvider!==storage.provider||found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();return found;});
     const bytes=await storage.read(principal.companyId,item.storageKey!),checksum=createHash('sha256').update(bytes).digest('hex');if(bytes.length!==item.fileSize||!item.checksum||checksum!==item.checksum)throw new Error('Attachment integrity mismatch');
     await UnitOfWork.run(principal.companyId,async tx=>{await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:item.id,action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,newState:JSON.stringify({event:'DOWNLOAD',checksum}),timestamp:new Date().toISOString()});});
     const safeName=item.fileName.replace(/[\r\n"]/g,'_');res.setHeader('content-type',item.mimeType);res.setHeader('content-length',String(bytes.length));res.setHeader('content-disposition',`inline; filename="${safeName}"`);res.setHeader('x-content-type-options','nosniff');res.send(bytes);
