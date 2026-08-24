@@ -226,6 +226,23 @@ jobs:
           fi
           echo "WHATSAPP-1A source invariants: PASS"
 
+      - name: WHATSAPP-1B client source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "WhatsappClient.decideConsent" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "Preparar lembrete — sem enviar" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "providerCallApplied: false" src/api/whatsappClient.ts
+          if grep -Fq "wa.me/" src/components/drivers/DriverDetailsModal.tsx; then
+            echo "FAIL: driver UI must not bypass consent/outbox through wa.me"
+            exit 1
+          fi
+          if grep -Fq "window.open" src/components/drivers/DriverDetailsModal.tsx; then
+            echo "FAIL: driver UI must not open an external WhatsApp destination"
+            exit 1
+          fi
+          echo "WHATSAPP-1B client source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
