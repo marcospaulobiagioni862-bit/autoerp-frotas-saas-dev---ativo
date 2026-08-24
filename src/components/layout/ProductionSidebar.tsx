@@ -22,6 +22,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import { useAuth } from '../../hooks/useAuth';
 
 export type NavigationTab =
   | 'dashboard'
@@ -90,7 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
 }) => {
+  const { user } = useAuth();
   const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(true);
+  const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
 
   const categories: Array<{ title: string; items: MenuItem[] }> = [
     {
@@ -162,6 +165,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const authorityItems: MenuItem[] = [
+    ...(isAdmin
+      ? [{ id: 'administration' as const, label: 'Administração de Usuários', icon: Users, badge: 'Admin' }]
+      : []),
     { id: 'executive-operations', label: 'Central Executiva', icon: ShieldCheck, badge: 'Server' },
     { id: 'incident-management', label: 'Incidentes', icon: LifeBuoy, badge: 'Server' },
     { id: 'workflow-center', label: 'Tarefas & Workflow', icon: CheckSquare, badge: 'Server' },
