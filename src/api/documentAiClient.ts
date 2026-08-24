@@ -125,6 +125,21 @@ export class DocumentAiClient {
     return payload.items.map(parseDocumentAiExtraction);
   }
 
+  static async retry(id: string): Promise<DocumentAiExtraction> {
+    const response = await fetch(`/api/document-ai/extractions/${encodeURIComponent(id)}/retry`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+    if (!response.ok) throw await errorFrom(response);
+    const payload = asRecord(await response.json());
+    return parseDocumentAiExtraction(payload.item);
+  }
+
   static async review(id: string, input: DocumentAiReviewInput): Promise<DocumentAiExtraction> {
     const response = await fetch(`/api/document-ai/extractions/${encodeURIComponent(id)}/review`, {
       method: 'POST',
