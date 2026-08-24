@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
-import { VehicleStatus } from '../../types/enums';
+import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
 import {
   Car,
   Search,
@@ -190,6 +190,17 @@ export const FleetManagement: React.FC = () => {
                 {st.label}
               </button>
             ))}
+            <div className="w-52 shrink-0">
+              <Select
+                aria-label="Filtrar por categoria"
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                options={[
+                  { value: 'ALL', label: 'Todas as categorias' },
+                  ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category })),
+                ]}
+              />
+            </div>
           </div>
         </div>
       </Card>
@@ -216,6 +227,7 @@ export const FleetManagement: React.FC = () => {
             onClick={() => {
               setSearchTerm('');
               setStatusFilter('ALL');
+              setCategoryFilter('ALL');
             }}
             className="mt-4"
           >
