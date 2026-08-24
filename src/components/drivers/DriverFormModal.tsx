@@ -159,7 +159,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={driverToEdit ? 'Editar Cadastro de Motorista' : 'Novo Cadastro de Motorista'}
-      maxWidth="max-w-4xl"
+      maxWidth="4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         {errorMessage && (
@@ -180,7 +180,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
               <Input
-                label="Nome Completo *"
+                label="Nome Completo"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Ex: João da Silva Santos"
@@ -189,7 +189,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             </div>
 
             <Input
-              label="CPF *"
+              label="CPF"
               value={cpf}
               onChange={(e) => setCpf(e.target.value)}
               placeholder="000.000.000-00"
@@ -204,7 +204,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             />
 
             <Input
-              label="Data de Nascimento *"
+              label="Data de Nascimento"
               type="date"
               value={birthDate}
               onChange={(e) => setBirthDate(e.target.value)}
@@ -212,7 +212,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             />
 
             <Input
-              label="Telefone Principal *"
+              label="Telefone Principal"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="(11) 90000-0000"
@@ -248,7 +248,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
-              label="Número do Registro CNH *"
+              label="Número do Registro CNH"
               value={cnhNumber}
               onChange={(e) => setCnhNumber(e.target.value)}
               placeholder="00000000000"
@@ -256,7 +256,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             />
 
             <Select
-              label="Categoria *"
+              label="Categoria"
               value={cnhCategory}
               onChange={(e) => setCnhCategory(e.target.value)}
               required
@@ -270,7 +270,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             </Select>
 
             <Input
-              label="Validade da CNH *"
+              label="Validade da CNH"
               type="date"
               value={cnhExpiration}
               onChange={(e) => setCnhExpiration(e.target.value)}
