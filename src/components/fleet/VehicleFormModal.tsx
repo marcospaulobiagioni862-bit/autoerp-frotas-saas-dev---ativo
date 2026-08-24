@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '../../types/entities';
+import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
@@ -264,13 +265,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             label="Categoria *"
             value={formData.category}
             onChange={(e) => handleChange('category', e.target.value)}
-            options={[
-              { value: 'Hatch / Sedan Compacto', label: 'Hatch / Sedan Compacto' },
-              { value: 'Sedan Médio', label: 'Sedan Médio' },
-              { value: 'SUV', label: 'SUV' },
-              { value: 'Utilitário / VUC', label: 'Utilitário / VUC' },
-              { value: 'Executivo', label: 'Executivo' },
-            ]}
+            options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))}
           />
         </div>
 
