@@ -4,7 +4,10 @@ import {
   GeminiDocumentAiProvider,
   SyntheticDocumentRequiredError,
 } from '../geminiDocumentAiProvider';
-import { DOCUMENT_AI_SYSTEM_POLICY } from '../documentAiProcessor';
+import {
+  DOCUMENT_AI_SYSTEM_POLICY,
+  processDocumentAiBytes,
+} from '../documentAiProcessor';
 
 const syntheticPdf = Buffer.from('%PDF-1.4\n% AutoERP synthetic fixture only\n%%EOF\n');
 const checksum = createHash('sha256').update(syntheticPdf).digest('hex');
@@ -33,14 +36,24 @@ const provider = new GeminiDocumentAiProvider({
   },
 });
 
-const allowed = await provider.extract({
+const allowed = await processDocumentAiBytes(provider, {
   content: syntheticPdf,
   mimeType: 'application/pdf',
-  policy: DOCUMENT_AI_SYSTEM_POLICY,
-}, new AbortController().signal);
+  expectedChecksum: checksum,
+});
 assert.equal(calls, 1);
-assert.equal((allowed as { documentType: string }).documentType, 'INVOICE');
+assert.equal(allowed.detectedDocumentType, 'INVOICE');
+assert.deepEqual(allowed.proposedFields, { invoiceNumber: 'SYNTHETIC-001', amount: 10 });
 assert.equal(captured?.model, 'gemini-2.5-flash');
+
+const config = captured?.config as Record<string, unknown> | undefined;
+assert.ok(config, 'Gemini request config was not captured');
+assert.equal(config.systemInstruction, DOCUMENT_AI_SYSTEM_POLICY);
+assert.equal(config.responseMimeType, 'application/json');
+assert.ok(config.responseJsonSchema, 'strict JSON schema was not sent');
+assert.equal('tools' in config, false);
+assert.equal('toolConfig' in config, false);
+assert.equal('automaticFunctionCalling' in config, false);
 assert.equal('tools' in (captured ?? {}), false);
 
 await assert.rejects(
