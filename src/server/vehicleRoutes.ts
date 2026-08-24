@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction, VehicleStatus } from '../types/enums';
+import { AuditAction, VEHICLE_CATEGORIES, VehicleStatus } from '../types/enums';
 import type { Vehicle } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 import { registerDriverRoutes } from './driverRoutes';
@@ -16,6 +16,7 @@ type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANG
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+const VEHICLE_CATEGORY_VALUES = new Set<string>(VEHICLE_CATEGORIES);
 
 class VehicleValidationError extends Error {}
 class VehicleConflictError extends Error {}
@@ -64,6 +65,12 @@ function requiredText(value: unknown, field: string): string {
 function optionalText(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
   return String(value).trim();
+}
+
+function normalizeVehicleCategory(value: unknown, fallback = 'Hatch / Sedan Compacto'): string {
+  const category = optionalText(value) || fallback;
+  if (!VEHICLE_CATEGORY_VALUES.has(category)) throw new VehicleValidationError('Invalid vehicle category');
+  return category;
 }
 
 function requiredNonNegative(value: unknown, field: string): number {
@@ -167,6 +174,7 @@ export function registerVehicleRoutes(app: Express): void {
       const nextMaintenanceKm = optionalNonNegative(req.body?.nextMaintenanceKm, 'nextMaintenanceKm');
       const yearFabrication = optionalNonNegativeInteger(req.body?.yearFabrication, 'yearFabrication') ?? 0;
       const yearModel = optionalNonNegativeInteger(req.body?.yearModel, 'yearModel') ?? 0;
+      const category = normalizeVehicleCategory(req.body?.category);
 
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
@@ -188,7 +196,7 @@ export function registerVehicleRoutes(app: Express): void {
           currentKm,
           nextMaintenanceKm,
           fuelType: optionalText(req.body?.fuelType) || 'Flex',
-          category: optionalText(req.body?.category) || 'Padrão',
+          category,
           acquisitionValue,
           currentValue,
           rentalValueBase,
@@ -259,7 +267,7 @@ export function registerVehicleRoutes(app: Express): void {
         if (req.body?.color !== undefined) changes.color = optionalText(req.body.color) || '';
         if (req.body?.chassis !== undefined) changes.chassis = (optionalText(req.body.chassis) || '').toUpperCase();
         if (req.body?.fuelType !== undefined) changes.fuelType = requiredText(req.body.fuelType, 'fuelType');
-        if (req.body?.category !== undefined) changes.category = requiredText(req.body.category, 'category');
+        if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(req.body.category);
         if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
         if (req.body?.yearFabrication !== undefined) changes.yearFabrication = optionalNonNegativeInteger(req.body.yearFabrication, 'yearFabrication')!;
         if (req.body?.yearModel !== undefined) changes.yearModel = optionalNonNegativeInteger(req.body.yearModel, 'yearModel')!;

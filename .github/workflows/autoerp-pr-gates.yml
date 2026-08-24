@@ -234,6 +234,7 @@ jobs:
           npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
           npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractAuthorityIntegration.ts
 

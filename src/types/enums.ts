@@ -9,6 +9,17 @@ export enum VehicleStatus {
   ARCHIVED = 'ARCHIVED',
 }
 
+export const VEHICLE_CATEGORIES = [
+  'Hatch / Sedan Compacto',
+  'Sedan Médio',
+  'SUV',
+  'Pickup / Caminhonete',
+  'Utilitário / VUC',
+  'Executivo',
+] as const;
+
+export type VehicleCategory = (typeof VEHICLE_CATEGORIES)[number];
+
 export enum DriverStatus {
   ACTIVE = 'ACTIVE',
   INACTIVE = 'INACTIVE',
