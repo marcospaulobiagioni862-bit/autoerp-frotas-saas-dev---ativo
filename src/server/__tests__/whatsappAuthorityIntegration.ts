@@ -228,7 +228,6 @@ export class WhatsappAuthorityIntegrationRunner {
           SELECT action, changes FROM audit_logs
           WHERE company_id = ${companyA}
             AND entity_type IN ('WhatsappConsent', 'WhatsappOutbox')
-          ORDER BY created_at
         `));
       });
       assert.equal(auditRows.length, 3, 'grant, held outbox, and revoke must each emit one audit event');
