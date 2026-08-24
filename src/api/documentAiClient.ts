@@ -13,6 +13,8 @@ export interface DocumentAiExtraction {
   attachmentChecksum: string;
   status: DocumentAiStatus;
   requestedBy: string;
+  attemptCount: number;
+  failureCode: string | null;
   provider: string | null;
   model: string | null;
   modelVersion: string | null;
@@ -64,6 +66,9 @@ export function parseDocumentAiExtraction(value: unknown): DocumentAiExtraction 
     typeof item.status !== 'string' ||
     !STATUSES.has(item.status as DocumentAiStatus) ||
     typeof item.requestedBy !== 'string' ||
+    !Number.isInteger(item.attemptCount) ||
+    (item.attemptCount as number) < 0 ||
+    (item.attemptCount as number) > 100 ||
     typeof item.createdAt !== 'string' ||
     typeof item.updatedAt !== 'string'
   ) {
@@ -83,6 +88,8 @@ export function parseDocumentAiExtraction(value: unknown): DocumentAiExtraction 
     attachmentChecksum: item.attachmentChecksum,
     status: item.status as DocumentAiStatus,
     requestedBy: item.requestedBy,
+    attemptCount: item.attemptCount as number,
+    failureCode: nullableString(item.failureCode),
     provider: nullableString(item.provider),
     model: nullableString(item.model),
     modelVersion: nullableString(item.modelVersion),
