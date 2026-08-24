@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, ExternalLink, FileSearch, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, Bot, Check, ExternalLink, FileSearch, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import {
   DocumentAiClient,
@@ -56,7 +56,7 @@ export function DocumentAiReviewPanel() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [submitting, setSubmitting] = useState<'APPROVE' | 'REJECT' | 'RETRY' | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +86,11 @@ export function DocumentAiReviewPanel() {
     setLoading(true);
     setError(null);
     try {
-      const next = await DocumentAiClient.list('REVIEW_REQUIRED');
+      const [reviewRequired, failed] = await Promise.all([
+        DocumentAiClient.list('REVIEW_REQUIRED'),
+        DocumentAiClient.list('FAILED'),
+      ]);
+      const next = [...reviewRequired, ...failed];
       setItems(next);
       setSelectedId((current) => next.some((item) => item.id === current) ? current : (next[0]?.id || ''));
       resetDraft(next.find((item) => item.id === selectedId) || next[0] || null);
@@ -142,6 +146,23 @@ export function DocumentAiReviewPanel() {
     }
   };
 
+  const retry = async () => {
+    if (!selected || selected.status !== 'FAILED' || !canReview) return;
+    setSubmitting('RETRY');
+    setError(null);
+    try {
+      await DocumentAiClient.retry(selected.id);
+      const remaining = items.filter((item) => item.id !== selected.id);
+      setItems(remaining);
+      setSelectedId(remaining[0]?.id || '');
+      resetDraft(remaining[0] || null);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao solicitar nova tentativa.');
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
   const openSource = async () => {
     if (!selected) return;
     setOpeningSource(true);
@@ -172,7 +193,7 @@ export function DocumentAiReviewPanel() {
     return (
       <div className="p-6 text-center">
         <ShieldCheck className="h-9 w-9 mx-auto text-emerald-500 mb-2" />
-        <p className="font-medium text-slate-900 dark:text-white">Nenhuma proposta aguardando revisão</p>
+        <p className="font-medium text-slate-900 dark:text-white">Nenhuma proposta ou falha pendente</p>
         <p className="text-sm text-slate-500 mt-1">Extrações futuras aparecerão aqui antes de qualquer aplicação no ERP.</p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>
           Atualizar
@@ -191,7 +212,7 @@ export function DocumentAiReviewPanel() {
       <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-3 space-y-2">
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Aguardando ({items.length})
+            Revisão e falhas ({items.length})
           </span>
           <button type="button" onClick={() => void load()} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Atualizar">
             <RefreshCw className="h-4 w-4" />
@@ -208,7 +229,16 @@ export function DocumentAiReviewPanel() {
                 : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900'
             }`}
           >
-            <p className="text-sm font-medium truncate">{item.detectedDocumentType || 'Documento não classificado'}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium truncate">{item.detectedDocumentType || 'Documento não classificado'}</p>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                item.status === 'FAILED'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+              }`}>
+                {item.status === 'FAILED' ? 'Falhou' : 'Revisar'}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-1 truncate">Anexo {item.attachmentId}</p>
             <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
           </button>
@@ -220,7 +250,9 @@ export function DocumentAiReviewPanel() {
           <div>
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-blue-600" />
-              <h3 className="font-semibold text-lg">Proposta de extração</h3>
+              <h3 className="font-semibold text-lg">
+                {selected.status === 'FAILED' ? 'Falha controlada na extração' : 'Proposta de extração'}
+              </h3>
             </div>
             <p className="text-sm text-slate-500 mt-1">
               {selected.detectedDocumentType || 'Tipo ainda não identificado'}
@@ -238,9 +270,20 @@ export function DocumentAiReviewPanel() {
           </Button>
         </div>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-          A IA apenas propõe. Aprovar registra a revisão, mas não altera motorista, veículo, contrato, documento operacional ou financeiro.
-        </div>
+        {selected.status === 'FAILED' ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            <p className="font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> A extração falhou sem gravar proposta parcial.
+            </p>
+            <p className="mt-1">
+              Código seguro: {selected.failureCode || 'PROCESSING_FAILED'} · tentativa {selected.attemptCount} de 3.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+            A IA apenas propõe. Aprovar registra a revisão, mas não altera motorista, veículo, contrato, documento operacional ou financeiro.
+          </div>
+        )}
 
         <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
@@ -249,7 +292,11 @@ export function DocumentAiReviewPanel() {
               Origem: anexo {selected.attachmentId} · SHA-256 {selected.attachmentChecksum.slice(0, 12)}…
             </p>
           </div>
-          {fields.length === 0 ? (
+          {selected.status === 'FAILED' ? (
+            <div className="p-5 text-sm text-red-700 dark:text-red-300">
+              Nenhuma proposta válida foi persistida. Uma nova tentativa exige ação explícita e continuará sob o limite do servidor.
+            </div>
+          ) : fields.length === 0 ? (
             <div className="p-5 text-sm text-amber-700 dark:text-amber-300">Nenhum campo estruturado foi proposto. Rejeite ou aguarde novo processamento.</div>
           ) : (
             <div className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -283,17 +330,19 @@ export function DocumentAiReviewPanel() {
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Observação da revisão</label>
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            maxLength={2000}
-            rows={3}
-            placeholder="Motivo da correção, aprovação ou rejeição..."
-            className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-          />
-        </div>
+        {selected.status === 'REVIEW_REQUIRED' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Observação da revisão</label>
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              maxLength={2000}
+              rows={3}
+              placeholder="Motivo da correção, aprovação ou rejeição..."
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+            />
+          </div>
+        )}
 
         {!canReview && (
           <p className="text-sm text-amber-700 dark:text-amber-300">
@@ -303,23 +352,36 @@ export function DocumentAiReviewPanel() {
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-          <Button
-            variant="danger"
-            disabled={!canReview}
-            isLoading={submitting === 'REJECT'}
-            onClick={() => void review('REJECT')}
-            icon={<X className="h-4 w-4" />}
-          >
-            Rejeitar proposta
-          </Button>
-          <Button
-            disabled={!canReview || fields.length === 0}
-            isLoading={submitting === 'APPROVE'}
-            onClick={() => void review('APPROVE')}
-            icon={<Check className="h-4 w-4" />}
-          >
-            Aprovar revisão
-          </Button>
+          {selected.status === 'FAILED' ? (
+            <Button
+              disabled={!canReview || selected.attemptCount >= 3}
+              isLoading={submitting === 'RETRY'}
+              onClick={() => void retry()}
+              icon={<RefreshCw className="h-4 w-4" />}
+            >
+              {selected.attemptCount >= 3 ? 'Limite de tentativas atingido' : 'Solicitar nova tentativa'}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="danger"
+                disabled={!canReview}
+                isLoading={submitting === 'REJECT'}
+                onClick={() => void review('REJECT')}
+                icon={<X className="h-4 w-4" />}
+              >
+                Rejeitar proposta
+              </Button>
+              <Button
+                disabled={!canReview || fields.length === 0}
+                isLoading={submitting === 'APPROVE'}
+                onClick={() => void review('APPROVE')}
+                icon={<Check className="h-4 w-4" />}
+              >
+                Aprovar revisão
+              </Button>
+            </>
+          )}
         </div>
       </section>
     </div>
