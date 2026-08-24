@@ -130,7 +130,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
   };
 
   const prepareDriverSummary = async (driverId: string) => {
-    setAssistantLoadingDriverId(driverId);
+    setAssistantLoadingTargetId(driverId);
     setAssistantError(null);
     try {
       const result = await ReportAiClient.createDriverSummary(driverId);
@@ -139,7 +139,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       setAssistantSuggestion(null);
       setAssistantError(error instanceof Error ? error.message : 'O preenchimento assistido falhou de forma segura.');
     } finally {
-      setAssistantLoadingDriverId(null);
+      setAssistantLoadingTargetId(null);
     }
   };
 
