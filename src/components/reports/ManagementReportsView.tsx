@@ -11,6 +11,7 @@ import {
   TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateManagementReport, ManagementReportData } from '../../domain/reports/ManagementReportsService';
+import { ReportAiClient, type ReportAiSuggestedField, type ReportAiSuggestionRecord } from '../../api/reportAiClient';
 import { VehicleStatus, DocumentStatus } from '../../types/enums';
 import { 
   BarChart3, 
@@ -59,6 +60,10 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
   const [reportData, setReportData] = useState<ManagementReportData | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<ReportTab>('overview');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [assistantLoadingDriverId, setAssistantLoadingDriverId] = useState<string | null>(null);
+  const [assistantSuggestion, setAssistantSuggestion] = useState<ReportAiSuggestionRecord | null>(null);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
+  const [assistantReviewing, setAssistantReviewing] = useState<boolean>(false);
 
   useEffect(() => {
     loadReportData();
@@ -109,6 +114,57 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       setLoading(false);
     }
   };
+
+  const prepareDriverSummary = async (driverId: string) => {
+    setAssistantLoadingDriverId(driverId);
+    setAssistantError(null);
+    try {
+      const result = await ReportAiClient.createDriverSummary(driverId);
+      setAssistantSuggestion(result.item);
+    } catch (error) {
+      setAssistantSuggestion(null);
+      setAssistantError(error instanceof Error ? error.message : 'O preenchimento assistido falhou de forma segura.');
+    } finally {
+      setAssistantLoadingDriverId(null);
+    }
+  };
+
+  const reviewDriverSummary = async (decision: 'CONFIRM' | 'REJECT') => {
+    if (!assistantSuggestion || assistantSuggestion.status !== 'PENDING_REVIEW') return;
+    setAssistantReviewing(true);
+    setAssistantError(null);
+    try {
+      const item = await ReportAiClient.review(assistantSuggestion.id, {
+        decision,
+        notes: decision === 'CONFIRM'
+          ? 'Confirmado por humano na Central de Relatórios.'
+          : 'Rejeitado por humano na Central de Relatórios.',
+      });
+      setAssistantSuggestion(item);
+    } catch (error) {
+      setAssistantError(error instanceof Error ? error.message : 'A revisão falhou de forma segura.');
+    } finally {
+      setAssistantReviewing(false);
+    }
+  };
+
+  const fieldLabel = (field: string): string => ({
+    driverName: 'Motorista',
+    cnhNumber: 'CNH',
+    cnhCategory: 'Categoria',
+    cnhExpiration: 'Validade da CNH',
+    phone: 'Telefone',
+    whatsapp: 'WhatsApp',
+    email: 'E-mail',
+    city: 'Cidade',
+    state: 'UF',
+    status: 'Status',
+    currentVehicleId: 'Veículo atual',
+    currentContractId: 'Contrato atual',
+  }[field] || field);
+
+  const fieldValue = (field: ReportAiSuggestedField): string =>
+    field.value === null ? 'Não informado' : String(field.value);
 
   if (loading || !reportData) {
     return (
@@ -591,6 +647,81 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             />
           </div>
 
+          {assistantError && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Falha segura:</strong> {assistantError} O relatório manual permanece disponível e nenhum cadastro foi alterado.
+            </div>
+          )}
+
+          {assistantSuggestion && (
+            <Card padding="sm" className="border-indigo-200 dark:border-indigo-800">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileCheck className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Resumo assistido — revisão humana</h3>
+                      <Badge variant={assistantSuggestion.status === 'CONFIRMED' ? 'success' : assistantSuggestion.status === 'REJECTED' ? 'danger' : 'warning'}>
+                        {assistantSuggestion.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Dados lidos somente do ERP. Não usa IA externa, não grava no cadastro e não executa alteração financeira ou contratual.
+                    </p>
+                  </div>
+                  {assistantSuggestion.status === 'PENDING_REVIEW' && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={assistantReviewing}
+                        onClick={() => reviewDriverSummary('REJECT')}
+                      >
+                        {assistantReviewing ? 'Registrando...' : 'Rejeitar'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={assistantReviewing}
+                        onClick={() => reviewDriverSummary('CONFIRM')}
+                        icon={<CheckCircle2 className="w-4 h-4" />}
+                      >
+                        {assistantReviewing ? 'Registrando...' : 'Confirmar revisão'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {assistantSuggestion.suggestion.suggestedFields.map((field) => (
+                    <div key={field.field} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{fieldLabel(field.field)}</span>
+                        {field.requiresServerRevalidation && <Badge variant="warning">Revalidar</Badge>}
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
+                      <div className="text-[10px] text-slate-500 mt-2">
+                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'PostgreSQL do ERP' : 'Documento aprovado'}
+                        {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {(assistantSuggestion.suggestion.missingFields.length > 0 || assistantSuggestion.suggestion.warnings.length > 0) && (
+                  <div className="text-xs text-amber-700 dark:text-amber-300">
+                    {assistantSuggestion.suggestion.missingFields.length > 0 && (
+                      <span>Campos ausentes: {assistantSuggestion.suggestion.missingFields.map(fieldLabel).join(', ')}. </span>
+                    )}
+                    {assistantSuggestion.suggestion.warnings.length > 0 && (
+                      <span>Há fontes divergentes que exigem conferência manual.</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           <Card padding="none" className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -602,6 +733,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                     <th className="p-3 font-semibold">Contrato Ativo</th>
                     <th className="p-3 font-semibold">Veículo</th>
                     <th className="p-3 font-semibold">Multas</th>
+                    <th className="p-3 font-semibold">Preenchimento assistido</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -617,6 +749,17 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                       <td className="p-3 font-mono text-indigo-600">{d.activeContractNumber || 'Nenhum'}</td>
                       <td className="p-3 font-mono text-blue-600">{d.vehiclePlate || 'Nenhum'}</td>
                       <td className="p-3 font-mono">{d.ticketCount}</td>
+                      <td className="p-3">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={assistantLoadingDriverId !== null}
+                          onClick={() => prepareDriverSummary(d.driverId)}
+                          icon={<FileCheck className="w-4 h-4" />}
+                        >
+                          {assistantLoadingDriverId === d.driverId ? 'Preparando...' : 'Preparar resumo'}
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
