@@ -295,6 +295,9 @@ jobs:
       - name: Report AI suggestion regression
         run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
 
+      - name: Report AI review authority regression
+        run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
+
       - name: Authentication regressions
         run: |
           npx tsx src/server/__tests__/authTestRunner.ts
