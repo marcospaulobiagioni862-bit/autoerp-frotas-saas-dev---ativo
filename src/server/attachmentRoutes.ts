@@ -7,7 +7,7 @@ import {AuditAction} from '../types/enums';
 import {hasDriverHealthPermission} from '../shared/security/driverHealthAuthorization';
 import {
   AttachmentStorageNotFoundError,AttachmentStorageUnavailableError,AttachmentStorageValidationError,
-  MAX_ATTACHMENT_BYTES,ServerAttachmentStorage,
+  getAttachmentStorageConfiguration,MAX_ATTACHMENT_BYTES,ServerAttachmentStorage,
 } from './attachmentStorage';
 
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
@@ -72,6 +72,11 @@ function auditState(item:FileAttachment):string{return JSON.stringify({entityTyp
 
 export function registerAttachmentRoutes(app:Express):void{
   const storage=new ServerAttachmentStorage();
+  app.get('/api/attachments/storage/status',(req,res)=>{
+    const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
+    const status=getAttachmentStorageConfiguration();
+    res.json({storage:status});
+  });
   app.get('/api/attachments',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
     const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'',entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';

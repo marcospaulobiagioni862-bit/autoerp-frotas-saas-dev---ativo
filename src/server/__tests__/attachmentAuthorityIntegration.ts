@@ -44,7 +44,9 @@ export class AttachmentAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
     const storageRoot = await mkdtemp(path.join(tmpdir(), 'autoerp-i4a-'));
     const previousStorage = process.env.ATTACHMENT_STORAGE_DIR;
+    const previousDurable = process.env.ATTACHMENT_STORAGE_DURABLE;
     process.env.ATTACHMENT_STORAGE_DIR = storageRoot;
+    delete process.env.ATTACHMENT_STORAGE_DURABLE;
 
     await db.execute(sql`
       INSERT INTO companies (id, name, status, created_at, updated_at) VALUES
@@ -157,6 +159,13 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await request('/api/attachments', {}, readonlyA);
       assert(response.status === 200, `READONLY list expected 200, got ${response.status}`);
 
+      response = await request('/api/attachments/storage/status', {}, adminA);
+      assert(response.status === 200, `storage status expected 200, got ${response.status}`);
+      const localStorageStatus = (await json(response)).storage;
+      assert(localStorageStatus.configured === true, 'configured storage was not reported');
+      assert(localStorageStatus.ephemeralPath === true && localStorageStatus.durable === false, 'temporary test storage was incorrectly reported as durable');
+      assert(!('path' in localStorageStatus), 'storage status leaked the server filesystem path');
+
       response = await upload(readonlyA as typeof adminA);
       assert(response.status === 403, `READONLY upload expected 403, got ${response.status}`);
 
@@ -253,10 +262,20 @@ export class AttachmentAuthorityIntegrationRunner {
       } finally {
         if (configured) process.env.ATTACHMENT_STORAGE_DIR = configured;
       }
+
+      process.env.ATTACHMENT_STORAGE_DURABLE = 'true';
+      response = await request('/api/attachments/storage/status', {}, adminA);
+      const unsafeDurableStatus = (await json(response)).storage;
+      assert(unsafeDurableStatus.durableRequested === true && unsafeDurableStatus.durable === false, 'ephemeral path accepted a durable attestation');
+
+      response = await upload(adminA, { fileName: 'unsafe-durable-path.pdf' });
+      assert(response.status === 503, `durable storage on /tmp expected 503, got ${response.status}`);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       if (previousStorage === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
       else process.env.ATTACHMENT_STORAGE_DIR = previousStorage;
+      if (previousDurable === undefined) delete process.env.ATTACHMENT_STORAGE_DURABLE;
+      else process.env.ATTACHMENT_STORAGE_DURABLE = previousDurable;
       await rm(storageRoot, { recursive: true, force: true });
     }
   }
