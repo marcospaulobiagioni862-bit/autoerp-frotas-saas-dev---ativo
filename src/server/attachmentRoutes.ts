@@ -14,6 +14,14 @@ type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp']);
+function canonicalMimeType(value:string):string{return value==='image/jpg'?'image/jpeg':value;}
+function detectedMimeType(bytes:Buffer):string|undefined{
+  if(bytes.length>=4&&bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46)return'application/pdf';
+  if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return'image/jpeg';
+  if(bytes.length>=8&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47&&bytes[4]===0x0d&&bytes[5]===0x0a&&bytes[6]===0x1a&&bytes[7]===0x0a)return'image/png';
+  if(bytes.length>=12&&bytes.subarray(0,4).toString('ascii')==='RIFF'&&bytes.subarray(8,12).toString('ascii')==='WEBP')return'image/webp';
+  return undefined;
+}
 const ENTITY_TYPES=new Set(['Vehicle','Driver','Contract','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
@@ -76,7 +84,7 @@ export function registerAttachmentRoutes(app:Express):void{
       const entityType=header(req,'x-autoerp-entity-type',true)!,entityId=header(req,'x-autoerp-entity-id',true)!,documentType=header(req,'x-autoerp-document-type'),fileName=validateFilename(header(req,'x-autoerp-file-name',true)!);
       const description=header(req,'x-autoerp-description'),issueDate=optionalIsoDate(header(req,'x-autoerp-issue-date'),'issueDate'),expirationDate=optionalIsoDate(header(req,'x-autoerp-expiration-date'),'expirationDate');
       const mimeType=String(req.get('content-type')||'').split(';',1)[0].trim().toLowerCase();if(!ALLOWED_MIME_TYPES.has(mimeType))throw new AttachmentValidationError('Invalid mime type');
-      if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}
+      if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
       await UnitOfWork.run(principal.companyId,async tx=>{await validateEntity(tx,principal,entityType,entityId,true);});
       const id=randomUUID(),stored=await storage.write(principal.companyId,id,req.body);storageKey=stored.storageKey;const now=new Date().toISOString();
       const item=await UnitOfWork.run(principal.companyId,async tx=>{
