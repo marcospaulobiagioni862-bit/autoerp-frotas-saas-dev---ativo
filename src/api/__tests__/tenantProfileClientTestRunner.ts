@@ -73,10 +73,10 @@ export class TenantProfileClientTestRunner {
     });
 
     tests.push(async () => {
-      globalThis.fetch = (async () => new Response(JSON.stringify({ item: { ...profile, maxDriversLimit: 'many' } }), { status: 200 })) as typeof fetch;
+      globalThis.fetch = (async () => new Response(JSON.stringify({ item: { ...profile, currency: 'USD' } }), { status: 200 })) as typeof fetch;
       let failed = false;
       try { await TenantProfileClient.get(); } catch { failed = true; }
-      if (!failed) throw new Error('Malformed tenant profile payload must fail closed');
+      if (!failed) throw new Error('Unsupported tenant profile currency must fail closed');
     });
 
     try {
