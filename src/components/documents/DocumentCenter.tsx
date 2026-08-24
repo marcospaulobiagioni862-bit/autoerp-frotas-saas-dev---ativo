@@ -6,6 +6,7 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { AttachmentList } from './AttachmentList';
+import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 
 export function DocumentCenter() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -82,6 +83,14 @@ export function DocumentCenter() {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <div className="p-4 border-b">
+          <h2 className="font-semibold text-lg">Revisão assistida por IA</h2>
+          <p className="text-sm text-gray-500 mt-1">Confira propostas e confiança antes de registrar aprovação ou rejeição.</p>
+        </div>
+        <DocumentAiReviewPanel />
       </Card>
 
       <Card>
