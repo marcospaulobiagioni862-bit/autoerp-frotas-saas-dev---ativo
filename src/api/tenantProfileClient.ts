@@ -3,7 +3,7 @@ export interface TenantProfileDto {
   companyName: string;
   document: string;
   timezone: string;
-  currency: string;
+  currency: 'BRL';
   maxVehiclesLimit: number;
   maxDriversLimit: number;
   updatedAt: string;
@@ -34,9 +34,9 @@ function parseProfile(value: unknown): TenantProfileDto {
     typeof row.companyName !== 'string' ||
     typeof row.document !== 'string' ||
     typeof row.timezone !== 'string' ||
-    typeof row.currency !== 'string' ||
-    typeof row.maxVehiclesLimit !== 'number' || !Number.isInteger(row.maxVehiclesLimit) ||
-    typeof row.maxDriversLimit !== 'number' || !Number.isInteger(row.maxDriversLimit) ||
+    row.currency !== 'BRL' ||
+    typeof row.maxVehiclesLimit !== 'number' || !Number.isInteger(row.maxVehiclesLimit) || row.maxVehiclesLimit < 0 || row.maxVehiclesLimit > 100000 ||
+    typeof row.maxDriversLimit !== 'number' || !Number.isInteger(row.maxDriversLimit) || row.maxDriversLimit < 0 || row.maxDriversLimit > 200000 ||
     typeof row.updatedAt !== 'string' ||
     typeof row.updatedBy !== 'string'
   ) {
