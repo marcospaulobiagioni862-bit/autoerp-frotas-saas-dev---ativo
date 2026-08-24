@@ -290,6 +290,9 @@ jobs:
       - name: Document review client regression
         run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
 
+      - name: Report AI suggestion regression
+        run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
+
       - name: Authentication regressions
         run: |
           npx tsx src/server/__tests__/authTestRunner.ts
