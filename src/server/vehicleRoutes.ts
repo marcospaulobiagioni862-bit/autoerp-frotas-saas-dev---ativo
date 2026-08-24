@@ -10,6 +10,7 @@ import { registerAttachmentRoutes } from './attachmentRoutes';
 import { registerDocumentRoutes } from './documentRoutes';
 import { registerDocumentAiRoutes } from './documentAiRoutes';
 import { registerReportAiSuggestionRoutes } from './reportAiSuggestionRoutes';
+import { registerWhatsappRoutes } from './whatsappRoutes';
 import { registerContractTemplateRoutes } from './contractTemplateRoutes';
 import { registerContractExecutionRoutes } from './contractExecutionRoutes';
 import { registerRecurringRoutes } from './recurringRoutes';
@@ -131,6 +132,7 @@ export function registerVehicleRoutes(app: Express): void {
   registerDocumentRoutes(app);
   registerDocumentAiRoutes(app);
   registerReportAiSuggestionRoutes(app);
+  registerWhatsappRoutes(app);
   registerContractTemplateRoutes(app);
   registerContractExecutionRoutes(app);
   registerRecurringRoutes(app);

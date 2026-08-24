@@ -207,6 +207,25 @@ jobs:
           fi
           echo "FINANCE-R24 source invariants: PASS"
 
+      - name: WHATSAPP-1A source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "FORCE ROW LEVEL SECURITY" drizzle/0033_whatsapp_consent_outbox.sql
+          grep -F "UNIQUE (company_id, idempotency_key)" drizzle/0033_whatsapp_consent_outbox.sql
+          grep -F "status text NOT NULL DEFAULT 'HELD_PROVIDER_DISABLED'" drizzle/0033_whatsapp_consent_outbox.sql
+          grep -F "const body = exactObject(req.body, new Set(['driverId', 'templateKey']));" src/server/whatsappRoutes.ts
+          grep -F "providerCallApplied: false" src/server/whatsappRoutes.ts
+          if grep -Fq "sql.raw" src/server/whatsappRoutes.ts; then
+            echo "FAIL: WhatsApp authority must use parameterized SQL"
+            exit 1
+          fi
+          if grep -Fq "fetch(" src/server/whatsappRoutes.ts; then
+            echo "FAIL: foundation must not call a WhatsApp provider"
+            exit 1
+          fi
+          echo "WHATSAPP-1A source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -300,6 +319,9 @@ jobs:
 
       - name: Report AI review authority regression
         run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
+
+      - name: WhatsApp consent and outbox authority regression
+        run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
 
       - name: Authentication regressions
         run: |
