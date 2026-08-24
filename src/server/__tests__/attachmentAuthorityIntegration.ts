@@ -196,6 +196,12 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await upload(adminA, { mimeType: 'text/plain', fileName: 'notes.txt' });
       assert(response.status === 400, `invalid MIME expected 400, got ${response.status}`);
 
+      response = await upload(adminA, { mimeType: 'application/pdf', fileName: 'forged.pdf', bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00]) });
+      assert(response.status === 400, `forged PDF signature expected 400, got ${response.status}`);
+
+      response = await upload(adminA, { mimeType: 'image/png', fileName: 'forged.png', bytes: new Uint8Array([37, 80, 68, 70]) });
+      assert(response.status === 400, `mismatched PNG signature expected 400, got ${response.status}`);
+
       response = await upload(adminA, { fileName: '../evil.pdf' });
       assert(response.status === 400, `path traversal filename expected 400, got ${response.status}`);
 
