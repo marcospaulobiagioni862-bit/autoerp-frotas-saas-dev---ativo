@@ -8,6 +8,36 @@ export class AttachmentStorageUnavailableError extends Error {}
 export class AttachmentStorageValidationError extends Error {}
 export class AttachmentStorageNotFoundError extends Error {}
 
+export interface AttachmentStorageConfiguration {
+  provider: 'SERVER_FS';
+  configured: boolean;
+  durableRequested: boolean;
+  durable: boolean;
+  ephemeralPath: boolean;
+  maxBytes: number;
+}
+
+function pathIsInside(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${path.sep}`);
+}
+
+export function getAttachmentStorageConfiguration(): AttachmentStorageConfiguration {
+  const configuredValue = String(process.env.ATTACHMENT_STORAGE_DIR || '').trim();
+  const resolved = configuredValue ? path.resolve(configuredValue) : '';
+  const ephemeralPath = Boolean(resolved) && ['/tmp', '/var/tmp', '/dev/shm']
+    .map((root) => path.resolve(root))
+    .some((root) => pathIsInside(resolved, root));
+  const durableRequested = String(process.env.ATTACHMENT_STORAGE_DURABLE || '').trim().toLowerCase() === 'true';
+  return {
+    provider: 'SERVER_FS',
+    configured: Boolean(resolved),
+    durableRequested,
+    durable: Boolean(resolved) && durableRequested && !ephemeralPath,
+    ephemeralPath,
+    maxBytes: MAX_ATTACHMENT_BYTES,
+  };
+}
+
 function safeSegment(value: string, field: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(value)) {
     throw new AttachmentStorageValidationError(`Invalid ${field}`);
@@ -17,8 +47,12 @@ function safeSegment(value: string, field: string): string {
 
 function configuredRoot(): string {
   const configured = String(process.env.ATTACHMENT_STORAGE_DIR || '').trim();
-  if (!configured) {
+  const status = getAttachmentStorageConfiguration();
+  if (!status.configured) {
     throw new AttachmentStorageUnavailableError('Attachment storage is not configured');
+  }
+  if (status.durableRequested && status.ephemeralPath) {
+    throw new AttachmentStorageUnavailableError('Durable attachment storage cannot use an ephemeral path');
   }
   return path.resolve(configured);
 }
