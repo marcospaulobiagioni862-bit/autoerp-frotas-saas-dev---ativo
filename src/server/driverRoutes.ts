@@ -11,6 +11,7 @@ type DriverAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'EDIT_DRIVER' | 'CHANGE_DR
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUS_VALUES = new Set(Object.values(DriverStatus));
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
 const MUTABLE_STATUS_VALUES = new Set([
   DriverStatus.ACTIVE,
   DriverStatus.INACTIVE,
@@ -59,6 +60,21 @@ function requiredText(value: unknown, field: string, minLength = 1): string {
   const clean = typeof value === 'string' ? value.trim() : '';
   if (clean.length < minLength) throw new DriverValidationError(`Invalid ${field}`);
   return clean;
+}
+
+function normalizeEmail(value: unknown): string | undefined {
+  const email = optionalText(value)?.toLowerCase();
+  if (!email) return undefined;
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new DriverValidationError('Invalid email');
+  }
+  return email;
+}
+
+function normalizeCnhCategory(value: unknown, fallback = ''): string {
+  const category = optionalText(value)?.toUpperCase() || fallback;
+  if (!CNH_CATEGORIES.has(category)) throw new DriverValidationError('Invalid cnhCategory');
+  return category;
 }
 
 function normalizePhone(value: unknown, field: string, required = true): string | undefined {
@@ -143,14 +159,18 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
   const input = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+  const state = optionalText(input.state)?.toUpperCase() ?? fallback?.state ?? '';
+  const zipCode = optionalText(input.zipCode)?.replace(/\D/g, '') ?? fallback?.zipCode ?? '';
+  if (state && !/^[A-Z]{2}$/.test(state)) throw new DriverValidationError('Invalid state');
+  if (zipCode && !/^\d{8}$/.test(zipCode)) throw new DriverValidationError('Invalid zipCode');
   return {
     street: optionalText(input.street) ?? fallback?.street ?? '',
     number: optionalText(input.number) ?? fallback?.number ?? '',
     complement: optionalText(input.complement) ?? fallback?.complement,
     neighborhood: optionalText(input.neighborhood) ?? fallback?.neighborhood ?? '',
     city: optionalText(input.city) ?? fallback?.city ?? '',
-    state: optionalText(input.state)?.toUpperCase() ?? fallback?.state ?? '',
-    zipCode: optionalText(input.zipCode)?.replace(/\D/g, '') ?? fallback?.zipCode ?? '',
+    state,
+    zipCode,
   };
 }
 
@@ -254,10 +274,10 @@ export function registerDriverRoutes(app: Express): void {
           birthDate,
           phone,
           whatsapp: normalizePhone(req.body?.whatsapp, 'whatsapp', false) || phone,
-          email: optionalText(req.body?.email)?.toLowerCase(),
+          email: normalizeEmail(req.body?.email),
           address: addressFrom(req.body?.address),
           cnhNumber,
-          cnhCategory: optionalText(req.body?.cnhCategory)?.toUpperCase() || '',
+          cnhCategory: normalizeCnhCategory(req.body?.cnhCategory),
           cnhExpiration,
           cnhStatus: cnhState,
           appPlatforms: platformsFrom(req.body?.appPlatforms),
@@ -308,10 +328,10 @@ export function registerDriverRoutes(app: Express): void {
           birthDate: body.birthDate === undefined ? existing.birthDate : normalizeIsoDate(body.birthDate, 'birthDate', false),
           phone: body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!,
           whatsapp: body.whatsapp === undefined ? existing.whatsapp : (normalizePhone(body.whatsapp, 'whatsapp', false) || (body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!)),
-          email: body.email === undefined ? existing.email : optionalText(body.email)?.toLowerCase(),
+          email: body.email === undefined ? existing.email : normalizeEmail(body.email),
           address: body.address === undefined ? existing.address : addressFrom(body.address, existing.address),
           cnhNumber: body.cnhNumber === undefined ? existing.cnhNumber : normalizeCnh(body.cnhNumber),
-          cnhCategory: body.cnhCategory === undefined ? existing.cnhCategory : (optionalText(body.cnhCategory)?.toUpperCase() || ''),
+          cnhCategory: body.cnhCategory === undefined ? existing.cnhCategory : normalizeCnhCategory(body.cnhCategory),
           cnhExpiration: body.cnhExpiration === undefined ? existing.cnhExpiration : normalizeIsoDate(body.cnhExpiration, 'cnhExpiration', true),
           appPlatforms: platformsFrom(body.appPlatforms, existing.appPlatforms),
           photoUrl: body.photoUrl === undefined ? existing.photoUrl : optionalText(body.photoUrl),

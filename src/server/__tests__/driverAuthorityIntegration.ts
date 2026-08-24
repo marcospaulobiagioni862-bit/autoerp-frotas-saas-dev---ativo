@@ -96,6 +96,10 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'phone-short', body: { ...baseDriver, phone: '1234' } },
         { label: 'phone-repeated', body: { ...baseDriver, phone: '11111111111' } },
         { label: 'whatsapp-invalid', body: { ...baseDriver, whatsapp: 'abc' } },
+        { label: 'email', body: { ...baseDriver, email: 'sem-arroba' } },
+        { label: 'cnhCategory', body: { ...baseDriver, cnhCategory: 'Z' } },
+        { label: 'state', body: { ...baseDriver, address: { ...baseDriver.address, state: 'SPO' } } },
+        { label: 'zipCode', body: { ...baseDriver, address: { ...baseDriver.address, zipCode: '123' } } },
       ];
       for (const invalid of invalidCases) {
         response = await request('/api/drivers', {
@@ -134,6 +138,16 @@ export class DriverAuthorityIntegrationRunner {
       const normalizedContact = (await json(response)).item;
       assert(normalizedContact.phone === '15997424411', 'formatted phone was not normalized');
       assert(normalizedContact.whatsapp === '5515997424411', 'country WhatsApp was not normalized');
+
+      response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ email: 'MOTORISTA@EXAMPLE.COM', cnhCategory: 'ab', address: { state: 'sp', zipCode: '18075-350' } }),
+      }, adminA);
+      assert(response.status === 200, `normalized identity update expected 200, got ${response.status}`);
+      const normalizedIdentity = (await json(response)).item;
+      assert(normalizedIdentity.email === 'motorista@example.com', 'email was not normalized');
+      assert(normalizedIdentity.cnhCategory === 'AB', 'CNH category was not normalized');
+      assert(normalizedIdentity.address.state === 'SP' && normalizedIdentity.address.zipCode === '18075350', 'address identity fields were not normalized');
 
       response = await request('/api/drivers', { method: 'POST', body: JSON.stringify(baseDriver) }, adminA);
       assert(response.status === 409, `same-tenant duplicate expected 409, got ${response.status}`);
