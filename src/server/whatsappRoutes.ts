@@ -127,13 +127,20 @@ function outboxRecord(row: Record<string, unknown>): Record<string, unknown> {
 }
 
 async function loadDriver(tx: any, companyId: string, driverId: string, lock = false): Promise<Record<string, unknown>> {
-  const selected = rows(await tx.execute(sql.raw(`
-    SELECT id, name, phone, whatsapp, cnh_expiration, status, is_archived
-    FROM drivers
-    WHERE company_id = '${companyId.replace(/'/g, "''")}'
-      AND id = '${driverId.replace(/'/g, "''")}'
-    ${lock ? 'FOR UPDATE' : ''}
-  `)))[0];
+  const result = lock
+    ? await tx.execute(sql`
+        SELECT id, name, phone, whatsapp, cnh_expiration, status, is_archived
+        FROM drivers
+        WHERE company_id = ${companyId} AND id = ${driverId}
+        FOR UPDATE
+      `)
+    : await tx.execute(sql`
+        SELECT id, name, phone, whatsapp, cnh_expiration, status, is_archived
+        FROM drivers
+        WHERE company_id = ${companyId} AND id = ${driverId}
+        LIMIT 1
+      `);
+  const selected = rows(result)[0];
   if (!selected || selected.is_archived === true || String(selected.status) === 'ARCHIVED') {
     throw new WhatsappNotFoundError();
   }
@@ -309,12 +316,15 @@ export function registerWhatsappRoutes(app: Express): void {
         const cnhExpiration = String(driver.cnh_expiration || '').slice(0, 10);
         if (!driverName || !/^\d{4}-\d{2}-\d{2}$/.test(cnhExpiration)) throw new WhatsappValidationError();
         const parameters = { driverName, cnhExpiration };
+        const consentGrantedAt = asIso(consent.granted_at);
+        if (!consentGrantedAt) throw new WhatsappConsentRequiredError();
         const material = JSON.stringify({
           companyId: principal.companyId,
           driverId,
           phone,
           templateKey: TEMPLATE_KEY,
           parameters,
+          consentGrantedAt,
         });
         const idempotencyKey = createHash('sha256').update(material).digest('hex');
         const id = `wao_${idempotencyKey.slice(0, 32)}`;
