@@ -7,6 +7,7 @@ import {
   TrendingUp,
   CreditCard,
   ArrowRightLeft,
+  Banknote,
   PieChart,
   ShieldAlert,
   ShieldCheck,
@@ -67,6 +68,7 @@ export type NavigationTab =
   | 'receivables'
   | 'payables'
   | 'transactions'
+  | 'cashflow'
   | 'dre'
   | 'finance-overview'
   | 'tests';
@@ -181,8 +183,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           id: 'transactions' as NavigationTab,
-          label: 'Fluxo de Caixa',
+          label: 'Movimentações',
           icon: ArrowRightLeft,
+          badge: null,
+        },
+        {
+          id: 'cashflow' as NavigationTab,
+          label: 'Fluxo de Caixa',
+          icon: Banknote,
           badge: null,
         },
         {

@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRightLeft,
+  Banknote,
   BellRing,
   Calendar,
   Car,
@@ -60,6 +61,7 @@ export type NavigationTab =
   | 'receivables'
   | 'payables'
   | 'transactions'
+  | 'cashflow'
   | 'dre'
   | 'finance-overview'
   | 'tests';
@@ -129,7 +131,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badge: pendingPayablesCount > 0 ? pendingPayablesCount : undefined,
           badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
         },
-        { id: 'transactions', label: 'Fluxo de Caixa', icon: ArrowRightLeft },
+        { id: 'transactions', label: 'Movimentações', icon: ArrowRightLeft },
+        { id: 'cashflow', label: 'Fluxo de Caixa', icon: Banknote },
         { id: 'dre', label: 'Relatórios Financeiros', icon: PieChart },
       ],
     },
