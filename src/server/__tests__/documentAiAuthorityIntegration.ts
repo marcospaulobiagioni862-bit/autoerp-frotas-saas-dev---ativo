@@ -1,7 +1,9 @@
 import express, { type NextFunction, type Request, type Response as ExpressResponse } from 'express';
 import { createServer } from 'node:http';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
+import { auditLogs, documentAiExtractions } from '../../db/schema';
+import { UnitOfWork } from '../../db/uow';
 import { registerDocumentAiRoutes } from '../documentAiRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 
@@ -140,6 +142,123 @@ export class DocumentAiAuthorityIntegrationRunner {
 
       response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}`, {}, adminB);
       assert(response.status === 404, `cross-tenant extraction read expected 404, got ${response.status}`);
+
+
+      const pendingResponse = await request('/api/document-ai/extractions', {
+        method: 'POST',
+        body: JSON.stringify({ attachmentId: 'doc-ai-att-a2', idempotencyKey: 'doc-ai-request-a2' }),
+      }, adminA);
+      assert(pendingResponse.status === 201, `second extraction expected 201, got ${pendingResponse.status}`);
+      const pending = (await json(pendingResponse)).item;
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ decision: 'REJECT', notes: 'not ready' }),
+      }, adminA);
+      assert(response.status === 409, `non-reviewable status expected 409, got ${response.status}`);
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.update(documentAiExtractions).set({
+          status: 'REVIEW_REQUIRED',
+          detectedDocumentType: 'CRLV',
+          proposedFields: { plate: 'ABC1D23', renavam: '00123456789' },
+          fieldConfidence: { plate: 0.99, renavam: 0.71 },
+          updatedAt: new Date().toISOString(),
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, created.id),
+        ));
+      });
+
+      const reviewBody = {
+        decision: 'APPROVE',
+        corrections: { renavam: '00123456780' },
+        notes: 'Conferido visualmente no documento sintético.',
+      };
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify(reviewBody),
+      }, readonlyA);
+      assert(response.status === 403, `READONLY review expected 403, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify(reviewBody),
+      }, adminB);
+      assert(response.status === 404, `cross-tenant review expected 404, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ ...reviewBody, companyId: companyB, reviewedBy: adminBId }),
+      }, adminA);
+      assert(response.status === 400, `forged review authority expected 400, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify(reviewBody),
+      }, adminA);
+      assert(response.status === 200, `human approval expected 200, got ${response.status}`);
+      const approvedPayload = await json(response);
+      assert(approvedPayload.idempotent === false, 'first approval must not be marked idempotent');
+      assert(approvedPayload.item.status === 'APPROVED', 'approval did not transition state');
+      assert(approvedPayload.item.reviewedBy === adminAId, 'review actor did not come from the session');
+      assert(Boolean(approvedPayload.item.reviewedAt), 'review timestamp was not persisted');
+      assert(Boolean(approvedPayload.item.approvedAt), 'approval timestamp was not persisted');
+      assert(approvedPayload.item.corrections.renavam === '00123456780', 'human correction was not preserved');
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify(reviewBody),
+      }, adminA);
+      assert(response.status === 200, `idempotent approval replay expected 200, got ${response.status}`);
+      assert((await json(response)).idempotent === true, 'approval replay was not identified as idempotent');
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(created.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ ...reviewBody, corrections: { renavam: 'DIFFERENT' } }),
+      }, adminA);
+      assert(response.status === 409, `conflicting terminal review expected 409, got ${response.status}`);
+
+      const reviewAudits = await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        return await tx.select().from(auditLogs).where(and(
+          eq(auditLogs.companyId, companyA),
+          eq(auditLogs.entityType, 'DocumentAiExtraction'),
+          eq(auditLogs.entityId, created.id),
+          eq(auditLogs.action, 'UPDATE'),
+        ));
+      });
+      assert(reviewAudits.length === 1, `expected one review audit, found ${reviewAudits.length}`);
+      const reviewChanges = JSON.parse(reviewAudits[0].changes || '{}');
+      const auditedNewState = JSON.parse(reviewChanges.newState || '{}');
+      assert(auditedNewState.status === 'APPROVED', 'approved status missing from review audit');
+      assert(auditedNewState.reviewedBy === adminAId, 'review actor missing from audit');
+      assert(auditedNewState.businessMutationApplied === false, 'review audit must prove no business mutation');
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.update(documentAiExtractions).set({
+          status: 'REVIEW_REQUIRED',
+          proposedFields: { plate: 'UNREADABLE' },
+          fieldConfidence: { plate: 0.2 },
+          updatedAt: new Date().toISOString(),
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, pending.id),
+        ));
+      });
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ decision: 'REJECT', notes: 'Imagem ilegível; novo documento necessário.' }),
+      }, adminA);
+      assert(response.status === 200, `human rejection expected 200, got ${response.status}`);
+      const rejected = (await json(response)).item;
+      assert(rejected.status === 'REJECTED', 'rejection did not transition state');
+      assert(Boolean(rejected.reviewedAt), 'rejection timestamp was not persisted');
+      assert(rejected.approvedAt === null, 'rejection must not have approval timestamp');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
