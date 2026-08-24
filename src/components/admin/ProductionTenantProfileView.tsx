@@ -64,8 +64,8 @@ export const ProductionTenantProfileView: React.FC = () => {
 
   const valid = Boolean(
     form &&
-    form.companyName.trim().length >= 2 &&
-    form.timezone.trim().length > 0 &&
+    form.companyName.trim().length >= 2 && form.companyName.trim().length <= 160 &&
+    form.timezone.trim().length > 0 && form.timezone.trim().length <= 100 &&
     Number.isInteger(form.maxVehiclesLimit) && form.maxVehiclesLimit >= 0 && form.maxVehiclesLimit <= 100000 &&
     Number.isInteger(form.maxDriversLimit) && form.maxDriversLimit >= 0 && form.maxDriversLimit <= 200000
   );
@@ -153,6 +153,8 @@ export const ProductionTenantProfileView: React.FC = () => {
               <input
                 className={inputClass}
                 value={form.companyName}
+                required
+                minLength={2}
                 maxLength={160}
                 onChange={(event) => setText('companyName', event.target.value)}
               />
@@ -169,6 +171,7 @@ export const ProductionTenantProfileView: React.FC = () => {
               <input
                 className={inputClass}
                 value={form.timezone}
+                required
                 maxLength={100}
                 onChange={(event) => setText('timezone', event.target.value)}
                 placeholder="America/Sao_Paulo"
