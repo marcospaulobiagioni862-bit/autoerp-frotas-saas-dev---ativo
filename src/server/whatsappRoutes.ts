@@ -287,7 +287,7 @@ export function registerWhatsappRoutes(app: Express): void {
         if (!persisted) throw new Error('WhatsApp consent persistence failed');
         return { item: consentRecord(persisted), changed: stateChanged, cancelledHeldItems: cancelledCount };
       });
-      res.status(result.changed ? 200 : 200).json(result);
+      res.status(200).json(result);
     } catch (error) {
       sendError(res, error);
     }
