@@ -62,11 +62,12 @@ function requiredText(value: unknown, field: string, minLength = 1): string {
 }
 
 function normalizePhone(value: unknown, field: string, required = true): string | undefined {
-  const digits = typeof value === 'string' ? value.replace(/\D/g, '') : '';
-  if (!digits) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) {
     if (required) throw new DriverValidationError(`Invalid ${field}`);
     return undefined;
   }
+  const digits = raw.replace(/\D/g, '');
   const localLength = digits.length === 10 || digits.length === 11;
   const countryLength = (digits.length === 12 || digits.length === 13) && digits.startsWith('55');
   if ((!localLength && !countryLength) || /^(\d)\1+$/.test(digits)) {
