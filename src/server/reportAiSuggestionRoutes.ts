@@ -4,7 +4,12 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
-import type { ReportAiScalar, ReportAiSuggestion } from './reportAiSuggestion';
+import {
+  buildReportAiSuggestion,
+  type ReportAiCandidate,
+  type ReportAiScalar,
+  type ReportAiSuggestion,
+} from './reportAiSuggestion';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -345,6 +350,76 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerReportAiSuggestionRoutes(app: Express): void {
+  app.post('/api/report-ai/suggestions/driver-summary', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const body = exactObject(req.body, new Set(['driverId']));
+      const driverId = typeof body.driverId === 'string' ? body.driverId.trim() : '';
+      if (!driverId || driverId.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(driverId)) {
+        throw new ReportAiAuthorityValidationError();
+      }
+      const driver = await UnitOfWork.run(principal.companyId, async (context: any) =>
+        await context.getDriverRepo().findByIdForCompany(principal.companyId, driverId),
+      );
+      if (!driver || driver.isArchived) throw new ReportAiAuthorityNotFoundError();
+
+      const candidates: ReportAiCandidate[] = [];
+      const add = (
+        field: string,
+        value: ReportAiScalar | undefined,
+        sensitivity: ReportAiCandidate['sensitivity'] = 'GENERAL',
+      ): void => {
+        if (value === undefined || value === null || value === '') return;
+        candidates.push({
+          companyId: principal.companyId,
+          field,
+          value,
+          sensitivity,
+          source: {
+            kind: 'POSTGRES',
+            entityType: 'Driver',
+            entityId: driver.id,
+            observedAt: driver.updatedAt,
+            confidence: null,
+            reviewedAt: null,
+          },
+        });
+      };
+      add('driverName', driver.fullName);
+      add('cnhNumber', driver.cnhNumber, 'CONTRACTUAL');
+      add('cnhCategory', driver.cnhCategory, 'CONTRACTUAL');
+      add('cnhExpiration', driver.cnhExpiration, 'CONTRACTUAL');
+      add('phone', driver.phone);
+      add('whatsapp', driver.whatsapp);
+      add('email', driver.email);
+      add('city', driver.address?.city);
+      add('state', driver.address?.state);
+      add('status', driver.status);
+      add('currentVehicleId', driver.currentVehicleId, 'CONTRACTUAL');
+      add('currentContractId', driver.currentContractId, 'CONTRACTUAL');
+
+      const suggestion = buildReportAiSuggestion({
+        companyId: principal.companyId,
+        targetType: 'DRIVER_SUMMARY',
+        targetId: driver.id,
+        allowedFields: [
+          'driverName', 'cnhNumber', 'cnhCategory', 'cnhExpiration', 'phone', 'whatsapp',
+          'email', 'city', 'state', 'status', 'currentVehicleId', 'currentContractId',
+        ],
+        requiredFields: ['driverName', 'cnhNumber', 'cnhExpiration', 'status'],
+        candidates,
+      });
+      const result = await persistReportAiSuggestion(principal.companyId, {
+        userId: principal.userId,
+        name: principal.name,
+      }, suggestion);
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.get('/api/report-ai/suggestions', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res);
     if (!principal) return;
