@@ -5,11 +5,11 @@ import { UnitOfWork } from '../db/uow';
 import { documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUSES = new Set(['PENDING', 'PROCESSING', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'FAILED']);
-export const DOCUMENT_AI_MAX_ATTEMPTS = 3;
 
 class DocumentAiValidationError extends Error {}
 class DocumentAiForbiddenError extends Error {}
