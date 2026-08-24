@@ -3,6 +3,10 @@ import {
   mapTrustedServerPrincipal,
   resolveEmbeddedAuthUser,
 } from '../../hooks/useAuth';
+import {
+  createSessionAwareFetch,
+  isAuthenticationExpiredError,
+} from '../sessionExpiry';
 
 interface AuthSessionTestResult {
   id: string;
@@ -168,6 +172,58 @@ export class AuthSessionTestRunner {
     await run('AS08', 'Invalid successful response fails closed', async () => {
       const client = createAuthSessionClient(async () => jsonResponse({ user: { role: 'ADMIN' } }, 200));
       await expectRejected(() => client.restore());
+    });
+
+    await run('AS09', 'Protected API 401 expires once and is never retried', async () => {
+      let fetchCalls = 0;
+      let invalidations = 0;
+      const sessionAwareFetch = createSessionAwareFetch(
+        async () => {
+          fetchCalls += 1;
+          return jsonResponse({ error: 'Unauthorized: Invalid or inactive authentication' }, 401);
+        },
+        () => {
+          invalidations += 1;
+        }
+      );
+
+      let caught: unknown;
+      try {
+        await sessionAwareFetch('/api/finance/receivables', { method: 'GET' });
+      } catch (error) {
+        caught = error;
+      }
+
+      if (!isAuthenticationExpiredError(caught)) {
+        throw new Error('Protected 401 did not produce the authentication-expired signal');
+      }
+      if (fetchCalls !== 1 || invalidations !== 1) {
+        throw new Error('Protected 401 was retried or invalidated more than once');
+      }
+
+      try {
+        await sessionAwareFetch('/api/finance/payables', { method: 'GET' });
+      } catch (error) {
+        if (!isAuthenticationExpiredError(error)) throw error;
+      }
+      if (fetchCalls !== 2 || invalidations !== 1) {
+        throw new Error('Concurrent expired requests did not converge to one invalidation');
+      }
+    });
+
+    await run('AS10', 'Authentication endpoint 401 is not reclassified as session expiry', async () => {
+      let invalidations = 0;
+      const sessionAwareFetch = createSessionAwareFetch(
+        async () => jsonResponse({ error: 'Invalid credentials' }, 401),
+        () => {
+          invalidations += 1;
+        }
+      );
+
+      const response = await sessionAwareFetch('/api/auth/login', { method: 'POST' });
+      if (response.status !== 401 || invalidations !== 0) {
+        throw new Error('Login failure was incorrectly treated as an expired authenticated session');
+      }
     });
 
     const passed = tests.filter((test) => test.passed).length;
