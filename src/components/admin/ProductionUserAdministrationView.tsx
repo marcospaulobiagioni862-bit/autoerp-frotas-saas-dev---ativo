@@ -59,6 +59,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950/60">
             <button
               type="button"
+              aria-pressed={activeTab === 'users'}
               onClick={() => setActiveTab('users')}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}
             >
@@ -66,6 +67,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
             </button>
             <button
               type="button"
+              aria-pressed={activeTab === 'tenant'}
               onClick={() => setActiveTab('tenant')}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'tenant' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}
             >
