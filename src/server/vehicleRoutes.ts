@@ -8,6 +8,7 @@ import { registerDriverRoutes } from './driverRoutes';
 import { registerContractRoutes } from './contractRoutes';
 import { registerAttachmentRoutes } from './attachmentRoutes';
 import { registerDocumentRoutes } from './documentRoutes';
+import { registerDocumentAiRoutes } from './documentAiRoutes';
 import { registerContractTemplateRoutes } from './contractTemplateRoutes';
 import { registerContractExecutionRoutes } from './contractExecutionRoutes';
 import { registerRecurringRoutes } from './recurringRoutes';
@@ -127,6 +128,7 @@ export function registerVehicleRoutes(app: Express): void {
   registerContractRoutes(app);
   registerAttachmentRoutes(app);
   registerDocumentRoutes(app);
+  registerDocumentAiRoutes(app);
   registerContractTemplateRoutes(app);
   registerContractExecutionRoutes(app);
   registerRecurringRoutes(app);
