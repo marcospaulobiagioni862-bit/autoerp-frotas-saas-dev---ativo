@@ -12,6 +12,16 @@ export const companies = pgTable('companies', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 });
 
+export const tenantOperationalConfigs = pgTable('tenant_operational_configs', {
+  companyId: text('company_id').primaryKey().references(() => companies.id, { onDelete: 'cascade' }),
+  timezone: text('timezone').notNull().default('America/Sao_Paulo'),
+  currency: text('currency').notNull().default('BRL'),
+  maxVehiclesLimit: integer('max_vehicles_limit').notNull().default(500),
+  maxDriversLimit: integer('max_drivers_limit').notNull().default(1000),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedBy: text('updated_by').notNull(),
+});
+
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
