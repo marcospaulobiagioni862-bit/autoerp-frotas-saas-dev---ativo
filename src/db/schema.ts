@@ -539,6 +539,7 @@ export const documentAiExtractions = pgTable('document_ai_extractions', {
   fieldConfidence: jsonb('field_confidence').notNull().default({}),
   failureCode: text('failure_code'),
   reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { mode: 'string' }),
   corrections: jsonb('corrections'),
   reviewNotes: text('review_notes'),
   approvedAt: timestamp('approved_at', { mode: 'string' }),
