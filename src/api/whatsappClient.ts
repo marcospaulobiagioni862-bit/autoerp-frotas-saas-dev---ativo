@@ -152,7 +152,7 @@ export class WhatsappClient {
     });
     if (!response.ok) throw await responseError(response);
     const payload = exactRecord(await response.json(), ['item', 'changed', 'cancelledHeldItems']);
-    if (typeof payload.changed !== 'boolean' || !Number.isInteger(payload.cancelledHeldItems) || Number(payload.cancelledHeldItems) < 0) invalid();
+    if (typeof payload.changed !== 'boolean' || typeof payload.cancelledHeldItems !== 'number' || !Number.isInteger(payload.cancelledHeldItems) || payload.cancelledHeldItems < 0) invalid();
     return {
       item: parseWhatsappConsent(payload.item),
       changed: payload.changed,
