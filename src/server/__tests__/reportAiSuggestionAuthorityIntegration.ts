@@ -16,6 +16,7 @@ const companyB = 'report-ai-review-company-b';
 const adminAId = 'report-ai-review-admin-a';
 const adminBId = 'report-ai-review-admin-b';
 const readonlyAId = 'report-ai-review-readonly-a';
+const driverAId = 'report-ai-driver-summary-a';
 
 function resultRows(result: any): Record<string, any>[] {
   if (Array.isArray(result)) return result;
@@ -80,6 +81,21 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
         (${adminAId}, ${companyA}, 'Report AI Admin A', 'report-ai-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
         (${adminBId}, ${companyB}, 'Report AI Admin B', 'report-ai-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
         (${readonlyAId}, ${companyA}, 'Report AI Readonly A', 'report-ai-readonly-a@example.test', 'READONLY', true, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    await db.execute(sql`
+      INSERT INTO drivers (
+        id, company_id, name, cpf, cnh, active, birth_date, phone, whatsapp, email,
+        address_street, address_number, address_neighborhood, address_city, address_state,
+        address_zip_code, cnh_category, cnh_expiration, app_platforms, status,
+        is_archived, created_at, updated_at
+      ) VALUES (
+        ${driverAId}, ${companyA}, 'Motorista Resumo Sintético', '52998224725', '12345678900',
+        true, '1990-01-01', '11999999999', '11999999999', 'report-ai-driver@example.test',
+        'Rua Sintética', '1', 'Centro', 'São Paulo', 'SP', '01001000', 'B', '2035-01-01',
+        ARRAY['synthetic'], 'ACTIVE', false, '2026-08-24T20:00:00.000Z', '2026-08-24T20:00:00.000Z'
+      )
       ON CONFLICT (id) DO NOTHING
     `);
 
@@ -148,6 +164,47 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
     try {
       let response = await request('/api/report-ai/suggestions');
       assert.equal(response.status, 401);
+
+      response = await request('/api/report-ai/suggestions/driver-summary', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: driverAId }),
+      }, readonlyA);
+      assert.equal(response.status, 403, 'readonly principal must not create suggestions');
+
+      response = await request('/api/report-ai/suggestions/driver-summary', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: driverAId, companyId: companyB }),
+      }, adminA);
+      assert.equal(response.status, 400, 'browser tenant authority must be rejected');
+
+      response = await request('/api/report-ai/suggestions/driver-summary', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: driverAId }),
+      }, adminB);
+      assert.equal(response.status, 404, 'cross-tenant driver must look absent');
+
+      response = await request('/api/report-ai/suggestions/driver-summary', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: driverAId }),
+      }, adminA);
+      assert.ok(response.status === 201 || response.status === 200);
+      const driverSummary = (await responseJson(response)).item;
+      assert.equal(driverSummary.companyId, companyA);
+      assert.equal(driverSummary.targetType, 'DRIVER_SUMMARY');
+      assert.equal(driverSummary.targetId, driverAId);
+      assert.equal(driverSummary.status, 'PENDING_REVIEW');
+      assert.equal(driverSummary.review, null);
+      const driverFields = new Map(driverSummary.suggestion.suggestedFields.map((field: any) => [field.field, field]));
+      assert.equal(driverFields.has('cpf'), false, 'CPF must not be exposed in assisted summary');
+      assert.equal(driverFields.get('driverName')?.value, 'Motorista Resumo Sintético');
+      assert.equal(driverFields.get('cnhNumber')?.requiresServerRevalidation, true);
+      assert.equal(driverSummary.suggestion.missingFields.length, 0);
+      for (const field of driverSummary.suggestion.suggestedFields) {
+        assert.ok(field.provenance.length > 0);
+        assert.ok(field.provenance.every((source: any) =>
+          source.kind === 'POSTGRES' && source.entityType === 'Driver' && source.entityId === driverAId
+        ));
+      }
 
       response = await request('/api/report-ai/suggestions', {}, adminA);
       assert.equal(response.status, 200);
