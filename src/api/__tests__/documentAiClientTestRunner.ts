@@ -15,6 +15,8 @@ const extraction: DocumentAiExtraction = {
   attachmentChecksum: 'a'.repeat(64),
   status: 'REVIEW_REQUIRED',
   requestedBy: 'server-user',
+  attemptCount: 1,
+  failureCode: null,
   provider: 'synthetic',
   model: 'synthetic-v1',
   modelVersion: null,
@@ -32,7 +34,9 @@ const extraction: DocumentAiExtraction = {
 
 export class DocumentAiClientTestRunner {
   static async runAllTests(): Promise<void> {
-    assert(parseDocumentAiExtraction(extraction).status === 'REVIEW_REQUIRED', 'valid extraction was rejected');
+    const parsed = parseDocumentAiExtraction(extraction);
+    assert(parsed.status === 'REVIEW_REQUIRED', 'valid extraction was rejected');
+    assert(parsed.attemptCount === 1 && parsed.failureCode === null, 'retry metadata was not parsed');
 
     let invalidRejected = false;
     try {
@@ -41,6 +45,14 @@ export class DocumentAiClientTestRunner {
       invalidRejected = true;
     }
     assert(invalidRejected, 'invalid extraction payload was accepted');
+
+    invalidRejected = false;
+    try {
+      parseDocumentAiExtraction({ ...extraction, attemptCount: -1 });
+    } catch {
+      invalidRejected = true;
+    }
+    assert(invalidRejected, 'invalid retry attempt count was accepted');
 
     const originalFetch = globalThis.fetch;
     const requests: Array<{ input: string; init?: RequestInit }> = [];
