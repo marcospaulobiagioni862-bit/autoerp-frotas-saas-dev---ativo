@@ -65,6 +65,65 @@ function parseStatus(value: unknown): string | undefined {
   return status;
 }
 
+type ReviewDecision = 'APPROVE' | 'REJECT';
+type ReviewInput = { decision: ReviewDecision; corrections: Record<string, unknown>; notes: string | null };
+
+function validateCorrectionValue(value: unknown, depth: number, state: { nodes: number }): void {
+  state.nodes += 1;
+  if (state.nodes > 250 || depth > 5) throw new DocumentAiValidationError();
+  if (value === null || typeof value === 'boolean') return;
+  if (typeof value === 'string') {
+    if (value.length > 4000) throw new DocumentAiValidationError();
+    return;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new DocumentAiValidationError();
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length > 50) throw new DocumentAiValidationError();
+    for (const item of value) validateCorrectionValue(item, depth + 1, state);
+    return;
+  }
+  if (!value || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) {
+    throw new DocumentAiValidationError();
+  }
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (!key || key.length > 120 || ['__proto__', 'prototype', 'constructor'].includes(key)) {
+      throw new DocumentAiValidationError();
+    }
+    validateCorrectionValue(item, depth + 1, state);
+  }
+}
+
+function parseReview(body: unknown): ReviewInput {
+  const item = exactObject(body, new Set(['decision', 'corrections', 'notes']));
+  if (item.decision !== 'APPROVE' && item.decision !== 'REJECT') throw new DocumentAiValidationError();
+  const corrections = item.corrections === undefined ? {} : item.corrections;
+  if (!corrections || typeof corrections !== 'object' || Array.isArray(corrections)) {
+    throw new DocumentAiValidationError();
+  }
+  validateCorrectionValue(corrections, 0, { nodes: 0 });
+  if (JSON.stringify(corrections).length > 20_000) throw new DocumentAiValidationError();
+  let notes: string | null = null;
+  if (item.notes !== undefined) {
+    if (typeof item.notes !== 'string') throw new DocumentAiValidationError();
+    notes = item.notes.trim() || null;
+    if (notes && notes.length > 2000) throw new DocumentAiValidationError();
+  }
+  return { decision: item.decision, corrections: corrections as Record<string, unknown>, notes };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>).sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson((value as Record<string, unknown>)[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof DocumentAiValidationError) {
     res.status(400).json({ error: 'Invalid document AI request' });
@@ -155,6 +214,83 @@ export function registerDocumentAiRoutes(app: Express): void {
         return { item: existing, created: false };
       });
       res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/document-ai/extractions/:id/review', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const id = requiredId(req.params.id, 'id');
+      const input = parseReview(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const rows = await tx.select().from(documentAiExtractions)
+          .where(and(
+            eq(documentAiExtractions.companyId, principal.companyId),
+            eq(documentAiExtractions.id, id),
+          ))
+          .for('update')
+          .limit(1);
+        const current = rows[0];
+        if (!current) throw new DocumentAiNotFoundError();
+
+        const targetStatus = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        if (current.status === targetStatus) {
+          const samePayload =
+            stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
+            (current.reviewNotes ?? null) === input.notes;
+          if (!samePayload) throw new DocumentAiConflictError();
+          return { item: current, idempotent: true };
+        }
+        if (current.status !== 'REVIEW_REQUIRED') throw new DocumentAiConflictError();
+
+        const now = new Date().toISOString();
+        const updatedRows = await tx.update(documentAiExtractions).set({
+          status: targetStatus,
+          reviewedBy: principal.userId,
+          reviewedAt: now,
+          corrections: input.corrections,
+          reviewNotes: input.notes,
+          approvedAt: targetStatus === 'APPROVED' ? now : null,
+          updatedAt: now,
+        }).where(and(
+          eq(documentAiExtractions.companyId, principal.companyId),
+          eq(documentAiExtractions.id, id),
+          eq(documentAiExtractions.status, 'REVIEW_REQUIRED'),
+        )).returning();
+        const updated = updatedRows[0];
+        if (!updated) throw new DocumentAiConflictError();
+
+        await context.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'DocumentAiExtraction',
+          entityId: updated.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify({
+            event: 'AI_EXTRACTION_REVIEW_STARTED',
+            status: current.status,
+          }),
+          newState: JSON.stringify({
+            event: 'AI_EXTRACTION_REVIEWED',
+            status: targetStatus,
+            reviewedBy: principal.userId,
+            reviewedAt: now,
+            correctionKeys: Object.keys(input.corrections).sort(),
+            hasReviewNotes: Boolean(input.notes),
+            businessMutationApplied: false,
+          }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+
+        return { item: updated, idempotent: false };
+      });
+      res.status(200).json(result);
     } catch (error) {
       sendError(res, error);
     }
