@@ -7,11 +7,12 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main(): Promise<void> {
-  const [vite, boundary, sidebar, app, adminAuthority, adminRoutes, adminClient, adminView, cashFlowRoutes] = await Promise.all([
+  const [vite, boundary, sidebar, app, financeHub, adminAuthority, adminRoutes, adminClient, adminView, cashFlowRoutes] = await Promise.all([
     readFile('vite.config.ts', 'utf8'),
     readFile('src/components/security/ProductionCockpitBoundary.tsx', 'utf8'),
     readFile('src/components/layout/ProductionSidebar.tsx', 'utf8'),
     readFile('src/App.tsx', 'utf8'),
+    readFile('src/components/finance/FinanceHubView.tsx', 'utf8'),
     readFile('src/server/adminUserAuthority.ts', 'utf8'),
     readFile('src/server/adminUserRoutes.ts', 'utf8'),
     readFile('src/api/adminUserClient.ts', 'utf8'),
@@ -121,6 +122,11 @@ async function main(): Promise<void> {
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
   assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
   assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
+  assert(sidebar.includes("id: 'transactions', label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
+  assert(sidebar.includes("id: 'cashflow', label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
+  assert(app.includes("activeTab==='cashflow'&&<FinanceHubView initialSubTab=\"cashflow\""), 'Fluxo de Caixa navigation must select the cashflow sub-tab');
+  assert(financeHub.includes("id: 'transactions' as const, label: 'Movimentações'"), 'Finance hub Movimentações sub-tab is missing');
+  assert(financeHub.includes("id: 'cashflow' as const, label: 'Fluxo de Caixa'"), 'Finance hub Fluxo de Caixa sub-tab is missing');
 
   // SECURITY-2Q1 source invariants. Browser identity must never be authority,
   // credentials must not be returned, and no local/browser repository may appear
