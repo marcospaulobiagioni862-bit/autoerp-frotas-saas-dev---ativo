@@ -217,6 +217,7 @@ jobs:
         run: |
           npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
           npx tsx src/server/__tests__/productionTrustBoundary.ts
+          npx tsx src/server/__tests__/tenantProfileAuthorityIntegration.ts
           npx tsx src/server/__tests__/detailAuthorityIntegration.ts
           npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
 
