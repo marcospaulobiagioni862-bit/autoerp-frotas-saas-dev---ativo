@@ -43,7 +43,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto">
+    <div className="space-y-5">
       <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-indigo-50 p-3 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
@@ -51,7 +51,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Administração de Usuários</h1>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Usuários</h2>
               <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                 PostgreSQL autoritativo
               </Badge>
@@ -66,10 +66,10 @@ export const ProductionUserAdministrationView: React.FC = () => {
         </Button>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <strong>Escopo SECURITY-2Q1:</strong> somente Usuários foi promovido para produção. Configuração de tenant, backup/restore, observabilidade e demais funções administrativas continuam bloqueadas até receberem autoridade server-side própria.
+          Credenciais e hashes de senha nunca são retornados por esta API. Tenant e ator são derivados exclusivamente da sessão autenticada do servidor.
         </div>
       </div>
 
@@ -86,8 +86,8 @@ export const ProductionUserAdministrationView: React.FC = () => {
 
       <Card className="overflow-hidden">
         <div className="border-b border-slate-200 p-4 dark:border-slate-800">
-          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Usuários do tenant</h2>
-          <p className="text-xs text-slate-500">Credenciais e hashes de senha nunca são retornados por esta API.</p>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Usuários do tenant</h3>
+          <p className="text-xs text-slate-500">Ações de status são validadas e auditadas pela autoridade PostgreSQL.</p>
         </div>
 
         {loading ? (
