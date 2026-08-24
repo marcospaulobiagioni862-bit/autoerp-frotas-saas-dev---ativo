@@ -283,6 +283,9 @@ jobs:
           npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
           npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
 
+      - name: Administration client regressions
+        run: npx tsx src/api/__tests__/adminUserClientTestRunner.ts
+
       - name: Document review client regression
         run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
 
@@ -326,6 +329,8 @@ jobs:
             ['/api/operations/tasks', 'task authority'],
             ['/api/operations/incidents', 'incident authority'],
             ['/api/operations/executive/snapshot', 'executive authority'],
+            ['/api/admin/users', 'user administration authority'],
+            ['/api/admin/tenant-profile', 'tenant profile administration authority'],
             ['BROWSER_WRITE_DISABLED_SERVER_AUTHORITY_REQUIRED', 'legacy write fail-closed bridge'],
           ];
           for (const [marker, label] of required) if (!bundle.includes(marker)) { console.error(`FAIL: ${label} missing from production frontend bundle (${marker})`); process.exit(1); }
