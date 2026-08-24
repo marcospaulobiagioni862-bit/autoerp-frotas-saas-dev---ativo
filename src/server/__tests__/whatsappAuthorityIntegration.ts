@@ -168,27 +168,31 @@ export class WhatsappAuthorityIntegrationRunner {
       }, adminB);
       assert.equal(response.status, 404, 'cross-tenant outbox request must look absent');
 
-      response = await request('/api/whatsapp/outbox', {
-        method: 'POST',
-        body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
-      }, adminA);
-      assert.equal(response.status, 201);
-      const created = await responseJson(response);
-      assert.equal(created.created, true);
+      const concurrentOutbox = await Promise.all([
+        request('/api/whatsapp/outbox', {
+          method: 'POST',
+          body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
+        }, adminA),
+        request('/api/whatsapp/outbox', {
+          method: 'POST',
+          body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
+        }, adminA),
+      ]);
+      assert.deepEqual(
+        concurrentOutbox.map((item) => item.status).sort(),
+        [200, 201],
+        'concurrent outbox requests must create once and replay once',
+      );
+      const concurrentPayloads = await Promise.all(concurrentOutbox.map(responseJson));
+      const created = concurrentPayloads.find((item) => item.created === true);
+      const replay = concurrentPayloads.find((item) => item.created === false);
+      assert.ok(created && replay);
       assert.equal(created.item.status, 'HELD_PROVIDER_DISABLED');
       assert.equal(created.item.providerCallApplied, false);
       assert.equal(created.item.templateParameters.driverName, 'Motorista WhatsApp Sintético A');
       assert.equal(created.item.templateParameters.cnhExpiration, '2035-01-15');
       assert.equal(JSON.stringify(created).includes('+5511987654321'), false);
-
-      response = await request('/api/whatsapp/outbox', {
-        method: 'POST',
-        body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
-      }, adminA);
-      assert.equal(response.status, 200);
-      const replay = await responseJson(response);
-      assert.equal(replay.created, false);
-      assert.equal(replay.item.id, created.item.id, 'outbox replay must be idempotent');
+      assert.equal(replay.item.id, created.item.id, 'concurrent outbox replay must be idempotent');
 
       response = await request('/api/whatsapp/outbox', {}, adminA);
       assert.equal(response.status, 200);
@@ -246,6 +250,19 @@ export class WhatsappAuthorityIntegrationRunner {
       assert.equal(stored.requested_by, adminAId);
       assert.equal(stored.cancelled_by, adminAId);
       assert.equal(stored.cancellation_reason, 'CONSENT_REVOKED');
+
+      response = await request(`/api/whatsapp/consents/${driverAId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ decision: 'GRANT' }),
+      }, adminA);
+      assert.equal(response.status, 200);
+      response = await request('/api/whatsapp/outbox', {
+        method: 'POST',
+        body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
+      }, adminA);
+      assert.equal(response.status, 201, 'a new explicit consent cycle must permit a new held item');
+      const afterRegrant = await responseJson(response);
+      assert.notEqual(afterRegrant.item.id, created.item.id, 'revoked item must never be resurrected');
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
