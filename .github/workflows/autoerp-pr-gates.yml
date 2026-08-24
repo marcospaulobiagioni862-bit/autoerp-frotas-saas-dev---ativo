@@ -301,6 +301,9 @@ jobs:
       - name: Report AI review authority regression
         run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
 
+      - name: WhatsApp consent and outbox authority regression
+        run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
+
       - name: Authentication regressions
         run: |
           npx tsx src/server/__tests__/authTestRunner.ts
