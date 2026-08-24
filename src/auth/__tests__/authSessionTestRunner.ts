@@ -206,7 +206,7 @@ export class AuthSessionTestRunner {
       } catch (error) {
         if (!isAuthenticationExpiredError(error)) throw error;
       }
-      if (fetchCalls !== 2 || invalidations !== 1) {
+      if (Number(fetchCalls) !== 2 || invalidations !== 1) {
         throw new Error('Concurrent expired requests did not converge to one invalidation');
       }
     });
