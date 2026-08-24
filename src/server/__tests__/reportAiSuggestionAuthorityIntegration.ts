@@ -194,7 +194,7 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
       assert.equal(driverSummary.targetId, driverAId);
       assert.equal(driverSummary.status, 'PENDING_REVIEW');
       assert.equal(driverSummary.review, null);
-      const driverFields = new Map(driverSummary.suggestion.suggestedFields.map((field: any) => [field.field, field]));
+      const driverFields = new Map<string, any>(driverSummary.suggestion.suggestedFields.map((field: any) => [field.field, field]));
       assert.equal(driverFields.has('cpf'), false, 'CPF must not be exposed in assisted summary');
       assert.equal(driverFields.get('driverName')?.value, 'Motorista Resumo Sintético');
       assert.equal(driverFields.get('cnhNumber')?.requiresServerRevalidation, true);
