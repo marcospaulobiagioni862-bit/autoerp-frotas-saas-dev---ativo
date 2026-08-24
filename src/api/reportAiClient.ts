@@ -207,6 +207,19 @@ async function errorFrom(response: Response): Promise<Error> {
 }
 
 export class ReportAiClient {
+  static async createVehicleSummary(vehicleId: string): Promise<{ item: ReportAiSuggestionRecord; created: boolean }> {
+    const response = await fetch('/api/report-ai/suggestions/vehicle-summary', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vehicleId }),
+    });
+    if (!response.ok) throw await errorFrom(response);
+    const payload = asRecord(await response.json());
+    if (typeof payload.created !== 'boolean') invalid();
+    return { item: parseReportAiSuggestionRecord(payload.item), created: payload.created };
+  }
+
   static async createDriverSummary(driverId: string): Promise<{ item: ReportAiSuggestionRecord; created: boolean }> {
     const response = await fetch('/api/report-ai/suggestions/driver-summary', {
       method: 'POST',

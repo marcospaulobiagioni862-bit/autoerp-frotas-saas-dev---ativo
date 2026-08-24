@@ -17,6 +17,7 @@ const adminAId = 'report-ai-review-admin-a';
 const adminBId = 'report-ai-review-admin-b';
 const readonlyAId = 'report-ai-review-readonly-a';
 const driverAId = 'report-ai-driver-summary-a';
+const vehicleAId = 'report-ai-vehicle-summary-a';
 
 function resultRows(result: any): Record<string, any>[] {
   if (Array.isArray(result)) return result;
@@ -95,6 +96,21 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
         true, '1990-01-01', '11999999999', '11999999999', 'report-ai-driver@example.test',
         'Rua Sintética', '1', 'Centro', 'São Paulo', 'SP', '01001000', 'B', '2035-01-01',
         ARRAY['synthetic'], 'ACTIVE', false, '2026-08-24T20:00:00.000Z', '2026-08-24T20:00:00.000Z'
+      )
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    await db.execute(sql`
+      INSERT INTO vehicles (
+        id, company_id, plate, renavam, brand, model, version, year_fabrication, year_model,
+        color, chassis, current_km, next_maintenance_km, fuel_type, category,
+        acquisition_value, current_value, rental_value_base, status, is_archived,
+        created_at, updated_at
+      ) VALUES (
+        ${vehicleAId}, ${companyA}, 'TST1A23', '00987654321', 'Marca Sintética',
+        'Modelo Sintético', 'Versão Teste', 2025, 2026, 'Prata', '9BRTESTE000000001',
+        12345, 15000, 'Flex', 'HATCH', 50000, 45000, 900, 'AVAILABLE', false,
+        '2026-08-24T20:00:00.000Z', '2026-08-24T20:00:00.000Z'
       )
       ON CONFLICT (id) DO NOTHING
     `);
@@ -203,6 +219,47 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
         assert.ok(field.provenance.length > 0);
         assert.ok(field.provenance.every((source: any) =>
           source.kind === 'POSTGRES' && source.entityType === 'Driver' && source.entityId === driverAId
+        ));
+      }
+
+      response = await request('/api/report-ai/suggestions/vehicle-summary', {
+        method: 'POST',
+        body: JSON.stringify({ vehicleId: vehicleAId }),
+      }, readonlyA);
+      assert.equal(response.status, 403, 'readonly principal must not create vehicle suggestions');
+
+      response = await request('/api/report-ai/suggestions/vehicle-summary', {
+        method: 'POST',
+        body: JSON.stringify({ vehicleId: vehicleAId, companyId: companyB }),
+      }, adminA);
+      assert.equal(response.status, 400, 'browser tenant authority must be rejected for vehicles');
+
+      response = await request('/api/report-ai/suggestions/vehicle-summary', {
+        method: 'POST',
+        body: JSON.stringify({ vehicleId: vehicleAId }),
+      }, adminB);
+      assert.equal(response.status, 404, 'cross-tenant vehicle must look absent');
+
+      response = await request('/api/report-ai/suggestions/vehicle-summary', {
+        method: 'POST',
+        body: JSON.stringify({ vehicleId: vehicleAId }),
+      }, adminA);
+      assert.ok(response.status === 201 || response.status === 200);
+      const vehicleSummary = (await responseJson(response)).item;
+      assert.equal(vehicleSummary.companyId, companyA);
+      assert.equal(vehicleSummary.targetType, 'VEHICLE_SUMMARY');
+      assert.equal(vehicleSummary.targetId, vehicleAId);
+      const vehicleFields = new Map<string, any>(vehicleSummary.suggestion.suggestedFields.map((field: any) => [field.field, field]));
+      assert.equal(vehicleFields.get('plate')?.value, 'TST1A23');
+      assert.equal(vehicleFields.get('plate')?.requiresServerRevalidation, true);
+      assert.equal(vehicleFields.has('acquisitionValue'), false, 'financial acquisition value must not be exposed');
+      assert.equal(vehicleFields.has('currentValue'), false, 'financial current value must not be exposed');
+      assert.equal(vehicleFields.has('rentalValueBase'), false, 'financial rental value must not be exposed');
+      assert.equal(vehicleSummary.suggestion.missingFields.length, 0);
+      for (const field of vehicleSummary.suggestion.suggestedFields) {
+        assert.ok(field.provenance.length > 0);
+        assert.ok(field.provenance.every((source: any) =>
+          source.kind === 'POSTGRES' && source.entityType === 'Vehicle' && source.entityId === vehicleAId
         ));
       }
 

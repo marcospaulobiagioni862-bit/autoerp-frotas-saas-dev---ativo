@@ -60,7 +60,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
   const [reportData, setReportData] = useState<ManagementReportData | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<ReportTab>('overview');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [assistantLoadingDriverId, setAssistantLoadingDriverId] = useState<string | null>(null);
+  const [assistantLoadingTargetId, setAssistantLoadingTargetId] = useState<string | null>(null);
   const [assistantSuggestion, setAssistantSuggestion] = useState<ReportAiSuggestionRecord | null>(null);
   const [assistantError, setAssistantError] = useState<string | null>(null);
   const [assistantReviewing, setAssistantReviewing] = useState<boolean>(false);
@@ -115,8 +115,22 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
     }
   };
 
+  const prepareVehicleSummary = async (vehicleId: string) => {
+    setAssistantLoadingTargetId(vehicleId);
+    setAssistantError(null);
+    try {
+      const result = await ReportAiClient.createVehicleSummary(vehicleId);
+      setAssistantSuggestion(result.item);
+    } catch (error) {
+      setAssistantSuggestion(null);
+      setAssistantError(error instanceof Error ? error.message : 'O preenchimento assistido falhou de forma segura.');
+    } finally {
+      setAssistantLoadingTargetId(null);
+    }
+  };
+
   const prepareDriverSummary = async (driverId: string) => {
-    setAssistantLoadingDriverId(driverId);
+    setAssistantLoadingTargetId(driverId);
     setAssistantError(null);
     try {
       const result = await ReportAiClient.createDriverSummary(driverId);
@@ -125,7 +139,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       setAssistantSuggestion(null);
       setAssistantError(error instanceof Error ? error.message : 'O preenchimento assistido falhou de forma segura.');
     } finally {
-      setAssistantLoadingDriverId(null);
+      setAssistantLoadingTargetId(null);
     }
   };
 
@@ -161,6 +175,19 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
     status: 'Status',
     currentVehicleId: 'Veículo atual',
     currentContractId: 'Contrato atual',
+    plate: 'Placa',
+    brand: 'Marca',
+    model: 'Modelo',
+    version: 'Versão',
+    yearFabrication: 'Ano de fabricação',
+    yearModel: 'Ano/modelo',
+    color: 'Cor',
+    renavam: 'RENAVAM',
+    chassis: 'Chassi',
+    currentKm: 'KM atual',
+    nextMaintenanceKm: 'Próxima manutenção',
+    fuelType: 'Combustível',
+    category: 'Categoria',
   }[field] || field);
 
   const fieldValue = (field: ReportAiSuggestedField): string =>
@@ -568,6 +595,81 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             />
           </div>
 
+          {assistantError && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>Falha segura:</strong> {assistantError} O relatório manual permanece disponível e nenhum cadastro foi alterado.
+            </div>
+          )}
+
+          {assistantSuggestion && (
+            <Card padding="sm" className="border-indigo-200 dark:border-indigo-800">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <FileCheck className="w-4 h-4 text-indigo-600" />
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Resumo assistido — revisão humana</h3>
+                      <Badge variant={assistantSuggestion.status === 'CONFIRMED' ? 'success' : assistantSuggestion.status === 'REJECTED' ? 'danger' : 'warning'}>
+                        {assistantSuggestion.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Dados lidos somente do ERP. Não usa IA externa, não grava no cadastro e não executa alteração financeira ou contratual.
+                    </p>
+                  </div>
+                  {assistantSuggestion.status === 'PENDING_REVIEW' && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={assistantReviewing}
+                        onClick={() => reviewDriverSummary('REJECT')}
+                      >
+                        {assistantReviewing ? 'Registrando...' : 'Rejeitar'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        disabled={assistantReviewing}
+                        onClick={() => reviewDriverSummary('CONFIRM')}
+                        icon={<CheckCircle2 className="w-4 h-4" />}
+                      >
+                        {assistantReviewing ? 'Registrando...' : 'Confirmar revisão'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {assistantSuggestion.suggestion.suggestedFields.map((field) => (
+                    <div key={field.field} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{fieldLabel(field.field)}</span>
+                        {field.requiresServerRevalidation && <Badge variant="warning">Revalidar</Badge>}
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
+                      <div className="text-[10px] text-slate-500 mt-2">
+                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'PostgreSQL do ERP' : 'Documento aprovado'}
+                        {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {(assistantSuggestion.suggestion.missingFields.length > 0 || assistantSuggestion.suggestion.warnings.length > 0) && (
+                  <div className="text-xs text-amber-700 dark:text-amber-300">
+                    {assistantSuggestion.suggestion.missingFields.length > 0 && (
+                      <span>Campos ausentes: {assistantSuggestion.suggestion.missingFields.map(fieldLabel).join(', ')}. </span>
+                    )}
+                    {assistantSuggestion.suggestion.warnings.length > 0 && (
+                      <span>Há fontes divergentes que exigem conferência manual.</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
           <Card padding="none" className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
@@ -581,6 +683,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                     <th className="p-3 font-semibold">Multas</th>
                     <th className="p-3 font-semibold">Pendências</th>
                     <th className="p-3 font-semibold">Saúde</th>
+                    <th className="p-3 font-semibold">Preenchimento assistido</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -623,6 +726,17 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                         }`}>
                           {v.healthStatus}
                         </span>
+                      </td>
+                      <td className="p-3">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={assistantLoadingTargetId !== null}
+                          onClick={() => prepareVehicleSummary(v.vehicleId)}
+                          icon={<FileCheck className="w-4 h-4" />}
+                        >
+                          {assistantLoadingTargetId === v.vehicleId ? 'Preparando...' : 'Preparar resumo'}
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -753,11 +867,11 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={assistantLoadingDriverId !== null}
+                          disabled={assistantLoadingTargetId !== null}
                           onClick={() => prepareDriverSummary(d.driverId)}
                           icon={<FileCheck className="w-4 h-4" />}
                         >
-                          {assistantLoadingDriverId === d.driverId ? 'Preparando...' : 'Preparar resumo'}
+                          {assistantLoadingTargetId === d.driverId ? 'Preparando...' : 'Preparar resumo'}
                         </Button>
                       </td>
                     </tr>

@@ -49,6 +49,17 @@ const record: ReportAiSuggestionRecord = {
   updatedAt: '2026-08-24T00:00:00.000Z',
 };
 
+const vehicleRecord: ReportAiSuggestionRecord = {
+  ...record,
+  targetType: 'VEHICLE_SUMMARY',
+  targetId: 'vehicle-1',
+  suggestion: {
+    ...record.suggestion,
+    targetType: 'VEHICLE_SUMMARY',
+    targetId: 'vehicle-1',
+  },
+};
+
 export class ReportAiClientTestRunner {
   static async runAllTests(): Promise<void> {
     assert(parseReportAiSuggestionRecord(record).status === 'PENDING_REVIEW', 'valid suggestion was rejected');
@@ -65,6 +76,12 @@ export class ReportAiClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input).endsWith('/vehicle-summary')) {
+          return new Response(JSON.stringify({ item: vehicleRecord, created: true }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input).endsWith('/driver-summary')) {
           return new Response(JSON.stringify({ item: record, created: true }), {
             status: 201,
@@ -92,16 +109,23 @@ export class ReportAiClientTestRunner {
       assert(Object.keys(generateBody).join(',') === 'driverId', 'generation sent fields beyond the driver identifier');
       assert(generateBody.driverId === 'driver-1', 'driver identifier missing');
 
+      const vehicleGenerated = await ReportAiClient.createVehicleSummary('vehicle-1');
+      assert(vehicleGenerated.created && vehicleGenerated.item.targetId === 'vehicle-1', 'vehicle summary response was not parsed');
+      const vehicleRequest = requests[1];
+      assert(vehicleRequest.input === '/api/report-ai/suggestions/vehicle-summary', 'vehicle generation route changed');
+      const vehicleBody = JSON.parse(String(vehicleRequest.init?.body));
+      assert(Object.keys(vehicleBody).join(',') === 'vehicleId', 'vehicle generation sent browser authority fields');
+
       const listed = await ReportAiClient.list('PENDING_REVIEW');
       assert(listed.length === 1, 'suggestion list response was not parsed');
-      assert(requests[1].input === '/api/report-ai/suggestions?status=PENDING_REVIEW', 'list filter was not encoded');
+      assert(requests[2].input === '/api/report-ai/suggestions?status=PENDING_REVIEW', 'list filter was not encoded');
 
       const reviewed = await ReportAiClient.review(record.id, {
         decision: 'CONFIRM',
         notes: '  confirmação humana  ',
       });
       assert(reviewed.status === 'CONFIRMED', 'review response was not parsed');
-      const reviewRequest = requests[2];
+      const reviewRequest = requests[3];
       const reviewBody = JSON.parse(String(reviewRequest.init?.body));
       assert(reviewBody.decision === 'CONFIRM', 'human decision missing');
       assert(reviewBody.notes === 'confirmação humana', 'review notes were not normalized');
