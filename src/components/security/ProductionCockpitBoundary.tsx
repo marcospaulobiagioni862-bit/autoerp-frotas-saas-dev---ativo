@@ -60,8 +60,8 @@ export const ExecutiveDashboardView: React.FC<LegacyViewProps> = () => (
   <ExecutiveOperationsCenterView />
 );
 
-// SECURITY-2Q1 promotes only the production Users slice. The rendered view itself
-// makes the remaining administration surfaces explicitly unavailable.
+// SECURITY-2Q2 promotes the production Users and Empresa / Tenant slices. The
+// rendered view keeps every remaining administration surface explicitly unavailable.
 export const AdministrationCenterView: React.FC<LegacyViewProps> = () => (
   <ProductionUserAdministrationView />
 );
