@@ -61,6 +61,21 @@ function requiredText(value: unknown, field: string, minLength = 1): string {
   return clean;
 }
 
+function normalizePhone(value: unknown, field: string, required = true): string | undefined {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) {
+    if (required) throw new DriverValidationError(`Invalid ${field}`);
+    return undefined;
+  }
+  const digits = raw.replace(/\D/g, '');
+  const localLength = digits.length === 10 || digits.length === 11;
+  const countryLength = (digits.length === 12 || digits.length === 13) && digits.startsWith('55');
+  if ((!localLength && !countryLength) || /^(\d)\1+$/.test(digits)) {
+    throw new DriverValidationError(`Invalid ${field}`);
+  }
+  return digits;
+}
+
 function normalizeCpf(value: unknown): string {
   const cpf = typeof value === 'string' ? value.replace(/\D/g, '') : '';
   if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) throw new DriverValidationError('Invalid cpf');
@@ -222,7 +237,7 @@ export function registerDriverRoutes(app: Express): void {
       const cpf = normalizeCpf(req.body?.cpf);
       const cnhNumber = normalizeCnh(req.body?.cnhNumber);
       const birthDate = normalizeIsoDate(req.body?.birthDate, 'birthDate', false);
-      const phone = requiredText(req.body?.phone, 'phone');
+      const phone = normalizePhone(req.body?.phone, 'phone')!;
       const cnhExpiration = normalizeIsoDate(req.body?.cnhExpiration, 'cnhExpiration', true);
       const cnhState = evaluateCnhStatus(cnhExpiration);
       const now = new Date().toISOString();
@@ -238,7 +253,7 @@ export function registerDriverRoutes(app: Express): void {
           rg: optionalText(req.body?.rg),
           birthDate,
           phone,
-          whatsapp: optionalText(req.body?.whatsapp) || phone,
+          whatsapp: normalizePhone(req.body?.whatsapp, 'whatsapp', false) || phone,
           email: optionalText(req.body?.email)?.toLowerCase(),
           address: addressFrom(req.body?.address),
           cnhNumber,
@@ -291,8 +306,8 @@ export function registerDriverRoutes(app: Express): void {
           cpf: body.cpf === undefined ? existing.cpf : normalizeCpf(body.cpf),
           rg: body.rg === undefined ? existing.rg : optionalText(body.rg),
           birthDate: body.birthDate === undefined ? existing.birthDate : normalizeIsoDate(body.birthDate, 'birthDate', false),
-          phone: body.phone === undefined ? existing.phone : requiredText(body.phone, 'phone'),
-          whatsapp: body.whatsapp === undefined ? existing.whatsapp : (optionalText(body.whatsapp) || existing.phone),
+          phone: body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!,
+          whatsapp: body.whatsapp === undefined ? existing.whatsapp : (normalizePhone(body.whatsapp, 'whatsapp', false) || (body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!)),
           email: body.email === undefined ? existing.email : optionalText(body.email)?.toLowerCase(),
           address: body.address === undefined ? existing.address : addressFrom(body.address, existing.address),
           cnhNumber: body.cnhNumber === undefined ? existing.cnhNumber : normalizeCnh(body.cnhNumber),
