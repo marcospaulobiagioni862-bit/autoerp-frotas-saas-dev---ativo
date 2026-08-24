@@ -7,6 +7,7 @@ import {
   LoginCredentials,
   resolveEmbeddedAuthUser,
 } from '../hooks/useAuth';
+import { createSessionAwareFetch } from './sessionExpiry';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -74,6 +75,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
     }
   }, [client]);
+
+  useEffect(() => {
+    if (embeddedDevelopmentUser || !user) {
+      return;
+    }
+
+    const originalFetch = globalThis.fetch;
+    const sessionAwareFetch = createSessionAwareFetch(
+      originalFetch.bind(globalThis),
+      () => setUser(null)
+    ) as typeof globalThis.fetch;
+
+    globalThis.fetch = sessionAwareFetch;
+    return () => {
+      if (globalThis.fetch === sessionAwareFetch) {
+        globalThis.fetch = originalFetch;
+      }
+    };
+  }, [embeddedDevelopmentUser, user?.userId]);
 
   if (isRestoring) {
     return (

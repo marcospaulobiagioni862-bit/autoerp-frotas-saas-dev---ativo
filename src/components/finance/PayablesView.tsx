@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccountPayable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
@@ -54,6 +55,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));
       setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
+      if (isAuthenticationExpiredError(err)) return;
       const message = err instanceof Error ? err.message : 'Erro ao carregar contas a pagar.';
       alert(message);
       setPayables([]);
@@ -102,6 +104,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       // Reload
       await loadPayables();
     } catch (err: any) {
+      if (isAuthenticationExpiredError(err)) return;
       alert(err.message || 'Erro ao criar obrigação a pagar.');
     } finally {
       setCreateLoading(false);
@@ -122,6 +125,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       setCancelTargetId(null);
       await loadPayables();
     } catch (err: any) {
+      if (isAuthenticationExpiredError(err)) return;
       alert(err.message || 'Erro ao cancelar título');
       setCancelTargetId(null);
     }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import {
   TrendingUp,
@@ -65,6 +66,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
       setCategoryId((current) => incomeCategories.some((category) => category.id === current) ? current : (incomeCategories[0]?.id || ''));
       setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
+      if (isAuthenticationExpiredError(err)) return;
       const message = err instanceof Error ? err.message : 'Erro ao carregar contas a receber.';
       alert(message);
       setReceivables([]);
@@ -111,6 +113,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
       // Reload
       await loadReceivables();
     } catch (err: any) {
+      if (isAuthenticationExpiredError(err)) return;
       alert(err.message || 'Erro ao criar título a receber.');
     } finally {
       setCreateLoading(false);
@@ -131,6 +134,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
       setCancelTargetId(null);
       loadReceivables();
     } catch (err: any) {
+      if (isAuthenticationExpiredError(err)) return;
       alert(err.message || 'Erro ao cancelar título');
       setCancelTargetId(null);
     }
