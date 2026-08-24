@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_consents (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (company_id, driver_id),
   CONSTRAINT whatsapp_consents_status_check CHECK (status IN ('GRANTED', 'REVOKED')),
-  CONSTRAINT whatsapp_consents_phone_check CHECK (phone_e164 ~ '^\\+55[0-9]{10,11}$'),
+  CONSTRAINT whatsapp_consents_phone_check CHECK (phone_e164 ~ '^[+]55[0-9]{10,11}$'),
   CONSTRAINT whatsapp_consents_source_check CHECK (consent_source = 'ERP_MANUAL')
 );
 
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_outbox (
   PRIMARY KEY (company_id, id),
   UNIQUE (company_id, idempotency_key),
   CONSTRAINT whatsapp_outbox_id_check CHECK (id ~ '^wao_[a-f0-9]{32}$'),
-  CONSTRAINT whatsapp_outbox_phone_check CHECK (phone_e164 ~ '^\\+55[0-9]{10,11}$'),
+  CONSTRAINT whatsapp_outbox_phone_check CHECK (phone_e164 ~ '^[+]55[0-9]{10,11}$'),
   CONSTRAINT whatsapp_outbox_template_check CHECK (template_key = 'DRIVER_CNH_EXPIRY'),
   CONSTRAINT whatsapp_outbox_parameters_object_check CHECK (jsonb_typeof(template_parameters) = 'object'),
   CONSTRAINT whatsapp_outbox_reference_check CHECK (reference_type = 'DRIVER'),
