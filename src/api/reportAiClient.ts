@@ -77,7 +77,8 @@ function nullableString(value: unknown): string | null {
 }
 
 function scalar(value: unknown): ReportAiScalar {
-  if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+  if (value === null) return null;
+  if (typeof value === 'boolean' || typeof value === 'string') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   return invalid();
 }
