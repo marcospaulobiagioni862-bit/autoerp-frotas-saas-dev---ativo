@@ -160,6 +160,67 @@ export class DocumentAiAuthorityIntegrationRunner {
       await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
         await tx.update(documentAiExtractions).set({
+          status: 'FAILED',
+          failureCode: 'PROVIDER_TIMEOUT',
+          attemptCount: 1,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, pending.id),
+        ));
+      });
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, readonlyA);
+      assert(response.status === 403, `READONLY retry expected 403, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminB);
+      assert(response.status === 404, `cross-tenant retry expected 404, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST',
+        body: JSON.stringify({ companyId: companyB, status: 'PENDING', attemptCount: 0 }),
+      }, adminA);
+      assert(response.status === 400, `forged retry fields expected 400, got ${response.status}`);
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminA);
+      assert(response.status === 200, `controlled retry expected 200, got ${response.status}`);
+      const retried = (await json(response)).item;
+      assert(retried.status === 'PENDING', 'retry did not return extraction to PENDING');
+      assert(retried.failureCode === null && retried.attemptCount === 1, 'retry must clear failure while retaining attempt count');
+
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminA);
+      assert(response.status === 409, `retry replay outside FAILED expected 409, got ${response.status}`);
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.update(documentAiExtractions).set({
+          status: 'FAILED',
+          failureCode: 'PROVIDER_TIMEOUT',
+          attemptCount: 3,
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, pending.id),
+        ));
+      });
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminA);
+      assert(response.status === 409, `retry beyond max attempts expected 409, got ${response.status}`);
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.update(documentAiExtractions).set({
           status: 'REVIEW_REQUIRED',
           detectedDocumentType: 'CRLV',
           proposedFields: { plate: 'ABC1D23', renavam: '00123456789' },
