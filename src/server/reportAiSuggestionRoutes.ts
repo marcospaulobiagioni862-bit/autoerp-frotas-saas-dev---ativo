@@ -350,6 +350,81 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerReportAiSuggestionRoutes(app: Express): void {
+  app.post('/api/report-ai/suggestions/vehicle-summary', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const body = exactObject(req.body, new Set(['vehicleId']));
+      const vehicleId = typeof body.vehicleId === 'string' ? body.vehicleId.trim() : '';
+      if (!vehicleId || vehicleId.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(vehicleId)) {
+        throw new ReportAiAuthorityValidationError();
+      }
+      const vehicle = await UnitOfWork.run(principal.companyId, async (context: any) =>
+        await context.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId),
+      );
+      if (!vehicle || vehicle.isArchived) throw new ReportAiAuthorityNotFoundError();
+
+      const candidates: ReportAiCandidate[] = [];
+      const add = (
+        field: string,
+        value: ReportAiScalar | undefined,
+        sensitivity: ReportAiCandidate['sensitivity'] = 'GENERAL',
+      ): void => {
+        if (value === undefined || value === null || value === '') return;
+        candidates.push({
+          companyId: principal.companyId,
+          field,
+          value,
+          sensitivity,
+          source: {
+            kind: 'POSTGRES',
+            entityType: 'Vehicle',
+            entityId: vehicle.id,
+            observedAt: vehicle.updatedAt,
+            confidence: null,
+            reviewedAt: null,
+          },
+        });
+      };
+      add('plate', vehicle.plate, 'CONTRACTUAL');
+      add('brand', vehicle.brand);
+      add('model', vehicle.model);
+      add('version', vehicle.version);
+      add('yearFabrication', vehicle.yearFabrication);
+      add('yearModel', vehicle.yearModel);
+      add('color', vehicle.color);
+      add('renavam', vehicle.renavam, 'CONTRACTUAL');
+      add('chassis', vehicle.chassis, 'CONTRACTUAL');
+      add('currentKm', vehicle.currentKm);
+      add('nextMaintenanceKm', vehicle.nextMaintenanceKm);
+      add('fuelType', vehicle.fuelType);
+      add('category', vehicle.category);
+      add('status', vehicle.status);
+      add('currentDriverId', vehicle.currentDriverId, 'CONTRACTUAL');
+      add('currentContractId', vehicle.currentContractId, 'CONTRACTUAL');
+
+      const suggestion = buildReportAiSuggestion({
+        companyId: principal.companyId,
+        targetType: 'VEHICLE_SUMMARY',
+        targetId: vehicle.id,
+        allowedFields: [
+          'plate', 'brand', 'model', 'version', 'yearFabrication', 'yearModel', 'color',
+          'renavam', 'chassis', 'currentKm', 'nextMaintenanceKm', 'fuelType', 'category',
+          'status', 'currentDriverId', 'currentContractId',
+        ],
+        requiredFields: ['plate', 'brand', 'model', 'currentKm', 'status'],
+        candidates,
+      });
+      const result = await persistReportAiSuggestion(principal.companyId, {
+        userId: principal.userId,
+        name: principal.name,
+      }, suggestion);
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.post('/api/report-ai/suggestions/driver-summary', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, true);
     if (!principal) return;
