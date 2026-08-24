@@ -169,7 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const authorityItems: MenuItem[] = [
     ...(isAdmin
-      ? [{ id: 'administration' as const, label: 'Administração de Usuários', icon: Users, badge: 'Admin' }]
+      ? [{ id: 'administration' as const, label: 'Administração', icon: Users, badge: 'Admin' }]
       : []),
     { id: 'executive-operations', label: 'Central Executiva', icon: ShieldCheck, badge: 'Server' },
     { id: 'incident-management', label: 'Incidentes', icon: LifeBuoy, badge: 'Server' },
