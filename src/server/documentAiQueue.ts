@@ -9,6 +9,8 @@ import {
   type DocumentAiProposal,
 } from './documentAiProcessor';
 
+export const DOCUMENT_AI_MAX_ATTEMPTS = 3;
+
 const SYSTEM_USER_ID = 'SYSTEM_DOC_AI';
 const SYSTEM_USER_NAME = 'AutoERP Document AI Worker';
 
@@ -66,6 +68,7 @@ async function claim(companyId: string, claimedBy: string): Promise<ClaimedExtra
          AND attachment.id = extraction.attachment_id
         WHERE extraction.company_id = ${companyId}
           AND extraction.status = 'PENDING'
+          AND extraction.attempt_count < ${DOCUMENT_AI_MAX_ATTEMPTS}
           AND attachment.is_archived = false
           AND attachment.content_state = 'AVAILABLE'
           AND attachment.storage_provider = 'SERVER_FS'
