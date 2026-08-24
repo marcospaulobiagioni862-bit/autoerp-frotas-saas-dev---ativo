@@ -1,4 +1,5 @@
 import { AdminUserClient } from '../adminUserClient';
+import { TenantProfileClientTestRunner } from './tenantProfileClientTestRunner';
 
 const user = {
   id: 'user-1',
@@ -79,8 +80,13 @@ export class AdminUserClientTestRunner {
       globalThis.fetch = originalFetch;
     }
 
-    const result = { passed, failed: tests.length - passed, total: tests.length };
-    console.log(`AdminUserClient ${result.passed}/${result.total} PASS`);
+    const tenant = await TenantProfileClientTestRunner.runAllTests();
+    const result = {
+      passed: passed + tenant.passed,
+      failed: (tests.length - passed) + tenant.failed,
+      total: tests.length + tenant.total,
+    };
+    console.log(`AdministrationClients ${result.passed}/${result.total} PASS`);
     return result;
   }
 }
