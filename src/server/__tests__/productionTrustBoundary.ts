@@ -7,7 +7,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main(): Promise<void> {
-  const [vite, boundary, sidebar, app, financeHub, adminAuthority, adminRoutes, adminClient, adminView, cashFlowRoutes] = await Promise.all([
+  const [vite, boundary, sidebar, app, financeHub, adminAuthority, adminRoutes, adminClient, adminView, tenantAuthority, tenantRoutes, tenantClient, tenantView, cashFlowRoutes] = await Promise.all([
     readFile('vite.config.ts', 'utf8'),
     readFile('src/components/security/ProductionCockpitBoundary.tsx', 'utf8'),
     readFile('src/components/layout/ProductionSidebar.tsx', 'utf8'),
@@ -17,6 +17,10 @@ async function main(): Promise<void> {
     readFile('src/server/adminUserRoutes.ts', 'utf8'),
     readFile('src/api/adminUserClient.ts', 'utf8'),
     readFile('src/components/admin/ProductionUserAdministrationView.tsx', 'utf8'),
+    readFile('src/server/tenantProfileAuthority.ts', 'utf8'),
+    readFile('src/server/tenantProfileRoutes.ts', 'utf8'),
+    readFile('src/api/tenantProfileClient.ts', 'utf8'),
+    readFile('src/components/admin/ProductionTenantProfileView.tsx', 'utf8'),
     readFile('src/server/financeCashFlowRoutes.ts', 'utf8'),
   ]);
 
@@ -70,7 +74,7 @@ async function main(): Promise<void> {
   assert(boundary.includes('OperationalIncidentCenterView'), 'Incident duplicate is not routed to SECURITY-2O authority');
   assert(boundary.includes('OperationalTasksView'), 'Workflow duplicate is not routed to SECURITY-2O task authority');
   assert(boundary.includes('ExecutiveOperationsCenterView'), 'Executive duplicate is not routed to SECURITY-2O authority');
-  assert(boundary.includes('ProductionUserAdministrationView'), 'SECURITY-2Q1 production Users slice is not routed to server authority');
+  assert(boundary.includes('ProductionUserAdministrationView'), 'SECURITY-2Q2 production administration is not routed to server authority');
 
   const forbiddenBoundaryMarkers = [
     'localStorage',
@@ -101,8 +105,8 @@ async function main(): Promise<void> {
     'Production administration navigation must derive visibility from the authenticated ADMIN principal'
   );
   assert(
-    sidebar.includes("label: 'Administração de Usuários'"),
-    'Production ADMIN navigation label for the promoted Users slice is missing'
+    sidebar.includes("label: 'Administração'"),
+    'Production ADMIN navigation label for the promoted Users and Tenant slices is missing'
   );
 
   const quarantinedNavigationLabels = [
@@ -142,8 +146,11 @@ async function main(): Promise<void> {
   assert(adminRoutes.includes("app.patch('/api/admin/users/:id/status'"), 'SECURITY-2Q1 ADMIN status route missing');
   assert(adminRoutes.includes("Object.keys(body).length !== 1"), 'SECURITY-2Q1 route must reject forged extra authority fields');
   assert(adminClient.includes("credentials: 'include'"), 'SECURITY-2Q1 client must use authenticated cookie transport');
-  assert(adminView.includes('somente Usuários foi promovido'), 'SECURITY-2Q1 UI must keep unpromoted admin slices visibly fail-closed');
+  assert(adminView.includes("type AdministrationTab = 'users' | 'tenant'"), 'SECURITY-2Q2 UI must expose exactly Users and Tenant tabs');
+  assert(adminView.includes('Empresa / Tenant foram promovidos'), 'SECURITY-2Q2 UI must keep unpromoted admin slices visibly fail-closed');
+  assert(adminView.includes('ProductionTenantProfileView'), 'SECURITY-2Q2 tenant profile view is not mounted in production administration');
   assert(cashFlowRoutes.includes('registerAdminUserRoutes(app)'), 'SECURITY-2Q1 routes are not mounted in production bootstrap');
+  assert(cashFlowRoutes.includes('registerTenantProfileRoutes(app)'), 'SECURITY-2Q2 routes are not mounted in production bootstrap');
   for (const [name, source] of Object.entries({ adminAuthority, adminRoutes, adminClient, adminView })) {
     assert(!source.includes('localRepositories'), `SECURITY-2Q1 ${name} references localRepositories`);
     assert(!source.includes('localStorage'), `SECURITY-2Q1 ${name} references localStorage`);
@@ -151,16 +158,33 @@ async function main(): Promise<void> {
   assert(!adminClient.includes('companyId'), 'SECURITY-2Q1 client must not transmit browser tenant authority');
   assert(!adminClient.includes('passwordHash'), 'SECURITY-2Q1 client contract must not contain credential material');
 
+  // SECURITY-2Q2 source invariants for Empresa / Tenant.
+  assert(tenantAuthority.includes("String(actor.role || '').toUpperCase() !== 'ADMIN'"), 'SECURITY-2Q2 authority must be ADMIN-only');
+  assert(tenantAuthority.includes("eq(companies.id, actor.companyId)"), 'SECURITY-2Q2 authority lacks explicit tenant predicate');
+  assert(tenantAuthority.includes(".for('update')"), 'SECURITY-2Q2 mutation must lock authoritative rows');
+  assert(tenantAuthority.includes("entityName: 'TenantOperationalConfig'"), 'SECURITY-2Q2 mutation lacks atomic audit evidence');
+  assert(tenantRoutes.includes("app.get('/api/admin/tenant-profile'"), 'SECURITY-2Q2 GET route missing');
+  assert(tenantRoutes.includes("app.patch('/api/admin/tenant-profile'"), 'SECURITY-2Q2 PATCH route missing');
+  assert(tenantRoutes.includes("new Set(['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit'])"), 'SECURITY-2Q2 PATCH allowlist changed');
+  assert(tenantClient.includes("credentials: 'include'"), 'SECURITY-2Q2 client must use authenticated cookie transport');
+  assert(tenantClient.includes("fetch('/api/admin/tenant-profile'"), 'SECURITY-2Q2 client route missing');
+  assert(tenantView.includes('Documento da empresa somente leitura'), 'SECURITY-2Q2 immutable document UI guard missing');
+  for (const [name, source] of Object.entries({ tenantAuthority, tenantRoutes, tenantClient, tenantView })) {
+    assert(!source.includes('localRepositories'), `SECURITY-2Q2 ${name} references localRepositories`);
+    assert(!source.includes('localStorage'), `SECURITY-2Q2 ${name} references localStorage`);
+  }
+
   const clientResult = await AdminUserClientTestRunner.runAllTests();
-  assert(clientResult.failed === 0, 'SECURITY-2Q1 administration client transport regression failed');
+  assert(clientResult.failed === 0, 'SECURITY-2Q1/2Q2 administration client transport regression failed');
   await runAdminUserAuthorityIntegration();
 
   console.log(JSON.stringify({
-    suite: 'SECURITY-2P/2Q1 production trust-boundary invariants',
+    suite: 'SECURITY-2P/2Q1/2Q2 production trust-boundary invariants',
     status: 'PASS',
     aliasedLegacyEntries: cockpitEntries.length,
     trustedCockpitRoutes: safeProductionRoutes,
     security2q1: 'PostgreSQL user administration authority PASS',
+    security2q2: 'PostgreSQL tenant profile authority PASS',
   }));
 }
 
