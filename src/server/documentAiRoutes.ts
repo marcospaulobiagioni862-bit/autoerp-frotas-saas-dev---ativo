@@ -5,6 +5,7 @@ import { UnitOfWork } from '../db/uow';
 import { documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -56,6 +57,12 @@ function parseCreate(body: unknown): { attachmentId: string; idempotencyKey: str
   const idempotencyKey = requiredId(item.idempotencyKey, 'idempotencyKey');
   if (idempotencyKey.length < 8) throw new DocumentAiValidationError('Invalid idempotencyKey');
   return { attachmentId, idempotencyKey };
+}
+
+function parseRetry(body: unknown): void {
+  if (body === undefined || body === null) return;
+  const item = exactObject(body, new Set());
+  if (Object.keys(item).length !== 0) throw new DocumentAiValidationError();
 }
 
 function parseStatus(value: unknown): string | undefined {
@@ -214,6 +221,95 @@ export function registerDocumentAiRoutes(app: Express): void {
         return { item: existing, created: false };
       });
       res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/document-ai/extractions/:id/retry', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const id = requiredId(req.params.id, 'id');
+      parseRetry(req.body);
+      const item = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const extractionRows = await tx.select().from(documentAiExtractions)
+          .where(and(
+            eq(documentAiExtractions.companyId, principal.companyId),
+            eq(documentAiExtractions.id, id),
+          ))
+          .for('update')
+          .limit(1);
+        const current = extractionRows[0];
+        if (!current) throw new DocumentAiNotFoundError();
+        if (current.status !== 'FAILED' || current.attemptCount >= DOCUMENT_AI_MAX_ATTEMPTS) {
+          throw new DocumentAiConflictError();
+        }
+
+        const attachmentRows = await tx.select().from(fileAttachments)
+          .where(and(
+            eq(fileAttachments.companyId, principal.companyId),
+            eq(fileAttachments.id, current.attachmentId),
+          ))
+          .for('update')
+          .limit(1);
+        const attachment = attachmentRows[0];
+        if (
+          !attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' ||
+          attachment.contentState !== 'AVAILABLE' || !attachment.storageKey ||
+          attachment.checksum !== current.attachmentChecksum
+        ) throw new DocumentAiConflictError();
+
+        const now = new Date().toISOString();
+        const updatedRows = await tx.update(documentAiExtractions).set({
+          status: 'PENDING',
+          workerId: null,
+          processingStartedAt: null,
+          completedAt: null,
+          failureCode: null,
+          provider: null,
+          model: null,
+          modelVersion: null,
+          detectedDocumentType: null,
+          rawExtraction: {},
+          proposedFields: {},
+          fieldConfidence: {},
+          updatedAt: now,
+        }).where(and(
+          eq(documentAiExtractions.companyId, principal.companyId),
+          eq(documentAiExtractions.id, id),
+          eq(documentAiExtractions.status, 'FAILED'),
+        )).returning();
+        const updated = updatedRows[0];
+        if (!updated) throw new DocumentAiConflictError();
+
+        await context.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'DocumentAiExtraction',
+          entityId: updated.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify({
+            event: 'AI_EXTRACTION_FAILED',
+            status: current.status,
+            failureCode: current.failureCode,
+            attemptCount: current.attemptCount,
+          }),
+          newState: JSON.stringify({
+            event: 'AI_EXTRACTION_RETRY_REQUESTED',
+            status: 'PENDING',
+            attemptCount: current.attemptCount,
+            maxAttempts: DOCUMENT_AI_MAX_ATTEMPTS,
+            businessMutationApplied: false,
+          }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+        return updated;
+      });
+      res.status(200).json({ item });
     } catch (error) {
       sendError(res, error);
     }

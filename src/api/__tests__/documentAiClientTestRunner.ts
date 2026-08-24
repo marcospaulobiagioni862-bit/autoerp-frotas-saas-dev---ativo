@@ -47,6 +47,12 @@ export class DocumentAiClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input).includes('/retry')) {
+          return new Response(JSON.stringify({ item: { ...extraction, status: 'PENDING' } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input).includes('/review')) {
           return new Response(JSON.stringify({ item: { ...extraction, status: 'APPROVED' } }), {
             status: 200,
@@ -77,6 +83,15 @@ export class DocumentAiClientTestRunner {
       assert(body.notes === 'revisão segura', 'review notes were not normalized');
       assert(body.companyId === undefined && body.reviewedBy === undefined && body.status === undefined, 'client sent forged authority fields');
       assert(reviewRequest.init?.credentials === 'include', 'review request omitted session credentials');
+
+      const retried = await DocumentAiClient.retry(extraction.id);
+      assert(retried.status === 'PENDING', 'retry response was not parsed');
+      const retryRequest = requests[2];
+      assert(retryRequest.input === `/api/document-ai/extractions/${extraction.id}/retry`, 'retry route was not encoded');
+      assert(retryRequest.init?.method === 'POST' && retryRequest.init.credentials === 'include', 'retry transport contract failed');
+      assert(String(retryRequest.init.body) === '{}', 'retry must send an exact empty body');
+      const retryBody = JSON.parse(String(retryRequest.init.body));
+      assert(Object.keys(retryBody).length === 0, 'retry client sent browser authority or mutation fields');
     } finally {
       globalThis.fetch = originalFetch;
     }
