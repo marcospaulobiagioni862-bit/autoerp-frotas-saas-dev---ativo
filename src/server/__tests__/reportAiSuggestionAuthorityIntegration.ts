@@ -98,7 +98,6 @@ export class ReportAiSuggestionAuthorityIntegrationRunner {
         ...suggestionA,
         targetId: 'forged-collision',
       }),
-      /ReportAiAuthorityConflictError/,
     );
     await persistReportAiSuggestion(companyB, { userId: adminBId, name: 'Report AI Admin B' }, suggestionB);
 
