@@ -57,17 +57,19 @@ async function seed(): Promise<void> {
       ('queue-att-a1', ${companyA}, 'Vehicle', 'Vehicle', 'queue-veh-a1', 'CRLV', 'a1.pdf', 'application/pdf', 'attachment://a1', 24, 24, 'SERVER_FS', ${`${companyA}/a1`}, ${checksum}, 'doc-ai-queue-user-a', false, 'AVAILABLE', NOW()),
       ('queue-att-a2', ${companyA}, 'Vehicle', 'Vehicle', 'queue-veh-a2', 'CRLV', 'a2.pdf', 'application/pdf', 'attachment://a2', 24, 24, 'SERVER_FS', ${`${companyA}/a2`}, ${checksum}, 'doc-ai-queue-user-a', false, 'AVAILABLE', NOW()),
       ('queue-att-a3', ${companyA}, 'Vehicle', 'Vehicle', 'queue-veh-a3', 'CRLV', 'a3.pdf', 'application/pdf', 'attachment://a3', 24, 24, 'SERVER_FS', ${`${companyA}/a3`}, ${checksum}, 'doc-ai-queue-user-a', false, 'AVAILABLE', NOW()),
+      ('queue-att-a4', ${companyA}, 'Vehicle', 'Vehicle', 'queue-veh-a4', 'CRLV', 'a4.pdf', 'application/pdf', 'attachment://a4', 24, 24, 'SERVER_FS', ${`${companyA}/a4`}, ${checksum}, 'doc-ai-queue-user-a', false, 'AVAILABLE', NOW()),
       ('queue-att-b1', ${companyB}, 'Vehicle', 'Vehicle', 'queue-veh-b1', 'CRLV', 'b1.pdf', 'application/pdf', 'attachment://b1', 24, 24, 'SERVER_FS', ${`${companyB}/b1`}, ${checksum}, 'doc-ai-queue-user-b', false, 'AVAILABLE', NOW())
     ON CONFLICT (id) DO NOTHING
   `);
   await db.execute(sql`
     INSERT INTO document_ai_extractions (
-      id, company_id, attachment_id, attachment_checksum, idempotency_key, status, requested_by, created_at, updated_at
+      id, company_id, attachment_id, attachment_checksum, idempotency_key, status, requested_by, attempt_count, created_at, updated_at
     ) VALUES
-      ('queue-ext-a1', ${companyA}, 'queue-att-a1', ${checksum}, 'queue-request-a1', 'PENDING', 'doc-ai-queue-user-a', NOW(), NOW()),
-      ('queue-ext-a2', ${companyA}, 'queue-att-a2', ${checksum}, 'queue-request-a2', 'PENDING', 'doc-ai-queue-user-a', NOW(), NOW()),
-      ('queue-ext-a3', ${companyA}, 'queue-att-a3', ${checksum}, 'queue-request-a3', 'PENDING', 'doc-ai-queue-user-a', NOW(), NOW()),
-      ('queue-ext-b1', ${companyB}, 'queue-att-b1', ${checksum}, 'queue-request-b1', 'PENDING', 'doc-ai-queue-user-b', NOW(), NOW())
+      ('queue-ext-a1', ${companyA}, 'queue-att-a1', ${checksum}, 'queue-request-a1', 'PENDING', 'doc-ai-queue-user-a', 0, NOW(), NOW()),
+      ('queue-ext-a2', ${companyA}, 'queue-att-a2', ${checksum}, 'queue-request-a2', 'PENDING', 'doc-ai-queue-user-a', 0, NOW(), NOW()),
+      ('queue-ext-a3', ${companyA}, 'queue-att-a3', ${checksum}, 'queue-request-a3', 'PENDING', 'doc-ai-queue-user-a', 0, NOW(), NOW()),
+      ('queue-ext-a4', ${companyA}, 'queue-att-a4', ${checksum}, 'queue-request-a4', 'PENDING', 'doc-ai-queue-user-a', 3, NOW(), NOW()),
+      ('queue-ext-b1', ${companyB}, 'queue-att-b1', ${checksum}, 'queue-request-b1', 'PENDING', 'doc-ai-queue-user-b', 0, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
   `);
 }
@@ -98,7 +100,10 @@ async function run(): Promise<void> {
   });
   assert(rowsA.filter((item: any) => item.status === 'REVIEW_REQUIRED').length === 2, 'expected two proposals for tenant A');
   assert(rowsA.filter((item: any) => item.status === 'FAILED').length === 1, 'expected one controlled failure for tenant A');
-  assert(rowsA.every((item: any) => item.attemptCount === 1 && item.workerId), 'processing lifecycle metadata missing');
+  const processedA = rowsA.filter((item: any) => item.id !== 'queue-ext-a4');
+  assert(processedA.every((item: any) => item.attemptCount === 1 && item.workerId), 'processing lifecycle metadata missing');
+  const exhausted = rowsA.find((item: any) => item.id === 'queue-ext-a4');
+  assert(exhausted?.status === 'PENDING' && exhausted.attemptCount === 3 && !exhausted.workerId, 'max-attempt extraction must not be claimed');
 
   const audits = await UnitOfWork.run(companyA, async (context: any) => {
     const tx = context.getRawTransaction();
