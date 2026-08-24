@@ -314,6 +314,9 @@ jobs:
       - name: Report AI client regression
         run: npx tsx src/api/__tests__/reportAiClientTestRunner.ts
 
+      - name: WhatsApp client authority regression
+        run: npx tsx src/api/__tests__/whatsappClientTestRunner.ts
+
       - name: Report AI suggestion regression
         run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
 
