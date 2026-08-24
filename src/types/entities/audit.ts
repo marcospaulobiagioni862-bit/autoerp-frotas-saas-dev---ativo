@@ -28,7 +28,7 @@ export interface FileAttachment {
   // Server-authoritative API payloads always validate and return entityType.
   entityType?: string;
   documentType?: string;
-  storageProvider?: 'LOCAL' | 'CLOUD' | 'LEGACY_BROWSER' | 'SERVER_FS';
+  storageProvider?: 'LOCAL' | 'CLOUD' | 'LEGACY_BROWSER' | 'SERVER_FS' | 'R2';
   storageKey?: string;
   checksum?: string;
   createdBy?: string;

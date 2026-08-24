@@ -71,7 +71,7 @@ async function claim(companyId: string, claimedBy: string): Promise<ClaimedExtra
           AND extraction.attempt_count < ${DOCUMENT_AI_MAX_ATTEMPTS}
           AND attachment.is_archived = false
           AND attachment.content_state = 'AVAILABLE'
-          AND attachment.storage_provider = 'SERVER_FS'
+          AND attachment.storage_provider IN ('SERVER_FS', 'R2')
           AND attachment.storage_key IS NOT NULL
         ORDER BY extraction.created_at, extraction.id
         FOR UPDATE OF extraction SKIP LOCKED

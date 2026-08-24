@@ -225,6 +225,8 @@ jobs:
         run: |
           npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
           npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/r2AttachmentStorageTestRunner.ts
+          npx tsx src/server/__tests__/economicStorageCapacityTestRunner.ts
           npx tsx src/server/__tests__/documentAiAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAiProcessorTestRunner.ts
           npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts

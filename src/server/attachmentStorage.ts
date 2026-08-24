@@ -8,8 +8,10 @@ export class AttachmentStorageUnavailableError extends Error {}
 export class AttachmentStorageValidationError extends Error {}
 export class AttachmentStorageNotFoundError extends Error {}
 
+export type AttachmentStorageProvider = 'SERVER_FS' | 'R2';
+
 export interface AttachmentStorageConfiguration {
-  provider: 'SERVER_FS';
+  provider: AttachmentStorageProvider;
   configured: boolean;
   durableRequested: boolean;
   durable: boolean;
@@ -76,7 +78,22 @@ export interface StoredAttachmentBytes {
   fileSize: number;
 }
 
-export class ServerAttachmentStorage {
+export interface AttachmentByteStorage {
+  readonly provider: AttachmentStorageProvider;
+  getConfiguration(): AttachmentStorageConfiguration;
+  write(companyId: string, attachmentId: string, bytes: Buffer): Promise<StoredAttachmentBytes>;
+  read(companyId: string, storageKey: string): Promise<Buffer>;
+  remove(companyId: string, storageKey: string): Promise<void>;
+  exists(companyId: string, storageKey: string): Promise<boolean>;
+}
+
+export class ServerAttachmentStorage implements AttachmentByteStorage {
+  readonly provider = 'SERVER_FS' as const;
+
+  getConfiguration(): AttachmentStorageConfiguration {
+    return getAttachmentStorageConfiguration();
+  }
+
   async write(companyId: string, attachmentId: string, bytes: Buffer): Promise<StoredAttachmentBytes> {
     if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
       throw new AttachmentStorageValidationError('Attachment content is empty');
