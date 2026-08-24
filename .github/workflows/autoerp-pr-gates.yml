@@ -280,6 +280,9 @@ jobs:
           npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
           npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
 
+      - name: Document review client regression
+        run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
+
       - name: Authentication regressions
         run: |
           npx tsx src/server/__tests__/authTestRunner.ts
