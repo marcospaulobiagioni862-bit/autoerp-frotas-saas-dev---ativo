@@ -66,7 +66,7 @@ export function parseWhatsappConsent(value: unknown): WhatsappConsent {
     (item.status !== 'GRANTED' && item.status !== 'REVOKED') ||
     item.consentSource !== 'ERP_MANUAL' ||
     typeof item.phoneMasked !== 'string' ||
-    !/^\\+55•{7}\\d{4}$/.test(item.phoneMasked)
+    !/^\+55•{7}\d{4}$/.test(item.phoneMasked)
   ) invalid();
   return {
     driverId: item.driverId,
