@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
-import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
+import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
-import { Bot, Download, Eye, File, Trash2, X } from 'lucide-react';
+import { Bot, Download, Eye, File, History, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
@@ -47,6 +47,10 @@ export function AttachmentList({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [requestingExtractionId, setRequestingExtractionId] = useState<string | null>(null);
   const [documentAiMessage, setDocumentAiMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [historyAttachmentId, setHistoryAttachmentId] = useState<string | null>(null);
+  const [historyItems, setHistoryItems] = useState<DocumentAiExtractionHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const canRequestDocumentAi =
     DOCUMENT_AI_WRITE_ROLES.has(user.role.toUpperCase()) ||
@@ -151,6 +155,27 @@ export function AttachmentList({
     }
   };
 
+
+  const handleExtractionHistory = async (attachmentId: string) => {
+    if (historyAttachmentId === attachmentId) {
+      setHistoryAttachmentId(null);
+      setHistoryItems([]);
+      setHistoryError(null);
+      return;
+    }
+    setHistoryAttachmentId(attachmentId);
+    setHistoryItems([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      setHistoryItems(await DocumentAiClient.attachmentHistory(attachmentId));
+    } catch (err: unknown) {
+      setHistoryError(err instanceof Error ? err.message : 'Histórico de extração indisponível.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const handleArchive = async () => {
     if (!deleteId) return;
     try {
@@ -217,6 +242,17 @@ export function AttachmentList({
                   </div>
                 </div>
                 <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                  {extractionStatus && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleExtractionHistory(att.id)}
+                      title="Histórico sanitizado da extração"
+                    >
+                      <History className="h-4 w-4" />
+                      <span className="sr-only">Histórico sanitizado da extração</span>
+                    </Button>
+                  )}
                   {canRequestDocumentAi && documentAiEligible && !extractionStatus && (
                     <Button
                       variant="ghost"
@@ -244,6 +280,30 @@ export function AttachmentList({
             );
           })}
         </ul>
+      )}
+
+      {historyAttachmentId && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
+          <div className="mb-2 flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
+            <History className="h-4 w-4" /> Histórico sanitizado da extração
+          </div>
+          {historyLoading ? (
+            <p className="text-slate-500">Carregando histórico...</p>
+          ) : historyError ? (
+            <p className="text-red-600 dark:text-red-300">{historyError}</p>
+          ) : historyItems.length === 0 ? (
+            <p className="text-slate-500">Nenhum evento sanitizado disponível para este anexo.</p>
+          ) : (
+            <ol className="space-y-1 text-slate-600 dark:text-slate-300">
+              {historyItems.map((item, index) => (
+                <li key={`${item.updatedAt}-${index}`}>
+                  {item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}
+                  {item.failureCode ? ` · ${item.failureCode}` : ''}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       )}
 
       {previewData && (
