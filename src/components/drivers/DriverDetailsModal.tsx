@@ -32,6 +32,7 @@ import {
   Skeleton,
 } from '../ui';
 import { DriverClient } from '../../api/driverClient';
+import { WhatsappClient, type WhatsappConsent, type WhatsappOutboxItem } from '../../api/whatsappClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
@@ -64,7 +65,6 @@ type DriverTab =
   | 'health'
   | 'history';
 
-type MessageType = 'RENT_CHARGE' | 'DUE_REMINDER' | 'TICKET_ALERT' | 'MAINTENANCE_ALERT' | 'CUSTOM';
 
 export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   isOpen,
@@ -105,8 +105,10 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
 
-  const [customMsg, setCustomMsg] = useState('');
-  const [msgType, setMsgType] = useState<MessageType>('CUSTOM');
+  const [whatsappConsent, setWhatsappConsent] = useState<WhatsappConsent | null>(null);
+  const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
   const driver = summary?.driver;
 
@@ -143,13 +145,39 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     }
   };
 
+  const loadWhatsappData = async () => {
+    if (!driverId) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      const [consent, outbox] = await Promise.all([
+        WhatsappClient.getConsent(driverId),
+        WhatsappClient.listForDriver(driverId),
+      ]);
+      setWhatsappConsent(consent);
+      setWhatsappOutbox(outbox);
+    } catch (err: unknown) {
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao carregar a autoridade de WhatsApp.');
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!isOpen || !driverId) return;
     setActiveTab('overview');
     setIsHealthUnlocked(false);
+    setWhatsappConsent(null);
+    setWhatsappOutbox([]);
+    setWhatsappError(null);
     applyHealthProfile({});
     void loadData();
   }, [isOpen, driverId]);
+
+  useEffect(() => {
+    if (!isOpen || !driverId || activeTab !== 'communications') return;
+    void loadWhatsappData();
+  }, [isOpen, driverId, activeTab]);
 
   const handleBlockDriver = async () => {
     if (!driverId || !blockReason.trim()) return;
@@ -260,65 +288,37 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     }
   };
 
-  const buildMessage = (type: MessageType, customText?: string) => {
-    if (!driver || !summary) return { message: '', ref: '' };
-    if (type === 'RENT_CHARGE') {
-      const amount = formatCurrencyBRL(summary.financialSummary.totalPendingAmount);
-      return {
-        message: `Olá ${driver.fullName}, gostaríamos de lembrar sobre a cobrança em aberto do aluguel do veículo no valor de ${amount}. Por favor, realize o pagamento para manter seu cadastro regularizado. Qualquer dúvida, estamos à disposição!`,
-        ref: `Saldo devedor total: ${amount}`,
-      };
-    }
-    if (type === 'DUE_REMINDER') {
-      return {
-        message: `Olá ${driver.fullName}, este é um lembrete amigável de que a sua próxima parcela de aluguel está próxima do vencimento. Mantenha os pagamentos em dia para evitar juros e bloqueios. Obrigado!`,
-        ref: 'Lembrete de Vencimento',
-      };
-    }
-    if (type === 'TICKET_ALERT') {
-      return {
-        message: `Olá ${driver.fullName}, identificamos ${summary.trafficTickets.length} nova(s) multa(s) de trânsito vinculada(s) ao veículo durante seu período de locação. Entre em contato para verificar os detalhes.`,
-        ref: `Aviso de Multas (${summary.trafficTickets.length})`,
-      };
-    }
-    if (type === 'MAINTENANCE_ALERT') {
-      return {
-        message: `Olá ${driver.fullName}, lembramos que o veículo está agendado ou necessita de manutenção preventiva em breve. Favor agendar o comparecimento na oficina parceira.`,
-        ref: 'Aviso de Manutenção',
-      };
-    }
-    return { message: customText || customMsg || 'Olá!', ref: 'Mensagem Personalizada' };
-  };
-
-  const handleSendWhatsApp = async (type: MessageType) => {
-    if (!driver) return;
-    const { message, ref } = buildMessage(type);
-    if (!message) return;
+  const handleWhatsappConsent = async (decision: 'GRANT' | 'REVOKE') => {
+    if (!driverId) return;
+    const prompt = decision === 'GRANT'
+      ? 'Confirma que o motorista autorizou o uso deste número para comunicações de WhatsApp?'
+      : 'Revogar o consentimento e cancelar todas as solicitações ainda retidas?';
+    if (!confirm(prompt)) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
     try {
-      await bridge.addCommunicationLog(driver, {
-        type,
-        phone: driver.phone,
-        message,
-        relatedRef: ref,
-        user: 'UI legada — entidade suplementar',
-        status: 'OPENED_IN_WHATSAPP',
-      });
-      const cleanPhone = driver.phone.replace(/\D/g, '');
-      const destination = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-      window.open(`https://wa.me/${destination}?text=${encodeURIComponent(message)}`, '_blank');
-      setCustomMsg('');
-      await loadData();
+      await WhatsappClient.decideConsent(driverId, decision);
+      await loadWhatsappData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao registrar comunicação.');
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao registrar a decisão de consentimento.');
+      setWhatsappLoading(false);
     }
   };
 
-  const handleConfirmCommunicationSent = async (logId: string) => {
+  const handlePrepareCnhReminder = async () => {
+    if (!driverId || whatsappConsent?.status !== 'GRANTED') return;
+    if (!confirm('Preparar o lembrete de vencimento da CNH? O provedor está desativado e nenhuma mensagem será enviada.')) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
     try {
-      await bridge.updateCommunicationStatus(logId, 'MANUALLY_CONFIRMED_SENT');
-      await loadData();
+      const result = await WhatsappClient.createCnhReminder(driverId);
+      await loadWhatsappData();
+      if (!result.created) {
+        alert('Este mesmo lembrete já estava preparado; nenhuma duplicata foi criada.');
+      }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao confirmar envio.');
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao preparar o lembrete.');
+      setWhatsappLoading(false);
     }
   };
 
@@ -513,23 +513,98 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           )}
 
           {activeTab === 'communications' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="p-4 space-y-3">
-                <h3 className="text-sm font-bold">Disparador de WhatsApp</h3>
-                <div className="flex flex-wrap gap-2">
-                  {(['RENT_CHARGE','DUE_REMINDER','TICKET_ALERT','MAINTENANCE_ALERT','CUSTOM'] as MessageType[]).map((type) => (
-                    <Button key={type} size="sm" variant="outline" onClick={() => { setMsgType(type); setCustomMsg(buildMessage(type).message); }}>{type}</Button>
-                  ))}
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-xl border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-xs">
+                <ShieldAlert className="w-4 h-4 inline mr-2" />
+                <strong>Modo econômico e seguro:</strong> o provedor está desativado. Preparar um lembrete apenas grava uma solicitação retida; não abre WhatsApp e não envia mensagem.
+              </div>
+
+              {whatsappError && (
+                <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
+                  {whatsappError}
                 </div>
-                <textarea rows={5} value={customMsg} onChange={(event) => setCustomMsg(event.target.value)} className="w-full p-2 text-xs rounded-lg border bg-transparent" />
-                <Button disabled={!customMsg.trim()} onClick={() => handleSendWhatsApp(msgType)}><ExternalLink className="w-4 h-4 mr-1" />Abrir WhatsApp</Button>
-              </Card>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-bold">Consentimento</h3>
+                    <Badge variant={whatsappConsent?.status === 'GRANTED' ? 'success' : whatsappConsent?.status === 'REVOKED' ? 'danger' : 'neutral'}>
+                      {whatsappConsent?.status === 'GRANTED' ? 'Autorizado' : whatsappConsent?.status === 'REVOKED' ? 'Revogado' : 'Não registrado'}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Número verificado pelo servidor: {whatsappConsent?.phoneMasked || 'disponível somente após decisão'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    A decisão deve refletir uma autorização real do motorista. O navegador não escolhe empresa, telefone ou conteúdo.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {whatsappConsent?.status !== 'GRANTED' && (
+                      <Button size="sm" onClick={() => handleWhatsappConsent('GRANT')} isLoading={whatsappLoading}>
+                        Registrar consentimento
+                      </Button>
+                    )}
+                    {whatsappConsent?.status === 'GRANTED' && (
+                      <Button size="sm" variant="danger" onClick={() => handleWhatsappConsent('REVOKE')} isLoading={whatsappLoading}>
+                        Revogar e cancelar pendências
+                      </Button>
+                    )}
+                  </div>
+                </Card>
+
+                <Card className="p-4 space-y-3">
+                  <h3 className="text-sm font-bold">Lembrete de vencimento da CNH</h3>
+                  <p className="text-xs text-slate-500">
+                    Template fixo, com nome e validade derivados do PostgreSQL pelo servidor. Nenhum texto livre é aceito.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={whatsappConsent?.status !== 'GRANTED' || whatsappLoading}
+                    onClick={handlePrepareCnhReminder}
+                  >
+                    Preparar lembrete — sem enviar
+                  </Button>
+                  {whatsappConsent?.status !== 'GRANTED' && (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">É necessário consentimento vigente para preparar a solicitação.</p>
+                  )}
+                </Card>
+              </div>
+
               <Card className="p-4 space-y-3">
-                <h3 className="text-sm font-bold">Histórico de Envio</h3>
-                {summary.communicationLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhuma comunicação registrada.</p> : summary.communicationLogs.map((log) => (
-                  <div key={log.id} className="p-2 border rounded-lg text-xs"><strong>{log.type}</strong><p className="text-slate-500">{log.message}</p><span className="text-[10px]">{new Date(log.dateTime).toLocaleString('pt-BR')} • {log.status}</span>{log.status === 'OPENED_IN_WHATSAPP' && <button className="block text-emerald-600 mt-1" onClick={() => handleConfirmCommunicationSent(log.id)}>Confirmar envio ✓</button>}</div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold">Fila auditável deste motorista</h3>
+                  {whatsappLoading && <span className="text-xs text-slate-400">Atualizando…</span>}
+                </div>
+                {whatsappOutbox.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhuma solicitação preparada.</p>
+                ) : whatsappOutbox.map((item) => (
+                  <div key={item.id} className="p-3 border rounded-xl text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <strong className="block">Vencimento de CNH — {item.templateParameters.cnhExpiration}</strong>
+                      <span className="text-slate-500">{new Date(item.createdAt).toLocaleString('pt-BR')} • {item.id}</span>
+                    </div>
+                    <Badge variant={item.status === 'HELD_PROVIDER_DISABLED' ? 'warning' : 'neutral'}>
+                      {item.status === 'HELD_PROVIDER_DISABLED' ? 'Retida — provedor desativado' : 'Cancelada'}
+                    </Badge>
+                  </div>
                 ))}
               </Card>
+
+              {summary.communicationLogs.length > 0 && (
+                <Card className="p-4 space-y-3">
+                  <h3 className="text-sm font-bold">Histórico anterior à autoridade atual</h3>
+                  <p className="text-xs text-slate-500">Somente leitura. Confirmações manuais e abertura direta do WhatsApp foram desativadas nesta tela.</p>
+                  {summary.communicationLogs.map((log) => (
+                    <div key={log.id} className="p-2 border rounded-lg text-xs">
+                      <strong>{log.type}</strong>
+                      <p className="text-slate-500">{log.message}</p>
+                      <span className="text-[10px]">{new Date(log.dateTime).toLocaleString('pt-BR')} • {log.status}</span>
+                    </div>
+                  ))}
+                </Card>
+              )}
             </div>
           )}
 
