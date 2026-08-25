@@ -3,9 +3,11 @@ import {
   parseWhatsappConsent,
   parseWhatsappOutboxItem,
   parseWhatsappTaskProposal,
+  parseWhatsappObservabilitySummary,
   type WhatsappConsent,
   type WhatsappOutboxItem,
   type WhatsappTaskProposal,
+  type WhatsappObservabilitySummary,
 } from '../whatsappClient';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -54,11 +56,23 @@ const proposal: WhatsappTaskProposal = {
   businessMutationApplied: false,
 };
 
+const observability: WhatsappObservabilitySummary = {
+  generatedAt: '2026-08-25T11:00:00.000Z',
+  windowDays: 30,
+  windowStartAt: '2026-07-26T11:00:00.000Z',
+  outbox: { total: 3, heldProviderDisabled: 2, cancelled: 1 },
+  webhookEvents: { total: 5, sent: 1, delivered: 1, read: 1, failed: 1, repliesReceived: 1 },
+  taskProposals: { total: 2, pending: 1, approved: 1, rejected: 0, oldestPendingCreatedAt: '2026-08-24T11:00:00.000Z' },
+  providerEnabled: false,
+  automaticBusinessMutationApplied: false,
+};
+
 export class WhatsappClientTestRunner {
   static async runAllTests(): Promise<void> {
     assert(parseWhatsappConsent(consent).status === 'GRANTED', 'valid consent rejected');
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
     assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
+    assert(parseWhatsappObservabilitySummary(observability).windowDays === 30, 'valid observability summary rejected');
 
     let rejected = false;
     try {
@@ -84,11 +98,22 @@ export class WhatsappClientTestRunner {
     }
     assert(rejected, 'raw WhatsApp reply was accepted by client parser');
 
+    rejected = false;
+    try {
+      parseWhatsappObservabilitySummary({ ...observability, tenantId: 'forbidden' });
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, 'observability parser accepted tenant authority');
+
     const originalFetch = globalThis.fetch;
     const requests: Array<{ input: string; init?: RequestInit }> = [];
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input).startsWith('/api/whatsapp/observability?windowDays=')) {
+          return new Response(JSON.stringify({ item: observability }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
         if (String(input).includes('/task-proposals/') && init?.method === 'POST') {
           return new Response(JSON.stringify({ item: { ...proposal, status: 'APPROVED', taskId: 'task-1', reviewedAt: '2026-08-25T10:05:00.000Z' }, replay: false }), {
             status: 201,
@@ -125,18 +150,22 @@ export class WhatsappClientTestRunner {
         });
       }) as typeof fetch;
 
+      const loadedObservability = await WhatsappClient.getObservability(30);
+      assert(loadedObservability.outbox.total === 3, 'observability summary not parsed');
+      assert(requests[0].input === '/api/whatsapp/observability?windowDays=30' && requests[0].init?.method === undefined && requests[0].init?.credentials === 'include', 'observability request violated readonly session contract');
+
       const loaded = await WhatsappClient.getConsent('driver-1');
       assert(loaded?.driverId === 'driver-1', 'consent not parsed');
 
       await WhatsappClient.decideConsent('driver-1', 'GRANT');
-      const consentRequest = requests[1];
+      const consentRequest = requests[2];
       const consentBody = JSON.parse(String(consentRequest.init?.body));
       assert(Object.keys(consentBody).join(',') === 'decision', 'consent sent browser authority fields');
       assert(consentBody.decision === 'GRANT', 'consent decision missing');
       assert(consentRequest.init?.credentials === 'include', 'consent omitted session');
 
       await WhatsappClient.createCnhReminder('driver-1');
-      const outboxRequest = requests[2];
+      const outboxRequest = requests[3];
       const outboxBody = JSON.parse(String(outboxRequest.init?.body));
       assert(Object.keys(outboxBody).join(',') === 'driverId,templateKey', 'outbox sent phone, tenant or content');
       assert(outboxBody.driverId === 'driver-1', 'driver identifier missing');
@@ -144,15 +173,15 @@ export class WhatsappClientTestRunner {
 
       const listed = await WhatsappClient.listForDriver('driver-1');
       assert(listed.length === 1 && listed[0].driverId === 'driver-1', 'driver outbox filter failed');
-      assert(requests[3].init?.credentials === 'include', 'outbox list omitted session');
+      assert(requests[4].init?.credentials === 'include', 'outbox list omitted session');
 
       const proposals = await WhatsappClient.listTaskProposalsForDriver('driver-1');
       assert(proposals.length === 1 && proposals[0].driverId === 'driver-1', 'task proposal driver filter failed');
-      assert(requests[4].init?.method === undefined && requests[4].init?.credentials === 'include', 'task proposal list is not authenticated GET');
+      assert(requests[5].init?.method === undefined && requests[5].init?.credentials === 'include', 'task proposal list is not authenticated GET');
 
       const reviewed = await WhatsappClient.reviewTaskProposal(proposal.id, 'APPROVE', '  Criar tarefa humana  ');
       assert(reviewed.item.status === 'APPROVED' && reviewed.item.taskId === 'task-1', 'task proposal review response rejected');
-      const reviewRequest = requests[5];
+      const reviewRequest = requests[6];
       const reviewBody = JSON.parse(String(reviewRequest.init?.body));
       assert(Object.keys(reviewBody).join(',') === 'decision,reason', 'task proposal review sent browser authority fields');
       assert(reviewBody.decision === 'APPROVE' && reviewBody.reason === 'Criar tarefa humana', 'task proposal review payload was not normalized');

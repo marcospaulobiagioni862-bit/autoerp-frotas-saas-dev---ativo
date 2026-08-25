@@ -37,6 +37,7 @@ import {
   type WhatsappConsent,
   type WhatsappOutboxItem,
   type WhatsappTaskProposal,
+  type WhatsappObservabilitySummary,
 } from '../../api/whatsappClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
 import { VehicleClient } from '../../api/vehicleClient';
@@ -113,6 +114,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [whatsappConsent, setWhatsappConsent] = useState<WhatsappConsent | null>(null);
   const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
   const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
+  const [whatsappObservability, setWhatsappObservability] = useState<WhatsappObservabilitySummary | null>(null);
+  const [whatsappWindowDays, setWhatsappWindowDays] = useState<WhatsappObservabilitySummary['windowDays']>(30);
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
@@ -156,14 +159,16 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setWhatsappLoading(true);
     setWhatsappError(null);
     try {
-      const [consent, outbox, taskProposals] = await Promise.all([
+      const [consent, outbox, taskProposals, observability] = await Promise.all([
         WhatsappClient.getConsent(driverId),
         WhatsappClient.listForDriver(driverId),
         WhatsappClient.listTaskProposalsForDriver(driverId),
+        WhatsappClient.getObservability(whatsappWindowDays),
       ]);
       setWhatsappConsent(consent);
       setWhatsappOutbox(outbox);
       setWhatsappTaskProposals(taskProposals);
+      setWhatsappObservability(observability);
     } catch (err: unknown) {
       setWhatsappError(err instanceof Error ? err.message : 'Erro ao carregar a autoridade de WhatsApp.');
     } finally {
@@ -178,6 +183,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setWhatsappConsent(null);
     setWhatsappOutbox([]);
     setWhatsappTaskProposals([]);
+    setWhatsappObservability(null);
     setWhatsappError(null);
     applyHealthProfile({});
     void loadData();
@@ -186,7 +192,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   useEffect(() => {
     if (!isOpen || !driverId || activeTab !== 'communications') return;
     void loadWhatsappData();
-  }, [isOpen, driverId, activeTab]);
+  }, [isOpen, driverId, activeTab, whatsappWindowDays]);
 
   const handleBlockDriver = async () => {
     if (!driverId || !blockReason.trim()) return;
@@ -558,6 +564,44 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                   {whatsappError}
                 </div>
               )}
+
+              <Card className="p-4 space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold">Observabilidade sanitizada</h3>
+                    <p className="text-xs text-slate-500">Somente totais por período. Não há telefone, conteúdo, tenant, provedor ou ação automática nesta tela.</p>
+                  </div>
+                  <Select
+                    label="Período"
+                    value={String(whatsappWindowDays)}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (parsed === 7 || parsed === 30 || parsed === 90 || parsed === 365) {
+                        setWhatsappWindowDays(parsed);
+                      }
+                    }}
+                  >
+                    <option value="7">7 dias</option>
+                    <option value="30">30 dias</option>
+                    <option value="90">90 dias</option>
+                    <option value="365">365 dias</option>
+                  </Select>
+                </div>
+                {whatsappObservability ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <Card className="p-3"><span className="block text-xs text-slate-400">Outbox</span><strong>{whatsappObservability.outbox.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.outbox.heldProviderDisabled} retidas • {whatsappObservability.outbox.cancelled} canceladas</p></Card>
+                      <Card className="p-3"><span className="block text-xs text-slate-400">Eventos</span><strong>{whatsappObservability.webhookEvents.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.webhookEvents.repliesReceived} respostas classificadas</p></Card>
+                      <Card className="p-3"><span className="block text-xs text-slate-400">Propostas</span><strong>{whatsappObservability.taskProposals.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.taskProposals.pending} aguardando revisão</p></Card>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Janela iniciada em {new Date(whatsappObservability.windowStartAt).toLocaleString('pt-BR')}. Provedor: desativado. Mutação automática: não aplicada.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-400">Carregando agregados sanitizados…</p>
+                )}
+              </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="p-4 space-y-3">

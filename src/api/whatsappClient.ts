@@ -11,6 +11,17 @@ export interface WhatsappConsent {
   updatedAt: string;
 }
 
+export interface WhatsappObservabilitySummary {
+  generatedAt: string;
+  windowDays: 7 | 30 | 90 | 365;
+  windowStartAt: string;
+  outbox: { total: number; heldProviderDisabled: number; cancelled: number };
+  webhookEvents: { total: number; sent: number; delivered: number; read: number; failed: number; repliesReceived: number };
+  taskProposals: { total: number; pending: number; approved: number; rejected: number; oldestPendingCreatedAt: string | null };
+  providerEnabled: false;
+  automaticBusinessMutationApplied: false;
+}
+
 export type WhatsappTaskProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type WhatsappTaskProposalCategory = 'PAYMENT_QUESTION' | 'DOCUMENT_QUESTION' | 'MAINTENANCE_REPORT' | 'GENERAL';
 
@@ -49,6 +60,7 @@ export interface WhatsappOutboxItem {
 type JsonRecord = Record<string, unknown>;
 const OUTBOX_ID = /^wao_[a-f0-9]{32}$/;
 const PROPOSAL_ID = /^wrp_[a-f0-9]{32}$/;
+const OBSERVABILITY_WINDOWS = new Set([7, 30, 90, 365]);
 
 function invalid(): never {
   throw new Error('Resposta inválida da autoridade de WhatsApp.');
@@ -136,6 +148,60 @@ export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
   };
 }
 
+function requiredNonNegativeInteger(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) invalid();
+  return value;
+}
+
+export function parseWhatsappObservabilitySummary(value: unknown): WhatsappObservabilitySummary {
+  const item = exactRecord(value, [
+    'generatedAt', 'windowDays', 'windowStartAt', 'outbox', 'webhookEvents',
+    'taskProposals', 'providerEnabled', 'automaticBusinessMutationApplied',
+  ]);
+  const outbox = exactRecord(item.outbox, ['total', 'heldProviderDisabled', 'cancelled']);
+  const webhookEvents = exactRecord(item.webhookEvents, ['total', 'sent', 'delivered', 'read', 'failed', 'repliesReceived']);
+  const taskProposals = exactRecord(item.taskProposals, ['total', 'pending', 'approved', 'rejected', 'oldestPendingCreatedAt']);
+  const windowDays = requiredNonNegativeInteger(item.windowDays);
+  if (
+    !OBSERVABILITY_WINDOWS.has(windowDays) ||
+    item.providerEnabled !== false ||
+    item.automaticBusinessMutationApplied !== false
+  ) invalid();
+  const parsed = {
+    generatedAt: requiredIso(item.generatedAt),
+    windowDays: windowDays as WhatsappObservabilitySummary['windowDays'],
+    windowStartAt: requiredIso(item.windowStartAt),
+    outbox: {
+      total: requiredNonNegativeInteger(outbox.total),
+      heldProviderDisabled: requiredNonNegativeInteger(outbox.heldProviderDisabled),
+      cancelled: requiredNonNegativeInteger(outbox.cancelled),
+    },
+    webhookEvents: {
+      total: requiredNonNegativeInteger(webhookEvents.total),
+      sent: requiredNonNegativeInteger(webhookEvents.sent),
+      delivered: requiredNonNegativeInteger(webhookEvents.delivered),
+      read: requiredNonNegativeInteger(webhookEvents.read),
+      failed: requiredNonNegativeInteger(webhookEvents.failed),
+      repliesReceived: requiredNonNegativeInteger(webhookEvents.repliesReceived),
+    },
+    taskProposals: {
+      total: requiredNonNegativeInteger(taskProposals.total),
+      pending: requiredNonNegativeInteger(taskProposals.pending),
+      approved: requiredNonNegativeInteger(taskProposals.approved),
+      rejected: requiredNonNegativeInteger(taskProposals.rejected),
+      oldestPendingCreatedAt: nullableIso(taskProposals.oldestPendingCreatedAt),
+    },
+    providerEnabled: false as const,
+    automaticBusinessMutationApplied: false as const,
+  };
+  if (
+    parsed.outbox.heldProviderDisabled + parsed.outbox.cancelled !== parsed.outbox.total ||
+    parsed.webhookEvents.sent + parsed.webhookEvents.delivered + parsed.webhookEvents.read + parsed.webhookEvents.failed + parsed.webhookEvents.repliesReceived !== parsed.webhookEvents.total ||
+    parsed.taskProposals.pending + parsed.taskProposals.approved + parsed.taskProposals.rejected !== parsed.taskProposals.total
+  ) invalid();
+  return parsed;
+}
+
 export function parseWhatsappTaskProposal(value: unknown): WhatsappTaskProposal {
   const item = exactRecord(value, [
     'id', 'webhookEventId', 'outboxId', 'driverId', 'replyCategory', 'status',
@@ -183,6 +249,17 @@ async function responseError(response: Response): Promise<Error> {
 }
 
 export class WhatsappClient {
+  static async getObservability(windowDays: WhatsappObservabilitySummary['windowDays'] = 30): Promise<WhatsappObservabilitySummary> {
+    if (!OBSERVABILITY_WINDOWS.has(windowDays)) invalid();
+    const response = await fetch(`/api/whatsapp/observability?windowDays=${windowDays}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await responseError(response);
+    const payload = exactRecord(await response.json(), ['item']);
+    return parseWhatsappObservabilitySummary(payload.item);
+  }
+
   static async getConsent(driverId: string): Promise<WhatsappConsent | null> {
     const response = await fetch(`/api/whatsapp/consents/${encodeURIComponent(driverId)}`, {
       credentials: 'include',
