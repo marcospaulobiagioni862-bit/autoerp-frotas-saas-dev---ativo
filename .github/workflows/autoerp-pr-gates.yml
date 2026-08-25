@@ -258,6 +258,24 @@ jobs:
           fi
           echo "WHATSAPP-1B2 template catalog invariants: PASS"
 
+      - name: WHATSAPP-1C1 dispatch policy invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "providerEnabled: env.WHATSAPP_PROVIDER_ENABLED === 'true'" src/server/whatsappDispatchPolicy.ts
+          grep -F "decision: 'PROVIDER_DISABLED'" src/server/whatsappDispatchPolicy.ts
+          grep -F "rateLimitPerMinute" src/server/whatsappDispatchPolicy.ts
+          grep -F "retryScheduleSeconds" src/server/whatsappDispatchPolicy.ts
+          if grep -Eq "fetch\\(|https?://|phone_e164|template_parameters" src/server/whatsappDispatchPolicy.ts; then
+            echo "FAIL: dispatch policy must remain provider-free and sanitized"
+            exit 1
+          fi
+          if grep -R -Eq "WhatsappDispatchPolicy|planWhatsappDispatch" src/server --exclude='whatsappDispatchPolicy.ts' --exclude='whatsappDispatchPolicyTestRunner.ts'; then
+            echo "FAIL: policy must not be wired to a production dispatcher before provider authorization"
+            exit 1
+          fi
+          echo "WHATSAPP-1C1 dispatch policy invariants: PASS"
+
       - name: TELEMETRY-1A source invariants
         shell: bash
         run: |
@@ -469,6 +487,9 @@ jobs:
 
       - name: Report AI review authority regression
         run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
+
+      - name: WhatsApp dispatch policy regression
+        run: npx tsx src/server/__tests__/whatsappDispatchPolicyTestRunner.ts
 
       - name: WhatsApp consent and outbox authority regression
         run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
