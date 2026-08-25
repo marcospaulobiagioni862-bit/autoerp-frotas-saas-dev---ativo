@@ -23,6 +23,13 @@ const statuses: Record<string, DocumentAiAttachmentStatus> = {
     failureCode: 'PROVIDER_TIMEOUT',
     updatedAt: '2026-08-25T20:01:00.000Z',
   },
+  review: {
+    attachmentId: 'review',
+    status: 'REVIEW_REQUIRED',
+    attemptCount: 1,
+    failureCode: null,
+    updatedAt: '2026-08-25T20:02:00.000Z',
+  },
 };
 
 assert.deepEqual(DOCUMENT_AI_STATUS_FILTERS, [
@@ -44,6 +51,7 @@ assert.equal(matchesDocumentAiStatusFilter('pending', 'PENDING', statuses, false
 assert.equal(matchesDocumentAiStatusFilter('pending', 'FAILED', statuses, false), false);
 assert.equal(matchesDocumentAiStatusFilter('failed', 'FAILED', statuses, false), true);
 assert.equal(matchesDocumentAiStatusFilter('failed', 'ACTION_REQUIRED', statuses, false), true);
+assert.equal(matchesDocumentAiStatusFilter('review', 'ACTION_REQUIRED', statuses, false), true);
 assert.equal(matchesDocumentAiStatusFilter('pending', 'ACTION_REQUIRED', statuses, false), false);
 assert.equal(matchesDocumentAiStatusFilter('missing', 'ACTION_REQUIRED', statuses, false), false);
 
@@ -56,14 +64,14 @@ for (const filter of DOCUMENT_AI_STATUS_FILTERS) {
 }
 
 assert.deepEqual(
-  createDocumentAiStatusCounts(['pending', 'failed', 'missing', 'pending'], statuses, false),
+  createDocumentAiStatusCounts(['pending', 'failed', 'review', 'missing', 'pending'], statuses, false),
   {
-    ALL: 3,
+    ALL: 4,
     NONE: 1,
-    ACTION_REQUIRED: 1,
+    ACTION_REQUIRED: 2,
     PENDING: 1,
     PROCESSING: 0,
-    REVIEW_REQUIRED: 0,
+    REVIEW_REQUIRED: 1,
     APPROVED: 0,
     REJECTED: 0,
     FAILED: 1,
@@ -72,9 +80,9 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  createDocumentAiStatusCounts(['pending', 'failed', 'missing', 'pending'], statuses, true),
+  createDocumentAiStatusCounts(['pending', 'failed', 'review', 'missing', 'pending'], statuses, true),
   {
-    ALL: 3,
+    ALL: 4,
     NONE: null,
     ACTION_REQUIRED: null,
     PENDING: null,
