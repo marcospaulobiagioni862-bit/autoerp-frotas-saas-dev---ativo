@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
-import { Download, Eye, File, Trash2, X } from 'lucide-react';
+import { DocumentAiClient } from '../../api/documentAiClient';
+import { useAuth } from '../../hooks/useAuth';
+import { Bot, Download, Eye, File, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
@@ -11,14 +13,32 @@ interface AttachmentListProps {
   attachments?: FileAttachment[];
   onRefresh?: () => void;
   showFilters?: boolean;
+  onDocumentAiRequested?: () => void;
 }
 
-export function AttachmentList({ entityType, entityId, attachments: initialAttachments, onRefresh }: AttachmentListProps) {
+const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+const DOCUMENT_AI_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+
+export function AttachmentList({
+  entityType,
+  entityId,
+  attachments: initialAttachments,
+  onRefresh,
+  onDocumentAiRequested,
+}: AttachmentListProps) {
+  const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
   const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<{ url: string; type: string; name: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [requestingExtractionId, setRequestingExtractionId] = useState<string | null>(null);
+  const [documentAiMessage, setDocumentAiMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  const canRequestDocumentAi =
+    DOCUMENT_AI_WRITE_ROLES.has(user.role.toUpperCase()) ||
+    user.permissions.includes('*') ||
+    user.permissions.includes('PROCESS_DOCUMENT_AI');
 
   const fetchAttachments = async () => {
     if (!entityType || !entityId) return;
@@ -90,6 +110,34 @@ export function AttachmentList({ entityType, entityId, attachments: initialAttac
     }
   };
 
+  const handleExtractionRequest = async (attachment: FileAttachment) => {
+    const eligible =
+      attachment.storageProvider === 'SERVER_FS' &&
+      attachment.contentState === 'AVAILABLE' &&
+      DOCUMENT_AI_MIME_TYPES.has(attachment.mimeType);
+    if (!canRequestDocumentAi || !eligible) return;
+    setRequestingExtractionId(attachment.id);
+    setDocumentAiMessage(null);
+    try {
+      await DocumentAiClient.create({
+        attachmentId: attachment.id,
+        idempotencyKey: `document-ai:${attachment.id}`,
+      });
+      setDocumentAiMessage({
+        kind: 'success',
+        text: 'Extração registrada na fila. O processamento automático permanece desativado.',
+      });
+      onDocumentAiRequested?.();
+    } catch (err: unknown) {
+      setDocumentAiMessage({
+        kind: 'error',
+        text: err instanceof Error ? err.message : 'Erro ao solicitar extração documental.',
+      });
+    } finally {
+      setRequestingExtractionId(null);
+    }
+  };
+
   const handleArchive = async () => {
     if (!deleteId) return;
     try {
@@ -108,6 +156,15 @@ export function AttachmentList({ entityType, entityId, attachments: initialAttac
 
   return (
     <div className="space-y-4">
+      {documentAiMessage && (
+        <div className={`rounded-md border p-3 text-sm ${
+          documentAiMessage.kind === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+            : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
+        }`}>
+          {documentAiMessage.text}
+        </div>
+      )}
       {attachments.length === 0 ? (
         <div className="text-center p-6 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <File className="h-8 w-8 mx-auto text-gray-400 mb-2" />
@@ -117,6 +174,7 @@ export function AttachmentList({ entityType, entityId, attachments: initialAttac
         <ul className="divide-y divide-gray-200 dark:divide-gray-700 border rounded-lg overflow-hidden">
           {attachments.map((att) => {
             const serverAvailable = att.storageProvider === 'SERVER_FS' && att.contentState === 'AVAILABLE';
+            const documentAiEligible = serverAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             return (
               <li key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <div className="flex items-center space-x-3 truncate">
@@ -134,6 +192,19 @@ export function AttachmentList({ entityType, entityId, attachments: initialAttac
                   </div>
                 </div>
                 <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                  {canRequestDocumentAi && documentAiEligible && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void handleExtractionRequest(att)}
+                      isLoading={requestingExtractionId === att.id}
+                      disabled={requestingExtractionId !== null}
+                      title="Solicitar extração assistida"
+                    >
+                      <Bot className="h-4 w-4" />
+                      <span className="sr-only">Solicitar extração assistida</span>
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!serverAvailable} title="Visualizar">
                     <Eye className="h-4 w-4" />
                   </Button>
