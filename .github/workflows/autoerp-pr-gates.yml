@@ -536,7 +536,7 @@ jobs:
           grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
           grep -F "canRequestDocumentAi && documentAiEligible && !extractionStatus" src/components/documents/AttachmentList.tsx
           grep -F "Object.keys(req.query).length !== 0" src/server/documentAiRoutes.ts
-          if grep -Eq "companyId|requestedBy|attachmentChecksum|provider|model|proposedFields|fieldConfidence" src/api/documentAiClient.ts | grep -F "DocumentAiAttachmentStatus"; then
+          if sed -n '/export interface DocumentAiAttachmentStatus {/,/^}/p' src/api/documentAiClient.ts | grep -Eq "companyId|requestedBy|attachmentChecksum|provider|model|proposedFields|fieldConfidence"; then
             echo "FAIL: attachment status contract may expose protected extraction data"
             exit 1
           fi
