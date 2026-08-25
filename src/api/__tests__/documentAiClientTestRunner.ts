@@ -1,7 +1,9 @@
 import {
   DocumentAiClient,
+  parseDocumentAiAttachmentStatuses,
   parseDocumentAiExtraction,
   parseDocumentAiObservability,
+  type DocumentAiAttachmentStatus,
   type DocumentAiExtraction,
   type DocumentAiObservability,
 } from '../documentAiClient';
@@ -9,6 +11,14 @@ import {
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+
+const attachmentStatus: DocumentAiAttachmentStatus = {
+  attachmentId: 'attachment-1',
+  status: 'PENDING',
+  attemptCount: 0,
+  failureCode: null,
+  updatedAt: '2026-08-25T12:00:00.000Z',
+};
 
 const observability: DocumentAiObservability = {
   runtime: {
@@ -74,6 +84,24 @@ export class DocumentAiClientTestRunner {
     }
     assert(invalidRejected, 'invalid retry attempt count was accepted');
 
+    const parsedAttachmentStatuses = parseDocumentAiAttachmentStatuses({ items: [attachmentStatus] });
+    assert(parsedAttachmentStatuses[0].status === 'PENDING', 'valid attachment status was rejected');
+    for (const unsafe of [
+      { items: [{ ...attachmentStatus, companyId: 'browser-authority' }] },
+      { items: [{ ...attachmentStatus, status: 'UNTRUSTED' }] },
+      { items: [{ ...attachmentStatus, attemptCount: -1 }] },
+      { items: [{ ...attachmentStatus, failureCode: 'raw failure text' }] },
+      { items: [attachmentStatus, attachmentStatus] },
+    ]) {
+      invalidRejected = false;
+      try {
+        parseDocumentAiAttachmentStatuses(unsafe);
+      } catch {
+        invalidRejected = true;
+      }
+      assert(invalidRejected, 'unsafe attachment status payload was accepted');
+    }
+
     const parsedObservability = parseDocumentAiObservability(observability);
     assert(parsedObservability.counts.total === 16, 'valid observability was rejected');
 
@@ -99,6 +127,12 @@ export class DocumentAiClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input) === '/api/document-ai/attachment-statuses') {
+          return new Response(JSON.stringify({ items: [attachmentStatus] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input) === '/api/document-ai/extractions' && init?.method === 'POST') {
           return new Response(JSON.stringify({ item: { ...extraction, status: 'PENDING' } }), {
             status: 201,
@@ -134,9 +168,16 @@ export class DocumentAiClientTestRunner {
       assert(requests[0].input === '/api/document-ai/extractions?status=REVIEW_REQUIRED', 'status filter was not encoded');
       assert(requests[0].init?.credentials === 'include', 'list request omitted session credentials');
 
+      const statuses = await DocumentAiClient.attachmentStatuses();
+      assert(statuses.length === 1 && statuses[0].attachmentId === extraction.attachmentId, 'attachment statuses were not parsed');
+      const statusRequest = requests[1];
+      assert(statusRequest.input === '/api/document-ai/attachment-statuses', 'attachment status route changed');
+      assert(statusRequest.init?.method === 'GET' && statusRequest.init.credentials === 'include', 'attachment status transport failed');
+      assert(statusRequest.init.body === undefined, 'attachment status request must not send a body');
+
       const observed = await DocumentAiClient.observability();
       assert(observed.runtime.mode === 'READY_SYNTHETIC_ONLY', 'observability response was not parsed');
-      const observabilityRequest = requests[1];
+      const observabilityRequest = requests[2];
       assert(observabilityRequest.input === '/api/document-ai/observability', 'observability route changed');
       assert(observabilityRequest.init?.method === 'GET', 'observability must use GET');
       assert(observabilityRequest.init.credentials === 'include', 'observability request omitted session credentials');
@@ -147,7 +188,7 @@ export class DocumentAiClientTestRunner {
         idempotencyKey: `document-ai:${extraction.attachmentId}`,
       });
       assert(created.status === 'PENDING', 'create response was not parsed');
-      const createRequest = requests[2];
+      const createRequest = requests[3];
       assert(createRequest.input === '/api/document-ai/extractions', 'create route changed');
       assert(createRequest.init?.method === 'POST' && createRequest.init.credentials === 'include', 'create transport contract failed');
       const createBody = JSON.parse(String(createRequest.init.body || '{}'));
@@ -164,7 +205,7 @@ export class DocumentAiClientTestRunner {
         notes: '  revisão segura  ',
       });
       assert(approved.status === 'APPROVED', 'review response was not parsed');
-      const reviewRequest = requests[3];
+      const reviewRequest = requests[4];
       const body = JSON.parse(String(reviewRequest.init?.body || '{}'));
       assert(body.decision === 'APPROVE', 'review decision missing');
       assert(body.corrections.plate === 'XYZ9Z99', 'review correction missing');
@@ -174,7 +215,7 @@ export class DocumentAiClientTestRunner {
 
       const retried = await DocumentAiClient.retry(extraction.id);
       assert(retried.status === 'PENDING', 'retry response was not parsed');
-      const retryRequest = requests[4];
+      const retryRequest = requests[5];
       assert(retryRequest.input === `/api/document-ai/extractions/${extraction.id}/retry`, 'retry route was not encoded');
       assert(retryRequest.init?.method === 'POST' && retryRequest.init.credentials === 'include', 'retry transport contract failed');
       assert(String(retryRequest.init.body) === '{}', 'retry must send an exact empty body');
