@@ -30,6 +30,11 @@ export interface DocumentAiExtraction {
   updatedAt: string;
 }
 
+export interface DocumentAiCreateInput {
+  attachmentId: string;
+  idempotencyKey: string;
+}
+
 export interface DocumentAiReviewInput {
   decision: 'APPROVE' | 'REJECT';
   corrections?: Record<string, unknown>;
@@ -190,6 +195,24 @@ async function errorFrom(response: Response): Promise<Error> {
 }
 
 export class DocumentAiClient {
+  static async create(input: DocumentAiCreateInput): Promise<DocumentAiExtraction> {
+    const response = await fetch('/api/document-ai/extractions', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        attachmentId: input.attachmentId,
+        idempotencyKey: input.idempotencyKey,
+      }),
+    });
+    if (!response.ok) throw await errorFrom(response);
+    const payload = asRecord(await response.json());
+    return parseDocumentAiExtraction(payload.item);
+  }
+
   static async observability(): Promise<DocumentAiObservability> {
     const response = await fetch('/api/document-ai/observability', {
       method: 'GET',
