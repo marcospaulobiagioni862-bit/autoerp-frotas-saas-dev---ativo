@@ -23,6 +23,10 @@ import {
   WhatsappInboundProposalValidationError,
   WhatsappInboundTaskProposalAuthority,
 } from './whatsappInboundTaskProposalAuthority';
+import {
+  WhatsappObservabilityAuthority,
+  WhatsappObservabilityForbiddenError,
+} from './whatsappObservabilityAuthority';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -206,6 +210,10 @@ async function loadActiveTemplate(tx: any, companyId: string): Promise<{ version
 }
 
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof WhatsappObservabilityForbiddenError) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
   if (error instanceof WhatsappWebhookAuthenticationError) {
     res.status(401).json({ error: 'Invalid WhatsApp webhook' });
     return;
@@ -277,6 +285,21 @@ export function registerWhatsappRoutes(app: Express): void {
         replyText: body.replyText as string | undefined,
       });
       res.status(result.created ? 202 : 200).json({ accepted: true, created: result.created, item: result.item });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/whatsapp/observability', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res);
+    if (!principal) return;
+    try {
+      const item = await WhatsappObservabilityAuthority.get(
+        principal,
+        new Date(),
+        typeof req.query.windowDays === 'string' ? req.query.windowDays : undefined,
+      );
+      res.json({ item });
     } catch (error) {
       sendError(res, error);
     }
