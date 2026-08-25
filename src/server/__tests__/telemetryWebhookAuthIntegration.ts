@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { TelemetryAuthorityService } from '../telemetryAuthority';
+import { TelemetryAuthorityService,type IngestTelemetryEventInput } from '../telemetryAuthority';
 import {
   TelemetryWebhookAuthenticationError,
   TelemetryWebhookAuthority,
@@ -32,7 +32,7 @@ async function main():Promise<void>{
   await seed();
   const now=new Date('2026-08-25T05:00:00.000Z');
   const timestamp=now.toISOString(),nonce='nonce_telemetry_1e_0001';
-  const body={trackerId:trackerA,sourceEventId:'telemetry-1e-source-1',eventType:'HEARTBEAT',occurredAt:'2026-08-25T04:59:00.000Z',payload:{signal:'ok',nested:{b:2,a:1}}};
+  const body:IngestTelemetryEventInput={trackerId:trackerA,sourceEventId:'telemetry-1e-source-1',eventType:'HEARTBEAT',occurredAt:'2026-08-25T04:59:00.000Z',payload:{signal:'ok',nested:{b:2,a:1}}};
   assert(canonicalizeTelemetryWebhookBody({b:2,a:1})==='{"a":1,"b":2}','canonical body is not deterministic');
   const signature=createTelemetryWebhookSignature(secretA,companyA,timestamp,nonce,body);
   const verified=TelemetryWebhookAuthority.verify({companyId:companyA,timestamp,nonce,signature},body,now,config);
