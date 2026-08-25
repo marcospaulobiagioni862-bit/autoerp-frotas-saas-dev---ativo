@@ -42,3 +42,17 @@ Não copiar essas variáveis para produção. Não inserir documento real na all
 - anexar evidência sanitizada à #288.
 
 Qualquer pedido para processar bytes fora da allowlist, usar produção ou usar documento real exige nova autorização na #283.
+
+
+## Composição runtime segura
+
+A fábrica `createDocumentAiRuntimeFromEnvironment` continua sem importação em rotas, bootstrap ou scheduler. Ela somente pode ser instanciada internamente quando todas as condições abaixo forem verdadeiras:
+
+- `DOC_AI_WORKER_ENABLED=true`;
+- `DOC_AI_PROVIDER=GEMINI`;
+- `DOC_AI_GEMINI_MODEL=gemini-2.5-flash` (modelo inicial autorizado);
+- `GEMINI_API_KEY` presente apenas no servidor;
+- `DOC_AI_SYNTHETIC_SHA256_ALLOWLIST` contendo um ou mais SHA-256 canônicos separados por vírgula;
+- storage selecionado completamente configurado.
+
+Configuração ausente, provider diferente ou allowlist vazia/inválida falha antes de criar o provider. A fábrica expõe apenas `processNextForTenant` para um chamador interno confiável; este slice não cria execução automática nem chamada externa.
