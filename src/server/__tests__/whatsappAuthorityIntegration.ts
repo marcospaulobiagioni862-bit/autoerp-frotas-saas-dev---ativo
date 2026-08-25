@@ -34,12 +34,6 @@ export class WhatsappAuthorityIntegrationRunner {
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
-      INSERT INTO whatsapp_template_catalog (company_id, template_key, version, status, body_text, parameter_keys) VALUES
-        (${companyA}, 'DRIVER_CNH_EXPIRY', 1, 'ACTIVE', 'Olá {{driverName}}, sua CNH vence em {{cnhExpiration}}.', '["driverName","cnhExpiration"]'::jsonb),
-        (${companyB}, 'DRIVER_CNH_EXPIRY', 1, 'ACTIVE', 'Olá {{driverName}}, sua CNH vence em {{cnhExpiration}}.', '["driverName","cnhExpiration"]'::jsonb)
-      ON CONFLICT (company_id, template_key, version) DO NOTHING
-    `);
-    await db.execute(sql`
       INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at) VALUES
         (${adminAId}, ${companyA}, 'WhatsApp Admin A', 'whatsapp-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
         (${adminBId}, ${companyB}, 'WhatsApp Admin B', 'whatsapp-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
@@ -195,6 +189,8 @@ export class WhatsappAuthorityIntegrationRunner {
       assert.ok(created && replay);
       assert.equal(created.item.status, 'HELD_PROVIDER_DISABLED');
       assert.equal(created.item.templateVersion, 1, 'outbox must persist selected template version');
+      const autoSeeded = await UnitOfWork.run(companyA, async (context: any) => resultRows(await context.getRawTransaction().execute(sql`SELECT version FROM whatsapp_template_catalog WHERE company_id=${companyA} AND template_key='DRIVER_CNH_EXPIRY'`)));
+      assert.equal(autoSeeded.length, 1, 'new tenant must receive one canonical template without browser authority');
       assert.equal(created.item.providerCallApplied, false);
       assert.equal(created.item.templateParameters.driverName, 'Motorista WhatsApp Sintético A');
       assert.equal(created.item.templateParameters.cnhExpiration, '2035-01-15');
