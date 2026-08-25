@@ -474,6 +474,20 @@ jobs:
           fi
           echo "DOC-AI-1B2 disabled runtime composition invariants: PASS"
 
+      - name: DOC-AI-1B3 read-only observability invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "app.get('/api/document-ai/observability'" src/server/documentAiRoutes.ts
+          grep -F "eq(documentAiExtractions.companyId, principal.companyId)" src/server/documentAiRoutes.ts
+          grep -F "automaticExecution: false" src/server/documentAiObservability.ts
+          grep -F "syntheticOnly: true" src/server/documentAiObservability.ts
+          if grep -E "apiKey|checksum|storageKey|workerId|companyId" src/server/documentAiObservability.ts | grep -F "return {"; then
+            echo "FAIL: observability response may expose authority or secret material"
+            exit 1
+          fi
+          echo "DOC-AI-1B3 read-only observability invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -498,6 +512,7 @@ jobs:
           npx tsx src/server/__tests__/documentAiProcessorTestRunner.ts
           npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts
           npx tsx src/server/__tests__/documentAiRuntimeTestRunner.ts
+          npx tsx src/server/__tests__/documentAiObservabilityTestRunner.ts
           npx tsx src/server/__tests__/documentAiQueueIntegration.ts
 
       - name: Fleet domain regressions
