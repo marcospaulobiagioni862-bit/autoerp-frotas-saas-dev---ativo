@@ -4,6 +4,18 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import {
+  WhatsappWebhookAuthenticationError,
+  WhatsappWebhookAuthority,
+  WhatsappWebhookReplayError,
+} from './whatsappWebhookAuth';
+import {
+  WhatsappWebhookConflictError,
+  WhatsappWebhookEventAuthority,
+  WhatsappWebhookNotFoundError,
+  WhatsappWebhookValidationError,
+  type WhatsappWebhookEventType,
+} from './whatsappWebhookAuthority';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -155,6 +167,26 @@ async function loadDriver(tx: any, companyId: string, driverId: string, lock = f
 }
 
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof WhatsappWebhookAuthenticationError) {
+    res.status(401).json({ error: 'Invalid WhatsApp webhook' });
+    return;
+  }
+  if (error instanceof WhatsappWebhookReplayError) {
+    res.status(409).json({ error: 'WhatsApp webhook replay' });
+    return;
+  }
+  if (error instanceof WhatsappWebhookValidationError) {
+    res.status(400).json({ error: 'Invalid WhatsApp webhook event' });
+    return;
+  }
+  if (error instanceof WhatsappWebhookNotFoundError) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (error instanceof WhatsappWebhookConflictError) {
+    res.status(409).json({ error: 'WhatsApp webhook conflict' });
+    return;
+  }
   if (error instanceof WhatsappValidationError) {
     res.status(400).json({ error: 'Invalid WhatsApp request' });
     return;
@@ -172,6 +204,28 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerWhatsappRoutes(app: Express): void {
+  app.post('/api/whatsapp/webhooks/synthetic', async (req: Request, res: Response) => {
+    try {
+      const body = exactObject(req.body, new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt']));
+      const verified = WhatsappWebhookAuthority.verify({
+        companyId: req.header('x-autoerp-company-id'),
+        timestamp: req.header('x-autoerp-whatsapp-timestamp'),
+        nonce: req.header('x-autoerp-whatsapp-nonce'),
+        signature: req.header('x-autoerp-whatsapp-signature'),
+      }, body);
+      await WhatsappWebhookAuthority.claimNonce(verified);
+      const result = await WhatsappWebhookEventAuthority.ingest(verified.companyId, {
+        providerEventId: body.providerEventId as string,
+        outboxId: body.outboxId as string,
+        eventType: body.eventType as WhatsappWebhookEventType,
+        occurredAt: body.occurredAt as string,
+      });
+      res.status(result.created ? 202 : 200).json({ accepted: true, created: result.created, item: result.item });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.get('/api/whatsapp/consents/:driverId', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res);
     if (!principal) return;
