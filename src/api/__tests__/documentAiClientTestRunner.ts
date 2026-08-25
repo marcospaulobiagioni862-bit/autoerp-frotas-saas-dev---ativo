@@ -99,6 +99,12 @@ export class DocumentAiClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input) === '/api/document-ai/extractions' && init?.method === 'POST') {
+          return new Response(JSON.stringify({ item: { ...extraction, status: 'PENDING' } }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input) === '/api/document-ai/observability') {
           return new Response(JSON.stringify(observability), {
             status: 200,
@@ -136,13 +142,29 @@ export class DocumentAiClientTestRunner {
       assert(observabilityRequest.init.credentials === 'include', 'observability request omitted session credentials');
       assert(observabilityRequest.init.body === undefined, 'observability request must not send a body');
 
+      const created = await DocumentAiClient.create({
+        attachmentId: extraction.attachmentId,
+        idempotencyKey: `document-ai:${extraction.attachmentId}`,
+      });
+      assert(created.status === 'PENDING', 'create response was not parsed');
+      const createRequest = requests[2];
+      assert(createRequest.input === '/api/document-ai/extractions', 'create route changed');
+      assert(createRequest.init?.method === 'POST' && createRequest.init.credentials === 'include', 'create transport contract failed');
+      const createBody = JSON.parse(String(createRequest.init.body || '{}'));
+      assert(createBody.attachmentId === extraction.attachmentId, 'create attachment missing');
+      assert(createBody.idempotencyKey === `document-ai:${extraction.attachmentId}`, 'create idempotency key changed');
+      assert(
+        Object.keys(createBody).sort().join(',') === 'attachmentId,idempotencyKey',
+        'create client sent tenant, actor, checksum, status or provider authority',
+      );
+
       const approved = await DocumentAiClient.review(extraction.id, {
         decision: 'APPROVE',
         corrections: { plate: 'XYZ9Z99' },
         notes: '  revisão segura  ',
       });
       assert(approved.status === 'APPROVED', 'review response was not parsed');
-      const reviewRequest = requests[2];
+      const reviewRequest = requests[3];
       const body = JSON.parse(String(reviewRequest.init?.body || '{}'));
       assert(body.decision === 'APPROVE', 'review decision missing');
       assert(body.corrections.plate === 'XYZ9Z99', 'review correction missing');
@@ -152,7 +174,7 @@ export class DocumentAiClientTestRunner {
 
       const retried = await DocumentAiClient.retry(extraction.id);
       assert(retried.status === 'PENDING', 'retry response was not parsed');
-      const retryRequest = requests[3];
+      const retryRequest = requests[4];
       assert(retryRequest.input === `/api/document-ai/extractions/${extraction.id}/retry`, 'retry route was not encoded');
       assert(retryRequest.init?.method === 'POST' && retryRequest.init.credentials === 'include', 'retry transport contract failed');
       assert(String(retryRequest.init.body) === '{}', 'retry must send an exact empty body');
