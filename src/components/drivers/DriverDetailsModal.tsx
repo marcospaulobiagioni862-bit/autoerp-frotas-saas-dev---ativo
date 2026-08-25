@@ -32,7 +32,12 @@ import {
   Skeleton,
 } from '../ui';
 import { DriverClient } from '../../api/driverClient';
-import { WhatsappClient, type WhatsappConsent, type WhatsappOutboxItem } from '../../api/whatsappClient';
+import {
+  WhatsappClient,
+  type WhatsappConsent,
+  type WhatsappOutboxItem,
+  type WhatsappTaskProposal,
+} from '../../api/whatsappClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
@@ -107,6 +112,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
   const [whatsappConsent, setWhatsappConsent] = useState<WhatsappConsent | null>(null);
   const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
+  const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
@@ -150,12 +156,14 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setWhatsappLoading(true);
     setWhatsappError(null);
     try {
-      const [consent, outbox] = await Promise.all([
+      const [consent, outbox, taskProposals] = await Promise.all([
         WhatsappClient.getConsent(driverId),
         WhatsappClient.listForDriver(driverId),
+        WhatsappClient.listTaskProposalsForDriver(driverId),
       ]);
       setWhatsappConsent(consent);
       setWhatsappOutbox(outbox);
+      setWhatsappTaskProposals(taskProposals);
     } catch (err: unknown) {
       setWhatsappError(err instanceof Error ? err.message : 'Erro ao carregar a autoridade de WhatsApp.');
     } finally {
@@ -169,6 +177,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setIsHealthUnlocked(false);
     setWhatsappConsent(null);
     setWhatsappOutbox([]);
+    setWhatsappTaskProposals([]);
     setWhatsappError(null);
     applyHealthProfile({});
     void loadData();
@@ -321,6 +330,31 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
       setWhatsappLoading(false);
     }
   };
+
+  const handleWhatsappTaskProposalReview = async (proposal: WhatsappTaskProposal, decision: 'APPROVE' | 'REJECT') => {
+    const reason = window.prompt(
+      decision === 'APPROVE'
+        ? 'Justifique a criação da tarefa operacional:'
+        : 'Justifique por que nenhuma tarefa deve ser criada:',
+    );
+    if (!reason?.trim() || reason.trim().length < 3) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      await WhatsappClient.reviewTaskProposal(proposal.id, decision, reason);
+      await loadWhatsappData();
+    } catch (err: unknown) {
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao revisar a proposta recebida.');
+      setWhatsappLoading(false);
+    }
+  };
+
+  const getWhatsappProposalCategory = (category: WhatsappTaskProposal['replyCategory']) => ({
+    PAYMENT_QUESTION: 'Dúvida de pagamento',
+    DOCUMENT_QUESTION: 'Dúvida documental',
+    MAINTENANCE_REPORT: 'Relato de manutenção',
+    GENERAL: 'Assunto geral',
+  }[category]);
 
   const getStatusBadge = (status?: DriverStatus) => {
     if (status === DriverStatus.ACTIVE) return <Badge variant="success">Ativo</Badge>;
@@ -588,6 +622,44 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                     <Badge variant={item.status === 'HELD_PROVIDER_DISABLED' ? 'warning' : 'neutral'}>
                       {item.status === 'HELD_PROVIDER_DISABLED' ? 'Retida — provedor desativado' : 'Cancelada'}
                     </Badge>
+                  </div>
+                ))}
+              </Card>
+
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold">Respostas recebidas — revisão humana</h3>
+                    <p className="text-xs text-slate-500">O conteúdo bruto não é armazenado nem exibido. Aprovar cria somente uma tarefa operacional; não altera financeiro, contratos ou documentos.</p>
+                  </div>
+                  {whatsappLoading && <span className="text-xs text-slate-400">Atualizando…</span>}
+                </div>
+                {whatsappTaskProposals.length === 0 ? (
+                  <p className="text-xs text-slate-400">Nenhuma proposta sanitizada para este motorista.</p>
+                ) : whatsappTaskProposals.map((proposal) => (
+                  <div key={proposal.id} className="p-3 border rounded-xl text-xs space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <strong className="block">{getWhatsappProposalCategory(proposal.replyCategory)}</strong>
+                        <span className="text-slate-500">{new Date(proposal.createdAt).toLocaleString('pt-BR')} • {proposal.id}</span>
+                      </div>
+                      <Badge variant={proposal.status === 'PENDING' ? 'warning' : proposal.status === 'APPROVED' ? 'success' : 'neutral'}>
+                        {proposal.status === 'PENDING' ? 'Aguardando revisão' : proposal.status === 'APPROVED' ? 'Tarefa criada' : 'Sem tarefa'}
+                      </Badge>
+                    </div>
+                    {proposal.status === 'APPROVED' && proposal.taskId && (
+                      <p className="text-emerald-700 dark:text-emerald-300">Tarefa operacional: {proposal.taskId}</p>
+                    )}
+                    {proposal.status === 'PENDING' && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'APPROVE')}>
+                          Aprovar e criar tarefa
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'REJECT')}>
+                          Rejeitar proposta
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </Card>

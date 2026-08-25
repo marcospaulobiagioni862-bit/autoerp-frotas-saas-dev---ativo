@@ -11,6 +11,23 @@ export interface WhatsappConsent {
   updatedAt: string;
 }
 
+export type WhatsappTaskProposalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type WhatsappTaskProposalCategory = 'PAYMENT_QUESTION' | 'DOCUMENT_QUESTION' | 'MAINTENANCE_REPORT' | 'GENERAL';
+
+export interface WhatsappTaskProposal {
+  id: string;
+  webhookEventId: string;
+  outboxId: string;
+  driverId: string;
+  replyCategory: WhatsappTaskProposalCategory;
+  status: WhatsappTaskProposalStatus;
+  taskId: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  rawReplyPersisted: false;
+  businessMutationApplied: false;
+}
+
 export interface WhatsappOutboxItem {
   id: string;
   driverId: string;
@@ -31,6 +48,7 @@ export interface WhatsappOutboxItem {
 
 type JsonRecord = Record<string, unknown>;
 const OUTBOX_ID = /^wao_[a-f0-9]{32}$/;
+const PROPOSAL_ID = /^wrp_[a-f0-9]{32}$/;
 
 function invalid(): never {
   throw new Error('Resposta inválida da autoridade de WhatsApp.');
@@ -118,6 +136,41 @@ export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
   };
 }
 
+export function parseWhatsappTaskProposal(value: unknown): WhatsappTaskProposal {
+  const item = exactRecord(value, [
+    'id', 'webhookEventId', 'outboxId', 'driverId', 'replyCategory', 'status',
+    'taskId', 'reviewedAt', 'createdAt', 'rawReplyPersisted', 'businessMutationApplied',
+  ]);
+  if (
+    typeof item.id !== 'string' || !PROPOSAL_ID.test(item.id) ||
+    typeof item.webhookEventId !== 'string' || !item.webhookEventId ||
+    typeof item.outboxId !== 'string' || !OUTBOX_ID.test(item.outboxId) ||
+    typeof item.driverId !== 'string' || !item.driverId ||
+    !new Set(['PAYMENT_QUESTION', 'DOCUMENT_QUESTION', 'MAINTENANCE_REPORT', 'GENERAL']).has(String(item.replyCategory)) ||
+    !new Set(['PENDING', 'APPROVED', 'REJECTED']).has(String(item.status)) ||
+    (item.taskId !== null && (typeof item.taskId !== 'string' || !item.taskId)) ||
+    item.rawReplyPersisted !== false ||
+    item.businessMutationApplied !== false
+  ) invalid();
+  const status = item.status as WhatsappTaskProposalStatus;
+  const taskId = item.taskId as string | null;
+  if ((status === 'PENDING' || status === 'REJECTED') && taskId !== null) invalid();
+  if (status === 'APPROVED' && taskId === null) invalid();
+  return {
+    id: item.id,
+    webhookEventId: item.webhookEventId,
+    outboxId: item.outboxId,
+    driverId: item.driverId,
+    replyCategory: item.replyCategory as WhatsappTaskProposalCategory,
+    status,
+    taskId,
+    reviewedAt: nullableIso(item.reviewedAt),
+    createdAt: requiredIso(item.createdAt),
+    rawReplyPersisted: false,
+    businessMutationApplied: false,
+  };
+}
+
 async function responseError(response: Response): Promise<Error> {
   let message = `Falha na autoridade de WhatsApp (${response.status}).`;
   try {
@@ -171,6 +224,36 @@ export class WhatsappClient {
     const payload = exactRecord(await response.json(), ['item', 'created']);
     if (typeof payload.created !== 'boolean') invalid();
     return { item: parseWhatsappOutboxItem(payload.item), created: payload.created };
+  }
+
+  static async listTaskProposalsForDriver(driverId: string): Promise<WhatsappTaskProposal[]> {
+    const response = await fetch('/api/whatsapp/task-proposals', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await responseError(response);
+    const payload = exactRecord(await response.json(), ['items']);
+    if (!Array.isArray(payload.items)) invalid();
+    return payload.items.map(parseWhatsappTaskProposal).filter((item) => item.driverId === driverId);
+  }
+
+  static async reviewTaskProposal(
+    proposalId: string,
+    decision: 'APPROVE' | 'REJECT',
+    reason: string,
+  ): Promise<{ item: WhatsappTaskProposal; replay: boolean }> {
+    const cleanReason = typeof reason === 'string' ? reason.trim().replace(/\s+/g, ' ') : '';
+    if (!PROPOSAL_ID.test(proposalId) || !new Set(['APPROVE', 'REJECT']).has(decision) || cleanReason.length < 3 || cleanReason.length > 500) invalid();
+    const response = await fetch(`/api/whatsapp/task-proposals/${encodeURIComponent(proposalId)}/review`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, reason: cleanReason }),
+    });
+    if (!response.ok) throw await responseError(response);
+    const payload = exactRecord(await response.json(), ['item', 'replay']);
+    if (typeof payload.replay !== 'boolean') invalid();
+    return { item: parseWhatsappTaskProposal(payload.item), replay: payload.replay };
   }
 
   static async listForDriver(driverId: string): Promise<WhatsappOutboxItem[]> {
