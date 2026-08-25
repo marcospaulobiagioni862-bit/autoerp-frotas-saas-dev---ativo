@@ -488,6 +488,25 @@ jobs:
           fi
           echo "DOC-AI-1B3 read-only observability invariants: PASS"
 
+      - name: DOC-AI-1B4 fail-closed client observability invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "DocumentAiClient.observability()" src/components/documents/DocumentAiReviewPanel.tsx
+          grep -F "method: 'GET'" src/api/documentAiClient.ts
+          grep -F "automaticExecution !== false" src/api/documentAiClient.ts
+          grep -F "syntheticOnly !== true" src/api/documentAiClient.ts
+          grep -F "Somente leitura · execução automática bloqueada" src/components/documents/DocumentAiReviewPanel.tsx
+          if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" src/components/documents/DocumentAiReviewPanel.tsx src/api/documentAiClient.ts; then
+            echo "FAIL: DOC-AI observability client must remain read-only"
+            exit 1
+          fi
+          if grep -Eq "apiKey|storageKey|workerId|companyId|attachmentChecksum" src/components/documents/DocumentAiReviewPanel.tsx | grep -F "Observability"; then
+            echo "FAIL: observability panel may consume protected authority"
+            exit 1
+          fi
+          echo "DOC-AI-1B4 fail-closed client observability invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 

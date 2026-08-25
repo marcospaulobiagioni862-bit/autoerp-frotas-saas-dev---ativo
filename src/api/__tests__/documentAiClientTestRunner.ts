@@ -1,12 +1,32 @@
 import {
   DocumentAiClient,
   parseDocumentAiExtraction,
+  parseDocumentAiObservability,
   type DocumentAiExtraction,
+  type DocumentAiObservability,
 } from '../documentAiClient';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+
+const observability: DocumentAiObservability = {
+  runtime: {
+    mode: 'READY_SYNTHETIC_ONLY',
+    provider: 'GEMINI',
+    syntheticOnly: true,
+    automaticExecution: false,
+  },
+  counts: {
+    PENDING: 2,
+    PROCESSING: 1,
+    REVIEW_REQUIRED: 3,
+    APPROVED: 4,
+    REJECTED: 5,
+    FAILED: 1,
+    total: 16,
+  },
+};
 
 const extraction: DocumentAiExtraction = {
   id: 'doc-ai-test-1',
@@ -54,11 +74,37 @@ export class DocumentAiClientTestRunner {
     }
     assert(invalidRejected, 'invalid retry attempt count was accepted');
 
+    const parsedObservability = parseDocumentAiObservability(observability);
+    assert(parsedObservability.counts.total === 16, 'valid observability was rejected');
+
+    for (const unsafe of [
+      { ...observability, companyId: 'browser-authority' },
+      { ...observability, runtime: { ...observability.runtime, automaticExecution: true } },
+      { ...observability, runtime: { ...observability.runtime, syntheticOnly: false } },
+      { ...observability, runtime: { ...observability.runtime, mode: 'DISABLED', provider: 'GEMINI' } },
+      { ...observability, counts: { ...observability.counts, FAILED: -1, total: 14 } },
+      { ...observability, counts: { ...observability.counts, total: 999 } },
+    ]) {
+      invalidRejected = false;
+      try {
+        parseDocumentAiObservability(unsafe);
+      } catch {
+        invalidRejected = true;
+      }
+      assert(invalidRejected, 'unsafe observability payload was accepted');
+    }
+
     const originalFetch = globalThis.fetch;
     const requests: Array<{ input: string; init?: RequestInit }> = [];
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input) === '/api/document-ai/observability') {
+          return new Response(JSON.stringify(observability), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input).includes('/retry')) {
           return new Response(JSON.stringify({ item: { ...extraction, status: 'PENDING' } }), {
             status: 200,
@@ -82,13 +128,21 @@ export class DocumentAiClientTestRunner {
       assert(requests[0].input === '/api/document-ai/extractions?status=REVIEW_REQUIRED', 'status filter was not encoded');
       assert(requests[0].init?.credentials === 'include', 'list request omitted session credentials');
 
+      const observed = await DocumentAiClient.observability();
+      assert(observed.runtime.mode === 'READY_SYNTHETIC_ONLY', 'observability response was not parsed');
+      const observabilityRequest = requests[1];
+      assert(observabilityRequest.input === '/api/document-ai/observability', 'observability route changed');
+      assert(observabilityRequest.init?.method === 'GET', 'observability must use GET');
+      assert(observabilityRequest.init.credentials === 'include', 'observability request omitted session credentials');
+      assert(observabilityRequest.init.body === undefined, 'observability request must not send a body');
+
       const approved = await DocumentAiClient.review(extraction.id, {
         decision: 'APPROVE',
         corrections: { plate: 'XYZ9Z99' },
         notes: '  revisão segura  ',
       });
       assert(approved.status === 'APPROVED', 'review response was not parsed');
-      const reviewRequest = requests[1];
+      const reviewRequest = requests[2];
       const body = JSON.parse(String(reviewRequest.init?.body || '{}'));
       assert(body.decision === 'APPROVE', 'review decision missing');
       assert(body.corrections.plate === 'XYZ9Z99', 'review correction missing');
@@ -98,7 +152,7 @@ export class DocumentAiClientTestRunner {
 
       const retried = await DocumentAiClient.retry(extraction.id);
       assert(retried.status === 'PENDING', 'retry response was not parsed');
-      const retryRequest = requests[2];
+      const retryRequest = requests[3];
       assert(retryRequest.input === `/api/document-ai/extractions/${extraction.id}/retry`, 'retry route was not encoded');
       assert(retryRequest.init?.method === 'POST' && retryRequest.init.credentials === 'include', 'retry transport contract failed');
       assert(String(retryRequest.init.body) === '{}', 'retry must send an exact empty body');
