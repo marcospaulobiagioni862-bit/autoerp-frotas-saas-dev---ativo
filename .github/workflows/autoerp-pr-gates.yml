@@ -507,6 +507,25 @@ jobs:
           fi
           echo "DOC-AI-1B4 fail-closed client observability invariants: PASS"
 
+      - name: DOC-AI-1B5 explicit idempotent request invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "DocumentAiClient.create({" src/components/documents/AttachmentList.tsx
+          grep -F "idempotencyKey: \`document-ai:\${attachment.id}\`" src/components/documents/AttachmentList.tsx
+          grep -F "Object.keys(createBody).sort().join(',') === 'attachmentId,idempotencyKey'" src/api/__tests__/documentAiClientTestRunner.ts
+          grep -F "DOCUMENT_AI_WRITE_ROLES" src/components/documents/AttachmentList.tsx
+          grep -F "O processamento automático permanece desativado." src/components/documents/AttachmentList.tsx
+          if grep -Eq "body: JSON.stringify\(\{[^}]*(companyId|requestedBy|status|provider|checksum)" src/api/documentAiClient.ts; then
+            echo "FAIL: document AI create client must not send server authority"
+            exit 1
+          fi
+          if grep -Eq "READONLY.*DOCUMENT_AI_WRITE_ROLES|DOCUMENT_AI_WRITE_ROLES.*READONLY" src/components/documents/AttachmentList.tsx; then
+            echo "FAIL: READONLY must not receive the document AI create action"
+            exit 1
+          fi
+          echo "DOC-AI-1B5 explicit idempotent request invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
