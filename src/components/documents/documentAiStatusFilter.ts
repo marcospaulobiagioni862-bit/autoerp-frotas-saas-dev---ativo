@@ -3,6 +3,7 @@ import type { DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 export const DOCUMENT_AI_STATUS_FILTERS = [
   'ALL',
   'NONE',
+  'ACTION_REQUIRED',
   'PENDING',
   'PROCESSING',
   'REVIEW_REQUIRED',
@@ -22,6 +23,9 @@ export function matchesDocumentAiStatusFilter(
   if (filter === 'ALL' || statusesUnavailable) return true;
   const current = statuses[attachmentId];
   if (filter === 'NONE') return current === undefined;
+  if (filter === 'ACTION_REQUIRED') {
+    return current?.status === 'REVIEW_REQUIRED' || current?.status === 'FAILED';
+  }
   return current?.status === filter;
 }
 
@@ -37,6 +41,7 @@ export function createDocumentAiStatusCounts(
   const counts: DocumentAiStatusCounts = {
     ALL: uniqueAttachmentIds.length,
     NONE: statusesUnavailable ? null : 0,
+    ACTION_REQUIRED: statusesUnavailable ? null : 0,
     PENDING: statusesUnavailable ? null : 0,
     PROCESSING: statusesUnavailable ? null : 0,
     REVIEW_REQUIRED: statusesUnavailable ? null : 0,
@@ -48,8 +53,14 @@ export function createDocumentAiStatusCounts(
 
   for (const attachmentId of uniqueAttachmentIds) {
     const status = statuses[attachmentId]?.status;
-    if (!status) counts.NONE = (counts.NONE ?? 0) + 1;
-    else counts[status] = (counts[status] ?? 0) + 1;
+    if (!status) {
+      counts.NONE = (counts.NONE ?? 0) + 1;
+    } else {
+      counts[status] = (counts[status] ?? 0) + 1;
+      if (status === 'REVIEW_REQUIRED' || status === 'FAILED') {
+        counts.ACTION_REQUIRED = (counts.ACTION_REQUIRED ?? 0) + 1;
+      }
+    }
   }
   return counts;
 }
