@@ -347,6 +347,26 @@ jobs:
           fi
           echo "TELEMETRY-1E authenticated synthetic webhook invariants: PASS"
 
+      - name: TELEMETRY-1F read-only observability invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "resolveTelemetryRetentionDays" src/server/telemetryAuthority.ts
+          grep -F "COUNT(*) FILTER (WHERE received_at<" src/server/telemetryAuthority.ts
+          grep -F "/api/trackers/:trackerId/telemetry/observability" src/server/telemetryRoutes.ts
+          grep -F "Unsafe telemetry observability response" src/api/trackerClient.ts
+          grep -F "TrackerClient.getTelemetryObservability" src/components/fleet/FleetComplianceManagement.tsx
+          grep -F "Somente observabilidade: nenhuma telemetria é excluída automaticamente." src/components/fleet/FleetComplianceManagement.tsx
+          if grep -Eq "app\.(post|patch|put|delete).*telemetry/observability" src/server/telemetryRoutes.ts; then
+            echo "FAIL: telemetry observability must remain read-only"
+            exit 1
+          fi
+          if grep -Eq "DELETE[[:space:]]+FROM[[:space:]]+tracker_telemetry_events|UPDATE[[:space:]]+tracker_telemetry_events" src/server/telemetryAuthority.ts; then
+            echo "FAIL: TELEMETRY-1F must not purge or mutate telemetry"
+            exit 1
+          fi
+          echo "TELEMETRY-1F read-only observability invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -382,6 +402,7 @@ jobs:
           npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
           npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
           npx tsx src/server/__tests__/telemetryWebhookAuthIntegration.ts
+          npx tsx src/server/__tests__/telemetryObservabilityIntegration.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
