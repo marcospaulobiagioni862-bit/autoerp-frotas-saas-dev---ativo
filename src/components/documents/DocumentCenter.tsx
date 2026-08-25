@@ -8,6 +8,7 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
+import { matchesDocumentAiStatusFilter, type DocumentAiStatusFilter } from './documentAiStatusFilter';
 
 export function DocumentCenter() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -16,6 +17,7 @@ export function DocumentCenter() {
   const [searchTerm, setSearchTerm] = useState('');
   const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
   const [documentTypeFilter, setDocumentTypeFilter] = useState('ALL');
+  const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>('ALL');
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
   const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
@@ -34,7 +36,9 @@ export function DocumentCenter() {
         setAttachmentStatuses(Object.fromEntries(statusesResult.value.map((item) => [item.attachmentId, item])));
         setAttachmentStatusesUnavailable(false);
       } else {
+        setAttachmentStatuses({});
         setAttachmentStatusesUnavailable(true);
+        setExtractionStatusFilter('ALL');
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar documentos.');
@@ -55,7 +59,13 @@ export function DocumentCenter() {
       att.entityId.toLowerCase().includes(term);
     const matchesEntity = entityTypeFilter === 'ALL' || att.entityType === entityTypeFilter;
     const matchesDoc = documentTypeFilter === 'ALL' || att.documentType === documentTypeFilter;
-    return matchesSearch && matchesEntity && matchesDoc && !att.isArchived;
+    const matchesExtraction = matchesDocumentAiStatusFilter(
+      att.id,
+      extractionStatusFilter,
+      attachmentStatuses,
+      attachmentStatusesUnavailable,
+    );
+    return matchesSearch && matchesEntity && matchesDoc && matchesExtraction && !att.isArchived;
   });
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
@@ -73,7 +83,7 @@ export function DocumentCenter() {
       <Card>
         <div className="p-4 border-b font-semibold text-lg">Filtros de Busca</div>
         <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
               <div className="relative">
@@ -93,6 +103,23 @@ export function DocumentCenter() {
               <Select value={documentTypeFilter} onChange={(event) => setDocumentTypeFilter(event.target.value)}>
                 <option value="ALL">Todos os Tipos</option>
                 {docTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado da Extração</label>
+              <Select
+                value={extractionStatusFilter}
+                onChange={(event) => setExtractionStatusFilter(event.target.value as DocumentAiStatusFilter)}
+                disabled={attachmentStatusesUnavailable}
+              >
+                <option value="ALL">Todos os Estados</option>
+                <option value="NONE">Sem extração</option>
+                <option value="PENDING">Na fila</option>
+                <option value="PROCESSING">Processando</option>
+                <option value="REVIEW_REQUIRED">Revisão necessária</option>
+                <option value="APPROVED">Aprovada</option>
+                <option value="REJECTED">Rejeitada</option>
+                <option value="FAILED">Falhou</option>
               </Select>
             </div>
           </div>
