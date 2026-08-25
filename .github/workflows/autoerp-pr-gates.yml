@@ -526,6 +526,26 @@ jobs:
           fi
           echo "DOC-AI-1B5 explicit idempotent request invariants: PASS"
 
+      - name: DOC-AI-1B6 sanitized attachment status invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "app.get('/api/document-ai/attachment-statuses'" src/server/documentAiRoutes.ts
+          grep -F "eq(documentAiExtractions.companyId, principal.companyId)" src/server/documentAiRoutes.ts
+          grep -F "createDocumentAiAttachmentStatusSnapshot" src/server/documentAiRoutes.ts
+          grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
+          grep -F "canRequestDocumentAi && documentAiEligible && !extractionStatus" src/components/documents/AttachmentList.tsx
+          grep -F "Object.keys(req.query).length !== 0" src/server/documentAiRoutes.ts
+          if sed -n '/export interface DocumentAiAttachmentStatus {/,/^}/p' src/api/documentAiClient.ts | grep -Eq "companyId|requestedBy|attachmentChecksum|provider|model|proposedFields|fieldConfidence"; then
+            echo "FAIL: attachment status contract may expose protected extraction data"
+            exit 1
+          fi
+          if grep -Eq "app\.(post|patch|put|delete).*document-ai/attachment-statuses" src/server/documentAiRoutes.ts; then
+            echo "FAIL: attachment statuses must remain read-only"
+            exit 1
+          fi
+          echo "DOC-AI-1B6 sanitized attachment status invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
