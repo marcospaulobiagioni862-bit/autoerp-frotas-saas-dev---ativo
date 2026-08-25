@@ -198,7 +198,7 @@ export function parseWhatsappObservabilitySummary(value: unknown): WhatsappObser
     taskProposals.total, taskProposals.pending, taskProposals.approved, taskProposals.rejected,
   ];
   if (
-    !new Set([7, 30, 90, 365]).has(item.windowDays) ||
+    typeof item.windowDays !== 'number' || !new Set([7, 30, 90, 365]).has(item.windowDays) ||
     counts.some((count) => typeof count !== 'number' || !Number.isInteger(count) || count < 0) ||
     outbox.heldProviderDisabled + outbox.cancelled !== outbox.total ||
     webhookEvents.sent + webhookEvents.delivered + webhookEvents.read + webhookEvents.failed + webhookEvents.repliesReceived !== webhookEvents.total ||
