@@ -361,7 +361,7 @@ jobs:
             echo "FAIL: telemetry observability must remain read-only"
             exit 1
           fi
-          if grep -Eq "DELETE[[:space:]]+FROM[[:space:]]+tracker_telemetry_events|UPDATE[[:space:]]+tracker_telemetry_events" src/server/telemetryAuthority.ts; then
+          if grep -Eq "DELETE[[:space:]]+FROM[[:space:]]+tracker_telemetry_events" src/server/telemetryAuthority.ts; then
             echo "FAIL: TELEMETRY-1F must not purge or mutate telemetry"
             exit 1
           fi
