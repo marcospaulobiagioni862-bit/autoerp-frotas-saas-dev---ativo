@@ -326,6 +326,27 @@ jobs:
           fi
           echo "TELEMETRY-1D auditable quarantine review invariants: PASS"
 
+      - name: TELEMETRY-1E authenticated synthetic webhook invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "CONSTRAINT uq_telemetry_webhook_nonce UNIQUE (company_id, nonce)" drizzle/0037_telemetry_webhook_replay.sql
+          grep -F "ALTER TABLE telemetry_webhook_nonces FORCE ROW LEVEL SECURITY" drizzle/0037_telemetry_webhook_replay.sql
+          grep -F "createHmac('sha256'" src/server/telemetryWebhookAuth.ts
+          grep -F "timingSafeEqual" src/server/telemetryWebhookAuth.ts
+          grep -F "ON CONFLICT (company_id,nonce) DO NOTHING" src/server/telemetryWebhookAuth.ts
+          grep -F "/api/telemetry/webhooks/synthetic" src/server/telemetryRoutes.ts
+          grep -F "exact(req.body,['trackerId','sourceEventId','eventType','occurredAt','payload'])" src/server/telemetryRoutes.ts
+          if grep -R -F "TELEMETRY_SYNTHETIC_WEBHOOK_KEYS_JSON" src --exclude='telemetryWebhookAuth.ts' --exclude='telemetryWebhookAuthIntegration.ts'; then
+            echo "FAIL: webhook secrets must remain in the dedicated server boundary"
+            exit 1
+          fi
+          if grep -Eq "getPayableRepo|FinancialAuthorizationService|UPDATE[[:space:]]+vehicles|current_km[[:space:]]*=" src/server/telemetryWebhookAuth.ts src/server/telemetryRoutes.ts; then
+            echo "FAIL: webhook authentication must not apply operational or financial effects"
+            exit 1
+          fi
+          echo "TELEMETRY-1E authenticated synthetic webhook invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -360,6 +381,7 @@ jobs:
           npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
           npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
           npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
+          npx tsx src/server/__tests__/telemetryWebhookAuthIntegration.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
