@@ -47,13 +47,13 @@ function requiredIdentifier(value: unknown, pattern: RegExp): string {
   return text;
 }
 
-function exactIso(value: unknown): string {
+function exactIso(value: unknown, referenceNow: Date): string {
   if (typeof value !== 'string') throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
   const milliseconds = Date.parse(value);
   if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value) {
     throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
   }
-  if (milliseconds > Date.now() + 5 * 60 * 1000) {
+  if (!Number.isFinite(referenceNow.getTime()) || milliseconds > referenceNow.getTime() + 5 * 60 * 1000) {
     throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
   }
   return value;
@@ -84,12 +84,13 @@ export class WhatsappWebhookEventAuthority {
   static async ingest(
     companyId: string,
     input: IngestWhatsappWebhookEventInput,
+    referenceNow = new Date(),
   ): Promise<{ item: WhatsappWebhookEventRecord; created: boolean }> {
     const providerEventId = requiredIdentifier(input.providerEventId, PROVIDER_EVENT_ID);
     const outboxId = requiredIdentifier(input.outboxId, OUTBOX_ID);
     const eventType = String(input.eventType || '') as WhatsappWebhookEventType;
     if (!EVENT_TYPES.has(eventType)) throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
-    const occurredAt = exactIso(input.occurredAt);
+    const occurredAt = exactIso(input.occurredAt, referenceNow);
 
     return UnitOfWork.run(companyId, async (context) => {
       const tx = context.getRawTransaction?.();
