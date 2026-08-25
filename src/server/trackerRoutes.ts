@@ -4,6 +4,7 @@ import {
   TrackerAuthorityService, TrackerConflictError, TrackerNotFoundError, TrackerValidationError,
   type CreateTrackerInput, type UpdateTrackerInput,
 } from './trackerAuthority';
+import { TelemetryAuthorityService, TelemetryNotFoundError, TelemetryValidationError, type IngestTelemetryInput } from './telemetryAuthority';
 
 type TrackerAction='VIEW_TRACKER'|'MUTATE_TRACKER';
 const READ_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
@@ -20,6 +21,7 @@ function rejectProtected(body:unknown):void{
   if(!body||typeof body!=='object'||Array.isArray(body))throw new TrackerValidationError('Invalid payload');
   for(const key of Object.keys(body as Record<string,unknown>))if(FORBIDDEN.has(key))throw new TrackerValidationError(`Protected field: ${key}`);
 }
+function exactKeys(value:unknown,allowed:Set<string>):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new TelemetryValidationError('Invalid payload');const body=value as Record<string,unknown>;for(const key of Object.keys(body))if(!allowed.has(key))throw new TelemetryValidationError(`Protected or unknown field: ${key}`);return body;}
 function requiredText(value:unknown,max=500):string{const s=typeof value==='string'?value.trim():'';if(!s||s.length>max)throw new TrackerValidationError('Invalid text');return s;}
 function optionalText(value:unknown,max=1000):string|undefined{if(value===undefined||value===null||value==='')return undefined;const s=String(value).trim();if(!s||s.length>max)throw new TrackerValidationError('Invalid text');return s;}
 function optionalNullable(value:unknown,max=1000):string|null|undefined{if(value===undefined)return undefined;if(value===null||value==='')return null;return optionalText(value,max)!;}
@@ -27,8 +29,8 @@ function nonNegative(value:unknown):number{const n=Number(value);if(!Number.isFi
 function uniqueViolation(error:unknown):boolean{let current:unknown=error;for(let i=0;i<6&&current&&typeof current==='object';i++){if('code'in current&&(current as any).code==='23505')return true;current='cause'in current?(current as any).cause:undefined;}return false;}
 function sendError(res:Response,error:unknown):void{
   const message=error instanceof Error?error.message:'';
-  if(error instanceof TrackerValidationError){res.status(400).json({error:'Invalid tracker request'});return;}
-  if(error instanceof TrackerNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof TrackerValidationError||error instanceof TelemetryValidationError){res.status(400).json({error:'Invalid tracker request'});return;}
+  if(error instanceof TrackerNotFoundError||error instanceof TelemetryNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}
   if(error instanceof TrackerConflictError||uniqueViolation(error)||message.includes('período financeiro')||message.includes('Permissão insuficiente')){res.status(409).json({error:'Tracker command conflict'});return;}
   if(message.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}
   console.error('AUTOERP_TRACKER_AUTHORITY_FAILURE',error);res.status(500).json({error:'Tracker operation failed'});
@@ -49,4 +51,13 @@ export function registerTrackerRoutes(app:Express):void{
     if(Object.values(input).every(v=>v===undefined))throw new TrackerValidationError('No changes');res.json({item:await TrackerAuthorityService.update(actor,req.params.id,input)});
   }catch(error){sendError(res,error);}});
   app.post('/api/trackers/:id/remove',async(req,res)=>{const actor=requirePrincipal(req,res,'MUTATE_TRACKER');if(!actor)return;try{rejectProtected(req.body);res.json({item:await TrackerAuthorityService.remove(actor,req.params.id,requiredText(req.body?.reason,500))});}catch(error){sendError(res,error);}});
+  app.post('/api/trackers/:id/telemetry/events',async(req,res)=>{const actor=requirePrincipal(req,res,'MUTATE_TRACKER');if(!actor)return;try{
+    const body=exactKeys(req.body,new Set(['sourceEventId','eventType','occurredAt','payload','synthetic']));
+    const result=await TelemetryAuthorityService.ingest(actor,req.params.id,{sourceEventId:requiredText(body.sourceEventId,160),eventType:String(body.eventType||'') as IngestTelemetryInput['eventType'],occurredAt:typeof body.occurredAt==='string'?body.occurredAt:'',payload:body.payload as Record<string,unknown>,synthetic:body.synthetic as true});
+    res.status(result.replayed?200:201).json(result);
+  }catch(error){sendError(res,error);}});
+  app.get('/api/trackers/:id/telemetry/events',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TRACKER');if(!actor)return;try{
+    const rawLimit=req.query.limit===undefined?50:Number(req.query.limit);const before=typeof req.query.before==='string'?req.query.before:undefined;
+    res.json(await TelemetryAuthorityService.list(actor.companyId,req.params.id,rawLimit,before));
+  }catch(error){sendError(res,error);}});
 }
