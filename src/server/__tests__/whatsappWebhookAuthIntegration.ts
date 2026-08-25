@@ -153,8 +153,8 @@ async function main(): Promise<void> {
   assert(nonceCounts.length === 2 && nonceCounts.every((row) => Number(row.count) === 1), 'nonce was not tenant isolated');
 
   const beforePayables = Number(rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count);
-  const created = await WhatsappWebhookEventAuthority.ingest(companyA, body);
-  const replay = await WhatsappWebhookEventAuthority.ingest(companyA, body);
+  const created = await WhatsappWebhookEventAuthority.ingest(companyA, body, now);
+  const replay = await WhatsappWebhookEventAuthority.ingest(companyA, body, now);
   assert(created.created && !replay.created && created.item.id === replay.item.id, 'providerEventId was not idempotent');
   assert(created.item.disposition === 'QUARANTINED', 'held outbox event was not quarantined');
   assert(created.item.quarantineReason === 'OUTBOX_NOT_DISPATCHED', 'held outbox reason is unsafe');
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
 
   let collisionRejected = false;
   try {
-    await WhatsappWebhookEventAuthority.ingest(companyA, { ...body, eventType: 'READ' });
+    await WhatsappWebhookEventAuthority.ingest(companyA, { ...body, eventType: 'READ' }, now);
   } catch (error) {
     collisionRejected = error instanceof WhatsappWebhookConflictError;
   }
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
       ...body,
       providerEventId: 'synthetic-provider-event-foreign',
       outboxId: outboxB,
-    });
+    }, now);
   } catch (error) {
     foreignRejected = error instanceof WhatsappWebhookNotFoundError;
   }
@@ -185,7 +185,7 @@ async function main(): Promise<void> {
     outboxId: outboxCancelledA,
     eventType: 'FAILED',
     occurredAt: body.occurredAt,
-  });
+  }, now);
   assert(cancelled.item.quarantineReason === 'OUTBOX_CANCELLED', 'cancelled outbox event was not quarantined');
 
   const statuses = rows(await db.execute(sql`
