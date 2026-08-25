@@ -294,6 +294,21 @@ jobs:
           fi
           echo "TELEMETRY-1B sanitized client invariants: PASS"
 
+      - name: TELEMETRY-1C server-derived health invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "deriveTelemetryHealthStatus" src/server/telemetryAuthority.ts
+          grep -F "/api/trackers/:trackerId/telemetry/health" src/server/telemetryRoutes.ts
+          grep -F "TrackerClient.getTelemetryHealth" src/components/fleet/FleetComplianceManagement.tsx
+          grep -F "O odômetro exibido não altera a quilometragem oficial do veículo." src/components/fleet/FleetComplianceManagement.tsx
+          grep -F "Unsafe telemetry health response" src/api/trackerClient.ts
+          if grep -Eq "POST.+telemetry/health|PATCH.+telemetry/health|PUT.+telemetry/health|DELETE.+telemetry/health" src/api/trackerClient.ts src/server/telemetryRoutes.ts; then
+            echo "FAIL: TELEMETRY-1C health must remain read-only"
+            exit 1
+          fi
+          echo "TELEMETRY-1C server-derived health invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
