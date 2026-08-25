@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
+import { createDocumentAiObservabilitySnapshot } from './documentAiObservability';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -387,6 +388,26 @@ export function registerDocumentAiRoutes(app: Express): void {
         return { item: updated, idempotent: false };
       });
       res.status(200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/document-ai/observability', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res);
+    if (!principal) return;
+    try {
+      if (Object.keys(req.query).length !== 0) throw new DocumentAiValidationError();
+      const rows = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        return await tx.select({
+          status: documentAiExtractions.status,
+          count: count(),
+        }).from(documentAiExtractions)
+          .where(eq(documentAiExtractions.companyId, principal.companyId))
+          .groupBy(documentAiExtractions.status);
+      });
+      res.json(createDocumentAiObservabilitySnapshot(rows));
     } catch (error) {
       sendError(res, error);
     }
