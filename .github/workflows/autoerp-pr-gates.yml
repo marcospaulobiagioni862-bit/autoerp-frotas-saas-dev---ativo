@@ -460,6 +460,20 @@ jobs:
           fi
           echo "TELEMETRY-1F read-only observability invariants: PASS"
 
+      - name: DOC-AI-1B2 runtime composition invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "DOC_AI_WORKER_ENABLED" src/server/documentAiRuntime.ts
+          grep -F "parseSyntheticChecksumAllowlist" src/server/documentAiRuntime.ts
+          grep -F "createAttachmentStorageFromEnvironment" src/server/documentAiRuntime.ts
+          grep -F "DocumentAiQueueService.processNextForTenant" src/server/documentAiRuntime.ts
+          if grep -R -F "createDocumentAiRuntimeFromEnvironment" src/server --exclude='documentAiRuntime.ts' --exclude='documentAiRuntimeTestRunner.ts'; then
+            echo "FAIL: DOC-AI runtime must not be connected to a route, scheduler or bootstrap in this slice"
+            exit 1
+          fi
+          echo "DOC-AI-1B2 disabled runtime composition invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -483,6 +497,7 @@ jobs:
           npx tsx src/server/__tests__/documentAiAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAiProcessorTestRunner.ts
           npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts
+          npx tsx src/server/__tests__/documentAiRuntimeTestRunner.ts
           npx tsx src/server/__tests__/documentAiQueueIntegration.ts
 
       - name: Fleet domain regressions
