@@ -51,6 +51,14 @@ export interface DocumentAiAttachmentStatus {
   updatedAt: string;
 }
 
+
+export interface DocumentAiExtractionHistoryItem {
+  status: DocumentAiStatus;
+  attemptCount: number;
+  failureCode: string | null;
+  updatedAt: string;
+}
+
 export interface DocumentAiObservability {
   runtime: {
     mode: DocumentAiRuntimeMode;
@@ -229,6 +237,31 @@ export function parseDocumentAiAttachmentStatuses(value: unknown): DocumentAiAtt
   });
 }
 
+
+export function parseDocumentAiExtractionHistory(value: unknown): DocumentAiExtractionHistoryItem[] {
+  const payload = exactRecord(value, ['items']);
+  if (!Array.isArray(payload.items) || payload.items.length > 100) {
+    throw new Error('Resposta inválida do histórico documental.');
+  }
+  return payload.items.map((value) => {
+    const item = exactRecord(value, ['status', 'attemptCount', 'failureCode', 'updatedAt']);
+    if (
+      typeof item.status !== 'string' || !STATUSES.has(item.status as DocumentAiStatus) ||
+      !Number.isSafeInteger(item.attemptCount) || (item.attemptCount as number) < 0 || (item.attemptCount as number) > 100 ||
+      (item.failureCode !== null && (typeof item.failureCode !== 'string' || !/^[A-Z0-9_:-]{1,120}$/.test(item.failureCode))) ||
+      typeof item.updatedAt !== 'string' || !Number.isFinite(Date.parse(item.updatedAt))
+    ) {
+      throw new Error('Resposta inválida do histórico documental.');
+    }
+    return {
+      status: item.status as DocumentAiStatus,
+      attemptCount: item.attemptCount as number,
+      failureCode: item.failureCode as string | null,
+      updatedAt: item.updatedAt,
+    };
+  });
+}
+
 async function errorFrom(response: Response): Promise<Error> {
   let message = `Falha na revisão documental (${response.status}).`;
   try {
@@ -257,6 +290,20 @@ export class DocumentAiClient {
     if (!response.ok) throw await errorFrom(response);
     const payload = asRecord(await response.json());
     return parseDocumentAiExtraction(payload.item);
+  }
+
+
+  static async attachmentHistory(attachmentId: string): Promise<DocumentAiExtractionHistoryItem[]> {
+    if (typeof attachmentId !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(attachmentId)) {
+      throw new Error('Anexo inválido para histórico documental.');
+    }
+    const response = await fetch(`/api/document-ai/attachments/${encodeURIComponent(attachmentId)}/history`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await errorFrom(response);
+    return parseDocumentAiExtractionHistory(await response.json());
   }
 
   static async attachmentStatuses(): Promise<DocumentAiAttachmentStatus[]> {

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
-import { documentAiExtractions, fileAttachments } from '../db/schema';
+import { auditLogs, documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
@@ -151,6 +151,38 @@ function sendError(res: Response, error: unknown): void {
   }
   console.error('AUTOERP_DOCUMENT_AI_AUTHORITY_FAILURE', error);
   res.status(500).json({ error: 'Document AI operation failed' });
+}
+
+
+type SanitizedExtractionHistoryItem = {
+  status: string;
+  attemptCount: number;
+  failureCode: string | null;
+  updatedAt: string;
+};
+
+function sanitizeExtractionAuditHistory(changes: unknown, timestamp: unknown): SanitizedExtractionHistoryItem | null {
+  if (typeof changes !== 'string' || typeof timestamp !== 'string') return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(changes); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const record = parsed as Record<string, unknown>;
+  const nextRaw = record.newState;
+  let next: Record<string, unknown> | null = null;
+  try {
+    const candidate = typeof nextRaw === 'string' ? JSON.parse(nextRaw) : nextRaw;
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) next = candidate as Record<string, unknown>;
+  } catch { return null; }
+  if (!next) return null;
+  const event = String(next.event || '');
+  const status = String(next.status || '');
+  if (!new Set(['AI_EXTRACTION_REQUESTED', 'AI_EXTRACTION_RETRY_REQUESTED', 'AI_EXTRACTION_REVIEWED']).has(event)
+    || !new Set(['PENDING', 'APPROVED', 'REJECTED']).has(status)) return null;
+  const attemptCount = Number(next.attemptCount ?? 0);
+  if (!Number.isInteger(attemptCount) || attemptCount < 0) return null;
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return null;
+  return { status, attemptCount, failureCode: null, updatedAt: date.toISOString() };
 }
 
 export function registerDocumentAiRoutes(app: Express): void {
@@ -388,6 +420,38 @@ export function registerDocumentAiRoutes(app: Express): void {
         return { item: updated, idempotent: false };
       });
       res.status(200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+
+  app.get('/api/document-ai/attachments/:attachmentId/history', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res);
+    if (!principal) return;
+    try {
+      if (Object.keys(req.query).length !== 0) throw new DocumentAiValidationError();
+      const attachmentId = requiredId(req.params.attachmentId, 'attachmentId');
+      const items = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const extractions = await tx.select({ id: documentAiExtractions.id }).from(documentAiExtractions)
+          .where(and(eq(documentAiExtractions.companyId, principal.companyId), eq(documentAiExtractions.attachmentId, attachmentId)));
+        if (extractions.length === 0) throw new DocumentAiNotFoundError();
+        const ids = extractions.map((item: { id: string }) => item.id);
+        const auditRows = await tx.select({
+          entityId: auditLogs.entityId,
+          changes: auditLogs.changes,
+          timestamp: auditLogs.timestamp,
+        }).from(auditLogs)
+          .where(and(eq(auditLogs.companyId, principal.companyId), eq(auditLogs.entityType, 'DocumentAiExtraction')))
+          .orderBy(asc(auditLogs.timestamp));
+        const allowed = new Set(ids);
+        return auditRows
+          .filter((row: { entityId: string }) => allowed.has(row.entityId))
+          .map((row: { changes: unknown; timestamp: unknown }) => sanitizeExtractionAuditHistory(row.changes, row.timestamp))
+          .filter((item: SanitizedExtractionHistoryItem | null): item is SanitizedExtractionHistoryItem => item !== null);
+      });
+      res.json({ items });
     } catch (error) {
       sendError(res, error);
     }

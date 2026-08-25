@@ -1,9 +1,11 @@
 import {
   DocumentAiClient,
   parseDocumentAiAttachmentStatuses,
+  parseDocumentAiExtractionHistory,
   parseDocumentAiExtraction,
   parseDocumentAiObservability,
   type DocumentAiAttachmentStatus,
+  type DocumentAiExtractionHistoryItem,
   type DocumentAiExtraction,
   type DocumentAiObservability,
 } from '../documentAiClient';
@@ -19,6 +21,12 @@ const attachmentStatus: DocumentAiAttachmentStatus = {
   failureCode: null,
   updatedAt: '2026-08-25T12:00:00.000Z',
 };
+
+
+const extractionHistory: DocumentAiExtractionHistoryItem[] = [
+  { status: 'PENDING', attemptCount: 0, failureCode: null, updatedAt: '2026-08-25T12:00:00.000Z' },
+  { status: 'APPROVED', attemptCount: 1, failureCode: null, updatedAt: '2026-08-25T12:05:00.000Z' },
+];
 
 const observability: DocumentAiObservability = {
   runtime: {
@@ -67,6 +75,7 @@ export class DocumentAiClientTestRunner {
     const parsed = parseDocumentAiExtraction(extraction);
     assert(parsed.status === 'REVIEW_REQUIRED', 'valid extraction was rejected');
     assert(parsed.attemptCount === 1 && parsed.failureCode === null, 'retry metadata was not parsed');
+    assert(parseDocumentAiExtractionHistory({ items: extractionHistory }).length === 2, 'sanitized history rejected');
 
     let invalidRejected = false;
     try {
@@ -127,6 +136,9 @@ export class DocumentAiClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input) === '/api/document-ai/attachments/attachment-1/history') {
+          return new Response(JSON.stringify({ items: extractionHistory }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
         if (String(input) === '/api/document-ai/attachment-statuses') {
           return new Response(JSON.stringify({ items: [attachmentStatus] }), {
             status: 200,
@@ -221,6 +233,15 @@ export class DocumentAiClientTestRunner {
       assert(String(retryRequest.init.body) === '{}', 'retry must send an exact empty body');
       const retryBody = JSON.parse(String(retryRequest.init.body));
       assert(Object.keys(retryBody).length === 0, 'retry client sent browser authority or mutation fields');
+      const history = await DocumentAiClient.attachmentHistory('attachment-1');
+      assert(history.length === 2 && history[1].status === 'APPROVED', 'history client did not parse sanitized events');
+      const historyRequest = requests[requests.length - 1];
+      assert(historyRequest.input === '/api/document-ai/attachments/attachment-1/history', 'history path is not canonical');
+      assert(historyRequest.init?.method === 'GET' && historyRequest.init?.credentials === 'include', 'history must be authenticated read-only');
+
+      invalidRejected = false;
+      try { parseDocumentAiExtractionHistory({ items: [{ ...extractionHistory[0], checksum: 'forbidden' }] }); } catch { invalidRejected = true; }
+      assert(invalidRejected, 'protected history field was accepted');
     } finally {
       globalThis.fetch = originalFetch;
     }
