@@ -243,6 +243,24 @@ jobs:
           fi
           echo "WHATSAPP-1B client source invariants: PASS"
 
+      - name: TELEMETRY-1A source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "FORCE ROW LEVEL SECURITY" drizzle/0034_telemetry_synthetic_authority.sql
+          grep -F "UNIQUE (company_id, tracker_id, source_event_id)" drizzle/0034_telemetry_synthetic_authority.sql
+          grep -F "registerTelemetryRoutes(app)" src/server/recurringRoutes.ts
+          grep -F "ODOMETER_REGRESSION" src/server/telemetryAuthority.ts
+          if grep -Fq "fetch(" src/server/telemetryAuthority.ts src/server/telemetryRoutes.ts; then
+            echo "FAIL: TELEMETRY-1A must not call a provider"
+            exit 1
+          fi
+          if grep -Eq "getPayableRepo|FinancialAuthorizationService|current_km.*UPDATE" src/server/telemetryAuthority.ts; then
+            echo "FAIL: TELEMETRY-1A must not create financial or vehicle side effects"
+            exit 1
+          fi
+          echo "TELEMETRY-1A source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -276,6 +294,7 @@ jobs:
           npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
           npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
           npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+          npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
