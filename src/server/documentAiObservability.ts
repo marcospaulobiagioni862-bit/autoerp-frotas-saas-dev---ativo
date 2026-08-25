@@ -25,6 +25,18 @@ interface DocumentAiObservabilityEnvironment {
   R2_BUCKET?: string;
 }
 
+export interface DocumentAiAttachmentStatusItem {
+  attachmentId: string;
+  status: DocumentAiObservableStatus;
+  attemptCount: number;
+  failureCode: string | null;
+  updatedAt: string;
+}
+
+export interface DocumentAiAttachmentStatusSnapshot {
+  items: DocumentAiAttachmentStatusItem[];
+}
+
 export interface DocumentAiObservabilitySnapshot {
   runtime: {
     mode: DocumentAiRuntimeMode;
@@ -96,4 +108,45 @@ export function createDocumentAiObservabilitySnapshot(
       total: Object.values(counts).reduce((total, value) => total + value, 0),
     },
   };
+}
+
+export function createDocumentAiAttachmentStatusSnapshot(
+  rows: ReadonlyArray<{
+    attachmentId: string;
+    status: string;
+    attemptCount: number;
+    failureCode: string | null;
+    updatedAt: string;
+  }>,
+): DocumentAiAttachmentStatusSnapshot {
+  const seen = new Set<string>();
+  const items: DocumentAiAttachmentStatusItem[] = [];
+  for (const row of rows) {
+    if (
+      typeof row.attachmentId !== 'string' ||
+      !row.attachmentId ||
+      row.attachmentId.length > 120 ||
+      seen.has(row.attachmentId) ||
+      !DOCUMENT_AI_OBSERVABLE_STATUSES.includes(row.status as DocumentAiObservableStatus) ||
+      !Number.isSafeInteger(row.attemptCount) ||
+      row.attemptCount < 0 ||
+      row.attemptCount > 100 ||
+      typeof row.updatedAt !== 'string' ||
+      !row.updatedAt
+    ) continue;
+    const failureCode =
+      row.failureCode === null ||
+      (typeof row.failureCode === 'string' && /^[A-Z0-9_:-]{1,120}$/.test(row.failureCode))
+        ? row.failureCode
+        : null;
+    seen.add(row.attachmentId);
+    items.push({
+      attachmentId: row.attachmentId,
+      status: row.status as DocumentAiObservableStatus,
+      attemptCount: row.attemptCount,
+      failureCode,
+      updatedAt: row.updatedAt,
+    });
+  }
+  return { items };
 }
