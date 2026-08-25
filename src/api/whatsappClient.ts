@@ -15,6 +15,7 @@ export interface WhatsappOutboxItem {
   id: string;
   driverId: string;
   templateKey: 'DRIVER_CNH_EXPIRY';
+  templateVersion: number;
   templateParameters: {
     driverName: string;
     cnhExpiration: string;
@@ -81,7 +82,7 @@ export function parseWhatsappConsent(value: unknown): WhatsappConsent {
 
 export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
   const item = exactRecord(value, [
-    'id', 'driverId', 'templateKey', 'templateParameters', 'referenceType',
+    'id', 'driverId', 'templateKey', 'templateVersion', 'templateParameters', 'referenceType',
     'referenceId', 'status', 'cancellationReason', 'createdAt', 'updatedAt',
     'cancelledAt', 'providerCallApplied',
   ]);
@@ -90,6 +91,7 @@ export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
     typeof item.id !== 'string' || !OUTBOX_ID.test(item.id) ||
     typeof item.driverId !== 'string' ||
     item.templateKey !== 'DRIVER_CNH_EXPIRY' ||
+    typeof item.templateVersion !== 'number' || !Number.isInteger(item.templateVersion) || item.templateVersion < 1 ||
     typeof parameters.driverName !== 'string' ||
     typeof parameters.cnhExpiration !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}$/.test(parameters.cnhExpiration) ||
@@ -103,6 +105,7 @@ export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
     id: item.id,
     driverId: item.driverId,
     templateKey: item.templateKey,
+    templateVersion: item.templateVersion,
     templateParameters: {
       driverName: parameters.driverName,
       cnhExpiration: parameters.cnhExpiration,
