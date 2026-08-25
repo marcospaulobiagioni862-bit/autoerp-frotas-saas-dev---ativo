@@ -243,6 +243,21 @@ jobs:
           fi
           echo "WHATSAPP-1B client source invariants: PASS"
 
+      - name: WHATSAPP-1B2 template catalog invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "ALTER TABLE whatsapp_template_catalog FORCE ROW LEVEL SECURITY" drizzle/0035_whatsapp_template_catalog.sql
+          grep -F "FOREIGN KEY (company_id, template_key, template_version)" drizzle/0035_whatsapp_template_catalog.sql
+          grep -F "CREATE TRIGGER trg_whatsapp_template_immutable" drizzle/0035_whatsapp_template_catalog.sql
+          grep -F "templateVersion: Number(row.template_version)" src/server/whatsappRoutes.ts
+          grep -F "const body = exactObject(req.body, new Set(['driverId', 'templateKey']));" src/server/whatsappRoutes.ts
+          if grep -Fq "fetch(" src/server/whatsappRoutes.ts; then
+            echo "FAIL: template catalog must not call a WhatsApp provider"
+            exit 1
+          fi
+          echo "WHATSAPP-1B2 template catalog invariants: PASS"
+
       - name: TELEMETRY-1A source invariants
         shell: bash
         run: |
