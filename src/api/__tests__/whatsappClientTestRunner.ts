@@ -24,6 +24,7 @@ const outbox: WhatsappOutboxItem = {
   id: 'wao_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   driverId: 'driver-1',
   templateKey: 'DRIVER_CNH_EXPIRY',
+  templateVersion: 1,
   templateParameters: {
     driverName: 'Motorista Sintético',
     cnhExpiration: '2035-01-15',
@@ -41,7 +42,7 @@ const outbox: WhatsappOutboxItem = {
 export class WhatsappClientTestRunner {
   static async runAllTests(): Promise<void> {
     assert(parseWhatsappConsent(consent).status === 'GRANTED', 'valid consent rejected');
-    assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
+    assert(parseWhatsappOutboxItem(outbox).templateVersion === 1, 'immutable template version rejected');
 
     let rejected = false;
     try {
@@ -53,11 +54,11 @@ export class WhatsappClientTestRunner {
 
     rejected = false;
     try {
-      parseWhatsappOutboxItem({ ...outbox, providerCallApplied: true });
+      parseWhatsappOutboxItem({ ...outbox, templateVersion: 0 });
     } catch {
       rejected = true;
     }
-    assert(rejected, 'provider-applied item accepted while provider is disabled');
+    assert(rejected, 'invalid immutable template version accepted');
 
     const originalFetch = globalThis.fetch;
     const requests: Array<{ input: string; init?: RequestInit }> = [];
