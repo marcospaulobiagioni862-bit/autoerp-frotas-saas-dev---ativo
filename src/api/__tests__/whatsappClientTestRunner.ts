@@ -2,8 +2,10 @@ import {
   WhatsappClient,
   parseWhatsappConsent,
   parseWhatsappOutboxItem,
+  parseWhatsappTaskProposal,
   type WhatsappConsent,
   type WhatsappOutboxItem,
+  type WhatsappTaskProposal,
 } from '../whatsappClient';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -38,10 +40,25 @@ const outbox: WhatsappOutboxItem = {
   providerCallApplied: false,
 };
 
+const proposal: WhatsappTaskProposal = {
+  id: 'wrp_11111111111111111111111111111111',
+  webhookEventId: 'wwe_11111111111111111111111111111111',
+  outboxId: outbox.id,
+  driverId: 'driver-1',
+  replyCategory: 'PAYMENT_QUESTION',
+  status: 'PENDING',
+  taskId: null,
+  reviewedAt: null,
+  createdAt: '2026-08-25T10:00:00.000Z',
+  rawReplyPersisted: false,
+  businessMutationApplied: false,
+};
+
 export class WhatsappClientTestRunner {
   static async runAllTests(): Promise<void> {
     assert(parseWhatsappConsent(consent).status === 'GRANTED', 'valid consent rejected');
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
+    assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
 
     let rejected = false;
     try {
@@ -59,11 +76,31 @@ export class WhatsappClientTestRunner {
     }
     assert(rejected, 'provider-applied item accepted while provider is disabled');
 
+    rejected = false;
+    try {
+      parseWhatsappTaskProposal({ ...proposal, replyText: 'conteúdo proibido' });
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, 'raw WhatsApp reply was accepted by client parser');
+
     const originalFetch = globalThis.fetch;
     const requests: Array<{ input: string; init?: RequestInit }> = [];
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input).includes('/task-proposals/') && init?.method === 'POST') {
+          return new Response(JSON.stringify({ item: { ...proposal, status: 'APPROVED', taskId: 'task-1', reviewedAt: '2026-08-25T10:05:00.000Z' }, replay: false }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (String(input).endsWith('/api/whatsapp/task-proposals')) {
+          return new Response(JSON.stringify({ items: [proposal, { ...proposal, id: 'wrp_22222222222222222222222222222222', driverId: 'driver-2' }] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
         if (String(input).includes('/consents/') && init?.method === 'PUT') {
           return new Response(JSON.stringify({ item: consent, changed: true, cancelledHeldItems: 0 }), {
             status: 200,
@@ -108,6 +145,27 @@ export class WhatsappClientTestRunner {
       const listed = await WhatsappClient.listForDriver('driver-1');
       assert(listed.length === 1 && listed[0].driverId === 'driver-1', 'driver outbox filter failed');
       assert(requests[3].init?.credentials === 'include', 'outbox list omitted session');
+
+      const proposals = await WhatsappClient.listTaskProposalsForDriver('driver-1');
+      assert(proposals.length === 1 && proposals[0].driverId === 'driver-1', 'task proposal driver filter failed');
+      assert(requests[4].init?.method === undefined && requests[4].init?.credentials === 'include', 'task proposal list is not authenticated GET');
+
+      const reviewed = await WhatsappClient.reviewTaskProposal(proposal.id, 'APPROVE', '  Criar tarefa humana  ');
+      assert(reviewed.item.status === 'APPROVED' && reviewed.item.taskId === 'task-1', 'task proposal review response rejected');
+      const reviewRequest = requests[5];
+      const reviewBody = JSON.parse(String(reviewRequest.init?.body));
+      assert(Object.keys(reviewBody).join(',') === 'decision,reason', 'task proposal review sent browser authority fields');
+      assert(reviewBody.decision === 'APPROVE' && reviewBody.reason === 'Criar tarefa humana', 'task proposal review payload was not normalized');
+      assert(reviewRequest.init?.credentials === 'include', 'task proposal review omitted session');
+
+      const beforeInvalidReview = requests.length;
+      let invalidReviewRejected = false;
+      try {
+        await WhatsappClient.reviewTaskProposal(proposal.id, 'APPROVE', ' ');
+      } catch {
+        invalidReviewRejected = true;
+      }
+      assert(invalidReviewRejected && requests.length === beforeInvalidReview, 'empty review reason reached the server');
     } finally {
       globalThis.fetch = originalFetch;
     }

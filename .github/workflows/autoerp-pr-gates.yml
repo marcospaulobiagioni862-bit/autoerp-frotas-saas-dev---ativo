@@ -318,6 +318,21 @@ jobs:
           fi
           echo "WHATSAPP-1E human-reviewed task proposal invariants: PASS"
 
+      - name: WHATSAPP-1E2 proposal review client invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "WhatsappClient.listTaskProposalsForDriver" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "WhatsappClient.reviewTaskProposal" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "O conteúdo bruto não é armazenado nem exibido." src/components/drivers/DriverDetailsModal.tsx
+          grep -F "exactRecord(value, [" src/api/whatsappClient.ts
+          grep -F "body: JSON.stringify({ decision, reason: cleanReason })" src/api/whatsappClient.ts
+          if grep -Eq "replyText|replyDigest|phoneE164|companyId" src/components/drivers/DriverDetailsModal.tsx; then
+            echo "FAIL: proposal review UI must not consume raw WhatsApp or tenant authority"
+            exit 1
+          fi
+          echo "WHATSAPP-1E2 proposal review client invariants: PASS"
+
       - name: TELEMETRY-1A source invariants
         shell: bash
         run: |
