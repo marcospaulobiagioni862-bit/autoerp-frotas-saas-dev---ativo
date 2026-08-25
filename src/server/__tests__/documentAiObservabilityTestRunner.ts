@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  createDocumentAiAttachmentStatusSnapshot,
   createDocumentAiObservabilitySnapshot,
   inspectDocumentAiRuntimeMode,
 } from '../documentAiObservability';
@@ -52,4 +53,57 @@ assert.equal(JSON.stringify(snapshot).includes('synthetic-test-key-not-real'), f
 assert.equal(JSON.stringify(snapshot).includes(checksum), false);
 assert.equal(JSON.stringify(snapshot).includes('/tmp/'), false);
 
-console.log('DOC-AI-1B3 read-only observability checks passed.');
+const attachmentStatuses = createDocumentAiAttachmentStatusSnapshot([
+  {
+    attachmentId: 'attachment-1',
+    status: 'FAILED',
+    attemptCount: 2,
+    failureCode: 'PROVIDER_TIMEOUT',
+    updatedAt: '2026-08-25T12:00:00.000Z',
+  },
+  {
+    attachmentId: 'attachment-1',
+    status: 'PENDING',
+    attemptCount: 1,
+    failureCode: null,
+    updatedAt: '2026-08-25T11:00:00.000Z',
+  },
+  {
+    attachmentId: 'attachment-2',
+    status: 'UNTRUSTED',
+    attemptCount: 0,
+    failureCode: null,
+    updatedAt: '2026-08-25T12:00:00.000Z',
+  },
+  {
+    attachmentId: 'attachment-3',
+    status: 'REVIEW_REQUIRED',
+    attemptCount: 1,
+    failureCode: 'unsafe failure text',
+    updatedAt: '2026-08-25T12:00:00.000Z',
+  },
+]);
+
+assert.deepEqual(attachmentStatuses, {
+  items: [
+    {
+      attachmentId: 'attachment-1',
+      status: 'FAILED',
+      attemptCount: 2,
+      failureCode: 'PROVIDER_TIMEOUT',
+      updatedAt: '2026-08-25T12:00:00.000Z',
+    },
+    {
+      attachmentId: 'attachment-3',
+      status: 'REVIEW_REQUIRED',
+      attemptCount: 1,
+      failureCode: null,
+      updatedAt: '2026-08-25T12:00:00.000Z',
+    },
+  ],
+});
+assert.equal(JSON.stringify(attachmentStatuses).includes('companyId'), false);
+assert.equal(JSON.stringify(attachmentStatuses).includes('checksum'), false);
+assert.equal(JSON.stringify(attachmentStatuses).includes('provider'), false);
+
+console.log('DOC-AI read-only observability and attachment status checks passed.');
