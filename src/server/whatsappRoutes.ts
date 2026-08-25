@@ -97,6 +97,12 @@ function asObject(value: unknown): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function asStringArray(value: unknown): string[] {
+  const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) throw new Error('Invalid persisted WhatsApp template schema');
+  return parsed;
+}
+
 function consentRecord(row: Record<string, unknown>): Record<string, unknown> {
   return {
     driverId: String(row.driver_id),
@@ -114,6 +120,7 @@ function outboxRecord(row: Record<string, unknown>): Record<string, unknown> {
     id: String(row.id),
     driverId: String(row.driver_id),
     templateKey: String(row.template_key),
+    templateVersion: Number(row.template_version),
     templateParameters: asObject(row.template_parameters),
     referenceType: String(row.reference_type),
     referenceId: String(row.reference_id),
@@ -316,6 +323,21 @@ export function registerWhatsappRoutes(app: Express): void {
         const cnhExpiration = String(driver.cnh_expiration || '').slice(0, 10);
         if (!driverName || !/^\d{4}-\d{2}-\d{2}$/.test(cnhExpiration)) throw new WhatsappValidationError();
         const parameters = { driverName, cnhExpiration };
+        const template = rows(await tx.execute(sql`
+          SELECT template_key, version, parameter_keys
+          FROM whatsapp_template_catalog
+          WHERE company_id = ${principal.companyId}
+            AND template_key = ${TEMPLATE_KEY}
+            AND status = 'ACTIVE'
+          ORDER BY version DESC
+          LIMIT 1
+          FOR SHARE
+        `))[0];
+        if (!template) throw new WhatsappValidationError();
+        const parameterKeys = asStringArray(template.parameter_keys).sort();
+        if (JSON.stringify(parameterKeys) !== JSON.stringify(Object.keys(parameters).sort())) throw new Error('WhatsApp template parameter schema mismatch');
+        const templateVersion = Number(template.version);
+        if (!Number.isInteger(templateVersion) || templateVersion < 1) throw new Error('Invalid WhatsApp template version');
         const consentGrantedAt = asIso(consent.granted_at);
         if (!consentGrantedAt) throw new WhatsappConsentRequiredError();
         const material = JSON.stringify({
@@ -323,6 +345,7 @@ export function registerWhatsappRoutes(app: Express): void {
           driverId,
           phone,
           templateKey: TEMPLATE_KEY,
+          templateVersion,
           parameters,
           consentGrantedAt,
         });
@@ -331,11 +354,11 @@ export function registerWhatsappRoutes(app: Express): void {
         const now = new Date().toISOString();
         const inserted = rows(await tx.execute(sql`
           INSERT INTO whatsapp_outbox (
-            id, company_id, driver_id, phone_e164, template_key, template_parameters,
+            id, company_id, driver_id, phone_e164, template_key, template_version, template_parameters,
             reference_type, reference_id, idempotency_key, status, requested_by,
             created_at, updated_at
           ) VALUES (
-            ${id}, ${principal.companyId}, ${driverId}, ${phone}, ${TEMPLATE_KEY},
+            ${id}, ${principal.companyId}, ${driverId}, ${phone}, ${TEMPLATE_KEY}, ${templateVersion},
             ${JSON.stringify(parameters)}::jsonb, 'DRIVER', ${driverId}, ${idempotencyKey},
             'HELD_PROVIDER_DISABLED', ${principal.userId}, ${now}, ${now}
           )
@@ -353,6 +376,7 @@ export function registerWhatsappRoutes(app: Express): void {
               event: 'WHATSAPP_OUTBOX_HELD',
               driverId,
               templateKey: TEMPLATE_KEY,
+              templateVersion,
               status: 'HELD_PROVIDER_DISABLED',
               phoneLast4: phone.slice(-4),
               providerCallApplied: false,
