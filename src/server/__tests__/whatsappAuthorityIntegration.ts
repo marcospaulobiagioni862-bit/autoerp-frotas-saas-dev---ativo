@@ -34,6 +34,12 @@ export class WhatsappAuthorityIntegrationRunner {
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
+      INSERT INTO whatsapp_template_catalog (company_id, template_key, version, status, body_text, parameter_keys) VALUES
+        (${companyA}, 'DRIVER_CNH_EXPIRY', 1, 'ACTIVE', 'Olá {{driverName}}, sua CNH vence em {{cnhExpiration}}.', '["driverName","cnhExpiration"]'::jsonb),
+        (${companyB}, 'DRIVER_CNH_EXPIRY', 1, 'ACTIVE', 'Olá {{driverName}}, sua CNH vence em {{cnhExpiration}}.', '["driverName","cnhExpiration"]'::jsonb)
+      ON CONFLICT (company_id, template_key, version) DO NOTHING
+    `);
+    await db.execute(sql`
       INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at) VALUES
         (${adminAId}, ${companyA}, 'WhatsApp Admin A', 'whatsapp-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
         (${adminBId}, ${companyB}, 'WhatsApp Admin B', 'whatsapp-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
@@ -188,6 +194,7 @@ export class WhatsappAuthorityIntegrationRunner {
       const replay = concurrentPayloads.find((item) => item.created === false);
       assert.ok(created && replay);
       assert.equal(created.item.status, 'HELD_PROVIDER_DISABLED');
+      assert.equal(created.item.templateVersion, 1, 'outbox must persist selected template version');
       assert.equal(created.item.providerCallApplied, false);
       assert.equal(created.item.templateParameters.driverName, 'Motorista WhatsApp Sintético A');
       assert.equal(created.item.templateParameters.cnhExpiration, '2035-01-15');
@@ -262,6 +269,39 @@ export class WhatsappAuthorityIntegrationRunner {
       assert.equal(response.status, 201, 'a new explicit consent cycle must permit a new held item');
       const afterRegrant = await responseJson(response);
       assert.notEqual(afterRegrant.item.id, created.item.id, 'revoked item must never be resurrected');
+      assert.equal(afterRegrant.item.templateVersion, 1);
+
+      let immutableRejected = false;
+      try {
+        await UnitOfWork.run(companyA, async (context: any) => {
+          await context.getRawTransaction().execute(sql`
+            UPDATE whatsapp_template_catalog
+            SET body_text = 'conteúdo adulterado'
+            WHERE company_id = ${companyA} AND template_key = 'DRIVER_CNH_EXPIRY' AND version = 1
+          `);
+        });
+      } catch { immutableRejected = true; }
+      assert.equal(immutableRejected, true, 'published template content must be immutable');
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.execute(sql`UPDATE whatsapp_template_catalog SET status='INACTIVE',updated_at=NOW() WHERE company_id=${companyA} AND template_key='DRIVER_CNH_EXPIRY' AND version=1`);
+      });
+      response = await request('/api/whatsapp/outbox', { method: 'POST', body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }) }, adminA);
+      assert.equal(response.status, 400, 'inactive template must fail closed');
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        await context.getRawTransaction().execute(sql`
+          INSERT INTO whatsapp_template_catalog(company_id,template_key,version,status,body_text,parameter_keys)
+          VALUES(${companyA},'DRIVER_CNH_EXPIRY',2,'ACTIVE','Versão 2: {{driverName}} / {{cnhExpiration}}','["driverName","cnhExpiration"]'::jsonb)
+        `);
+      });
+      response = await request('/api/whatsapp/outbox', { method: 'POST', body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }) }, adminA);
+      assert.equal(response.status, 201, 'new active version must create a distinct held item');
+      const versionTwo = await responseJson(response);
+      assert.equal(versionTwo.item.templateVersion, 2);
+      const versions = await UnitOfWork.run(companyA, async (context: any) => resultRows(await context.getRawTransaction().execute(sql`SELECT template_version FROM whatsapp_outbox WHERE company_id=${companyA} ORDER BY template_version`)));
+      assert.ok(versions.some((row) => Number(row.template_version) === 1) && versions.some((row) => Number(row.template_version) === 2), 'catalog evolution rewrote prior outbox version');
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
