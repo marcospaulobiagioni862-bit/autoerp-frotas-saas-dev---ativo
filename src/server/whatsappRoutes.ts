@@ -16,6 +16,13 @@ import {
   WhatsappWebhookValidationError,
   type WhatsappWebhookEventType,
 } from './whatsappWebhookAuthority';
+import {
+  WhatsappInboundProposalConflictError,
+  WhatsappInboundProposalForbiddenError,
+  WhatsappInboundProposalNotFoundError,
+  WhatsappInboundProposalValidationError,
+  WhatsappInboundTaskProposalAuthority,
+} from './whatsappInboundTaskProposalAuthority';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -187,6 +194,22 @@ function sendError(res: Response, error: unknown): void {
     res.status(409).json({ error: 'WhatsApp webhook conflict' });
     return;
   }
+  if (error instanceof WhatsappInboundProposalValidationError) {
+    res.status(400).json({ error: 'Invalid WhatsApp task proposal' });
+    return;
+  }
+  if (error instanceof WhatsappInboundProposalNotFoundError) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  if (error instanceof WhatsappInboundProposalForbiddenError) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+  if (error instanceof WhatsappInboundProposalConflictError) {
+    res.status(409).json({ error: 'WhatsApp task proposal conflict' });
+    return;
+  }
   if (error instanceof WhatsappValidationError) {
     res.status(400).json({ error: 'Invalid WhatsApp request' });
     return;
@@ -206,7 +229,7 @@ function sendError(res: Response, error: unknown): void {
 export function registerWhatsappRoutes(app: Express): void {
   app.post('/api/whatsapp/webhooks/synthetic', async (req: Request, res: Response) => {
     try {
-      const body = exactObject(req.body, new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt']));
+      const body = exactObject(req.body, new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt', 'replyText']));
       const verified = WhatsappWebhookAuthority.verify({
         companyId: req.header('x-autoerp-company-id'),
         timestamp: req.header('x-autoerp-whatsapp-timestamp'),
@@ -219,8 +242,41 @@ export function registerWhatsappRoutes(app: Express): void {
         outboxId: body.outboxId as string,
         eventType: body.eventType as WhatsappWebhookEventType,
         occurredAt: body.occurredAt as string,
+        replyText: body.replyText as string | undefined,
       });
       res.status(result.created ? 202 : 200).json({ accepted: true, created: result.created, item: result.item });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/whatsapp/task-proposals', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res);
+    if (!principal) return;
+    try {
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const items = await WhatsappInboundTaskProposalAuthority.list(
+        principal,
+        status as 'PENDING' | 'APPROVED' | 'REJECTED' | undefined,
+      );
+      res.json({ items });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/whatsapp/task-proposals/:proposalId/review', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const body = exactObject(req.body, new Set(['decision', 'reason']));
+      const result = await WhatsappInboundTaskProposalAuthority.review(
+        principal,
+        String(req.params.proposalId || ''),
+        body.decision as 'APPROVE' | 'REJECT',
+        body.reason as string,
+      );
+      res.status(result.replay ? 200 : 201).json(result);
     } catch (error) {
       sendError(res, error);
     }

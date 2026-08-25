@@ -287,7 +287,7 @@ jobs:
           grep -F "ON CONFLICT (company_id,nonce) DO NOTHING" src/server/whatsappWebhookAuth.ts
           grep -F "ON CONFLICT (company_id,provider_event_id) DO NOTHING" src/server/whatsappWebhookAuthority.ts
           grep -F "/api/whatsapp/webhooks/synthetic" src/server/whatsappRoutes.ts
-          grep -F "new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt'])" src/server/whatsappRoutes.ts
+          grep -F "new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt', 'replyText'])" src/server/whatsappRoutes.ts
           if grep -R -F "WHATSAPP_SYNTHETIC_WEBHOOK_KEYS_JSON" src --exclude='whatsappWebhookAuth.ts' --exclude='whatsappWebhookAuthIntegration.ts'; then
             echo "FAIL: WhatsApp webhook secrets must remain in the dedicated server boundary"
             exit 1
@@ -297,6 +297,26 @@ jobs:
             exit 1
           fi
           echo "WHATSAPP-1D authenticated webhook invariants: PASS"
+
+      - name: WHATSAPP-1E human-reviewed task proposal invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "ALTER TABLE whatsapp_inbound_task_proposals FORCE ROW LEVEL SECURITY" drizzle/0039_whatsapp_inbound_task_proposals.sql
+          grep -F "UNIQUE (company_id, webhook_event_id)" drizzle/0039_whatsapp_inbound_task_proposals.sql
+          grep -F "rawReplyPersisted: false" src/server/whatsappInboundTaskProposalAuthority.ts
+          grep -F "OperationalAuthorityService.createTask" src/server/whatsappInboundTaskProposalAuthority.ts
+          grep -F "/api/whatsapp/task-proposals/:proposalId/review" src/server/whatsappRoutes.ts
+          grep -F "new Set(['decision', 'reason'])" src/server/whatsappRoutes.ts
+          if grep -Fq "reply_text" drizzle/0039_whatsapp_inbound_task_proposals.sql; then
+            echo "FAIL: raw WhatsApp reply text must not be persisted"
+            exit 1
+          fi
+          if grep -Eq "account_payables|contracts|vehicle_documents|UPDATE[[:space:]]+vehicles" src/server/whatsappInboundTaskProposalAuthority.ts; then
+            echo "FAIL: WhatsApp reply review must not mutate protected business records"
+            exit 1
+          fi
+          echo "WHATSAPP-1E human-reviewed task proposal invariants: PASS"
 
       - name: TELEMETRY-1A source invariants
         shell: bash
@@ -515,6 +535,9 @@ jobs:
 
       - name: WhatsApp webhook authentication regression
         run: npx tsx src/server/__tests__/whatsappWebhookAuthIntegration.ts
+
+      - name: WhatsApp inbound task proposal regression
+        run: npx tsx src/server/__tests__/whatsappInboundTaskProposalIntegration.ts
 
       - name: WhatsApp consent and outbox authority regression
         run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
