@@ -276,6 +276,28 @@ jobs:
           fi
           echo "WHATSAPP-1C1 dispatch policy invariants: PASS"
 
+      - name: WHATSAPP-1D authenticated webhook invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "CONSTRAINT uq_whatsapp_webhook_nonce UNIQUE (company_id, nonce)" drizzle/0038_whatsapp_webhook_replay.sql
+          grep -F "ALTER TABLE whatsapp_webhook_events FORCE ROW LEVEL SECURITY" drizzle/0038_whatsapp_webhook_replay.sql
+          grep -F "createHmac('sha256'" src/server/whatsappWebhookAuth.ts
+          grep -F "timingSafeEqual" src/server/whatsappWebhookAuth.ts
+          grep -F "ON CONFLICT (company_id,nonce) DO NOTHING" src/server/whatsappWebhookAuth.ts
+          grep -F "ON CONFLICT (company_id,provider_event_id) DO NOTHING" src/server/whatsappWebhookAuthority.ts
+          grep -F "/api/whatsapp/webhooks/synthetic" src/server/whatsappRoutes.ts
+          grep -F "new Set(['providerEventId', 'outboxId', 'eventType', 'occurredAt'])" src/server/whatsappRoutes.ts
+          if grep -R -F "WHATSAPP_SYNTHETIC_WEBHOOK_KEYS_JSON" src --exclude='whatsappWebhookAuth.ts' --exclude='whatsappWebhookAuthIntegration.ts'; then
+            echo "FAIL: WhatsApp webhook secrets must remain in the dedicated server boundary"
+            exit 1
+          fi
+          if grep -Eq "UPDATE[[:space:]]+whatsapp_outbox|account_payables|contracts|vehicle_documents" src/server/whatsappWebhookAuth.ts src/server/whatsappWebhookAuthority.ts; then
+            echo "FAIL: synthetic WhatsApp webhook must not apply business effects"
+            exit 1
+          fi
+          echo "WHATSAPP-1D authenticated webhook invariants: PASS"
+
       - name: TELEMETRY-1A source invariants
         shell: bash
         run: |
@@ -490,6 +512,9 @@ jobs:
 
       - name: WhatsApp dispatch policy regression
         run: npx tsx src/server/__tests__/whatsappDispatchPolicyTestRunner.ts
+
+      - name: WhatsApp webhook authentication regression
+        run: npx tsx src/server/__tests__/whatsappWebhookAuthIntegration.ts
 
       - name: WhatsApp consent and outbox authority regression
         run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
