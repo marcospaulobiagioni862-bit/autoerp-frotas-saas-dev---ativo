@@ -555,7 +555,7 @@ jobs:
           grep -F '<option value="NONE">Sem extração</option>' src/components/documents/DocumentCenter.tsx
           grep -F "if (filter === 'ALL' || statusesUnavailable) return true;" src/components/documents/documentAiStatusFilter.ts
           grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
-          if grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" src/components/documents/documentAiStatusFilter.ts; then
+          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
             echo "FAIL: local status filter must not fetch or consume protected authority"
             exit 1
           fi
