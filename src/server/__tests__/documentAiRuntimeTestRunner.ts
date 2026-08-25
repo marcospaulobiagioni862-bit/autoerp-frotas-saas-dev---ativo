@@ -76,7 +76,10 @@ const runtime = createDocumentAiRuntimeFromEnvironment(baseEnvironment, {
     assert.equal(companyId, 'company-synthetic');
     assert.equal(workerId, 'worker-synthetic');
     assert.equal(selectedProvider, provider);
-    assert.deepEqual(await reader.read(companyId, `${companyId}/attachment-synthetic`), bytes);
+    assert.deepEqual(
+      Array.from(await reader.read(companyId, `${companyId}/attachment-synthetic`)),
+      Array.from(bytes),
+    );
     return { id: 'extraction-synthetic', status: 'REVIEW_REQUIRED' };
   },
 });
