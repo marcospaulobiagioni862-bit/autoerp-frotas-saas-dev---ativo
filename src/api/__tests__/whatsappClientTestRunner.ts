@@ -3,9 +3,11 @@ import {
   parseWhatsappConsent,
   parseWhatsappOutboxItem,
   parseWhatsappTaskProposal,
+  parseWhatsappObservabilitySummary,
   type WhatsappConsent,
   type WhatsappOutboxItem,
   type WhatsappTaskProposal,
+  type WhatsappObservabilitySummary,
 } from '../whatsappClient';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -40,6 +42,18 @@ const outbox: WhatsappOutboxItem = {
   providerCallApplied: false,
 };
 
+
+const observability: WhatsappObservabilitySummary = {
+  generatedAt: '2026-08-25T10:00:00.000Z',
+  windowDays: 30,
+  windowStartAt: '2026-07-26T10:00:00.000Z',
+  outbox: { total: 2, heldProviderDisabled: 1, cancelled: 1 },
+  webhookEvents: { total: 0, sent: 0, delivered: 0, read: 0, failed: 0, repliesReceived: 0 },
+  taskProposals: { total: 1, pending: 1, approved: 0, rejected: 0, oldestPendingCreatedAt: '2026-08-25T09:00:00.000Z' },
+  providerEnabled: false,
+  automaticBusinessMutationApplied: false,
+};
+
 const proposal: WhatsappTaskProposal = {
   id: 'wrp_11111111111111111111111111111111',
   webhookEventId: 'wwe_11111111111111111111111111111111',
@@ -59,6 +73,7 @@ export class WhatsappClientTestRunner {
     assert(parseWhatsappConsent(consent).status === 'GRANTED', 'valid consent rejected');
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
     assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
+    assert(parseWhatsappObservabilitySummary(observability).providerEnabled === false, 'sanitized observability rejected');
 
     let rejected = false;
     try {
@@ -89,6 +104,9 @@ export class WhatsappClientTestRunner {
     try {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         requests.push({ input: String(input), init });
+        if (String(input).includes('/api/whatsapp/observability?')) {
+          return new Response(JSON.stringify({ item: observability }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }
         if (String(input).includes('/task-proposals/') && init?.method === 'POST') {
           return new Response(JSON.stringify({ item: { ...proposal, status: 'APPROVED', taskId: 'task-1', reviewedAt: '2026-08-25T10:05:00.000Z' }, replay: false }), {
             status: 201,
@@ -166,6 +184,17 @@ export class WhatsappClientTestRunner {
         invalidReviewRejected = true;
       }
       assert(invalidReviewRejected && requests.length === beforeInvalidReview, 'empty review reason reached the server');
+
+      const summary = await WhatsappClient.getObservability(30);
+      assert(summary.outbox.total === 2 && summary.providerEnabled === false, 'observability client rejected safe aggregate');
+      const observabilityRequest = requests[6];
+      assert(observabilityRequest.input.endsWith('/api/whatsapp/observability?windowDays=30'), 'observability query is not allowlisted');
+      assert(observabilityRequest.init?.method === undefined && observabilityRequest.init?.credentials === 'include', 'observability must be authenticated GET');
+
+      rejected = false;
+      try { parseWhatsappObservabilitySummary({ ...observability, tenantId: 'forbidden' }); } catch { rejected = true; }
+      assert(rejected, 'sensitive observability field was accepted');
+
     } finally {
       globalThis.fetch = originalFetch;
     }
