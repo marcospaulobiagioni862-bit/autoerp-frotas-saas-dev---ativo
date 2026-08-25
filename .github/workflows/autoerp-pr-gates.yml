@@ -561,6 +561,21 @@ jobs:
           fi
           echo "DOC-AI-1B7 client-side status filter invariants: PASS"
 
+      - name: DOC-AI-1B8 sanitized status count invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "createDocumentAiStatusCounts(" src/components/documents/documentAiStatusFilter.ts
+          grep -F "baseFilteredAttachments.map((attachment) => attachment.id)" src/components/documents/DocumentCenter.tsx
+          grep -F "NONE: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
+          grep -F "Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})" src/components/documents/DocumentCenter.tsx
+          grep -F "unavailable status data must never be represented as zero" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
+          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
+            echo "FAIL: local status counts must not fetch or consume protected authority"
+            exit 1
+          fi
+          echo "DOC-AI-1B8 sanitized status count invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
