@@ -46,6 +46,18 @@ export interface WhatsappOutboxItem {
   providerCallApplied: false;
 }
 
+
+export interface WhatsappObservabilitySummary {
+  generatedAt: string;
+  windowDays: 7 | 30 | 90 | 365;
+  windowStartAt: string;
+  outbox: { total: number; heldProviderDisabled: number; cancelled: number };
+  webhookEvents: { total: number; sent: number; delivered: number; read: number; failed: number; repliesReceived: number };
+  taskProposals: { total: number; pending: number; approved: number; rejected: number; oldestPendingCreatedAt: string | null };
+  providerEnabled: false;
+  automaticBusinessMutationApplied: false;
+}
+
 type JsonRecord = Record<string, unknown>;
 const OUTBOX_ID = /^wao_[a-f0-9]{32}$/;
 const PROPOSAL_ID = /^wrp_[a-f0-9]{32}$/;
@@ -171,6 +183,43 @@ export function parseWhatsappTaskProposal(value: unknown): WhatsappTaskProposal 
   };
 }
 
+
+export function parseWhatsappObservabilitySummary(value: unknown): WhatsappObservabilitySummary {
+  const item = exactRecord(value, [
+    'generatedAt', 'windowDays', 'windowStartAt', 'outbox', 'webhookEvents', 'taskProposals',
+    'providerEnabled', 'automaticBusinessMutationApplied',
+  ]);
+  const outbox = exactRecord(item.outbox, ['total', 'heldProviderDisabled', 'cancelled']);
+  const webhookEvents = exactRecord(item.webhookEvents, ['total', 'sent', 'delivered', 'read', 'failed', 'repliesReceived']);
+  const taskProposals = exactRecord(item.taskProposals, ['total', 'pending', 'approved', 'rejected', 'oldestPendingCreatedAt']);
+  const counts = [
+    outbox.total, outbox.heldProviderDisabled, outbox.cancelled,
+    webhookEvents.total, webhookEvents.sent, webhookEvents.delivered, webhookEvents.read, webhookEvents.failed, webhookEvents.repliesReceived,
+    taskProposals.total, taskProposals.pending, taskProposals.approved, taskProposals.rejected,
+  ];
+  if (
+    !new Set([7, 30, 90, 365]).has(item.windowDays) ||
+    counts.some((count) => typeof count !== 'number' || !Number.isInteger(count) || count < 0) ||
+    outbox.heldProviderDisabled + outbox.cancelled !== outbox.total ||
+    webhookEvents.sent + webhookEvents.delivered + webhookEvents.read + webhookEvents.failed + webhookEvents.repliesReceived !== webhookEvents.total ||
+    taskProposals.pending + taskProposals.approved + taskProposals.rejected !== taskProposals.total ||
+    item.providerEnabled !== false || item.automaticBusinessMutationApplied !== false
+  ) invalid();
+  return {
+    generatedAt: requiredIso(item.generatedAt),
+    windowDays: item.windowDays as 7 | 30 | 90 | 365,
+    windowStartAt: requiredIso(item.windowStartAt),
+    outbox: outbox as WhatsappObservabilitySummary['outbox'],
+    webhookEvents: webhookEvents as WhatsappObservabilitySummary['webhookEvents'],
+    taskProposals: {
+      ...(taskProposals as Omit<WhatsappObservabilitySummary['taskProposals'], 'oldestPendingCreatedAt'>),
+      oldestPendingCreatedAt: nullableIso(taskProposals.oldestPendingCreatedAt),
+    },
+    providerEnabled: false,
+    automaticBusinessMutationApplied: false,
+  };
+}
+
 async function responseError(response: Response): Promise<Error> {
   let message = `Falha na autoridade de WhatsApp (${response.status}).`;
   try {
@@ -224,6 +273,16 @@ export class WhatsappClient {
     const payload = exactRecord(await response.json(), ['item', 'created']);
     if (typeof payload.created !== 'boolean') invalid();
     return { item: parseWhatsappOutboxItem(payload.item), created: payload.created };
+  }
+
+
+  static async getObservability(windowDays: 7 | 30 | 90 | 365 = 30): Promise<WhatsappObservabilitySummary> {
+    const response = await fetch(`/api/whatsapp/observability?windowDays=${windowDays}`, {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await responseError(response);
+    return parseWhatsappObservabilitySummary(exactRecord(await response.json(), ['item']).item);
   }
 
   static async listTaskProposalsForDriver(driverId: string): Promise<WhatsappTaskProposal[]> {
