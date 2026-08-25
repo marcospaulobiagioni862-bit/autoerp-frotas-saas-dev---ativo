@@ -1,4 +1,4 @@
-import { TrackerClient,parseTelemetryEventSummary,parseTelemetryHealthSummary,type TelemetryEventSummary,type TelemetryHealthSummary } from '../trackerClient';
+import { TrackerClient,parseTelemetryEventSummary,parseTelemetryHealthSummary,parseTelemetryObservabilitySummary,type TelemetryEventSummary,type TelemetryHealthSummary,type TelemetryObservabilitySummary } from '../trackerClient';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
 
@@ -18,12 +18,19 @@ const health:TelemetryHealthSummary={
   trackerId:'tracker/synthetic',healthStatus:'ATTENTION',lastCommunicationAt:'2026-08-25T02:00:01.000Z',
   lastAcceptedEventAt:'2026-08-25T02:00:01.000Z',latestAcceptedEventType:'HEARTBEAT',lastAcceptedOdometerKm:1000,quarantinedLast24h:1,
 };
+const observability:TelemetryObservabilitySummary={
+  trackerId:'tracker/synthetic',retentionDays:90,generatedAt:'2026-08-25T03:00:00.000Z',retentionCutoffAt:'2026-05-27T03:00:00.000Z',
+  totalEvents:2,acceptedEvents:1,quarantinedEvents:1,pendingReviewEvents:1,retentionEligibleEvents:0,
+  oldestReceivedAt:'2026-08-25T02:00:01.000Z',newestReceivedAt:'2026-08-25T02:05:01.000Z',
+};
 
 async function main():Promise<void>{
   assert(parseTelemetryEventSummary(accepted).status==='ACCEPTED','accepted summary rejected');
   assert(parseTelemetryEventSummary(quarantined).reviewStatus==='PENDING','pending quarantine summary rejected');
   assert(parseTelemetryEventSummary(reviewed).reviewStatus==='ACKNOWLEDGED','reviewed quarantine summary rejected');
   assert(parseTelemetryHealthSummary(health).healthStatus==='ATTENTION','health summary rejected');
+  assert(parseTelemetryObservabilitySummary(observability).pendingReviewEvents===1,'observability summary rejected');
+  for(const unsafeObservability of [{...observability,rawPayload:{}},{...observability,companyId:'foreign-tenant'},{...observability,totalEvents:3},{...observability,retentionDays:7}]){let rejected=false;try{parseTelemetryObservabilitySummary(unsafeObservability);}catch{rejected=true;}assert(rejected,'unsafe or inconsistent observability summary accepted');}
   for(const unsafeHealth of [{...health,rawPayload:{}},{...health,companyId:'foreign-tenant'},{...health,imei:'111111111111111'},{...health,healthStatus:'NO_DATA'}]){let rejected=false;try{parseTelemetryHealthSummary(unsafeHealth);}catch{rejected=true;}assert(rejected,'unsafe or inconsistent health summary accepted');}
   for(const unsafe of [
     {...accepted,rawPayload:{latitude:-23.5,longitude:-46.6}},
@@ -40,22 +47,26 @@ async function main():Promise<void>{
     globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
       requests.push({input:String(input),init});
       const url=String(input);
-      const payload=url.endsWith('/telemetry/health')?{item:health}:url.endsWith('/review')?{item:reviewed,changed:true}:{items:[accepted,quarantined]};
+      const payload=url.endsWith('/telemetry/health')?{item:health}:url.endsWith('/telemetry/observability')?{item:observability}:url.endsWith('/review')?{item:reviewed,changed:true}:{items:[accepted,quarantined]};
       return new Response(JSON.stringify(payload),{status:200,headers:{'content-type':'application/json'}});
     }) as typeof fetch;
     const listed=await TrackerClient.listTelemetry('tracker/synthetic',200);assert(listed.length===2,'telemetry list not parsed');
     const loadedHealth=await TrackerClient.getTelemetryHealth('tracker/synthetic');assert(loadedHealth.lastAcceptedOdometerKm===1000,'derived odometer not parsed');
+    const loadedObservability=await TrackerClient.getTelemetryObservability('tracker/synthetic');assert(loadedObservability.totalEvents===2,'observability not parsed');
     const result=await TrackerClient.reviewTelemetry('tracker/synthetic','event/review','ACKNOWLEDGED','Divergência confirmada em revisão humana');assert(result.changed&&result.item.reviewStatus==='ACKNOWLEDGED','telemetry review not parsed');
-    assert(requests.length===3,'telemetry client emitted unexpected requests');
+    assert(requests.length===4,'telemetry client emitted unexpected requests');
     assert(requests[0].input==='/api/trackers/tracker%2Fsynthetic/telemetry?limit=50','tracker id or safe limit not enforced');
     assert(!requests[0].init?.method||requests[0].init?.method==='GET','telemetry list emitted a mutation');
     assert(requests[0].init?.credentials==='include'&&!requests[0].init?.body,'telemetry list sent browser authority payload');
     assert(requests[1].input==='/api/trackers/tracker%2Fsynthetic/telemetry/health','health tracker id not encoded');
     assert(!requests[1].init?.method||requests[1].init?.method==='GET','health client emitted a mutation');
     assert(requests[1].init?.credentials==='include'&&!requests[1].init?.body,'health query sent browser authority payload');
-    assert(requests[2].input==='/api/trackers/tracker%2Fsynthetic/telemetry/event%2Freview/review','review path identifiers not encoded');
-    assert(requests[2].init?.method==='POST'&&requests[2].init?.credentials==='include','review omitted authenticated POST');
-    const body=JSON.parse(String(requests[2].init?.body)) as Record<string,unknown>;
+    assert(requests[2].input==='/api/trackers/tracker%2Fsynthetic/telemetry/observability','observability tracker id not encoded');
+    assert(!requests[2].init?.method||requests[2].init?.method==='GET','observability client emitted a mutation');
+    assert(requests[2].init?.credentials==='include'&&!requests[2].init?.body,'observability query sent browser authority payload');
+    assert(requests[3].input==='/api/trackers/tracker%2Fsynthetic/telemetry/event%2Freview/review','review path identifiers not encoded');
+    assert(requests[3].init?.method==='POST'&&requests[3].init?.credentials==='include','review omitted authenticated POST');
+    const body=JSON.parse(String(requests[3].init?.body)) as Record<string,unknown>;
     assert(JSON.stringify(Object.keys(body).sort())===JSON.stringify(['decision','reason']),'review sent protected browser authority fields');
     assert(body.decision==='ACKNOWLEDGED'&&body.reason==='Divergência confirmada em revisão humana','review body changed human decision');
   }finally{globalThis.fetch=originalFetch;}
