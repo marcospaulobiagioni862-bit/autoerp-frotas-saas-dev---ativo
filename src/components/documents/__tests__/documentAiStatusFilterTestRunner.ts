@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { DocumentAiAttachmentStatus } from '../../../api/documentAiClient';
 import {
+  createDocumentAiStatusCounts,
   DOCUMENT_AI_STATUS_FILTERS,
   matchesDocumentAiStatusFilter,
 } from '../documentAiStatusFilter';
@@ -48,4 +49,34 @@ for (const filter of DOCUMENT_AI_STATUS_FILTERS) {
   );
 }
 
-console.log('PASS: document AI status filtering is deterministic and fail-open for visibility');
+assert.deepEqual(
+  createDocumentAiStatusCounts(['pending', 'failed', 'missing', 'pending'], statuses, false),
+  {
+    ALL: 3,
+    NONE: 1,
+    PENDING: 1,
+    PROCESSING: 0,
+    REVIEW_REQUIRED: 0,
+    APPROVED: 0,
+    REJECTED: 0,
+    FAILED: 1,
+  },
+  'counts must be sanitized, complete and deduplicated',
+);
+
+assert.deepEqual(
+  createDocumentAiStatusCounts(['pending', 'failed', 'missing', 'pending'], statuses, true),
+  {
+    ALL: 3,
+    NONE: null,
+    PENDING: null,
+    PROCESSING: null,
+    REVIEW_REQUIRED: null,
+    APPROVED: null,
+    REJECTED: null,
+    FAILED: null,
+  },
+  'unavailable status data must never be represented as zero',
+);
+
+console.log('PASS: document AI status filtering and counts are deterministic and fail-open for visibility');

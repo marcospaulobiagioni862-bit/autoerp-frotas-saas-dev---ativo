@@ -8,7 +8,11 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
-import { matchesDocumentAiStatusFilter, type DocumentAiStatusFilter } from './documentAiStatusFilter';
+import {
+  createDocumentAiStatusCounts,
+  matchesDocumentAiStatusFilter,
+  type DocumentAiStatusFilter,
+} from './documentAiStatusFilter';
 
 export function DocumentCenter() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -51,7 +55,7 @@ export function DocumentCenter() {
     void fetchDocuments();
   }, []);
 
-  const filteredAttachments = attachments.filter((att) => {
+  const baseFilteredAttachments = attachments.filter((att) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       att.fileName.toLowerCase().includes(term) ||
@@ -59,14 +63,22 @@ export function DocumentCenter() {
       att.entityId.toLowerCase().includes(term);
     const matchesEntity = entityTypeFilter === 'ALL' || att.entityType === entityTypeFilter;
     const matchesDoc = documentTypeFilter === 'ALL' || att.documentType === documentTypeFilter;
-    const matchesExtraction = matchesDocumentAiStatusFilter(
-      att.id,
+    return matchesSearch && matchesEntity && matchesDoc && !att.isArchived;
+  });
+  const extractionStatusCounts = createDocumentAiStatusCounts(
+    baseFilteredAttachments.map((attachment) => attachment.id),
+    attachmentStatuses,
+    attachmentStatusesUnavailable,
+  );
+  const filteredAttachments = baseFilteredAttachments.filter((attachment) =>
+    matchesDocumentAiStatusFilter(
+      attachment.id,
       extractionStatusFilter,
       attachmentStatuses,
       attachmentStatusesUnavailable,
-    );
-    return matchesSearch && matchesEntity && matchesDoc && matchesExtraction && !att.isArchived;
-  });
+    ),
+  );
+  const statusCountLabel = (count: number | null) => count === null ? '—' : String(count);
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
   const docTypes = Array.from(new Set(attachments.map((item) => item.documentType).filter((value): value is string => Boolean(value))));
@@ -112,14 +124,14 @@ export function DocumentCenter() {
                 onChange={(event) => setExtractionStatusFilter(event.target.value as DocumentAiStatusFilter)}
                 disabled={attachmentStatusesUnavailable}
               >
-                <option value="ALL">Todos os Estados</option>
-                <option value="NONE">Sem extração</option>
-                <option value="PENDING">Na fila</option>
-                <option value="PROCESSING">Processando</option>
-                <option value="REVIEW_REQUIRED">Revisão necessária</option>
-                <option value="APPROVED">Aprovada</option>
-                <option value="REJECTED">Rejeitada</option>
-                <option value="FAILED">Falhou</option>
+                <option value="ALL">Todos os Estados ({statusCountLabel(extractionStatusCounts.ALL)})</option>
+                <option value="NONE">Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})</option>
+                <option value="PENDING">Na fila ({statusCountLabel(extractionStatusCounts.PENDING)})</option>
+                <option value="PROCESSING">Processando ({statusCountLabel(extractionStatusCounts.PROCESSING)})</option>
+                <option value="REVIEW_REQUIRED">Revisão necessária ({statusCountLabel(extractionStatusCounts.REVIEW_REQUIRED)})</option>
+                <option value="APPROVED">Aprovada ({statusCountLabel(extractionStatusCounts.APPROVED)})</option>
+                <option value="REJECTED">Rejeitada ({statusCountLabel(extractionStatusCounts.REJECTED)})</option>
+                <option value="FAILED">Falhou ({statusCountLabel(extractionStatusCounts.FAILED)})</option>
               </Select>
             </div>
           </div>
