@@ -333,6 +333,24 @@ jobs:
           fi
           echo "WHATSAPP-1E2 proposal review client invariants: PASS"
 
+      - name: WHATSAPP-1F read-only observability invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "resolveWhatsappObservabilityWindowDays" src/server/whatsappObservabilityAuthority.ts
+          grep -F "/api/whatsapp/observability" src/server/whatsappRoutes.ts
+          grep -F "providerEnabled: false" src/server/whatsappObservabilityAuthority.ts
+          grep -F "automaticBusinessMutationApplied: false" src/server/whatsappObservabilityAuthority.ts
+          if grep -Eq "app\.(post|patch|put|delete).*whatsapp/observability" src/server/whatsappRoutes.ts; then
+            echo "FAIL: WhatsApp observability must remain read-only"
+            exit 1
+          fi
+          if grep -Eq "INSERT|UPDATE|DELETE|reply_digest|phone_e164|raw_payload" src/server/whatsappObservabilityAuthority.ts; then
+            echo "FAIL: WhatsApp observability must not mutate or expose protected data"
+            exit 1
+          fi
+          echo "WHATSAPP-1F read-only observability invariants: PASS"
+
       - name: TELEMETRY-1A source invariants
         shell: bash
         run: |
@@ -553,6 +571,9 @@ jobs:
 
       - name: WhatsApp inbound task proposal regression
         run: npx tsx src/server/__tests__/whatsappInboundTaskProposalIntegration.ts
+
+      - name: WhatsApp observability regression
+        run: npx tsx src/server/__tests__/whatsappObservabilityIntegration.ts
 
       - name: WhatsApp consent and outbox authority regression
         run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
