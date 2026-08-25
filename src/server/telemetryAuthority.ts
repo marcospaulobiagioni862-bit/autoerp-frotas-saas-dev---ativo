@@ -25,10 +25,14 @@ export interface TelemetryEventSummary {
 export interface IngestTelemetryEventInput { trackerId:string; sourceEventId:string; eventType:TelemetryEventType; occurredAt:string; payload:Record<string,unknown>; }
 export interface ReviewTelemetryEventInput { decision:TelemetryReviewDecision; reason:string; }
 export interface TelemetryHealthSummary { trackerId:string;healthStatus:TelemetryHealthStatus;lastCommunicationAt:string|null;lastAcceptedEventAt:string|null;latestAcceptedEventType:TelemetryEventType|null;lastAcceptedOdometerKm:number|null;quarantinedLast24h:number; }
+export interface TelemetryObservabilitySummary { trackerId:string;retentionDays:number;generatedAt:string;retentionCutoffAt:string;totalEvents:number;acceptedEvents:number;quarantinedEvents:number;pendingReviewEvents:number;retentionEligibleEvents:number;oldestReceivedAt:string|null;newestReceivedAt:string|null; }
 export class TelemetryValidationError extends Error {}
 export class TelemetryNotFoundError extends Error {}
 export class TelemetryConflictError extends Error {}
 const MAX_ODOMETER_DELTA_KM=1000;
+const DEFAULT_TELEMETRY_RETENTION_DAYS=90;
+export function resolveTelemetryRetentionDays(value:unknown):number{const parsed=typeof value==='string'&&value.trim()!==''?Number(value):Number.NaN;return Number.isInteger(parsed)&&parsed>=30&&parsed<=3650?parsed:DEFAULT_TELEMETRY_RETENTION_DAYS;}
+function safeCount(value:unknown):number{const parsed=Number(value??0);if(!Number.isInteger(parsed)||parsed<0)throw new Error('Invalid telemetry aggregate');return parsed;}
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function text(value:unknown,max:number):string{const s=typeof value==='string'?value.trim():'';if(!s||s.length>max)throw new TelemetryValidationError('Invalid telemetry field');return s;}
 function reviewReason(value:unknown):string{const result=text(value,500);if(result.length<3)throw new TelemetryValidationError('Invalid review reason');return result;}
@@ -119,4 +123,27 @@ export class TelemetryAuthorityService {
       return{trackerId:safeTrackerId,healthStatus:deriveTelemetryHealthStatus(String(tracker.status),lastCommunicationAt,quarantinedLast24h,referenceNow),lastCommunicationAt,lastAcceptedEventAt,latestAcceptedEventType,lastAcceptedOdometerKm,quarantinedLast24h};
     });
   }
+  static async observability(companyId:string,trackerId:string,referenceNow=new Date(),rawRetentionDays=process.env.TELEMETRY_RETENTION_DAYS):Promise<TelemetryObservabilitySummary>{
+    return await UnitOfWork.run(companyId,async tx=>{
+      const safeTrackerId=text(trackerId,160),tracker=await tx.getTrackerRepo().findByIdForCompany(companyId,safeTrackerId);if(!tracker)throw new TelemetryNotFoundError('Tracker not found');
+      const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Telemetry persistence unavailable');
+      const retentionDays=resolveTelemetryRetentionDays(rawRetentionDays),generatedAt=referenceNow.toISOString(),retentionCutoffAt=new Date(referenceNow.getTime()-retentionDays*24*60*60*1000).toISOString();
+      const row=rows(await raw.execute(sql`
+        SELECT
+          COUNT(*)::int AS total_events,
+          COUNT(*) FILTER (WHERE status='ACCEPTED')::int AS accepted_events,
+          COUNT(*) FILTER (WHERE status='QUARANTINED')::int AS quarantined_events,
+          COUNT(*) FILTER (WHERE status='QUARANTINED' AND review_status='PENDING')::int AS pending_review_events,
+          COUNT(*) FILTER (WHERE received_at<${retentionCutoffAt})::int AS retention_eligible_events,
+          MIN(received_at) AS oldest_received_at,
+          MAX(received_at) AS newest_received_at
+        FROM tracker_telemetry_events
+        WHERE company_id=${companyId} AND tracker_id=${safeTrackerId}
+      `))[0]||{};
+      const totalEvents=safeCount(row.total_events),acceptedEvents=safeCount(row.accepted_events),quarantinedEvents=safeCount(row.quarantined_events),pendingReviewEvents=safeCount(row.pending_review_events),retentionEligibleEvents=safeCount(row.retention_eligible_events);
+      if(acceptedEvents+quarantinedEvents!==totalEvents||pendingReviewEvents>quarantinedEvents||retentionEligibleEvents>totalEvents)throw new Error('Inconsistent telemetry aggregate');
+      return{trackerId:safeTrackerId,retentionDays,generatedAt,retentionCutoffAt,totalEvents,acceptedEvents,quarantinedEvents,pendingReviewEvents,retentionEligibleEvents,oldestReceivedAt:isoOrNull(row.oldest_received_at),newestReceivedAt:isoOrNull(row.newest_received_at)};
+    });
+  }
+
 }
