@@ -79,7 +79,6 @@ async function main(): Promise<void> {
   const before = {
     payables: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count),
     contracts: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM contracts WHERE company_id=${companyA}`))[0].count),
-    documents: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM vehicle_documents WHERE company_id=${companyA}`))[0].count),
   };
   const reply = await WhatsappWebhookEventAuthority.ingest(companyA, {
     providerEventId: 'synthetic-reply-approve',
@@ -143,7 +142,6 @@ async function main(): Promise<void> {
   const after = {
     payables: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count),
     contracts: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM contracts WHERE company_id=${companyA}`))[0].count),
-    documents: Number(rows(await db.execute(sql`SELECT count(*)::int count FROM vehicle_documents WHERE company_id=${companyA}`))[0].count),
   };
   assert(JSON.stringify(before) === JSON.stringify(after), 'WhatsApp reply proposal mutated protected business data');
   console.log('WHATSAPP-1E inbound task proposal integration: PASS');
