@@ -4,6 +4,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import {
   DocumentAiClient,
   type DocumentAiExtraction,
+  type DocumentAiObservability,
   type DocumentAiReviewInput,
 } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -49,9 +50,60 @@ function confidenceLabel(value: unknown): { text: string; className: string } {
   return { text: `${percentage}%`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
 }
 
+function runtimeDescription(mode: DocumentAiObservability['runtime']['mode']): string {
+  if (mode === 'DISABLED') return 'Processamento automático desativado';
+  if (mode === 'MISCONFIGURED') return 'Configuração incompleta';
+  return 'Pronto apenas para documentos sintéticos';
+}
+
+function DocumentAiObservabilitySummary({
+  snapshot,
+  unavailable,
+}: {
+  snapshot: DocumentAiObservability | null;
+  unavailable: boolean;
+}) {
+  if (!snapshot) {
+    return (
+      <div className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+        <p className="font-medium">Indicadores operacionais indisponíveis</p>
+        <p className="mt-1 text-xs">A fila de revisão permanece acessível; nenhuma execução foi iniciada.</p>
+      </div>
+    );
+  }
+  const counts = snapshot.counts;
+  return (
+    <section className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900" aria-label="Observabilidade documental">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">{runtimeDescription(snapshot.runtime.mode)}</p>
+          <p className="text-xs text-slate-500">Somente leitura · execução automática bloqueada</p>
+        </div>
+        <span className="text-xs text-slate-500">{counts.total} extrações registradas</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          ['Na fila', counts.PENDING],
+          ['Processando', counts.PROCESSING],
+          ['Em revisão', counts.REVIEW_REQUIRED],
+          ['Falhas', counts.FAILED],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="text-lg font-semibold text-slate-900 dark:text-white">{value}</p>
+          </div>
+        ))}
+      </div>
+      {unavailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Indicadores anteriores preservados durante uma falha temporária de atualização.</p>}
+    </section>
+  );
+}
+
 export function DocumentAiReviewPanel() {
   const { user } = useAuth();
   const [items, setItems] = useState<DocumentAiExtraction[]>([]);
+  const [observability, setObservability] = useState<DocumentAiObservability | null>(null);
+  const [observabilityUnavailable, setObservabilityUnavailable] = useState(false);
   const [selectedId, setSelectedId] = useState<string>('');
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
@@ -86,11 +138,20 @@ export function DocumentAiReviewPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [reviewRequired, failed] = await Promise.all([
+      const [reviewResult, failedResult, observabilityResult] = await Promise.allSettled([
         DocumentAiClient.list('REVIEW_REQUIRED'),
         DocumentAiClient.list('FAILED'),
+        DocumentAiClient.observability(),
       ]);
-      const next = [...reviewRequired, ...failed];
+      if (observabilityResult.status === 'fulfilled') {
+        setObservability(observabilityResult.value);
+        setObservabilityUnavailable(false);
+      } else {
+        setObservabilityUnavailable(true);
+      }
+      if (reviewResult.status === 'rejected') throw reviewResult.reason;
+      if (failedResult.status === 'rejected') throw failedResult.reason;
+      const next = [...reviewResult.value, ...failedResult.value];
       setItems(next);
       setSelectedId((current) => next.some((item) => item.id === current) ? current : (next[0]?.id || ''));
       resetDraft(next.find((item) => item.id === selectedId) || next[0] || null);
@@ -191,7 +252,9 @@ export function DocumentAiReviewPanel() {
 
   if (items.length === 0) {
     return (
-      <div className="p-6 text-center">
+      <div>
+        <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
+        <div className="p-6 text-center">
         <ShieldCheck className="h-9 w-9 mx-auto text-emerald-500 mb-2" />
         <p className="font-medium text-slate-900 dark:text-white">Nenhuma proposta ou falha pendente</p>
         <p className="text-sm text-slate-500 mt-1">Extrações futuras aparecerão aqui antes de qualquer aplicação no ERP.</p>
@@ -199,6 +262,7 @@ export function DocumentAiReviewPanel() {
           Atualizar
         </Button>
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        </div>
       </div>
     );
   }
@@ -208,7 +272,9 @@ export function DocumentAiReviewPanel() {
   const fields = Object.entries(selected.proposedFields);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] min-h-[420px]">
+    <div>
+      <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] min-h-[420px]">
       <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-3 space-y-2">
         <div className="flex items-center justify-between px-2 py-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -384,6 +450,7 @@ export function DocumentAiReviewPanel() {
           )}
         </div>
       </section>
+      </div>
     </div>
   );
 }
