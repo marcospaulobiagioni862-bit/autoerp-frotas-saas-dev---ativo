@@ -15,6 +15,7 @@ export function DocumentCenter() {
   const [searchTerm, setSearchTerm] = useState('');
   const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
   const [documentTypeFilter, setDocumentTypeFilter] = useState('ALL');
+  const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -90,7 +91,7 @@ export function DocumentCenter() {
           <h2 className="font-semibold text-lg">Revisão assistida por IA</h2>
           <p className="text-sm text-gray-500 mt-1">Confira propostas e confiança antes de registrar aprovação ou rejeição.</p>
         </div>
-        <DocumentAiReviewPanel />
+        <DocumentAiReviewPanel refreshKey={documentAiRefreshKey} />
       </Card>
 
       <Card>
@@ -101,7 +102,11 @@ export function DocumentCenter() {
           ) : error ? (
             <div className="text-center py-10 text-red-500">{error}</div>
           ) : (
-            <AttachmentList attachments={filteredAttachments} onRefresh={() => void fetchDocuments()} />
+            <AttachmentList
+              attachments={filteredAttachments}
+              onRefresh={() => void fetchDocuments()}
+              onDocumentAiRequested={() => setDocumentAiRefreshKey((current) => current + 1)}
+            />
           )}
         </div>
       </Card>
