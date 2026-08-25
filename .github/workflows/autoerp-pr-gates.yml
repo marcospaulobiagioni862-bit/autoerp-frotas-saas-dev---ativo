@@ -600,7 +600,9 @@ jobs:
           grep -F "current?.status === 'REVIEW_REQUIRED' || current?.status === 'FAILED'" src/components/documents/documentAiStatusFilter.ts
           grep -F "ACTION_REQUIRED: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
           grep -F '<option value="ACTION_REQUIRED">Ação necessária (' src/components/documents/DocumentCenter.tsx
+          grep -F "matchesDocumentAiStatusFilter('review', 'ACTION_REQUIRED', statuses, false), true" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "matchesDocumentAiStatusFilter('pending', 'ACTION_REQUIRED', statuses, false), false" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
+          grep -F "ACTION_REQUIRED: 2" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "ACTION_REQUIRED: null" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -E "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" >/dev/null; then
             echo "FAIL: consolidated action filter must not fetch or consume protected authority"
