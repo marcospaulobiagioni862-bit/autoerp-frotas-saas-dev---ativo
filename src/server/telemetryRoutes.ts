@@ -1,7 +1,7 @@
 import type { Express,Request,Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
-import { TelemetryAuthorityService,TelemetryConflictError,TelemetryNotFoundError,TelemetryValidationError,type TelemetryEventType } from './telemetryAuthority';
-type Action='VIEW_TELEMETRY'|'INGEST_TELEMETRY';
+import { TelemetryAuthorityService,TelemetryConflictError,TelemetryNotFoundError,TelemetryValidationError,type TelemetryEventType,type TelemetryReviewDecision } from './telemetryAuthority';
+type Action='VIEW_TELEMETRY'|'INGEST_TELEMETRY'|'REVIEW_TELEMETRY';
 const readRoles=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL','READONLY']);
 const writeRoles=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 function principal(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
@@ -10,6 +10,7 @@ function exact(value:unknown,allowed:string[]):Record<string,unknown>{if(!value|
 function send(res:Response,error:unknown):void{if(error instanceof TelemetryValidationError){res.status(400).json({error:'Invalid telemetry request'});return;}if(error instanceof TelemetryNotFoundError){res.status(404).json({error:'Not found'});return;}if(error instanceof TelemetryConflictError){res.status(409).json({error:'Telemetry conflict'});return;}console.error('AUTOERP_TELEMETRY_AUTHORITY_FAILURE',error);res.status(500).json({error:'Telemetry operation failed'});}
 export function registerTelemetryRoutes(app:Express):void{
   app.post('/api/telemetry/events',async(req,res)=>{const actor=requirePrincipal(req,res,'INGEST_TELEMETRY');if(!actor)return;try{const body=exact(req.body,['trackerId','sourceEventId','eventType','occurredAt','payload']);const item=await TelemetryAuthorityService.ingest(actor,{trackerId:body.trackerId as string,sourceEventId:body.sourceEventId as string,eventType:body.eventType as TelemetryEventType,occurredAt:body.occurredAt as string,payload:body.payload as Record<string,unknown>});res.status(item.created?201:200).json(item);}catch(error){send(res,error);}});
+  app.post('/api/trackers/:trackerId/telemetry/:eventId/review',async(req,res)=>{const actor=requirePrincipal(req,res,'REVIEW_TELEMETRY');if(!actor)return;try{const body=exact(req.body,['decision','reason']);res.json(await TelemetryAuthorityService.review(actor,req.params.trackerId,req.params.eventId,{decision:body.decision as TelemetryReviewDecision,reason:body.reason as string}));}catch(error){send(res,error);}});
   app.get('/api/trackers/:trackerId/telemetry/health',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{res.json({item:await TelemetryAuthorityService.health(actor.companyId,req.params.trackerId)});}catch(error){send(res,error);}});
   app.get('/api/trackers/:trackerId/telemetry',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{const raw=req.query.limit===undefined?50:Number(req.query.limit);const limit=Number.isInteger(raw)&&raw>0&&raw<=100?raw:50;res.json({items:await TelemetryAuthorityService.list(actor.companyId,req.params.trackerId,limit)});}catch(error){send(res,error);}});
 }
