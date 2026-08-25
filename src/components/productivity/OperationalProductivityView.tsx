@@ -22,13 +22,23 @@ export const OperationalProductivityView: React.FC<OperationalProductivityViewPr
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('30d');
 
   const metrics = useMemo(() => {
+    const cutoff = timeRange === 'all'
+      ? null
+      : Date.now() - (timeRange === '7d' ? 7 : 30) * 24 * 60 * 60 * 1000;
+    const withinWindow = <T extends { createdAt?: string }>(items: T[]) => {
+      if (cutoff === null) return items;
+      return items.filter((item) => {
+        const createdAt = new Date(item.createdAt ?? '').getTime();
+        return Number.isFinite(createdAt) && createdAt >= cutoff;
+      });
+    };
     return OperationalProductivityService.calculateMetrics({
       companyId,
-      tasks,
-      incidents,
-      pendings,
+      tasks: withinWindow(tasks),
+      incidents: withinWindow(incidents),
+      pendings: withinWindow(pendings),
     });
-  }, [companyId, tasks, incidents, pendings]);
+  }, [companyId, tasks, incidents, pendings, timeRange]);
 
   return (
     <div className="space-y-6">
