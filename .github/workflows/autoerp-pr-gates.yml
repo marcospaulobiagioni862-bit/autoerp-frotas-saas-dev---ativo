@@ -586,7 +586,7 @@ jobs:
           grep -F "REVIEW_REQUIRED: 0" src/components/documents/documentAiStatusFilter.ts
           grep -F '<option value="REVIEW_PRIORITY">Prioridade de triagem</option>' src/components/documents/DocumentCenter.tsx
           grep -F "sorting must not mutate authorized input data" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
-          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\\\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
+          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
             echo "FAIL: local triage sorting must not fetch or consume protected authority"
             exit 1
           fi
