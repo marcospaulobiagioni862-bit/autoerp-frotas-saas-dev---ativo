@@ -546,6 +546,21 @@ jobs:
           fi
           echo "DOC-AI-1B6 sanitized attachment status invariants: PASS"
 
+      - name: DOC-AI-1B7 client-side status filter invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "matchesDocumentAiStatusFilter(" src/components/documents/DocumentCenter.tsx
+          grep -F "setExtractionStatusFilter('ALL')" src/components/documents/DocumentCenter.tsx
+          grep -F '<option value="NONE">Sem extração</option>' src/components/documents/DocumentCenter.tsx
+          grep -F "if (filter === 'ALL' || statusesUnavailable) return true;" src/components/documents/documentAiStatusFilter.ts
+          grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
+          if grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" src/components/documents/documentAiStatusFilter.ts; then
+            echo "FAIL: local status filter must not fetch or consume protected authority"
+            exit 1
+          fi
+          echo "DOC-AI-1B7 client-side status filter invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -571,6 +586,7 @@ jobs:
           npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts
           npx tsx src/server/__tests__/documentAiRuntimeTestRunner.ts
           npx tsx src/server/__tests__/documentAiObservabilityTestRunner.ts
+          npx tsx src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           npx tsx src/server/__tests__/documentAiQueueIntegration.ts
 
       - name: Fleet domain regressions
