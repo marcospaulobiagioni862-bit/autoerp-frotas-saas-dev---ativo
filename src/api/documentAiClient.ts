@@ -36,6 +36,18 @@ export interface DocumentAiReviewInput {
   notes?: string;
 }
 
+export type DocumentAiRuntimeMode = 'DISABLED' | 'MISCONFIGURED' | 'READY_SYNTHETIC_ONLY';
+
+export interface DocumentAiObservability {
+  runtime: {
+    mode: DocumentAiRuntimeMode;
+    provider: 'GEMINI' | null;
+    syntheticOnly: true;
+    automaticExecution: false;
+  };
+  counts: Record<DocumentAiStatus, number> & { total: number };
+}
+
 type JsonRecord = Record<string, unknown>;
 
 function asRecord(value: unknown): JsonRecord {
@@ -43,6 +55,16 @@ function asRecord(value: unknown): JsonRecord {
     throw new Error('Resposta inválida da revisão documental.');
   }
   return value as JsonRecord;
+}
+
+function exactRecord(value: unknown, keys: readonly string[]): JsonRecord {
+  const item = asRecord(value);
+  const actual = Object.keys(item).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new Error('Resposta inválida da observabilidade documental.');
+  }
+  return item;
 }
 
 function nullableString(value: unknown): string | null {
@@ -106,6 +128,56 @@ export function parseDocumentAiExtraction(value: unknown): DocumentAiExtraction 
   };
 }
 
+const OBSERVABILITY_STATUSES: readonly DocumentAiStatus[] = [
+  'PENDING', 'PROCESSING', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'FAILED',
+];
+
+export function parseDocumentAiObservability(value: unknown): DocumentAiObservability {
+  const payload = exactRecord(value, ['runtime', 'counts']);
+  const runtime = exactRecord(payload.runtime, ['mode', 'provider', 'syntheticOnly', 'automaticExecution']);
+  const counts = exactRecord(payload.counts, [...OBSERVABILITY_STATUSES, 'total']);
+  const modes: readonly DocumentAiRuntimeMode[] = ['DISABLED', 'MISCONFIGURED', 'READY_SYNTHETIC_ONLY'];
+  if (
+    typeof runtime.mode !== 'string' ||
+    !modes.includes(runtime.mode as DocumentAiRuntimeMode) ||
+    runtime.syntheticOnly !== true ||
+    runtime.automaticExecution !== false ||
+    (runtime.provider !== null && runtime.provider !== 'GEMINI') ||
+    (runtime.mode === 'READY_SYNTHETIC_ONLY' ? runtime.provider !== 'GEMINI' : runtime.provider !== null)
+  ) {
+    throw new Error('Resposta inválida da observabilidade documental.');
+  }
+  for (const status of OBSERVABILITY_STATUSES) {
+    if (!Number.isSafeInteger(counts[status]) || (counts[status] as number) < 0) {
+      throw new Error('Resposta inválida da observabilidade documental.');
+    }
+  }
+  if (
+    !Number.isSafeInteger(counts.total) ||
+    (counts.total as number) < 0 ||
+    counts.total !== OBSERVABILITY_STATUSES.reduce((total, status) => total + (counts[status] as number), 0)
+  ) {
+    throw new Error('Resposta inválida da observabilidade documental.');
+  }
+  return {
+    runtime: {
+      mode: runtime.mode as DocumentAiRuntimeMode,
+      provider: runtime.provider as 'GEMINI' | null,
+      syntheticOnly: true,
+      automaticExecution: false,
+    },
+    counts: {
+      PENDING: counts.PENDING as number,
+      PROCESSING: counts.PROCESSING as number,
+      REVIEW_REQUIRED: counts.REVIEW_REQUIRED as number,
+      APPROVED: counts.APPROVED as number,
+      REJECTED: counts.REJECTED as number,
+      FAILED: counts.FAILED as number,
+      total: counts.total as number,
+    },
+  };
+}
+
 async function errorFrom(response: Response): Promise<Error> {
   let message = `Falha na revisão documental (${response.status}).`;
   try {
@@ -118,6 +190,16 @@ async function errorFrom(response: Response): Promise<Error> {
 }
 
 export class DocumentAiClient {
+  static async observability(): Promise<DocumentAiObservability> {
+    const response = await fetch('/api/document-ai/observability', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await errorFrom(response);
+    return parseDocumentAiObservability(await response.json());
+  }
+
   static async list(status?: DocumentAiStatus): Promise<DocumentAiExtraction[]> {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
