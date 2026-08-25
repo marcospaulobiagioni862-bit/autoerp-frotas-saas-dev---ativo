@@ -43,6 +43,14 @@ export interface DocumentAiReviewInput {
 
 export type DocumentAiRuntimeMode = 'DISABLED' | 'MISCONFIGURED' | 'READY_SYNTHETIC_ONLY';
 
+export interface DocumentAiAttachmentStatus {
+  attachmentId: string;
+  status: DocumentAiStatus;
+  attemptCount: number;
+  failureCode: string | null;
+  updatedAt: string;
+}
+
 export interface DocumentAiObservability {
   runtime: {
     mode: DocumentAiRuntimeMode;
@@ -183,6 +191,44 @@ export function parseDocumentAiObservability(value: unknown): DocumentAiObservab
   };
 }
 
+export function parseDocumentAiAttachmentStatuses(value: unknown): DocumentAiAttachmentStatus[] {
+  const payload = exactRecord(value, ['items']);
+  if (!Array.isArray(payload.items)) {
+    throw new Error('Resposta inválida do estado documental.');
+  }
+  const seen = new Set<string>();
+  return payload.items.map((value) => {
+    const item = exactRecord(value, ['attachmentId', 'status', 'attemptCount', 'failureCode', 'updatedAt']);
+    if (
+      typeof item.attachmentId !== 'string' ||
+      !item.attachmentId ||
+      item.attachmentId.length > 120 ||
+      seen.has(item.attachmentId) ||
+      typeof item.status !== 'string' ||
+      !STATUSES.has(item.status as DocumentAiStatus) ||
+      !Number.isSafeInteger(item.attemptCount) ||
+      (item.attemptCount as number) < 0 ||
+      (item.attemptCount as number) > 100 ||
+      (item.failureCode !== null && (
+        typeof item.failureCode !== 'string' ||
+        !/^[A-Z0-9_:-]{1,120}$/.test(item.failureCode)
+      )) ||
+      typeof item.updatedAt !== 'string' ||
+      !item.updatedAt
+    ) {
+      throw new Error('Resposta inválida do estado documental.');
+    }
+    seen.add(item.attachmentId);
+    return {
+      attachmentId: item.attachmentId,
+      status: item.status as DocumentAiStatus,
+      attemptCount: item.attemptCount as number,
+      failureCode: item.failureCode as string | null,
+      updatedAt: item.updatedAt,
+    };
+  });
+}
+
 async function errorFrom(response: Response): Promise<Error> {
   let message = `Falha na revisão documental (${response.status}).`;
   try {
@@ -211,6 +257,16 @@ export class DocumentAiClient {
     if (!response.ok) throw await errorFrom(response);
     const payload = asRecord(await response.json());
     return parseDocumentAiExtraction(payload.item);
+  }
+
+  static async attachmentStatuses(): Promise<DocumentAiAttachmentStatus[]> {
+    const response = await fetch('/api/document-ai/attachment-statuses', {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) throw await errorFrom(response);
+    return parseDocumentAiAttachmentStatuses(await response.json());
   }
 
   static async observability(): Promise<DocumentAiObservability> {
