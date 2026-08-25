@@ -53,3 +53,54 @@ export function createDocumentAiStatusCounts(
   }
   return counts;
 }
+
+export const DOCUMENT_AI_STATUS_SORTS = [
+  'ATTACHMENT_NEWEST',
+  'REVIEW_PRIORITY',
+  'EXTRACTION_UPDATED_DESC',
+  'EXTRACTION_UPDATED_ASC',
+] as const;
+
+export type DocumentAiStatusSort = (typeof DOCUMENT_AI_STATUS_SORTS)[number];
+
+const DOCUMENT_AI_REVIEW_PRIORITY: Readonly<Record<DocumentAiAttachmentStatus['status'], number>> = {
+  REVIEW_REQUIRED: 0,
+  FAILED: 1,
+  PROCESSING: 2,
+  PENDING: 3,
+  REJECTED: 5,
+  APPROVED: 6,
+};
+
+function timestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function sortDocumentAiAttachments<T extends { id: string; createdAt: string }>(
+  attachments: ReadonlyArray<T>,
+  sort: DocumentAiStatusSort,
+  statuses: Readonly<Record<string, DocumentAiAttachmentStatus>>,
+): T[] {
+  const effectiveTimestamp = (attachment: T) =>
+    timestamp(statuses[attachment.id]?.updatedAt ?? attachment.createdAt);
+  const priority = (attachment: T) => {
+    const status = statuses[attachment.id]?.status;
+    return status ? DOCUMENT_AI_REVIEW_PRIORITY[status] : 4;
+  };
+
+  return [...attachments].sort((left, right) => {
+    let comparison = 0;
+    if (sort === 'REVIEW_PRIORITY') {
+      comparison = priority(left) - priority(right)
+        || effectiveTimestamp(left) - effectiveTimestamp(right);
+    } else if (sort === 'EXTRACTION_UPDATED_ASC') {
+      comparison = effectiveTimestamp(left) - effectiveTimestamp(right);
+    } else if (sort === 'EXTRACTION_UPDATED_DESC') {
+      comparison = effectiveTimestamp(right) - effectiveTimestamp(left);
+    } else {
+      comparison = timestamp(right.createdAt) - timestamp(left.createdAt);
+    }
+    return comparison || left.id.localeCompare(right.id);
+  });
+}
