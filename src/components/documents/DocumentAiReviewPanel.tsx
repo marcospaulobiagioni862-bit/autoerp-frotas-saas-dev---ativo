@@ -99,7 +99,7 @@ function DocumentAiObservabilitySummary({
   );
 }
 
-export function DocumentAiReviewPanel() {
+export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const { user } = useAuth();
   const [items, setItems] = useState<DocumentAiExtraction[]>([]);
   const [observability, setObservability] = useState<DocumentAiObservability | null>(null);
@@ -164,7 +164,7 @@ export function DocumentAiReviewPanel() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     resetDraft(selected);
