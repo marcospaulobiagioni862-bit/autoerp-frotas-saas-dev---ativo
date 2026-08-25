@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
-import { DocumentAiClient } from '../../api/documentAiClient';
+import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
 import { Bot, Download, Eye, File, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -14,10 +14,21 @@ interface AttachmentListProps {
   onRefresh?: () => void;
   showFilters?: boolean;
   onDocumentAiRequested?: () => void;
+  attachmentStatuses?: Record<string, DocumentAiAttachmentStatus>;
+  attachmentStatusesUnavailable?: boolean;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const DOCUMENT_AI_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+
+function extractionStatusLabel(status: DocumentAiAttachmentStatus['status']): { text: string; className: string } {
+  if (status === 'PENDING') return { text: 'Na fila', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
+  if (status === 'PROCESSING') return { text: 'Processando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' };
+  if (status === 'REVIEW_REQUIRED') return { text: 'Revisar extração', className: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' };
+  if (status === 'APPROVED') return { text: 'Extração aprovada', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+  if (status === 'REJECTED') return { text: 'Extração rejeitada', className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' };
+  return { text: 'Extração falhou', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+}
 
 export function AttachmentList({
   entityType,
@@ -25,6 +36,8 @@ export function AttachmentList({
   attachments: initialAttachments,
   onRefresh,
   onDocumentAiRequested,
+  attachmentStatuses = {},
+  attachmentStatusesUnavailable = false,
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -156,6 +169,11 @@ export function AttachmentList({
 
   return (
     <div className="space-y-4">
+      {attachmentStatusesUnavailable && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          Estados de extração temporariamente indisponíveis. Os documentos continuam acessíveis.
+        </div>
+      )}
       {documentAiMessage && (
         <div className={`rounded-md border p-3 text-sm ${
           documentAiMessage.kind === 'success'
@@ -175,6 +193,8 @@ export function AttachmentList({
           {attachments.map((att) => {
             const serverAvailable = att.storageProvider === 'SERVER_FS' && att.contentState === 'AVAILABLE';
             const documentAiEligible = serverAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
+            const extractionStatus = attachmentStatuses[att.id];
+            const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
             return (
               <li key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <div className="flex items-center space-x-3 truncate">
@@ -188,11 +208,16 @@ export function AttachmentList({
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
                       {!serverAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                      {extractionBadge && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${extractionBadge.className}`}>
+                          {extractionBadge.text}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
-                  {canRequestDocumentAi && documentAiEligible && (
+                  {canRequestDocumentAi && documentAiEligible && !extractionStatus && (
                     <Button
                       variant="ghost"
                       size="sm"
