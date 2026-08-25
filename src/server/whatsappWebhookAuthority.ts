@@ -1,20 +1,25 @@
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
+import {
+  createWhatsappReplyTaskProposal,
+  type WhatsappInboundTaskProposalRecord,
+} from './whatsappInboundTaskProposalAuthority';
 
 const PROVIDER_EVENT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const OUTBOX_ID = /^wao_[a-f0-9]{32}$/;
-const EVENT_TYPES = new Set(['SENT', 'DELIVERED', 'READ', 'FAILED']);
+const EVENT_TYPES = new Set(['SENT', 'DELIVERED', 'READ', 'FAILED', 'REPLY_RECEIVED']);
 
 type QueryResult = { rows?: unknown[] } | unknown[];
 
-export type WhatsappWebhookEventType = 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+export type WhatsappWebhookEventType = 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'REPLY_RECEIVED';
 
 export interface IngestWhatsappWebhookEventInput {
   providerEventId: string;
   outboxId: string;
   eventType: WhatsappWebhookEventType;
   occurredAt: string;
+  replyText?: string;
 }
 
 export interface WhatsappWebhookEventRecord {
@@ -27,6 +32,7 @@ export interface WhatsappWebhookEventRecord {
   receivedAt: string;
   providerCallApplied: false;
   businessMutationApplied: false;
+  taskProposal?: WhatsappInboundTaskProposalRecord;
 }
 
 export class WhatsappWebhookValidationError extends Error {}
@@ -59,7 +65,7 @@ function exactIso(value: unknown, referenceNow: Date): string {
   return value;
 }
 
-function record(row: Record<string, unknown>): WhatsappWebhookEventRecord {
+function record(row: Record<string, unknown>, taskProposal?: WhatsappInboundTaskProposalRecord): WhatsappWebhookEventRecord {
   const occurredAt = new Date(String(row.occurred_at)).toISOString();
   const receivedAt = new Date(String(row.received_at)).toISOString();
   const eventType = String(row.event_type) as WhatsappWebhookEventType;
@@ -77,6 +83,7 @@ function record(row: Record<string, unknown>): WhatsappWebhookEventRecord {
     receivedAt,
     providerCallApplied: false,
     businessMutationApplied: false,
+    taskProposal,
   };
 }
 
@@ -90,13 +97,15 @@ export class WhatsappWebhookEventAuthority {
     const outboxId = requiredIdentifier(input.outboxId, OUTBOX_ID);
     const eventType = String(input.eventType || '') as WhatsappWebhookEventType;
     if (!EVENT_TYPES.has(eventType)) throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
+    if (eventType === 'REPLY_RECEIVED' && input.replyText === undefined) throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
+    if (eventType !== 'REPLY_RECEIVED' && input.replyText !== undefined) throw new WhatsappWebhookValidationError('Invalid WhatsApp webhook event');
     const occurredAt = exactIso(input.occurredAt, referenceNow);
 
     return UnitOfWork.run(companyId, async (context) => {
       const tx = context.getRawTransaction?.();
       if (!tx) throw new Error('WhatsApp webhook persistence unavailable');
       const outbox = rows(await tx.execute(sql`
-        SELECT id,status FROM whatsapp_outbox
+        SELECT id,status,driver_id FROM whatsapp_outbox
         WHERE company_id=${companyId} AND id=${outboxId}
         LIMIT 1
       `))[0];
@@ -117,7 +126,12 @@ export class WhatsappWebhookEventAuthority {
         ON CONFLICT (company_id,provider_event_id) DO NOTHING
         RETURNING *
       `));
-      if (inserted[0]) return { item: record(inserted[0]), created: true };
+      if (inserted[0]) {
+        const taskProposal = eventType === 'REPLY_RECEIVED'
+          ? await createWhatsappReplyTaskProposal(tx, companyId, id, outboxId, String(outbox.driver_id), input.replyText)
+          : undefined;
+        return { item: record(inserted[0], taskProposal), created: true };
+      }
 
       const existing = rows(await tx.execute(sql`
         SELECT * FROM whatsapp_webhook_events
@@ -132,7 +146,10 @@ export class WhatsappWebhookEventAuthority {
       ) {
         throw new WhatsappWebhookConflictError('WhatsApp webhook event collision');
       }
-      return { item: record(existing), created: false };
+      const taskProposal = eventType === 'REPLY_RECEIVED'
+        ? await createWhatsappReplyTaskProposal(tx, companyId, String(existing.id), outboxId, String(outbox.driver_id), input.replyText)
+        : undefined;
+      return { item: record(existing, taskProposal), created: false };
     });
   }
 }
