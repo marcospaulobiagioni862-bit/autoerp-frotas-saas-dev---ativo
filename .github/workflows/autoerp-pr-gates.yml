@@ -281,15 +281,11 @@ jobs:
         run: |
           set -euo pipefail
           grep -F "TrackerClient.listTelemetry" src/components/fleet/FleetComplianceManagement.tsx
-          grep -F "Somente leitura; nenhum evento altera KM, manutenção, contratos ou financeiro." src/components/fleet/FleetComplianceManagement.tsx
+          grep -F "Consulta e triagem humana; nenhuma decisão altera KM, manutenção, contratos ou financeiro." src/components/fleet/FleetComplianceManagement.tsx
           grep -F "Unsafe telemetry response" src/api/trackerClient.ts
           grep -F "credentials:'include'" src/api/trackerClient.ts
           if grep -Fq "rawPayload" src/components/fleet/FleetComplianceManagement.tsx; then
             echo "FAIL: sanitized telemetry UI must not consume raw payload"
-            exit 1
-          fi
-          if grep -Eq "POST.+telemetry|PATCH.+telemetry|PUT.+telemetry|DELETE.+telemetry" src/api/trackerClient.ts; then
-            echo "FAIL: TELEMETRY-1B client must remain read-only"
             exit 1
           fi
           echo "TELEMETRY-1B sanitized client invariants: PASS"
@@ -308,6 +304,27 @@ jobs:
             exit 1
           fi
           echo "TELEMETRY-1C server-derived health invariants: PASS"
+
+      - name: TELEMETRY-1D auditable quarantine review invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "tracker_telemetry_events_review_state_chk" drizzle/0036_telemetry_quarantine_review.sql
+          grep -F "status = 'QUARANTINED' AND review_status = 'PENDING'" drizzle/0036_telemetry_quarantine_review.sql
+          grep -F "FOR UPDATE" src/server/telemetryAuthority.ts
+          grep -F "/api/trackers/:trackerId/telemetry/:eventId/review" src/server/telemetryRoutes.ts
+          grep -F "exact(req.body,['decision','reason'])" src/server/telemetryRoutes.ts
+          grep -F "A triagem apenas registra a análise humana; não altera KM nem financeiro." src/components/fleet/FleetComplianceManagement.tsx
+          grep -F "Unsafe telemetry review response" src/api/trackerClient.ts
+          if grep -Eq "writeRoles=.*READONLY" src/server/telemetryRoutes.ts; then
+            echo "FAIL: READONLY role must not review telemetry"
+            exit 1
+          fi
+          if grep -Eq "getPayableRepo|FinancialAuthorizationService|UPDATE[[:space:]]+vehicles|current_km[[:space:]]*=" src/server/telemetryAuthority.ts src/server/telemetryRoutes.ts; then
+            echo "FAIL: telemetry review must not apply operational or financial effects"
+            exit 1
+          fi
+          echo "TELEMETRY-1D auditable quarantine review invariants: PASS"
 
       - name: TypeScript gate
         run: npm run lint
@@ -401,7 +418,7 @@ jobs:
       - name: WhatsApp client authority regression
         run: npx tsx src/api/__tests__/whatsappClientTestRunner.ts
 
-      - name: Telemetry client read-only authority regression
+      - name: Telemetry client authority and human review regression
         run: npx tsx src/api/__tests__/telemetryClientTestRunner.ts
 
       - name: Report AI suggestion regression
