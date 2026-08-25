@@ -154,6 +154,38 @@ async function loadDriver(tx: any, companyId: string, driverId: string, lock = f
   return selected;
 }
 
+
+async function loadActiveTemplate(tx: any, companyId: string): Promise<{ version: number; parameterKeys: string[] }> {
+  await tx.execute(sql`
+    INSERT INTO whatsapp_template_catalog (
+      company_id, template_key, version, status, body_text, parameter_keys
+    ) VALUES (
+      ${companyId}, ${TEMPLATE_KEY}, 1, 'ACTIVE',
+      'Olá {{driverName}}, sua CNH vence em {{cnhExpiration}}.',
+      '["driverName","cnhExpiration"]'::jsonb
+    )
+    ON CONFLICT (company_id, template_key, version) DO NOTHING
+  `);
+  const template = rows(await tx.execute(sql`
+    SELECT version, parameter_keys
+    FROM whatsapp_template_catalog
+    WHERE company_id = ${companyId}
+      AND template_key = ${TEMPLATE_KEY}
+      AND status = 'ACTIVE'
+    ORDER BY version DESC
+    LIMIT 1
+    FOR SHARE
+  `))[0];
+  if (!template) throw new WhatsappValidationError();
+  const version = Number(template.version);
+  const parameterKeys = asStringArray(template.parameter_keys).sort();
+  if (!Number.isInteger(version) || version < 1) throw new Error('Invalid WhatsApp template version');
+  if (JSON.stringify(parameterKeys) !== JSON.stringify(['cnhExpiration', 'driverName'])) {
+    throw new Error('WhatsApp template parameter schema mismatch');
+  }
+  return { version, parameterKeys };
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof WhatsappValidationError) {
     res.status(400).json({ error: 'Invalid WhatsApp request' });
@@ -323,21 +355,11 @@ export function registerWhatsappRoutes(app: Express): void {
         const cnhExpiration = String(driver.cnh_expiration || '').slice(0, 10);
         if (!driverName || !/^\d{4}-\d{2}-\d{2}$/.test(cnhExpiration)) throw new WhatsappValidationError();
         const parameters = { driverName, cnhExpiration };
-        const template = rows(await tx.execute(sql`
-          SELECT template_key, version, parameter_keys
-          FROM whatsapp_template_catalog
-          WHERE company_id = ${principal.companyId}
-            AND template_key = ${TEMPLATE_KEY}
-            AND status = 'ACTIVE'
-          ORDER BY version DESC
-          LIMIT 1
-          FOR SHARE
-        `))[0];
-        if (!template) throw new WhatsappValidationError();
-        const parameterKeys = asStringArray(template.parameter_keys).sort();
-        if (JSON.stringify(parameterKeys) !== JSON.stringify(Object.keys(parameters).sort())) throw new Error('WhatsApp template parameter schema mismatch');
-        const templateVersion = Number(template.version);
-        if (!Number.isInteger(templateVersion) || templateVersion < 1) throw new Error('Invalid WhatsApp template version');
+        const template = await loadActiveTemplate(tx, principal.companyId);
+        if (JSON.stringify(template.parameterKeys) !== JSON.stringify(Object.keys(parameters).sort())) {
+          throw new Error('WhatsApp template parameter schema mismatch');
+        }
+        const templateVersion = template.version;
         const consentGrantedAt = asIso(consent.granted_at);
         if (!consentGrantedAt) throw new WhatsappConsentRequiredError();
         const material = JSON.stringify({
