@@ -11,7 +11,9 @@ import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
   createDocumentAiStatusCounts,
   matchesDocumentAiStatusFilter,
+  sortDocumentAiAttachments,
   type DocumentAiStatusFilter,
+  type DocumentAiStatusSort,
 } from './documentAiStatusFilter';
 
 export function DocumentCenter() {
@@ -22,6 +24,7 @@ export function DocumentCenter() {
   const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
   const [documentTypeFilter, setDocumentTypeFilter] = useState('ALL');
   const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>('ALL');
+  const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST');
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
   const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
@@ -43,6 +46,7 @@ export function DocumentCenter() {
         setAttachmentStatuses({});
         setAttachmentStatusesUnavailable(true);
         setExtractionStatusFilter('ALL');
+        setExtractionSort('ATTACHMENT_NEWEST');
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar documentos.');
@@ -70,13 +74,18 @@ export function DocumentCenter() {
     attachmentStatuses,
     attachmentStatusesUnavailable,
   );
-  const filteredAttachments = baseFilteredAttachments.filter((attachment) =>
+  const statusFilteredAttachments = baseFilteredAttachments.filter((attachment) =>
     matchesDocumentAiStatusFilter(
       attachment.id,
       extractionStatusFilter,
       attachmentStatuses,
       attachmentStatusesUnavailable,
     ),
+  );
+  const filteredAttachments = sortDocumentAiAttachments<FileAttachment>(
+    statusFilteredAttachments,
+    extractionSort,
+    attachmentStatuses,
   );
   const statusCountLabel = (count: number | null) => count === null ? '—' : String(count);
 
@@ -95,7 +104,7 @@ export function DocumentCenter() {
       <Card>
         <div className="p-4 border-b font-semibold text-lg">Filtros de Busca</div>
         <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
               <div className="relative">
@@ -132,6 +141,19 @@ export function DocumentCenter() {
                 <option value="APPROVED">Aprovada ({statusCountLabel(extractionStatusCounts.APPROVED)})</option>
                 <option value="REJECTED">Rejeitada ({statusCountLabel(extractionStatusCounts.REJECTED)})</option>
                 <option value="FAILED">Falhou ({statusCountLabel(extractionStatusCounts.FAILED)})</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ordenação</label>
+              <Select
+                value={extractionSort}
+                onChange={(event) => setExtractionSort(event.target.value as DocumentAiStatusSort)}
+                disabled={attachmentStatusesUnavailable}
+              >
+                <option value="ATTACHMENT_NEWEST">Anexo mais recente</option>
+                <option value="REVIEW_PRIORITY">Prioridade de triagem</option>
+                <option value="EXTRACTION_UPDATED_DESC">Extração atualizada recentemente</option>
+                <option value="EXTRACTION_UPDATED_ASC">Extração atualizada há mais tempo</option>
               </Select>
             </div>
           </div>
