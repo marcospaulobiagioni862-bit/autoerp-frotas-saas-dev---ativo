@@ -82,7 +82,7 @@ export function DocumentCenter() {
       attachmentStatusesUnavailable,
     ),
   );
-  const filteredAttachments = sortDocumentAiAttachments(
+  const filteredAttachments = sortDocumentAiAttachments<FileAttachment>(
     statusFilteredAttachments,
     extractionSort,
     attachmentStatuses,
