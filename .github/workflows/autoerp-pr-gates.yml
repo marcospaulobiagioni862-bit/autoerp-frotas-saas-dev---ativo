@@ -243,6 +243,25 @@ jobs:
           fi
           echo "WHATSAPP-1B client source invariants: PASS"
 
+      - name: TELEMETRY-1A source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "ALTER TABLE telemetry_events FORCE ROW LEVEL SECURITY" drizzle/0034_telemetry_synthetic_quarantine.sql
+          grep -F "UNIQUE (company_id, tracker_id, source_event_id)" drizzle/0034_telemetry_synthetic_quarantine.sql
+          grep -F "CHECK (is_synthetic = true)" drizzle/0034_telemetry_synthetic_quarantine.sql
+          grep -F "const body=exactKeys(req.body,new Set(['sourceEventId','eventType','occurredAt','payload','synthetic']));" src/server/trackerRoutes.ts
+          grep -F "hasPosition: Boolean(row.has_position)" src/server/telemetryAuthority.ts
+          if grep -Fq "raw_payload" src/server/trackerRoutes.ts; then
+            echo "FAIL: tracker routes must not expose raw telemetry payloads"
+            exit 1
+          fi
+          if grep -Fq "fetch(" src/server/telemetryAuthority.ts; then
+            echo "FAIL: TELEMETRY-1A must not call a provider"
+            exit 1
+          fi
+          echo "TELEMETRY-1A source invariants: PASS"
+
       - name: TypeScript gate
         run: npm run lint
 
@@ -276,6 +295,7 @@ jobs:
           npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
           npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
           npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+          npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
