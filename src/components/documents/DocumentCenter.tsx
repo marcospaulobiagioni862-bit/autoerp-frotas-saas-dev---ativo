@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
+import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 import type { FileAttachment } from '../../types/entities/audit';
 import { Search } from 'lucide-react';
 import { Card } from '../ui/Card';
@@ -16,13 +17,25 @@ export function DocumentCenter() {
   const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
   const [documentTypeFilter, setDocumentTypeFilter] = useState('ALL');
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
+  const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
+  const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
 
   const fetchDocuments = async () => {
     setLoading(true);
     setError(null);
     try {
-      const all = await AttachmentClient.list();
-      setAttachments(all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      const [attachmentsResult, statusesResult] = await Promise.allSettled([
+        AttachmentClient.list(),
+        DocumentAiClient.attachmentStatuses(),
+      ]);
+      if (attachmentsResult.status === 'rejected') throw attachmentsResult.reason;
+      setAttachments(attachmentsResult.value.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      if (statusesResult.status === 'fulfilled') {
+        setAttachmentStatuses(Object.fromEntries(statusesResult.value.map((item) => [item.attachmentId, item])));
+        setAttachmentStatusesUnavailable(false);
+      } else {
+        setAttachmentStatusesUnavailable(true);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar documentos.');
     } finally {
@@ -105,7 +118,12 @@ export function DocumentCenter() {
             <AttachmentList
               attachments={filteredAttachments}
               onRefresh={() => void fetchDocuments()}
-              onDocumentAiRequested={() => setDocumentAiRefreshKey((current) => current + 1)}
+              attachmentStatuses={attachmentStatuses}
+              attachmentStatusesUnavailable={attachmentStatusesUnavailable}
+              onDocumentAiRequested={() => {
+                setDocumentAiRefreshKey((current) => current + 1);
+                void fetchDocuments();
+              }}
             />
           )}
         </div>
