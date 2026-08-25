@@ -580,7 +580,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "sortDocumentAiAttachments(" src/components/documents/documentAiStatusFilter.ts
+          grep -F "export function sortDocumentAiAttachments<" src/components/documents/documentAiStatusFilter.ts
           grep -F "const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
           grep -F "setExtractionSort('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
           grep -F "REVIEW_REQUIRED: 0" src/components/documents/documentAiStatusFilter.ts
