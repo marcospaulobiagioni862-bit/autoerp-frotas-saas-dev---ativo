@@ -8,14 +8,6 @@ import { TransferModal } from './components/modals/TransferModal';
 import { RenegotiationModal } from './components/modals/RenegotiationModal';
 import { AccountReceivable, AccountPayable } from './types/entities';
 import { useAuth } from './hooks/useAuth';
-import {
-  AccountReceivableRepository, AccountPayableRepository, VehicleRepository, ContractRepository,
-  MaintenanceRepository, VehicleDocumentRepository, DriverDocumentRepository, TrafficTicketRepository,
-  DriverRepository, InsuranceRepository,
-} from './persistence/repositories/serverReadModelRepositories';
-import { TrackerClient } from './api/trackerClient';
-import { ObligationStatus } from './types/enums';
-import { generateOperationalPendings } from './domain/operations/serverOperationalPendingProjection';
 
 const OverviewDashboard=lazy(()=>import('./components/dashboard/OverviewDashboard').then(module=>({default:module.OverviewDashboard})));
 const PendingCenterView=lazy(()=>import('./components/operations/PendingCenterView').then(module=>({default:module.PendingCenterView})));
@@ -61,14 +53,12 @@ export default function App(){
 
   useEffect(()=>{const requestVersion=++badgesRequestVersionRef.current,companyIdSnapshot=user?.companyId;clearBadgeState();if(companyIdSnapshot)void refreshBadges(companyIdSnapshot,requestVersion);return()=>{badgesRequestVersionRef.current+=1;};},[user?.companyId]);
   const refreshBadges=async(companyIdSnapshot:string,requestVersion:number)=>{
-    const recRepo=new AccountReceivableRepository(),payRepo=new AccountPayableRepository(),vehRepo=new VehicleRepository(),contractRepo=new ContractRepository(),maintRepo=new MaintenanceRepository(),vehDocRepo=new VehicleDocumentRepository(),drvDocRepo=new DriverDocumentRepository(),ticketRepo=new TrafficTicketRepository(),drvRepo=new DriverRepository(),insRepo=new InsuranceRepository();
-    const [recs,pays,vehicles,contracts,maintenances,vehicleDocuments,driverDocuments,tickets,drivers,insurances,trackers]=await Promise.all([
-      recRepo.findAllForCompany(companyIdSnapshot),payRepo.findAllForCompany(companyIdSnapshot),vehRepo.findAllForCompany(companyIdSnapshot),contractRepo.findAllForCompany(companyIdSnapshot),maintRepo.findAllForCompany(companyIdSnapshot),vehDocRepo.findAllForCompany(companyIdSnapshot),drvDocRepo.findAllForCompany(companyIdSnapshot),ticketRepo.findAllForCompany(companyIdSnapshot),drvRepo.findAllForCompany(companyIdSnapshot),insRepo.findAllForCompany(companyIdSnapshot),TrackerClient.list(),
-    ]);
-    if(requestVersion!==badgesRequestVersionRef.current||activeCompanyIdRef.current!==companyIdSnapshot)return;
-    const pendingRecs=recs.filter(r=>r.status===ObligationStatus.PENDING||r.status===ObligationStatus.PARTIALLY_PAID),pendingPays=pays.filter(p=>p.status===ObligationStatus.PENDING||p.status===ObligationStatus.PARTIALLY_PAID);
-    const opPendings=generateOperationalPendings({companyId:companyIdSnapshot,vehicles,contracts,maintenances,vehicleDocuments,driverDocuments,tickets,drivers,insurances,trackers});
-    if(requestVersion!==badgesRequestVersionRef.current||activeCompanyIdRef.current!==companyIdSnapshot)return;setPendingReceivablesCount(pendingRecs.length);setPendingPayablesCount(pendingPays.length);setPendingPendingsCount(opPendings.length);
+    const requestStillCurrent=()=>requestVersion===badgesRequestVersionRef.current&&activeCompanyIdRef.current===companyIdSnapshot;
+    const {loadNavigationBadgeCounts}=await import('./app/navigationBadgeLoader');
+    if(!requestStillCurrent())return;
+    const counts=await loadNavigationBadgeCounts(companyIdSnapshot,requestStillCurrent);
+    if(!counts||!requestStillCurrent())return;
+    setPendingReceivablesCount(counts.pendingReceivablesCount);setPendingPayablesCount(counts.pendingPayablesCount);setPendingPendingsCount(counts.pendingPendingsCount);
   };
   const handleOperationSuccess=async()=>{const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;if(!companyIdSnapshot){clearBadgeState();return;}await refreshBadges(companyIdSnapshot,requestVersion);};
 
