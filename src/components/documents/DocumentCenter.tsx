@@ -135,6 +135,7 @@ export function DocumentCenter() {
               >
                 <option value="ALL">Todos os Estados ({statusCountLabel(extractionStatusCounts.ALL)})</option>
                 <option value="NONE">Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})</option>
+                <option value="ACTION_REQUIRED">Ação necessária ({statusCountLabel(extractionStatusCounts.ACTION_REQUIRED)})</option>
                 <option value="PENDING">Na fila ({statusCountLabel(extractionStatusCounts.PENDING)})</option>
                 <option value="PROCESSING">Processando ({statusCountLabel(extractionStatusCounts.PROCESSING)})</option>
                 <option value="REVIEW_REQUIRED">Revisão necessária ({statusCountLabel(extractionStatusCounts.REVIEW_REQUIRED)})</option>
