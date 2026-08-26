@@ -27,7 +27,7 @@ export function DocumentCenter() {
   const [entityTypeFilter, setEntityTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
   const [documentTypeFilter, setDocumentTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
   const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
-  const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>(DOCUMENT_CENTER_DEFAULT_FILTERS.sort);
+  const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST');
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
   const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
@@ -109,7 +109,7 @@ export function DocumentCenter() {
     setEntityTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
     setDocumentTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
     setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
-    setExtractionSort(DOCUMENT_CENTER_DEFAULT_FILTERS.sort);
+    setExtractionSort('ATTACHMENT_NEWEST');
   };
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
