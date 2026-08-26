@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import {
   Users,
   UserPlus,
@@ -18,12 +18,14 @@ import {
   ConfirmDialog,
   PageHeader,
 } from '../ui';
+import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Driver } from '../../types/entities';
+
+const DriverFormModal=lazy(()=>import('./DriverFormModal').then(module=>({default:module.DriverFormModal})));
+const DriverDetailsModal=lazy(()=>import('./DriverDetailsModal').then(module=>({default:module.DriverDetailsModal})));
 import { DriverStatus, DocumentStatus } from '../../types/enums';
-import { DriverFormModal } from './DriverFormModal';
-import { DriverDetailsModal } from './DriverDetailsModal';
 
 interface DriversManagementProps {
   companyId: string;
@@ -173,6 +175,12 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         return <Badge variant="neutral">{status}</Badge>;
     }
   };
+
+  const driverModalResetKey = isFormOpen
+    ? `form:${editingDriver?.id ?? 'new'}`
+    : isDetailsOpen
+      ? `details:${selectedDriverId ?? 'none'}`
+      : 'none';
 
   return (
     <div className="space-y-6">
@@ -384,20 +392,23 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         </>
       )}
 
-      <DriverFormModal
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        driverToEdit={editingDriver}
-        onSuccess={loadData}
-      />
-
-      <DriverDetailsModal
-        isOpen={isDetailsOpen}
-        onClose={() => setIsDetailsOpen(false)}
-        driverId={selectedDriverId}
-        onSelectVehicle={onSelectVehicle}
-        onDriverUpdated={loadData}
-      />
+      <LazyModuleErrorBoundary resetKey={driverModalResetKey} onRetry={()=>window.location.reload()}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do motorista...</div></div>}>
+          {isFormOpen&&<DriverFormModal
+            isOpen
+            onClose={() => setIsFormOpen(false)}
+            driverToEdit={editingDriver}
+            onSuccess={loadData}
+          />}
+          {isDetailsOpen&&selectedDriverId&&<DriverDetailsModal
+            isOpen
+            onClose={() => setIsDetailsOpen(false)}
+            driverId={selectedDriverId}
+            onSelectVehicle={onSelectVehicle}
+            onDriverUpdated={loadData}
+          />}
+        </Suspense>
+      </LazyModuleErrorBoundary>
 
       <ConfirmDialog
         isOpen={!!deletingDriver}
