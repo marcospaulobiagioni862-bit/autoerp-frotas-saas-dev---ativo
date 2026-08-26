@@ -10,6 +10,7 @@ import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
   createDocumentAiStatusCounts,
+  createDocumentCenterResultSummary,
   DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
   hasActiveDocumentCenterFilters,
@@ -62,6 +63,7 @@ export function DocumentCenter() {
     void fetchDocuments();
   }, []);
 
+  const availableAttachmentCount = attachments.filter((attachment) => !attachment.isArchived).length;
   const baseFilteredAttachments = attachments.filter((att) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
@@ -111,6 +113,11 @@ export function DocumentCenter() {
     setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
     setExtractionSort('ATTACHMENT_NEWEST');
   };
+  const resultSummary = createDocumentCenterResultSummary(
+    availableAttachmentCount,
+    filteredAttachments.length,
+    filtersActive,
+  );
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
   const docTypes = Array.from(new Set(attachments.map((item) => item.documentType).filter((value): value is string => Boolean(value))));
@@ -213,12 +220,26 @@ export function DocumentCenter() {
       </Card>
 
       <Card>
-        <div className="p-4 border-b font-semibold text-lg">Resultados ({filteredAttachments.length})</div>
+        <div className="p-4 border-b font-semibold text-lg">
+          Resultados ({resultSummary.filtered ? `${resultSummary.visible} de ${resultSummary.total}` : resultSummary.visible})
+        </div>
         <div className="p-4">
           {loading ? (
             <div className="text-center py-10 text-gray-500">Carregando documentos...</div>
           ) : error ? (
             <div className="text-center py-10 text-red-500">{error}</div>
+          ) : resultSummary.filteredEmpty ? (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-700 dark:bg-gray-800/60">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Nenhum documento corresponde aos filtros atuais.</p>
+              <p className="mt-1 text-xs text-gray-500">Os {resultSummary.total} anexos autorizados continuam disponíveis.</p>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="mt-3 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-white dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-900"
+              >
+                Restaurar visão completa
+              </button>
+            </div>
           ) : (
             <AttachmentList
               attachments={filteredAttachments}
