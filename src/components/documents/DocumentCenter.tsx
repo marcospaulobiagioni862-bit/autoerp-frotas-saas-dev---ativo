@@ -10,6 +10,7 @@ import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
   createDocumentAiStatusCounts,
+  getDocumentAiActionRequiredSelection,
   matchesDocumentAiStatusFilter,
   sortDocumentAiAttachments,
   type DocumentAiStatusFilter,
@@ -88,6 +89,12 @@ export function DocumentCenter() {
     attachmentStatuses,
   );
   const statusCountLabel = (count: number | null) => count === null ? '—' : String(count);
+  const actionRequiredSelection = getDocumentAiActionRequiredSelection(attachmentStatusesUnavailable);
+  const focusActionRequired = () => {
+    if (!actionRequiredSelection) return;
+    setExtractionStatusFilter(actionRequiredSelection.statusFilter);
+    setExtractionSort(actionRequiredSelection.sort);
+  };
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
   const docTypes = Array.from(new Set(attachments.map((item) => item.documentType).filter((value): value is string => Boolean(value))));
@@ -102,7 +109,17 @@ export function DocumentCenter() {
       </div>
 
       <Card>
-        <div className="p-4 border-b font-semibold text-lg">Filtros de Busca</div>
+        <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
+          <span className="font-semibold text-lg">Filtros de Busca</span>
+          <button
+            type="button"
+            onClick={focusActionRequired}
+            disabled={!actionRequiredSelection}
+            className="rounded-md border border-amber-500 px-3 py-1.5 text-sm font-medium text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
+          >
+            Priorizar ações necessárias
+          </button>
+        </div>
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             <div>
