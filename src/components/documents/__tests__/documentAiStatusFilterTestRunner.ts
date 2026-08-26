@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { DocumentAiAttachmentStatus } from '../../../api/documentAiClient';
 import {
   createDocumentAiStatusCounts,
+  getDocumentAiActionRequiredSelection,
   DOCUMENT_AI_STATUS_FILTERS,
   DOCUMENT_AI_STATUS_SORTS,
   matchesDocumentAiStatusFilter,
@@ -95,6 +96,17 @@ assert.deepEqual(
   'unavailable status data must never be represented as zero',
 );
 
+assert.deepEqual(
+  getDocumentAiActionRequiredSelection(false),
+  { statusFilter: 'ACTION_REQUIRED', sort: 'REVIEW_PRIORITY' },
+  'the action-required shortcut must use only sanitized local selection values',
+);
+assert.equal(
+  getDocumentAiActionRequiredSelection(true),
+  null,
+  'the action-required shortcut must be unavailable when statuses are unavailable',
+);
+
 assert.deepEqual(DOCUMENT_AI_STATUS_SORTS, [
   'ATTACHMENT_NEWEST',
   'REVIEW_PRIORITY',
@@ -139,4 +151,4 @@ assert.deepEqual(
 );
 assert.deepEqual(sortableAttachments.map(({ id }) => id), originalOrder, 'sorting must not mutate authorized input data');
 
-console.log('PASS: document AI action filtering, counts and local sorting are deterministic and fail-open for visibility');
+console.log('PASS: document AI action filtering, shortcut selection, counts and local sorting are deterministic and fail-open for visibility');
