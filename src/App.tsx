@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { Header } from './components/layout/Header';
+import { LazyModuleErrorBoundary } from './components/common/LazyModuleErrorBoundary';
 import { Sidebar, NavigationTab } from './components/layout/Sidebar';
 import { ReceiptModal } from './components/modals/ReceiptModal';
 import { PaymentModal } from './components/modals/PaymentModal';
@@ -74,7 +75,7 @@ export default function App(){
   return <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
     <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
     <div className="flex-1 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950"><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
+      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
         {activeTab==='executive-operations'&&<ExecutiveOperationsCenterView/>}
         {activeTab==='performance-management'&&<PerformanceManagementCenterView/>}
@@ -107,7 +108,7 @@ export default function App(){
         {activeTab==='cashflow'&&<FinanceHubView initialSubTab="cashflow" onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenRenegotiationModal={setSelectedReceivablesForRenegotiation}/>} 
         {activeTab==='dre'&&<FinanceHubView initialSubTab="dre" onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenRenegotiationModal={setSelectedReceivablesForRenegotiation}/>} 
         {activeTab==='tests'&&<TestRunnerPanel onTestsCompleted={setTestStatus}/>} 
-      </Suspense></main>
+      </Suspense></LazyModuleErrorBoundary></main>
     </div>
     <ReceiptModal isOpen={!!selectedReceivableForReceipt} onClose={()=>setSelectedReceivableForReceipt(null)} receivable={selectedReceivableForReceipt} onSuccess={handleOperationSuccess}/>
     <PaymentModal isOpen={!!selectedPayableForPayment} onClose={()=>setSelectedPayableForPayment(null)} payable={selectedPayableForPayment} onSuccess={handleOperationSuccess}/>
