@@ -613,6 +613,27 @@ jobs:
       - name: TypeScript gate
         run: npm run lint
 
+      - name: Lazy module recovery invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "static getDerivedStateFromError()" src/components/common/LazyModuleErrorBoundary.tsx
+          grep -F 'role="alert"' src/components/common/LazyModuleErrorBoundary.tsx
+          grep -F "Recarregar aplicação" src/components/common/LazyModuleErrorBoundary.tsx
+          grep -F "onRetry={()=>window.location.reload()}" src/App.tsx
+          grep -F "<LazyModuleErrorBoundary resetKey={activeTab}" src/App.tsx
+          if grep -Eq "error\.(message|stack)|String\(error\)" src/components/common/LazyModuleErrorBoundary.tsx; then
+            echo "FAIL: lazy module fallback must not expose raw error details"
+            exit 1
+          fi
+          echo "PERF-FRONTEND-2 lazy module recovery invariants: PASS"
+
+      - name: Lazy module recovery regression
+        run: npx tsx src/components/common/__tests__/lazyModuleErrorBoundaryTestRunner.ts
+
+      - name: Deferred navigation badges regression
+        run: npx tsx src/app/__tests__/navigationBadgeLoaderTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
@@ -709,27 +730,6 @@ jobs:
 
       - name: Telemetry client authority and human review regression
         run: npx tsx src/api/__tests__/telemetryClientTestRunner.ts
-
-      - name: Lazy module recovery invariants
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -F "static getDerivedStateFromError()" src/components/common/LazyModuleErrorBoundary.tsx
-          grep -F 'role="alert"' src/components/common/LazyModuleErrorBoundary.tsx
-          grep -F "Recarregar aplicação" src/components/common/LazyModuleErrorBoundary.tsx
-          grep -F "onRetry={()=>window.location.reload()}" src/App.tsx
-          grep -F "<LazyModuleErrorBoundary resetKey={activeTab}" src/App.tsx
-          if grep -Eq "error\.(message|stack)|String\(error\)" src/components/common/LazyModuleErrorBoundary.tsx; then
-            echo "FAIL: lazy module fallback must not expose raw error details"
-            exit 1
-          fi
-          echo "PERF-FRONTEND-2 lazy module recovery invariants: PASS"
-
-      - name: Lazy module recovery regression
-        run: npx tsx src/components/common/__tests__/lazyModuleErrorBoundaryTestRunner.ts
-
-      - name: Deferred navigation badges regression
-        run: npx tsx src/app/__tests__/navigationBadgeLoaderTestRunner.ts
 
       - name: Report AI suggestion regression
         run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
