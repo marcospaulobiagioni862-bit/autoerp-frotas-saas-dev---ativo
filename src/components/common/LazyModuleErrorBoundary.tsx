@@ -20,10 +20,15 @@ interface LazyModuleErrorBoundaryState {
   hasError: boolean;
 }
 
-export class LazyModuleErrorBoundary extends Component<
-  LazyModuleErrorBoundaryProps,
-  LazyModuleErrorBoundaryState
-> {
+type LazyModuleBoundaryBase = new (props: LazyModuleErrorBoundaryProps) => {
+  readonly props: Readonly<LazyModuleErrorBoundaryProps>;
+  state: LazyModuleErrorBoundaryState;
+  setState(nextState: LazyModuleErrorBoundaryState): void;
+};
+
+const LazyModuleBoundaryComponent = Component as unknown as LazyModuleBoundaryBase;
+
+export class LazyModuleErrorBoundary extends LazyModuleBoundaryComponent {
   state: LazyModuleErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(): LazyModuleErrorBoundaryState {
