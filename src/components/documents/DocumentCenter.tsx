@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 import type { FileAttachment } from '../../types/entities/audit';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -10,14 +10,18 @@ import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
   createDocumentAiStatusCounts,
+  createDocumentCenterActiveFilters,
   createDocumentCenterResultSummary,
   DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
   hasActiveDocumentCenterFilters,
   matchesDocumentAiStatusFilter,
+  resetDocumentCenterFilter,
   sortDocumentAiAttachments,
   type DocumentAiStatusFilter,
   type DocumentAiStatusSort,
+  type DocumentCenterFilterKey,
+  type DocumentCenterFilterState,
 } from './documentAiStatusFilter';
 
 export function DocumentCenter() {
@@ -99,19 +103,27 @@ export function DocumentCenter() {
     setExtractionStatusFilter(actionRequiredSelection.statusFilter);
     setExtractionSort(actionRequiredSelection.sort);
   };
-  const filtersActive = hasActiveDocumentCenterFilters({
+  const currentFilters: DocumentCenterFilterState = {
     searchTerm,
     entityType: entityTypeFilter,
     documentType: documentTypeFilter,
     statusFilter: extractionStatusFilter,
     sort: extractionSort,
-  });
+  };
+  const activeFilters = createDocumentCenterActiveFilters(currentFilters);
+  const filtersActive = hasActiveDocumentCenterFilters(currentFilters);
+  const applyFilterState = (filters: DocumentCenterFilterState) => {
+    setSearchTerm(filters.searchTerm);
+    setEntityTypeFilter(filters.entityType);
+    setDocumentTypeFilter(filters.documentType);
+    setExtractionStatusFilter(filters.statusFilter);
+    setExtractionSort(filters.sort);
+  };
   const clearFilters = () => {
-    setSearchTerm(DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm);
-    setEntityTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
-    setDocumentTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
-    setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
-    setExtractionSort('ATTACHMENT_NEWEST');
+    applyFilterState(DOCUMENT_CENTER_DEFAULT_FILTERS);
+  };
+  const removeActiveFilter = (key: DocumentCenterFilterKey) => {
+    applyFilterState(resetDocumentCenterFilter(currentFilters, key));
   };
   const resultSummary = createDocumentCenterResultSummary(
     availableAttachmentCount,
@@ -208,6 +220,23 @@ export function DocumentCenter() {
               </Select>
             </div>
           </div>
+          {activeFilters.length > 0 ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Filtros ativos</span>
+              {activeFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => removeActiveFilter(filter.key)}
+                  aria-label={`Remover ${filter.label}`}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-300 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-900"
+                >
+                  <span className="truncate">{filter.label}</span>
+                  <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </Card>
 
