@@ -51,6 +51,11 @@ import {
   DriverLegacyDetailsBridge,
   type DriverLegacyDetailedSummary,
 } from './DriverLegacyDetailsBridge';
+import {
+  createWhatsappTaskProposalCounts,
+  filterWhatsappTaskProposals,
+  type WhatsappTaskProposalFilter,
+} from './whatsappTaskProposalTriage';
 
 interface DriverDetailsModalProps {
   isOpen: boolean;
@@ -116,6 +121,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
   const [whatsappObservability, setWhatsappObservability] = useState<WhatsappObservabilitySummary | null>(null);
   const [whatsappWindowDays, setWhatsappWindowDays] = useState<WhatsappObservabilitySummary['windowDays']>(30);
+  const [whatsappProposalFilter, setWhatsappProposalFilter] = useState<WhatsappTaskProposalFilter>('ALL');
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
@@ -184,6 +190,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setWhatsappOutbox([]);
     setWhatsappTaskProposals([]);
     setWhatsappObservability(null);
+    setWhatsappProposalFilter('ALL');
     setWhatsappError(null);
     applyHealthProfile({});
     void loadData();
@@ -361,6 +368,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     MAINTENANCE_REPORT: 'Relato de manutenção',
     GENERAL: 'Assunto geral',
   }[category]);
+
+  const whatsappTaskProposalCounts = createWhatsappTaskProposalCounts(whatsappTaskProposals);
+  const visibleWhatsappTaskProposals = filterWhatsappTaskProposals(whatsappTaskProposals, whatsappProposalFilter);
 
   const getStatusBadge = (status?: DriverStatus) => {
     if (status === DriverStatus.ACTIVE) return <Badge variant="success">Ativo</Badge>;
@@ -671,16 +681,42 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               </Card>
 
               <Card className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-sm font-bold">Respostas recebidas — revisão humana</h3>
                     <p className="text-xs text-slate-500">O conteúdo bruto não é armazenado nem exibido. Aprovar cria somente uma tarefa operacional; não altera financeiro, contratos ou documentos.</p>
                   </div>
-                  {whatsappLoading && <span className="text-xs text-slate-400">Atualizando…</span>}
+                  <div className="flex flex-col gap-2 sm:min-w-52">
+                    <Select
+                      label="Triagem"
+                      value={whatsappProposalFilter}
+                      onChange={(event) => setWhatsappProposalFilter(event.target.value as WhatsappTaskProposalFilter)}
+                    >
+                      <option value="ALL">Todas ({whatsappTaskProposalCounts.ALL})</option>
+                      <option value="PENDING">Aguardando revisão ({whatsappTaskProposalCounts.PENDING})</option>
+                      <option value="COMPLETED">Concluídas ({whatsappTaskProposalCounts.COMPLETED})</option>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={whatsappLoading || whatsappTaskProposalCounts.PENDING === 0}
+                      onClick={() => setWhatsappProposalFilter('PENDING')}
+                    >
+                      Priorizar pendências
+                    </Button>
+                  </div>
                 </div>
+                {whatsappLoading && <span className="text-xs text-slate-400">Atualizando…</span>}
                 {whatsappTaskProposals.length === 0 ? (
                   <p className="text-xs text-slate-400">Nenhuma proposta sanitizada para este motorista.</p>
-                ) : whatsappTaskProposals.map((proposal) => (
+                ) : visibleWhatsappTaskProposals.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-4 text-xs text-slate-500">
+                    <p>Nenhuma proposta corresponde à triagem atual. As outras propostas autorizadas continuam disponíveis.</p>
+                    <Button size="sm" variant="outline" className="mt-2" onClick={() => setWhatsappProposalFilter('ALL')}>
+                      Mostrar todas
+                    </Button>
+                  </div>
+                ) : visibleWhatsappTaskProposals.map((proposal) => (
                   <div key={proposal.id} className="p-3 border rounded-xl text-xs space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                       <div>
