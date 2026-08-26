@@ -1,40 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { Header } from './components/layout/Header';
 import { Sidebar, NavigationTab } from './components/layout/Sidebar';
-import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
-import { PendingCenterView } from './components/operations/PendingCenterView';
-import { DocumentCenter } from './components/documents/DocumentCenter';
-import { ManagementReportsView } from './components/reports/ManagementReportsView';
-import { DailyOperationsView } from './components/operations/DailyOperationsView';
-import { RentalLifecycleView } from './components/rental/RentalLifecycleView';
-import { RentalControlCenterView } from './components/operations/RentalControlCenterView';
-import { OperationalIncidentCenterView } from './components/incidents/OperationalIncidentCenterView';
-import { OperationalTasksView } from './components/tasks/OperationalTasksView';
-import { OperationalProductivityView } from './components/productivity/OperationalProductivityView';
-import { ManagementGoalsView } from './components/goals/ManagementGoalsView';
-import { ExecutiveDashboardView } from './components/executive/ExecutiveDashboardView';
-import { ExecutiveOperationsCenterView } from './components/operations/ExecutiveOperationsCenterView';
-import { DecisionManagementCenterView } from './components/decision-management/DecisionManagementCenterView';
-import { PerformanceManagementCenterView } from './components/performance/PerformanceManagementCenterView';
-import { GovernanceCenterView } from './components/governance/GovernanceCenterView';
-import { PostGoLiveObservabilityView } from './components/observability/PostGoLiveObservabilityView';
-import { ResilienceCenterView } from './components/resilience/ResilienceCenterView';
-import { AdministrationCenterView } from './components/admin/AdministrationCenterView';
-import { SystemHealthCenterView } from './components/admin/SystemHealthCenterView';
-import { ReleaseGovernanceCenterView } from './components/release/ReleaseGovernanceCenterView';
-import { IncidentManagementCenterView } from './components/incident-management/IncidentManagementCenterView';
-import { SystemIntegrityAuditView } from './components/audit/SystemIntegrityAuditView';
-import { EnterpriseConsolidationView } from './components/consolidation/EnterpriseConsolidationView';
-import { OperationalWorkflowCenterView } from './components/workflow/OperationalWorkflowCenterView';
-import { OperationalExecutionCenterView } from './components/execution/OperationalExecutionCenterView';
-import { FleetManagement } from './components/fleet/FleetManagement';
-import { FleetComplianceManagement } from './components/fleet/FleetComplianceManagement';
-import { DriversManagement } from './components/drivers/DriversManagement';
-import { ContractsManagement } from './components/contracts/ContractsManagement';
-import { TrafficTicketsManagement } from './components/trafficTickets/TrafficTicketsManagement';
-import { MaintenanceManagement } from './components/maintenance/MaintenanceManagement';
-import { FinanceHubView } from './components/finance/FinanceHubView';
-import { TestRunnerPanel } from './components/tests/TestRunnerPanel';
 import { ReceiptModal } from './components/modals/ReceiptModal';
 import { PaymentModal } from './components/modals/PaymentModal';
 import { TransferModal } from './components/modals/TransferModal';
@@ -49,6 +15,41 @@ import {
 import { TrackerClient } from './api/trackerClient';
 import { ObligationStatus } from './types/enums';
 import { generateOperationalPendings } from './domain/operations/serverOperationalPendingProjection';
+
+const OverviewDashboard=lazy(()=>import('./components/dashboard/OverviewDashboard').then(module=>({default:module.OverviewDashboard})));
+const PendingCenterView=lazy(()=>import('./components/operations/PendingCenterView').then(module=>({default:module.PendingCenterView})));
+const DocumentCenter=lazy(()=>import('./components/documents/DocumentCenter').then(module=>({default:module.DocumentCenter})));
+const ManagementReportsView=lazy(()=>import('./components/reports/ManagementReportsView').then(module=>({default:module.ManagementReportsView})));
+const DailyOperationsView=lazy(()=>import('./components/operations/DailyOperationsView').then(module=>({default:module.DailyOperationsView})));
+const RentalLifecycleView=lazy(()=>import('./components/rental/RentalLifecycleView').then(module=>({default:module.RentalLifecycleView})));
+const RentalControlCenterView=lazy(()=>import('./components/operations/RentalControlCenterView').then(module=>({default:module.RentalControlCenterView})));
+const OperationalIncidentCenterView=lazy(()=>import('./components/incidents/OperationalIncidentCenterView').then(module=>({default:module.OperationalIncidentCenterView})));
+const OperationalTasksView=lazy(()=>import('./components/tasks/OperationalTasksView').then(module=>({default:module.OperationalTasksView})));
+const OperationalProductivityView=lazy(()=>import('./components/productivity/OperationalProductivityView').then(module=>({default:module.OperationalProductivityView})));
+const ManagementGoalsView=lazy(()=>import('./components/goals/ManagementGoalsView').then(module=>({default:module.ManagementGoalsView})));
+const ExecutiveDashboardView=lazy(()=>import('./components/executive/ExecutiveDashboardView').then(module=>({default:module.ExecutiveDashboardView})));
+const ExecutiveOperationsCenterView=lazy(()=>import('./components/operations/ExecutiveOperationsCenterView').then(module=>({default:module.ExecutiveOperationsCenterView})));
+const DecisionManagementCenterView=lazy(()=>import('./components/decision-management/DecisionManagementCenterView').then(module=>({default:module.DecisionManagementCenterView})));
+const PerformanceManagementCenterView=lazy(()=>import('./components/performance/PerformanceManagementCenterView').then(module=>({default:module.PerformanceManagementCenterView})));
+const GovernanceCenterView=lazy(()=>import('./components/governance/GovernanceCenterView').then(module=>({default:module.GovernanceCenterView})));
+const PostGoLiveObservabilityView=lazy(()=>import('./components/observability/PostGoLiveObservabilityView').then(module=>({default:module.PostGoLiveObservabilityView})));
+const ResilienceCenterView=lazy(()=>import('./components/resilience/ResilienceCenterView').then(module=>({default:module.ResilienceCenterView})));
+const AdministrationCenterView=lazy(()=>import('./components/admin/AdministrationCenterView').then(module=>({default:module.AdministrationCenterView})));
+const SystemHealthCenterView=lazy(()=>import('./components/admin/SystemHealthCenterView').then(module=>({default:module.SystemHealthCenterView})));
+const ReleaseGovernanceCenterView=lazy(()=>import('./components/release/ReleaseGovernanceCenterView').then(module=>({default:module.ReleaseGovernanceCenterView})));
+const IncidentManagementCenterView=lazy(()=>import('./components/incident-management/IncidentManagementCenterView').then(module=>({default:module.IncidentManagementCenterView})));
+const SystemIntegrityAuditView=lazy(()=>import('./components/audit/SystemIntegrityAuditView').then(module=>({default:module.SystemIntegrityAuditView})));
+const EnterpriseConsolidationView=lazy(()=>import('./components/consolidation/EnterpriseConsolidationView').then(module=>({default:module.EnterpriseConsolidationView})));
+const OperationalWorkflowCenterView=lazy(()=>import('./components/workflow/OperationalWorkflowCenterView').then(module=>({default:module.OperationalWorkflowCenterView})));
+const OperationalExecutionCenterView=lazy(()=>import('./components/execution/OperationalExecutionCenterView').then(module=>({default:module.OperationalExecutionCenterView})));
+const FleetManagement=lazy(()=>import('./components/fleet/FleetManagement').then(module=>({default:module.FleetManagement})));
+const FleetComplianceManagement=lazy(()=>import('./components/fleet/FleetComplianceManagement').then(module=>({default:module.FleetComplianceManagement})));
+const DriversManagement=lazy(()=>import('./components/drivers/DriversManagement').then(module=>({default:module.DriversManagement})));
+const ContractsManagement=lazy(()=>import('./components/contracts/ContractsManagement').then(module=>({default:module.ContractsManagement})));
+const TrafficTicketsManagement=lazy(()=>import('./components/trafficTickets/TrafficTicketsManagement').then(module=>({default:module.TrafficTicketsManagement})));
+const MaintenanceManagement=lazy(()=>import('./components/maintenance/MaintenanceManagement').then(module=>({default:module.MaintenanceManagement})));
+const FinanceHubView=lazy(()=>import('./components/finance/FinanceHubView').then(module=>({default:module.FinanceHubView})));
+const TestRunnerPanel=lazy(()=>import('./components/tests/TestRunnerPanel').then(module=>({default:module.TestRunnerPanel})));
 
 export default function App(){
   const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);
@@ -73,7 +74,7 @@ export default function App(){
   return <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
     <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
     <div className="flex-1 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950">
+      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950"><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
         {activeTab==='executive-operations'&&<ExecutiveOperationsCenterView/>}
         {activeTab==='performance-management'&&<PerformanceManagementCenterView/>}
@@ -106,7 +107,7 @@ export default function App(){
         {activeTab==='cashflow'&&<FinanceHubView initialSubTab="cashflow" onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenRenegotiationModal={setSelectedReceivablesForRenegotiation}/>} 
         {activeTab==='dre'&&<FinanceHubView initialSubTab="dre" onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenRenegotiationModal={setSelectedReceivablesForRenegotiation}/>} 
         {activeTab==='tests'&&<TestRunnerPanel onTestsCompleted={setTestStatus}/>} 
-      </main>
+      </Suspense></main>
     </div>
     <ReceiptModal isOpen={!!selectedReceivableForReceipt} onClose={()=>setSelectedReceivableForReceipt(null)} receivable={selectedReceivableForReceipt} onSuccess={handleOperationSuccess}/>
     <PaymentModal isOpen={!!selectedPayableForPayment} onClose={()=>setSelectedPayableForPayment(null)} payable={selectedPayableForPayment} onSuccess={handleOperationSuccess}/>
