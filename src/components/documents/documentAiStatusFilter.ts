@@ -88,6 +88,30 @@ export function getDocumentAiActionRequiredSelection(
   };
 }
 
+export type DocumentCenterFilterState = Readonly<{
+  searchTerm: string;
+  entityType: string;
+  documentType: string;
+  statusFilter: DocumentAiStatusFilter;
+  sort: DocumentAiStatusSort;
+}>;
+
+export const DOCUMENT_CENTER_DEFAULT_FILTERS: DocumentCenterFilterState = Object.freeze({
+  searchTerm: '',
+  entityType: 'ALL',
+  documentType: 'ALL',
+  statusFilter: 'ALL',
+  sort: 'ATTACHMENT_NEWEST',
+});
+
+export function hasActiveDocumentCenterFilters(filters: DocumentCenterFilterState): boolean {
+  return filters.searchTerm !== DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm
+    || filters.entityType !== DOCUMENT_CENTER_DEFAULT_FILTERS.entityType
+    || filters.documentType !== DOCUMENT_CENTER_DEFAULT_FILTERS.documentType
+    || filters.statusFilter !== DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter
+    || filters.sort !== DOCUMENT_CENTER_DEFAULT_FILTERS.sort;
+}
+
 const DOCUMENT_AI_REVIEW_PRIORITY: Readonly<Record<DocumentAiAttachmentStatus['status'], number>> = {
   REVIEW_REQUIRED: 0,
   FAILED: 1,

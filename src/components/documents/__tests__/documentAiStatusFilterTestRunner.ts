@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import type { DocumentAiAttachmentStatus } from '../../../api/documentAiClient';
 import {
   createDocumentAiStatusCounts,
+  DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
+  hasActiveDocumentCenterFilters,
   DOCUMENT_AI_STATUS_FILTERS,
   DOCUMENT_AI_STATUS_SORTS,
   matchesDocumentAiStatusFilter,
@@ -107,6 +109,24 @@ assert.equal(
   'the action-required shortcut must be unavailable when statuses are unavailable',
 );
 
+assert.deepEqual(DOCUMENT_CENTER_DEFAULT_FILTERS, {
+  searchTerm: '',
+  entityType: 'ALL',
+  documentType: 'ALL',
+  statusFilter: 'ALL',
+  sort: 'ATTACHMENT_NEWEST',
+});
+assert.equal(hasActiveDocumentCenterFilters(DOCUMENT_CENTER_DEFAULT_FILTERS), false);
+for (const activeFilters of [
+  { ...DOCUMENT_CENTER_DEFAULT_FILTERS, searchTerm: 'CRLV' },
+  { ...DOCUMENT_CENTER_DEFAULT_FILTERS, entityType: 'VEHICLE' },
+  { ...DOCUMENT_CENTER_DEFAULT_FILTERS, documentType: 'INSURANCE' },
+  { ...DOCUMENT_CENTER_DEFAULT_FILTERS, statusFilter: 'ACTION_REQUIRED' as const },
+  { ...DOCUMENT_CENTER_DEFAULT_FILTERS, sort: 'REVIEW_PRIORITY' as const },
+]) {
+  assert.equal(hasActiveDocumentCenterFilters(activeFilters), true, 'each local control must activate clear filters');
+}
+
 assert.deepEqual(DOCUMENT_AI_STATUS_SORTS, [
   'ATTACHMENT_NEWEST',
   'REVIEW_PRIORITY',
@@ -151,4 +171,4 @@ assert.deepEqual(
 );
 assert.deepEqual(sortableAttachments.map(({ id }) => id), originalOrder, 'sorting must not mutate authorized input data');
 
-console.log('PASS: document AI action filtering, shortcut selection, counts and local sorting are deterministic and fail-open for visibility');
+console.log('PASS: document AI action filtering, shortcut selection, deterministic reset, counts and local sorting are deterministic and fail-open for visibility');

@@ -10,7 +10,9 @@ import { AttachmentList } from './AttachmentList';
 import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
   createDocumentAiStatusCounts,
+  DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
+  hasActiveDocumentCenterFilters,
   matchesDocumentAiStatusFilter,
   sortDocumentAiAttachments,
   type DocumentAiStatusFilter,
@@ -21,10 +23,10 @@ export function DocumentCenter() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [entityTypeFilter, setEntityTypeFilter] = useState('ALL');
-  const [documentTypeFilter, setDocumentTypeFilter] = useState('ALL');
-  const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>('ALL');
+  const [searchTerm, setSearchTerm] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm);
+  const [entityTypeFilter, setEntityTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
+  const [documentTypeFilter, setDocumentTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
+  const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
   const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST');
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
@@ -95,6 +97,20 @@ export function DocumentCenter() {
     setExtractionStatusFilter(actionRequiredSelection.statusFilter);
     setExtractionSort(actionRequiredSelection.sort);
   };
+  const filtersActive = hasActiveDocumentCenterFilters({
+    searchTerm,
+    entityType: entityTypeFilter,
+    documentType: documentTypeFilter,
+    statusFilter: extractionStatusFilter,
+    sort: extractionSort,
+  });
+  const clearFilters = () => {
+    setSearchTerm(DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm);
+    setEntityTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
+    setDocumentTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
+    setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
+    setExtractionSort('ATTACHMENT_NEWEST');
+  };
 
   const entityTypes = Array.from(new Set(attachments.map((item) => item.entityType).filter(Boolean)));
   const docTypes = Array.from(new Set(attachments.map((item) => item.documentType).filter((value): value is string => Boolean(value))));
@@ -111,14 +127,24 @@ export function DocumentCenter() {
       <Card>
         <div className="p-4 border-b flex flex-wrap items-center justify-between gap-3">
           <span className="font-semibold text-lg">Filtros de Busca</span>
-          <button
-            type="button"
-            onClick={focusActionRequired}
-            disabled={!actionRequiredSelection}
-            className="rounded-md border border-amber-500 px-3 py-1.5 text-sm font-medium text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
-          >
-            Priorizar ações necessárias
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={!filtersActive}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 enabled:hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-300"
+            >
+              Limpar filtros
+            </button>
+            <button
+              type="button"
+              onClick={focusActionRequired}
+              disabled={!actionRequiredSelection}
+              className="rounded-md border border-amber-500 px-3 py-1.5 text-sm font-medium text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
+            >
+              Priorizar ações necessárias
+            </button>
+          </div>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
