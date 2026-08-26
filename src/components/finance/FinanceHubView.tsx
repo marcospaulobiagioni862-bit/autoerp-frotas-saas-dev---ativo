@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
-import { FinanceOverviewView } from './FinanceOverviewView';
-import { ReceivablesView } from './ReceivablesView';
-import { PayablesView } from './PayablesView';
-import { TransactionsView } from './TransactionsView';
-import { DREReportView } from './DREReportView';
-import { CashFlowView } from './CashFlowView';
-import { FinancialPeriodsView } from './FinancialPeriodsView';
-import { FinancialMasterDataView } from './FinancialMasterDataView';
+import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
+
+const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
+const ReceivablesView=lazy(()=>import('./ReceivablesView').then(module=>({default:module.ReceivablesView})));
+const PayablesView=lazy(()=>import('./PayablesView').then(module=>({default:module.PayablesView})));
+const TransactionsView=lazy(()=>import('./TransactionsView').then(module=>({default:module.TransactionsView})));
+const CashFlowView=lazy(()=>import('./CashFlowView').then(module=>({default:module.CashFlowView})));
+const FinancialPeriodsView=lazy(()=>import('./FinancialPeriodsView').then(module=>({default:module.FinancialPeriodsView})));
+const DREReportView=lazy(()=>import('./DREReportView').then(module=>({default:module.DREReportView})));
+const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(module=>({default:module.FinancialMasterDataView})));
 
 type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'periods' | 'dre' | 'settings';
 
@@ -70,7 +72,9 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         })}
       </div>
 
-      <div className="mt-6">
+      <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
+        <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
+          <div className="mt-6">
         {activeSubTab === 'overview' && (
           <FinanceOverviewView onSelectSubTab={(tab) => setActiveSubTab(tab)} />
         )}
@@ -90,7 +94,9 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         {activeSubTab === 'periods' && <FinancialPeriodsView />}
         {activeSubTab === 'dre' && <DREReportView />}
         {activeSubTab === 'settings' && <FinancialMasterDataView />}
-      </div>
+          </div>
+        </Suspense>
+      </LazyModuleErrorBoundary>
     </div>
   );
 };
