@@ -22,10 +22,10 @@ import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Driver } from '../../types/entities';
+import { DriverStatus, DocumentStatus } from '../../types/enums';
 
 const DriverFormModal=lazy(()=>import('./DriverFormModal').then(module=>({default:module.DriverFormModal})));
 const DriverDetailsModal=lazy(()=>import('./DriverDetailsModal').then(module=>({default:module.DriverDetailsModal})));
-import { DriverStatus, DocumentStatus } from '../../types/enums';
 
 interface DriversManagementProps {
   companyId: string;
