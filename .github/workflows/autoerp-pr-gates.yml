@@ -710,6 +710,9 @@ jobs:
       - name: Telemetry client authority and human review regression
         run: npx tsx src/api/__tests__/telemetryClientTestRunner.ts
 
+      - name: Lazy module recovery regression
+        run: npx tsx src/components/common/__tests__/lazyModuleErrorBoundaryTestRunner.ts
+
       - name: Report AI suggestion regression
         run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
 
