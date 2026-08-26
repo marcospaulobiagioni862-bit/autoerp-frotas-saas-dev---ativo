@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { DocumentAiAttachmentStatus } from '../../../api/documentAiClient';
 import {
   createDocumentAiStatusCounts,
+  createDocumentCenterActiveFilters,
   createDocumentCenterResultSummary,
   DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
@@ -9,6 +10,7 @@ import {
   DOCUMENT_AI_STATUS_FILTERS,
   DOCUMENT_AI_STATUS_SORTS,
   matchesDocumentAiStatusFilter,
+  resetDocumentCenterFilter,
   sortDocumentAiAttachments,
 } from '../documentAiStatusFilter';
 
@@ -119,6 +121,52 @@ assert.deepEqual(DOCUMENT_CENTER_DEFAULT_FILTERS, {
 });
 assert.equal(hasActiveDocumentCenterFilters(DOCUMENT_CENTER_DEFAULT_FILTERS), false);
 assert.deepEqual(
+  createDocumentCenterActiveFilters(DOCUMENT_CENTER_DEFAULT_FILTERS),
+  [],
+  'the safe default state must not invent active filter labels',
+);
+
+const allFiltersActive = {
+  searchTerm: 'CRLV 2026',
+  entityType: 'VEHICLE',
+  documentType: 'CRLV',
+  statusFilter: 'ACTION_REQUIRED' as const,
+  sort: 'REVIEW_PRIORITY' as const,
+};
+assert.deepEqual(
+  createDocumentCenterActiveFilters(allFiltersActive),
+  [
+    { key: 'searchTerm', label: 'Busca: CRLV 2026' },
+    { key: 'entityType', label: 'Módulo: VEHICLE' },
+    { key: 'documentType', label: 'Tipo: CRLV' },
+    { key: 'statusFilter', label: 'Estado: Ação necessária' },
+    { key: 'sort', label: 'Ordenação: Prioridade de triagem' },
+  ],
+  'active filter summary must preserve deterministic control order and sanitized labels',
+);
+
+const filterKeys = ['searchTerm', 'entityType', 'documentType', 'statusFilter', 'sort'] as const;
+for (const key of filterKeys) {
+  const reset = resetDocumentCenterFilter(allFiltersActive, key);
+  assert.equal(reset[key], DOCUMENT_CENTER_DEFAULT_FILTERS[key], `reset must restore only ${key} to its safe default`);
+  for (const otherKey of filterKeys) {
+    if (otherKey === key) continue;
+    assert.equal(reset[otherKey], allFiltersActive[otherKey], `resetting ${key} must preserve ${otherKey}`);
+  }
+}
+assert.deepEqual(
+  allFiltersActive,
+  {
+    searchTerm: 'CRLV 2026',
+    entityType: 'VEHICLE',
+    documentType: 'CRLV',
+    statusFilter: 'ACTION_REQUIRED',
+    sort: 'REVIEW_PRIORITY',
+  },
+  'individual reset must not mutate the current filter state',
+);
+
+assert.deepEqual(
   createDocumentCenterResultSummary(4, 4, false),
   { total: 4, visible: 4, filtered: false, filteredEmpty: false },
 );
@@ -149,6 +197,7 @@ for (const activeFilters of [
   { ...DOCUMENT_CENTER_DEFAULT_FILTERS, sort: 'REVIEW_PRIORITY' as const },
 ]) {
   assert.equal(hasActiveDocumentCenterFilters(activeFilters), true, 'each local control must activate clear filters');
+  assert.equal(createDocumentCenterActiveFilters(activeFilters).length, 1, 'each changed control must produce exactly one active filter item');
 }
 
 assert.deepEqual(DOCUMENT_AI_STATUS_SORTS, [
@@ -195,4 +244,4 @@ assert.deepEqual(
 );
 assert.deepEqual(sortableAttachments.map(({ id }) => id), originalOrder, 'sorting must not mutate authorized input data');
 
-console.log('PASS: document AI filtering, contextual result summary, deterministic reset, counts and local sorting are deterministic and fail-open for visibility');
+console.log('PASS: document AI filtering, active filter summary, contextual result summary, deterministic reset, counts and local sorting are deterministic and fail-open for visibility');
