@@ -36,7 +36,7 @@ assert.doesNotMatch(seedStub, /StorageAdapter|indexedDB|localStorage/i, 'Product
 assert.match(seedStub, /BROWSER_SEED_RESET_DISABLED_SERVER_AUTHORITY_REQUIRED/, 'Browser reset must fail closed');
 
 const migratedRuntimeFiles = [
-  'src/App.tsx',
+  'src/app/navigationBadgeLoader.ts',
   'src/components/dashboard/OverviewDashboard.tsx',
   'src/components/dashboard/PerformanceMetricsWidget.tsx',
   'src/components/operations/PendingCenterView.tsx',
@@ -53,8 +53,13 @@ for (const path of migratedRuntimeFiles) {
 }
 
 const appSource = read('src/App.tsx');
+assert.doesNotMatch(appSource, /StorageAdapter|indexedDB|localStorage/i, 'App must not directly access browser persistence');
+assert.doesNotMatch(appSource, /persistence\/repositories\/(?:localRepositories|serverReadModelRepositories)/, 'App must defer the read-model repository graph');
 assert.doesNotMatch(appSource, /persistence\/seed\/seedData|seedAutoERPTestData|handleResetSeedData/, 'App runtime must not depend on browser seed/reset authority');
-assert.match(appSource, /domain\/operations\/serverOperationalPendingProjection/, 'App must import the tenant-safe pending projection explicitly');
+assert.match(appSource, /import\('\.\/app\/navigationBadgeLoader'\)/, 'App must load the authenticated badge read-model boundary explicitly and on demand');
+const badgeLoaderSource = read('src/app/navigationBadgeLoader.ts');
+assert.match(badgeLoaderSource, /persistence\/repositories\/serverReadModelRepositories/, 'Badge loader must import the authenticated server read-model adapter');
+assert.match(badgeLoaderSource, /domain\/operations\/serverOperationalPendingProjection/, 'Badge loader must import the tenant-safe pending projection explicitly');
 const overviewSource = read('src/components/dashboard/OverviewDashboard.tsx');
 assert.match(overviewSource, /domain\/operations\/serverOperationalPendingProjection/, 'Overview must import the tenant-safe pending projection explicitly');
 assert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');
