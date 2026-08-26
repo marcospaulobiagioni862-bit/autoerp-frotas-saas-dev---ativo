@@ -74,6 +74,20 @@ export const DOCUMENT_AI_STATUS_SORTS = [
 
 export type DocumentAiStatusSort = (typeof DOCUMENT_AI_STATUS_SORTS)[number];
 
+export type DocumentAiActionRequiredSelection = Readonly<{
+  statusFilter: 'ACTION_REQUIRED';
+  sort: 'REVIEW_PRIORITY';
+}>;
+
+export function getDocumentAiActionRequiredSelection(
+  statusesUnavailable: boolean,
+): DocumentAiActionRequiredSelection | null {
+  return statusesUnavailable ? null : {
+    statusFilter: 'ACTION_REQUIRED',
+    sort: 'REVIEW_PRIORITY',
+  };
+}
+
 const DOCUMENT_AI_REVIEW_PRIORITY: Readonly<Record<DocumentAiAttachmentStatus['status'], number>> = {
   REVIEW_REQUIRED: 0,
   FAILED: 1,
