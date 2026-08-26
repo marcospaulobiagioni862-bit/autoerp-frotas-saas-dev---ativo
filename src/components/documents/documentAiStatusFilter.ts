@@ -29,7 +29,6 @@ export function matchesDocumentAiStatusFilter(
   return current?.status === filter;
 }
 
-
 export type DocumentAiStatusCounts = Record<DocumentAiStatusFilter, number | null>;
 
 export function createDocumentAiStatusCounts(
@@ -96,6 +95,13 @@ export type DocumentCenterFilterState = Readonly<{
   sort: DocumentAiStatusSort;
 }>;
 
+export type DocumentCenterFilterKey = keyof DocumentCenterFilterState;
+
+export type DocumentCenterActiveFilter = Readonly<{
+  key: DocumentCenterFilterKey;
+  label: string;
+}>;
+
 export const DOCUMENT_CENTER_DEFAULT_FILTERS: DocumentCenterFilterState = Object.freeze({
   searchTerm: '',
   entityType: 'ALL',
@@ -103,6 +109,63 @@ export const DOCUMENT_CENTER_DEFAULT_FILTERS: DocumentCenterFilterState = Object
   statusFilter: 'ALL',
   sort: 'ATTACHMENT_NEWEST',
 });
+
+const DOCUMENT_AI_STATUS_FILTER_LABELS: Readonly<Record<DocumentAiStatusFilter, string>> = {
+  ALL: 'Todos os estados',
+  NONE: 'Sem extração',
+  ACTION_REQUIRED: 'Ação necessária',
+  PENDING: 'Na fila',
+  PROCESSING: 'Processando',
+  REVIEW_REQUIRED: 'Revisão necessária',
+  APPROVED: 'Aprovada',
+  REJECTED: 'Rejeitada',
+  FAILED: 'Falhou',
+};
+
+const DOCUMENT_AI_STATUS_SORT_LABELS: Readonly<Record<DocumentAiStatusSort, string>> = {
+  ATTACHMENT_NEWEST: 'Anexo mais recente',
+  REVIEW_PRIORITY: 'Prioridade de triagem',
+  EXTRACTION_UPDATED_DESC: 'Extração atualizada recentemente',
+  EXTRACTION_UPDATED_ASC: 'Extração atualizada há mais tempo',
+};
+
+export function createDocumentCenterActiveFilters(
+  filters: DocumentCenterFilterState,
+): DocumentCenterActiveFilter[] {
+  const activeFilters: DocumentCenterActiveFilter[] = [];
+  if (filters.searchTerm !== DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm) {
+    activeFilters.push({ key: 'searchTerm', label: `Busca: ${filters.searchTerm}` });
+  }
+  if (filters.entityType !== DOCUMENT_CENTER_DEFAULT_FILTERS.entityType) {
+    activeFilters.push({ key: 'entityType', label: `Módulo: ${filters.entityType}` });
+  }
+  if (filters.documentType !== DOCUMENT_CENTER_DEFAULT_FILTERS.documentType) {
+    activeFilters.push({ key: 'documentType', label: `Tipo: ${filters.documentType}` });
+  }
+  if (filters.statusFilter !== DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter) {
+    activeFilters.push({
+      key: 'statusFilter',
+      label: `Estado: ${DOCUMENT_AI_STATUS_FILTER_LABELS[filters.statusFilter]}`,
+    });
+  }
+  if (filters.sort !== DOCUMENT_CENTER_DEFAULT_FILTERS.sort) {
+    activeFilters.push({
+      key: 'sort',
+      label: `Ordenação: ${DOCUMENT_AI_STATUS_SORT_LABELS[filters.sort]}`,
+    });
+  }
+  return activeFilters;
+}
+
+export function resetDocumentCenterFilter(
+  filters: DocumentCenterFilterState,
+  key: DocumentCenterFilterKey,
+): DocumentCenterFilterState {
+  return {
+    ...filters,
+    [key]: DOCUMENT_CENTER_DEFAULT_FILTERS[key],
+  };
+}
 
 export function hasActiveDocumentCenterFilters(filters: DocumentCenterFilterState): boolean {
   return filters.searchTerm !== DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm
