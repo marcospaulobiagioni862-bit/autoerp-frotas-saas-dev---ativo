@@ -634,6 +634,9 @@ jobs:
       - name: Deferred navigation badges regression
         run: npx tsx src/app/__tests__/navigationBadgeLoaderTestRunner.ts
 
+      - name: Deferred finance subviews regression
+        run: npx tsx src/components/finance/__tests__/financeHubLazyLoadingTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
