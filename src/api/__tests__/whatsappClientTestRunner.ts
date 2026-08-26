@@ -9,6 +9,11 @@ import {
   type WhatsappTaskProposal,
   type WhatsappObservabilitySummary,
 } from '../whatsappClient';
+import {
+  createWhatsappTaskProposalCounts,
+  filterWhatsappTaskProposals,
+  WHATSAPP_TASK_PROPOSAL_FILTERS,
+} from '../../components/drivers/whatsappTaskProposalTriage';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -73,6 +78,22 @@ export class WhatsappClientTestRunner {
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
     assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
     assert(parseWhatsappObservabilitySummary(observability).windowDays === 30, 'valid observability summary rejected');
+
+    assert(WHATSAPP_TASK_PROPOSAL_FILTERS.join(',') === 'ALL,PENDING,COMPLETED', 'proposal triage filter allowlist changed');
+    const triageInput: WhatsappTaskProposal[] = [
+      { ...proposal, id: 'wrp_33333333333333333333333333333333', createdAt: '2026-08-25T12:00:00.000Z' },
+      { ...proposal, id: 'wrp_22222222222222222222222222222222', createdAt: '2026-08-25T09:00:00.000Z' },
+      { ...proposal, id: 'wrp_44444444444444444444444444444444', status: 'APPROVED', taskId: 'task-4', reviewedAt: '2026-08-25T12:05:00.000Z' },
+      { ...proposal, id: 'wrp_55555555555555555555555555555555', status: 'REJECTED', reviewedAt: '2026-08-25T12:06:00.000Z' },
+    ];
+    const triageOriginalOrder = triageInput.map((item) => item.id).join(',');
+    const triageCounts = createWhatsappTaskProposalCounts(triageInput);
+    assert(triageCounts.ALL === 4 && triageCounts.PENDING === 2 && triageCounts.COMPLETED === 2, 'proposal triage counts are inconsistent');
+    assert(filterWhatsappTaskProposals(triageInput, 'ALL').length === 4, 'ALL proposal triage hid authorized proposals');
+    assert(filterWhatsappTaskProposals(triageInput, 'COMPLETED').every((item) => item.status !== 'PENDING'), 'COMPLETED proposal triage leaked pending items');
+    const pendingTriage = filterWhatsappTaskProposals(triageInput, 'PENDING');
+    assert(pendingTriage.length === 2 && pendingTriage[0].id === 'wrp_22222222222222222222222222222222', 'PENDING proposal triage must show oldest pending first');
+    assert(triageInput.map((item) => item.id).join(',') === triageOriginalOrder, 'proposal triage mutated authorized input');
 
     let rejected = false;
     try {
@@ -202,7 +223,7 @@ export class WhatsappClientTestRunner {
 }
 
 WhatsappClientTestRunner.runAllTests()
-  .then(() => console.log('WhatsApp client authority tests PASS'))
+  .then(() => console.log('WhatsApp client authority and local proposal triage tests PASS'))
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;
