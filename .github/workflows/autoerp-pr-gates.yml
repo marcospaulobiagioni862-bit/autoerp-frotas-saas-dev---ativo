@@ -728,6 +728,9 @@ jobs:
       - name: Lazy module recovery regression
         run: npx tsx src/components/common/__tests__/lazyModuleErrorBoundaryTestRunner.ts
 
+      - name: Deferred navigation badges regression
+        run: npx tsx src/app/__tests__/navigationBadgeLoaderTestRunner.ts
+
       - name: Report AI suggestion regression
         run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
 
