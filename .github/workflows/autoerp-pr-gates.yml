@@ -640,6 +640,9 @@ jobs:
       - name: Deferred driver modals regression
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
+      - name: Deferred contract modals regression
+        run: npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
