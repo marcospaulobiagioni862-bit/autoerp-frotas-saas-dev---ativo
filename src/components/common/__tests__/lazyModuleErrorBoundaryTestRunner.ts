@@ -60,9 +60,11 @@ for (const openingGuard of [
   );
 }
 
-assert.match(
-  appSource,
-  /<LazyModuleErrorBoundary resetKey=\{financeModalResetKey\}[^>]*><Suspense fallback=\{null\}>/,
+assert.equal(
+  appSource.includes(
+    '<LazyModuleErrorBoundary resetKey={financeModalResetKey} onRetry={()=>window.location.reload()}><Suspense fallback={null}>',
+  ),
+  true,
   'deferred finance modals must stay inside a recoverable Suspense boundary',
 );
 
