@@ -2,10 +2,6 @@ import React, { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { Header } from './components/layout/Header';
 import { LazyModuleErrorBoundary } from './components/common/LazyModuleErrorBoundary';
 import { Sidebar, NavigationTab } from './components/layout/Sidebar';
-import { ReceiptModal } from './components/modals/ReceiptModal';
-import { PaymentModal } from './components/modals/PaymentModal';
-import { TransferModal } from './components/modals/TransferModal';
-import { RenegotiationModal } from './components/modals/RenegotiationModal';
 import { AccountReceivable, AccountPayable } from './types/entities';
 import { useAuth } from './hooks/useAuth';
 
@@ -43,6 +39,10 @@ const TrafficTicketsManagement=lazy(()=>import('./components/trafficTickets/Traf
 const MaintenanceManagement=lazy(()=>import('./components/maintenance/MaintenanceManagement').then(module=>({default:module.MaintenanceManagement})));
 const FinanceHubView=lazy(()=>import('./components/finance/FinanceHubView').then(module=>({default:module.FinanceHubView})));
 const TestRunnerPanel=lazy(()=>import('./components/tests/TestRunnerPanel').then(module=>({default:module.TestRunnerPanel})));
+const ReceiptModal=lazy(()=>import('./components/modals/ReceiptModal').then(module=>({default:module.ReceiptModal})));
+const PaymentModal=lazy(()=>import('./components/modals/PaymentModal').then(module=>({default:module.PaymentModal})));
+const TransferModal=lazy(()=>import('./components/modals/TransferModal').then(module=>({default:module.TransferModal})));
+const RenegotiationModal=lazy(()=>import('./components/modals/RenegotiationModal').then(module=>({default:module.RenegotiationModal})));
 
 export default function App(){
   const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);
@@ -61,6 +61,7 @@ export default function App(){
     setPendingReceivablesCount(counts.pendingReceivablesCount);setPendingPayablesCount(counts.pendingPayablesCount);setPendingPendingsCount(counts.pendingPendingsCount);
   };
   const handleOperationSuccess=async()=>{const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;if(!companyIdSnapshot){clearBadgeState();return;}await refreshBadges(companyIdSnapshot,requestVersion);};
+  const financeModalResetKey=selectedReceivableForReceipt?'receipt':selectedPayableForPayment?'payment':isTransferModalOpen?'transfer':selectedReceivablesForRenegotiation.length>0?'renegotiation':'none';
 
   return <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
     <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
@@ -100,9 +101,11 @@ export default function App(){
         {activeTab==='tests'&&<TestRunnerPanel onTestsCompleted={setTestStatus}/>} 
       </Suspense></LazyModuleErrorBoundary></main>
     </div>
-    <ReceiptModal isOpen={!!selectedReceivableForReceipt} onClose={()=>setSelectedReceivableForReceipt(null)} receivable={selectedReceivableForReceipt} onSuccess={handleOperationSuccess}/>
-    <PaymentModal isOpen={!!selectedPayableForPayment} onClose={()=>setSelectedPayableForPayment(null)} payable={selectedPayableForPayment} onSuccess={handleOperationSuccess}/>
-    <TransferModal isOpen={isTransferModalOpen} onClose={()=>setIsTransferModalOpen(false)} onSuccess={handleOperationSuccess}/>
-    <RenegotiationModal isOpen={selectedReceivablesForRenegotiation.length>0} onClose={()=>setSelectedReceivablesForRenegotiation([])} receivables={selectedReceivablesForRenegotiation} onSuccess={handleOperationSuccess}/>
+    <LazyModuleErrorBoundary resetKey={financeModalResetKey} onRetry={()=>window.location.reload()}><Suspense fallback={null}>
+      {selectedReceivableForReceipt&&<ReceiptModal isOpen onClose={()=>setSelectedReceivableForReceipt(null)} receivable={selectedReceivableForReceipt} onSuccess={handleOperationSuccess}/>}
+      {selectedPayableForPayment&&<PaymentModal isOpen onClose={()=>setSelectedPayableForPayment(null)} payable={selectedPayableForPayment} onSuccess={handleOperationSuccess}/>}
+      {isTransferModalOpen&&<TransferModal isOpen onClose={()=>setIsTransferModalOpen(false)} onSuccess={handleOperationSuccess}/>}
+      {selectedReceivablesForRenegotiation.length>0&&<RenegotiationModal isOpen onClose={()=>setSelectedReceivablesForRenegotiation([])} receivables={selectedReceivablesForRenegotiation} onSuccess={handleOperationSuccess}/>}
+    </Suspense></LazyModuleErrorBoundary>
   </div>;
 }
