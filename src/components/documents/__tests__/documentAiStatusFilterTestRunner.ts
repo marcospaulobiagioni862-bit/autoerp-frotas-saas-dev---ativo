@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { DocumentAiAttachmentStatus } from '../../../api/documentAiClient';
 import {
   createDocumentAiStatusCounts,
+  createDocumentCenterResultSummary,
   DOCUMENT_CENTER_DEFAULT_FILTERS,
   getDocumentAiActionRequiredSelection,
   hasActiveDocumentCenterFilters,
@@ -117,6 +118,29 @@ assert.deepEqual(DOCUMENT_CENTER_DEFAULT_FILTERS, {
   sort: 'ATTACHMENT_NEWEST',
 });
 assert.equal(hasActiveDocumentCenterFilters(DOCUMENT_CENTER_DEFAULT_FILTERS), false);
+assert.deepEqual(
+  createDocumentCenterResultSummary(4, 4, false),
+  { total: 4, visible: 4, filtered: false, filteredEmpty: false },
+);
+assert.deepEqual(
+  createDocumentCenterResultSummary(4, 2, true),
+  { total: 4, visible: 2, filtered: true, filteredEmpty: false },
+);
+assert.deepEqual(
+  createDocumentCenterResultSummary(4, 0, true),
+  { total: 4, visible: 0, filtered: true, filteredEmpty: true },
+);
+assert.deepEqual(
+  createDocumentCenterResultSummary(0, 0, true),
+  { total: 0, visible: 0, filtered: true, filteredEmpty: false },
+  'an empty authorized collection must not be misreported as hidden by filters',
+);
+for (const invalidCounts of [[-1, 0], [1, -1], [1, 2], [1.5, 1]] as const) {
+  assert.throws(
+    () => createDocumentCenterResultSummary(invalidCounts[0], invalidCounts[1], true),
+    /Invalid document result summary/,
+  );
+}
 for (const activeFilters of [
   { ...DOCUMENT_CENTER_DEFAULT_FILTERS, searchTerm: 'CRLV' },
   { ...DOCUMENT_CENTER_DEFAULT_FILTERS, entityType: 'VEHICLE' },
@@ -171,4 +195,4 @@ assert.deepEqual(
 );
 assert.deepEqual(sortableAttachments.map(({ id }) => id), originalOrder, 'sorting must not mutate authorized input data');
 
-console.log('PASS: document AI action filtering, shortcut selection, deterministic reset, counts and local sorting are deterministic and fail-open for visibility');
+console.log('PASS: document AI filtering, contextual result summary, deterministic reset, counts and local sorting are deterministic and fail-open for visibility');

@@ -112,6 +112,29 @@ export function hasActiveDocumentCenterFilters(filters: DocumentCenterFilterStat
     || filters.sort !== DOCUMENT_CENTER_DEFAULT_FILTERS.sort;
 }
 
+export type DocumentCenterResultSummary = Readonly<{
+  total: number;
+  visible: number;
+  filtered: boolean;
+  filteredEmpty: boolean;
+}>;
+
+export function createDocumentCenterResultSummary(
+  total: number,
+  visible: number,
+  filtersActive: boolean,
+): DocumentCenterResultSummary {
+  if (!Number.isInteger(total) || total < 0 || !Number.isInteger(visible) || visible < 0 || visible > total) {
+    throw new Error('Invalid document result summary');
+  }
+  return {
+    total,
+    visible,
+    filtered: filtersActive,
+    filteredEmpty: filtersActive && total > 0 && visible === 0,
+  };
+}
+
 const DOCUMENT_AI_REVIEW_PRIORITY: Readonly<Record<DocumentAiAttachmentStatus['status'], number>> = {
   REVIEW_REQUIRED: 0,
   FAILED: 1,
