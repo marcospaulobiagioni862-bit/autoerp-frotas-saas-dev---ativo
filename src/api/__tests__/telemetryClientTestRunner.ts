@@ -1,4 +1,5 @@
 import { TrackerClient,parseTelemetryEventSummary,parseTelemetryHealthSummary,parseTelemetryObservabilitySummary,type TelemetryEventSummary,type TelemetryHealthSummary,type TelemetryObservabilitySummary } from '../trackerClient';
+import { createTelemetryEventCounts,filterTelemetryEvents,TELEMETRY_EVENT_FILTERS } from '../../components/fleet/telemetryEventTriage';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
 
@@ -30,6 +31,22 @@ async function main():Promise<void>{
   assert(parseTelemetryEventSummary(reviewed).reviewStatus==='ACKNOWLEDGED','reviewed quarantine summary rejected');
   assert(parseTelemetryHealthSummary(health).healthStatus==='ATTENTION','health summary rejected');
   assert(parseTelemetryObservabilitySummary(observability).pendingReviewEvents===1,'observability summary rejected');
+  assert(TELEMETRY_EVENT_FILTERS.join(',')==='ALL,PENDING,COMPLETED,ACCEPTED','telemetry triage filter allowlist changed');
+  const triageInput:TelemetryEventSummary[]=[
+    {...quarantined,id:'telemetry-event-3',receivedAt:'2026-08-25T02:05:01.000Z'},
+    {...accepted,id:'telemetry-event-4',receivedAt:'2026-08-25T02:03:01.000Z'},
+    {...reviewed,id:'telemetry-event-5',receivedAt:'2026-08-25T02:04:01.000Z'},
+    {...quarantined,id:'telemetry-event-6',receivedAt:'2026-08-25T02:01:01.000Z'},
+  ];
+  const originalTriageOrder=triageInput.map(item=>item.id).join(',');
+  const triageCounts=createTelemetryEventCounts(triageInput);
+  assert(triageCounts.ALL===4&&triageCounts.PENDING===2&&triageCounts.COMPLETED===1&&triageCounts.ACCEPTED===1,'telemetry triage counts are inconsistent');
+  assert(filterTelemetryEvents(triageInput,'ALL').length===4,'ALL telemetry triage hid authorized events');
+  assert(filterTelemetryEvents(triageInput,'COMPLETED').every(item=>item.status==='QUARANTINED'&&item.reviewStatus!=='PENDING'),'COMPLETED telemetry triage leaked pending or accepted events');
+  assert(filterTelemetryEvents(triageInput,'ACCEPTED').every(item=>item.status==='ACCEPTED'),'ACCEPTED telemetry triage leaked quarantined events');
+  const pendingTriage=filterTelemetryEvents(triageInput,'PENDING');
+  assert(pendingTriage.length===2&&pendingTriage[0].id==='telemetry-event-6','PENDING telemetry triage must show oldest pending first');
+  assert(triageInput.map(item=>item.id).join(',')===originalTriageOrder,'telemetry triage mutated authorized input');
   for(const unsafeObservability of [{...observability,rawPayload:{}},{...observability,companyId:'foreign-tenant'},{...observability,totalEvents:3},{...observability,retentionDays:7}]){let rejected=false;try{parseTelemetryObservabilitySummary(unsafeObservability);}catch{rejected=true;}assert(rejected,'unsafe or inconsistent observability summary accepted');}
   for(const unsafeHealth of [{...health,rawPayload:{}},{...health,companyId:'foreign-tenant'},{...health,imei:'111111111111111'},{...health,healthStatus:'NO_DATA'}]){let rejected=false;try{parseTelemetryHealthSummary(unsafeHealth);}catch{rejected=true;}assert(rejected,'unsafe or inconsistent health summary accepted');}
   for(const unsafe of [
@@ -70,6 +87,6 @@ async function main():Promise<void>{
     assert(JSON.stringify(Object.keys(body).sort())===JSON.stringify(['decision','reason']),'review sent protected browser authority fields');
     assert(body.decision==='ACKNOWLEDGED'&&body.reason==='Divergência confirmada em revisão humana','review body changed human decision');
   }finally{globalThis.fetch=originalFetch;}
-  console.log('Telemetry client authority and human review tests PASS');
+  console.log('Telemetry client authority, human review and local triage tests PASS');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
