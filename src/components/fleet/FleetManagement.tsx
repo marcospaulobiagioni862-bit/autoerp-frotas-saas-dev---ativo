@@ -21,6 +21,7 @@ import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import {
   VEHICLE_STATUS_FILTERS,
+  vehicleManualStatusOptions,
   vehicleStatusBadgeVariant,
   vehicleStatusLabel,
 } from './vehicleStatusPresentation';
@@ -247,6 +248,7 @@ export const FleetManagement: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVehicles.map((vehicle) => {
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
+            const manualStatusOptions = vehicleManualStatusOptions(vehicle.status);
 
             return (
               <Card
@@ -295,43 +297,60 @@ export const FleetManagement: React.FC = () => {
                 </div>
 
                 {/* Quick Action Buttons */}
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
-                  <button
-                    onClick={() => setSelectedVehicleIdForDetails(vehicle.id)}
-                    className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Detalhes →
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setVehicleForKmRecord(vehicle)}
-                      title="Registrar KM"
-                      className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      <Gauge className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setVehicleToEdit(vehicle);
-                        setIsFormOpen(true);
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2 text-xs">
+                  {manualStatusOptions.length > 0 && (
+                    <Select
+                      aria-label={`Alterar status do veículo ${vehicle.plate}`}
+                      value=""
+                      onChange={(event) => {
+                        const nextStatus = event.target.value as VehicleStatus;
+                        if (nextStatus) handleStatusChangeClick(vehicle, nextStatus);
                       }}
-                      title="Editar Veículo"
-                      className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                      options={[
+                        { value: '', label: 'Alterar status...', disabled: true },
+                        ...manualStatusOptions,
+                      ]}
+                    />
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setSelectedVehicleIdForDetails(vehicle.id)}
+                      className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
                     >
-                      <Edit className="w-4 h-4" />
+                      <Eye className="w-3.5 h-3.5" /> Detalhes →
                     </button>
 
-                    {isAvailable && (
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)}
-                        title="Enviar para Manutenção"
-                        className="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded-md"
+                        onClick={() => setVehicleForKmRecord(vehicle)}
+                        title="Registrar KM"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
                       >
-                        Oficina
+                        <Gauge className="w-4 h-4" />
                       </button>
-                    )}
+
+                      <button
+                        onClick={() => {
+                          setVehicleToEdit(vehicle);
+                          setIsFormOpen(true);
+                        }}
+                        title="Editar Veículo"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+
+                      {isAvailable && (
+                        <button
+                          onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)}
+                          title="Enviar para Manutenção"
+                          className="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded-md"
+                        >
+                          Oficina
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Card>
