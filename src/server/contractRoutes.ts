@@ -538,6 +538,9 @@ export function registerContractRoutes(app: Express): void {
         if (closeDate < contract.startDate) throw new ContractConflictError('Close date precedes contract start');
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
+        if (vehicle.currentContractId !== contract.id || vehicle.currentDriverId !== contract.driverId) {
+          throw new ContractConflictError('Contract binding mismatch');
+        }
         const now = new Date().toISOString();
         const endDate = contract.endDate && contract.endDate < closeDate ? contract.endDate : closeDate;
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
@@ -547,15 +550,13 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
-        if (vehicle.currentContractId === contract.id) {
-          const released = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
-            status: VehicleStatus.AVAILABLE,
-            currentDriverId: '',
-            currentContractId: '',
-            updatedAt: now,
-          });
-          if (!released) throw new ContractNotFoundError();
-        }
+        const released = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
+          status: VehicleStatus.AVAILABLE,
+          currentDriverId: '',
+          currentContractId: '',
+          updatedAt: now,
+        });
+        if (!released) throw new ContractNotFoundError();
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
