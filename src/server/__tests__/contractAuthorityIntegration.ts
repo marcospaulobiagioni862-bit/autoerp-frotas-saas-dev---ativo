@@ -193,6 +193,20 @@ export class ContractAuthorityIntegrationRunner {
       assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
       await markLegacyContract(created.id);
 
+      const draftCloseAuditBefore = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
+        method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Nunca ativado' }),
+      }, adminA);
+      assert(response.status === 409, `DRAFT close expected 409, got ${response.status}`);
+      const draftCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
+      const draftCloseVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const draftCloseReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      const draftCloseAuditAfter = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
+      assert(draftCloseContract?.status === ContractStatus.DRAFT && !draftCloseContract?.end_date, 'DRAFT close mutated contract');
+      assert(draftCloseVehicle?.status === VehicleStatus.AVAILABLE && !draftCloseVehicle?.current_driver_id && !draftCloseVehicle?.current_contract_id, 'DRAFT close mutated vehicle');
+      assert(Number(draftCloseReceivables?.count) === 0, 'DRAFT close mutated financial history');
+      assert(Number(draftCloseAuditAfter?.count) === Number(draftCloseAuditBefore?.count), 'DRAFT close created audit mutation');
+
       response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, adminA);
       assert(response.status === 409, `same-tenant contract number expected 409, got ${response.status}`);
 
