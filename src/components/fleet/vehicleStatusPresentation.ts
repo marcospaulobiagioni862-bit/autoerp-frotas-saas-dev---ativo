@@ -1,6 +1,8 @@
 import { VehicleStatus } from '../../types/enums';
 import { vehicleStatusLabel } from '../../domain/fleet/vehicleStatusPolicy';
 
+export { vehicleStatusLabel };
+
 export type VehicleStatusBadgeVariant = 'success' | 'warning' | 'info' | 'danger' | 'default';
 
 export interface VehicleStatusFilterOption {
