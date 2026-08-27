@@ -6,6 +6,7 @@ import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
+import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { FolderOpen } from 'lucide-react';
 import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog } from '../ui';
 
@@ -19,6 +20,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
   const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
+  const [detailsTarget, setDetailsTarget] = useState<AccountPayable | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
 
@@ -274,7 +276,10 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                           {item.status}
                         </Badge>
                       </td>
-                      <td className="p-3.5 text-right">
+                      <td className="p-3.5 text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>
+                          Detalhes
+                        </Button>
                         {isPending && (
                           <Button
                             size="sm"
@@ -429,6 +434,12 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
           </form>
         </ModalContainer>
       )}
+
+      <FinancialObligationDetailsModal
+        obligation={detailsTarget}
+        type="PAYABLE"
+        onClose={() => setDetailsTarget(null)}
+      />
 
       {attachmentEntity && (
         <AttachmentModal

@@ -637,6 +637,9 @@ jobs:
       - name: Deferred finance subviews regression
         run: npx tsx src/components/finance/__tests__/financeHubLazyLoadingTestRunner.ts
 
+      - name: Financial obligation details regression
+        run: npx tsx src/components/finance/__tests__/financialObligationDetailsTestRunner.ts
+
       - name: Deferred driver modals regression
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
