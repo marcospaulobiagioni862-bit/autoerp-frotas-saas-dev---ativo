@@ -461,7 +461,6 @@ export function registerContractRoutes(app: Express): void {
         const categoryId = requiredText(req.body?.categoryId, 'categoryId');
         await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
 
-        // Deterministic lock order: Contract -> Vehicle -> Driver.
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
@@ -579,8 +578,8 @@ export function registerContractRoutes(app: Express): void {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status === ContractStatus.CANCELLED) return contract;
-        if ([ContractStatus.CLOSED, ContractStatus.FINISHED].includes(contract.status)) {
-          throw new ContractConflictError('Closed contract cannot cancel');
+        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
+          throw new ContractConflictError('Contract lifecycle does not allow cancel');
         }
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
