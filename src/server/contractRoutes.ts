@@ -15,6 +15,7 @@ import {
   VehicleStatus,
 } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -446,6 +447,9 @@ export function registerContractRoutes(app: Express): void {
         if (!driver) throw new ContractNotFoundError();
         ensureVehicleEligible(vehicle);
         await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, tx);
+        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, contract.startDate, tx))) {
+          throw new ContractConflictError('Vehicle insurance unavailable');
+        }
         ensureDriverEligible(driver);
 
         const vehicleConflict = await tx.getContractRepo().findActiveByVehicle(principal.companyId, contract.vehicleId, contract.id);
