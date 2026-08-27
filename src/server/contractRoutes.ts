@@ -527,6 +527,7 @@ export function registerContractRoutes(app: Express): void {
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) return contract;
         if (contract.status === ContractStatus.CANCELLED) throw new ContractConflictError('Cancelled contract cannot close');
+        if (closeDate < contract.startDate) throw new ContractConflictError('Close date precedes contract start');
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
         const now = new Date().toISOString();

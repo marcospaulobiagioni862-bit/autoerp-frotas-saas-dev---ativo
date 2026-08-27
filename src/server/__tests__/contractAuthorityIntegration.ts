@@ -337,6 +337,17 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 409, `ACTIVE archive expected 409, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
+        method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Data inválida' }),
+      }, adminA);
+      assert(response.status === 409, `close before contract start expected 409, got ${response.status}`);
+      const prematureCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
+      const prematureCloseVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const prematureCloseReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(prematureCloseContract?.status === ContractStatus.ACTIVE && !prematureCloseContract?.end_date, 'invalid close date mutated contract');
+      assert(prematureCloseVehicle?.status === VehicleStatus.RENTED && prematureCloseVehicle?.current_driver_id === 'i3-drv-a1' && prematureCloseVehicle?.current_contract_id === created.id, 'invalid close date released vehicle');
+      assert(Number(prematureCloseReceivables?.count) === 2, 'invalid close date mutated financial history');
+
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
         method: 'POST', body: JSON.stringify({ closeDate: '2026-09-30', reason: 'Integração I3' }),
       }, adminA);
       assert(response.status === 200, `close expected 200, got ${response.status}`);
