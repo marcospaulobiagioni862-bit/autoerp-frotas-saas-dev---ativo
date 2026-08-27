@@ -652,6 +652,9 @@ jobs:
       - name: Deferred traffic-ticket modals regression
         run: npx tsx src/components/trafficTickets/__tests__/trafficTicketsLazyModalsTestRunner.ts
 
+      - name: Deferred management report fleet tab regression
+        run: npx tsx src/components/reports/__tests__/managementReportsFleetLazyTabTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
