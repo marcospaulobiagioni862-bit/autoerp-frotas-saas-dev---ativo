@@ -1,5 +1,8 @@
 import { VehicleStatus } from '../../types/enums';
-import { vehicleStatusLabel } from '../../domain/fleet/vehicleStatusPolicy';
+import {
+  manuallyAllowedVehicleStatuses,
+  vehicleStatusLabel,
+} from '../../domain/fleet/vehicleStatusPolicy';
 
 export { vehicleStatusLabel };
 
@@ -7,6 +10,11 @@ export type VehicleStatusBadgeVariant = 'success' | 'warning' | 'info' | 'danger
 
 export interface VehicleStatusFilterOption {
   id: 'ALL' | VehicleStatus;
+  label: string;
+}
+
+export interface VehicleManualStatusOption {
+  value: VehicleStatus;
   label: string;
 }
 
@@ -24,6 +32,20 @@ export const VEHICLE_STATUS_FILTERS: VehicleStatusFilterOption[] = [
   { id: VehicleStatus.INACTIVE, label: vehicleStatusLabel(VehicleStatus.INACTIVE) },
   { id: VehicleStatus.SOLD, label: vehicleStatusLabel(VehicleStatus.SOLD) },
 ];
+
+export function vehicleManualStatusOptions(status: VehicleStatus): VehicleManualStatusOption[] {
+  if (
+    status === VehicleStatus.RENTED ||
+    status === VehicleStatus.MAINTENANCE ||
+    status === VehicleStatus.ARCHIVED
+  ) {
+    return [];
+  }
+
+  return manuallyAllowedVehicleStatuses(status)
+    .filter((target) => target !== VehicleStatus.MAINTENANCE && target !== VehicleStatus.ARCHIVED)
+    .map((target) => ({ value: target, label: vehicleStatusLabel(target) }));
+}
 
 export function vehicleStatusBadgeVariant(status: VehicleStatus): VehicleStatusBadgeVariant {
   switch (status) {
