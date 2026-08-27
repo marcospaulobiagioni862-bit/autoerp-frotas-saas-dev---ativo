@@ -1,5 +1,10 @@
 import { VehicleStatus } from '../../types/enums';
 
+export interface VehicleStatusTransitionContext {
+  hasActiveContract?: boolean;
+  hasBlockingMaintenance?: boolean;
+}
+
 const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   [VehicleStatus.AVAILABLE]: new Set([
     VehicleStatus.RESERVED,
@@ -79,8 +84,15 @@ const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   [VehicleStatus.ARCHIVED]: new Set([]),
 };
 
-export function canManuallyTransitionVehicleStatus(from: VehicleStatus, to: VehicleStatus): boolean {
+export function canManuallyTransitionVehicleStatus(
+  from: VehicleStatus,
+  to: VehicleStatus,
+  context: VehicleStatusTransitionContext = {},
+): boolean {
   if (from === to) return true;
+  if (to === VehicleStatus.RENTED) return false;
+  if (context.hasActiveContract) return false;
+  if (context.hasBlockingMaintenance && from === VehicleStatus.MAINTENANCE && to !== VehicleStatus.MAINTENANCE) return false;
   return MANUAL_TRANSITIONS[from]?.has(to) ?? false;
 }
 
@@ -101,6 +113,11 @@ export function vehicleStatusLabel(status: VehicleStatus): string {
   }
 }
 
-export function manuallyAllowedVehicleStatuses(from: VehicleStatus): VehicleStatus[] {
-  return [...(MANUAL_TRANSITIONS[from] ?? [])];
+export function manuallyAllowedVehicleStatuses(
+  from: VehicleStatus,
+  context: VehicleStatusTransitionContext = {},
+): VehicleStatus[] {
+  return [...(MANUAL_TRANSITIONS[from] ?? [])].filter((status) =>
+    canManuallyTransitionVehicleStatus(from, status, context)
+  );
 }
