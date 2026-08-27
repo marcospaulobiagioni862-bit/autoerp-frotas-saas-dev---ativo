@@ -236,6 +236,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
               { value: 'Flex', label: 'Flex' },
               { value: 'Gasolina', label: 'Gasolina' },
               { value: 'Etanol', label: 'Etanol' },
+              { value: 'Diesel', label: 'Diesel' },
               { value: 'Elétrico', label: 'Elétrico' },
               { value: 'Híbrido', label: 'Híbrido' },
               { value: 'GNV', label: 'GNV' },
