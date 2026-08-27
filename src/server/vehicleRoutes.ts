@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
+import { canManuallyTransitionVehicleStatus } from '../domain/fleet/vehicleStatusPolicy';
 import { AuditAction, VEHICLE_CATEGORIES, VehicleStatus } from '../types/enums';
 import type { Vehicle } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
@@ -385,14 +386,25 @@ export function registerVehicleRoutes(app: Express): void {
     try {
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
-        const existing = await repo.findByIdForCompany(principal.companyId, req.params.id);
+        const existing = await repo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!existing) throw new VehicleNotFoundError();
         if (existing.status === status) return existing;
+
+        const targetStatus = status as VehicleStatus;
+        const hasCurrentBinding = Boolean(existing.currentContractId || existing.currentDriverId);
+        const maintenanceControlled = existing.status === VehicleStatus.MAINTENANCE;
+        if (!canManuallyTransitionVehicleStatus(existing.status, targetStatus, {
+          hasActiveContract: hasCurrentBinding,
+          hasBlockingMaintenance: maintenanceControlled,
+        })) {
+          throw new VehicleConflictError('Invalid vehicle status transition');
+        }
+
         const now = new Date().toISOString();
         const reason = optionalText(req.body?.reason);
         const updated = await repo.updateForCompany(principal.companyId, existing.id, {
-          status: status as VehicleStatus,
-          isArchived: status === VehicleStatus.ARCHIVED,
+          status: targetStatus,
+          isArchived: targetStatus === VehicleStatus.ARCHIVED,
           notes: appendStatusReason(existing, reason),
           updatedAt: now,
         });
