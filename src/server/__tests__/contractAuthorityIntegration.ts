@@ -223,6 +223,7 @@ export class ContractAuthorityIntegrationRunner {
       assert(vehicleBeforeValidActivation?.status === VehicleStatus.AVAILABLE && !vehicleBeforeValidActivation?.current_contract_id, 'invalid category mutated vehicle');
       assert(Number(receivablesBeforeValidActivation?.count) === 0, 'invalid category created receivable');
 
+      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-crlv'`);
       await db.execute(sql`
         INSERT INTO file_attachments (
           id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
@@ -252,6 +253,7 @@ export class ContractAuthorityIntegrationRunner {
       assert(blockedVehicle?.status === VehicleStatus.AVAILABLE && !blockedVehicle?.current_driver_id && !blockedVehicle?.current_contract_id, 'expired document gate mutated vehicle');
       assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
+      await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-crlv'`);
 
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
