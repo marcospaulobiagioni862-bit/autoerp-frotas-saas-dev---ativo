@@ -401,6 +401,8 @@ if (process.argv[1]?.includes('contractAuthorityIntegration')) {
     .then(() => console.log('Contract authority integration PASS'))
     .catch((error) => {
       console.error(error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`::error title=Contract authority integration::${message.replace(/%/g, '%25').replace(/\r?\n/g, '%0A')}`);
       process.exitCode = 1;
     });
 }
