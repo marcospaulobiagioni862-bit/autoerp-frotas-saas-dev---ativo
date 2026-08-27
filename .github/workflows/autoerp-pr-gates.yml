@@ -646,6 +646,9 @@ jobs:
       - name: Deferred fleet modals regression
         run: npx tsx src/components/fleet/__tests__/fleetManagementLazyModalsTestRunner.ts
 
+      - name: Deferred maintenance panels regression
+        run: npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
