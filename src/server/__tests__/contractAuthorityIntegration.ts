@@ -113,7 +113,7 @@ export class ContractAuthorityIntegrationRunner {
         ('i3-doc-valid-a3-lic', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
         ('i3-doc-valid-b1-ipva', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
         ('i3-doc-valid-b1-crlv', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
-        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'Vehicle', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
+        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
     `);
 
