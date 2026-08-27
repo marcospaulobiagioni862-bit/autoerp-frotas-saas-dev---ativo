@@ -1,3 +1,6 @@
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { ContractExecutionAuthorityIntegrationRunner } from './contractExecutionAuthorityIntegration';
@@ -20,6 +23,8 @@ async function scalar(query: any): Promise<any> {
  */
 export async function runContractSignatureTimeGateRegression(): Promise<void> {
   const originalFetch = globalThis.fetch.bind(globalThis);
+  const originalStorageDir = process.env.ATTACHMENT_STORAGE_DIR;
+  process.env.ATTACHMENT_STORAGE_DIR = await mkdtemp(join(tmpdir(), 'autoerp-signature-time-gate-'));
   let rejectedHistoricalSignature = false;
 
   globalThis.fetch = (async (...args: Parameters<typeof fetch>): Promise<Response> => {
@@ -87,6 +92,8 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
     assert(rejectedHistoricalSignature, 'signature time regression was not exercised');
   } finally {
     globalThis.fetch = originalFetch as typeof fetch;
+    if (originalStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
+    else process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;
   }
 }
 
