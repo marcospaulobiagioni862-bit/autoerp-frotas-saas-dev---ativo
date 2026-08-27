@@ -411,7 +411,7 @@ export class ContractAuthorityIntegrationRunner {
       assert(Number(prematureCloseReceivables?.count) === 2, 'invalid close date mutated financial history');
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
-        method: 'POST', body: JSON.stringify({ closeDate: '2026-09-30', reason: 'Integração I3' }),
+        method: 'POST', body: JSON.stringify({ closeDate: new Date().toISOString().slice(0, 10), reason: 'Integração I3' }),
       }, adminA);
       assert(response.status === 200, `close expected 200, got ${response.status}`);
       assert((await json(response)).item.status === ContractStatus.CLOSED, 'close did not persist CLOSED');

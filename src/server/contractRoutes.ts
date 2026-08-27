@@ -527,6 +527,8 @@ export function registerContractRoutes(app: Express): void {
       const closeDate = req.body?.closeDate === undefined
         ? new Date().toISOString().slice(0, 10)
         : normalizeDate(req.body.closeDate, 'closeDate');
+      const today = new Date().toISOString().slice(0, 10);
+      if (closeDate > today) throw new ContractConflictError('Close date cannot be in the future');
       const reason = optionalText(req.body?.reason);
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
