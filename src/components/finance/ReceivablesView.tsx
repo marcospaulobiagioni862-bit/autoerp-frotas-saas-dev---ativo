@@ -13,6 +13,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { AttachmentModal } from '../documents/AttachmentModal';
+import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { FolderOpen } from 'lucide-react';
 import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer, Select } from '../ui';
 
@@ -31,6 +32,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
+  const [detailsTarget, setDetailsTarget] = useState<AccountReceivable | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
 
@@ -319,6 +321,9 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
                         </Badge>
                       </td>
                       <td className="p-3.5 text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>
+                          Detalhes
+                        </Button>
                         {isPending && (
                           <Button
                             size="sm"
@@ -457,6 +462,12 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
           </form>
         </ModalContainer>
       )}
+
+      <FinancialObligationDetailsModal
+        obligation={detailsTarget}
+        type="RECEIVABLE"
+        onClose={() => setDetailsTarget(null)}
+      />
 
       {attachmentEntity && (
         <AttachmentModal
