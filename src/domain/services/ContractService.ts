@@ -137,8 +137,15 @@ export class ContractService {
       return { available: false, reason: 'Veículo não pertence à empresa da operação.' };
     }
 
-    if (vehicle.status === VehicleStatus.INACTIVE || vehicle.status === VehicleStatus.SOLD || vehicle.isArchived) {
-      return { available: false, reason: `Veículo está com status ${vehicle.status} ou arquivado` };
+    if (vehicle.isArchived) {
+      return { available: false, reason: 'Veículo está arquivado e não pode receber novo contrato' };
+    }
+
+    if (vehicle.status !== VehicleStatus.AVAILABLE) {
+      return {
+        available: false,
+        reason: `Veículo está com status ${vehicle.status} e não está disponível para novo contrato`,
+      };
     }
 
     // Verificar contratos ativos concorrentes (escopados por companyId quando informado)
