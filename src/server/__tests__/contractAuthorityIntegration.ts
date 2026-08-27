@@ -113,7 +113,7 @@ export class ContractAuthorityIntegrationRunner {
         ('i3-doc-valid-a3-lic', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
         ('i3-doc-valid-b1-ipva', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
         ('i3-doc-valid-b1-crlv', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
-        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
+        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'Vehicle', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
     `);
 
@@ -335,6 +335,17 @@ export class ContractAuthorityIntegrationRunner {
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/archive`, { method: 'POST', body: '{}' }, adminA);
       assert(response.status === 409, `ACTIVE archive expected 409, got ${response.status}`);
+
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
+        method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Data inválida' }),
+      }, adminA);
+      assert(response.status === 409, `close before contract start expected 409, got ${response.status}`);
+      const prematureCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
+      const prematureCloseVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const prematureCloseReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(prematureCloseContract?.status === ContractStatus.ACTIVE && !prematureCloseContract?.end_date, 'invalid close date mutated contract');
+      assert(prematureCloseVehicle?.status === VehicleStatus.RENTED && prematureCloseVehicle?.current_driver_id === 'i3-drv-a1' && prematureCloseVehicle?.current_contract_id === created.id, 'invalid close date released vehicle');
+      assert(Number(prematureCloseReceivables?.count) === 2, 'invalid close date mutated financial history');
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
         method: 'POST', body: JSON.stringify({ closeDate: '2026-09-30', reason: 'Integração I3' }),
