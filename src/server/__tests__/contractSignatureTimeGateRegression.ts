@@ -20,6 +20,8 @@ async function scalar(query: any): Promise<any> {
  * The suite intentionally submits a historical signedAt (2026-08-19) after generating
  * the current PDF. That first request must fail closed. The interceptor then retries
  * the same evidence with the current timestamp so the authoritative suite can continue.
+ * The legacy suite also carries a fixed future contract start date; this wrapper makes
+ * only that fixture date current so the independent activation-period gate stays intact.
  */
 export async function runContractSignatureTimeGateRegression(): Promise<void> {
   const originalFetch = globalThis.fetch.bind(globalThis);
@@ -37,6 +39,20 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
     const requestMethod = String(
       init?.method ?? (typeof input === 'string' || input instanceof URL ? 'GET' : input.method)
     ).toUpperCase();
+
+    if (
+      requestMethod === 'POST' &&
+      /\/api\/contracts$/.test(requestUrl) &&
+      typeof init?.body === 'string'
+    ) {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      if (body.contractNumber === 'CNT-I4C-A-001') {
+        return await originalFetch(input, {
+          ...init,
+          body: JSON.stringify({ ...body, startDate: new Date().toISOString().slice(0, 10) }),
+        });
+      }
+    }
 
     if (
       !rejectedHistoricalSignature &&
