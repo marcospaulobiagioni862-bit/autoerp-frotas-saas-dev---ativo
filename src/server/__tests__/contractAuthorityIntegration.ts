@@ -91,20 +91,30 @@ export class ContractAuthorityIntegrationRunner {
         id, company_id, subject_type, module, subject_id, category, original_name,
         mime_type, file_url, size_bytes, actual_size_bytes, storage_provider, storage_key, checksum_sha256,
         uploaded_by, is_archived, document_state, created_at
-      ) VALUES (
-        'i3-att-valid-annual', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'ANNUAL', 'annual.pdf',
-        'application/pdf', 'attachment://i3-valid-annual', 10, 10, 'SERVER_FS', 'i3/valid-annual', repeat('a',64),
-        ${adminAId}, false, 'AVAILABLE', NOW()
-      ) ON CONFLICT (id) DO NOTHING
+      ) VALUES
+        ('i3-att-valid-a1', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'ANNUAL', 'annual-a1.pdf', 'application/pdf', 'attachment://i3-valid-a1', 10, 10, 'SERVER_FS', 'i3/valid-a1', repeat('a',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('i3-att-valid-a2', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a2', 'ANNUAL', 'annual-a2.pdf', 'application/pdf', 'attachment://i3-valid-a2', 10, 10, 'SERVER_FS', 'i3/valid-a2', repeat('b',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('i3-att-valid-a3', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a3', 'ANNUAL', 'annual-a3.pdf', 'application/pdf', 'attachment://i3-valid-a3', 10, 10, 'SERVER_FS', 'i3/valid-a3', repeat('c',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('i3-att-valid-b1', ${companyB}, 'Vehicle', 'Vehicle', 'i3-veh-b1', 'ANNUAL', 'annual-b1.pdf', 'application/pdf', 'attachment://i3-valid-b1', 10, 10, 'SERVER_FS', 'i3/valid-b1', repeat('d',64), ${adminBId}, false, 'AVAILABLE', NOW())
+      ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
       INSERT INTO documents (
         id, company_id, subject_type, subject_id, document_type, reference_year, expiration_date, attachment_id,
         version_number, is_current, is_archived, cost, created_by, created_at, updated_at
       ) VALUES
-        ('i3-doc-valid-ipva', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
-        ('i3-doc-valid-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
-        ('i3-doc-valid-lic', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW())
+        ('i3-doc-valid-ipva', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-lic', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a2-ipva', ${companyA}, 'VEHICLE', 'i3-veh-a2', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a2-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a2', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a2-lic', ${companyA}, 'VEHICLE', 'i3-veh-a2', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a3-ipva', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a3-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-a3-lic', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-b1-ipva', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
+        ('i3-doc-valid-b1-crlv', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
+        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
     `);
 
