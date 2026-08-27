@@ -22,6 +22,7 @@ type ContractAction =
   | 'CREATE_CONTRACT'
   | 'EDIT_CONTRACT'
   | 'ACTIVATE_CONTRACT'
+  | 'SUSPEND_CONTRACT'
   | 'CLOSE_CONTRACT'
   | 'CANCEL_CONTRACT'
   | 'ARCHIVE_CONTRACT'
@@ -515,6 +516,47 @@ export function registerContractRoutes(app: Express): void {
         return { item: active, receivables };
       });
       res.json(result);
+    } catch (error) {
+      sendContractError(res, error);
+    }
+  });
+
+  app.post('/api/contracts/:id/suspend', async (req: Request, res: Response) => {
+    const principal = requireContractPrincipal(req, res, 'SUSPEND_CONTRACT');
+    if (!principal) return;
+    try {
+      const reason = requiredText(req.body?.reason, 'reason', 3);
+      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ContractNotFoundError();
+        if (contract.status === ContractStatus.SUSPENDED) return contract;
+        if (contract.status !== ContractStatus.ACTIVE) {
+          throw new ContractConflictError('Contract lifecycle does not allow suspend');
+        }
+        const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
+        if (!vehicle) throw new ContractNotFoundError();
+        if (
+          vehicle.status !== VehicleStatus.RENTED ||
+          vehicle.currentContractId !== contract.id ||
+          vehicle.currentDriverId !== contract.driverId
+        ) {
+          throw new ContractConflictError('Contract binding mismatch');
+        }
+        const now = new Date().toISOString();
+        const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
+          status: ContractStatus.SUSPENDED,
+          notes: appendNote(contract.notes, 'Suspensão', reason),
+          updatedAt: now,
+        });
+        if (!saved) throw new ContractNotFoundError();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
+          action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
+          userId: principal.userId, userName: principal.name, timestamp: now,
+        });
+        return saved;
+      });
+      res.json({ item });
     } catch (error) {
       sendContractError(res, error);
     }
