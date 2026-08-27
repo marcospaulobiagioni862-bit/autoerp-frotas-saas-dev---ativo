@@ -223,6 +223,17 @@ export class ContractAuthorityIntegrationRunner {
       assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
 
+      await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+      assert(response.status === 409, `expired driver CNH expected activation 409, got ${response.status}`);
+      const cnhBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const cnhBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const cnhBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(cnhBlockedContract?.status === ContractStatus.DRAFT, 'expired CNH gate mutated contract');
+      assert(cnhBlockedVehicle?.status === VehicleStatus.AVAILABLE && !cnhBlockedVehicle?.current_driver_id && !cnhBlockedVehicle?.current_contract_id, 'expired CNH gate mutated vehicle');
+      assert(Number(cnhBlockedReceivables?.count) === 0, 'expired CNH gate created receivable');
+      await db.execute(sql`UPDATE drivers SET cnh_expiration='2035-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
+
       await db.execute(sql`UPDATE insurances SET status='EXPIRED', updated_at=NOW() WHERE id='i3-ins-a1'`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 409, `expired vehicle insurance expected activation 409, got ${response.status}`);
