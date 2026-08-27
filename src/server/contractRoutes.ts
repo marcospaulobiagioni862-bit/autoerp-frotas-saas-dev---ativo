@@ -661,6 +661,12 @@ export function registerContractRoutes(app: Express): void {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status !== ContractStatus.ACTIVE) throw new ContractConflictError('Contract must be active');
+        if (competenceDate < contract.startDate) {
+          throw new ContractConflictError('Billing competence precedes contract start');
+        }
+        if (contract.endDate && competenceDate > contract.endDate) {
+          throw new ContractConflictError('Billing competence exceeds contract end');
+        }
         await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
