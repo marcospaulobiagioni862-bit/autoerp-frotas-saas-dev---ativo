@@ -7,6 +7,7 @@ const companyA = 'finance-r24-company-a';
 const companyB = 'finance-r24-company-b';
 const accountA1 = 'finance-r24-account-a1';
 const accountA2 = 'finance-r24-account-a2';
+const cardA = 'finance-r24-card-a';
 const accountB = 'finance-r24-account-b';
 const methodA = 'finance-r24-method-a';
 const methodB = 'finance-r24-method-b';
@@ -56,11 +57,14 @@ async function seed(): Promise<void> {
 
   // initial balance is the accounting source; current balance is seeded to the
   // fully reconciled post-period balance only as an independent consistency check.
+  // The CREDIT_CARD balance intentionally carries a large pre-existing credit so
+  // the test proves it is excluded from cash position rather than merely being zero.
   await db.execute(sql`INSERT INTO financial_accounts(
     id,company_id,name,type,initial_balance,current_balance,status,created_at,updated_at
   ) VALUES
-    (${accountA1},${companyA},'Conta A1','BANK',1000,1140,'ACTIVE',NOW(),NOW()),
+    (${accountA1},${companyA},'Conta A1','BANK',1000,640,'ACTIVE',NOW(),NOW()),
     (${accountA2},${companyA},'Conta A2','BANK',500,700,'ACTIVE',NOW(),NOW()),
+    (${cardA},${companyA},'Cartão A','CREDIT_CARD',999,699,'ACTIVE',NOW(),NOW()),
     (${accountB},${companyB},'Conta B','BANK',99999,199999,'ACTIVE',NOW(),NOW())`);
 
   await db.execute(sql`INSERT INTO financial_transactions(
@@ -75,6 +79,10 @@ async function seed(): Promise<void> {
     ('r24-reversal-income',${companyA},${accountA1},NULL,'REVERSAL',50,${methodA},'2026-06-06','2026-06-05','ESTORNO: Receita depois estornada',false,'r24-original-income','r24-user',NOW(),NOW()),
     ('r24-deposit-receipt',${companyA},${accountA1},NULL,'INCOME',300,${methodA},'2026-06-18','2026-06-18','Recebimento de Caução (Contrato: R24)',false,NULL,'r24-user',NOW(),NOW()),
     ('r24-deposit-return',${companyA},${accountA1},NULL,'EXPENSE',120,${methodA},'2026-06-25','2026-06-25','Devolução de Caução (Motorista: R24)',false,NULL,'r24-user',NOW(),NOW()),
+    ('r24-card-purchase',${companyA},${cardA},NULL,'EXPENSE',1000,${methodA},'2026-06-10','2026-06-10','Manutenção liquidada no cartão',false,NULL,'r24-user',NOW(),NOW()),
+    ('r24-card-purchase-reversal',${companyA},${cardA},NULL,'REVERSAL',200,${methodA},'2026-06-11','2026-06-10','Estorno parcial da compra no cartão',false,'r24-card-purchase','r24-user',NOW(),NOW()),
+    ('r24-card-payment-transfer',${companyA},${accountA1},${cardA},'TRANSFER',600,${methodA},'2026-06-20','2026-06-20','Pagamento parcial da fatura',false,NULL,'r24-user',NOW(),NOW()),
+    ('r24-card-payment-reversal',${companyA},${accountA1},${cardA},'REVERSAL',100,${methodA},'2026-06-21','2026-06-20','Estorno parcial do pagamento da fatura',false,'r24-card-payment-transfer','r24-user',NOW(),NOW()),
     ('r24-foreign-income',${companyB},${accountB},NULL,'INCOME',100000,${methodB},'2026-06-01','2026-06-01','Foreign tenant cash',false,NULL,'r24-user-b',NOW(),NOW())`);
 
   await db.execute(sql`INSERT INTO account_receivables(
@@ -103,23 +111,31 @@ async function run(): Promise<void> {
   );
 
   assert(report.periodStart === '2026-06-01' && report.periodEnd === '2026-06-30', 'cash-flow period must preserve exact boundaries');
-  assert(report.initialCashBalance === 1600, `opening balance must be initial balances + pre-period ledger; got ${report.initialCashBalance}`);
-  assert(report.totalRealizedIncomes === 450, `realized incomes must include authoritative cash/deposit/reversal semantics; got ${report.totalRealizedIncomes}`);
-  assert(report.totalRealizedExpenses === 210, `realized expenses must include authoritative cash/deposit/reversal semantics; got ${report.totalRealizedExpenses}`);
-  assert(report.finalRealizedCashBalance === 1840, `final realized balance must reconcile to 1840; got ${report.finalRealizedCashBalance}`);
+  assert(report.initialCashBalance === 1600, `opening balance must exclude CREDIT_CARD initial balance and include pre-period cash ledger; got ${report.initialCashBalance}`);
+  assert(report.totalRealizedIncomes === 550, `realized incomes must include cash reversal of card payment but no card purchase effect; got ${report.totalRealizedIncomes}`);
+  assert(report.totalRealizedExpenses === 810, `realized expenses must include bank-to-card payment but no card purchase effect; got ${report.totalRealizedExpenses}`);
+  assert(report.finalRealizedCashBalance === 1340, `final realized cash balance must reconcile to 1340; got ${report.finalRealizedCashBalance}`);
 
   const startDay = report.dailyFlows.find((item) => item.date === '2026-06-01');
   const endDay = report.dailyFlows.find((item) => item.date === '2026-06-30');
   const transferDay = report.dailyFlows.find((item) => item.date === '2026-06-08');
   const reversalDay = report.dailyFlows.find((item) => item.date === '2026-06-06');
+  const cardPurchaseDay = report.dailyFlows.find((item) => item.date === '2026-06-10');
+  const cardPurchaseReversalDay = report.dailyFlows.find((item) => item.date === '2026-06-11');
+  const cardPaymentDay = report.dailyFlows.find((item) => item.date === '2026-06-20');
+  const cardPaymentReversalDay = report.dailyFlows.find((item) => item.date === '2026-06-21');
   const partialReceivableDay = report.dailyFlows.find((item) => item.date === '2026-06-10');
   const overdueReceivableDay = report.dailyFlows.find((item) => item.date === '2026-06-15');
   const payableDay = report.dailyFlows.find((item) => item.date === '2026-06-12');
 
   assert(startDay?.realizedIncomes === 100, 'exact period start transaction must be included');
   assert(endDay?.realizedExpenses === 40, 'exact period end transaction must be included');
-  assert(!transferDay || (transferDay.realizedIncomes === 0 && transferDay.realizedExpenses === 0), 'internal transfer must not inflate consolidated cash flow');
+  assert(!transferDay || (transferDay.realizedIncomes === 0 && transferDay.realizedExpenses === 0), 'cash-like internal transfer must not inflate consolidated cash flow');
   assert(reversalDay?.realizedExpenses === 50, 'reversal of income must be represented as authoritative cash outflow on reversal date');
+  assert(cardPurchaseDay?.realizedIncomes === 0 && cardPurchaseDay?.realizedExpenses === 0, 'credit-card purchase must not move cash');
+  assert(cardPurchaseReversalDay?.realizedIncomes === 0 && cardPurchaseReversalDay?.realizedExpenses === 0, 'credit-card purchase reversal must not move cash');
+  assert(cardPaymentDay?.realizedExpenses === 600, 'cash-like to credit-card transfer must be cash outflow');
+  assert(cardPaymentReversalDay?.realizedIncomes === 100, 'reversal of cash-like to credit-card transfer must restore cash');
   assert(partialReceivableDay?.predictedIncomes === 300, 'partial receivable prediction must use remaining balanceAmount only');
   assert(overdueReceivableDay?.predictedIncomes === 175, 'overdue/discount/fine/interest prediction must use authoritative balanceAmount');
   assert(payableDay?.predictedExpenses === 80, 'partial payable prediction must use remaining balanceAmount only');
@@ -127,13 +143,20 @@ async function run(): Promise<void> {
   assert(!report.dailyFlows.some((item) => item.date === '2026-06-21' && item.predictedIncomes > 0), 'CANCELLED receivable must be excluded from predictions');
   assert(!report.dailyFlows.some((item) => item.date === '2026-06-22' && item.predictedExpenses > 0), 'CANCELLED payable must be excluded from predictions');
 
-  const persistedCash = await row(sql`SELECT COALESCE(SUM(current_balance),0) AS total FROM financial_accounts WHERE company_id=${companyA}`);
-  assert(money(persistedCash.total) === report.finalRealizedCashBalance, 'final cash-flow balance must reconcile with authoritative account balances when no post-period movement exists');
+  const persistedCash = await row(sql`
+    SELECT COALESCE(SUM(current_balance),0) AS total
+    FROM financial_accounts
+    WHERE company_id=${companyA} AND type<>'CREDIT_CARD'
+  `);
+  assert(money(persistedCash.total) === report.finalRealizedCashBalance, 'cash flow must reconcile only with cash-like account balances');
+
+  const cardPosition = await row(sql`SELECT initial_balance,current_balance FROM financial_accounts WHERE id=${cardA}`);
+  assert(money(cardPosition.initial_balance) === 999 && money(cardPosition.current_balance) === 699, 'credit-card financial position must remain persisted but excluded from cash totals');
 
   assert(report.totalRealizedIncomes < 100000, 'another tenant transaction must never influence totals');
   assert((partialReceivableDay?.predictedIncomes || 0) < 99999, 'another tenant receivable must never influence predictions');
 
-  console.log('FINANCE-R24 authoritative cash-flow PostgreSQL integration: PASS');
+  console.log('FINANCE-R24/CARD-1B1 authoritative cash-flow PostgreSQL integration: PASS');
 }
 
 run().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
