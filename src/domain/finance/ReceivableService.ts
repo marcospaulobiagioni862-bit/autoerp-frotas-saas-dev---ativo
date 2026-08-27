@@ -28,6 +28,26 @@ export interface CreateReceivableParams {
   userName: string;
 }
 
+async function assertContractRentCompetenceWithinContract(
+  params: CreateReceivableParams,
+  txContext?: ITransactionContext
+): Promise<void> {
+  if (params.originType !== OriginType.CONTRACT_RENT) return;
+  if (!params.contractId || !txContext) {
+    throw new Error('Autoridade contratual indisponível para cobrança de aluguel');
+  }
+
+  const contract = await txContext.getContractRepo().findByIdForCompany(params.companyId, params.contractId);
+  if (!contract || contract.isArchived) {
+    throw new Error('Contrato indisponível para cobrança de aluguel');
+  }
+
+  const competenceDate = params.competenceDate || params.dueDate;
+  if (competenceDate < contract.startDate || (contract.endDate && competenceDate > contract.endDate)) {
+    throw new Error('Período contratual inválido para cobrança');
+  }
+}
+
 export class ReceivableService {
   private static repo = new AccountReceivableRepository();
 
@@ -41,6 +61,8 @@ export class ReceivableService {
       'RECEIVABLE_CREATE',
       txContext
     );
+
+    await assertContractRentCompetenceWithinContract(params, txContext);
 
     const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
     if (params.originType === OriginType.MANUAL) {
