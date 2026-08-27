@@ -35,12 +35,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
   const [complement, setComplement] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
   const [city, setCity] = useState('');
-  const [state, setState] = useState('SP');
+  const [state, setState] = useState('');
 
   const [cnhNumber, setCnhNumber] = useState('');
-  const [cnhCategory, setCnhCategory] = useState('B');
+  const [cnhCategory, setCnhCategory] = useState('');
   const [cnhExpiration, setCnhExpiration] = useState('');
-  const [appPlatforms, setAppPlatforms] = useState<string[]>(['Uber', '99']);
+  const [appPlatforms, setAppPlatforms] = useState<string[]>([]);
   const [status, setStatus] = useState<DriverStatus>(DriverStatus.ACTIVE);
   const [notes, setNotes] = useState('');
 
@@ -60,12 +60,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       setComplement(driverToEdit.address?.complement || '');
       setNeighborhood(driverToEdit.address?.neighborhood || '');
       setCity(driverToEdit.address?.city || '');
-      setState(driverToEdit.address?.state || 'SP');
+      setState(driverToEdit.address?.state || '');
 
       setCnhNumber(driverToEdit.cnhNumber || '');
-      setCnhCategory(driverToEdit.cnhCategory || 'B');
+      setCnhCategory(driverToEdit.cnhCategory || '');
       setCnhExpiration(driverToEdit.cnhExpiration || '');
-      setAppPlatforms(driverToEdit.appPlatforms || ['Uber', '99']);
+      setAppPlatforms(driverToEdit.appPlatforms || []);
       setStatus(driverToEdit.status || DriverStatus.ACTIVE);
       setNotes(driverToEdit.notes || '');
     } else {
@@ -83,12 +83,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       setComplement('');
       setNeighborhood('');
       setCity('');
-      setState('SP');
+      setState('');
 
       setCnhNumber('');
-      setCnhCategory('B');
+      setCnhCategory('');
       setCnhExpiration('');
-      setAppPlatforms(['Uber', '99']);
+      setAppPlatforms([]);
       setStatus(DriverStatus.ACTIVE);
       setNotes('');
     }
@@ -261,6 +261,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
               onChange={(e) => setCnhCategory(e.target.value)}
               required
             >
+              <option value="">Selecione</option>
               <option value="A">A (Moto)</option>
               <option value="B">B (Carro)</option>
               <option value="AB">AB (Carro e Moto)</option>
