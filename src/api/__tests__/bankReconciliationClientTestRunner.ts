@@ -1,16 +1,6 @@
 import assert from 'node:assert/strict';
 import { BankReconciliationClient, BankReconciliationApiError } from '../bankReconciliationClient';
 
-const originalFetch = globalThis.fetch;
-let calls: Array<{ url: string; init?: RequestInit }> = [];
-let responder: (url: string, init?: RequestInit) => Promise<Response>;
-
-globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  calls.push({ url, init });
-  return await responder(url, init);
-};
-
 const entry = {
   id: 'entry-1', companyId: 'company-a', financialAccountId: 'acc-1', date: '2026-08-27',
   description: 'PIX motorista', amount: '450.00', direction: 'CREDIT', importSource: 'MANUAL_UI',
@@ -21,7 +11,17 @@ const transaction = {
   transactionDate: '2026-08-27T00:00:00Z', description: 'Recebimento contrato', isReversed: false,
 };
 
-async function run() {
+export async function runBankReconciliationClientTests(): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  let calls: Array<{ url: string; init?: RequestInit }> = [];
+  let responder: (url: string, init?: RequestInit) => Promise<Response>;
+
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push({ url, init });
+    return await responder(url, init);
+  };
+
   try {
     responder = async () => new Response(JSON.stringify({ items: [entry] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     calls = [];
@@ -77,5 +77,3 @@ async function run() {
     globalThis.fetch = originalFetch;
   }
 }
-
-run().catch((error) => { console.error(error); process.exit(1); });
