@@ -87,10 +87,9 @@ export class ContractAuthorityIntegrationRunner {
       ON CONFLICT (id) DO UPDATE SET status='ACTIVE', start_date='2026-01-01', end_date='2027-12-31', updated_at=NOW()
     `);
     await db.execute(sql`
-      INSERT INTO attachments (
-        id, company_id, subject_type, module, subject_id, category, original_name,
-        mime_type, file_url, size_bytes, actual_size_bytes, storage_provider, storage_key, checksum_sha256,
-        uploaded_by, is_archived, document_state, created_at
+      INSERT INTO file_attachments (
+        id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
+        size, file_size, storage_provider, storage_key, checksum, created_by, is_archived, content_state, created_at
       ) VALUES
         ('i3-att-valid-a1', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'CRLV', 'annual-a1.pdf', 'application/pdf', 'attachment://i3-valid-a1', 10, 10, 'SERVER_FS', 'i3/valid-a1', repeat('a',64), ${adminAId}, false, 'AVAILABLE', NOW()),
         ('i3-att-valid-a2', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a2', 'CRLV', 'annual-a2.pdf', 'application/pdf', 'attachment://i3-valid-a2', 10, 10, 'SERVER_FS', 'i3/valid-a2', repeat('b',64), ${adminAId}, false, 'AVAILABLE', NOW()),
