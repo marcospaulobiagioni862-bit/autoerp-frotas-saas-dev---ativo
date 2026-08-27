@@ -24,6 +24,7 @@ const txPayload = {
   companyId: 'company-a',
   financialAccountId: 'acc-a',
   destinationAccountId: 'acc-b',
+  receivableId: 'rec-1',
   type: 'TRANSFER',
   amount: '55.25',
   paymentMethodId: 'pm-a',
@@ -45,6 +46,25 @@ async function run() {
     assert(calls[0].url === '/api/finance/transactions', 'list URL');
     assert(calls[0].init?.credentials === 'include', 'list credentials');
     assert(list[0].amount === 55.25 && list[0].transactionDate === '2026-08-18', 'list normalization');
+    passed++;
+
+    responder = async () => new Response(JSON.stringify({ items: [txPayload] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    calls = [];
+    const history = await FinanceTransactionClient.listByObligation('RECEIVABLE', 'rec/1');
+    assert(calls[0].url === '/api/finance/transactions/by-obligation?receivableId=rec%2F1', 'receivable history URL');
+    assert(calls[0].init?.credentials === 'include', 'receivable history credentials');
+    assert(!/companyId=|userId=|userName=/.test(calls[0].url), 'history request must not send browser authority');
+    assert(history[0].receivableId === 'rec-1', 'history normalization');
+    passed++;
+
+    calls = [];
+    await FinanceTransactionClient.listByObligation('PAYABLE', 'pay-1');
+    assert(calls[0].url === '/api/finance/transactions/by-obligation?payableId=pay-1', 'payable history URL');
+    passed++;
+
+    let invalidObligation = false;
+    try { await FinanceTransactionClient.listByObligation('RECEIVABLE', '   '); } catch { invalidObligation = true; }
+    assert(invalidObligation && calls.length === 1, 'blank obligation id must fail before fetch');
     passed++;
 
     responder = async (url) => {
@@ -139,7 +159,7 @@ async function run() {
     assert(networkClosed, 'network error must propagate without local fallback');
     passed++;
 
-    console.log(`FinanceTransactionClient ${passed}/9 PASS`);
+    console.log(`FinanceTransactionClient ${passed}/12 PASS`);
   } finally {
     globalThis.fetch = originalFetch;
   }
