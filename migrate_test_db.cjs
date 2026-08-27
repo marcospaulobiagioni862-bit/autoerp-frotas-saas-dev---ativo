@@ -8,21 +8,30 @@ const clientConfig = {
   host: process.env.SQL_HOST,
 };
 
+function runTsxRegression(file, label) {
+  const result = spawnSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['tsx', file],
+    { stdio: 'inherit', env: process.env }
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${label} failed with exit code ${result.status}`);
+  console.log(`${label} verified after migrations.`);
+}
+
 async function run() {
   await runMigrations({ clientConfig });
   await runMigrations({ clientConfig });
   console.log('Migration runner idempotency verified.');
 
-  const cardB2 = spawnSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['tsx', 'src/server/__tests__/financeCreditCardStatementPersistenceIntegration.ts'],
-    { stdio: 'inherit', env: process.env }
+  runTsxRegression(
+    'src/server/__tests__/financeCreditCardStatementPersistenceIntegration.ts',
+    'FINANCE-CARD-1B2 persistence regression'
   );
-  if (cardB2.error) throw cardB2.error;
-  if (cardB2.status !== 0) {
-    throw new Error(`FINANCE-CARD-1B2 persistence regression failed with exit code ${cardB2.status}`);
-  }
-  console.log('FINANCE-CARD-1B2 persistence regression verified after migrations.');
+  runTsxRegression(
+    'src/server/__tests__/financeCreditCardPurchaseCycleIntegration.ts',
+    'FINANCE-CARD-1C purchase-cycle regression'
+  );
 }
 
 run().catch((error) => {
