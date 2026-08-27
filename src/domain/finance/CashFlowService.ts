@@ -5,8 +5,8 @@ import {
   AccountReceivableRepository,
   AccountPayableRepository,
 } from '../../persistence/repositories/localRepositories';
-import { TransactionType, ObligationStatus } from '../../types/enums';
-import { FinancialTransaction } from '../../types/entities';
+import { FinancialAccountType, TransactionType, ObligationStatus } from '../../types/enums';
+import { FinancialAccount, FinancialTransaction } from '../../types/entities';
 import { CashFlowReport, CashFlowDaily } from '../../types/reports';
 import { roundCurrency } from '../../shared/utils/currency';
 
@@ -50,37 +50,84 @@ function emptyDaily(date: string): CashFlowDaily {
   };
 }
 
+function isCashLike(account: FinancialAccount): boolean {
+  // CARD-A intentionally changes only CREDIT_CARD semantics. All existing
+  // account types keep their historical cash-flow treatment in this wave.
+  return account.type !== FinancialAccountType.CREDIT_CARD;
+}
+
+function invertMovement(movement: CashMovement): CashMovement {
+  return { income: movement.expense, expense: movement.income };
+}
+
 export class CashFlowService {
   private static txRepo = new FinancialTransactionRepository();
   private static accountRepo = new FinancialAccountRepository();
   private static recRepo = new AccountReceivableRepository();
   private static payRepo = new AccountPayableRepository();
 
+  private static requireAccount(
+    accountsById: Map<string, FinancialAccount>,
+    accountId: string,
+  ): FinancialAccount {
+    const account = accountsById.get(accountId);
+    if (!account) throw new Error('Transação financeira referencia conta inexistente no fluxo de caixa');
+    return account;
+  }
+
+  private static baseCashMovement(
+    transaction: FinancialTransaction,
+    amount: number,
+    accountsById: Map<string, FinancialAccount>,
+  ): CashMovement {
+    const source = this.requireAccount(accountsById, transaction.financialAccountId);
+    const sourceIsCash = isCashLike(source);
+
+    if (transaction.type === TransactionType.INCOME) {
+      return sourceIsCash ? { income: amount, expense: 0 } : { income: 0, expense: 0 };
+    }
+
+    if (transaction.type === TransactionType.EXPENSE) {
+      return sourceIsCash ? { income: 0, expense: amount } : { income: 0, expense: 0 };
+    }
+
+    if (transaction.type === TransactionType.TRANSFER) {
+      if (!transaction.destinationAccountId) {
+        throw new Error('Transferência sem conta de destino no fluxo de caixa');
+      }
+      const destination = this.requireAccount(accountsById, transaction.destinationAccountId);
+      const destinationIsCash = isCashLike(destination);
+
+      if (sourceIsCash && destinationIsCash) return { income: 0, expense: 0 };
+      if (sourceIsCash && !destinationIsCash) return { income: 0, expense: amount };
+      if (!sourceIsCash && destinationIsCash) return { income: amount, expense: 0 };
+      return { income: 0, expense: 0 };
+    }
+
+    throw new Error('Tipo base de transação financeira não suportado no fluxo de caixa');
+  }
+
   private static cashMovement(
     transaction: FinancialTransaction,
-    transactionsById: Map<string, FinancialTransaction>
+    transactionsById: Map<string, FinancialTransaction>,
+    accountsById: Map<string, FinancialAccount>,
   ): CashMovement {
     const amount = roundCurrency(Number(transaction.amount || 0));
     if (!Number.isFinite(amount) || amount < 0) {
       throw new Error('Transação financeira contém valor inválido para o fluxo de caixa');
     }
 
-    if (transaction.type === TransactionType.INCOME) return { income: amount, expense: 0 };
-    if (transaction.type === TransactionType.EXPENSE) return { income: 0, expense: amount };
-    if (transaction.type === TransactionType.TRANSFER) return { income: 0, expense: 0 };
-
-    if (transaction.type === TransactionType.REVERSAL) {
-      const originalId = transaction.reversalTransactionId || '';
-      const original = originalId ? transactionsById.get(originalId) : undefined;
-      if (!original || original.type === TransactionType.REVERSAL) {
-        throw new Error('Estorno financeiro sem transação original autoritativa para o fluxo de caixa');
-      }
-      if (original.type === TransactionType.INCOME) return { income: 0, expense: amount };
-      if (original.type === TransactionType.EXPENSE) return { income: amount, expense: 0 };
-      return { income: 0, expense: 0 };
+    if (transaction.type !== TransactionType.REVERSAL) {
+      return this.baseCashMovement(transaction, amount, accountsById);
     }
 
-    throw new Error('Tipo de transação financeira não suportado no fluxo de caixa');
+    const originalId = transaction.reversalTransactionId || '';
+    const original = originalId ? transactionsById.get(originalId) : undefined;
+    if (!original || original.type === TransactionType.REVERSAL) {
+      throw new Error('Estorno financeiro sem transação original autoritativa para o fluxo de caixa');
+    }
+
+    return invertMovement(this.baseCashMovement(original, amount, accountsById));
   }
 
   public static async getCashFlowReport(
@@ -123,12 +170,17 @@ export class CashFlowService {
     const receivables = rawReceivables.filter((item) => item.companyId === tenantId);
     const payables = rawPayables.filter((item) => item.companyId === tenantId);
 
+    const accountsById = new Map<string, FinancialAccount>(
+      accounts.map((item): [string, FinancialAccount] => [item.id, item])
+    );
     const transactionsById = new Map<string, FinancialTransaction>(
       transactions.map((item): [string, FinancialTransaction] => [item.id, item])
     );
 
     const openingFromAccounts = roundCurrency(
-      accounts.reduce((sum, account) => sum + Number(account.initialBalance || 0), 0)
+      accounts
+        .filter(isCashLike)
+        .reduce((sum, account) => sum + Number(account.initialBalance || 0), 0)
     );
 
     let initialCashBalance = openingFromAccounts;
@@ -141,7 +193,7 @@ export class CashFlowService {
       if (!DATE_PATTERN.test(transactionDate)) {
         throw new Error('Transação financeira contém data inválida para o fluxo de caixa');
       }
-      const movement = this.cashMovement(transaction, transactionsById);
+      const movement = this.cashMovement(transaction, transactionsById, accountsById);
 
       if (transactionDate < start) {
         initialCashBalance = roundCurrency(initialCashBalance + movement.income - movement.expense);
