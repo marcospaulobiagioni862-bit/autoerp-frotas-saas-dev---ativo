@@ -658,6 +658,9 @@ jobs:
       - name: Vehicle latest KM summary regression
         run: npx tsx src/components/fleet/__tests__/vehicleDetailsLatestKmTestRunner.ts
 
+      - name: Deferred report AI client regression
+        run: npx tsx src/components/reports/__tests__/managementReportsAiClientLazyLoadingTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 

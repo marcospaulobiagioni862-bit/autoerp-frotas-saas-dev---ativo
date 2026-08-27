@@ -11,7 +11,7 @@ import {
   TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateManagementReport, ManagementReportData } from '../../domain/reports/ManagementReportsService';
-import { ReportAiClient, type ReportAiSuggestedField, type ReportAiSuggestionRecord } from '../../api/reportAiClient';
+import type { ReportAiSuggestedField, ReportAiSuggestionRecord } from '../../api/reportAiClient';
 import { VehicleStatus, DocumentStatus } from '../../types/enums';
 import { 
   BarChart3, 
@@ -56,6 +56,9 @@ type ReportTab =
 const ManagementReportsFleetTab = lazy(() =>
   import('./ManagementReportsFleetTab').then((module) => ({ default: module.ManagementReportsFleetTab })),
 );
+
+const loadReportAiClient = () =>
+  import('../../api/reportAiClient').then(({ ReportAiClient }) => ReportAiClient);
 
 export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
   companyId = 'company-main-uuid',
@@ -124,6 +127,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
     setAssistantLoadingTargetId(vehicleId);
     setAssistantError(null);
     try {
+      const ReportAiClient = await loadReportAiClient();
       const result = await ReportAiClient.createVehicleSummary(vehicleId);
       setAssistantSuggestion(result.item);
     } catch (error) {
@@ -138,6 +142,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
     setAssistantLoadingTargetId(driverId);
     setAssistantError(null);
     try {
+      const ReportAiClient = await loadReportAiClient();
       const result = await ReportAiClient.createDriverSummary(driverId);
       setAssistantSuggestion(result.item);
     } catch (error) {
@@ -153,6 +158,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
     setAssistantReviewing(true);
     setAssistantError(null);
     try {
+      const ReportAiClient = await loadReportAiClient();
       const item = await ReportAiClient.review(assistantSuggestion.id, {
         decision,
         notes: decision === 'CONFIRM'
