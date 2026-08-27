@@ -18,6 +18,11 @@ async function rows(query: any): Promise<any[]> {
   return result.rows || [];
 }
 
+async function txRows(tx: any, query: any): Promise<any[]> {
+  const result: any = await tx.execute(query);
+  return result.rows || [];
+}
+
 async function expectFailure(action: () => Promise<unknown>, message: string): Promise<void> {
   let failed = false;
   try {
@@ -62,7 +67,8 @@ async function seed(): Promise<void> {
 async function run(): Promise<void> {
   await seed();
 
-  await UnitOfWork.run(companyA, async () => {
+  await UnitOfWork.run(companyA, async (txContext: any) => {
+    const tx = txContext.getRawTransaction();
     await db.execute(sql`INSERT INTO credit_card_profiles(
       id,company_id,financial_account_id,credit_limit,closing_day,due_day,active,version,created_by_id,updated_by_id
     ) VALUES ('card-b2-profile-a',${companyA},${cardAccountA},5000,20,27,true,1,'card-b2-user','card-b2-user')`);
@@ -122,16 +128,17 @@ async function run(): Promise<void> {
     assert(paymentTransaction.type === 'TRANSFER' && paymentTransaction.destination_account_id === cardAccountA,
       'statement payment link must preserve authoritative TRANSFER semantics');
 
-    const visibleProfiles = await rows(sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+    const visibleProfiles = await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
     assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-a',
       'tenant A must only see its own credit-card profile');
   });
 
-  await UnitOfWork.run(companyB, async () => {
+  await UnitOfWork.run(companyB, async (txContext: any) => {
+    const tx = txContext.getRawTransaction();
     await db.execute(sql`INSERT INTO credit_card_profiles(
       id,company_id,financial_account_id,credit_limit,closing_day,due_day,active,version,created_by_id,updated_by_id
     ) VALUES ('card-b2-profile-b',${companyB},${cardAccountB},3000,15,22,true,1,'card-b2-user-b','card-b2-user-b')`);
-    const visibleProfiles = await rows(sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+    const visibleProfiles = await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
     assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-b',
       'FORCE RLS must isolate tenant B from tenant A card profiles');
   });
