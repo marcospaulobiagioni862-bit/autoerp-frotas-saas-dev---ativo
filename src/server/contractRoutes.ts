@@ -451,6 +451,10 @@ export function registerContractRoutes(app: Express): void {
         }
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
         validateDateRange(contract.startDate, contract.endDate);
+        const today = new Date().toISOString().slice(0, 10);
+        if (contract.endDate && contract.endDate < today) {
+          throw new ContractConflictError('Contract period already ended');
+        }
         const categoryId = requiredText(req.body?.categoryId, 'categoryId');
         await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
 
