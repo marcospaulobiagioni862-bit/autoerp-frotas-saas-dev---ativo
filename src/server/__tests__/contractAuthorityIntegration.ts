@@ -266,6 +266,17 @@ export class ContractAuthorityIntegrationRunner {
       assert(Number(missingDocumentBlockedReceivables?.count) === 0, 'missing document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
 
+      await db.execute(sql`UPDATE documents SET expiration_date='2026-08-31', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+      assert(response.status === 409, `document expiring before contract start expected activation 409, got ${response.status}`);
+      const futureDocumentBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const futureDocumentBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const futureDocumentBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(futureDocumentBlockedContract?.status === ContractStatus.DRAFT, 'future document gate mutated contract');
+      assert(futureDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futureDocumentBlockedVehicle?.current_driver_id && !futureDocumentBlockedVehicle?.current_contract_id, 'future document gate mutated vehicle');
+      assert(Number(futureDocumentBlockedReceivables?.count) === 0, 'future document gate created receivable');
+      await db.execute(sql`UPDATE documents SET expiration_date='2035-01-01', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
+
       await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 409, `expired driver CNH expected activation 409, got ${response.status}`);
