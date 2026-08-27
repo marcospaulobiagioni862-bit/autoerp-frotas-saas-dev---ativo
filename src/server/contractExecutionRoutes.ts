@@ -407,6 +407,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF', true);
         if (!generated) throw new ExecutionConflictError();
+        if (new Date(signedAt).getTime() < new Date(generated.createdAt).getTime()) throw new ExecutionConflictError();
         const existing = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE', true);
         if (existing) {
           if (existing.attachmentId === attachmentId) return existing;
