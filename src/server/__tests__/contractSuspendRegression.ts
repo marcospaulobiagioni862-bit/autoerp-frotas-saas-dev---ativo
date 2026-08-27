@@ -267,6 +267,116 @@ export async function runContractSuspendRegression(): Promise<void> {
       WHERE company_id=${companyA} AND contract_id=${activeCandidate.id}
     `);
     assert(Number(receivablesAfterBillAttempt?.count) === Number(receivablesBefore?.count), 'SUSPENDED billing created receivable');
+
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, readonlyA);
+    assert(response.status === 403, `READONLY resume expected 403, got ${response.status}`);
+
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminB);
+    assert(response.status === 404, `cross-tenant resume expected 404, got ${response.status}`);
+
+    const resumeAuditBaseline = await scalar(sql`
+      SELECT count(*)::int AS count FROM audit_logs
+      WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${activeCandidate.id}
+    `);
+
+    await db.execute(sql`UPDATE vehicles SET current_driver_id='suspend-drv-a2', updated_at=NOW() WHERE id='suspend-veh-a1'`);
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminA);
+    assert(response.status === 409, `binding mismatch resume expected 409, got ${response.status}`);
+    await db.execute(sql`UPDATE vehicles SET current_driver_id='suspend-drv-a1', updated_at=NOW() WHERE id='suspend-veh-a1'`);
+
+    await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='suspend-drv-a1'`);
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminA);
+    assert(response.status === 409, `expired CNH resume expected 409, got ${response.status}`);
+    await db.execute(sql`UPDATE drivers SET cnh_expiration='2035-01-01', updated_at=NOW() WHERE id='suspend-drv-a1'`);
+
+    await db.execute(sql`UPDATE documents SET expiration_date='2020-01-01', updated_at=NOW() WHERE id='suspend-doc-a1-ipva'`);
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminA);
+    assert(response.status === 409, `expired document resume expected 409, got ${response.status}`);
+    await db.execute(sql`UPDATE documents SET expiration_date='2035-01-01', updated_at=NOW() WHERE id='suspend-doc-a1-ipva'`);
+
+    await db.execute(sql`UPDATE insurances SET status='EXPIRED', updated_at=NOW() WHERE id='suspend-ins-a1'`);
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminA);
+    assert(response.status === 409, `expired insurance resume expected 409, got ${response.status}`);
+    await db.execute(sql`UPDATE insurances SET status='ACTIVE', updated_at=NOW() WHERE id='suspend-ins-a1'`);
+
+    await db.execute(sql`UPDATE contracts SET start_date='2020-01-01', end_date='2020-01-31', updated_at=NOW() WHERE id=${activeCandidate.id}`);
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: '{}',
+    }, adminA);
+    assert(response.status === 409, `ended contract resume expected 409, got ${response.status}`);
+    await db.execute(sql`UPDATE contracts SET start_date=${today}, end_date=NULL, updated_at=NOW() WHERE id=${activeCandidate.id}`);
+
+    const blockedResumeState = await scalar(sql`SELECT status FROM contracts WHERE id=${activeCandidate.id}`);
+    const blockedResumeVehicle = await scalar(sql`
+      SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='suspend-veh-a1'
+    `);
+    const blockedResumeReceivables = await scalar(sql`
+      SELECT count(*)::int AS count FROM account_receivables
+      WHERE company_id=${companyA} AND contract_id=${activeCandidate.id}
+    `);
+    const blockedResumeAudit = await scalar(sql`
+      SELECT count(*)::int AS count FROM audit_logs
+      WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${activeCandidate.id}
+    `);
+    assert(blockedResumeState?.status === ContractStatus.SUSPENDED, 'blocked resume mutated contract');
+    assert(blockedResumeVehicle?.status === VehicleStatus.RENTED, 'blocked resume released vehicle');
+    assert(blockedResumeVehicle?.current_driver_id === 'suspend-drv-a1', 'blocked resume changed driver binding');
+    assert(blockedResumeVehicle?.current_contract_id === activeCandidate.id, 'blocked resume changed contract binding');
+    assert(Number(blockedResumeReceivables?.count) === Number(receivablesBefore?.count), 'blocked resume mutated receivables');
+    assert(Number(blockedResumeAudit?.count) === Number(resumeAuditBaseline?.count), 'blocked resume created audit');
+
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: JSON.stringify({ reason: 'Retorno à operação' }),
+    }, adminA);
+    assert(response.status === 200, `SUSPENDED resume expected 200, got ${response.status}`);
+    const resumed = (await json(response)).item;
+    assert(resumed.status === ContractStatus.ACTIVE, 'resume did not persist ACTIVE');
+    assert(String(resumed.notes || '').includes('Retorno à operação'), 'resume reason not persisted');
+
+    const vehicleAfterResume = await scalar(sql`
+      SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='suspend-veh-a1'
+    `);
+    const receivablesAfterResume = await scalar(sql`
+      SELECT count(*)::int AS count FROM account_receivables
+      WHERE company_id=${companyA} AND contract_id=${activeCandidate.id}
+    `);
+    const auditAfterResume = await scalar(sql`
+      SELECT count(*)::int AS count FROM audit_logs
+      WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${activeCandidate.id}
+    `);
+    assert(vehicleAfterResume?.status === VehicleStatus.RENTED, 'resume changed vehicle status');
+    assert(vehicleAfterResume?.current_driver_id === 'suspend-drv-a1', 'resume changed driver binding');
+    assert(vehicleAfterResume?.current_contract_id === activeCandidate.id, 'resume changed contract binding');
+    assert(Number(receivablesAfterResume?.count) === Number(receivablesBefore?.count), 'resume duplicated receivable');
+    assert(Number(auditAfterResume?.count) === Number(resumeAuditBaseline?.count) + 1, 'resume did not create exactly one audit');
+
+    response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/resume`, {
+      method: 'POST', body: JSON.stringify({ reason: 'Replay idempotente' }),
+    }, adminA);
+    assert(response.status === 200, `idempotent resume expected 200, got ${response.status}`);
+    assert((await json(response)).item.status === ContractStatus.ACTIVE, 'idempotent resume changed status');
+    const auditAfterResumeReplay = await scalar(sql`
+      SELECT count(*)::int AS count FROM audit_logs
+      WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${activeCandidate.id}
+    `);
+    const receivablesAfterResumeReplay = await scalar(sql`
+      SELECT count(*)::int AS count FROM account_receivables
+      WHERE company_id=${companyA} AND contract_id=${activeCandidate.id}
+    `);
+    assert(Number(auditAfterResumeReplay?.count) === Number(auditAfterResume?.count), 'idempotent resume duplicated audit');
+    assert(Number(receivablesAfterResumeReplay?.count) === Number(receivablesBefore?.count), 'idempotent resume duplicated receivable');
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

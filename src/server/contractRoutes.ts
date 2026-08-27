@@ -23,6 +23,7 @@ type ContractAction =
   | 'EDIT_CONTRACT'
   | 'ACTIVATE_CONTRACT'
   | 'SUSPEND_CONTRACT'
+  | 'RESUME_CONTRACT'
   | 'CLOSE_CONTRACT'
   | 'CANCEL_CONTRACT'
   | 'ARCHIVE_CONTRACT'
@@ -546,6 +547,65 @@ export function registerContractRoutes(app: Express): void {
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           status: ContractStatus.SUSPENDED,
           notes: appendNote(contract.notes, 'Suspensão', reason),
+          updatedAt: now,
+        });
+        if (!saved) throw new ContractNotFoundError();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
+          action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
+          userId: principal.userId, userName: principal.name, timestamp: now,
+        });
+        return saved;
+      });
+      res.json({ item });
+    } catch (error) {
+      sendContractError(res, error);
+    }
+  });
+
+  app.post('/api/contracts/:id/resume', async (req: Request, res: Response) => {
+    const principal = requireContractPrincipal(req, res, 'RESUME_CONTRACT');
+    if (!principal) return;
+    try {
+      const reason = optionalText(req.body?.reason);
+      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ContractNotFoundError();
+        const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
+        if (!vehicle) throw new ContractNotFoundError();
+        if (
+          vehicle.status !== VehicleStatus.RENTED ||
+          vehicle.currentContractId !== contract.id ||
+          vehicle.currentDriverId !== contract.driverId
+        ) {
+          throw new ContractConflictError('Contract binding mismatch');
+        }
+        if (contract.status === ContractStatus.ACTIVE) return contract;
+        if (contract.status !== ContractStatus.SUSPENDED) {
+          throw new ContractConflictError('Contract lifecycle does not allow resume');
+        }
+
+        validateDateRange(contract.startDate, contract.endDate);
+        const today = new Date().toISOString().slice(0, 10);
+        if (contract.startDate > today) throw new ContractConflictError('Contract period has not started');
+        if (contract.endDate && contract.endDate < today) throw new ContractConflictError('Contract period already ended');
+
+        const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
+        if (!driver) throw new ContractNotFoundError();
+        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, today, tx);
+        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, today, tx))) {
+          throw new ContractConflictError('Vehicle insurance unavailable');
+        }
+        ensureDriverEligible(driver);
+
+        const vehicleConflict = await tx.getContractRepo().findActiveByVehicle(principal.companyId, contract.vehicleId, contract.id);
+        const driverConflict = await tx.getContractRepo().findActiveByDriver(principal.companyId, contract.driverId, contract.id);
+        if (vehicleConflict || driverConflict) throw new ContractConflictError('Active binding conflict');
+
+        const now = new Date().toISOString();
+        const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
+          status: ContractStatus.ACTIVE,
+          notes: appendNote(contract.notes, 'Retomada', reason),
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
