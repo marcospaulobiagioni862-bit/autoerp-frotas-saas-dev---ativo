@@ -1,6 +1,7 @@
 import { boolean, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { financialAccounts, financialTransactions } from './schema';
 
+// FINANCE-CARD-1B2 Drizzle model. Database constraints/triggers/RLS remain authoritative in migration 0040.
 export const creditCardProfiles = pgTable('credit_card_profiles', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
