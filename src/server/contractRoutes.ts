@@ -201,7 +201,7 @@ function ensureVehicleEligible(vehicle: Vehicle): void {
   if (vehicle.currentContractId || vehicle.currentDriverId) throw new ContractConflictError('Vehicle already bound');
 }
 
-async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: string, tx: any): Promise<void> {
+async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: string, effectiveDate: string, tx: any): Promise<void> {
   const documents = await tx.getDocumentRepo().findAllByCompany(companyId, {
     subjectType: 'VEHICLE',
     subjectId: vehicleId,
@@ -216,7 +216,8 @@ async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: stri
   const eligibleTypes = new Set(
     annualDocuments
       .filter((document: any) =>
-        [DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(document.complianceStatus)
+        [DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(document.complianceStatus) &&
+        (!document.expirationDate || document.expirationDate >= effectiveDate)
       )
       .map((document: any) => document.documentType)
   );
@@ -459,7 +460,7 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
         if (!driver) throw new ContractNotFoundError();
         ensureVehicleEligible(vehicle);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, tx);
+        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, contract.startDate, tx);
         if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, contract.startDate, tx))) {
           throw new ContractConflictError('Vehicle insurance unavailable');
         }
