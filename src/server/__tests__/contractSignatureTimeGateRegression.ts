@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { ContractExecutionAuthorityIntegrationRunner } from './contractExecutionAuthorityIntegration';
+import { runContractSuspendRegression } from './contractSuspendRegression';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -174,6 +175,8 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
     if (originalStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
     else process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;
   }
+
+  await runContractSuspendRegression();
 }
 
 if (process.argv[1]?.includes('contractSignatureTimeGateRegression')) {
