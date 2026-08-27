@@ -8,6 +8,9 @@ import { PieChart, Calendar, Car } from 'lucide-react';
 import { Card, Select, Skeleton } from '../ui';
 import { useAuth } from '../../hooks/useAuth';
 
+const formatCurrency = (value: number) =>
+  value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 export const DREReportView: React.FC = () => {
   const [regime, setRegime] = useState<AccountingRegime>(AccountingRegime.CASH);
   const [startDate, setStartDate] = useState<string>('2026-01-01');
@@ -244,28 +247,78 @@ export const DREReportView: React.FC = () => {
             </div>
 
             {vehicleProfit && (
-              <div className="space-y-3 pt-2 text-xs">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Receita Gerada pelo Veículo</span>
-                  <strong className="text-emerald-600 dark:text-emerald-400 font-mono tabular-nums text-sm block">
-                    R$ {vehicleProfit.grossRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </strong>
+              <div className="space-y-4 pt-2 text-xs">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950/30">
+                    <span className="block text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Receita total</span>
+                    <strong className="mt-1 block font-mono text-sm text-emerald-700 dark:text-emerald-300">{formatCurrency(vehicleProfit.totalIncome)}</strong>
+                  </div>
+                  <div className="rounded-lg bg-indigo-50 p-3 dark:bg-indigo-950/30">
+                    <span className="block text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-400">Despesa total</span>
+                    <strong className="mt-1 block font-mono text-sm text-indigo-700 dark:text-indigo-300">{formatCurrency(vehicleProfit.totalExpense)}</strong>
+                  </div>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-lg space-y-1">
-                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Custos Totais do Veículo</span>
-                  <strong className="text-indigo-600 dark:text-indigo-400 font-mono tabular-nums text-sm block">
-                    R$ {vehicleProfit.totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </strong>
+                <section>
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Composição das receitas</h4>
+                  <dl className="space-y-1.5 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                    {[
+                      ['Locação', vehicleProfit.rentalIncome],
+                      ['KM excedente', vehicleProfit.kmExcessIncome],
+                      ['Multas reembolsadas', vehicleProfit.finesReimbursedIncome],
+                      ['Outras receitas', vehicleProfit.otherIncome],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="flex justify-between gap-3">
+                        <dt className="text-slate-500">{label}</dt>
+                        <dd className="font-mono tabular-nums">{formatCurrency(Number(value))}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+
+                <section>
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-500">Composição das despesas</h4>
+                  <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 rounded-lg border border-slate-200 p-3 dark:border-slate-800 xl:grid-cols-2">
+                    {[
+                      ['Manutenção', vehicleProfit.maintenanceExpense],
+                      ['Seguro', vehicleProfit.insuranceExpense],
+                      ['Rastreador', vehicleProfit.trackerExpense],
+                      ['Documentação', vehicleProfit.documentationExpense],
+                      ['Multas da empresa', vehicleProfit.finesCompanyExpense],
+                      ['Financiamento', vehicleProfit.financingExpense],
+                      ['Depreciação', vehicleProfit.depreciationExpense],
+                      ['Outras despesas', vehicleProfit.otherExpense],
+                    ].map(([label, value]) => (
+                      <div key={String(label)} className="flex justify-between gap-3">
+                        <dt className="text-slate-500">{label}</dt>
+                        <dd className="font-mono tabular-nums">{formatCurrency(Number(value))}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/60">
+                    <span className="block text-[9px] font-bold uppercase text-slate-500">KM no período</span>
+                    <strong className="mt-1 block font-mono">{vehicleProfit.kmTraveledPeriod.toLocaleString('pt-BR')} km</strong>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/60">
+                    <span className="block text-[9px] font-bold uppercase text-slate-500">Receita/KM</span>
+                    <strong className="mt-1 block font-mono">{formatCurrency(vehicleProfit.revenuePerKm)}</strong>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/60">
+                    <span className="block text-[9px] font-bold uppercase text-slate-500">Custo/KM</span>
+                    <strong className="mt-1 block font-mono">{formatCurrency(vehicleProfit.costPerKm)}</strong>
+                  </div>
                 </div>
 
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-lg space-y-1">
-                  <span className="text-blue-600 dark:text-blue-400 block text-[10px] uppercase font-bold">Lucro Líquido Individual</span>
-                  <strong className="text-blue-800 dark:text-blue-200 font-mono tabular-nums text-base block">
-                    R$ {vehicleProfit.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-950/30">
+                  <span className="block text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">Lucro líquido individual</span>
+                  <strong className={`mt-1 block font-mono text-base ${vehicleProfit.netProfit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'}`}>
+                    {formatCurrency(vehicleProfit.netProfit)}
                   </strong>
-                  <span className="text-[11px] text-slate-500 block mt-1">
-                    Margem de Lucro: <strong className="text-slate-800 dark:text-slate-200 font-mono tabular-nums">{vehicleProfit.marginPercentage.toFixed(1)}%</strong>
+                  <span className="mt-1 block text-[11px] text-slate-500">
+                    Margem: <strong className="font-mono text-slate-800 dark:text-slate-200">{vehicleProfit.profitMarginPercentage.toFixed(1)}%</strong>
                   </span>
                 </div>
               </div>

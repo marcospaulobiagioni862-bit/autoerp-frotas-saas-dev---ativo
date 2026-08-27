@@ -643,6 +643,9 @@ jobs:
       - name: Financial transaction filters regression
         run: npx tsx src/components/finance/__tests__/transactionFiltersTestRunner.ts
 
+      - name: Vehicle profitability breakdown regression
+        run: npx tsx src/components/finance/__tests__/vehicleProfitabilityBreakdownTestRunner.ts
+
       - name: Deferred driver modals regression
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
