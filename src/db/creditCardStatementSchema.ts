@@ -1,4 +1,4 @@
-import { boolean, index, integer, numeric, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { financialAccounts, financialTransactions } from './schema';
 
 export const creditCardProfiles = pgTable('credit_card_profiles', {
@@ -24,8 +24,8 @@ export const creditCardStatements = pgTable('credit_card_statements', {
   companyId: text('company_id').notNull(),
   creditCardProfileId: text('credit_card_profile_id').notNull().references(() => creditCardProfiles.id, { onDelete: 'restrict' }),
   cycleRef: text('cycle_ref').notNull(),
-  closingDate: timestamp('closing_date', { mode: 'string' }).notNull(),
-  dueDate: timestamp('due_date', { mode: 'string' }).notNull(),
+  closingDate: date('closing_date', { mode: 'string' }).notNull(),
+  dueDate: date('due_date', { mode: 'string' }).notNull(),
   status: text('status').notNull().default('OPEN'),
   originalAmount: numeric('original_amount', { precision: 12, scale: 2 }).notNull().default('0'),
   adjustmentAmount: numeric('adjustment_amount', { precision: 12, scale: 2 }).notNull().default('0'),
