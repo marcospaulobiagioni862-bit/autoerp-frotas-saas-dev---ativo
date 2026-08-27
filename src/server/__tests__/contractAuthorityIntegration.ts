@@ -299,6 +299,31 @@ export class ContractAuthorityIntegrationRunner {
       assert(Number(insuranceBlockedReceivables?.count) === 0, 'expired insurance gate created receivable');
       await db.execute(sql`UPDATE insurances SET status='ACTIVE', updated_at=NOW() WHERE id='i3-ins-a1'`);
 
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...baseContract,
+          contractNumber: 'CNT-I3-PAST-PERIOD',
+          vehicleId: 'i3-veh-a2',
+          driverId: 'i3-drv-a2',
+          startDate: '2026-01-01',
+          endDate: '2026-01-31',
+        }),
+      }, adminA);
+      assert(response.status === 201, `past-period draft create expected 201, got ${response.status}`);
+      const pastPeriodContract = (await json(response)).item;
+      await markLegacyContract(pastPeriodContract.id);
+      response = await request(`/api/contracts/${encodeURIComponent(pastPeriodContract.id)}/activate`, {
+        method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }),
+      }, adminA);
+      assert(response.status === 409, `past contract period expected activation 409, got ${response.status}`);
+      const pastPeriodBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${pastPeriodContract.id}`);
+      const pastPeriodBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a2'`);
+      const pastPeriodBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${pastPeriodContract.id}`);
+      assert(pastPeriodBlockedContract?.status === ContractStatus.DRAFT, 'past period gate mutated contract');
+      assert(pastPeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !pastPeriodBlockedVehicle?.current_driver_id && !pastPeriodBlockedVehicle?.current_contract_id, 'past period gate mutated vehicle');
+      assert(Number(pastPeriodBlockedReceivables?.count) === 0, 'past period gate created receivable');
+
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
       const activation = await json(response);
