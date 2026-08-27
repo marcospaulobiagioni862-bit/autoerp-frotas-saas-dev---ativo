@@ -667,6 +667,23 @@ jobs:
       - name: Deferred report AI client regression
         run: npx tsx src/components/reports/__tests__/managementReportsAiClientLazyLoadingTestRunner.ts
 
+      - name: FINANCE-CARD-1B2 source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "CREATE TABLE credit_card_profiles" drizzle/0040_credit_card_statement_authority.sql
+          grep -F "CREATE TABLE credit_card_statements" drizzle/0040_credit_card_statement_authority.sql
+          grep -F "CREATE TABLE credit_card_statement_items" drizzle/0040_credit_card_statement_authority.sql
+          grep -F "CREATE TABLE credit_card_statement_payments" drizzle/0040_credit_card_statement_authority.sql
+          test "$(grep -c 'FORCE ROW LEVEL SECURITY' drizzle/0040_credit_card_statement_authority.sql)" -eq 4
+          grep -F "credit_card_statement_cycle_unique" drizzle/0040_credit_card_statement_authority.sql
+          grep -F "credit_card_item_transaction_unique" drizzle/0040_credit_card_statement_authority.sql
+          if grep -Eq "INSERT INTO financial_transactions|UPDATE financial_accounts.*current_balance" drizzle/0040_credit_card_statement_authority.sql; then
+            echo "FAIL: card persistence migration must not create ledger entries or mutate balances"
+            exit 1
+          fi
+          echo "FINANCE-CARD-1B2 source invariants: PASS"
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
@@ -729,6 +746,7 @@ jobs:
           npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeCashFlowAuthorityIntegration.ts
+          npx tsx src/server/__tests__/creditCardStatementAuthorityIntegration.ts
 
       - name: Finance domain regressions
         run: |
