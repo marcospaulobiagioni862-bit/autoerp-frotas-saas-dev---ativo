@@ -32,8 +32,8 @@ async function assertContractRentCompetenceWithinContract(
   params: CreateReceivableParams,
   txContext?: ITransactionContext
 ): Promise<void> {
-  if (params.originType !== OriginType.CONTRACT_RENT) return;
-  if (!params.contractId || !txContext) {
+  if (params.originType !== OriginType.CONTRACT_RENT || !txContext) return;
+  if (!params.contractId) {
     throw new Error('Autoridade contratual indisponível para cobrança de aluguel');
   }
 
