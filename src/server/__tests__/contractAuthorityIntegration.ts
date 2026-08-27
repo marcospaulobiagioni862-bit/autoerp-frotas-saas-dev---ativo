@@ -113,7 +113,7 @@ export class ContractAuthorityIntegrationRunner {
         ('i3-doc-valid-a3-lic', ${companyA}, 'VEHICLE', 'i3-veh-a3', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-a3', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
         ('i3-doc-valid-b1-ipva', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
         ('i3-doc-valid-b1-crlv', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW()),
-        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'i3-veh-b1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
+        ('i3-doc-valid-b1-lic', ${companyB}, 'VEHICLE', 'Vehicle', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-b1', 1, true, false, 0, ${adminBId}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
     `);
 
@@ -161,7 +161,7 @@ export class ContractAuthorityIntegrationRunner {
       contractNumber: 'CNT-I3-A-001',
       driverId: 'i3-drv-a1',
       vehicleId: 'i3-veh-a1',
-      startDate: '2026-09-01',
+      startDate: '2026-08-01',
       rentalAmount: 750,
       billingPeriodicity: RecurringFrequency.WEEKLY,
       billingDueDayOfWeek: 1,
@@ -266,15 +266,15 @@ export class ContractAuthorityIntegrationRunner {
       assert(Number(missingDocumentBlockedReceivables?.count) === 0, 'missing document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
 
-      await db.execute(sql`UPDATE documents SET expiration_date='2026-08-31', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
+      await db.execute(sql`UPDATE documents SET expiration_date='2026-07-31', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `document expiring before contract start expected activation 409, got ${response.status}`);
+      assert(response.status === 409, `annual vehicle document before contract start expected activation 409, got ${response.status}`);
       const futureDocumentBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
       const futureDocumentBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
       const futureDocumentBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(futureDocumentBlockedContract?.status === ContractStatus.DRAFT, 'future document gate mutated contract');
-      assert(futureDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futureDocumentBlockedVehicle?.current_driver_id && !futureDocumentBlockedVehicle?.current_contract_id, 'future document gate mutated vehicle');
-      assert(Number(futureDocumentBlockedReceivables?.count) === 0, 'future document gate created receivable');
+      assert(futureDocumentBlockedContract?.status === ContractStatus.DRAFT, 'document date gate mutated contract');
+      assert(futureDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futureDocumentBlockedVehicle?.current_driver_id && !futureDocumentBlockedVehicle?.current_contract_id, 'document date gate mutated vehicle');
+      assert(Number(futureDocumentBlockedReceivables?.count) === 0, 'document date gate created receivable');
       await db.execute(sql`UPDATE documents SET expiration_date='2035-01-01', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
 
       await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
@@ -324,6 +324,30 @@ export class ContractAuthorityIntegrationRunner {
       assert(pastPeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !pastPeriodBlockedVehicle?.current_driver_id && !pastPeriodBlockedVehicle?.current_contract_id, 'past period gate mutated vehicle');
       assert(Number(pastPeriodBlockedReceivables?.count) === 0, 'past period gate created receivable');
 
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...baseContract,
+          contractNumber: 'CNT-I3-FUTURE-PERIOD',
+          vehicleId: 'i3-veh-a3',
+          driverId: 'i3-drv-a3',
+          startDate: '2099-01-01',
+        }),
+      }, adminA);
+      assert(response.status === 201, `future-period draft create expected 201, got ${response.status}`);
+      const futurePeriodContract = (await json(response)).item;
+      await markLegacyContract(futurePeriodContract.id);
+      response = await request(`/api/contracts/${encodeURIComponent(futurePeriodContract.id)}/activate`, {
+        method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }),
+      }, adminA);
+      assert(response.status === 409, `future contract period expected activation 409, got ${response.status}`);
+      const futurePeriodBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${futurePeriodContract.id}`);
+      const futurePeriodBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a3'`);
+      const futurePeriodBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${futurePeriodContract.id}`);
+      assert(futurePeriodBlockedContract?.status === ContractStatus.DRAFT, 'future period gate mutated contract');
+      assert(futurePeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futurePeriodBlockedVehicle?.current_driver_id && !futurePeriodBlockedVehicle?.current_contract_id, 'future period gate mutated vehicle');
+      assert(Number(futurePeriodBlockedReceivables?.count) === 0, 'future period gate created receivable');
+
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
       const activation = await json(response);
@@ -362,7 +386,7 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 409, `ACTIVE archive expected 409, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
-        method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Data inválida' }),
+        method: 'POST', body: JSON.stringify({ closeDate: '2026-07-31', reason: 'Data inválida' }),
       }, adminA);
       assert(response.status === 409, `close before contract start expected 409, got ${response.status}`);
       const prematureCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
