@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FinanceReportingClient } from '../../api/financeReportingClient';
-import { VehicleRepository } from '../../persistence/repositories/localRepositories';
+import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { AccountingRegime } from '../../types/enums';
 import { DREReport, VehicleProfitabilityReport } from '../../types/reports/index';
@@ -44,11 +44,11 @@ export const DREReportView: React.FC = () => {
       }
       
       setLoading(true);
-      const companyId = user.companyId;
       try {
-        const dre = await FinanceReportingClient.getDRE(startDate, endDate, regime);
-        const vehRepo = new VehicleRepository();
-        const vehList = await vehRepo.findAllForCompany(companyId);
+        const [dre, vehList] = await Promise.all([
+          FinanceReportingClient.getDRE(startDate, endDate, regime),
+          VehicleClient.list(),
+        ]);
         
         let vProfit = null;
         let finalSelectedVehicleId = isSwitchingTenant ? '' : selectedVehicleId;
@@ -276,4 +276,3 @@ export const DREReportView: React.FC = () => {
     </div>
   );
 };
-
