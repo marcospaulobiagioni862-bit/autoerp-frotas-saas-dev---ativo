@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DriverClient } from '../../api/driverClient';
 import type { Driver, TrafficTicket, Vehicle } from '../../types/entities';
 import { TicketResponsibility, TicketStatus } from '../../types/enums';
-import { TrafficTicketFormModal } from './TrafficTicketFormModal';
-import { TrafficTicketDetailsModal } from './TrafficTicketDetailsModal';
+import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { Badge, Button, Card, Input, PageHeader, Select } from '../ui';
 import { AlertTriangle, DollarSign, Plus, ShieldAlert, User } from 'lucide-react';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+
+const TrafficTicketFormModal=lazy(()=>import('./TrafficTicketFormModal').then(module=>({default:module.TrafficTicketFormModal})));
+const TrafficTicketDetailsModal=lazy(()=>import('./TrafficTicketDetailsModal').then(module=>({default:module.TrafficTicketDetailsModal})));
 
 interface TrafficTicketsManagementProps { companyId?: string; }
 
@@ -41,6 +43,7 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
   const total=tickets.reduce((sum,t)=>sum+t.originalAmount,0);
   const pending=tickets.filter(t=>t.responsibility===TicketResponsibility.UNIDENTIFIED).length;
   const driverCharges=tickets.filter(t=>t.responsibility===TicketResponsibility.DRIVER&&Boolean(t.receivableId)).length;
+  const ticketModalResetKey=isFormOpen?'form':selectedTicketId?`details:${selectedTicketId}`:'none';
 
   return <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
     <PageHeader title="Multas de Trânsito" description="Autoridade server-side, vínculo financeiro e NIC auditável" breadcrumb="Operação • Gestão de Multas" primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}/>
@@ -67,7 +70,11 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
       <table className="w-full text-xs"><thead><tr className="border-b"><th className="p-3 text-left">Auto</th><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Motorista</th><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Valor</th><th className="p-3 text-left">Responsabilidade</th><th className="p-3 text-left">Status</th><th className="p-3"/></tr></thead>
       <tbody>{filtered.map(t=><tr key={t.id} className="border-b last:border-0"><td className="p-3 font-mono font-semibold">{t.autoNumber}</td><td className="p-3">{vehicleInfo(t.vehicleId)}</td><td className="p-3">{driverInfo(t.driverId)}</td><td className="p-3">{new Date(`${t.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}</td><td className="p-3">{formatCurrencyBRL(t.originalAmount)}</td><td className="p-3"><Badge variant={t.responsibility===TicketResponsibility.UNIDENTIFIED?'warning':t.responsibility===TicketResponsibility.DRIVER?'indigo':'slate'}>{t.responsibility}</Badge></td><td className="p-3"><Badge variant={t.status===TicketStatus.CANCELLED?'danger':t.status===TicketStatus.PAID_BY_COMPANY?'success':t.status===TicketStatus.APPEALED?'warning':'secondary'}>{t.status}</Badge></td><td className="p-3 text-right"><Button variant="outline" size="sm" onClick={()=>setSelectedTicketId(t.id)}>Detalhes</Button></td></tr>)}</tbody></table>}
     </Card>
-    <TrafficTicketFormModal isOpen={isFormOpen} onClose={()=>setIsFormOpen(false)} onSuccess={()=>void loadData()}/>
-    <TrafficTicketDetailsModal isOpen={Boolean(selectedTicketId)} onClose={()=>setSelectedTicketId(null)} ticketId={selectedTicketId} onRefresh={()=>void loadData()}/>
+    <LazyModuleErrorBoundary resetKey={ticketModalResetKey} onRetry={()=>window.location.reload()}>
+      <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados da multa...</div></div>}>
+        {isFormOpen&&<TrafficTicketFormModal isOpen onClose={()=>setIsFormOpen(false)} onSuccess={()=>void loadData()}/>}
+        {selectedTicketId&&<TrafficTicketDetailsModal isOpen onClose={()=>setSelectedTicketId(null)} ticketId={selectedTicketId} onRefresh={()=>void loadData()}/>}
+      </Suspense>
+    </LazyModuleErrorBoundary>
   </div>;
 };

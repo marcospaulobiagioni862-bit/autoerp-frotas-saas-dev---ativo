@@ -649,6 +649,9 @@ jobs:
       - name: Deferred maintenance panels regression
         run: npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
 
+      - name: Deferred traffic-ticket modals regression
+        run: npx tsx src/components/trafficTickets/__tests__/trafficTicketsLazyModalsTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
