@@ -74,6 +74,18 @@ export class ContractAuthorityIntegrationRunner {
         ('i3-drv-b1', ${companyB}, 'Driver B1', '16899535009', '24681357982', true, '2035-01-01', 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
+    await db.execute(sql`
+      INSERT INTO insurances (
+        id, company_id, vehicle_id, insurance_company, policy_number, coverage_details,
+        deductible_amount, total_premium_amount, installments_count, start_date, end_date, status,
+        account_payable_ids, created_by, created_at, updated_at
+      ) VALUES
+        ('i3-ins-a1', ${companyA}, 'i3-veh-a1', 'Seguradora A', 'POL-I3-A1', 'Cobertura teste', 1000, 1200, 12, '2026-01-01', '2027-12-31', 'ACTIVE', '[]'::jsonb, ${adminAId}, NOW(), NOW()),
+        ('i3-ins-a2', ${companyA}, 'i3-veh-a2', 'Seguradora A', 'POL-I3-A2', 'Cobertura teste', 1000, 1200, 12, '2026-01-01', '2027-12-31', 'ACTIVE', '[]'::jsonb, ${adminAId}, NOW(), NOW()),
+        ('i3-ins-a3', ${companyA}, 'i3-veh-a3', 'Seguradora A', 'POL-I3-A3', 'Cobertura teste', 1000, 1200, 12, '2026-01-01', '2027-12-31', 'ACTIVE', '[]'::jsonb, ${adminAId}, NOW(), NOW()),
+        ('i3-ins-b1', ${companyB}, 'i3-veh-b1', 'Seguradora B', 'POL-I3-B1', 'Cobertura teste', 1000, 1200, 12, '2026-01-01', '2027-12-31', 'ACTIVE', '[]'::jsonb, ${adminBId}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET status='ACTIVE', start_date='2026-01-01', end_date='2027-12-31', updated_at=NOW()
+    `);
 
     const app = express();
     app.use(express.json());
@@ -210,6 +222,17 @@ export class ContractAuthorityIntegrationRunner {
       assert(blockedVehicle?.status === VehicleStatus.AVAILABLE && !blockedVehicle?.current_driver_id && !blockedVehicle?.current_contract_id, 'expired document gate mutated vehicle');
       assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
+
+      await db.execute(sql`UPDATE insurances SET status='EXPIRED', updated_at=NOW() WHERE id='i3-ins-a1'`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+      assert(response.status === 409, `expired vehicle insurance expected activation 409, got ${response.status}`);
+      const insuranceBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const insuranceBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const insuranceBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(insuranceBlockedContract?.status === ContractStatus.DRAFT, 'expired insurance gate mutated contract');
+      assert(insuranceBlockedVehicle?.status === VehicleStatus.AVAILABLE && !insuranceBlockedVehicle?.current_driver_id && !insuranceBlockedVehicle?.current_contract_id, 'expired insurance gate mutated vehicle');
+      assert(Number(insuranceBlockedReceivables?.count) === 0, 'expired insurance gate created receivable');
+      await db.execute(sql`UPDATE insurances SET status='ACTIVE', updated_at=NOW() WHERE id='i3-ins-a1'`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
