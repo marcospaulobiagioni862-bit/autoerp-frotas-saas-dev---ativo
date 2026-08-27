@@ -179,7 +179,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={() => void activate()}>Ativar legado</Button>}
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={bill}>Faturar competência</Button>}
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
-          {contract.status !== ContractStatus.CANCELLED && contract.status !== ContractStatus.CLOSED && contract.status !== ContractStatus.ARCHIVED && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
+          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
           {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
         </div>
       </div>}
