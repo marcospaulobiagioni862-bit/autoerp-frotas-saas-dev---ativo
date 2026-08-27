@@ -655,6 +655,9 @@ jobs:
       - name: Deferred management report fleet tab regression
         run: npx tsx src/components/reports/__tests__/managementReportsFleetLazyTabTestRunner.ts
 
+      - name: Vehicle latest KM summary regression
+        run: npx tsx src/components/fleet/__tests__/vehicleDetailsLatestKmTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
