@@ -42,19 +42,19 @@ export const DREReportView: React.FC = () => {
         setLoading(false);
         return;
       }
-
+      
       setLoading(true);
       try {
         const [dre, vehList] = await Promise.all([
           FinanceReportingClient.getDRE(startDate, endDate, regime),
           VehicleClient.list(),
         ]);
-
+        
         let vProfit = null;
         let finalSelectedVehicleId = isSwitchingTenant ? '' : selectedVehicleId;
 
         if (vehList.length > 0) {
-          const isVehicleValid = finalSelectedVehicleId && vehList.some((v) => v.id === finalSelectedVehicleId);
+          const isVehicleValid = finalSelectedVehicleId && vehList.some(v => v.id === finalSelectedVehicleId);
           const vId = isVehicleValid ? finalSelectedVehicleId : vehList[0].id;
           finalSelectedVehicleId = vId;
           vProfit = await FinanceReportingClient.getVehicleProfitability(vId, startDate, endDate, regime);
@@ -105,6 +105,7 @@ export const DREReportView: React.FC = () => {
           </p>
         </div>
 
+        {/* Regime Switcher */}
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
           <button
             onClick={() => setRegime(AccountingRegime.CASH)}
@@ -129,6 +130,7 @@ export const DREReportView: React.FC = () => {
         </div>
       </div>
 
+      {/* Date Range Filter */}
       <Card padding="sm">
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <div className="flex items-center gap-2">
@@ -165,6 +167,7 @@ export const DREReportView: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* DRE Summary Table */}
           <Card padding="md" className="lg:col-span-2 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
@@ -218,6 +221,7 @@ export const DREReportView: React.FC = () => {
             </div>
           </Card>
 
+          {/* Vehicle Profitability Matrix Card */}
           <Card padding="md" className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
