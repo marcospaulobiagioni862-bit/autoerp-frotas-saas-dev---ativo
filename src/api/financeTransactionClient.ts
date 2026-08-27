@@ -113,6 +113,13 @@ function postJson(body: unknown): RequestInit {
   };
 }
 
+function obligationHistoryParams(type: 'RECEIVABLE' | 'PAYABLE', obligationId: string): string {
+  const id = obligationId.trim();
+  if (!id) throw new Error('Invalid obligation id');
+  const params = new URLSearchParams(type === 'RECEIVABLE' ? { receivableId: id } : { payableId: id });
+  return params.toString();
+}
+
 export class FinanceTransactionClient {
   static async getOptions(): Promise<SettlementOptions> {
     return FinanceSettlementClient.getOptions();
@@ -123,6 +130,12 @@ export class FinanceTransactionClient {
     if (!Array.isArray(payload.items)) {
       throw new Error('Invalid transaction list response');
     }
+    return payload.items.map(normalizeTransaction);
+  }
+
+  static async listByObligation(type: 'RECEIVABLE' | 'PAYABLE', obligationId: string): Promise<FinancialTransaction[]> {
+    const payload = asRecord(await requestJson(`/api/finance/transactions/by-obligation?${obligationHistoryParams(type, obligationId)}`));
+    if (!Array.isArray(payload.items)) throw new Error('Invalid obligation transaction history response');
     return payload.items.map(normalizeTransaction);
   }
 

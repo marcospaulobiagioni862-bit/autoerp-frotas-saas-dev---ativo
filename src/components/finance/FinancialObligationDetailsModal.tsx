@@ -44,21 +44,15 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
     setTransactions([]);
     setTransactionsError(null);
 
-    FinanceTransactionClient.listTransactions()
+    FinanceTransactionClient.listByObligation(type, obligation.id)
       .then((items) => {
         if (!active) return;
-        const linked = items
-          .filter((transaction) =>
-            type === 'RECEIVABLE'
-              ? transaction.receivableId === obligation.id
-              : transaction.payableId === obligation.id
-          )
-          .sort((a, b) => {
-            const dateDifference =
-              new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
-            return dateDifference || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          });
-        setTransactions(linked);
+        const ordered = [...items].sort((a, b) => {
+          const dateDifference =
+            new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
+          return dateDifference || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setTransactions(ordered);
       })
       .catch((error: unknown) => {
         if (!active || isAuthenticationExpiredError(error)) return;
