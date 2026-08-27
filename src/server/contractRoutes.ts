@@ -3,6 +3,7 @@ import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { ReceivableService } from '../domain/finance/ReceivableService';
 import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
+import { ANNUAL_VEHICLE_DOCUMENT_TYPES } from '../domain/documents/documentPolicy';
 import type { Contract, Driver, Vehicle } from '../types/entities';
 import {
   AuditAction,
@@ -197,6 +198,19 @@ function ensureDriverEligible(driver: Driver): void {
 function ensureVehicleEligible(vehicle: Vehicle): void {
   if (vehicle.isArchived || vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle unavailable');
   if (vehicle.currentContractId || vehicle.currentDriverId) throw new ContractConflictError('Vehicle already bound');
+}
+
+async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: string, tx: any): Promise<void> {
+  const documents = await tx.getDocumentRepo().findAllByCompany(companyId, {
+    subjectType: 'VEHICLE',
+    subjectId: vehicleId,
+    currentOnly: true,
+  });
+  const blocking = documents.filter((document: any) =>
+    ANNUAL_VEHICLE_DOCUMENT_TYPES.has(document.documentType) &&
+    [DocumentStatus.PENDING, DocumentStatus.EXPIRED].includes(document.complianceStatus)
+  );
+  if (blocking.length > 0) throw new ContractConflictError('Vehicle documentation unavailable');
 }
 
 function editableBody(req: Request): Record<string, unknown> {
@@ -431,6 +445,7 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
         if (!driver) throw new ContractNotFoundError();
         ensureVehicleEligible(vehicle);
+        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, tx);
         ensureDriverEligible(driver);
 
         const vehicleConflict = await tx.getContractRepo().findActiveByVehicle(principal.companyId, contract.vehicleId, contract.id);
