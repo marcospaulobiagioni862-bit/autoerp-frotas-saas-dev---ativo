@@ -65,7 +65,7 @@ export const VehicleProfitabilityBreakdown: React.FC<VehicleProfitabilityBreakdo
         <Metric label="Receita por KM" value={money(report.revenuePerKm)} />
         <Metric label="Custo por KM" value={money(report.costPerKm)} />
         <Metric label="Lucro líquido" value={money(report.netProfit)} emphasize />
-        <Metric label="Resultado por KM" value={report.kmTraveledPeriod > 0 ? money(report.netProfit / report.kmTraveledPeriod) : money(0)} emphasize />
+        <Metric label="Margem líquida" value={`${report.profitMarginPercentage.toFixed(1)}%`} emphasize />
       </section>
     </div>
   );
