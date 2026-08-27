@@ -14,6 +14,12 @@ import {
   X,
 } from 'lucide-react';
 import { Card, Button, Badge, Input, ConfirmDialog, Skeleton } from '../ui';
+import {
+  filterFinancialTransactions,
+  hasActiveTransactionFilters,
+  hasInvalidTransactionPeriod,
+  type TransactionLinkFilter,
+} from './transactionFilters';
 
 interface TransactionsViewProps {
   onOpenTransferModal: () => void;
@@ -24,6 +30,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [accountFilter, setAccountFilter] = useState<string>('ALL');
+  const [linkFilter, setLinkFilter] = useState<TransactionLinkFilter>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<string | null>(null);
   const [reversalTargetTx, setReversalTargetTx] = useState<FinancialTransaction | null>(null);
@@ -81,13 +91,19 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     }
   };
 
-  const filteredTxs = transactions.filter((tx) => {
-    const matchesSearch =
-      tx.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tx.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = typeFilter === 'ALL' || tx.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
+  const filters = { searchTerm, type: typeFilter, accountId: accountFilter, link: linkFilter, startDate, endDate };
+  const filteredTxs = filterFinancialTransactions(transactions, filters);
+  const invalidPeriod = hasInvalidTransactionPeriod(startDate, endDate);
+  const filtersActive = hasActiveTransactionFilters(filters);
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('ALL');
+    setAccountFilter('ALL');
+    setLinkFilter('ALL');
+    setStartDate('');
+    setEndDate('');
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -152,40 +168,70 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
       </div>
 
       <Card padding="sm">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="w-full sm:w-80">
-            <Input
-              type="text"
-              placeholder="Buscar por descrição ou id..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-slate-400" />}
-            />
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+            <div className="lg:col-span-2">
+              <Input
+                type="text"
+                placeholder="Buscar descrição ou qualquer vínculo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                icon={<Search className="w-4 h-4 text-slate-400" />}
+              />
+            </div>
+            <select
+              aria-label="Filtrar por conta"
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="ALL">Todas as contas</option>
+              {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            </select>
+            <select
+              aria-label="Filtrar por vínculo"
+              value={linkFilter}
+              onChange={(e) => setLinkFilter(e.target.value as TransactionLinkFilter)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="ALL">Todos os vínculos</option>
+              <option value="RECEIVABLE">Contas a receber</option>
+              <option value="PAYABLE">Contas a pagar</option>
+              <option value="UNLINKED">Sem título vinculado</option>
+            </select>
+            <div className="flex gap-2">
+              <Input aria-label="Data inicial" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input aria-label="Data final" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-            {['ALL', TransactionType.INCOME, TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.REVERSAL].map((type) => (
-              <button
-                key={type}
-                onClick={() => setTypeFilter(type)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  typeFilter === type
-                    ? 'bg-blue-600 text-white font-semibold shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {type === 'ALL'
-                  ? 'Todos'
-                  : type === TransactionType.INCOME
-                  ? 'Receitas (INCOME)'
-                  : type === TransactionType.EXPENSE
-                  ? 'Despesas (EXPENSE)'
-                  : type === TransactionType.TRANSFER
-                  ? 'Transferências (TRANSFER)'
-                  : 'Estornos (REVERSAL)'}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              {['ALL', TransactionType.INCOME, TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.REVERSAL].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setTypeFilter(type)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    typeFilter === type
+                      ? 'bg-blue-600 text-white font-semibold shadow-2xs'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  {type === 'ALL' ? 'Todos' : type}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500">{filteredTxs.length} de {transactions.length} movimentações</span>
+              <Button size="sm" variant="outline" onClick={clearFilters} disabled={!filtersActive}>Limpar filtros</Button>
+            </div>
           </div>
+
+          {invalidPeriod && (
+            <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">
+              A data inicial não pode ser posterior à data final.
+            </p>
+          )}
         </div>
       </Card>
 
@@ -231,6 +277,12 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                         <div className="font-semibold text-slate-900 dark:text-slate-100">{tx.description}</div>
                         <div className="text-[10px] text-slate-400">
                           Competência: {tx.competenceDate} • Conta: {tx.financialAccountId}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400">
+                          {tx.receivableId && <>AR: {tx.receivableId}</>}
+                          {tx.payableId && <>AP: {tx.payableId}</>}
+                          {!tx.receivableId && !tx.payableId && <>Sem título vinculado</>}
+                          {tx.reversalTransactionId && <> • Estorno: {tx.reversalTransactionId}</>}
                         </div>
                       </td>
                       <td className="p-3.5">
