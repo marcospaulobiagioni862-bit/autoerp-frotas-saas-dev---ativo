@@ -21,6 +21,7 @@ import { registerFinanceMasterDataRoutes } from './financeMasterDataRoutes';
 import { registerFinanceCashFlowRoutes } from './financeCashFlowRoutes';
 import { registerFinanceObligationHistoryRoutes } from './financeObligationHistoryRoutes';
 import { registerTelemetryRoutes } from './telemetryRoutes';
+import { registerCreditCardStatementRoutes } from './creditCardStatementRoutes';
 
 type RecurringAction = 'VIEW_RECURRING' | 'MUTATE_RECURRING' | 'VIEW_NOTIFICATIONS' | 'READ_NOTIFICATIONS';
 const READ_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
@@ -64,7 +65,7 @@ export function registerRecurringRoutes(app: Express): void {
   startRecurringScheduler();
   registerMaintenanceRoutes(app); registerTrackerRoutes(app); registerInsuranceRoutes(app); registerTrafficTicketRoutes(app);
   registerOperationalRoutes(app); registerDetailAuthorityRoutes(app); registerFinanceOverdueRoutes(app); registerBankReconciliationRoutes(app);
-  registerSecurityDepositLifecycleRoutes(app); registerFinancePayableRenegotiationRoutes(app); registerFinanceMasterDataRoutes(app); registerFinanceCashFlowRoutes(app); registerFinanceObligationHistoryRoutes(app); registerTelemetryRoutes(app);
+  registerSecurityDepositLifecycleRoutes(app); registerFinancePayableRenegotiationRoutes(app); registerFinanceMasterDataRoutes(app); registerFinanceCashFlowRoutes(app); registerFinanceObligationHistoryRoutes(app); registerTelemetryRoutes(app); registerCreditCardStatementRoutes(app);
 
   app.get('/api/recurring-rules', async (req, res) => { const actor = requirePrincipal(req, res, 'VIEW_RECURRING'); if (!actor) return; try { res.json({ items: await RecurringAuthorityService.listRules(actor.companyId) }); } catch (error) { sendError(res, error); } });
   app.get('/api/recurring-rules/:id', async (req, res) => { const actor = requirePrincipal(req, res, 'VIEW_RECURRING'); if (!actor) return; try { const item = await RecurringAuthorityService.getRule(actor.companyId, req.params.id); if (!item) throw new RecurringNotFoundError(); res.json({ item }); } catch (error) { sendError(res, error); } });
