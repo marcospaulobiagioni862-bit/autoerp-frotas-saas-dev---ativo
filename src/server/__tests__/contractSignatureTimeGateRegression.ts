@@ -57,7 +57,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
         const beforeAudit = await scalar(sql`
           SELECT count(*)::int AS count
           FROM audit_logs
-          WHERE entity_name='ContractArtifact'
+          WHERE entity_type='ContractArtifact'
         `);
 
         const rejected = await originalFetch(input, init);
@@ -71,7 +71,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
         const afterAudit = await scalar(sql`
           SELECT count(*)::int AS count
           FROM audit_logs
-          WHERE entity_name='ContractArtifact'
+          WHERE entity_type='ContractArtifact'
         `);
         assert(Number(afterArtifact?.count) === Number(beforeArtifact?.count), 'historical signedAt created signed evidence');
         assert(Number(afterAudit?.count) === Number(beforeAudit?.count), 'historical signedAt created audit mutation');
