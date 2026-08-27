@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote, ShieldAlert, Landmark } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
 const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
@@ -10,11 +10,12 @@ const PayablesView=lazy(()=>import('./PayablesView').then(module=>({default:modu
 const TransactionsView=lazy(()=>import('./TransactionsView').then(module=>({default:module.TransactionsView})));
 const CashFlowView=lazy(()=>import('./CashFlowView').then(module=>({default:module.CashFlowView})));
 const DelinquencyView=lazy(()=>import('./DelinquencyView').then(module=>({default:module.DelinquencyView})));
+const BankReconciliationView=lazy(()=>import('./BankReconciliationView').then(module=>({default:module.BankReconciliationView})));
 const FinancialPeriodsView=lazy(()=>import('./FinancialPeriodsView').then(module=>({default:module.FinancialPeriodsView})));
 const DREReportView=lazy(()=>import('./DREReportView').then(module=>({default:module.DREReportView})));
 const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(module=>({default:module.FinancialMasterDataView})));
 
-type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'periods' | 'dre' | 'settings';
+type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
   initialSubTab?: FinanceSubTab;
@@ -40,6 +41,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
     { id: 'delinquency' as const, label: 'Inadimplência', icon: ShieldAlert },
+    { id: 'reconciliation' as const, label: 'Conciliação Bancária', icon: Landmark },
     { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
     { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
     { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
@@ -94,6 +96,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         )}
         {activeSubTab === 'cashflow' && <CashFlowView />}
         {activeSubTab === 'delinquency' && <DelinquencyView />}
+        {activeSubTab === 'reconciliation' && <BankReconciliationView />}
         {activeSubTab === 'periods' && <FinancialPeriodsView />}
         {activeSubTab === 'dre' && <DREReportView />}
         {activeSubTab === 'settings' && <FinancialMasterDataView />}
