@@ -19,6 +19,11 @@ import {
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import {
+  VEHICLE_STATUS_FILTERS,
+  vehicleStatusBadgeVariant,
+  vehicleStatusLabel,
+} from './vehicleStatusPresentation';
 
 const VehicleFormModal=lazy(()=>import('./VehicleFormModal').then(module=>({default:module.VehicleFormModal})));
 const VehicleDetailsModal=lazy(()=>import('./VehicleDetailsModal').then(module=>({default:module.VehicleDetailsModal})));
@@ -181,13 +186,7 @@ export const FleetManagement: React.FC = () => {
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
-            {[
-              { id: 'ALL', label: 'Todos' },
-              { id: 'AVAILABLE', label: 'Disponíveis' },
-              { id: 'RENTED', label: 'Locados' },
-              { id: 'MAINTENANCE', label: 'Em Manutenção' },
-              { id: 'INACTIVE', label: 'Inativos' },
-            ].map((st) => (
+            {VEHICLE_STATUS_FILTERS.map((st) => (
               <button
                 key={st.id}
                 onClick={() => setStatusFilter(st.id)}
@@ -247,8 +246,6 @@ export const FleetManagement: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVehicles.map((vehicle) => {
-            const isRented = vehicle.status === VehicleStatus.RENTED;
-            const isMaintenance = vehicle.status === VehicleStatus.MAINTENANCE;
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
 
             return (
@@ -263,24 +260,8 @@ export const FleetManagement: React.FC = () => {
                     <span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">
                       {vehicle.plate}
                     </span>
-                    <Badge
-                      variant={
-                        isRented
-                          ? 'success'
-                          : isMaintenance
-                          ? 'warning'
-                          : isAvailable
-                          ? 'info'
-                          : 'default'
-                      }
-                    >
-                      {isRented
-                        ? 'Locado'
-                        : isMaintenance
-                        ? 'Em Manutenção'
-                        : isAvailable
-                        ? 'Disponível'
-                        : vehicle.status}
+                    <Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>
+                      {vehicleStatusLabel(vehicle.status)}
                     </Badge>
                   </div>
 
@@ -351,16 +332,6 @@ export const FleetManagement: React.FC = () => {
                         Oficina
                       </button>
                     )}
-
-                    {isMaintenance && (
-                      <button
-                        onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.AVAILABLE)}
-                        title="Liberar da Oficina"
-                        className="px-2 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-md"
-                      >
-                        Liberar
-                      </button>
-                    )}
                   </div>
                 </div>
               </Card>
@@ -417,7 +388,7 @@ export const FleetManagement: React.FC = () => {
         onClose={() => setIsConfirmingStatus(false)}
         onConfirm={handleConfirmStatusChange}
         title="Alterar Status do Veículo"
-        message={`Deseja alterar o status do veículo ${vehicleForStatusChange?.plate} para ${targetStatus}?`}
+        message={`Deseja alterar o status do veículo ${vehicleForStatusChange?.plate} para ${targetStatus ? vehicleStatusLabel(targetStatus) : ''}?`}
         confirmLabel="Confirmar Alteração"
         variant="warning"
         requireReason
