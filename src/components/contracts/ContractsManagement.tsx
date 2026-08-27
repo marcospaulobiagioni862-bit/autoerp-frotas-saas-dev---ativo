@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
 import { Badge, Button, Card, Input, PageHeader } from '../ui';
 import { ContractClient } from '../../api/contractClient';
@@ -7,9 +7,11 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
-import { ContractFormModal } from './ContractFormModal';
-import { ContractDetailsModal } from './ContractDetailsModal';
-import { ContractTemplateManagementModal } from './ContractTemplateManagementModal';
+import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
+
+const ContractFormModal=lazy(()=>import('./ContractFormModal').then(module=>({default:module.ContractFormModal})));
+const ContractDetailsModal=lazy(()=>import('./ContractDetailsModal').then(module=>({default:module.ContractDetailsModal})));
+const ContractTemplateManagementModal=lazy(()=>import('./ContractTemplateManagementModal').then(module=>({default:module.ContractTemplateManagementModal})));
 
 interface ContractsManagementProps {
   companyId: string;
@@ -132,6 +134,14 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     });
   }, [contracts, drivers, vehicles, searchTerm, statusFilter]);
 
+  const contractModalResetKey = formOpen
+    ? `form:${contractToEdit?.id ?? 'new'}`
+    : detailsOpen
+      ? `details:${selectedContractId ?? 'none'}`
+      : templateManagerOpen
+        ? 'templates'
+        : 'none';
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
@@ -223,21 +233,25 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
         )}
       </Card>
 
-      <ContractFormModal
-        isOpen={formOpen}
-        onClose={() => setFormOpen(false)}
-        contractToEdit={contractToEdit}
-        companyId={companyId}
-        onSuccess={() => void loadData()}
-      />
-      <ContractTemplateManagementModal isOpen={templateManagerOpen} onClose={() => setTemplateManagerOpen(false)} />
-      <ContractDetailsModal
-        isOpen={detailsOpen}
-        onClose={() => setDetailsOpen(false)}
-        contractId={selectedContractId}
-        companyId={companyId}
-        onRefresh={() => void loadData()}
-      />
+      <LazyModuleErrorBoundary resetKey={contractModalResetKey} onRetry={()=>window.location.reload()}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do contrato...</div></div>}>
+          {formOpen&&<ContractFormModal
+            isOpen
+            onClose={() => setFormOpen(false)}
+            contractToEdit={contractToEdit}
+            companyId={companyId}
+            onSuccess={() => void loadData()}
+          />}
+          {templateManagerOpen&&<ContractTemplateManagementModal isOpen onClose={() => setTemplateManagerOpen(false)} />}
+          {detailsOpen&&selectedContractId&&<ContractDetailsModal
+            isOpen
+            onClose={() => setDetailsOpen(false)}
+            contractId={selectedContractId}
+            companyId={companyId}
+            onRefresh={() => void loadData()}
+          />}
+        </Suspense>
+      </LazyModuleErrorBoundary>
     </div>
   );
 };
