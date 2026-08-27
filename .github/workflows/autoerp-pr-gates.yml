@@ -643,6 +643,9 @@ jobs:
       - name: Deferred contract modals regression
         run: npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
 
+      - name: Deferred fleet modals regression
+        run: npx tsx src/components/fleet/__tests__/fleetManagementLazyModalsTestRunner.ts
+
       - name: Apply migrations once
         run: node migrate_test_db.cjs
 
