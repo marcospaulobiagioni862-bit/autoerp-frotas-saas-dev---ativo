@@ -240,7 +240,7 @@ export class ContractAuthorityIntegrationRunner {
           version_number, is_current, is_archived, cost, created_by, created_at, updated_at
         ) VALUES (
           'i3-doc-expired-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2020-01-01',
-          'i3-att-expired-crlv', 1, true, false, 0, ${adminAId}, NOW(), NOW()
+          'i3-att-expired-crlv', 2, true, false, 0, ${adminAId}, NOW(), NOW()
         ) ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2020-01-01'
       `);
 
