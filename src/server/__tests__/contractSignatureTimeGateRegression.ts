@@ -20,14 +20,22 @@ async function scalar(query: any): Promise<any> {
  * The suite intentionally submits a historical signedAt (2026-08-19) after generating
  * the current PDF. That first request must fail closed. The interceptor then retries
  * the same evidence with the current timestamp so the authoritative suite can continue.
- * The legacy suite also carries a fixed future contract start date; this wrapper makes
- * only that fixture date current so the independent activation-period gate stays intact.
+ * The legacy suite also carries a fixed future contract start date and predates the
+ * categoryId activation authority; this wrapper aligns only those fixtures with the
+ * current server contract while preserving both production gates.
  */
 export async function runContractSignatureTimeGateRegression(): Promise<void> {
   const originalFetch = globalThis.fetch.bind(globalThis);
   const originalStorageDir = process.env.ATTACHMENT_STORAGE_DIR;
+  const activationCategoryId = 'signature-time-gate-income';
   process.env.ATTACHMENT_STORAGE_DIR = await mkdtemp(join(tmpdir(), 'autoerp-signature-time-gate-'));
   let rejectedHistoricalSignature = false;
+
+  await db.execute(sql`
+    INSERT INTO financial_categories (id, company_id, name, type, active, created_at, updated_at)
+    VALUES (${activationCategoryId}, 'security-2i4c-company-a', 'Signature Time Gate Rental Income', 'INCOME', true, NOW(), NOW())
+    ON CONFLICT (id) DO UPDATE SET active=true, type='INCOME', updated_at=NOW()
+  `);
 
   globalThis.fetch = (async (...args: Parameters<typeof fetch>): Promise<Response> => {
     const [input, init] = args;
@@ -50,6 +58,20 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
         return await originalFetch(input, {
           ...init,
           body: JSON.stringify({ ...body, startDate: new Date().toISOString().slice(0, 10) }),
+        });
+      }
+    }
+
+    if (
+      requestMethod === 'POST' &&
+      /\/api\/contracts\/[^/]+\/activate$/.test(requestUrl) &&
+      typeof init?.body === 'string'
+    ) {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      if (Object.keys(body).length === 0) {
+        return await originalFetch(input, {
+          ...init,
+          body: JSON.stringify({ categoryId: activationCategoryId }),
         });
       }
     }
