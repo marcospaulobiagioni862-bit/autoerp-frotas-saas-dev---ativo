@@ -181,6 +181,36 @@ export class ContractAuthorityIntegrationRunner {
       assert(vehicleBeforeValidActivation?.status === VehicleStatus.AVAILABLE && !vehicleBeforeValidActivation?.current_contract_id, 'invalid category mutated vehicle');
       assert(Number(receivablesBeforeValidActivation?.count) === 0, 'invalid category created receivable');
 
+      await db.execute(sql`
+        INSERT INTO file_attachments (
+          id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
+          size, file_size, storage_provider, storage_key, checksum, created_by, is_archived, content_state, created_at
+        ) VALUES (
+          'i3-att-expired-crlv', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'CRLV', 'expired-crlv.pdf',
+          'application/pdf', 'attachment://i3-expired-crlv', 10, 10, 'SERVER_FS', 'i3/expired-crlv', repeat('f',64),
+          ${adminAId}, false, 'AVAILABLE', NOW()
+        ) ON CONFLICT (id) DO NOTHING
+      `);
+      await db.execute(sql`
+        INSERT INTO documents (
+          id, company_id, subject_type, subject_id, document_type, reference_year, expiration_date, attachment_id,
+          version_number, is_current, is_archived, cost, created_by, created_at, updated_at
+        ) VALUES (
+          'i3-doc-expired-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2020-01-01',
+          'i3-att-expired-crlv', 1, true, false, 0, ${adminAId}, NOW(), NOW()
+        ) ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2020-01-01'
+      `);
+
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+      assert(response.status === 409, `expired vehicle document expected activation 409, got ${response.status}`);
+      const blockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const blockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const blockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(blockedContract?.status === ContractStatus.DRAFT, 'expired document gate mutated contract');
+      assert(blockedVehicle?.status === VehicleStatus.AVAILABLE && !blockedVehicle?.current_driver_id && !blockedVehicle?.current_contract_id, 'expired document gate mutated vehicle');
+      assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
+      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
+
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
       const activation = await json(response);
