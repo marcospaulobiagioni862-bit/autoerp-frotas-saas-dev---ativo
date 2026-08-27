@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
@@ -17,10 +17,12 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
-import { VehicleFormModal } from './VehicleFormModal';
-import { VehicleDetailsModal } from './VehicleDetailsModal';
-import { RecordKmModal } from './RecordKmModal';
+import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+
+const VehicleFormModal=lazy(()=>import('./VehicleFormModal').then(module=>({default:module.VehicleFormModal})));
+const VehicleDetailsModal=lazy(()=>import('./VehicleDetailsModal').then(module=>({default:module.VehicleDetailsModal})));
+const RecordKmModal=lazy(()=>import('./RecordKmModal').then(module=>({default:module.RecordKmModal})));
 
 export const FleetManagement: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -101,6 +103,14 @@ export const FleetManagement: React.FC = () => {
       setTargetStatus(null);
     }
   };
+
+  const fleetModalResetKey = isFormOpen
+    ? `form:${vehicleToEdit?.id ?? 'new'}`
+    : selectedVehicleIdForDetails
+      ? `details:${selectedVehicleIdForDetails}`
+      : vehicleForKmRecord
+        ? `km:${vehicleForKmRecord.id}`
+        : 'none';
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -360,43 +370,47 @@ export const FleetManagement: React.FC = () => {
       )}
 
       {/* Modals */}
-      <VehicleFormModal
-        isOpen={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setVehicleToEdit(null);
-        }}
-        onSuccess={loadVehicles}
-        vehicleToEdit={vehicleToEdit}
-      />
+      <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
+          {isFormOpen&&<VehicleFormModal
+            isOpen
+            onClose={() => {
+              setIsFormOpen(false);
+              setVehicleToEdit(null);
+            }}
+            onSuccess={loadVehicles}
+            vehicleToEdit={vehicleToEdit}
+          />}
 
-      <VehicleDetailsModal
-        isOpen={!!selectedVehicleIdForDetails}
-        onClose={() => setSelectedVehicleIdForDetails(null)}
-        vehicleId={selectedVehicleIdForDetails}
-        onEditRequest={() => {
-          const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
-          if (v) {
-            setSelectedVehicleIdForDetails(null);
-            setVehicleToEdit(v);
-            setIsFormOpen(true);
-          }
-        }}
-        onRecordKmRequest={() => {
-          const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
-          if (v) {
-            setSelectedVehicleIdForDetails(null);
-            setVehicleForKmRecord(v);
-          }
-        }}
-      />
+          {selectedVehicleIdForDetails&&<VehicleDetailsModal
+            isOpen
+            onClose={() => setSelectedVehicleIdForDetails(null)}
+            vehicleId={selectedVehicleIdForDetails}
+            onEditRequest={() => {
+              const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
+              if (v) {
+                setSelectedVehicleIdForDetails(null);
+                setVehicleToEdit(v);
+                setIsFormOpen(true);
+              }
+            }}
+            onRecordKmRequest={() => {
+              const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
+              if (v) {
+                setSelectedVehicleIdForDetails(null);
+                setVehicleForKmRecord(v);
+              }
+            }}
+          />}
 
-      <RecordKmModal
-        isOpen={!!vehicleForKmRecord}
-        onClose={() => setVehicleForKmRecord(null)}
-        onSuccess={loadVehicles}
-        vehicle={vehicleForKmRecord}
-      />
+          {vehicleForKmRecord&&<RecordKmModal
+            isOpen
+            onClose={() => setVehicleForKmRecord(null)}
+            onSuccess={loadVehicles}
+            vehicle={vehicleForKmRecord}
+          />}
+        </Suspense>
+      </LazyModuleErrorBoundary>
 
       <ConfirmDialog
         isOpen={isConfirmingStatus}
