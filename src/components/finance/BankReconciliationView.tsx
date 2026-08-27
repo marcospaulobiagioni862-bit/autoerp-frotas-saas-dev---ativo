@@ -31,6 +31,7 @@ export const BankReconciliationView: React.FC = () => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [entries, setEntries] = useState<BankStatementEntry[]>([]);
   const [suggestions, setSuggestions] = useState<ReconciliationSuggestion[]>([]);
+  const [candidateSelection, setCandidateSelection] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -59,6 +60,7 @@ export const BankReconciliationView: React.FC = () => {
       if (!selected) {
         setEntries([]);
         setSuggestions([]);
+        setCandidateSelection({});
         return;
       }
       const [entryList, suggestionList] = await Promise.all([
@@ -67,9 +69,11 @@ export const BankReconciliationView: React.FC = () => {
       ]);
       setEntries(entryList);
       setSuggestions(suggestionList);
+      setCandidateSelection({});
     } catch (error) {
       setEntries([]);
       setSuggestions([]);
+      setCandidateSelection({});
       setMessage(error instanceof Error ? error.message : 'Não foi possível carregar a conciliação bancária.');
     } finally {
       setLoading(false);
@@ -89,11 +93,13 @@ export const BankReconciliationView: React.FC = () => {
       if (!active) return;
       setEntries(entryList);
       setSuggestions(suggestionList);
+      setCandidateSelection({});
       setMessage(null);
     }).catch((error: unknown) => {
       if (!active) return;
       setEntries([]);
       setSuggestions([]);
+      setCandidateSelection({});
       setMessage(error instanceof Error ? error.message : 'Não foi possível atualizar a conciliação bancária.');
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -137,6 +143,10 @@ export const BankReconciliationView: React.FC = () => {
   };
 
   const act = async (entry: BankStatementEntry, action: 'MATCH' | 'UNMATCH' | 'IGNORE', transactionId?: string) => {
+    if (action === 'MATCH' && !transactionId) {
+      setMessage('Escolha explicitamente uma transação candidata antes de conciliar.');
+      return;
+    }
     setBusyId(entry.id);
     try {
       if (action === 'MATCH' && transactionId) await BankReconciliationClient.match(entry.id, transactionId);
@@ -153,9 +163,7 @@ export const BankReconciliationView: React.FC = () => {
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100">
-            <Landmark className="h-6 w-6 text-blue-600" /> Conciliação Bancária
-          </h2>
+          <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100"><Landmark className="h-6 w-6 text-blue-600" /> Conciliação Bancária</h2>
           <p className="mt-1 text-xs text-slate-500">Vincule entradas de extrato a transações já existentes. Esta área não altera saldo nem cria movimentações financeiras.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void refresh()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
@@ -165,23 +173,9 @@ export const BankReconciliationView: React.FC = () => {
 
       <Card padding="sm">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-            Conta financeira
-            <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
-              {accounts.length === 0 && <option value="">Nenhuma conta disponível</option>}
-              {accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.type})</option>)}
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-            Status
-            <select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
-              {STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </label>
-          <div className="lg:col-span-2">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</span>
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Descrição, documento, ID ou transação..." icon={<Search className="h-4 w-4 text-slate-400" />} />
-          </div>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Conta financeira<select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">{accounts.length === 0 && <option value="">Nenhuma conta disponível</option>}{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} ({account.type})</option>)}</select></label>
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Status<select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">{STATUS_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+          <div className="lg:col-span-2"><span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Buscar</span><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Descrição, documento, ID ou transação..." icon={<Search className="h-4 w-4 text-slate-400" />} /></div>
         </div>
       </Card>
 
@@ -199,38 +193,25 @@ export const BankReconciliationView: React.FC = () => {
       </Card>
 
       <Card padding="none">
-        {loading ? (
-          <div className="space-y-3 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
-        ) : visibleEntries.length === 0 ? (
-          <div className="p-6 text-center text-sm text-slate-500">Nenhum lançamento bancário encontrado para os filtros atuais.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60">
-                <tr><th className="p-3">Data / Descrição</th><th className="p-3">Direção</th><th className="p-3 text-right">Valor</th><th className="p-3">Status / vínculo</th><th className="p-3">Sugestão</th><th className="p-3 text-right">Ações</th></tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {visibleEntries.map((entry) => {
-                  const suggestion = suggestionByEntry.get(entry.id);
-                  const best = suggestion?.bestMatch;
-                  return (
-                    <tr key={entry.id}>
-                      <td className="p-3"><div className="font-mono font-semibold">{entry.date}</div><div className="font-semibold text-slate-900 dark:text-slate-100">{entry.description}</div><div className="text-[10px] font-mono text-slate-400">{entry.documentNumber || entry.externalId || entry.id}</div></td>
-                      <td className="p-3"><Badge variant={entry.direction === 'CREDIT' ? 'success' : 'info'}>{entry.direction || 'LEGADO'}</Badge></td>
-                      <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(entry.amount)}</td>
-                      <td className="p-3"><Badge variant={badgeVariant(entry.status)}>{entry.status}</Badge>{entry.matchedTransactionId && <div className="mt-1 text-[10px] font-mono text-slate-400">TX: {entry.matchedTransactionId}</div>}</td>
-                      <td className="p-3">{best ? <div><div className="font-semibold">{best.description}</div><div className="text-[10px] font-mono text-slate-400">{best.transactionDate} • {currency(best.amount)} • {best.id}</div></div> : <span className="text-slate-400">Sem melhor correspondência</span>}</td>
-                      <td className="p-3 text-right"><div className="flex justify-end gap-1">
-                        {entry.status !== 'MATCHED' && best && <Button size="sm" variant="outline" disabled={busyId === entry.id} onClick={() => void act(entry, 'MATCH', best.id)} icon={<Link2 className="h-3.5 w-3.5" />}>Conciliar</Button>}
-                        {entry.status === 'MATCHED' && <Button size="sm" variant="outline" disabled={busyId === entry.id} onClick={() => void act(entry, 'UNMATCH')} icon={<Unlink className="h-3.5 w-3.5" />}>Desconciliar</Button>}
-                        {entry.status !== 'MATCHED' && entry.status !== 'IGNORED' && <Button size="sm" variant="ghost" disabled={busyId === entry.id} onClick={() => void act(entry, 'IGNORE')} icon={<Ban className="h-3.5 w-3.5" />}>Ignorar</Button>}
-                      </div></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        {loading ? <div className="space-y-3 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div> : visibleEntries.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">Nenhum lançamento bancário encontrado para os filtros atuais.</div> : (
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Data / Descrição</th><th className="p-3">Direção</th><th className="p-3 text-right">Valor</th><th className="p-3">Status / vínculo</th><th className="p-3">Sugestão</th><th className="p-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {visibleEntries.map((entry) => {
+              const suggestion = suggestionByEntry.get(entry.id);
+              const selectedCandidateId = candidateSelection[entry.id] || suggestion?.bestMatch?.id || '';
+              return <tr key={entry.id}>
+                <td className="p-3"><div className="font-mono font-semibold">{entry.date}</div><div className="font-semibold text-slate-900 dark:text-slate-100">{entry.description}</div><div className="text-[10px] font-mono text-slate-400">{entry.documentNumber || entry.externalId || entry.id}</div></td>
+                <td className="p-3"><Badge variant={entry.direction === 'CREDIT' ? 'success' : 'info'}>{entry.direction || 'LEGADO'}</Badge></td>
+                <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(entry.amount)}</td>
+                <td className="p-3"><Badge variant={badgeVariant(entry.status)}>{entry.status}</Badge>{entry.matchedTransactionId && <div className="mt-1 text-[10px] font-mono text-slate-400">TX: {entry.matchedTransactionId}</div>}</td>
+                <td className="p-3">{suggestion && suggestion.candidates.length > 0 ? <select aria-label={`Candidato para ${entry.id}`} value={selectedCandidateId} onChange={(event) => setCandidateSelection((current) => ({ ...current, [entry.id]: event.target.value }))} className="max-w-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] dark:border-slate-700 dark:bg-slate-900"><option value="">Escolha um candidato</option>{suggestion.candidates.map((candidate) => <option key={candidate.transaction.id} value={candidate.transaction.id}>{candidate.confidence} • {candidate.transaction.transactionDate} • {currency(candidate.transaction.amount)} • {candidate.transaction.description}</option>)}</select> : <span className="text-slate-400">Sem correspondência candidata</span>}</td>
+                <td className="p-3 text-right"><div className="flex justify-end gap-1">
+                  {entry.status !== 'MATCHED' && suggestion && suggestion.candidates.length > 0 && <Button size="sm" variant="outline" disabled={busyId === entry.id || !selectedCandidateId} onClick={() => void act(entry, 'MATCH', selectedCandidateId)} icon={<Link2 className="h-3.5 w-3.5" />}>Conciliar</Button>}
+                  {entry.status === 'MATCHED' && <Button size="sm" variant="outline" disabled={busyId === entry.id} onClick={() => void act(entry, 'UNMATCH')} icon={<Unlink className="h-3.5 w-3.5" />}>Desconciliar</Button>}
+                  {entry.status !== 'MATCHED' && entry.status !== 'IGNORED' && <Button size="sm" variant="ghost" disabled={busyId === entry.id} onClick={() => void act(entry, 'IGNORE')} icon={<Ban className="h-3.5 w-3.5" />}>Ignorar</Button>}
+                </div></td>
+              </tr>;
+            })}
+          </tbody></table></div>
         )}
       </Card>
     </div>
