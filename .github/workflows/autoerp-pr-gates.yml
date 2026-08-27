@@ -640,6 +640,9 @@ jobs:
       - name: Financial obligation details regression
         run: npx tsx src/components/finance/__tests__/financialObligationDetailsTestRunner.ts
 
+      - name: Financial transaction filters regression
+        run: npx tsx src/components/finance/__tests__/transactionFiltersTestRunner.ts
+
       - name: Deferred driver modals regression
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
