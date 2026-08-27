@@ -86,6 +86,27 @@ export class ContractAuthorityIntegrationRunner {
         ('i3-ins-b1', ${companyB}, 'i3-veh-b1', 'Seguradora B', 'POL-I3-B1', 'Cobertura teste', 1000, 1200, 12, '2026-01-01', '2027-12-31', 'ACTIVE', '[]'::jsonb, ${adminBId}, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET status='ACTIVE', start_date='2026-01-01', end_date='2027-12-31', updated_at=NOW()
     `);
+    await db.execute(sql`
+      INSERT INTO attachments (
+        id, company_id, subject_type, module, subject_id, category, original_name,
+        mime_type, file_url, size_bytes, actual_size_bytes, storage_provider, storage_key, checksum_sha256,
+        uploaded_by, is_archived, document_state, created_at
+      ) VALUES (
+        'i3-att-valid-annual', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'ANNUAL', 'annual.pdf',
+        'application/pdf', 'attachment://i3-valid-annual', 10, 10, 'SERVER_FS', 'i3/valid-annual', repeat('a',64),
+        ${adminAId}, false, 'AVAILABLE', NOW()
+      ) ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO documents (
+        id, company_id, subject_type, subject_id, document_type, reference_year, expiration_date, attachment_id,
+        version_number, is_current, is_archived, cost, created_by, created_at, updated_at
+      ) VALUES
+        ('i3-doc-valid-ipva', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'IPVA', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i3-doc-valid-lic', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i3-att-valid-annual', 1, true, false, 0, ${adminAId}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
+    `);
 
     const app = express();
     app.use(express.json());
@@ -222,6 +243,17 @@ export class ContractAuthorityIntegrationRunner {
       assert(blockedVehicle?.status === VehicleStatus.AVAILABLE && !blockedVehicle?.current_driver_id && !blockedVehicle?.current_contract_id, 'expired document gate mutated vehicle');
       assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
+
+      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
+      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+      assert(response.status === 409, `missing annual vehicle document expected activation 409, got ${response.status}`);
+      const missingDocumentBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const missingDocumentBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const missingDocumentBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(missingDocumentBlockedContract?.status === ContractStatus.DRAFT, 'missing document gate mutated contract');
+      assert(missingDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !missingDocumentBlockedVehicle?.current_driver_id && !missingDocumentBlockedVehicle?.current_contract_id, 'missing document gate mutated vehicle');
+      assert(Number(missingDocumentBlockedReceivables?.count) === 0, 'missing document gate created receivable');
+      await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
 
       await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);

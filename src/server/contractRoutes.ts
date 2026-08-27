@@ -207,11 +207,24 @@ async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: stri
     subjectId: vehicleId,
     currentOnly: true,
   });
-  const blocking = documents.filter((document: any) =>
-    ANNUAL_VEHICLE_DOCUMENT_TYPES.has(document.documentType) &&
+  const annualDocuments = documents.filter((document: any) =>
+    ANNUAL_VEHICLE_DOCUMENT_TYPES.has(document.documentType)
+  );
+  const blocking = annualDocuments.filter((document: any) =>
     [DocumentStatus.PENDING, DocumentStatus.EXPIRED].includes(document.complianceStatus)
   );
-  if (blocking.length > 0) throw new ContractConflictError('Vehicle documentation unavailable');
+  const eligibleTypes = new Set(
+    annualDocuments
+      .filter((document: any) =>
+        [DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(document.complianceStatus)
+      )
+      .map((document: any) => document.documentType)
+  );
+  const missingRequiredType = [...ANNUAL_VEHICLE_DOCUMENT_TYPES]
+    .some((documentType) => !eligibleTypes.has(documentType));
+  if (blocking.length > 0 || missingRequiredType) {
+    throw new ContractConflictError('Vehicle documentation unavailable');
+  }
 }
 
 function editableBody(req: Request): Record<string, unknown> {
