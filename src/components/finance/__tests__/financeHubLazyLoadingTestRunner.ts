@@ -10,6 +10,7 @@ const views = [
   'TransactionsView',
   'CashFlowView',
   'DelinquencyView',
+  'BankReconciliationView',
   'FinancialPeriodsView',
   'DREReportView',
   'FinancialMasterDataView',
@@ -44,7 +45,7 @@ assert.match(
   'financial subviews must expose a neutral loading fallback',
 );
 
-for (const tab of ['overview', 'receivables', 'payables', 'transactions', 'cashflow', 'delinquency', 'periods', 'dre', 'settings']) {
+for (const tab of ['overview', 'receivables', 'payables', 'transactions', 'cashflow', 'delinquency', 'reconciliation', 'periods', 'dre', 'settings']) {
   assert.match(
     source,
     new RegExp(`activeSubTab === ['"]${tab}['"]`),
