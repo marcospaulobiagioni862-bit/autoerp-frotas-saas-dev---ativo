@@ -8,6 +8,7 @@ const cardAccountA = 'finance-card-b2-card-a';
 const bankAccountA = 'finance-card-b2-bank-a';
 const cardAccountB = 'finance-card-b2-card-b';
 const methodA = 'finance-card-b2-method-a';
+const rlsTestRole = 'autoerp_card_b2_rls_test';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -31,6 +32,36 @@ async function expectFailure(action: () => Promise<unknown>, message: string): P
     failed = true;
   }
   assert(failed, message);
+}
+
+async function ensureRlsTestRole(): Promise<void> {
+  await db.execute(sql.raw(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${rlsTestRole}') THEN
+        CREATE ROLE ${rlsTestRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
+      END IF;
+    END
+    $$
+  `));
+  await db.execute(sql.raw(`ALTER ROLE ${rlsTestRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`));
+  await db.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${rlsTestRole}`));
+  await db.execute(sql.raw(`GRANT SELECT ON credit_card_profiles TO ${rlsTestRole}`));
+
+  const roleRows = await rows(sql`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=${rlsTestRole}`);
+  assert(
+    roleRows.length === 1 && roleRows[0].rolsuper === false && roleRows[0].rolbypassrls === false,
+    'RLS regression role must not be superuser or BYPASSRLS'
+  );
+}
+
+async function rlsVisibleProfiles(tx: any): Promise<any[]> {
+  await tx.execute(sql.raw(`SET LOCAL ROLE ${rlsTestRole}`));
+  try {
+    return await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+  } finally {
+    await tx.execute(sql.raw('RESET ROLE'));
+  }
 }
 
 async function seed(): Promise<void> {
@@ -66,6 +97,7 @@ async function seed(): Promise<void> {
 
 async function run(): Promise<void> {
   await seed();
+  await ensureRlsTestRole();
 
   await UnitOfWork.run(companyA, async (txContext: any) => {
     const tx = txContext.getRawTransaction();
@@ -128,7 +160,7 @@ async function run(): Promise<void> {
     assert(paymentTransaction.type === 'TRANSFER' && paymentTransaction.destination_account_id === cardAccountA,
       'statement payment link must preserve authoritative TRANSFER semantics');
 
-    const visibleProfiles = await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+    const visibleProfiles = await rlsVisibleProfiles(tx);
     assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-a',
       'tenant A must only see its own credit-card profile');
   });
@@ -138,7 +170,7 @@ async function run(): Promise<void> {
     await db.execute(sql`INSERT INTO credit_card_profiles(
       id,company_id,financial_account_id,credit_limit,closing_day,due_day,active,version,created_by_id,updated_by_id
     ) VALUES ('card-b2-profile-b',${companyB},${cardAccountB},3000,15,22,true,1,'card-b2-user-b','card-b2-user-b')`);
-    const visibleProfiles = await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+    const visibleProfiles = await rlsVisibleProfiles(tx);
     assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-b',
       'FORCE RLS must isolate tenant B from tenant A card profiles');
   });
