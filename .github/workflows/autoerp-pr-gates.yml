@@ -743,6 +743,7 @@ jobs:
           npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
           npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
           npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverdueClientTestRunner.ts
 
       - name: Administration client regressions
         run: npx tsx src/api/__tests__/adminUserClientTestRunner.ts
