@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import { CreditCardStatementAuthority, type CreditCardStatementActor } from './creditCardStatementAuthority';
+import { registerCreditCardPurchaseCycleRoutes } from './creditCardPurchaseCycleRoutes';
 
 class CreditCardValidationError extends Error {}
 function principal(req: Request): AuthenticatedPrincipal | undefined { return (req as Request & { principal?: AuthenticatedPrincipal }).principal; }
@@ -16,6 +17,7 @@ function isoDate(value: unknown): string { const v=text(value,10); if(!/^\d{4}-\
 function send(res: Response,error: unknown): void { const m=error instanceof Error?error.message:''; if(error instanceof CreditCardValidationError){res.status(400).json({error:'Invalid credit-card statement request'});return;} if(m.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;} if(m.includes('não encontrada')||m.includes('não encontrado')){res.status(404).json({error:'Not found'});return;} if(m.includes('já existe')||m.includes('incompatível')||m.includes('inativa')||m.includes('fechada')||m.includes('elegível')||m.includes('excede')||m.includes('divergente')){res.status(409).json({error:'Credit-card statement conflict'});return;} console.error('AUTOERP_CREDIT_CARD_STATEMENT_API_FAILURE',error);res.status(500).json({error:'Credit-card statement operation failed'}); }
 
 export function registerCreditCardStatementRoutes(app: Express): void {
+  registerCreditCardPurchaseCycleRoutes(app);
   app.get('/api/finance/credit-cards/profiles',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{res.json({items:await CreditCardStatementAuthority.listProfiles(actor(p))});}catch(e){send(res,e);}});
   app.post('/api/finance/credit-cards/profiles',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{const b=body(req.body);only(b,['financialAccountId','creditLimit','closingDay','dueDay']);res.status(201).json({item:await CreditCardStatementAuthority.createProfile(actor(p),{financialAccountId:text(b.financialAccountId),creditLimit:amount(b.creditLimit,true),closingDay:day(b.closingDay),dueDay:day(b.dueDay)})});}catch(e){send(res,e);}});
   app.get('/api/finance/credit-cards/statements',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{const profileId=req.query.profileId===undefined?undefined:text(req.query.profileId);res.json({items:await CreditCardStatementAuthority.listStatements(actor(p),profileId)});}catch(e){send(res,e);}});
