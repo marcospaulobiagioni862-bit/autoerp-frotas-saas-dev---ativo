@@ -225,6 +225,12 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
   return await response.json();
 }
 
+export function createCreditCardPaymentIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') return `card-payment-${cryptoApi.randomUUID()}`;
+  return `card-payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export class CreditCardStatementClient {
   static async listProfiles(): Promise<CreditCardProfileSummary[]> {
     const payload = record(await requestJson('/api/finance/credit-cards/profiles'));
@@ -247,6 +253,21 @@ export class CreditCardStatementClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: '{}',
+    }));
+    record(payload.item);
+  }
+
+  static async payStatement(statementId: string, financialTransactionId: string, idempotencyKey: string): Promise<void> {
+    const cleanStatementId = statementId.trim();
+    const cleanTransactionId = financialTransactionId.trim();
+    const cleanIdempotencyKey = idempotencyKey.trim();
+    if (!cleanStatementId) throw new Error('Statement id is required');
+    if (!cleanTransactionId) throw new Error('Financial transaction id is required');
+    if (!cleanIdempotencyKey) throw new Error('Idempotency key is required');
+    const payload = record(await requestJson(`/api/finance/credit-cards/statements/${encodeURIComponent(cleanStatementId)}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ financialTransactionId: cleanTransactionId, idempotencyKey: cleanIdempotencyKey }),
     }));
     record(payload.item);
   }
