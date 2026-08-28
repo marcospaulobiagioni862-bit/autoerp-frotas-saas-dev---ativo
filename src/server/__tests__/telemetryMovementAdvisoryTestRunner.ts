@@ -1,3 +1,4 @@
+import './telemetryFleetScorecardTestRunner';
 import assert from 'node:assert/strict';
 import { deriveTelemetryMovement } from '../telemetryMovementAdvisoryAuthority';
 
