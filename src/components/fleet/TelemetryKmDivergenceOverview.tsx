@@ -1,14 +1,17 @@
 import React,{useEffect,useState}from'react';
 import { TrackerClient,type TelemetryKmDivergenceSummary } from '../../api/trackerClient';
+import { TelemetryMaintenanceAdvisoryClient,type TelemetryMaintenanceAdvisorySummary,type TelemetryMaintenanceAdvisoryState } from '../../api/telemetryMaintenanceAdvisoryClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Tracker,Vehicle } from '../../types/entities';
 import { Badge,Button,Card } from '../ui';
-import { Gauge } from 'lucide-react';
+import { Gauge,Wrench } from 'lucide-react';
 
-type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;error:string};
+type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;error:string;advisoryError:string};
 
 const directionLabel=(direction:TelemetryKmDivergenceSummary['direction']):string=>direction==='ALIGNED'?'Alinhado':direction==='TELEMETRY_ABOVE'?'Telemetria acima':direction==='TELEMETRY_BELOW'?'Telemetria abaixo':'Sem leitura disponível';
 const directionVariant=(direction:TelemetryKmDivergenceSummary['direction']):'success'|'warning'|'secondary'=>direction==='ALIGNED'?'success':direction==='UNAVAILABLE'?'secondary':'warning';
+const advisoryLabel=(state:TelemetryMaintenanceAdvisoryState):string=>state==='DUE'?'Vencida por KM':state==='DUE_SOON'?'Próxima por KM':state==='NOT_DUE'?'Dentro do intervalo':'Sem base telemétrica';
+const advisoryVariant=(state:TelemetryMaintenanceAdvisoryState):'success'|'warning'|'danger'|'secondary'=>state==='DUE'?'danger':state==='DUE_SOON'?'warning':state==='NOT_DUE'?'success':'secondary';
 const km=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(value)} km`;
 
 export const TelemetryKmDivergenceOverview:React.FC=()=>{
@@ -20,8 +23,16 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
       const active=trackers.filter(item=>item.status==='ACTIVE');
       const vehicleById=new Map(vehicles.filter(item=>!item.isArchived).map(item=>[item.id,item]));
       const resolved=await Promise.all(active.map(async tracker=>{
-        try{return{tracker,vehicle:vehicleById.get(tracker.vehicleId),summary:await TrackerClient.getTelemetryKmDivergence(tracker.id),error:''};}
-        catch(err:unknown){return{tracker,vehicle:vehicleById.get(tracker.vehicleId),summary:null,error:err instanceof Error?err.message:'Falha ao consultar divergência de KM.'};}
+        const vehicle=vehicleById.get(tracker.vehicleId);
+        const[divergenceResult,advisoryResult]=await Promise.allSettled([TrackerClient.getTelemetryKmDivergence(tracker.id),TelemetryMaintenanceAdvisoryClient.get(tracker.id)]);
+        return{
+          tracker,
+          vehicle,
+          summary:divergenceResult.status==='fulfilled'?divergenceResult.value:null,
+          advisory:advisoryResult.status==='fulfilled'?advisoryResult.value:null,
+          error:divergenceResult.status==='rejected'?(divergenceResult.reason instanceof Error?divergenceResult.reason.message:'Falha ao consultar divergência de KM.'):'',
+          advisoryError:advisoryResult.status==='rejected'?(advisoryResult.reason instanceof Error?advisoryResult.reason.message:'Falha ao consultar manutenção preventiva por telemetria.'):'',
+        };
       }));
       setRows(resolved);
     }catch(err:unknown){setError(err instanceof Error?err.message:'Falha ao carregar rastreadores para a comparação de KM.');}
@@ -33,8 +44,8 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
     <Card padding="md">
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Divergência de KM — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Compara o KM oficial do veículo com o último odômetro telemétrico aceito. A tela não recalcula nem aplica valores.</p></div>
-          <Button size="sm" variant="outline" disabled={loading} onClick={()=>void load()}>{loading?'Consultando...':'Atualizar comparação'}</Button>
+          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria de KM e manutenção — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Compara o KM oficial com o último odômetro aceito e mostra alertas preventivos calculados pelo servidor. Nada nesta visão altera KM, abre OS ou gera cobrança.</p></div>
+          <Button size="sm" variant="outline" disabled={loading} onClick={()=>void load()}>{loading?'Consultando...':'Atualizar telemetria'}</Button>
         </div>
         {error&&<div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
         {!error&&!loading&&rows.length===0&&<p className="rounded-lg border border-dashed p-4 text-xs text-slate-500">Nenhum rastreador ativo disponível para comparação.</p>}
@@ -45,8 +56,18 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
             <span>Odômetro aceito: <strong>{km(row.summary.telemetryOdometerKm)}</strong></span>
             <span>Diferença: <strong>{km(row.summary.differenceKm)}</strong></span>
             <span>Limiar informativo: <strong>{km(row.summary.thresholdKm)}</strong></span>
-            <p className="col-span-2 text-[11px] text-slate-500">Estado: <strong>{directionLabel(row.summary.direction)}</strong>. Valores e classificação vêm do servidor; eventos em quarentena não são usados e nenhum botão desta visão altera o KM oficial.</p>
+            <p className="col-span-2 text-[11px] text-slate-500">Estado: <strong>{directionLabel(row.summary.direction)}</strong>. Valores e classificação vêm do servidor; eventos em quarentena não são usados.</p>
           </div>}
+          <div className="mt-3 border-t pt-3">
+            <div className="mb-2 flex items-center gap-2 font-semibold"><Wrench className="h-3.5 w-3.5"/>Manutenção preventiva por KM telemétrico</div>
+            {row.advisoryError&&<p className="rounded-lg bg-rose-50 p-2 text-rose-700">Alerta preventivo indisponível: {row.advisoryError}</p>}
+            {!row.advisoryError&&row.advisory&&row.advisory.plans.length===0&&<p className="rounded-lg border border-dashed p-2 text-slate-500">Nenhum plano preventivo ativo para este veículo.</p>}
+            {!row.advisoryError&&row.advisory&&row.advisory.plans.length>0&&<div className="space-y-2">{row.advisory.plans.map(plan=><div key={plan.planId} className="rounded-lg border p-2.5">
+              <div className="flex items-start justify-between gap-2"><div><strong>{plan.name}</strong><p className="text-[11px] text-slate-500">Prioridade {plan.priority}</p></div><Badge variant={advisoryVariant(plan.state)}>{advisoryLabel(plan.state)}</Badge></div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]"><span>Próximo KM: <strong>{km(plan.nextDueKm)}</strong></span><span>Saldo telemétrico: <strong>{km(plan.telemetryKmRemaining)}</strong></span><span>KM oficial: <strong>{km(plan.authoritativeVehicleKm)}</strong></span><span>Odômetro aceito: <strong>{km(plan.telemetryOdometerKm)}</strong></span></div>
+            </div>)}</div>}
+            {row.advisory&&<p className="mt-2 text-[11px] text-slate-500">Limiar de proximidade definido pelo servidor: <strong>{km(row.advisory.dueSoonThresholdKm)}</strong>. O alerta é apenas consultivo.</p>}
+          </div>
         </div>)}</div>}
       </div>
     </Card>
