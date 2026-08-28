@@ -52,6 +52,10 @@ async function run() {
     'src/server/__tests__/creditCardStatementOverdueTestRunner.ts',
     'FINANCE-CARD-1E2 overdue derivation regression'
   );
+  runTsxRegression(
+    'src/server/__tests__/financeCreditCardStatementDetailIntegration.ts',
+    'FINANCE-CARD-1F2 statement-detail regression'
+  );
 }
 
 run().catch((error) => {
