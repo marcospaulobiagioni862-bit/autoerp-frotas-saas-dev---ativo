@@ -1,7 +1,7 @@
 import { boolean, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { financialAccounts, financialTransactions } from './schema';
 
-// FINANCE-CARD-1B2 Drizzle model. Database constraints/triggers/RLS remain authoritative in migration 0040.
+// FINANCE-CARD-1B2 Drizzle model. Database constraints/triggers/RLS remain authoritative in migration 0040+.
 export const creditCardProfiles = pgTable('credit_card_profiles', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
@@ -78,4 +78,20 @@ export const creditCardStatementPayments = pgTable('credit_card_statement_paymen
   uqTransfer: uniqueIndex('uq_credit_card_statement_payment_transfer').on(t.companyId, t.financialTransactionId),
   uqIdempotency: uniqueIndex('uq_credit_card_statement_payment_idempotency').on(t.companyId, t.idempotencyKey),
   idxStatement: index('idx_credit_card_statement_payments_statement').on(t.companyId, t.statementId, t.createdAt),
+}));
+
+export const creditCardStatementAdjustments = pgTable('credit_card_statement_adjustments', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  statementId: text('statement_id').notNull().references(() => creditCardStatements.id, { onDelete: 'restrict' }),
+  interestAmount: numeric('interest_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  fineAmount: numeric('fine_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).notNull().default('0'),
+  reason: text('reason').notNull(),
+  idempotencyKey: text('idempotency_key').notNull(),
+  createdById: text('created_by_id').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  uqIdempotency: uniqueIndex('uq_credit_card_statement_adjustment_idempotency').on(t.companyId, t.idempotencyKey),
+  idxStatement: index('idx_credit_card_statement_adjustments_statement').on(t.companyId, t.statementId, t.createdAt),
 }));
