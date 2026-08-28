@@ -35,10 +35,11 @@ export class AttachmentClientTestRunner {
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         url = String(input);
         credentials = String(init?.credentials);
-        return new Response(JSON.stringify({ items: [attachment] }), { status: 200 });
+        return new Response(JSON.stringify({ items: [attachment, { ...attachment, id: 'att-r2', storageProvider: 'R2' }] }), { status: 200 });
       }) as typeof fetch;
       const items = await AttachmentClient.list({ entityType: 'Vehicle', entityId: 'vehicle 1' });
-      assert(items.length === 1, 'LIST payload');
+      assert(items.length === 2, 'LIST payload');
+      assert(items[1].storageProvider === 'R2', 'LIST accepts durable R2 provider');
       assert(credentials === 'include', 'LIST credentials');
       assert(url.includes('entityType=Vehicle') && url.includes('entityId=vehicle+1'), 'LIST filters');
     });
