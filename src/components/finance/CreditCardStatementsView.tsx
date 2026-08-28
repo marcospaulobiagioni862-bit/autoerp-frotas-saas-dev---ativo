@@ -110,7 +110,7 @@ export const CreditCardStatementsView: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100"><CreditCard className="h-6 w-6 text-blue-600" /> Cartões / Faturas</h2>
-          <p className="mt-1 text-xs text-slate-500">Visão somente leitura. Status, saldo e atraso são exibidos exatamente como retornados pela autoridade financeira do servidor.</p>
+          <p className="mt-1 text-xs text-slate-500">Status, saldo e atraso são exibidos exatamente como retornados pela autoridade financeira do servidor; o fechamento exige confirmação explícita.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
       </div>
