@@ -89,15 +89,14 @@ export const CreditCardStatementsView: React.FC = () => {
 
       <Card padding="none">
         {loading ? <div className="space-y-3 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div> : visibleStatements.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">Nenhuma fatura encontrada para o filtro atual.</div> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes autoritativos</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visibleStatements.map((statement) => {
               const profile = profileById.get(statement.creditCardProfileId);
-              const netAdjustments = statement.adjustmentAmount + statement.interestAmount + statement.fineAmount - statement.discountAmount;
               return <tr key={statement.id}>
                 <td className="p-3"><div className="font-semibold text-slate-900 dark:text-slate-100">{statement.cycleRef}</div><div className="mt-1 text-[11px] text-slate-500">Fecha {statement.closingDate} • vence {statement.dueDate}</div><div className="mt-1 break-all font-mono text-[10px] text-slate-400">{profile?.financialAccountId || statement.creditCardProfileId}</div></td>
                 <td className="p-3"><Badge variant={statusVariant(statement.status, statement.isOverdue)}>{statusLabel(statement.status)}</Badge>{statement.isOverdue && <div className="mt-1 text-[11px] font-semibold text-red-600">Vencida há {statement.overdueDays} dia{statement.overdueDays === 1 ? '' : 's'}</div>}</td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.originalAmount)}</td>
-                <td className="p-3 text-right font-mono tabular-nums">{currency(netAdjustments)}</td>
+                <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
                 <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(statement.balanceAmount)}</td>
               </tr>;
