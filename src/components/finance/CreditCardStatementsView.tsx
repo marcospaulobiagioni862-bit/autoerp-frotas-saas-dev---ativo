@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CreditCard, RefreshCw } from 'lucide-react';
-import { CreditCardStatementClient, type CreditCardProfileSummary, type CreditCardStatementStatus, type CreditCardStatementSummary } from '../../api/creditCardStatementClient';
+import { CreditCard, Eye, RefreshCw, X } from 'lucide-react';
+import { CreditCardStatementClient, type CreditCardProfileSummary, type CreditCardStatementDetail, type CreditCardStatementStatus, type CreditCardStatementSummary } from '../../api/creditCardStatementClient';
 import { Badge, Button, Card, Skeleton } from '../ui';
 
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -25,6 +25,9 @@ export const CreditCardStatementsView: React.FC = () => {
   const [profileId, setProfileId] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CreditCardStatementDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailMessage, setDetailMessage] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -48,6 +51,19 @@ export const CreditCardStatementsView: React.FC = () => {
   };
 
   useEffect(() => { void load(); }, []);
+
+  const loadDetail = async (statementId: string) => {
+    setDetail(null);
+    setDetailMessage(null);
+    setDetailLoading(true);
+    try {
+      setDetail(await CreditCardStatementClient.getStatementDetail(statementId));
+    } catch (error) {
+      setDetailMessage(error instanceof Error ? error.message : 'Não foi possível carregar o detalhe autoritativo da fatura.');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const visibleStatements = useMemo(
     () => profileId ? statements.filter((statement) => statement.creditCardProfileId === profileId) : statements,
@@ -89,7 +105,7 @@ export const CreditCardStatementsView: React.FC = () => {
 
       <Card padding="none">
         {loading ? <div className="space-y-3 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div> : visibleStatements.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">Nenhuma fatura encontrada para o filtro atual.</div> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes autoritativos</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes autoritativos</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th><th className="p-3 text-right">Detalhe</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visibleStatements.map((statement) => {
               const profile = profileById.get(statement.creditCardProfileId);
               return <tr key={statement.id}>
@@ -99,11 +115,34 @@ export const CreditCardStatementsView: React.FC = () => {
                 <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
                 <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(statement.balanceAmount)}</td>
+                <td className="p-3 text-right"><Button size="sm" variant="outline" onClick={() => void loadDetail(statement.id)} icon={<Eye className="h-4 w-4" />}>Ver detalhe</Button></td>
               </tr>;
             })}
           </tbody></table></div>
         )}
       </Card>
+
+      {(detailLoading || detailMessage || detail) && (
+        <Card padding="sm">
+          <div className="flex items-start justify-between gap-3">
+            <div><h3 className="font-bold text-slate-900 dark:text-slate-100">Detalhe autoritativo da fatura</h3><p className="mt-1 text-[11px] text-slate-500">Carregado sob demanda; valores exibidos sem recomposição local.</p></div>
+            <Button size="sm" variant="ghost" onClick={() => { setDetail(null); setDetailMessage(null); }} icon={<X className="h-4 w-4" />}>Fechar</Button>
+          </div>
+          {detailLoading && <div className="mt-4 space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>}
+          {detailMessage && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{detailMessage}</div>}
+          {detail && (
+            <div className="mt-4 space-y-5 text-xs">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><div><span className="text-slate-500">Ciclo</span><div className="font-semibold">{detail.statement.cycleRef}</div></div><div><span className="text-slate-500">Status</span><div className="font-semibold">{statusLabel(detail.statement.status)}</div></div><div><span className="text-slate-500">Pago</span><div className="font-mono font-semibold">{currency(detail.statement.paidAmount)}</div></div><div><span className="text-slate-500">Saldo</span><div className="font-mono font-bold">{currency(detail.statement.balanceAmount)}</div></div></div>
+              <section><h4 className="mb-2 font-semibold">Itens ({detail.items.length})</h4>{detail.items.length === 0 ? <div className="text-slate-500">Nenhum item.</div> : <div className="space-y-2">{detail.items.map((item) => <div key={item.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex justify-between gap-3"><div><div className="font-semibold">{item.originType}</div><div className="break-all font-mono text-[10px] text-slate-500">{item.originId}</div></div><div className="font-mono font-bold">{currency(item.finalAmount)}</div></div><div className="mt-1 text-[11px] text-slate-500">Original {currency(item.originalAmount)} • ajuste {currency(item.adjustmentAmount)}</div></div>)}</div>}</section>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <section><h4 className="mb-2 font-semibold">Pagamentos ({detail.payments.length})</h4>{detail.payments.length === 0 ? <div className="text-slate-500">Nenhum pagamento.</div> : detail.payments.map((payment) => <div key={payment.id} className="mb-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="font-mono font-bold">{currency(payment.amount)}</div><div className="text-[10px] text-slate-500">{new Date(payment.createdAt).toLocaleString('pt-BR')}</div></div>)}</section>
+                <section><h4 className="mb-2 font-semibold">Encargos e descontos ({detail.adjustments.length})</h4>{detail.adjustments.length === 0 ? <div className="text-slate-500">Nenhum ajuste.</div> : detail.adjustments.map((adjustment) => <div key={adjustment.id} className="mb-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div>{adjustment.reason}</div><div className="mt-1 font-mono text-[11px]">Juros {currency(adjustment.interestAmount)} • multa {currency(adjustment.fineAmount)} • desconto {currency(adjustment.discountAmount)}</div></div>)}</section>
+                <section><h4 className="mb-2 font-semibold">Créditos ({detail.credits.length})</h4>{detail.credits.length === 0 ? <div className="text-slate-500">Nenhum crédito.</div> : detail.credits.map((credit) => <div key={credit.id} className="mb-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div>{credit.reason}</div><div className="mt-1 font-mono font-bold">{currency(credit.amount)}</div></div>)}</section>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <p className="text-[11px] text-slate-500">Esta tela não cria, fecha, paga, ajusta nem credita faturas. Qualquer ação financeira permanece fora desta wave e exige autoridade server-side específica.</p>
     </div>
