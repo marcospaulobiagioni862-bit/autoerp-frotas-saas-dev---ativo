@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CreditCard, Eye, Lock, RefreshCw, X } from 'lucide-react';
 import { CreditCardStatementClient, type CreditCardProfileSummary, type CreditCardStatementDetail, type CreditCardStatementStatus, type CreditCardStatementSummary } from '../../api/creditCardStatementClient';
 import { Badge, Button, Card, Skeleton } from '../ui';
+import { CreditCardStatementPaymentAction } from './CreditCardStatementPaymentAction';
 
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -88,6 +89,11 @@ export const CreditCardStatementsView: React.FC = () => {
     }
   };
 
+  const refreshAfterPayment = async (statementId: string) => {
+    await load();
+    if (detail?.statement.id === statementId) await loadDetail(statementId);
+  };
+
   const cycleRefs = useMemo(
     () => Array.from(new Set<string>(statements.map((statement) => statement.cycleRef))).sort((left, right) => right.localeCompare(left)),
     [statements],
@@ -110,7 +116,7 @@ export const CreditCardStatementsView: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100"><CreditCard className="h-6 w-6 text-blue-600" /> Cartões / Faturas</h2>
-          <p className="mt-1 text-xs text-slate-500">Status, saldo e atraso são exibidos exatamente como retornados pela autoridade financeira do servidor; o fechamento exige confirmação explícita.</p>
+          <p className="mt-1 text-xs text-slate-500">Status, saldo e atraso são exibidos exatamente como retornados pela autoridade financeira do servidor; fechamento e pagamento exigem confirmação explícita.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
       </div>
@@ -177,7 +183,7 @@ export const CreditCardStatementsView: React.FC = () => {
                 <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
                 <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(statement.balanceAmount)}</td>
-                <td className="p-3 text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => void loadDetail(statement.id)} icon={<Eye className="h-4 w-4" />}>Ver detalhe</Button>{statement.status === 'OPEN' && <Button size="sm" variant="primary" disabled={closingStatementId !== null} onClick={() => void closeStatement(statement)} icon={<Lock className="h-4 w-4" />}>{closingStatementId === statement.id ? 'Fechando...' : 'Fechar fatura'}</Button>}</div></td>
+                <td className="p-3 text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => void loadDetail(statement.id)} icon={<Eye className="h-4 w-4" />}>Ver detalhe</Button>{statement.status === 'OPEN' && <Button size="sm" variant="primary" disabled={closingStatementId !== null} onClick={() => void closeStatement(statement)} icon={<Lock className="h-4 w-4" />}>{closingStatementId === statement.id ? 'Fechando...' : 'Fechar fatura'}</Button>}<CreditCardStatementPaymentAction statement={statement} profile={profile} onSuccess={() => refreshAfterPayment(statement.id)} /></div></td>
               </tr>;
             })}
           </tbody></table></div>
@@ -206,7 +212,7 @@ export const CreditCardStatementsView: React.FC = () => {
         </Card>
       )}
 
-      <p className="text-[11px] text-slate-500">Esta tela fecha faturas abertas somente pelo endpoint autoritativo e recarrega o read-model após sucesso. Pagamentos, ajustes e créditos permanecem fora desta wave.</p>
+      <p className="text-[11px] text-slate-500">Fechamento e pagamento usam exclusivamente endpoints autoritativos e recarregam o read-model após sucesso. Nenhuma transferência, valor, saldo ou status é criado ou recalculado pelo navegador.</p>
     </div>
   );
 };
