@@ -91,7 +91,7 @@ async function seed(): Promise<void> {
     transaction_date,competence_date,description,is_reversed,created_by_id,created_at,updated_at
   ) VALUES
     ('card-b2-purchase',${companyA},${cardAccountA},NULL,'EXPENSE',300,${methodA},'2026-08-10','2026-08-10','Card purchase',false,'card-b2-user',NOW(),NOW()),
-    ('card-b2-payment',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',200,${methodA},'2026-08-25','2026-08-25','Statement payment',false,'card-b2-user',NOW(),NOW()),
+    ('card-b2-payment',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',300,${methodA},'2026-08-25','2026-08-25','Statement payment',false,'card-b2-user',NOW(),NOW()),
     ('card-b2-not-transfer',${companyA},${bankAccountA},NULL,'EXPENSE',50,${methodA},'2026-08-25','2026-08-25','Not a statement payment',false,'card-b2-user',NOW(),NOW())`);
 }
 
@@ -145,9 +145,16 @@ async function run(): Promise<void> {
     const afterClose = Number((await rows(sql`SELECT count(*)::int AS count FROM financial_transactions WHERE company_id=${companyA}`))[0].count);
     assert(beforeClose === afterClose, 'closing a statement must not create a FinancialTransaction');
 
+    await expectFailure(
+      () => db.execute(sql`INSERT INTO credit_card_statement_payments(
+        id,company_id,statement_id,financial_transaction_id,amount,idempotency_key,created_by_id
+      ) VALUES ('card-b2-underpayment',${companyA},'card-b2-statement-a','card-b2-payment',200,'card-b2-underpayment-key','card-b2-user')`),
+      'full statement payment must reject an amount below the authoritative balance'
+    );
+
     await db.execute(sql`INSERT INTO credit_card_statement_payments(
       id,company_id,statement_id,financial_transaction_id,amount,idempotency_key,created_by_id
-    ) VALUES ('card-b2-payment-link',${companyA},'card-b2-statement-a','card-b2-payment',200,'card-b2-pay-key','card-b2-user')`);
+    ) VALUES ('card-b2-payment-link',${companyA},'card-b2-statement-a','card-b2-payment',300,'card-b2-pay-key','card-b2-user')`);
 
     await expectFailure(
       () => db.execute(sql`INSERT INTO credit_card_statement_payments(
