@@ -130,12 +130,26 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     try { await CreditCardStatementClient.listStatements(); } catch { malformedStatusRejected = true; }
     assert.equal(malformedStatusRejected, true);
 
+    for (const malformedMoney of [null, '', '   ', true, false, {}, []]) {
+      responder = async () => new Response(JSON.stringify({ items: [{ ...statement, balance_amount: malformedMoney }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      let malformedMoneyRejected = false;
+      try { await CreditCardStatementClient.listStatements(); } catch { malformedMoneyRejected = true; }
+      assert.equal(malformedMoneyRejected, true, `expected malformed money to be rejected: ${JSON.stringify(malformedMoney)}`);
+    }
+
+    for (const malformedInteger of [null, '', '   ', true, false, {}, []]) {
+      responder = async () => new Response(JSON.stringify({ items: [{ ...statement, overdue_days: malformedInteger }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      let malformedIntegerRejected = false;
+      try { await CreditCardStatementClient.listStatements(); } catch { malformedIntegerRejected = true; }
+      assert.equal(malformedIntegerRejected, true, `expected malformed integer to be rejected: ${JSON.stringify(malformedInteger)}`);
+    }
+
     responder = async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
     let forbiddenRejected = false;
     try { await CreditCardStatementClient.listProfiles(); } catch (error) { forbiddenRejected = error instanceof Error && error.message === 'Forbidden'; }
     assert.equal(forbiddenRejected, true);
 
-    console.log('CreditCardStatementClient 16/16 PASS');
+    console.log('CreditCardStatementClient 18/18 PASS');
   } finally {
     globalThis.fetch = originalFetch;
   }
