@@ -73,7 +73,7 @@ export const CreditCardStatementsView: React.FC = () => {
   };
 
   const cycleRefs = useMemo(
-    () => Array.from(new Set(statements.map((statement) => statement.cycleRef))).sort((left, right) => right.localeCompare(left)),
+    () => Array.from(new Set<string>(statements.map((statement) => statement.cycleRef))).sort((left, right) => right.localeCompare(left)),
     [statements],
   );
   const visibleStatements = useMemo(
