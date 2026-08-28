@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { TelemetryAuthorityService,TelemetryConflictError,deriveTelemetryHealthStatus } from '../telemetryAuthority';
+import { TelemetryKmDivergenceAuthority,deriveTelemetryKmDivergence } from '../telemetryKmDivergenceAuthority';
 import type { AuthenticatedPrincipal } from '../auth';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
@@ -17,6 +18,8 @@ async function seed():Promise<void>{
 
 async function main():Promise<void>{
   await seed();
+  const noOdometer=await TelemetryKmDivergenceAuthority.get(companyA,trackerA);
+  assert(noOdometer.direction==='UNAVAILABLE'&&noOdometer.telemetryOdometerKm===null&&noOdometer.differenceKm===null,'missing accepted odometer invented divergence');
   const occurredAt=new Date(Date.now()-60_000).toISOString();
   const beforePayables=rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count;
   const first=await TelemetryAuthorityService.ingest(adminA,{trackerId:trackerA,sourceEventId:'synthetic-odometer-1',eventType:'ODOMETER',occurredAt,payload:{odometerKm:1000,imei:'111111111111111'}});
@@ -25,6 +28,9 @@ async function main():Promise<void>{
   assert(!replay.created&&replay.item.id===first.item.id,'replay was not idempotent');
   const regressive=await TelemetryAuthorityService.ingest(adminA,{trackerId:trackerA,sourceEventId:'synthetic-odometer-2',eventType:'ODOMETER',occurredAt,payload:{odometerKm:999}});
   assert(regressive.item.status==='QUARANTINED'&&regressive.item.quarantineReason==='ODOMETER_REGRESSION'&&regressive.item.reviewStatus==='PENDING','regressive odometer not pending human review');
+  const divergence=await TelemetryKmDivergenceAuthority.get(companyA,trackerA);
+  assert(divergence.direction==='ALIGNED'&&divergence.authoritativeVehicleKm===1000&&divergence.telemetryOdometerKm===1000&&divergence.differenceKm===0&&divergence.thresholdKm===5,'accepted KM divergence is incorrect');
+  assert(deriveTelemetryKmDivergence(1000,1006).direction==='TELEMETRY_ABOVE'&&deriveTelemetryKmDivergence(1000,994).direction==='TELEMETRY_BELOW','KM divergence direction derivation failed');
 
   let acceptedReviewDenied=false;
   try{await TelemetryAuthorityService.review(adminA,trackerA,first.item.id,{decision:'DISMISSED',reason:'Evento aceito não deve ser revisado'});}catch{acceptedReviewDenied=true;}
@@ -32,6 +38,7 @@ async function main():Promise<void>{
   let crossTenant=false;
   try{await TelemetryAuthorityService.review(adminA,trackerB,regressive.item.id,{decision:'ACKNOWLEDGED',reason:'Tentativa de outro tenant'});}catch{crossTenant=true;}
   assert(crossTenant,'cross-tenant review was accepted');
+  let crossTenantDivergence=false;try{await TelemetryKmDivergenceAuthority.get(companyA,trackerB);}catch{crossTenantDivergence=true;}assert(crossTenantDivergence,'cross-tenant KM divergence was exposed');
 
   const auditBefore=Number(rows(await db.execute(sql`SELECT count(*)::int count FROM audit_logs WHERE company_id=${companyA} AND entity_type='TrackerTelemetryEvent' AND entity_id=${regressive.item.id} AND action='UPDATE'`))[0].count);
   const reviewed=await TelemetryAuthorityService.review(adminA,trackerA,regressive.item.id,{decision:'ACKNOWLEDGED',reason:'Divergência confirmada em revisão humana'});
@@ -59,9 +66,9 @@ async function main():Promise<void>{
   assert(deriveTelemetryHealthStatus('ACTIVE','2026-08-25T11:00:00.000Z',1,now)==='ATTENTION','ATTENTION boundary failed');
   assert(deriveTelemetryHealthStatus('REMOVED','2026-08-25T11:00:00.000Z',0,now)==='INACTIVE','INACTIVE boundary failed');
   const vehicleKm=rows(await db.execute(sql`SELECT current_km FROM vehicles WHERE company_id=${companyA} AND id=${vehicleA}`))[0].current_km;
-  assert(Number(vehicleKm)===1000,'telemetry review changed authoritative vehicle KM');
+  assert(Number(vehicleKm)===1000,'telemetry review or divergence read changed authoritative vehicle KM');
   const afterPayables=rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count;
-  assert(Number(beforePayables)===Number(afterPayables),'telemetry review created a financial payable');
-  console.log('TELEMETRY-1D synthetic authority and human review integration: PASS');
+  assert(Number(beforePayables)===Number(afterPayables),'telemetry review or divergence read created a financial payable');
+  console.log('TELEMETRY-1D/1H synthetic authority, human review and KM divergence integration: PASS');
 }
 main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});
