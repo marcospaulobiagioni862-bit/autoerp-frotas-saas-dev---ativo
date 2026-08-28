@@ -210,8 +210,8 @@ function normalizeCredit(value: unknown): CreditCardStatementCreditDetail {
   };
 }
 
-async function requestJson(path: string): Promise<unknown> {
-  const response = await fetch(path, { credentials: 'include' });
+async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetch(path, { ...init, credentials: 'include' });
   if (!response.ok) {
     let message = `Credit-card request failed (${response.status})`;
     try {
@@ -238,6 +238,17 @@ export class CreditCardStatementClient {
     const payload = record(await requestJson(`/api/finance/credit-cards/statements${suffix}`));
     if (!Array.isArray(payload.items)) throw new Error('Invalid credit-card statement list');
     return payload.items.map(normalizeStatement);
+  }
+
+  static async closeStatement(statementId: string): Promise<void> {
+    const cleanStatementId = statementId.trim();
+    if (!cleanStatementId) throw new Error('Statement id is required');
+    const payload = record(await requestJson(`/api/finance/credit-cards/statements/${encodeURIComponent(cleanStatementId)}/close`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }));
+    record(payload.item);
   }
 
   static async getStatementDetail(statementId: string): Promise<CreditCardStatementDetail> {
