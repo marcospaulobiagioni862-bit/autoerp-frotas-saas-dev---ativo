@@ -3,10 +3,11 @@ import { TrackerClient,type TelemetryKmDivergenceSummary } from '../../api/track
 import { TelemetryMaintenanceAdvisoryClient,type TelemetryMaintenanceAdvisorySummary,type TelemetryMaintenanceAdvisoryState } from '../../api/telemetryMaintenanceAdvisoryClient';
 import { TelemetryContractExcessKmClient,type TelemetryContractExcessKmState,type TelemetryContractExcessKmSummary } from '../../api/telemetryContractExcessKmClient';
 import { TelemetryMovementAdvisoryClient,type TelemetryMovementState,type TelemetryMovementSummary } from '../../api/telemetryMovementAdvisoryClient';
+import { TelemetryFleetScorecardClient,type FleetTelemetryAttentionReason,type FleetTelemetryHealthState,type TelemetryFleetScorecardSummary } from '../../api/telemetryFleetScorecardClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Tracker,Vehicle } from '../../types/entities';
 import { Badge,Button,Card } from '../ui';
-import { Gauge,Wrench,Route,Navigation } from 'lucide-react';
+import { Activity,Gauge,Wrench,Route,Navigation } from 'lucide-react';
 
 type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;contractKm:TelemetryContractExcessKmSummary|null;movement:TelemetryMovementSummary|null;error:string;advisoryError:string;contractKmError:string;movementError:string};
 
@@ -18,16 +19,23 @@ const contractKmLabel=(state:TelemetryContractExcessKmState):string=>state==='EX
 const contractKmVariant=(state:TelemetryContractExcessKmState):'success'|'warning'|'danger'|'secondary'=>state==='EXCEEDED'?'danger':state==='NEAR_LIMIT'?'warning':state==='WITHIN_LIMIT'?'success':'secondary';
 const movementLabel=(state:TelemetryMovementState):string=>state==='MOVING'?'Em movimento':state==='STOPPED'?'Parado':state==='STALE'?'Leitura antiga':'Sem base suficiente';
 const movementVariant=(state:TelemetryMovementState):'success'|'warning'|'secondary'=>state==='MOVING'?'success':state==='STALE'?'warning':'secondary';
+const healthLabel=(state:FleetTelemetryHealthState):string=>state==='HEALTHY'?'Saudável':state==='ATTENTION'?'Atenção':state==='OFFLINE'?'Offline':state==='STALE'?'Comunicação antiga':'Sem dados';
+const attentionReasonLabel=(reason:FleetTelemetryAttentionReason):string=>reason==='HEALTH_ATTENTION'?'Saúde requer atenção':reason==='HEALTH_OFFLINE'?'Rastreador offline':reason==='HEALTH_STALE'?'Comunicação antiga':reason==='HEALTH_NO_DATA'?'Sem dados de saúde':reason==='MOVEMENT_STALE'?'Movimento com leitura antiga':'Movimento sem base suficiente';
 const km=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(value)} km`;
 const meters=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(value)} m`;
 const seconds=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:0}).format(value)} s`;
 
 export const TelemetryKmDivergenceOverview:React.FC=()=>{
-  const[rows,setRows]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  const[rows,setRows]=useState<Row[]>([]),[scorecard,setScorecard]=useState<TelemetryFleetScorecardSummary|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[scorecardError,setScorecardError]=useState('');
   const load=async()=>{
-    setLoading(true);setError('');setRows([]);
+    setLoading(true);setError('');setScorecardError('');setRows([]);setScorecard(null);
     try{
-      const[trackers,vehicles]=await Promise.all([TrackerClient.list(),VehicleClient.list()]);
+      const[trackers,vehicles,scorecardResult]=await Promise.all([
+        TrackerClient.list(),
+        VehicleClient.list(),
+        TelemetryFleetScorecardClient.get().then(value=>({value,error:''}),reason=>({value:null,error:reason instanceof Error?reason.message:'Falha ao consultar resumo telemétrico da frota.'})),
+      ]);
+      setScorecard(scorecardResult.value);setScorecardError(scorecardResult.error);
       const active=trackers.filter(item=>item.status==='ACTIVE');
       const vehicleById=new Map(vehicles.filter(item=>!item.isArchived).map(item=>[item.id,item]));
       const resolved=await Promise.all(active.map(async tracker=>{
@@ -59,6 +67,20 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
           <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria operacional — leitura consultiva</h3><p className="mt-1 text-xs text-slate-500">Compara KM, manutenção, contrato e estado de movimento usando somente eventos aceitos e cálculos server-side. Nada nesta visão altera KM, abre OS, bloqueia veículo ou gera cobrança.</p></div>
           <Button size="sm" variant="outline" disabled={loading} onClick={()=>void load()}>{loading?'Consultando...':'Atualizar telemetria'}</Button>
         </div>
+        {scorecardError&&<div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">Resumo da frota indisponível: {scorecardError}</div>}
+        {scorecard&&<div className="rounded-xl border bg-slate-50/70 p-3 dark:bg-slate-950/30">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2 text-xs font-semibold"><Activity className="h-4 w-4"/>Scorecard telemétrico sanitizado da frota</div><Badge variant={scorecard.attentionTotal>0?'warning':'success'}>{scorecard.attentionTotal} item(ns) para conferência</Badge></div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4 lg:grid-cols-6">
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Rastreadores ativos</span><strong className="mt-1 block text-sm">{scorecard.totalActiveTrackers}</strong></div>
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Saudáveis</span><strong className="mt-1 block text-sm">{scorecard.healthCounts.HEALTHY}</strong></div>
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Atenção/offline</span><strong className="mt-1 block text-sm">{scorecard.healthCounts.ATTENTION+scorecard.healthCounts.OFFLINE}</strong></div>
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Comunicação antiga/sem dados</span><strong className="mt-1 block text-sm">{scorecard.healthCounts.STALE+scorecard.healthCounts.NO_DATA}</strong></div>
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Em movimento</span><strong className="mt-1 block text-sm">{scorecard.movementCounts.MOVING}</strong></div>
+            <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Parados</span><strong className="mt-1 block text-sm">{scorecard.movementCounts.STOPPED}</strong></div>
+          </div>
+          {scorecard.attentionItems.length>0&&<div className="mt-3"><p className="mb-2 text-[11px] font-semibold">Prioridade consultiva</p><div className="grid gap-2 md:grid-cols-2">{scorecard.attentionItems.slice(0,6).map(item=><div key={item.trackerId} className="rounded-lg border bg-white p-2 text-[11px] dark:bg-slate-900"><div className="flex items-start justify-between gap-2"><div><strong>Rastreador {item.trackerId}</strong><p className="text-slate-500">Veículo {item.vehicleId}</p></div><Badge variant={item.healthState==='ATTENTION'||item.healthState==='OFFLINE'?'warning':'secondary'}>{healthLabel(item.healthState)}</Badge></div><p className="mt-1 text-slate-500">Movimento: <strong>{movementLabel(item.movementState)}</strong></p><p className="mt-1 text-slate-500">{item.reasons.map(attentionReasonLabel).join(' • ')}</p></div>)}</div></div>}
+          <p className="mt-3 text-[11px] text-slate-500">Este scorecard apenas prioriza conferência visual. Não envia notificações, não altera disponibilidade, não cria geofence, bloqueio, multa, cobrança ou qualquer efeito financeiro/contratual.</p>
+        </div>}
         {error&&<div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
         {!error&&!loading&&rows.length===0&&<p className="rounded-lg border border-dashed p-4 text-xs text-slate-500">Nenhum rastreador ativo disponível para comparação.</p>}
         {rows.length>0&&<div className="grid gap-3 lg:grid-cols-2">{rows.map(row=><div key={row.tracker.id} className="rounded-xl border p-3 text-xs">
