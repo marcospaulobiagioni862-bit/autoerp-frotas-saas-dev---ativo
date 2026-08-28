@@ -1,3 +1,4 @@
+import './telemetryFleetScorecardClientTestRunner';
 import { TrackerClient,parseTelemetryEventSummary,parseTelemetryHealthSummary,parseTelemetryObservabilitySummary,type TelemetryEventSummary,type TelemetryHealthSummary,type TelemetryObservabilitySummary } from '../trackerClient';
 import { createTelemetryEventCounts,filterTelemetryEvents,TELEMETRY_EVENT_FILTERS } from '../../components/fleet/telemetryEventTriage';
 
