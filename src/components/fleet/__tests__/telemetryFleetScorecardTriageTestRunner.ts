@@ -1,5 +1,5 @@
 import type { TelemetryFleetAttentionItem } from '../../../api/telemetryFleetScorecardClient';
-import { createTelemetryScorecardTriageCounts,triageTelemetryScorecardItems } from '../telemetryFleetScorecardTriage';
+import { createTelemetryScorecardTriageCounts,selectTelemetryScorecardVisibleItems,TELEMETRY_SCORECARD_INITIAL_VISIBLE_ITEMS,triageTelemetryScorecardItems } from '../telemetryFleetScorecardTriage';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
 
@@ -26,5 +26,14 @@ export function runTelemetryFleetScorecardTriageRegression():void{
   const combined=triageTelemetryScorecardItems(items,{health:'NO_DATA',movement:'UNAVAILABLE',reason:'HEALTH_NO_DATA'});
   assert(combined.length===1&&combined[0].trackerId==='tracker-no-data','combined telemetry scorecard filters are inconsistent');
   assert(items.map(item=>item.trackerId).join(',')===originalOrder,'local telemetry scorecard triage mutated authorized input');
-  console.log('TELEMETRY-1N local fleet scorecard triage regression: PASS');
+
+  const windowItems=Array.from({length:TELEMETRY_SCORECARD_INITIAL_VISIBLE_ITEMS+1},(_,index):TelemetryFleetAttentionItem=>({trackerId:`tracker-${index}`,vehicleId:`vehicle-${index}`,healthState:'ATTENTION',movementState:'STOPPED',reasons:['HEALTH_ATTENTION']}));
+  const windowOrder=windowItems.map(item=>item.trackerId).join(',');
+  const collapsed=selectTelemetryScorecardVisibleItems(windowItems,false);
+  const expanded=selectTelemetryScorecardVisibleItems(windowItems,true);
+  assert(collapsed.length===TELEMETRY_SCORECARD_INITIAL_VISIBLE_ITEMS&&collapsed.at(-1)?.trackerId==='tracker-11','collapsed triage window no longer limits to twelve');
+  assert(expanded.length===windowItems.length&&expanded.at(-1)?.trackerId==='tracker-12','expanded triage window hid authorized items');
+  assert(collapsed!==windowItems&&expanded!==windowItems,'visible triage window leaked the authorized input reference');
+  assert(windowItems.map(item=>item.trackerId).join(',')===windowOrder,'visible triage window mutated authorized input');
+  console.log('TELEMETRY-1N/1O local fleet scorecard triage regression: PASS');
 }
