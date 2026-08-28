@@ -252,6 +252,10 @@ export interface ITransactionContext {
   findFinancialTransactionByIdWithLock?(id: string): Promise<FinancialTransaction | null>;
   /** Server-only settlement/reversal capability: durable lookup of a financial command idempotency key. */
   findFinancialTransactionByIdempotencyKey?(key: string): Promise<FinancialTransaction | null>;
+  /** Server-only card authority: lock a statement payment and its statement by transfer id. */
+  findCreditCardStatementPaymentForUpdate?(financialTransactionId: string): Promise<any | null>;
+  /** Server-only card authority: restore statement paid/balance state after transfer reversal. */
+  applyCreditCardStatementPaymentReversal?(statementId: string, amount: number, userId: string): Promise<any>;
   /** Server-only escape hatch for authority modules that need PostgreSQL locking/raw SQL. */
   getRawTransaction?(): any;
   /** Capability is minted only by UnitOfWork options inside trusted server code. */
