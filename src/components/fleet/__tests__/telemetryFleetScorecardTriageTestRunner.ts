@@ -1,5 +1,5 @@
 import type { TelemetryFleetAttentionItem } from '../../../api/telemetryFleetScorecardClient';
-import { createTelemetryScorecardTriageCounts,triageTelemetryScorecardItems } from '../telemetryFleetScorecardTriage';
+import { createTelemetryScorecardTriageCounts,getTelemetryScorecardVisibleItems,TELEMETRY_SCORECARD_VISIBLE_LIMIT,triageTelemetryScorecardItems } from '../telemetryFleetScorecardTriage';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
 
@@ -26,5 +26,15 @@ export function runTelemetryFleetScorecardTriageRegression():void{
   const combined=triageTelemetryScorecardItems(items,{health:'NO_DATA',movement:'UNAVAILABLE',reason:'HEALTH_NO_DATA'});
   assert(combined.length===1&&combined[0].trackerId==='tracker-no-data','combined telemetry scorecard filters are inconsistent');
   assert(items.map(item=>item.trackerId).join(',')===originalOrder,'local telemetry scorecard triage mutated authorized input');
-  console.log('TELEMETRY-1N local fleet scorecard triage regression: PASS');
+
+  const manyItems:TelemetryFleetAttentionItem[]=Array.from({length:15},(_,index)=>({trackerId:`tracker-${String(index).padStart(2,'0')}`,vehicleId:`vehicle-${String(index).padStart(2,'0')}`,healthState:'ATTENTION',movementState:'STOPPED',reasons:['HEALTH_ATTENTION']}));
+  const manyOrder=manyItems.map(item=>item.trackerId).join(',');
+  const compact=getTelemetryScorecardVisibleItems(manyItems,false);
+  const expanded=getTelemetryScorecardVisibleItems(manyItems,true);
+  assert(TELEMETRY_SCORECARD_VISIBLE_LIMIT===12,'telemetry scorecard compact limit changed unexpectedly');
+  assert(compact.length===12&&compact[0]===manyItems[0]&&compact[11]===manyItems[11],'compact scorecard window did not preserve the first authorized items');
+  assert(expanded.length===15&&expanded.every((item,index)=>item===manyItems[index]),'expanded scorecard window hid or reordered authorized items');
+  assert(compact!==manyItems&&expanded!==manyItems,'visible scorecard window leaked mutable input reference');
+  assert(manyItems.map(item=>item.trackerId).join(',')===manyOrder,'visible scorecard window mutated authorized input');
+  console.log('TELEMETRY-1O local fleet scorecard visible-window regression: PASS');
 }

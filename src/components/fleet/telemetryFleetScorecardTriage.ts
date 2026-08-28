@@ -3,6 +3,7 @@ import type { FleetTelemetryAttentionReason,FleetTelemetryHealthState,TelemetryF
 export const TELEMETRY_SCORECARD_HEALTH_FILTERS=['ALL','ATTENTION','OFFLINE','STALE','NO_DATA','HEALTHY'] as const;
 export const TELEMETRY_SCORECARD_MOVEMENT_FILTERS=['ALL','STALE','UNAVAILABLE','STOPPED','MOVING'] as const;
 export const TELEMETRY_SCORECARD_REASON_FILTERS=['ALL','HEALTH_OFFLINE','HEALTH_ATTENTION','HEALTH_STALE','HEALTH_NO_DATA','MOVEMENT_STALE','MOVEMENT_UNAVAILABLE'] as const;
+export const TELEMETRY_SCORECARD_VISIBLE_LIMIT=12;
 
 export type TelemetryScorecardHealthFilter=typeof TELEMETRY_SCORECARD_HEALTH_FILTERS[number];
 export type TelemetryScorecardMovementFilter=typeof TELEMETRY_SCORECARD_MOVEMENT_FILTERS[number];
@@ -49,3 +50,5 @@ export const triageTelemetryScorecardItems=(items:readonly TelemetryFleetAttenti
       return left.trackerId.localeCompare(right.trackerId);
     });
 };
+
+export const getTelemetryScorecardVisibleItems=(items:readonly TelemetryFleetAttentionItem[],expanded:boolean):TelemetryFleetAttentionItem[]=>expanded?items.slice():items.slice(0,TELEMETRY_SCORECARD_VISIBLE_LIMIT);
