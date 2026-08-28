@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import { CreditCardStatementAuthority, type CreditCardStatementActor } from './creditCardStatementAuthority';
 import { registerCreditCardPurchaseCycleRoutes } from './creditCardPurchaseCycleRoutes';
+import { registerCreditCardStatementCreditRoutes } from './creditCardStatementCreditRoutes';
 import { deriveCreditCardStatementOverdue } from './creditCardStatementOverdue';
 
 class CreditCardValidationError extends Error {}
@@ -19,6 +20,7 @@ function send(res: Response,error: unknown): void { const m=error instanceof Err
 
 export function registerCreditCardStatementRoutes(app: Express): void {
   registerCreditCardPurchaseCycleRoutes(app);
+  registerCreditCardStatementCreditRoutes(app);
   app.get('/api/finance/credit-cards/profiles',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{res.json({items:await CreditCardStatementAuthority.listProfiles(actor(p))});}catch(e){send(res,e);}});
   app.post('/api/finance/credit-cards/profiles',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{const b=body(req.body);only(b,['financialAccountId','creditLimit','closingDay','dueDay']);res.status(201).json({item:await CreditCardStatementAuthority.createProfile(actor(p),{financialAccountId:text(b.financialAccountId),creditLimit:amount(b.creditLimit,true),closingDay:day(b.closingDay),dueDay:day(b.dueDay)})});}catch(e){send(res,e);}});
   app.get('/api/finance/credit-cards/statements',async(req,res)=>{const p=requirePrincipal(req,res);if(!p)return;try{const profileId=req.query.profileId===undefined?undefined:text(req.query.profileId);const statements=await CreditCardStatementAuthority.listStatements(actor(p),profileId);const asOf=new Date().toISOString().slice(0,10);res.json({items:statements.map((statement:any)=>({...statement,...deriveCreditCardStatementOverdue(statement,asOf)}))});}catch(e){send(res,e);}});
