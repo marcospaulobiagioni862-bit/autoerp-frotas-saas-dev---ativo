@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { TelemetryAuthorityService,TelemetryConflictError,deriveTelemetryHealthStatus } from '../telemetryAuthority';
 import { TelemetryKmDivergenceAuthority,deriveTelemetryKmDivergence } from '../telemetryKmDivergenceAuthority';
+import { TelemetryFleetScorecardAuthority } from '../telemetryFleetScorecardAuthority';
 import type { AuthenticatedPrincipal } from '../auth';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
@@ -58,6 +59,8 @@ async function main():Promise<void>{
   assert(health.healthStatus==='ATTENTION'&&health.lastAcceptedOdometerKm===1000&&health.quarantinedLast24h===1,'server-derived tracker health is incorrect');
   assert(!Object.prototype.hasOwnProperty.call(health,'rawPayload')&&!Object.prototype.hasOwnProperty.call(health,'companyId')&&!Object.prototype.hasOwnProperty.call(health,'imei'),'health summary leaked protected telemetry');
   let crossTenantHealth=false;try{await TelemetryAuthorityService.health(companyA,trackerB);}catch{crossTenantHealth=true;}assert(crossTenantHealth,'cross-tenant health was exposed');
+  const scorecard=await TelemetryFleetScorecardAuthority.get(companyA,new Date());
+  assert(scorecard.totalActiveTrackers===1&&scorecard.attentionItems.every(item=>item.trackerId===trackerA&&item.vehicleId===vehicleA),'fleet scorecard crossed tenant boundary');
   const now=new Date('2026-08-25T12:00:00.000Z');
   assert(deriveTelemetryHealthStatus('ACTIVE',null,0,now)==='NO_DATA','NO_DATA boundary failed');
   assert(deriveTelemetryHealthStatus('ACTIVE','2026-08-25T11:00:00.000Z',0,now)==='HEALTHY','HEALTHY boundary failed');
@@ -69,6 +72,6 @@ async function main():Promise<void>{
   assert(Number(vehicleKm)===1000,'telemetry review or divergence read changed authoritative vehicle KM');
   const afterPayables=rows(await db.execute(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA}`))[0].count;
   assert(Number(beforePayables)===Number(afterPayables),'telemetry review or divergence read created a financial payable');
-  console.log('TELEMETRY-1D/1H synthetic authority, human review and KM divergence integration: PASS');
+  console.log('TELEMETRY-1D/1H/1M synthetic authority, human review, KM divergence and fleet scorecard integration: PASS');
 }
 main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});
