@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { CreditCardStatementClient } from '../creditCardStatementClient';
+import { creditCardStatementStatusVariant } from '../../components/finance/creditCardStatementStatusPresentation';
 
 const profile = {
   id: 'profile-1',
@@ -48,6 +49,13 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
   };
 
   try {
+    assert.equal(creditCardStatementStatusVariant('OPEN', false), 'warning');
+    assert.equal(creditCardStatementStatusVariant('CLOSED', false), 'info');
+    assert.equal(creditCardStatementStatusVariant('PARTIALLY_PAID', false), 'warning');
+    assert.equal(creditCardStatementStatusVariant('PAID', false), 'success');
+    assert.equal(creditCardStatementStatusVariant('OPEN', true), 'danger');
+    assert.equal(creditCardStatementStatusVariant('PARTIALLY_PAID', true), 'danger');
+
     responder = async () => new Response(JSON.stringify({ items: [profile] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     calls = [];
     const profiles = await CreditCardStatementClient.listProfiles();
@@ -127,7 +135,7 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     try { await CreditCardStatementClient.listProfiles(); } catch (error) { forbiddenRejected = error instanceof Error && error.message === 'Forbidden'; }
     assert.equal(forbiddenRejected, true);
 
-    console.log('CreditCardStatementClient 10/10 PASS');
+    console.log('CreditCardStatementClient 16/16 PASS');
   } finally {
     globalThis.fetch = originalFetch;
   }
