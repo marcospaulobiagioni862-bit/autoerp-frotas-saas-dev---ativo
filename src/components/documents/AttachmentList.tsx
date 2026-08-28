@@ -84,8 +84,11 @@ export function AttachmentList({
     if (previewData?.url) URL.revokeObjectURL(previewData.url);
   }, [previewData]);
 
+  const hasAvailableContent = (item: FileAttachment): boolean =>
+    (item.storageProvider === 'SERVER_FS' || item.storageProvider === 'R2') && item.contentState === 'AVAILABLE';
+
   const getAvailableAttachment = (id: string): FileAttachment | undefined =>
-    attachments.find((item) => item.id === id && item.storageProvider === 'SERVER_FS' && item.contentState === 'AVAILABLE');
+    attachments.find((item) => item.id === id && hasAvailableContent(item));
 
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
@@ -129,8 +132,7 @@ export function AttachmentList({
 
   const handleExtractionRequest = async (attachment: FileAttachment) => {
     const eligible =
-      attachment.storageProvider === 'SERVER_FS' &&
-      attachment.contentState === 'AVAILABLE' &&
+      hasAvailableContent(attachment) &&
       DOCUMENT_AI_MIME_TYPES.has(attachment.mimeType);
     if (!canRequestDocumentAi || !eligible) return;
     setRequestingExtractionId(attachment.id);
@@ -216,8 +218,8 @@ export function AttachmentList({
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-700 border rounded-lg overflow-hidden">
           {attachments.map((att) => {
-            const serverAvailable = att.storageProvider === 'SERVER_FS' && att.contentState === 'AVAILABLE';
-            const documentAiEligible = serverAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
+            const contentAvailable = hasAvailableContent(att);
+            const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             const extractionStatus = attachmentStatuses[att.id];
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
             return (
@@ -232,7 +234,7 @@ export function AttachmentList({
                       <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
-                      {!serverAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                      {!contentAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
                       {extractionBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${extractionBadge.className}`}>
                           {extractionBadge.text}
@@ -266,10 +268,10 @@ export function AttachmentList({
                       <span className="sr-only">Solicitar extração assistida</span>
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!serverAvailable} title="Visualizar">
+                  <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!contentAvailable} title="Visualizar">
                     <Eye className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!serverAvailable} title="Baixar">
+                  <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!contentAvailable} title="Baixar">
                     <Download className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar">
