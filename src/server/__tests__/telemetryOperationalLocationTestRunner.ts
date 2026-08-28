@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { deriveTelemetryOperationalLocation } from '../telemetryOperationalLocationAuthority';
+const now=new Date('2026-08-28T16:00:00.000Z');
+assert.equal(deriveTelemetryOperationalLocation(null,null,null,now).state,'UNAVAILABLE');
+const fresh=deriveTelemetryOperationalLocation(-23.5505201,-46.6333089,'2026-08-28T15:00:00.000Z',now);
+assert.equal(fresh.state,'FRESH');assert.equal(fresh.latitude,-23.55052);assert.equal(fresh.longitude,-46.63331);assert.equal(fresh.ageMinutes,60);
+assert.equal(deriveTelemetryOperationalLocation(-23.55,-46.63,'2026-08-28T14:00:00.000Z',now).state,'FRESH');
+assert.equal(deriveTelemetryOperationalLocation(-23.55,-46.63,'2026-08-28T13:59:00.000Z',now).state,'STALE');
+for(const invalid of [()=>deriveTelemetryOperationalLocation(91,0,'2026-08-28T15:00:00.000Z',now),()=>deriveTelemetryOperationalLocation(0,181,'2026-08-28T15:00:00.000Z',now),()=>deriveTelemetryOperationalLocation(0,0,'invalid',now)])assert.throws(invalid);
+console.log('TELEMETRY-1K operational location derivation regression: PASS');
