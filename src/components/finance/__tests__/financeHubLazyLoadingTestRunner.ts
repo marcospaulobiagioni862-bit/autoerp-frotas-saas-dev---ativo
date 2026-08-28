@@ -47,7 +47,7 @@ assert.match(cards, /CreditCardStatementClient\.listStatements\(\)/, 'card UI mu
 assert.match(cards, /Visão somente leitura/, 'card UI must make read-only semantics explicit');
 assert.match(cards, /Status, saldo e atraso são exibidos exatamente como retornados/, 'card UI must preserve server-derived state semantics');
 assert.doesNotMatch(cards, /\.createProfile|\.createStatement|\.closeStatement|\.linkPayment|\.applyAdjustment|fetch\(|localRepositories|localStorage|indexedDB/);
-assert.doesNotMatch(cards, /balanceAmount\s*[+\-*/]|paidAmount\s*[+\-*/]|interestAmount\s*[+\-*/]|fineAmount\s*[+\-*/]|discountAmount\s*[+\-*/]/, 'card UI must not recompute financial authority');
+assert.doesNotMatch(cards, /(?:balanceAmount|paidAmount|interestAmount|fineAmount|discountAmount)\s*(?:\+|-|\*|\/)/, 'card UI must not recompute financial authority');
 
 await runBankReconciliationClientTests();
 await runCreditCardStatementClientTests();
