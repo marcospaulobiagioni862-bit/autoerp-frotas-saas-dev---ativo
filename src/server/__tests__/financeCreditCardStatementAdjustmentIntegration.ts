@@ -114,7 +114,7 @@ async function run(): Promise<void> {
 
   const txAfter = Number((await row(sql`SELECT count(*)::int count FROM financial_transactions WHERE company_id=${companyA}`)).count);
   assert(txAfter === txBefore, 'statement adjustments must not create FinancialTransactions');
-  const auditCount = await row(sql`SELECT count(*)::int count FROM audit_logs WHERE company_id=${companyA} AND entity_name='CreditCardStatementAdjustment'`);
+  const auditCount = await row(sql`SELECT count(*)::int count FROM audit_logs WHERE company_id=${companyA} AND entity_type='CreditCardStatementAdjustment'`);
   assert(Number(auditCount.count) === 2, 'two successful adjustment commands must produce exactly two adjustment audits');
 
   console.log('FINANCE-CARD-1E5 statement adjustment PostgreSQL integration: PASS');
