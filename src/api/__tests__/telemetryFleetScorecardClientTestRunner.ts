@@ -17,7 +17,7 @@ async function expectRejected(payload:unknown):Promise<void>{
   }finally{globalThis.fetch=originalFetch;}
 }
 
-async function main():Promise<void>{
+export async function runTelemetryFleetScorecardClientRegression():Promise<void>{
   const originalFetch=globalThis.fetch,requests:Array<{input:string;init?:RequestInit}>=[];
   try{
     globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{requests.push({input:String(input),init});return new Response(JSON.stringify({item:summary}),{status:200,headers:{'content-type':'application/json'}});}) as typeof fetch;
@@ -34,4 +34,3 @@ async function main():Promise<void>{
   await expectRejected({...summary,attentionItems:[{...summary.attentionItems[0],reasons:['UNKNOWN_REASON']}]});
   console.log('TELEMETRY-1M fleet scorecard client regression: PASS');
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
