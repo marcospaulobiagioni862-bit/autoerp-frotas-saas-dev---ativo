@@ -45,6 +45,10 @@ async function run() {
     'FINANCE-CARD-1E5 statement-adjustment regression'
   );
   runTsxRegression(
+    'src/server/__tests__/financeCreditCardPostCloseCreditIntegration.ts',
+    'FINANCE-CARD-1E6 post-close-credit regression'
+  );
+  runTsxRegression(
     'src/server/__tests__/creditCardStatementOverdueTestRunner.ts',
     'FINANCE-CARD-1E2 overdue derivation regression'
   );
