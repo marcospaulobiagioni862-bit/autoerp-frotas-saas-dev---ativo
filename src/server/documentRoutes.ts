@@ -158,7 +158,7 @@ async function validateAttachment(
 ): Promise<void> {
   if (!attachmentId) return;
   const attachment = await tx.getAttachmentRepo().findByIdForCompany(companyId, attachmentId);
-  if (!attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' || attachment.contentState !== 'AVAILABLE') {
+  if (!attachment || attachment.isArchived || (attachment.storageProvider !== 'SERVER_FS' && attachment.storageProvider !== 'R2') || attachment.contentState !== 'AVAILABLE') {
     throw new DocumentNotFoundError();
   }
   const expectedEntity = subjectType === 'VEHICLE' ? 'Vehicle' : 'Driver';
