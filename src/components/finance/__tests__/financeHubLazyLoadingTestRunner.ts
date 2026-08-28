@@ -50,6 +50,9 @@ assert.match(cards, /CreditCardStatementClient\.getStatementDetail\(statementId\
 assert.match(cards, /Carregado sob demanda; valores exibidos sem recomposição local/, 'statement detail must preserve read-only server authority semantics');
 assert.match(cards, /detail\.items\.length === 0/, 'statement detail must expose an explicit empty item state');
 assert.match(cards, /detailMessage && <div role="alert"/, 'statement detail failures must remain explicit without fallback data');
+assert.match(cards, /new Set<string>\(statements\.map\(\(statement\) => statement\.cycleRef\)\)/, 'cycle catalog must be derived only from authorized statements');
+assert.match(cards, /statement\.cycleRef !== cycleRef/, 'cycle filtering must use only the server-returned cycleRef');
+assert.match(cards, /Ciclo da fatura/, 'cycle filter must be visible to the operator');
 assert.match(cards, /statement\.status !== statusFilter/, 'status filtering must use the server-returned statement status');
 assert.match(cards, /dueFilter === 'OVERDUE' && !statement\.isOverdue/, 'overdue filtering must use only server-derived isOverdue');
 assert.match(cards, /dueFilter === 'CURRENT' && statement\.isOverdue/, 'current filtering must use only server-derived isOverdue');
