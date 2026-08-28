@@ -255,6 +255,23 @@ export class ReversalService {
       }
     }
 
+    let linkedCardPurchase: any | null = null;
+    const cardContext = txContext as any;
+    if (originalTx.type === TransactionType.EXPENSE && txContext && cardContext?.findCreditCardStatementPurchaseForUpdate) {
+      linkedCardPurchase = await cardContext.findCreditCardStatementPurchaseForUpdate(originalTx.id);
+      if (linkedCardPurchase) {
+        if (!cardContext.applyCreditCardStatementPurchaseReversal) {
+          throw new Error('Autoridade transacional de estorno de compra de cartão indisponível');
+        }
+        if (linkedCardPurchase.status !== 'OPEN') {
+          throw new Error('Estorno de compra em fatura fechada exige crédito pós-fechamento');
+        }
+        if (normalizedReversalAmount > roundCurrency(Number(linkedCardPurchase.final_amount))) {
+          throw new Error('Estorno excede o saldo autoritativo do item da fatura');
+        }
+      }
+    }
+
     if (originalTx.type === TransactionType.TRANSFER) {
       if (!originalTx.destinationAccountId) {
         throw new Error('Transferência original sem conta de destino');
@@ -368,6 +385,53 @@ export class ReversalService {
           status: state.newStatus,
         });
       }
+    }
+
+    if (linkedCardPurchase && cardContext?.applyCreditCardStatementPurchaseReversal) {
+      const previousItem = {
+        id: linkedCardPurchase.item_id,
+        originalAmount: Number(linkedCardPurchase.original_amount),
+        adjustmentAmount: Number(linkedCardPurchase.adjustment_amount),
+        finalAmount: Number(linkedCardPurchase.final_amount),
+      };
+      const previousStatement = {
+        id: linkedCardPurchase.statement_id,
+        originalAmount: Number(linkedCardPurchase.statement_original_amount),
+        adjustmentAmount: Number(linkedCardPurchase.statement_adjustment_amount),
+        balanceAmount: Number(linkedCardPurchase.statement_balance_amount),
+        status: linkedCardPurchase.status,
+      };
+      const updated = await cardContext.applyCreditCardStatementPurchaseReversal(
+        linkedCardPurchase.item_id,
+        linkedCardPurchase.statement_id,
+        normalizedReversalAmount,
+        userId
+      );
+      if (!updated?.item || !updated?.statement) {
+        throw new Error('Falha ao sincronizar estorno de compra com a fatura');
+      }
+      await AuditLogger.logAction(
+        companyId,
+        'CreditCardStatementItem',
+        linkedCardPurchase.item_id,
+        isFullReversal ? AuditAction.REVERSE : AuditAction.PARTIAL_REVERSE,
+        userId,
+        userName,
+        previousItem,
+        updated.item,
+        txContext
+      );
+      await AuditLogger.logAction(
+        companyId,
+        'CreditCardStatement',
+        linkedCardPurchase.statement_id,
+        isFullReversal ? AuditAction.REVERSE : AuditAction.PARTIAL_REVERSE,
+        userId,
+        userName,
+        previousStatement,
+        updated.statement,
+        txContext
+      );
     }
 
     if (linkedCardPayment && txContext?.applyCreditCardStatementPaymentReversal) {
