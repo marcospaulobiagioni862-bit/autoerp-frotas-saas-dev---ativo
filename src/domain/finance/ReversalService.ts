@@ -244,6 +244,16 @@ export class ReversalService {
     // Lock the linked obligation before accounts. Settlement uses obligation -> account,
     // so keeping the same order avoids an account/obligation deadlock.
     const linked = await this.lockLinkedObligation(companyId, originalTx, txContext);
+    let linkedCardPayment: any | null = null;
+    if (originalTx.type === TransactionType.TRANSFER && txContext?.findCreditCardStatementPaymentForUpdate) {
+      linkedCardPayment = await txContext.findCreditCardStatementPaymentForUpdate(originalTx.id);
+      if (linkedCardPayment && !txContext.applyCreditCardStatementPaymentReversal) {
+        throw new Error('Autoridade transacional de estorno de pagamento de fatura indisponível');
+      }
+      if (linkedCardPayment && normalizedReversalAmount > roundCurrency(Number(linkedCardPayment.amount))) {
+        throw new Error('Estorno excede o pagamento autoritativo vinculado à fatura');
+      }
+    }
 
     if (originalTx.type === TransactionType.TRANSFER) {
       if (!originalTx.destinationAccountId) {
@@ -358,6 +368,31 @@ export class ReversalService {
           status: state.newStatus,
         });
       }
+    }
+
+    if (linkedCardPayment && txContext?.applyCreditCardStatementPaymentReversal) {
+      const previousStatement = {
+        id: linkedCardPayment.statement_id,
+        paidAmount: Number(linkedCardPayment.paid_amount),
+        balanceAmount: Number(linkedCardPayment.balance_amount),
+        status: linkedCardPayment.status,
+      };
+      const updatedStatement = await txContext.applyCreditCardStatementPaymentReversal(
+        linkedCardPayment.statement_id,
+        normalizedReversalAmount,
+        userId
+      );
+      await AuditLogger.logAction(
+        companyId,
+        'CreditCardStatement',
+        linkedCardPayment.statement_id,
+        isFullReversal ? AuditAction.REVERSE : AuditAction.PARTIAL_REVERSE,
+        userId,
+        userName,
+        previousStatement,
+        updatedStatement,
+        txContext
+      );
     }
 
     await AuditLogger.logAction(
