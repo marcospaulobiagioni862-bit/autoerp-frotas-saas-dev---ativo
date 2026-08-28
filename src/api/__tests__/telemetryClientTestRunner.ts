@@ -1,4 +1,5 @@
 import { runTelemetryFleetScorecardClientRegression } from './telemetryFleetScorecardClientTestRunner';
+import { runTelemetryFleetScorecardTriageRegression } from '../../components/fleet/__tests__/telemetryFleetScorecardTriageTestRunner';
 import { TrackerClient,parseTelemetryEventSummary,parseTelemetryHealthSummary,parseTelemetryObservabilitySummary,type TelemetryEventSummary,type TelemetryHealthSummary,type TelemetryObservabilitySummary } from '../trackerClient';
 import { createTelemetryEventCounts,filterTelemetryEvents,TELEMETRY_EVENT_FILTERS } from '../../components/fleet/telemetryEventTriage';
 
@@ -88,6 +89,7 @@ async function main():Promise<void>{
     assert(JSON.stringify(Object.keys(body).sort())===JSON.stringify(['decision','reason']),'review sent protected browser authority fields');
     assert(body.decision==='ACKNOWLEDGED'&&body.reason==='Divergência confirmada em revisão humana','review body changed human decision');
   }finally{globalThis.fetch=originalFetch;}
+  runTelemetryFleetScorecardTriageRegression();
   await runTelemetryFleetScorecardClientRegression();
   console.log('Telemetry client authority, human review and local triage tests PASS');
 }

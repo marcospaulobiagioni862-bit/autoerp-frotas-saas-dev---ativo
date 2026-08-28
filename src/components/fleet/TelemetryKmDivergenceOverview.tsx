@@ -8,6 +8,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import type { Tracker,Vehicle } from '../../types/entities';
 import { Badge,Button,Card } from '../ui';
 import { Activity,Gauge,Wrench,Route,Navigation } from 'lucide-react';
+import { TelemetryFleetScorecardTriagePanel } from './TelemetryFleetScorecardTriagePanel';
 
 type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;contractKm:TelemetryContractExcessKmSummary|null;movement:TelemetryMovementSummary|null;error:string;advisoryError:string;contractKmError:string;movementError:string};
 
@@ -78,7 +79,8 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
             <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Em movimento</span><strong className="mt-1 block text-sm">{scorecard.movementCounts.MOVING}</strong></div>
             <div className="rounded-lg border bg-white p-2 dark:bg-slate-900"><span className="text-slate-500">Parados</span><strong className="mt-1 block text-sm">{scorecard.movementCounts.STOPPED}</strong></div>
           </div>
-          {scorecard.attentionItems.length>0&&<div className="mt-3"><p className="mb-2 text-[11px] font-semibold">Prioridade consultiva</p><div className="grid gap-2 md:grid-cols-2">{scorecard.attentionItems.slice(0,6).map(item=><div key={item.trackerId} className="rounded-lg border bg-white p-2 text-[11px] dark:bg-slate-900"><div className="flex items-start justify-between gap-2"><div><strong>Rastreador {item.trackerId}</strong><p className="text-slate-500">Veículo {item.vehicleId}</p></div><Badge variant={item.healthState==='ATTENTION'||item.healthState==='OFFLINE'?'warning':'secondary'}>{healthLabel(item.healthState)}</Badge></div><p className="mt-1 text-slate-500">Movimento: <strong>{movementLabel(item.movementState)}</strong></p><p className="mt-1 text-slate-500">{item.reasons.map(attentionReasonLabel).join(' • ')}</p></div>)}</div></div>}
+          <TelemetryFleetScorecardTriagePanel scorecard={scorecard}/>
+          {scorecard.attentionItems.length>0&&<div className="mt-3"><p className="mb-2 text-[11px] font-semibold">Prioridade consultiva original</p><div className="grid gap-2 md:grid-cols-2">{scorecard.attentionItems.slice(0,6).map(item=><div key={item.trackerId} className="rounded-lg border bg-white p-2 text-[11px] dark:bg-slate-900"><div className="flex items-start justify-between gap-2"><div><strong>Rastreador {item.trackerId}</strong><p className="text-slate-500">Veículo {item.vehicleId}</p></div><Badge variant={item.healthState==='ATTENTION'||item.healthState==='OFFLINE'?'warning':'secondary'}>{healthLabel(item.healthState)}</Badge></div><p className="mt-1 text-slate-500">Movimento: <strong>{movementLabel(item.movementState)}</strong></p><p className="mt-1 text-slate-500">{item.reasons.map(attentionReasonLabel).join(' • ')}</p></div>)}</div></div>}
           <p className="mt-3 text-[11px] text-slate-500">Este scorecard apenas prioriza conferência visual. Não envia notificações, não altera disponibilidade, não cria geofence, bloqueio, multa, cobrança ou qualquer efeito financeiro/contratual.</p>
         </div>}
         {error&&<div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
