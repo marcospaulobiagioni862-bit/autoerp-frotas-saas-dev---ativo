@@ -1,3 +1,4 @@
+import './telemetryMovementAdvisoryTestRunner';
 import assert from 'node:assert/strict';
 import { deriveTelemetryLocationFreshness } from '../sanitizedTelemetryLocationAuthority';
 
