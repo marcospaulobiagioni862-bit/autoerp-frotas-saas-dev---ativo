@@ -28,6 +28,14 @@ const statement = {
   overdue_days: 3,
 };
 
+const detail = {
+  statement,
+  items: [{ id: 'item-1', financial_transaction_id: 'tx-1', payable_id: null, origin_type: 'MAINTENANCE', origin_id: 'maint-1', original_amount: '1000.00', adjustment_amount: '-50.00', final_amount: '950.00' }],
+  payments: [{ id: 'payment-1', financial_transaction_id: 'tx-pay-1', amount: '400.00', created_at: '2026-08-28T10:00:00.000Z' }],
+  adjustments: [{ id: 'adjustment-1', interest_amount: '20.00', fine_amount: '10.00', discount_amount: '5.00', reason: 'Atraso', created_at: '2026-08-28T11:00:00.000Z' }],
+  credits: [{ id: 'credit-1', statement_item_id: 'item-1', financial_transaction_id: 'tx-1', amount: '50.00', reason: 'Crédito lojista', created_at: '2026-08-28T12:00:00.000Z' }],
+};
+
 export async function runCreditCardStatementClientTests(): Promise<void> {
   const originalFetch = globalThis.fetch;
   let calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -61,6 +69,24 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     assert.equal(statements[0].fineAmount, 10);
     assert.equal(statements[0].discountAmount, 5);
 
+    responder = async () => new Response(JSON.stringify(detail), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    calls = [];
+    const loadedDetail = await CreditCardStatementClient.getStatementDetail('statement/1');
+    assert.equal(calls[0].url, '/api/finance/credit-cards/statements/statement%2F1/detail');
+    assert.equal(calls[0].init?.credentials, 'include');
+    assert.doesNotMatch(calls[0].url, /companyId|userId|userName/);
+    assert.equal(loadedDetail.statement.balanceAmount, 575);
+    assert.equal(loadedDetail.items[0].originType, 'MAINTENANCE');
+    assert.equal(loadedDetail.items[0].finalAmount, 950);
+    assert.equal(loadedDetail.payments[0].amount, 400);
+    assert.equal(loadedDetail.adjustments[0].interestAmount, 20);
+    assert.equal(loadedDetail.credits[0].amount, 50);
+
+    responder = async () => new Response(JSON.stringify({ ...detail, payments: 'invalid' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    let malformedDetailRejected = false;
+    try { await CreditCardStatementClient.getStatementDetail('statement-1'); } catch { malformedDetailRejected = true; }
+    assert.equal(malformedDetailRejected, true);
+
     responder = async () => new Response(JSON.stringify({ items: [{ ...statement, is_overdue: 'true' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     let malformedBooleanRejected = false;
     try { await CreditCardStatementClient.listStatements(); } catch { malformedBooleanRejected = true; }
@@ -76,7 +102,7 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     try { await CreditCardStatementClient.listProfiles(); } catch (error) { forbiddenRejected = error instanceof Error && error.message === 'Forbidden'; }
     assert.equal(forbiddenRejected, true);
 
-    console.log('CreditCardStatementClient 5/5 PASS');
+    console.log('CreditCardStatementClient 7/7 PASS');
   } finally {
     globalThis.fetch = originalFetch;
   }
