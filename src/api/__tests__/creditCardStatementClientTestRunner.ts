@@ -92,6 +92,21 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     assert.deepEqual(calls[0].init?.headers, { 'Content-Type': 'application/json' });
     assert.doesNotMatch(String(calls[0].init?.body), /companyId|userId|userName|amount|balance|status/);
 
+    responder = async () => new Response(JSON.stringify({ item: { id: 'payment-2' } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    calls = [];
+    await CreditCardStatementClient.payStatement('statement/1', 'transfer/1', 'retry-key-1');
+    assert.equal(calls[0].url, '/api/finance/credit-cards/statements/statement%2F1/payments');
+    assert.equal(calls[0].init?.method, 'POST');
+    assert.equal(calls[0].init?.credentials, 'include');
+    assert.deepEqual(calls[0].init?.headers, { 'Content-Type': 'application/json' });
+    const paymentBody = JSON.parse(String(calls[0].init?.body));
+    assert.deepEqual(paymentBody, { financialTransactionId: 'transfer/1', idempotencyKey: 'retry-key-1' });
+    assert.doesNotMatch(String(calls[0].init?.body), /companyId|userId|userName|amount|balance|status/);
+
+    let missingCommandRejected = false;
+    try { await CreditCardStatementClient.payStatement('statement-1', '', 'retry-key-1'); } catch { missingCommandRejected = true; }
+    assert.equal(missingCommandRejected, true);
+
     responder = async () => new Response(JSON.stringify({ ...detail, payments: 'invalid' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     let malformedDetailRejected = false;
     try { await CreditCardStatementClient.getStatementDetail('statement-1'); } catch { malformedDetailRejected = true; }
@@ -112,7 +127,7 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     try { await CreditCardStatementClient.listProfiles(); } catch (error) { forbiddenRejected = error instanceof Error && error.message === 'Forbidden'; }
     assert.equal(forbiddenRejected, true);
 
-    console.log('CreditCardStatementClient 8/8 PASS');
+    console.log('CreditCardStatementClient 10/10 PASS');
   } finally {
     globalThis.fetch = originalFetch;
   }
