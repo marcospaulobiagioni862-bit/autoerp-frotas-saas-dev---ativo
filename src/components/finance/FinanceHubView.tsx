@@ -11,11 +11,12 @@ const TransactionsView=lazy(()=>import('./TransactionsView').then(module=>({defa
 const CashFlowView=lazy(()=>import('./CashFlowView').then(module=>({default:module.CashFlowView})));
 const DelinquencyView=lazy(()=>import('./DelinquencyView').then(module=>({default:module.DelinquencyView})));
 const BankReconciliationView=lazy(()=>import('./BankReconciliationView').then(module=>({default:module.BankReconciliationView})));
+const CreditCardStatementsView=lazy(()=>import('./CreditCardStatementsView').then(module=>({default:module.CreditCardStatementsView})));
 const FinancialPeriodsView=lazy(()=>import('./FinancialPeriodsView').then(module=>({default:module.FinancialPeriodsView})));
 const DREReportView=lazy(()=>import('./DREReportView').then(module=>({default:module.DREReportView})));
 const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(module=>({default:module.FinancialMasterDataView})));
 
-type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'periods' | 'dre' | 'settings';
+type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'cards' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
   initialSubTab?: FinanceSubTab;
@@ -42,6 +43,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
     { id: 'delinquency' as const, label: 'Inadimplência', icon: ShieldAlert },
     { id: 'reconciliation' as const, label: 'Conciliação Bancária', icon: Landmark },
+    { id: 'cards' as const, label: 'Cartões / Faturas', icon: CreditCard },
     { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
     { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
     { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
@@ -97,6 +99,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         {activeSubTab === 'cashflow' && <CashFlowView />}
         {activeSubTab === 'delinquency' && <DelinquencyView />}
         {activeSubTab === 'reconciliation' && <BankReconciliationView />}
+        {activeSubTab === 'cards' && <CreditCardStatementsView />}
         {activeSubTab === 'periods' && <FinancialPeriodsView />}
         {activeSubTab === 'dre' && <DREReportView />}
         {activeSubTab === 'settings' && <FinancialMasterDataView />}
