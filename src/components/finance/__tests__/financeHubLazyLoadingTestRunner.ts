@@ -46,6 +46,10 @@ assert.match(cards, /CreditCardStatementClient\.listProfiles\(\)/, 'card UI must
 assert.match(cards, /CreditCardStatementClient\.listStatements\(\)/, 'card UI must read statements from server authority');
 assert.match(cards, /Visão somente leitura/, 'card UI must make read-only semantics explicit');
 assert.match(cards, /Status, saldo e atraso são exibidos exatamente como retornados/, 'card UI must preserve server-derived state semantics');
+assert.match(cards, /CreditCardStatementClient\.getStatementDetail\(statementId\)/, 'statement detail must load only through an explicit user action');
+assert.match(cards, /Carregado sob demanda; valores exibidos sem recomposição local/, 'statement detail must preserve read-only server authority semantics');
+assert.match(cards, /detail\.items\.length === 0/, 'statement detail must expose an explicit empty item state');
+assert.match(cards, /detailMessage && <div role="alert"/, 'statement detail failures must remain explicit without fallback data');
 assert.doesNotMatch(cards, /\.createProfile|\.createStatement|\.closeStatement|\.linkPayment|\.applyAdjustment|fetch\(|localRepositories|localStorage|indexedDB/);
 assert.doesNotMatch(cards, /(?:balanceAmount|paidAmount|interestAmount|fineAmount|discountAmount)\s*(?:\+|-|\*|\/)/, 'card UI must not recompute financial authority');
 
