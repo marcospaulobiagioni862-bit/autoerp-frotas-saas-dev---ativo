@@ -88,14 +88,24 @@ function nullableText(value: unknown, field: string): string | null {
   return text(value, field);
 }
 
-function money(value: unknown, field: string): number {
+function numeric(value: unknown, field: string): number {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new Error(`Invalid credit-card numeric field: ${field}`);
+  }
+  if (typeof value === 'string' && !value.trim()) {
+    throw new Error(`Invalid credit-card numeric field: ${field}`);
+  }
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) throw new Error(`Invalid credit-card numeric field: ${field}`);
   return parsed;
 }
 
+function money(value: unknown, field: string): number {
+  return numeric(value, field);
+}
+
 function integer(value: unknown, field: string): number {
-  const parsed = Number(value);
+  const parsed = numeric(value, field);
   if (!Number.isInteger(parsed)) throw new Error(`Invalid credit-card integer field: ${field}`);
   return parsed;
 }
