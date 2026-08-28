@@ -1,4 +1,5 @@
 import { MaintenancePreventiveClient } from '../maintenancePreventiveClient';
+import { runTrafficTicketClientRegression } from './trafficTicketClientTestRunner';
 
 const basePlan={id:'p1',companyId:'c1',vehicleId:'v1',name:'Óleo',maintenanceType:'OIL',intervalKm:10000,intervalDays:180,lastExecutionKm:1000,lastExecutionDate:'2026-08-01',nextDueKm:11000,nextDueDate:'2027-01-28',priority:'MEDIUM',status:'ACTIVE',cycleSequence:0,createdBy:'u1',createdAt:'2026-08-01T00:00:00.000Z',updatedAt:'2026-08-01T00:00:00.000Z',projectedStatus:'OK',projectedStage:'NONE',dueReference:'11000:2027-01-28',remainingKm:10000,remainingDays:153};
 const baseOil={id:'o1',companyId:'c1',vehicleId:'v1',km:1000,date:'2026-08-28',oilType:'5W30',oilBrand:'Marca',quantity:4,filterChanged:false,nextKm:11000,createdAt:'2026-08-28T00:00:00.000Z',updatedAt:'2026-08-28T00:00:00.000Z'};
@@ -28,3 +29,5 @@ try{
 }finally{
   globalThis.fetch=originalFetch;
 }
+
+await runTrafficTicketClientRegression();
