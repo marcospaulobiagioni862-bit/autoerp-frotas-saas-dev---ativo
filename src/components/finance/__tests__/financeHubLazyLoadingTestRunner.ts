@@ -44,7 +44,6 @@ assert.doesNotMatch(reconciliation, /updateBalance|createTransaction|localReposi
 
 assert.match(cards, /CreditCardStatementClient\.listProfiles\(\)/, 'card UI must read profiles from server authority');
 assert.match(cards, /CreditCardStatementClient\.listStatements\(\)/, 'card UI must read statements from server authority');
-assert.match(cards, /Visão somente leitura/, 'card UI must make read-only semantics explicit');
 assert.match(cards, /Status, saldo e atraso são exibidos exatamente como retornados/, 'card UI must preserve server-derived state semantics');
 assert.match(cards, /CreditCardStatementClient\.getStatementDetail\(statementId\)/, 'statement detail must load only through an explicit user action');
 assert.match(cards, /Carregado sob demanda; valores exibidos sem recomposição local/, 'statement detail must preserve read-only server authority semantics');
@@ -59,7 +58,11 @@ assert.match(cards, /dueFilter === 'CURRENT' && statement\.isOverdue/, 'current 
 assert.match(cards, /Filtros atuam somente sobre o read-model já retornado pelo servidor/, 'filter semantics must remain presentation-only');
 assert.match(cards, /Nenhuma fatura encontrada para o filtro atual/, 'filtered empty state must remain explicit');
 assert.doesNotMatch(cards, /new Date\(statement\.dueDate\)|Date\.now\(\)/, 'card UI must not derive overdue state from client clock');
-assert.doesNotMatch(cards, /\.createProfile|\.createStatement|\.closeStatement|\.linkPayment|\.applyAdjustment|fetch\(|localRepositories|localStorage|indexedDB/);
+assert.match(cards, /CreditCardStatementClient\.closeStatement\(statement\.id\)/, 'statement close must call only the authoritative client');
+assert.match(cards, /statement\.status === 'OPEN'/, 'close action must be exposed only for open statements');
+assert.match(cards, /window\.confirm/, 'statement close must require explicit operator confirmation');
+assert.match(cards, /await load\(\)/, 'statement close must reload the server read-model after success');
+assert.doesNotMatch(cards, /\.createProfile|\.createStatement|\.linkPayment|\.applyAdjustment|fetch\(|localRepositories|localStorage|indexedDB/);
 assert.doesNotMatch(cards, /(?:balanceAmount|paidAmount|interestAmount|fineAmount|discountAmount)\s*(?:\+|-|\*|\/)/, 'card UI must not recompute financial authority');
 
 await runBankReconciliationClientTests();

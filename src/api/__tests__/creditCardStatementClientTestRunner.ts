@@ -89,8 +89,8 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     assert.equal(calls[0].init?.method, 'POST');
     assert.equal(calls[0].init?.credentials, 'include');
     assert.equal(calls[0].init?.body, '{}');
-    assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {});
-    assert.doesNotMatch(`${calls[0].url}${String(calls[0].init?.body)}`, /companyId|userId|userName|balance|status/);
+    assert.deepEqual(calls[0].init?.headers, { 'Content-Type': 'application/json' });
+    assert.doesNotMatch(String(calls[0].init?.body), /companyId|userId|userName|amount|balance|status/);
 
     responder = async () => new Response(JSON.stringify({ ...detail, payments: 'invalid' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     let malformedDetailRejected = false;

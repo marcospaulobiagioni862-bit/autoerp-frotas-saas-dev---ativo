@@ -240,6 +240,17 @@ export class CreditCardStatementClient {
     return payload.items.map(normalizeStatement);
   }
 
+  static async closeStatement(statementId: string): Promise<void> {
+    const cleanStatementId = statementId.trim();
+    if (!cleanStatementId) throw new Error('Statement id is required');
+    const payload = record(await requestJson(`/api/finance/credit-cards/statements/${encodeURIComponent(cleanStatementId)}/close`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }));
+    record(payload.item);
+  }
+
   static async getStatementDetail(statementId: string): Promise<CreditCardStatementDetail> {
     const cleanStatementId = statementId.trim();
     if (!cleanStatementId) throw new Error('Statement id is required');
@@ -251,16 +262,5 @@ export class CreditCardStatementClient {
       adjustments: list(payload.adjustments, 'adjustments').map(normalizeAdjustment),
       credits: list(payload.credits, 'credits').map(normalizeCredit),
     };
-  }
-
-  static async closeStatement(statementId: string): Promise<void> {
-    const cleanStatementId = statementId.trim();
-    if (!cleanStatementId) throw new Error('Statement id is required');
-    const payload = record(await requestJson(`/api/finance/credit-cards/statements/${encodeURIComponent(cleanStatementId)}/close`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}',
-    }));
-    record(payload.item);
   }
 }
