@@ -59,7 +59,7 @@ async function run(){
   assert(Number(state.paid_amount)===0&&Number(state.balance_amount)===300&&state.status==='CLOSED','full payment reversal must restore CLOSED statement');
   const ledger=await one(sql`SELECT count(*)::int count FROM financial_transactions WHERE company_id=${company}`);
   assert(Number(ledger.count)===3,'two reversals must create only two REVERSAL rows and no EXPENSE');
-  const audit=await one(sql`SELECT count(*)::int count FROM audit_logs WHERE company_id=${company} AND entity_name='CreditCardStatement' AND entity_id=${statement}`);
+  const audit=await one(sql`SELECT count(*)::int count FROM audit_logs WHERE company_id=${company} AND entity_type='CreditCardStatement' AND entity_id=${statement}`);
   assert(Number(audit.count)===2,'statement reversal effects must be audited once per effective reversal');
   console.log('FINANCE-CARD-1E3 payment reversal synchronization: PASS');
 }
