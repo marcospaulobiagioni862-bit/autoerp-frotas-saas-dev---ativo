@@ -82,6 +82,16 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     assert.equal(loadedDetail.adjustments[0].interestAmount, 20);
     assert.equal(loadedDetail.credits[0].amount, 50);
 
+    responder = async () => new Response(JSON.stringify({ item: { id: 'statement-1', status: 'CLOSED' } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    calls = [];
+    await CreditCardStatementClient.closeStatement('statement/1');
+    assert.equal(calls[0].url, '/api/finance/credit-cards/statements/statement%2F1/close');
+    assert.equal(calls[0].init?.method, 'POST');
+    assert.equal(calls[0].init?.credentials, 'include');
+    assert.equal(calls[0].init?.body, '{}');
+    assert.deepEqual(JSON.parse(String(calls[0].init?.body)), {});
+    assert.doesNotMatch(`${calls[0].url}${String(calls[0].init?.body)}`, /companyId|userId|userName|balance|status/);
+
     responder = async () => new Response(JSON.stringify({ ...detail, payments: 'invalid' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     let malformedDetailRejected = false;
     try { await CreditCardStatementClient.getStatementDetail('statement-1'); } catch { malformedDetailRejected = true; }
@@ -102,7 +112,7 @@ export async function runCreditCardStatementClientTests(): Promise<void> {
     try { await CreditCardStatementClient.listProfiles(); } catch (error) { forbiddenRejected = error instanceof Error && error.message === 'Forbidden'; }
     assert.equal(forbiddenRejected, true);
 
-    console.log('CreditCardStatementClient 7/7 PASS');
+    console.log('CreditCardStatementClient 8/8 PASS');
   } finally {
     globalThis.fetch = originalFetch;
   }
