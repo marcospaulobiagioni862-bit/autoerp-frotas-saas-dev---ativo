@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { UnitOfWork } from '../../db/uow';
+import { Client } from 'pg';
 
 const companyA = 'finance-card-b2-company-a';
 const companyB = 'finance-card-b2-company-b';
@@ -9,6 +10,7 @@ const bankAccountA = 'finance-card-b2-bank-a';
 const cardAccountB = 'finance-card-b2-card-b';
 const methodA = 'finance-card-b2-method-a';
 const rlsTestRole = 'autoerp_card_b2_rls_test';
+const rlsTestPassword = 'autoerp-card-b2-rls-password';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -16,11 +18,6 @@ function assert(condition: unknown, message: string): asserts condition {
 
 async function rows(query: any): Promise<any[]> {
   const result: any = await db.execute(query);
-  return result.rows || [];
-}
-
-async function txRows(tx: any, query: any): Promise<any[]> {
-  const result: any = await tx.execute(query);
   return result.rows || [];
 }
 
@@ -34,33 +31,49 @@ async function expectFailure(action: () => Promise<unknown>, message: string): P
   assert(failed, message);
 }
 
-async function ensureRlsTestRole(): Promise<void> {
-  await db.execute(sql.raw(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${rlsTestRole}') THEN
-        CREATE ROLE ${rlsTestRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
-      END IF;
-    END
-    $$
-  `));
-  await db.execute(sql.raw(`ALTER ROLE ${rlsTestRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`));
+async function testRlsNonSuperuser(): Promise<void> {
+  await db.execute(sql.raw(`DROP ROLE IF EXISTS ${rlsTestRole}`));
+  await db.execute(sql.raw(`CREATE ROLE ${rlsTestRole} LOGIN PASSWORD '${rlsTestPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`));
   await db.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${rlsTestRole}`));
-  await db.execute(sql.raw(`GRANT SELECT ON credit_card_profiles TO ${rlsTestRole}`));
+  await db.execute(sql.raw(`GRANT SELECT, INSERT ON credit_card_profiles TO ${rlsTestRole}`));
 
-  const roleRows = await rows(sql`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=${rlsTestRole}`);
-  assert(
-    roleRows.length === 1 && roleRows[0].rolsuper === false && roleRows[0].rolbypassrls === false,
-    'RLS regression role must not be superuser or BYPASSRLS'
-  );
-}
-
-async function rlsVisibleProfiles(tx: any): Promise<any[]> {
-  await tx.execute(sql.raw(`SET LOCAL ROLE ${rlsTestRole}`));
+  const url = new URL(process.env.DATABASE_URL || 'postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test');
+  const client = new Client({
+    host: url.hostname,
+    port: Number(url.port || 5432),
+    database: url.pathname.slice(1),
+    user: rlsTestRole,
+    password: rlsTestPassword,
+  });
+  await client.connect();
   try {
-    return await txRows(tx, sql`SELECT id FROM credit_card_profiles ORDER BY id`);
+    await client.query(`SELECT set_config('app.current_tenant',$1,false)`, [companyA]);
+    const tenantA = await client.query('SELECT id, company_id FROM credit_card_profiles ORDER BY id');
+    assert(tenantA.rows.length === 1 && tenantA.rows[0].id === 'card-b2-profile-a',
+      'FORCE RLS must expose only tenant A credit-card profile');
+
+    await client.query(`SELECT set_config('app.current_tenant',$1,false)`, [companyB]);
+    const tenantB = await client.query('SELECT id, company_id FROM credit_card_profiles ORDER BY id');
+    assert(tenantB.rows.length === 1 && tenantB.rows[0].id === 'card-b2-profile-b',
+      'FORCE RLS must expose only tenant B credit-card profile');
+
+    let crossTenantRejected = false;
+    try {
+      await client.query(
+        `INSERT INTO credit_card_profiles(
+          id,company_id,financial_account_id,credit_limit,closing_day,due_day,active,version,created_by_id,updated_by_id
+        ) VALUES ($1,$2,$3,1000,10,20,true,1,$4,$4)`,
+        ['card-b2-profile-cross', companyA, cardAccountA, 'card-b2-rls-user'],
+      );
+    } catch (error: any) {
+      crossTenantRejected = String(error?.code || '') === '42501'
+        || String(error?.message || '').toLowerCase().includes('row-level security');
+    }
+    assert(crossTenantRejected, 'FORCE RLS must reject cross-tenant card profile insert');
   } finally {
-    await tx.execute(sql.raw('RESET ROLE'));
+    await client.end();
+    await db.execute(sql.raw(`DROP OWNED BY ${rlsTestRole}`));
+    await db.execute(sql.raw(`DROP ROLE IF EXISTS ${rlsTestRole}`));
   }
 }
 
@@ -97,7 +110,6 @@ async function seed(): Promise<void> {
 
 async function run(): Promise<void> {
   await seed();
-  await ensureRlsTestRole();
 
   await UnitOfWork.run(companyA, async (txContext: any) => {
     const tx = txContext.getRawTransaction();
@@ -159,10 +171,6 @@ async function run(): Promise<void> {
     const paymentTransaction = (await rows(sql`SELECT type,destination_account_id FROM financial_transactions WHERE id='card-b2-payment'`))[0];
     assert(paymentTransaction.type === 'TRANSFER' && paymentTransaction.destination_account_id === cardAccountA,
       'statement payment link must preserve authoritative TRANSFER semantics');
-
-    const visibleProfiles = await rlsVisibleProfiles(tx);
-    assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-a',
-      'tenant A must only see its own credit-card profile');
   });
 
   await UnitOfWork.run(companyB, async (txContext: any) => {
@@ -170,10 +178,9 @@ async function run(): Promise<void> {
     await db.execute(sql`INSERT INTO credit_card_profiles(
       id,company_id,financial_account_id,credit_limit,closing_day,due_day,active,version,created_by_id,updated_by_id
     ) VALUES ('card-b2-profile-b',${companyB},${cardAccountB},3000,15,22,true,1,'card-b2-user-b','card-b2-user-b')`);
-    const visibleProfiles = await rlsVisibleProfiles(tx);
-    assert(visibleProfiles.length === 1 && visibleProfiles[0].id === 'card-b2-profile-b',
-      'FORCE RLS must isolate tenant B from tenant A card profiles');
   });
+
+  await testRlsNonSuperuser();
 
   console.log('FINANCE-CARD-1B2 credit-card persistence PostgreSQL integration: PASS');
 }
