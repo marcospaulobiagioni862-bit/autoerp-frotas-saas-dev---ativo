@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CreditCard, Eye, RefreshCw, X } from 'lucide-react';
+import { CreditCard, Eye, Lock, RefreshCw, X } from 'lucide-react';
 import { CreditCardStatementClient, type CreditCardProfileSummary, type CreditCardStatementDetail, type CreditCardStatementStatus, type CreditCardStatementSummary } from '../../api/creditCardStatementClient';
 import { Badge, Button, Card, Skeleton } from '../ui';
 
@@ -33,6 +33,7 @@ export const CreditCardStatementsView: React.FC = () => {
   const [detail, setDetail] = useState<CreditCardStatementDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState<string | null>(null);
+  const [closingStatementId, setClosingStatementId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +70,21 @@ export const CreditCardStatementsView: React.FC = () => {
       setDetailMessage(error instanceof Error ? error.message : 'Não foi possível carregar o detalhe autoritativo da fatura.');
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const closeStatement = async (statement: CreditCardStatementSummary) => {
+    if (!window.confirm(`Fechar a fatura do ciclo ${statement.cycleRef}? Esta ação será executada pela autoridade financeira do servidor.`)) return;
+    setClosingStatementId(statement.id);
+    setMessage(null);
+    try {
+      await CreditCardStatementClient.closeStatement(statement.id);
+      await load();
+      if (detail?.statement.id === statement.id) await loadDetail(statement.id);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Não foi possível fechar a fatura pela autoridade financeira.');
+    } finally {
+      setClosingStatementId(null);
     }
   };
 
@@ -151,7 +167,7 @@ export const CreditCardStatementsView: React.FC = () => {
 
       <Card padding="none">
         {loading ? <div className="space-y-3 p-6"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div> : visibleStatements.length === 0 ? <div className="p-6 text-center text-sm text-slate-500">Nenhuma fatura encontrada para o filtro atual.</div> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes autoritativos</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th><th className="p-3 text-right">Detalhe</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-slate-200 bg-slate-50 uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3">Ciclo / datas</th><th className="p-3">Status</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Ajustes autoritativos</th><th className="p-3 text-right">Pago</th><th className="p-3 text-right">Saldo</th><th className="p-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visibleStatements.map((statement) => {
               const profile = profileById.get(statement.creditCardProfileId);
               return <tr key={statement.id}>
@@ -161,7 +177,7 @@ export const CreditCardStatementsView: React.FC = () => {
                 <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
                 <td className="p-3 text-right font-mono font-bold tabular-nums">{currency(statement.balanceAmount)}</td>
-                <td className="p-3 text-right"><Button size="sm" variant="outline" onClick={() => void loadDetail(statement.id)} icon={<Eye className="h-4 w-4" />}>Ver detalhe</Button></td>
+                <td className="p-3 text-right"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => void loadDetail(statement.id)} icon={<Eye className="h-4 w-4" />}>Ver detalhe</Button>{statement.status === 'OPEN' && <Button size="sm" variant="primary" disabled={closingStatementId !== null} onClick={() => void closeStatement(statement)} icon={<Lock className="h-4 w-4" />}>{closingStatementId === statement.id ? 'Fechando...' : 'Fechar fatura'}</Button>}</div></td>
               </tr>;
             })}
           </tbody></table></div>
@@ -190,7 +206,7 @@ export const CreditCardStatementsView: React.FC = () => {
         </Card>
       )}
 
-      <p className="text-[11px] text-slate-500">Esta tela não cria, fecha, paga, ajusta nem credita faturas. Qualquer ação financeira permanece fora desta wave e exige autoridade server-side específica.</p>
+      <p className="text-[11px] text-slate-500">Esta tela fecha faturas abertas somente pelo endpoint autoritativo e recarrega o read-model após sucesso. Pagamentos, ajustes e créditos permanecem fora desta wave.</p>
     </div>
   );
 };
