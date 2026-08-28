@@ -1,17 +1,20 @@
 import React,{useEffect,useState}from'react';
 import { TrackerClient,type TelemetryKmDivergenceSummary } from '../../api/trackerClient';
 import { TelemetryMaintenanceAdvisoryClient,type TelemetryMaintenanceAdvisorySummary,type TelemetryMaintenanceAdvisoryState } from '../../api/telemetryMaintenanceAdvisoryClient';
+import { TelemetryContractExcessKmClient,type TelemetryContractExcessKmState,type TelemetryContractExcessKmSummary } from '../../api/telemetryContractExcessKmClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Tracker,Vehicle } from '../../types/entities';
 import { Badge,Button,Card } from '../ui';
-import { Gauge,Wrench } from 'lucide-react';
+import { Gauge,Wrench,Route } from 'lucide-react';
 
-type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;error:string;advisoryError:string};
+type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;contractKm:TelemetryContractExcessKmSummary|null;error:string;advisoryError:string;contractKmError:string};
 
 const directionLabel=(direction:TelemetryKmDivergenceSummary['direction']):string=>direction==='ALIGNED'?'Alinhado':direction==='TELEMETRY_ABOVE'?'Telemetria acima':direction==='TELEMETRY_BELOW'?'Telemetria abaixo':'Sem leitura disponível';
 const directionVariant=(direction:TelemetryKmDivergenceSummary['direction']):'success'|'warning'|'secondary'=>direction==='ALIGNED'?'success':direction==='UNAVAILABLE'?'secondary':'warning';
 const advisoryLabel=(state:TelemetryMaintenanceAdvisoryState):string=>state==='DUE'?'Vencida por KM':state==='DUE_SOON'?'Próxima por KM':state==='NOT_DUE'?'Dentro do intervalo':'Sem base telemétrica';
 const advisoryVariant=(state:TelemetryMaintenanceAdvisoryState):'success'|'warning'|'danger'|'secondary'=>state==='DUE'?'danger':state==='DUE_SOON'?'warning':state==='NOT_DUE'?'success':'secondary';
+const contractKmLabel=(state:TelemetryContractExcessKmState):string=>state==='EXCEEDED'?'Limite excedido':state==='NEAR_LIMIT'?'Próximo do limite':state==='WITHIN_LIMIT'?'Dentro da franquia':'Base indisponível';
+const contractKmVariant=(state:TelemetryContractExcessKmState):'success'|'warning'|'danger'|'secondary'=>state==='EXCEEDED'?'danger':state==='NEAR_LIMIT'?'warning':state==='WITHIN_LIMIT'?'success':'secondary';
 const km=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(value)} km`;
 
 export const TelemetryKmDivergenceOverview:React.FC=()=>{
@@ -24,14 +27,16 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
       const vehicleById=new Map(vehicles.filter(item=>!item.isArchived).map(item=>[item.id,item]));
       const resolved=await Promise.all(active.map(async tracker=>{
         const vehicle=vehicleById.get(tracker.vehicleId);
-        const[divergenceResult,advisoryResult]=await Promise.allSettled([TrackerClient.getTelemetryKmDivergence(tracker.id),TelemetryMaintenanceAdvisoryClient.get(tracker.id)]);
+        const[divergenceResult,advisoryResult,contractKmResult]=await Promise.allSettled([TrackerClient.getTelemetryKmDivergence(tracker.id),TelemetryMaintenanceAdvisoryClient.get(tracker.id),TelemetryContractExcessKmClient.get(tracker.id)]);
         return{
           tracker,
           vehicle,
           summary:divergenceResult.status==='fulfilled'?divergenceResult.value:null,
           advisory:advisoryResult.status==='fulfilled'?advisoryResult.value:null,
+          contractKm:contractKmResult.status==='fulfilled'?contractKmResult.value:null,
           error:divergenceResult.status==='rejected'?(divergenceResult.reason instanceof Error?divergenceResult.reason.message:'Falha ao consultar divergência de KM.'):'',
           advisoryError:advisoryResult.status==='rejected'?(advisoryResult.reason instanceof Error?advisoryResult.reason.message:'Falha ao consultar manutenção preventiva por telemetria.'):'',
+          contractKmError:contractKmResult.status==='rejected'?(contractKmResult.reason instanceof Error?contractKmResult.reason.message:'Falha ao consultar KM contratual telemétrico.'):'',
         };
       }));
       setRows(resolved);
@@ -44,7 +49,7 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
     <Card padding="md">
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria de KM e manutenção — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Compara o KM oficial com o último odômetro aceito e mostra alertas preventivos calculados pelo servidor. Nada nesta visão altera KM, abre OS ou gera cobrança.</p></div>
+          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria de KM, manutenção e contrato — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Compara o KM oficial com o último odômetro aceito e mostra alertas preventivos e contratuais calculados no servidor. Nada nesta visão altera KM, abre OS ou gera cobrança.</p></div>
           <Button size="sm" variant="outline" disabled={loading} onClick={()=>void load()}>{loading?'Consultando...':'Atualizar telemetria'}</Button>
         </div>
         {error&&<div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
@@ -67,6 +72,17 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
               <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]"><span>Próximo KM: <strong>{km(plan.nextDueKm)}</strong></span><span>Saldo telemétrico: <strong>{km(plan.telemetryKmRemaining)}</strong></span><span>KM oficial: <strong>{km(plan.authoritativeVehicleKm)}</strong></span><span>Odômetro aceito: <strong>{km(plan.telemetryOdometerKm)}</strong></span></div>
             </div>)}</div>}
             {row.advisory&&<p className="mt-2 text-[11px] text-slate-500">Limiar de proximidade definido pelo servidor: <strong>{km(row.advisory.dueSoonThresholdKm)}</strong>. O alerta é apenas consultivo.</p>}
+          </div>
+          <div className="mt-3 border-t pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2"><div className="flex items-center gap-2 font-semibold"><Route className="h-3.5 w-3.5"/>KM excedente contratual — conferência telemétrica</div>{row.contractKm&&<Badge variant={contractKmVariant(row.contractKm.state)}>{contractKmLabel(row.contractKm.state)}</Badge>}</div>
+            {row.contractKmError&&<p className="rounded-lg bg-rose-50 p-2 text-rose-700">Conferência contratual indisponível: {row.contractKmError}</p>}
+            {!row.contractKmError&&row.contractKm&&<div className="grid grid-cols-2 gap-1.5 rounded-lg border p-2.5 text-[11px]">
+              <span>Contrato: <strong>{row.contractKm.contractNumber||'Indisponível'}</strong></span><span>Franquia: <strong>{km(row.contractKm.franchiseKm)}</strong></span>
+              <span>KM referência: <strong>{km(row.contractKm.referenceKm)}</strong></span><span>Odômetro aceito: <strong>{km(row.contractKm.telemetryOdometerKm)}</strong></span>
+              <span>Percorrido estimado: <strong>{km(row.contractKm.telemetryTravelledKm)}</strong></span><span>Saldo estimado: <strong>{km(row.contractKm.telemetryRemainingKm)}</strong></span>
+              <span>Excedente estimado: <strong>{km(row.contractKm.telemetryExcessKm)}</strong></span><span>Limiar de alerta: <strong>{km(row.contractKm.nearLimitThresholdKm)}</strong></span>
+              <p className="col-span-2 mt-1 text-slate-500">Estado: <strong>{contractKmLabel(row.contractKm.state)}</strong>. Esta apuração é somente consultiva: não altera contrato, KM oficial, Contas a Receber, recebimentos nem fluxo de caixa.</p>
+            </div>}
           </div>
         </div>)}</div>}
       </div>
