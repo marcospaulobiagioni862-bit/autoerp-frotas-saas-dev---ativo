@@ -13,7 +13,7 @@ function asRecord(value: unknown): JsonRecord {
   return value as JsonRecord;
 }
 
-const STORAGE_PROVIDERS = new Set(['LEGACY_BROWSER', 'SERVER_FS']);
+const STORAGE_PROVIDERS = new Set(['LEGACY_BROWSER', 'SERVER_FS', 'R2']);
 const CONTENT_STATES = new Set(['LEGACY_BROWSER', 'AVAILABLE', 'MISSING']);
 
 function validateAttachment(value: unknown): FileAttachment {
