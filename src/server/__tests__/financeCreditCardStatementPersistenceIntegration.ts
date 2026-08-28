@@ -91,7 +91,9 @@ async function seed(): Promise<void> {
     transaction_date,competence_date,description,is_reversed,created_by_id,created_at,updated_at
   ) VALUES
     ('card-b2-purchase',${companyA},${cardAccountA},NULL,'EXPENSE',300,${methodA},'2026-08-10','2026-08-10','Card purchase',false,'card-b2-user',NOW(),NOW()),
-    ('card-b2-payment',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',300,${methodA},'2026-08-25','2026-08-25','Statement payment',false,'card-b2-user',NOW(),NOW()),
+    ('card-b2-payment-200',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',200,${methodA},'2026-08-25','2026-08-25','Partial statement payment',false,'card-b2-user',NOW(),NOW()),
+    ('card-b2-payment-100',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',100,${methodA},'2026-08-26','2026-08-26','Final statement payment',false,'card-b2-user',NOW(),NOW()),
+    ('card-b2-payment-over',${companyA},${bankAccountA},${cardAccountA},'TRANSFER',400,${methodA},'2026-08-25','2026-08-25','Over statement payment',false,'card-b2-user',NOW(),NOW()),
     ('card-b2-not-transfer',${companyA},${bankAccountA},NULL,'EXPENSE',50,${methodA},'2026-08-25','2026-08-25','Not a statement payment',false,'card-b2-user',NOW(),NOW())`);
 }
 
@@ -148,13 +150,16 @@ async function run(): Promise<void> {
     await expectFailure(
       () => db.execute(sql`INSERT INTO credit_card_statement_payments(
         id,company_id,statement_id,financial_transaction_id,amount,idempotency_key,created_by_id
-      ) VALUES ('card-b2-underpayment',${companyA},'card-b2-statement-a','card-b2-payment',200,'card-b2-underpayment-key','card-b2-user')`),
-      'full statement payment must reject an amount below the authoritative balance'
+      ) VALUES ('card-b2-overpayment',${companyA},'card-b2-statement-a','card-b2-payment-over',400,'card-b2-overpayment-key','card-b2-user')`),
+      'statement payment must reject a transfer above the authoritative balance'
     );
 
     await db.execute(sql`INSERT INTO credit_card_statement_payments(
       id,company_id,statement_id,financial_transaction_id,amount,idempotency_key,created_by_id
-    ) VALUES ('card-b2-payment-link',${companyA},'card-b2-statement-a','card-b2-payment',300,'card-b2-pay-key','card-b2-user')`);
+    ) VALUES ('card-b2-payment-link-200',${companyA},'card-b2-statement-a','card-b2-payment-200',200,'card-b2-pay-200-key','card-b2-user')`);
+    await db.execute(sql`UPDATE credit_card_statements
+      SET status='PARTIALLY_PAID',paid_amount=200,balance_amount=100,updated_at=NOW(),version=version+1
+      WHERE id='card-b2-statement-a'`);
 
     await expectFailure(
       () => db.execute(sql`INSERT INTO credit_card_statement_payments(
@@ -163,7 +168,19 @@ async function run(): Promise<void> {
       'statement payment must reference an existing TRANSFER into the card account'
     );
 
-    const paymentTransaction = (await rows(sql`SELECT type,destination_account_id FROM financial_transactions WHERE id='card-b2-payment'`))[0];
+    await db.execute(sql`INSERT INTO credit_card_statement_payments(
+      id,company_id,statement_id,financial_transaction_id,amount,idempotency_key,created_by_id
+    ) VALUES ('card-b2-payment-link-100',${companyA},'card-b2-statement-a','card-b2-payment-100',100,'card-b2-pay-100-key','card-b2-user')`);
+    await db.execute(sql`UPDATE credit_card_statements
+      SET status='PAID',paid_amount=300,balance_amount=0,updated_at=NOW(),version=version+1
+      WHERE id='card-b2-statement-a'`);
+
+    const payments = (await rows(sql`SELECT count(*)::int AS count, COALESCE(sum(amount),0)::numeric AS total
+      FROM credit_card_statement_payments WHERE company_id=${companyA} AND statement_id='card-b2-statement-a'`))[0];
+    assert(Number(payments.count) === 2 && Number(payments.total) === 300,
+      'partial and final payments must settle the statement exactly once');
+
+    const paymentTransaction = (await rows(sql`SELECT type,destination_account_id FROM financial_transactions WHERE id='card-b2-payment-200'`))[0];
     assert(paymentTransaction.type === 'TRANSFER' && paymentTransaction.destination_account_id === cardAccountA,
       'statement payment link must preserve authoritative TRANSFER semantics');
 

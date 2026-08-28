@@ -178,7 +178,7 @@ export class CreditCardStatementAuthority {
       if (transaction.type !== 'TRANSFER' || transaction.destination_account_id !== statement.financial_account_id || transaction.is_reversed) throw new Error('Transferência incompatível com a fatura');
       const amount = money(transaction.amount);
       const balance = money(statement.balance_amount);
-      if (amount <= 0 || amount !== balance) throw new Error('Pagamento integral deve corresponder ao saldo autoritativo da fatura');
+      if (amount <= 0 || amount > balance) throw new Error('Pagamento deve ser positivo e não pode exceder o saldo autoritativo da fatura');
       const id = randomUUID();
       const item = await repo.createPayment({ id, companyId: actor.companyId, statementId, financialTransactionId: input.financialTransactionId, amount, idempotencyKey: input.idempotencyKey, userId: actor.userId });
       const paidAmount = money(statement.paid_amount) + amount; const balanceAmount = money(statement.balance_amount) - amount; const status = balanceAmount === 0 ? 'PAID' : 'PARTIALLY_PAID';
