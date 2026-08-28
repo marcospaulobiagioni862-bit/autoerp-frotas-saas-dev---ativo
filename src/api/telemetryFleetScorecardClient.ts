@@ -17,8 +17,8 @@ const allowedItem=new Set(['trackerId','vehicleId','healthState','movementState'
 function count(value:unknown):number{if(typeof value!=='number'||!Number.isInteger(value)||value<0)throw new Error('Invalid telemetry scorecard count');return value;}
 function exactCounts<T extends readonly string[]>(value:unknown,keys:T):Record<T[number],number>{
   if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid telemetry scorecard counts');
-  const item=value as Record<string,unknown>;
-  if(Object.keys(item).length!==keys.length||Object.keys(item).some(key=>!keys.includes(key)))throw new Error('Unexpected telemetry scorecard count field');
+  const item=value as Record<string,unknown>,allowedKeys=new Set<string>(keys);
+  if(Object.keys(item).length!==keys.length||Object.keys(item).some(key=>!allowedKeys.has(key)))throw new Error('Unexpected telemetry scorecard count field');
   return Object.fromEntries(keys.map(key=>[key,count(item[key])])) as Record<T[number],number>;
 }
 function parse(value:unknown):TelemetryFleetScorecardSummary{
