@@ -1,6 +1,7 @@
 import type { Express,Request,Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import { TelemetryAuthorityService,TelemetryConflictError,TelemetryNotFoundError,TelemetryValidationError,type TelemetryEventType,type TelemetryReviewDecision } from './telemetryAuthority';
+import { TelemetryKmDivergenceAuthority } from './telemetryKmDivergenceAuthority';
 import { TelemetryWebhookAuthenticationError,TelemetryWebhookAuthority,TelemetryWebhookReplayError } from './telemetryWebhookAuth';
 type Action='VIEW_TELEMETRY'|'INGEST_TELEMETRY'|'REVIEW_TELEMETRY';
 const readRoles=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL','READONLY']);
@@ -15,5 +16,6 @@ export function registerTelemetryRoutes(app:Express):void{
   app.post('/api/trackers/:trackerId/telemetry/:eventId/review',async(req,res)=>{const actor=requirePrincipal(req,res,'REVIEW_TELEMETRY');if(!actor)return;try{const body=exact(req.body,['decision','reason']);res.json(await TelemetryAuthorityService.review(actor,req.params.trackerId,req.params.eventId,{decision:body.decision as TelemetryReviewDecision,reason:body.reason as string}));}catch(error){send(res,error);}});
   app.get('/api/trackers/:trackerId/telemetry/health',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{res.json({item:await TelemetryAuthorityService.health(actor.companyId,req.params.trackerId)});}catch(error){send(res,error);}});
   app.get('/api/trackers/:trackerId/telemetry/observability',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{res.json({item:await TelemetryAuthorityService.observability(actor.companyId,req.params.trackerId)});}catch(error){send(res,error);}});
+  app.get('/api/trackers/:trackerId/telemetry/km-divergence',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{res.json({item:await TelemetryKmDivergenceAuthority.get(actor.companyId,req.params.trackerId)});}catch(error){send(res,error);}});
   app.get('/api/trackers/:trackerId/telemetry',async(req,res)=>{const actor=requirePrincipal(req,res,'VIEW_TELEMETRY');if(!actor)return;try{const raw=req.query.limit===undefined?50:Number(req.query.limit);const limit=Number.isInteger(raw)&&raw>0&&raw<=100?raw:50;res.json({items:await TelemetryAuthorityService.list(actor.companyId,req.params.trackerId,limit)});}catch(error){send(res,error);}});
 }
