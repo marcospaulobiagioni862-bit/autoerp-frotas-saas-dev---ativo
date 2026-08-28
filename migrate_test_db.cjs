@@ -37,6 +37,10 @@ async function run() {
     'FINANCE-CARD-1E3 payment-reversal regression'
   );
   runTsxRegression(
+    'src/server/__tests__/financeCreditCardPurchaseReversalIntegration.ts',
+    'FINANCE-CARD-1E4 purchase-reversal regression'
+  );
+  runTsxRegression(
     'src/server/__tests__/creditCardStatementOverdueTestRunner.ts',
     'FINANCE-CARD-1E2 overdue derivation regression'
   );
