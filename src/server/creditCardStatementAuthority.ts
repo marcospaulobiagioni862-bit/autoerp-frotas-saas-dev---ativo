@@ -39,6 +39,14 @@ export interface LinkCreditCardStatementPaymentInput {
   idempotencyKey: string;
 }
 
+export interface ApplyCreditCardStatementAdjustmentInput {
+  interestAmount: number;
+  fineAmount: number;
+  discountAmount: number;
+  reason: string;
+  idempotencyKey: string;
+}
+
 function money(value: unknown): number {
   const amount = Number(value);
   if (!Number.isFinite(amount)) throw new Error('Valor financeiro inválido');
@@ -49,6 +57,12 @@ function intDay(value: unknown): number {
   const day = Number(value);
   if (!Number.isInteger(day) || day < 1 || day > 31) throw new Error('Dia de cartão inválido');
   return day;
+}
+
+function requiredText(value: unknown, max: number, label: string): string {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized || normalized.length > max) throw new Error(`${label} inválido`);
+  return normalized;
 }
 
 async function audit(txContext: any, actor: CreditCardStatementActor, entityName: string, entityId: string, action: AuditAction, previousState: unknown, newState: unknown): Promise<void> {
@@ -185,6 +199,52 @@ export class CreditCardStatementAuthority {
       const updated = await repo.applyPaymentToStatement({ companyId: actor.companyId, statementId, paidAmount, balanceAmount, status, userId: actor.userId });
       await audit(txContext, actor, 'CreditCardStatementPayment', id, AuditAction.CREATE, null, item);
       await audit(txContext, actor, 'CreditCardStatement', statementId, AuditAction.UPDATE, statement, updated);
+      return { item, replayed: false, statement: updated };
+    });
+  }
+
+  static async applyAdjustment(actor: CreditCardStatementActor, statementId: string, input: ApplyCreditCardStatementAdjustmentInput) {
+    return UnitOfWork.run(actor.companyId, async (txContext: any) => {
+      await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_MASTER_DATA_MANAGE', txContext);
+      const tx = txContext.getRawTransaction();
+      const repo = new PostgresCreditCardStatementRepository(tx);
+      const idempotencyKey = requiredText(input.idempotencyKey, 200, 'Chave idempotente');
+      const reason = requiredText(input.reason, 1000, 'Motivo do ajuste');
+      const interestAmount = money(input.interestAmount);
+      const fineAmount = money(input.fineAmount);
+      const discountAmount = money(input.discountAmount);
+      if (interestAmount < 0 || fineAmount < 0 || discountAmount < 0) throw new Error('Valores de ajuste inválidos');
+      if (interestAmount === 0 && fineAmount === 0 && discountAmount === 0) throw new Error('Ajuste financeiro vazio');
+
+      await lock(tx, `${actor.companyId}:credit-card-adjustment:${idempotencyKey}`);
+      const replay = await repo.findAdjustmentByIdempotency(actor.companyId, idempotencyKey);
+      if (replay) {
+        const matches = replay.statement_id === statementId
+          && money(replay.interest_amount) === interestAmount
+          && money(replay.fine_amount) === fineAmount
+          && money(replay.discount_amount) === discountAmount
+          && replay.reason === reason
+          && replay.created_by_id === actor.userId;
+        if (!matches) throw new Error('Chave idempotente divergente');
+        const statement = await repo.findStatementForUpdate(actor.companyId, statementId);
+        return { item: replay, replayed: true, statement };
+      }
+
+      const statement = await repo.findStatementForUpdate(actor.companyId, statementId);
+      if (!statement) throw new Error('Fatura de cartão não encontrada');
+      if (!['CLOSED','PARTIALLY_PAID'].includes(statement.status)) throw new Error('Fatura não está elegível para ajuste');
+      const currentBalance = money(statement.balance_amount);
+      const newBalance = money(currentBalance + interestAmount + fineAmount - discountAmount);
+      if (newBalance <= 0) throw new Error('Desconto excede o saldo elegível da fatura');
+
+      const beforeCount = await repo.countTransactions(actor.companyId);
+      const id = randomUUID();
+      const item = await repo.createAdjustment({ id, companyId: actor.companyId, statementId, interestAmount, fineAmount, discountAmount, reason, idempotencyKey, userId: actor.userId });
+      const updated = await repo.applyStatementAdjustment({ companyId: actor.companyId, statementId, interestAmount, fineAmount, discountAmount, balanceAmount: newBalance, userId: actor.userId });
+      const afterCount = await repo.countTransactions(actor.companyId);
+      if (beforeCount !== afterCount) throw new Error('Ajuste de fatura não pode criar transação financeira');
+      await audit(txContext, actor, 'CreditCardStatementAdjustment', id, AuditAction.CREATE, null, item);
+      await audit(txContext, actor, 'CreditCardStatement', statementId, AuditAction.UPDATE, statement, { ...updated, adjustmentReason: reason });
       return { item, replayed: false, statement: updated };
     });
   }
