@@ -703,6 +703,7 @@ jobs:
           npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
           npx tsx src/server/__tests__/telemetryWebhookAuthIntegration.ts
           npx tsx src/server/__tests__/telemetryObservabilityIntegration.ts
+          npx tsx src/server/__tests__/telemetryMaintenanceAdvisoryTestRunner.ts
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
