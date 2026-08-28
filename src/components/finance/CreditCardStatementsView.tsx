@@ -5,6 +5,8 @@ import { Badge, Button, Card, Skeleton } from '../ui';
 
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+type DueFilter = '' | 'OVERDUE' | 'CURRENT';
+
 function statusVariant(status: CreditCardStatementStatus, isOverdue: boolean): 'success' | 'warning' | 'neutral' | 'info' {
   if (status === 'PAID') return 'success';
   if (isOverdue || status === 'PARTIALLY_PAID') return 'warning';
@@ -23,6 +25,8 @@ export const CreditCardStatementsView: React.FC = () => {
   const [profiles, setProfiles] = useState<CreditCardProfileSummary[]>([]);
   const [statements, setStatements] = useState<CreditCardStatementSummary[]>([]);
   const [profileId, setProfileId] = useState('');
+  const [statusFilter, setStatusFilter] = useState<CreditCardStatementStatus | ''>('');
+  const [dueFilter, setDueFilter] = useState<DueFilter>('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [detail, setDetail] = useState<CreditCardStatementDetail | null>(null);
@@ -66,8 +70,14 @@ export const CreditCardStatementsView: React.FC = () => {
   };
 
   const visibleStatements = useMemo(
-    () => profileId ? statements.filter((statement) => statement.creditCardProfileId === profileId) : statements,
-    [profileId, statements],
+    () => statements.filter((statement) => {
+      if (profileId && statement.creditCardProfileId !== profileId) return false;
+      if (statusFilter && statement.status !== statusFilter) return false;
+      if (dueFilter === 'OVERDUE' && !statement.isOverdue) return false;
+      if (dueFilter === 'CURRENT' && statement.isOverdue) return false;
+      return true;
+    }),
+    [dueFilter, profileId, statements, statusFilter],
   );
   const profileById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
 
@@ -84,13 +94,34 @@ export const CreditCardStatementsView: React.FC = () => {
       {message && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{message}</div>}
 
       <Card padding="sm">
-        <label className="block max-w-md text-xs font-semibold text-slate-600 dark:text-slate-400">
-          Perfil de cartão
-          <select value={profileId} onChange={(event) => setProfileId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
-            <option value="">Todos os perfis</option>
-            {profiles.map((profile) => <option key={profile.id} value={profile.id}>Conta {profile.financialAccountId} • fecha dia {profile.closingDay} • vence dia {profile.dueDay}</option>)}
-          </select>
-        </label>
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+            Perfil de cartão
+            <select value={profileId} onChange={(event) => setProfileId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <option value="">Todos os perfis</option>
+              {profiles.map((profile) => <option key={profile.id} value={profile.id}>Conta {profile.financialAccountId} • fecha dia {profile.closingDay} • vence dia {profile.dueDay}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+            Status da fatura
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as CreditCardStatementStatus | '')} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <option value="">Todos os status</option>
+              <option value="OPEN">Aberta</option>
+              <option value="CLOSED">Fechada</option>
+              <option value="PARTIALLY_PAID">Parcialmente paga</option>
+              <option value="PAID">Paga</option>
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+            Vencimento autoritativo
+            <select value={dueFilter} onChange={(event) => setDueFilter(event.target.value as DueFilter)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <option value="">Todos os vencimentos</option>
+              <option value="OVERDUE">Vencidas</option>
+              <option value="CURRENT">A vencer / hoje</option>
+            </select>
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-slate-500">Filtros atuam somente sobre o read-model já retornado pelo servidor; nenhum status financeiro é recalculado no navegador.</p>
       </Card>
 
       {loading ? (
