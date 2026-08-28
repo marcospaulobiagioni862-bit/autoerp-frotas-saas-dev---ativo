@@ -25,6 +25,7 @@ export const CreditCardStatementsView: React.FC = () => {
   const [profiles, setProfiles] = useState<CreditCardProfileSummary[]>([]);
   const [statements, setStatements] = useState<CreditCardStatementSummary[]>([]);
   const [profileId, setProfileId] = useState('');
+  const [cycleRef, setCycleRef] = useState('');
   const [statusFilter, setStatusFilter] = useState<CreditCardStatementStatus | ''>('');
   const [dueFilter, setDueFilter] = useState<DueFilter>('');
   const [loading, setLoading] = useState(true);
@@ -44,10 +45,12 @@ export const CreditCardStatementsView: React.FC = () => {
       setProfiles(profileList);
       setStatements(statementList);
       if (profileId && !profileList.some((profile) => profile.id === profileId)) setProfileId('');
+      if (cycleRef && !statementList.some((statement) => statement.cycleRef === cycleRef)) setCycleRef('');
     } catch (error) {
       setProfiles([]);
       setStatements([]);
       setProfileId('');
+      setCycleRef('');
       setMessage(error instanceof Error ? error.message : 'Não foi possível carregar cartões e faturas.');
     } finally {
       setLoading(false);
@@ -69,15 +72,20 @@ export const CreditCardStatementsView: React.FC = () => {
     }
   };
 
+  const cycleRefs = useMemo(
+    () => Array.from(new Set(statements.map((statement) => statement.cycleRef))).sort((left, right) => right.localeCompare(left)),
+    [statements],
+  );
   const visibleStatements = useMemo(
     () => statements.filter((statement) => {
       if (profileId && statement.creditCardProfileId !== profileId) return false;
+      if (cycleRef && statement.cycleRef !== cycleRef) return false;
       if (statusFilter && statement.status !== statusFilter) return false;
       if (dueFilter === 'OVERDUE' && !statement.isOverdue) return false;
       if (dueFilter === 'CURRENT' && statement.isOverdue) return false;
       return true;
     }),
-    [dueFilter, profileId, statements, statusFilter],
+    [cycleRef, dueFilter, profileId, statements, statusFilter],
   );
   const profileById = useMemo(() => new Map(profiles.map((profile) => [profile.id, profile])), [profiles]);
 
@@ -94,12 +102,19 @@ export const CreditCardStatementsView: React.FC = () => {
       {message && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{message}</div>}
 
       <Card padding="sm">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
             Perfil de cartão
             <select value={profileId} onChange={(event) => setProfileId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
               <option value="">Todos os perfis</option>
               {profiles.map((profile) => <option key={profile.id} value={profile.id}>Conta {profile.financialAccountId} • fecha dia {profile.closingDay} • vence dia {profile.dueDay}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+            Ciclo da fatura
+            <select value={cycleRef} onChange={(event) => setCycleRef(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900">
+              <option value="">Todos os ciclos</option>
+              {cycleRefs.map((cycle) => <option key={cycle} value={cycle}>{cycle}</option>)}
             </select>
           </label>
           <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
