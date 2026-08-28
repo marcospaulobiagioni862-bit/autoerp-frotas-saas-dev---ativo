@@ -36,7 +36,6 @@ export interface AttachCreditCardStatementItemInput {
 
 export interface LinkCreditCardStatementPaymentInput {
   financialTransactionId: string;
-  amount: number;
   idempotencyKey: string;
 }
 
@@ -165,11 +164,10 @@ export class CreditCardStatementAuthority {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_MASTER_DATA_MANAGE', txContext);
       const tx = txContext.getRawTransaction();
       const repo = new PostgresCreditCardStatementRepository(tx);
-      const amount = money(input.amount); if (amount <= 0) throw new Error('Valor de pagamento inválido');
       await lock(tx, `${actor.companyId}:credit-card-payment:${input.idempotencyKey}`);
       const replay = await repo.findPaymentByIdempotency(actor.companyId, input.idempotencyKey);
       if (replay) {
-        if (replay.statement_id !== statementId || replay.financial_transaction_id !== input.financialTransactionId || money(replay.amount) !== amount) throw new Error('Chave idempotente divergente');
+        if (replay.statement_id !== statementId || replay.financial_transaction_id !== input.financialTransactionId) throw new Error('Chave idempotente divergente');
         return { item: replay, replayed: true };
       }
       const statement = await repo.findStatementForUpdate(actor.companyId, statementId);
@@ -178,7 +176,9 @@ export class CreditCardStatementAuthority {
       const transaction = await repo.findTransferForUpdate(actor.companyId, input.financialTransactionId);
       if (!transaction) throw new Error('Transferência de pagamento não encontrada');
       if (transaction.type !== 'TRANSFER' || transaction.destination_account_id !== statement.financial_account_id || transaction.is_reversed) throw new Error('Transferência incompatível com a fatura');
-      if (amount > money(transaction.amount) || amount > money(statement.balance_amount)) throw new Error('Pagamento excede valor autoritativo');
+      const amount = money(transaction.amount);
+      const balance = money(statement.balance_amount);
+      if (amount <= 0 || amount !== balance) throw new Error('Pagamento integral deve corresponder ao saldo autoritativo da fatura');
       const id = randomUUID();
       const item = await repo.createPayment({ id, companyId: actor.companyId, statementId, financialTransactionId: input.financialTransactionId, amount, idempotencyKey: input.idempotencyKey, userId: actor.userId });
       const paidAmount = money(statement.paid_amount) + amount; const balanceAmount = money(statement.balance_amount) - amount; const status = balanceAmount === 0 ? 'PAID' : 'PARTIALLY_PAID';
