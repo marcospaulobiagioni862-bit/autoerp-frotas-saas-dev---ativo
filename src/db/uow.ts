@@ -130,6 +130,50 @@ export class UnitOfWork {
           `);
           return result.rows?.[0]||null;
         },
+        findCreditCardStatementPurchaseForUpdate:async(financialTransactionId:string)=>{
+          const result:any=await tx.execute(sql`
+            SELECT i.id AS item_id,i.statement_id,i.original_amount,i.adjustment_amount,i.final_amount,
+                   s.status,s.original_amount AS statement_original_amount,
+                   s.adjustment_amount AS statement_adjustment_amount,s.balance_amount AS statement_balance_amount
+            FROM credit_card_statement_items i
+            JOIN credit_card_statements s ON s.id=i.statement_id AND s.company_id=i.company_id
+            WHERE i.company_id=${companyId} AND i.financial_transaction_id=${financialTransactionId}
+            FOR UPDATE OF i,s
+          `);
+          return result.rows?.[0]||null;
+        },
+        applyCreditCardStatementPurchaseReversal:async(itemId:string,statementId:string,amount:number,userId:string)=>{
+          const itemResult:any=await tx.execute(sql`
+            UPDATE credit_card_statement_items
+            SET adjustment_amount=adjustment_amount-${String(amount)},
+                final_amount=final_amount-${String(amount)}
+            WHERE company_id=${companyId} AND id=${itemId} AND statement_id=${statementId}
+              AND final_amount>=${String(amount)}
+            RETURNING *
+          `);
+          const item=itemResult.rows?.[0]||null;
+          if(!item)return null;
+          const statementResult:any=await tx.execute(sql`
+            WITH totals AS (
+              SELECT COALESCE(SUM(original_amount),0) AS original_amount,
+                     COALESCE(SUM(adjustment_amount),0) AS adjustment_amount,
+                     COALESCE(SUM(final_amount),0) AS balance_amount
+              FROM credit_card_statement_items
+              WHERE company_id=${companyId} AND statement_id=${statementId}
+            )
+            UPDATE credit_card_statements s
+            SET original_amount=totals.original_amount,
+                adjustment_amount=totals.adjustment_amount,
+                balance_amount=totals.balance_amount,
+                updated_by_id=${userId},updated_at=NOW(),version=version+1
+            FROM totals
+            WHERE s.company_id=${companyId} AND s.id=${statementId} AND s.status='OPEN'
+            RETURNING s.*
+          `);
+          const statement=statementResult.rows?.[0]||null;
+          if(!statement)throw new Error('Fatura não está aberta para estorno de compra');
+          return {item,statement};
+        },
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };
