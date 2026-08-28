@@ -15,7 +15,7 @@ async function request(url:string,init?:RequestInit):Promise<TrafficTicketDetail
 export interface CreateTrafficTicketInput{
   vehicleId:string;driverId?:string;contractId?:string;autoNumber:string;organName:string;infractionCode:string;description:string;
   infractionDate:string;dueDate:string;discountDueDate?:string;originalAmount:number;discountedAmount?:number;nicAmount?:number;points:number;
-  responsibility:TicketResponsibility;notes?:string;baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;nicAmount?:number;
+  responsibility:TicketResponsibility;notes?:string;baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;
 }
 export class TrafficTicketClient{
   static async list(filters:{vehicleId?:string;driverId?:string;status?:TicketStatus;responsibility?:TicketResponsibility}={}):Promise<TrafficTicket[]>{const params=new URLSearchParams();Object.entries(filters).forEach(([key,value])=>{if(value)params.set(key,String(value));});const suffix=params.toString();const response=await fetch(`/api/traffic-tickets${suffix?`?${suffix}`:''}`,{credentials:'include'});if(!response.ok)throw await error(response);const payload=record(await response.json());if(!Array.isArray(payload.items))throw new Error('Invalid traffic ticket list');return payload.items.map(ticket);}
