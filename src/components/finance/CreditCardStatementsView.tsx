@@ -3,17 +3,11 @@ import { CreditCard, Eye, Lock, RefreshCw, X } from 'lucide-react';
 import { CreditCardStatementClient, type CreditCardProfileSummary, type CreditCardStatementDetail, type CreditCardStatementStatus, type CreditCardStatementSummary } from '../../api/creditCardStatementClient';
 import { Badge, Button, Card, Skeleton } from '../ui';
 import { CreditCardStatementPaymentAction } from './CreditCardStatementPaymentAction';
+import { creditCardStatementStatusVariant } from './creditCardStatementStatusPresentation';
 
 const currency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 type DueFilter = '' | 'OVERDUE' | 'CURRENT';
-
-function statusVariant(status: CreditCardStatementStatus, isOverdue: boolean): 'success' | 'warning' | 'neutral' | 'info' {
-  if (status === 'PAID') return 'success';
-  if (isOverdue || status === 'PARTIALLY_PAID') return 'warning';
-  if (status === 'CLOSED') return 'info';
-  return 'neutral';
-}
 
 function statusLabel(status: CreditCardStatementStatus): string {
   if (status === 'OPEN') return 'Aberta';
@@ -178,7 +172,7 @@ export const CreditCardStatementsView: React.FC = () => {
               const profile = profileById.get(statement.creditCardProfileId);
               return <tr key={statement.id}>
                 <td className="p-3"><div className="font-semibold text-slate-900 dark:text-slate-100">{statement.cycleRef}</div><div className="mt-1 text-[11px] text-slate-500">Fecha {statement.closingDate} • vence {statement.dueDate}</div><div className="mt-1 break-all font-mono text-[10px] text-slate-400">{profile?.financialAccountId || statement.creditCardProfileId}</div></td>
-                <td className="p-3"><Badge variant={statusVariant(statement.status, statement.isOverdue)}>{statusLabel(statement.status)}</Badge>{statement.isOverdue && <div className="mt-1 text-[11px] font-semibold text-red-600">Vencida há {statement.overdueDays} dia{statement.overdueDays === 1 ? '' : 's'}</div>}</td>
+                <td className="p-3"><Badge variant={creditCardStatementStatusVariant(statement.status, statement.isOverdue)}>{statusLabel(statement.status)}</Badge>{statement.isOverdue && <div className="mt-1 text-[11px] font-semibold text-red-600">Vencida há {statement.overdueDays} dia{statement.overdueDays === 1 ? '' : 's'}</div>}</td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.originalAmount)}</td>
                 <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
