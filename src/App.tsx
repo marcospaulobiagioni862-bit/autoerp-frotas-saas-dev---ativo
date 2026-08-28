@@ -34,6 +34,7 @@ const OperationalExecutionCenterView=lazy(()=>import('./components/execution/Ope
 const FleetManagement=lazy(()=>import('./components/fleet/FleetManagement').then(module=>({default:module.FleetManagement})));
 const FleetComplianceManagement=lazy(()=>import('./components/fleet/FleetComplianceManagement').then(module=>({default:module.FleetComplianceManagement})));
 const TelemetryKmDivergenceOverview=lazy(()=>import('./components/fleet/TelemetryKmDivergenceOverview').then(module=>({default:module.TelemetryKmDivergenceOverview})));
+const TelemetrySanitizedLocationOverview=lazy(()=>import('./components/fleet/TelemetrySanitizedLocationOverview').then(module=>({default:module.TelemetrySanitizedLocationOverview})));
 const DriversManagement=lazy(()=>import('./components/drivers/DriversManagement').then(module=>({default:module.DriversManagement})));
 const ContractsManagement=lazy(()=>import('./components/contracts/ContractsManagement').then(module=>({default:module.ContractsManagement})));
 const TrafficTicketsManagement=lazy(()=>import('./components/trafficTickets/TrafficTicketsManagement').then(module=>({default:module.TrafficTicketsManagement})));
@@ -89,7 +90,7 @@ export default function App(){
         {activeTab==='metas'&&<div className="p-4 sm:p-6"><ManagementGoalsView companyId={user.companyId}/></div>}
         {activeTab==='documentos'&&<DocumentCenter/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/>} 
         {activeTab==='relatorios'&&<ManagementReportsView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/>} 
-        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><FleetComplianceManagement/></>}
+        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><TelemetrySanitizedLocationOverview/><FleetComplianceManagement/></>}
         {activeTab==='drivers'&&<div className="p-4 sm:p-6"><DriversManagement companyId={user.companyId} onSelectVehicle={()=>setActiveTab('fleet')}/></div>}
         {activeTab==='contracts'&&<ContractsManagement companyId={user.companyId}/>} {activeTab==='trafficTickets'&&<TrafficTicketsManagement companyId={user.companyId}/>} 
         {activeTab==='maintenance'&&<MaintenanceManagement companyId={user.companyId} onOpenPaymentModal={setSelectedPayableForPayment}/>} 
