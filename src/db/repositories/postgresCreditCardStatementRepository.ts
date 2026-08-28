@@ -78,4 +78,27 @@ export class PostgresCreditCardStatementRepository {
   async applyPaymentToStatement(input: { companyId: string; statementId: string; paidAmount: number; balanceAmount: number; status: string; userId: string; }) {
     return rows(await this.tx.execute(sql`UPDATE credit_card_statements SET paid_amount=${String(input.paidAmount)},balance_amount=${String(input.balanceAmount)},status=${input.status},updated_by_id=${input.userId},updated_at=NOW(),version=version+1 WHERE company_id=${input.companyId} AND id=${input.statementId} RETURNING *`))[0];
   }
+
+  async findAdjustmentByIdempotency(companyId: string, idempotencyKey: string) {
+    return rows(await this.tx.execute(sql`SELECT * FROM credit_card_statement_adjustments WHERE company_id=${companyId} AND idempotency_key=${idempotencyKey}`))[0] || null;
+  }
+
+  async createAdjustment(input: { id: string; companyId: string; statementId: string; interestAmount: number; fineAmount: number; discountAmount: number; reason: string; idempotencyKey: string; userId: string; }) {
+    return rows(await this.tx.execute(sql`INSERT INTO credit_card_statement_adjustments(
+      id,company_id,statement_id,interest_amount,fine_amount,discount_amount,reason,idempotency_key,created_by_id
+    ) VALUES(
+      ${input.id},${input.companyId},${input.statementId},${String(input.interestAmount)},${String(input.fineAmount)},${String(input.discountAmount)},${input.reason},${input.idempotencyKey},${input.userId}
+    ) RETURNING *`))[0];
+  }
+
+  async applyStatementAdjustment(input: { companyId: string; statementId: string; interestAmount: number; fineAmount: number; discountAmount: number; balanceAmount: number; userId: string; }) {
+    return rows(await this.tx.execute(sql`UPDATE credit_card_statements
+      SET interest_amount=interest_amount+${String(input.interestAmount)},
+          fine_amount=fine_amount+${String(input.fineAmount)},
+          discount_amount=discount_amount+${String(input.discountAmount)},
+          balance_amount=${String(input.balanceAmount)},
+          updated_by_id=${input.userId},updated_at=NOW(),version=version+1
+      WHERE company_id=${input.companyId} AND id=${input.statementId}
+      RETURNING *`))[0];
+  }
 }
