@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import './telemetryContractExcessKmTestRunner';
+import './telemetryOperationalLocationTestRunner';
 import { deriveTelemetryMaintenanceAdvisory } from '../telemetryMaintenanceAdvisoryAuthority';
 
 const unavailableTelemetry = deriveTelemetryMaintenanceAdvisory(1000, null, 1500);
