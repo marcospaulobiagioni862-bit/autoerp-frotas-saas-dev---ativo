@@ -106,6 +106,30 @@ export class UnitOfWork {
             .limit(1);
           return rows[0]||null;
         },
+        findCreditCardStatementPaymentForUpdate:async(financialTransactionId:string)=>{
+          const result:any=await tx.execute(sql`
+            SELECT p.id AS payment_id,p.statement_id,p.amount,
+                   s.paid_amount,s.balance_amount,s.status,s.updated_by_id
+            FROM credit_card_statement_payments p
+            JOIN credit_card_statements s ON s.id=p.statement_id AND s.company_id=p.company_id
+            WHERE p.company_id=${companyId} AND p.financial_transaction_id=${financialTransactionId}
+            FOR UPDATE OF p,s
+          `);
+          return result.rows?.[0]||null;
+        },
+        applyCreditCardStatementPaymentReversal:async(statementId:string,amount:number,userId:string)=>{
+          const result:any=await tx.execute(sql`
+            UPDATE credit_card_statements
+            SET paid_amount=GREATEST(0,paid_amount-${String(amount)}),
+                balance_amount=balance_amount+${String(amount)},
+                status=CASE WHEN GREATEST(0,paid_amount-${String(amount)})=0
+                            THEN 'CLOSED' ELSE 'PARTIALLY_PAID' END,
+                updated_by_id=${userId},updated_at=NOW(),version=version+1
+            WHERE company_id=${companyId} AND id=${statementId}
+            RETURNING *
+          `);
+          return result.rows?.[0]||null;
+        },
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };
