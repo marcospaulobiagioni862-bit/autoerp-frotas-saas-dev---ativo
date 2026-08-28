@@ -2,12 +2,13 @@ import React,{useEffect,useState}from'react';
 import { TrackerClient,type TelemetryKmDivergenceSummary } from '../../api/trackerClient';
 import { TelemetryMaintenanceAdvisoryClient,type TelemetryMaintenanceAdvisorySummary,type TelemetryMaintenanceAdvisoryState } from '../../api/telemetryMaintenanceAdvisoryClient';
 import { TelemetryContractExcessKmClient,type TelemetryContractExcessKmState,type TelemetryContractExcessKmSummary } from '../../api/telemetryContractExcessKmClient';
+import { TelemetrySanitizedLocationClient,type SanitizedTelemetryLocation,type TelemetryLocationFreshness } from '../../api/telemetrySanitizedLocationClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Tracker,Vehicle } from '../../types/entities';
 import { Badge,Button,Card } from '../ui';
-import { Gauge,Wrench,Route } from 'lucide-react';
+import { Gauge,Wrench,Route,MapPin } from 'lucide-react';
 
-type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;contractKm:TelemetryContractExcessKmSummary|null;error:string;advisoryError:string;contractKmError:string};
+type Row={tracker:Tracker;vehicle:Vehicle|undefined;summary:TelemetryKmDivergenceSummary|null;advisory:TelemetryMaintenanceAdvisorySummary|null;contractKm:TelemetryContractExcessKmSummary|null;location:SanitizedTelemetryLocation|null;error:string;advisoryError:string;contractKmError:string;locationError:string};
 
 const directionLabel=(direction:TelemetryKmDivergenceSummary['direction']):string=>direction==='ALIGNED'?'Alinhado':direction==='TELEMETRY_ABOVE'?'Telemetria acima':direction==='TELEMETRY_BELOW'?'Telemetria abaixo':'Sem leitura disponível';
 const directionVariant=(direction:TelemetryKmDivergenceSummary['direction']):'success'|'warning'|'secondary'=>direction==='ALIGNED'?'success':direction==='UNAVAILABLE'?'secondary':'warning';
@@ -15,7 +16,10 @@ const advisoryLabel=(state:TelemetryMaintenanceAdvisoryState):string=>state==='D
 const advisoryVariant=(state:TelemetryMaintenanceAdvisoryState):'success'|'warning'|'danger'|'secondary'=>state==='DUE'?'danger':state==='DUE_SOON'?'warning':state==='NOT_DUE'?'success':'secondary';
 const contractKmLabel=(state:TelemetryContractExcessKmState):string=>state==='EXCEEDED'?'Limite excedido':state==='NEAR_LIMIT'?'Próximo do limite':state==='WITHIN_LIMIT'?'Dentro da franquia':'Base indisponível';
 const contractKmVariant=(state:TelemetryContractExcessKmState):'success'|'warning'|'danger'|'secondary'=>state==='EXCEEDED'?'danger':state==='NEAR_LIMIT'?'warning':state==='WITHIN_LIMIT'?'success':'secondary';
+const locationLabel=(freshness:TelemetryLocationFreshness):string=>freshness==='FRESH'?'Localização recente':freshness==='STALE'?'Localização antiga':freshness==='OFFLINE'?'Rastreador offline':'Sem localização';
+const locationVariant=(freshness:TelemetryLocationFreshness):'success'|'warning'|'danger'|'secondary'=>freshness==='FRESH'?'success':freshness==='STALE'?'warning':freshness==='OFFLINE'?'danger':'secondary';
 const km=(value:number|null):string=>value===null?'Indisponível':`${new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(value)} km`;
+const coord=(value:number|null):string=>value===null?'Indisponível':new Intl.NumberFormat('pt-BR',{minimumFractionDigits:3,maximumFractionDigits:3}).format(value);
 
 export const TelemetryKmDivergenceOverview:React.FC=()=>{
   const[rows,setRows]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState('');
@@ -27,16 +31,18 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
       const vehicleById=new Map(vehicles.filter(item=>!item.isArchived).map(item=>[item.id,item]));
       const resolved=await Promise.all(active.map(async tracker=>{
         const vehicle=vehicleById.get(tracker.vehicleId);
-        const[divergenceResult,advisoryResult,contractKmResult]=await Promise.allSettled([TrackerClient.getTelemetryKmDivergence(tracker.id),TelemetryMaintenanceAdvisoryClient.get(tracker.id),TelemetryContractExcessKmClient.get(tracker.id)]);
+        const[divergenceResult,advisoryResult,contractKmResult,locationResult]=await Promise.allSettled([TrackerClient.getTelemetryKmDivergence(tracker.id),TelemetryMaintenanceAdvisoryClient.get(tracker.id),TelemetryContractExcessKmClient.get(tracker.id),TelemetrySanitizedLocationClient.get(tracker.id)]);
         return{
           tracker,
           vehicle,
           summary:divergenceResult.status==='fulfilled'?divergenceResult.value:null,
           advisory:advisoryResult.status==='fulfilled'?advisoryResult.value:null,
           contractKm:contractKmResult.status==='fulfilled'?contractKmResult.value:null,
+          location:locationResult.status==='fulfilled'?locationResult.value:null,
           error:divergenceResult.status==='rejected'?(divergenceResult.reason instanceof Error?divergenceResult.reason.message:'Falha ao consultar divergência de KM.'):'',
           advisoryError:advisoryResult.status==='rejected'?(advisoryResult.reason instanceof Error?advisoryResult.reason.message:'Falha ao consultar manutenção preventiva por telemetria.'):'',
           contractKmError:contractKmResult.status==='rejected'?(contractKmResult.reason instanceof Error?contractKmResult.reason.message:'Falha ao consultar KM contratual telemétrico.'):'',
+          locationError:locationResult.status==='rejected'?(locationResult.reason instanceof Error?locationResult.reason.message:'Falha ao consultar localização telemétrica.'):'',
         };
       }));
       setRows(resolved);
@@ -49,7 +55,7 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
     <Card padding="md">
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria de KM, manutenção e contrato — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Compara o KM oficial com o último odômetro aceito e mostra alertas preventivos e contratuais calculados no servidor. Nada nesta visão altera KM, abre OS ou gera cobrança.</p></div>
+          <div><h3 className="flex items-center gap-2 text-sm font-bold"><Gauge className="h-4 w-4 text-blue-600"/>Telemetria operacional — leitura autoritativa</h3><p className="mt-1 text-xs text-slate-500">Consolida KM, manutenção, contrato e última localização aceita. Nada nesta visão altera KM, abre OS, gera cobrança, aplica geofence ou bloqueia veículo.</p></div>
           <Button size="sm" variant="outline" disabled={loading} onClick={()=>void load()}>{loading?'Consultando...':'Atualizar telemetria'}</Button>
         </div>
         {error&&<div className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
@@ -82,6 +88,15 @@ export const TelemetryKmDivergenceOverview:React.FC=()=>{
               <span>Percorrido estimado: <strong>{km(row.contractKm.telemetryTravelledKm)}</strong></span><span>Saldo estimado: <strong>{km(row.contractKm.telemetryRemainingKm)}</strong></span>
               <span>Excedente estimado: <strong>{km(row.contractKm.telemetryExcessKm)}</strong></span><span>Limiar de alerta: <strong>{km(row.contractKm.nearLimitThresholdKm)}</strong></span>
               <p className="col-span-2 mt-1 text-slate-500">Estado: <strong>{contractKmLabel(row.contractKm.state)}</strong>. Esta apuração é somente consultiva: não altera contrato, KM oficial, Contas a Receber, recebimentos nem fluxo de caixa.</p>
+            </div>}
+          </div>
+          <div className="mt-3 border-t pt-3">
+            <div className="mb-2 flex items-center justify-between gap-2"><div className="flex items-center gap-2 font-semibold"><MapPin className="h-3.5 w-3.5"/>Última localização operacional aceita</div>{row.location&&<Badge variant={locationVariant(row.location.freshness)}>{locationLabel(row.location.freshness)}</Badge>}</div>
+            {row.locationError&&<p className="rounded-lg bg-rose-50 p-2 text-rose-700">Localização indisponível: {row.locationError}</p>}
+            {!row.locationError&&row.location&&<div className="grid grid-cols-2 gap-1.5 rounded-lg border p-2.5 text-[11px]">
+              <span>Latitude: <strong>{coord(row.location.latitude)}</strong></span><span>Longitude: <strong>{coord(row.location.longitude)}</strong></span>
+              <span className="col-span-2">Último evento aceito: <strong>{row.location.occurredAt?new Date(row.location.occurredAt).toLocaleString('pt-BR'):'Indisponível'}</strong></span>
+              <p className="col-span-2 mt-1 text-slate-500">Coordenadas sanitizadas e classificação de atualidade vêm do servidor. Esta visão não expõe payload bruto, IMEI, geofence, mapa externo ou comando de bloqueio.</p>
             </div>}
           </div>
         </div>)}</div>}
