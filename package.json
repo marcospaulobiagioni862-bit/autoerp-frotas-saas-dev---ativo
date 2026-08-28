@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
     "test:maintenance-client": "tsx src/api/__tests__/maintenancePreventiveClientTestRunner.ts",
+    "test:contract-billing-client": "tsx src/api/__tests__/contractBillingDayClientTestRunner.ts",
     "start": "node dist/server.mjs",
     "db:migrate": "node migrate_db.cjs",
     "db:push": "drizzle-kit push",
@@ -37,7 +38,6 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
-    "@types/pg": "^8.21.0",
     "autoprefixer": "^10.4.21",
     "drizzle-kit": "^0.31.10",
     "esbuild": "^0.25.0",
