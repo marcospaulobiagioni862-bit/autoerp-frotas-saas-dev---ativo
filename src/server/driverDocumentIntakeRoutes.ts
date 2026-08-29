@@ -104,6 +104,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
       const result = await UnitOfWork.run(principal.companyId, async (context) => {
         const tx = context.getRawTransaction?.();
         if (!tx) throw new Error('Raw tenant transaction unavailable');
+
         const existingResult: any = await tx.execute(sql`
           SELECT * FROM driver_document_intakes
           WHERE company_id = ${principal.companyId} AND idempotency_key = ${idempotencyKey}
@@ -125,11 +126,22 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
             ${id}, ${principal.companyId}, ${principal.userId}, 'DRAFT', ${idempotencyKey},
             ${expiresAt.toISOString()}, ${now.toISOString()}, ${now.toISOString()}
           )
+          ON CONFLICT (company_id, idempotency_key) DO NOTHING
           RETURNING *
         `);
-        const row = insertedResult.rows?.[0];
-        if (!row) throw new Error('Driver document intake create failed');
-        const item = mapDriverDocumentIntakeRow(row);
+        const inserted = insertedResult.rows?.[0];
+        if (!inserted) {
+          const winnerResult: any = await tx.execute(sql`
+            SELECT * FROM driver_document_intakes
+            WHERE company_id = ${principal.companyId} AND idempotency_key = ${idempotencyKey}
+            LIMIT 1
+          `);
+          const winner = winnerResult.rows?.[0];
+          if (!winner || String(winner.created_by) !== principal.userId) throw new DriverDocumentIntakeConflictError();
+          return { item: mapDriverDocumentIntakeRow(winner), created: false };
+        }
+
+        const item = mapDriverDocumentIntakeRow(inserted);
         await context.getAuditLogRepo().create({
           id: randomUUID(),
           companyId: principal.companyId,
