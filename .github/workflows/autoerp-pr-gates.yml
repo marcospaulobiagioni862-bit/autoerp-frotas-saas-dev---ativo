@@ -759,6 +759,9 @@ jobs:
       - name: Document review client regression
         run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
 
+      - name: Approved CNH driver prefill regression
+        run: npx tsx src/api/__tests__/driverCnhPrefillTestRunner.ts
+
       - name: Report AI client regression
         run: npx tsx src/api/__tests__/reportAiClientTestRunner.ts
 
