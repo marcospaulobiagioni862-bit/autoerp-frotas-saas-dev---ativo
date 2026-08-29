@@ -4,7 +4,6 @@ import { documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { canQueueDriverDocumentIntakeCnh } from './driverDocumentIntakeAiPolicy';
-import { scheduleDriverDocumentIntakeAiDispatch } from './driverDocumentIntakeAiDispatch';
 
 export class DriverDocumentIntakeAiNotFoundError extends Error {}
 export class DriverDocumentIntakeAiConflictError extends Error {}
@@ -59,7 +58,6 @@ export async function enqueueDriverDocumentIntakeCnh(
     if (!existing || existing.attachmentId !== attachment.id || existing.attachmentChecksum !== checksum) {
       throw new DriverDocumentIntakeAiConflictError();
     }
-    scheduleDriverDocumentIntakeAiDispatch(principal.companyId, existing.id);
     return { item: existing, created: false };
   }
 
@@ -173,6 +171,5 @@ export async function enqueueDriverDocumentIntakeCnh(
     timestamp: now,
   });
 
-  scheduleDriverDocumentIntakeAiDispatch(principal.companyId, item.id);
   return { item, created };
 }
