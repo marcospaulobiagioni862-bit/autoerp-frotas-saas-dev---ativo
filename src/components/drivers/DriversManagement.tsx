@@ -8,6 +8,7 @@ import {
   Edit2,
   Trash2,
   RefreshCw,
+  ScanLine,
 } from 'lucide-react';
 import {
   Card,
@@ -21,11 +22,13 @@ import {
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus, DocumentStatus } from '../../types/enums';
 
-const DriverFormModal=lazy(()=>import('./DriverFormModal').then(module=>({default:module.DriverFormModal})));
-const DriverDetailsModal=lazy(()=>import('./DriverDetailsModal').then(module=>({default:module.DriverDetailsModal})));
+const DriverFormModal = lazy(() => import('./DriverFormModal').then(module => ({ default: module.DriverFormModal })));
+const DriverDetailsModal = lazy(() => import('./DriverDetailsModal').then(module => ({ default: module.DriverDetailsModal })));
+const DriverCnhIntakeModal = lazy(() => import('./DriverCnhIntakeModal').then(module => ({ default: module.DriverCnhIntakeModal })));
 
 interface DriversManagementProps {
   companyId: string;
@@ -51,6 +54,8 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+  const [isCnhIntakeOpen, setIsCnhIntakeOpen] = useState(false);
+  const [cnhDraft, setCnhDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [deletingDriver, setDeletingDriver] = useState<Driver | null>(null);
@@ -132,11 +137,27 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
 
   const handleOpenCreate = () => {
     setEditingDriver(null);
+    setCnhDraft(null);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenCnhIntake = () => {
+    setEditingDriver(null);
+    setCnhDraft(null);
+    setIsFormOpen(false);
+    setIsCnhIntakeOpen(true);
+  };
+
+  const handleCnhDraftReady = (draft: ApprovedCnhDriverDraft) => {
+    setCnhDraft(draft);
+    setEditingDriver(null);
+    setIsCnhIntakeOpen(false);
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (driver: Driver, event: React.MouseEvent) => {
     event.stopPropagation();
+    setCnhDraft(null);
     setEditingDriver(driver);
     setIsFormOpen(true);
   };
@@ -176,11 +197,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
     }
   };
 
-  const driverModalResetKey = isFormOpen
-    ? `form:${editingDriver?.id ?? 'new'}`
-    : isDetailsOpen
-      ? `details:${selectedDriverId ?? 'none'}`
-      : 'none';
+  const driverModalResetKey = isCnhIntakeOpen
+    ? 'cnh-intake'
+    : isFormOpen
+      ? `form:${editingDriver?.id ?? (cnhDraft ? 'new-cnh' : 'new')}`
+      : isDetailsOpen
+        ? `details:${selectedDriverId ?? 'none'}`
+        : 'none';
 
   return (
     <div className="space-y-6">
@@ -194,10 +217,16 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
           icon: <UserPlus className="w-4 h-4" />,
         }}
         secondaryActions={
-          <Button variant="outline" size="sm" onClick={loadData}>
-            <RefreshCw className="w-4 h-4 mr-1.5" />
-            Atualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleOpenCnhIntake}>
+              <ScanLine className="w-4 h-4 mr-1.5" />
+              Cadastrar pela CNH
+            </Button>
+            <Button variant="outline" size="sm" onClick={loadData}>
+              <RefreshCw className="w-4 h-4 mr-1.5" />
+              Atualizar
+            </Button>
+          </div>
         }
       />
 
@@ -392,15 +421,24 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         </>
       )}
 
-      <LazyModuleErrorBoundary resetKey={driverModalResetKey} onRetry={()=>window.location.reload()}>
+      <LazyModuleErrorBoundary resetKey={driverModalResetKey} onRetry={() => window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do motorista...</div></div>}>
-          {isFormOpen&&<DriverFormModal
+          {isCnhIntakeOpen && <DriverCnhIntakeModal
             isOpen
-            onClose={() => setIsFormOpen(false)}
+            onClose={() => setIsCnhIntakeOpen(false)}
+            onDraftReady={handleCnhDraftReady}
+          />}
+          {isFormOpen && <DriverFormModal
+            isOpen
+            onClose={() => {
+              setIsFormOpen(false);
+              setCnhDraft(null);
+            }}
             driverToEdit={editingDriver}
+            initialCnhDraft={editingDriver ? null : cnhDraft}
             onSuccess={loadData}
           />}
-          {isDetailsOpen&&selectedDriverId&&<DriverDetailsModal
+          {isDetailsOpen && selectedDriverId && <DriverDetailsModal
             isOpen
             onClose={() => setIsDetailsOpen(false)}
             driverId={selectedDriverId}
