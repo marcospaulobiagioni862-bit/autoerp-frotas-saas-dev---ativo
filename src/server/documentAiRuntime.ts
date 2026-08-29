@@ -126,6 +126,19 @@ export function createDocumentAiRuntimeFromEnvironment(
   };
 }
 
+export function isDocumentAiRuntimeAvailableFromEnvironment(
+  environment: DocumentAiRuntimeEnvironment = process.env,
+  dependencies: DocumentAiRuntimeDependencies = {},
+): boolean {
+  try {
+    createDocumentAiRuntimeFromEnvironment(environment, dependencies);
+    return true;
+  } catch (error) {
+    if (error instanceof DocumentAiRuntimeUnavailableError) return false;
+    throw error;
+  }
+}
+
 export async function dispatchDocumentAiExtractionFromEnvironment(
   companyId: string,
   extractionId: string,
