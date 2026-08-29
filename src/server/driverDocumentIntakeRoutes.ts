@@ -5,8 +5,13 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import type { DriverDocumentIntakeState } from './driverDocumentIntakeAuthority';
+import {
+  DriverDocumentIntakeAiConflictError,
+  DriverDocumentIntakeAiNotFoundError,
+  enqueueDriverDocumentIntakeCnh,
+} from './driverDocumentIntakeAiQueue';
 
-type DriverIntakeAction = 'VIEW_DRIVER' | 'CREATE_DRIVER';
+type DriverIntakeAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'PROCESS_DOCUMENT_AI';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -54,6 +59,30 @@ function optionalText(value: unknown): string | undefined {
   return String(value);
 }
 
+function requiredIntakeId(value: unknown): string {
+  const id = typeof value === 'string' ? value.trim() : '';
+  if (!id || id.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(id)) throw new DriverDocumentIntakeValidationError();
+  return id;
+}
+
+function requireEmptyBody(body: unknown): void {
+  if (body === undefined || body === null) return;
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body as Record<string, unknown>).length !== 0) {
+    throw new DriverDocumentIntakeValidationError();
+  }
+}
+
+function sanitizeExtraction(item: any) {
+  return {
+    id: String(item.id),
+    attachmentId: String(item.attachmentId),
+    attachmentChecksum: String(item.attachmentChecksum),
+    status: String(item.status),
+    createdAt: iso(item.createdAt),
+    updatedAt: iso(item.updatedAt),
+  };
+}
+
 export function mapDriverDocumentIntakeRow(row: any): DriverDocumentIntakeState {
   if (!row) throw new DriverDocumentIntakeValidationError();
   return {
@@ -78,11 +107,11 @@ function sendError(res: Response, error: unknown): void {
     res.status(400).json({ error: 'Invalid driver document intake request' });
     return;
   }
-  if (error instanceof DriverDocumentIntakeNotFoundError) {
+  if (error instanceof DriverDocumentIntakeNotFoundError || error instanceof DriverDocumentIntakeAiNotFoundError) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
-  if (error instanceof DriverDocumentIntakeConflictError) {
+  if (error instanceof DriverDocumentIntakeConflictError || error instanceof DriverDocumentIntakeAiConflictError) {
     res.status(409).json({ error: 'Driver document intake conflict' });
     return;
   }
@@ -161,12 +190,29 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
     }
   });
 
+  app.post('/api/driver-document-intakes/:id/document-ai', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'PROCESS_DOCUMENT_AI');
+    if (!principal) return;
+    try {
+      const intakeId = requiredIntakeId(req.params.id);
+      requireEmptyBody(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (context) => (
+        enqueueDriverDocumentIntakeCnh(context, principal, intakeId)
+      ));
+      res.status(result.created ? 201 : 200).json({ item: sanitizeExtraction(result.item), created: result.created });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.get('/api/driver-document-intakes/:id', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'VIEW_DRIVER');
     if (!principal) return;
-    const intakeId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
-    if (!intakeId || intakeId.length > 120) {
-      sendError(res, new DriverDocumentIntakeValidationError());
+    let intakeId: string;
+    try {
+      intakeId = requiredIntakeId(req.params.id);
+    } catch (error) {
+      sendError(res, error);
       return;
     }
 
