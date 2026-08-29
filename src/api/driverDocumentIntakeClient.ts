@@ -42,6 +42,12 @@ export interface ApprovedCnhDriverDraft {
   cnhExpiration?: string;
 }
 
+export interface DriverDocumentIntakePromotionResult {
+  driverId: string;
+  attachmentId: string;
+  promoted: boolean;
+}
+
 const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'DRAFT',
   'DOCUMENT_UPLOADED',
@@ -98,6 +104,17 @@ function validateExtractionSummary(value: unknown): DriverDocumentIntakeExtracti
     throw new Error('Invalid driver document intake extraction payload');
   }
   return item as unknown as DriverDocumentIntakeExtractionSummary;
+}
+
+function validatePromotionResult(value: unknown): DriverDocumentIntakePromotionResult {
+  const item = asRecord(value);
+  if (
+    typeof item.driverId !== 'string' || !item.driverId.trim() ||
+    typeof item.attachmentId !== 'string' || !item.attachmentId.trim() ||
+    typeof item.promoted !== 'boolean' ||
+    !Object.keys(item).every((key) => ['driverId', 'attachmentId', 'promoted'].includes(key))
+  ) throw new Error('Invalid driver document intake promotion payload');
+  return item as unknown as DriverDocumentIntakePromotionResult;
 }
 
 function validIsoDate(value: string): boolean {
@@ -174,5 +191,16 @@ export class DriverDocumentIntakeClient {
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateApprovedCnhDraft(asRecord(await response.json()).draft);
+  }
+
+  static async promote(id: string, driverId: string): Promise<DriverDocumentIntakePromotionResult> {
+    const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}/promote`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ driverId }),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    return validatePromotionResult(asRecord(await response.json()).item);
   }
 }
