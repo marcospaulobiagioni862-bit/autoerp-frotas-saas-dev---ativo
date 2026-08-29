@@ -6,6 +6,8 @@ import { db } from '../../db';
 import { MaintenanceAuthorityService, setMaintenanceTestHooksForTests } from '../maintenanceAuthority';
 import { registerMaintenanceRoutes } from '../maintenanceRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import './maintenanceTimelineTestRunner';
+import { runMaintenanceTimelineIntegration } from './maintenanceTimelineIntegration';
 
 const require = createRequire(import.meta.url);
 const { Client } = require('pg') as typeof import('pg');
@@ -132,7 +134,7 @@ async function testRls():Promise<void>{
 }
 
 async function main():Promise<void>{
-  await seed(); await testHttpSecurity(); await testAtomicLifecycle(); await testRls();
+  await seed(); await testHttpSecurity(); await testAtomicLifecycle(); await testRls(); await runMaintenanceTimelineIntegration();
   console.log('SECURITY-2J1 maintenance authority integration: PASS');
 }
 main().then(()=>process.exit(0)).catch((error)=>{console.error(error);process.exit(1);});
