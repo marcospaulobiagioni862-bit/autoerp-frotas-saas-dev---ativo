@@ -38,6 +38,15 @@ function workerId(value: string): string {
   return normalized;
 }
 
+function optionalExtractionId(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(normalized)) {
+    throw new Error('Invalid document AI extraction id');
+  }
+  return normalized;
+}
+
 interface ClaimedExtraction {
   id: string;
   attachmentId: string;
@@ -55,7 +64,12 @@ export type DocumentAiQueueResult =
   | { id: string; status: 'FAILED'; failureCode: string }
   | null;
 
-async function claim(companyId: string, claimedBy: string): Promise<ClaimedExtraction | null> {
+async function claim(
+  companyId: string,
+  claimedBy: string,
+  expectedExtractionId?: string,
+): Promise<ClaimedExtraction | null> {
+  const expectedId = optionalExtractionId(expectedExtractionId);
   return await UnitOfWork.run(companyId, async (context: any) => {
     const tx = context.getRawTransaction?.();
     if (!tx) throw new Error('Document AI persistence unavailable');
@@ -68,6 +82,7 @@ async function claim(companyId: string, claimedBy: string): Promise<ClaimedExtra
           ON attachment.company_id = extraction.company_id
          AND attachment.id = extraction.attachment_id
         WHERE extraction.company_id = ${companyId}
+          AND (${expectedId}::text IS NULL OR extraction.id = ${expectedId})
           AND extraction.status = 'PENDING'
           AND extraction.attempt_count < ${DOCUMENT_AI_MAX_ATTEMPTS}
           AND attachment.is_archived = false
@@ -224,9 +239,10 @@ export class DocumentAiQueueService {
     worker: string,
     provider: DocumentAiProvider,
     reader: DocumentAiAttachmentReader,
+    expectedExtractionId?: string,
   ): Promise<DocumentAiQueueResult> {
     const claimedBy = workerId(worker);
-    const item = await claim(companyId, claimedBy);
+    const item = await claim(companyId, claimedBy, expectedExtractionId);
     if (!item) return null;
     try {
       const content = await reader.read(companyId, item.storageKey);
