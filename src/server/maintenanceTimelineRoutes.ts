@@ -5,6 +5,7 @@ import {
   MaintenanceNotFoundError,
   MaintenanceValidationError,
 } from './maintenanceAuthority';
+import { registerMaintenanceSlaRoutes } from './maintenanceSlaRoutes';
 import {
   MaintenanceTimelineAuthorityService,
   type MaintenanceTimelineEventType,
@@ -71,6 +72,8 @@ function send(res: Response, error: unknown): void {
 }
 
 export function registerMaintenanceTimelineRoutes(app: Express): void {
+  registerMaintenanceSlaRoutes(app);
+
   app.get('/api/maintenance/work-orders/:id/timeline', async (req, res) => {
     const principal = actor(req, res, 'VIEW_MAINTENANCE');
     if (!principal) return;
