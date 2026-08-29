@@ -11,6 +11,7 @@ import {
   DriverDocumentIntakeAiNotFoundError,
   enqueueDriverDocumentIntakeCnh,
 } from './driverDocumentIntakeAiQueue';
+import { dispatchDocumentAiExtractionFromEnvironment } from './documentAiRuntime';
 import {
   DriverDocumentIntakePromotionConflictError,
   DriverDocumentIntakePromotionNotFoundError,
@@ -102,6 +103,18 @@ function sanitizeExtraction(item: any) {
     createdAt: iso(item.createdAt),
     updatedAt: iso(item.updatedAt),
   };
+}
+
+function scheduleDocumentAiExtraction(companyId: string, extractionId: string): void {
+  setImmediate(() => {
+    void dispatchDocumentAiExtractionFromEnvironment(
+      companyId,
+      extractionId,
+      `driver-intake-${extractionId}`,
+    ).catch(() => {
+      console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE');
+    });
+  });
 }
 
 export function mapDriverDocumentIntakeRow(row: any): DriverDocumentIntakeState {
@@ -228,6 +241,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
       const result = await UnitOfWork.run(principal.companyId, async (context) => (
         enqueueDriverDocumentIntakeCnh(context, principal, intakeId)
       ));
+      scheduleDocumentAiExtraction(principal.companyId, String(result.item.id));
       res.status(result.created ? 201 : 200).json({ item: sanitizeExtraction(result.item), created: result.created });
     } catch (error) {
       sendError(res, error);

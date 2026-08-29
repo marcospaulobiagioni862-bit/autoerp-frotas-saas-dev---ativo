@@ -33,6 +33,7 @@ export interface DocumentAiRuntime {
   readonly providerName: string;
   readonly storageProvider: string;
   processNextForTenant(companyId: string, workerId: string): Promise<DocumentAiQueueResult>;
+  processExtractionForTenant(companyId: string, extractionId: string, workerId: string): Promise<DocumentAiQueueResult>;
 }
 
 export interface DocumentAiRuntimeDependencies {
@@ -43,8 +44,14 @@ export interface DocumentAiRuntimeDependencies {
     workerId: string,
     provider: DocumentAiProvider,
     reader: DocumentAiAttachmentReader,
+    expectedExtractionId?: string,
   ) => Promise<DocumentAiQueueResult>;
 }
+
+export type DocumentAiDispatchResult =
+  | { state: 'DISABLED' }
+  | { state: 'IDLE' }
+  | { state: 'PROCESSED'; item: Exclude<DocumentAiQueueResult, null> };
 
 export class DocumentAiRuntimeUnavailableError extends Error {
   constructor() {
@@ -97,8 +104,14 @@ export function createDocumentAiRuntimeFromEnvironment(
     },
   };
   const processNext = dependencies.processNext
-    ?? ((companyId, workerId, selectedProvider, selectedReader) => (
-      DocumentAiQueueService.processNextForTenant(companyId, workerId, selectedProvider, selectedReader)
+    ?? ((companyId, workerId, selectedProvider, selectedReader, expectedExtractionId) => (
+      DocumentAiQueueService.processNextForTenant(
+        companyId,
+        workerId,
+        selectedProvider,
+        selectedReader,
+        expectedExtractionId,
+      )
     ));
 
   return {
@@ -107,5 +120,28 @@ export function createDocumentAiRuntimeFromEnvironment(
     processNextForTenant(companyId, workerId) {
       return processNext(companyId, workerId, provider, reader);
     },
+    processExtractionForTenant(companyId, extractionId, workerId) {
+      return processNext(companyId, workerId, provider, reader, extractionId);
+    },
   };
+}
+
+export async function dispatchDocumentAiExtractionFromEnvironment(
+  companyId: string,
+  extractionId: string,
+  workerId: string,
+  environment: DocumentAiRuntimeEnvironment = process.env,
+  dependencies: DocumentAiRuntimeDependencies = {},
+): Promise<DocumentAiDispatchResult> {
+  let runtime: DocumentAiRuntime;
+  try {
+    runtime = createDocumentAiRuntimeFromEnvironment(environment, dependencies);
+  } catch (error) {
+    if (error instanceof DocumentAiRuntimeUnavailableError) return { state: 'DISABLED' };
+    throw error;
+  }
+
+  const item = await runtime.processExtractionForTenant(companyId, extractionId, workerId);
+  if (!item) return { state: 'IDLE' };
+  return { state: 'PROCESSED', item };
 }
