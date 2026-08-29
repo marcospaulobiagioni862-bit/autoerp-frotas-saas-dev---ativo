@@ -50,7 +50,7 @@ async function financialCounts(companyId: string): Promise<[number, number, numb
   ];
 }
 
-async function authorityAndIdempotency(): Promise<{ workOrderAId: string; workOrderBId: string; firstEventId: string }> {
+async function authorityAndIdempotency(): Promise<{ workOrderBId: string; firstEventId: string }> {
   const workOrderA = await MaintenanceAuthorityService.createWorkOrder(adminA, {
     number: 'OS-TIMELINE-A', vehicleId: vehicleA, entryKm: 10000, description: 'Synthetic timeline A',
   });
@@ -104,7 +104,7 @@ async function authorityAndIdempotency(): Promise<{ workOrderAId: string; workOr
   const afterFinance = await financialCounts(companyA);
   assert(JSON.stringify(afterFinance) === JSON.stringify(beforeFinance), 'timeline mutated financial records');
 
-  return { workOrderAId: workOrderA.id, workOrderBId: workOrderB.id, firstEventId: first.event.id };
+  return { workOrderBId: workOrderB.id, firstEventId: first.event.id };
 }
 
 async function rlsAndAppendOnly(workOrderBId: string, firstEventId: string): Promise<void> {
@@ -151,11 +151,9 @@ async function rlsAndAppendOnly(workOrderBId: string, firstEventId: string): Pro
   }
 }
 
-async function main(): Promise<void> {
+export async function runMaintenanceTimelineIntegration(): Promise<void> {
   await seed();
   const result = await authorityAndIdempotency();
   await rlsAndAppendOnly(result.workOrderBId, result.firstEventId);
   console.log('MAINT-SLA-1B persistence tenant append-only integration: PASS');
 }
-
-main().then(() => process.exit(0)).catch(error => { console.error(error); process.exit(1); });
