@@ -19,6 +19,10 @@ const CONTRACT_STATUSES = new Set(Object.values(ContractStatus));
 const PERIODICITIES = new Set(Object.values(RecurringFrequency));
 const OBLIGATION_STATUSES = new Set(Object.values(ObligationStatus));
 
+function isOptionalIntegerInRange(value: unknown, min: number, max: number): boolean {
+  return value === undefined || (typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max);
+}
+
 function validateContract(value: unknown): Contract {
   const item = asRecord(value);
   if (
@@ -32,8 +36,8 @@ function validateContract(value: unknown): Contract {
     typeof item.status !== 'string' || !CONTRACT_STATUSES.has(item.status as ContractStatus) ||
     typeof item.rentalAmount !== 'number' || !Number.isFinite(item.rentalAmount) ||
     typeof item.billingPeriodicity !== 'string' || !PERIODICITIES.has(item.billingPeriodicity as RecurringFrequency) ||
-    (item.billingDueDayOfWeek !== undefined && typeof item.billingDueDayOfWeek !== 'number') ||
-    (item.billingDueDayOfMonth !== undefined && typeof item.billingDueDayOfMonth !== 'number') ||
+    !isOptionalIntegerInRange(item.billingDueDayOfWeek, 0, 6) ||
+    !isOptionalIntegerInRange(item.billingDueDayOfMonth, 1, 31) ||
     typeof item.securityDepositAmount !== 'number' || !Number.isFinite(item.securityDepositAmount) ||
     typeof item.franchiseKm !== 'number' || !Number.isFinite(item.franchiseKm) ||
     typeof item.excessKmRate !== 'number' || !Number.isFinite(item.excessKmRate) ||
