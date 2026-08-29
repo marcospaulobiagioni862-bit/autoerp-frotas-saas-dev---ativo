@@ -106,6 +106,7 @@ const attachment = {
 };
 assert.equal(configuredDocumentAiStorageProvider(undefined), 'SERVER_FS');
 assert.equal(configuredDocumentAiStorageProvider('r2'), 'R2');
+assert.equal(configuredDocumentAiStorageProvider('  server_fs  '), 'SERVER_FS');
 assert.equal(configuredDocumentAiStorageProvider('legacy_browser'), null);
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2'), true);
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'SERVER_FS'), false);
