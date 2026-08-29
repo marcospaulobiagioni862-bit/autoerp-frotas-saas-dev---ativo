@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput } from '../../api/driverClient';
-import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
+import { DriverDocumentIntakeClient, type ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
+
+type ApprovedCnhDraftWithSource = ApprovedCnhDriverDraft & { sourceIntakeId?: string };
 
 interface DriverFormModalProps {
   isOpen: boolean;
@@ -23,6 +25,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdDriverId, setCreatedDriverId] = useState<string | null>(null);
+
+  const sourceIntakeId = (initialCnhDraft as ApprovedCnhDraftWithSource | null | undefined)?.sourceIntakeId;
 
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
@@ -95,6 +100,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       setStatus(DriverStatus.ACTIVE);
       setNotes('');
     }
+    setCreatedDriverId(null);
     setErrorMessage(null);
   }, [driverToEdit, initialCnhDraft, isOpen]);
 
@@ -145,7 +151,22 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           );
         }
       } else {
-        await DriverClient.create(input);
+        let driverId = createdDriverId;
+        if (!driverId) {
+          const created = await DriverClient.create(input);
+          driverId = created.id;
+          setCreatedDriverId(created.id);
+        }
+        if (sourceIntakeId) {
+          try {
+            await DriverDocumentIntakeClient.promote(sourceIntakeId, driverId);
+            setCreatedDriverId(null);
+          } catch (promotionError: unknown) {
+            const detail = promotionError instanceof Error ? promotionError.message : 'Falha ao vincular a CNH.';
+            setErrorMessage(`O motorista já foi cadastrado, mas a CNH ainda precisa ser vinculada. Clique em “Concluir vínculo da CNH” para tentar novamente. ${detail}`);
+            return;
+          }
+        }
       }
 
       onSuccess();
@@ -179,71 +200,30 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         )}
 
+        {createdDriverId && sourceIntakeId && (
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl text-amber-800 dark:text-amber-300 text-sm flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <span>O motorista já foi criado. A próxima tentativa executará somente o vínculo do documento CNH; alterações feitas nos campos agora não serão reenviadas ao cadastro.</span>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <User className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              1. Dados Pessoais
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">1. Dados Pessoais</h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <Input
-                label="Nome Completo"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Ex: João da Silva Santos"
-                required
-              />
+              <Input label="Nome Completo" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ex: João da Silva Santos" required />
             </div>
-
-            <Input
-              label="CPF"
-              value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
-              placeholder="000.000.000-00"
-              required
-            />
-
-            <Input
-              label="RG"
-              value={rg}
-              onChange={(e) => setRg(e.target.value)}
-              placeholder="00.000.000-0"
-            />
-
-            <Input
-              label="Data de Nascimento"
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              required
-            />
-
-            <Input
-              label="Telefone Principal"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(11) 90000-0000"
-              required
-            />
-
-            <Input
-              label="WhatsApp"
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="(11) 90000-0000"
-            />
-
+            <Input label="CPF" value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="000.000.000-00" required />
+            <Input label="RG" value={rg} onChange={(e) => setRg(e.target.value)} placeholder="00.000.000-0" />
+            <Input label="Data de Nascimento" type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} required />
+            <Input label="Telefone Principal" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 90000-0000" required />
+            <Input label="WhatsApp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="(11) 90000-0000" />
             <div className="lg:col-span-2">
-              <Input
-                label="E-mail"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="motorista@email.com"
-              />
+              <Input label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="motorista@email.com" />
             </div>
           </div>
         </div>
@@ -251,26 +231,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <CreditCard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              2. Carteira Nacional de Habilitação (CNH)
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">2. Carteira Nacional de Habilitação (CNH)</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input
-              label="Número do Registro CNH"
-              value={cnhNumber}
-              onChange={(e) => setCnhNumber(e.target.value)}
-              placeholder="00000000000"
-              required
-            />
-
-            <Select
-              label="Categoria"
-              value={cnhCategory}
-              onChange={(e) => setCnhCategory(e.target.value)}
-              required
-            >
+            <Input label="Número do Registro CNH" value={cnhNumber} onChange={(e) => setCnhNumber(e.target.value)} placeholder="00000000000" required />
+            <Select label="Categoria" value={cnhCategory} onChange={(e) => setCnhCategory(e.target.value)} required>
               <option value="">Selecione</option>
               <option value="A">A (Moto)</option>
               <option value="B">B (Carro)</option>
@@ -279,21 +245,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
               <option value="D">D (Ônibus/Vans)</option>
               <option value="E">E (Articulados)</option>
             </Select>
-
-            <Input
-              label="Validade da CNH"
-              type="date"
-              value={cnhExpiration}
-              onChange={(e) => setCnhExpiration(e.target.value)}
-              required
-            />
-
+            <Input label="Validade da CNH" type="date" value={cnhExpiration} onChange={(e) => setCnhExpiration(e.target.value)} required />
             {driverToEdit && (
-              <Select
-                label="Status Operacional"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as DriverStatus)}
-              >
+              <Select label="Status Operacional" value={status} onChange={(e) => setStatus(e.target.value as DriverStatus)}>
                 <option value={DriverStatus.ACTIVE}>Ativo</option>
                 <option value={DriverStatus.INACTIVE}>Inativo</option>
                 <option value={DriverStatus.PENDING_DOCS}>Pendente de Docs</option>
@@ -306,78 +260,30 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              3. Endereço
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">3. Endereço</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Input
-              label="CEP"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-              placeholder="00000-000"
-            />
-
+            <Input label="CEP" value={zipCode} onChange={(e) => setZipCode(e.target.value)} placeholder="00000-000" />
             <div className="sm:col-span-2">
-              <Input
-                label="Logradouro / Rua"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                placeholder="Av. Paulista"
-              />
+              <Input label="Logradouro / Rua" value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Av. Paulista" />
             </div>
-
-            <Input
-              label="Número"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              placeholder="1000"
-            />
-
-            <Input
-              label="Complemento"
-              value={complement}
-              onChange={(e) => setComplement(e.target.value)}
-              placeholder="Apto 42"
-            />
-
-            <Input
-              label="Bairro"
-              value={neighborhood}
-              onChange={(e) => setNeighborhood(e.target.value)}
-              placeholder="Bela Vista"
-            />
-
-            <Input
-              label="Cidade"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="São Paulo"
-            />
-
-            <Input
-              label="Estado (UF)"
-              value={state}
-              onChange={(e) => setState(e.target.value.toUpperCase())}
-              placeholder="SP"
-              maxLength={2}
-            />
+            <Input label="Número" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="1000" />
+            <Input label="Complemento" value={complement} onChange={(e) => setComplement(e.target.value)} placeholder="Apto 42" />
+            <Input label="Bairro" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} placeholder="Bela Vista" />
+            <Input label="Cidade" value={city} onChange={(e) => setCity(e.target.value)} placeholder="São Paulo" />
+            <Input label="Estado (UF)" value={state} onChange={(e) => setState(e.target.value.toUpperCase())} placeholder="SP" maxLength={2} />
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
             <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              4. Plataformas e Observações
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">4. Plataformas e Observações</h3>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Plataformas de Atuação
-            </label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Plataformas de Atuação</label>
             <div className="flex flex-wrap gap-2">
               {['Uber', '99', 'InDrive', 'Particular', 'Lalamove'].map((p) => {
                 const active = appPlatforms.includes(p);
@@ -400,9 +306,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Observações Operacionais
-            </label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações Operacionais</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -414,11 +318,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>
-            {driverToEdit ? 'Salvar Alterações' : 'Cadastrar Motorista'}
+            {driverToEdit ? 'Salvar Alterações' : createdDriverId && sourceIntakeId ? 'Concluir vínculo da CNH' : 'Cadastrar Motorista'}
           </Button>
         </div>
       </form>
