@@ -8,6 +8,8 @@ import {
 } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
+import { DriverCnhPrefillButton } from './DriverCnhPrefillButton';
+import type { DriverCnhDraft } from '../../api/driverCnhPrefill';
 
 type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId?: string };
 
@@ -106,6 +108,16 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
     }
     setErrorMessage(null);
   }, [driverToEdit, initialCnhDraft, isOpen]);
+
+  const applyApprovedCnhDraft = (draft: DriverCnhDraft) => {
+    if (draft.fullName !== undefined) setFullName(draft.fullName);
+    if (draft.cpf !== undefined) setCpf(draft.cpf);
+    if (draft.rg !== undefined) setRg(draft.rg);
+    if (draft.birthDate !== undefined) setBirthDate(draft.birthDate);
+    if (draft.cnhNumber !== undefined) setCnhNumber(draft.cnhNumber);
+    if (draft.cnhCategory !== undefined) setCnhCategory(draft.cnhCategory);
+    if (draft.cnhExpiration !== undefined) setCnhExpiration(draft.cnhExpiration);
+  };
 
   const togglePlatform = (platform: string) => {
     if (appPlatforms.includes(platform)) {
@@ -282,6 +294,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
               2. Carteira Nacional de Habilitação (CNH)
             </h3>
           </div>
+
+          {driverToEdit && (
+            <DriverCnhPrefillButton driverId={driverToEdit.id} onApply={applyApprovedCnhDraft} />
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Input
