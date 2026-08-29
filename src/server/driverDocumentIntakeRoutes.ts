@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { projectApprovedCnhDriverDraft } from './driverDocumentIntakeApprovedCnhDraft';
 import type { DriverDocumentIntakeState } from './driverDocumentIntakeAuthority';
 import {
   DriverDocumentIntakeAiConflictError,
@@ -200,6 +201,61 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         enqueueDriverDocumentIntakeCnh(context, principal, intakeId)
       ));
       res.status(result.created ? 201 : 200).json({ item: sanitizeExtraction(result.item), created: result.created });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.get('/api/driver-document-intakes/:id/approved-cnh-draft', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'VIEW_DRIVER');
+    if (!principal) return;
+    try {
+      const intakeId = requiredIntakeId(req.params.id);
+      const draft = await UnitOfWork.run(principal.companyId, async (context) => {
+        const tx = context.getRawTransaction?.();
+        if (!tx) throw new Error('Raw tenant transaction unavailable');
+        const result: any = await tx.execute(sql`
+          SELECT
+            intake.status AS intake_status,
+            intake.attachment_id,
+            intake.approved_extraction_id,
+            extraction.id AS extraction_id,
+            extraction.attachment_id AS extraction_attachment_id,
+            extraction.status AS extraction_status,
+            extraction.detected_document_type,
+            extraction.proposed_fields,
+            extraction.corrections
+          FROM driver_document_intakes intake
+          JOIN document_ai_extractions extraction
+            ON extraction.company_id = intake.company_id
+           AND extraction.id = intake.approved_extraction_id
+          WHERE intake.company_id = ${principal.companyId}
+            AND intake.id = ${intakeId}
+            AND intake.created_by = ${principal.userId}
+          LIMIT 1
+          FOR UPDATE OF intake
+        `);
+        const row = result.rows?.[0];
+        if (!row) throw new DriverDocumentIntakeNotFoundError();
+        if (
+          String(row.intake_status) !== 'APPROVED' ||
+          !row.attachment_id || !row.approved_extraction_id ||
+          String(row.approved_extraction_id) !== String(row.extraction_id) ||
+          String(row.attachment_id) !== String(row.extraction_attachment_id) ||
+          String(row.extraction_status) !== 'APPROVED' ||
+          String(row.detected_document_type || '').toUpperCase() !== 'CNH'
+        ) throw new DriverDocumentIntakeConflictError();
+
+        const projected = projectApprovedCnhDriverDraft({
+          status: String(row.extraction_status),
+          detectedDocumentType: String(row.detected_document_type),
+          proposedFields: row.proposed_fields,
+          corrections: row.corrections,
+        });
+        if (Object.keys(projected).length === 0) throw new DriverDocumentIntakeConflictError();
+        return projected;
+      });
+      res.json({ draft });
     } catch (error) {
       sendError(res, error);
     }
