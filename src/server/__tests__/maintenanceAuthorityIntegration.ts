@@ -8,6 +8,8 @@ import { registerMaintenanceRoutes } from '../maintenanceRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 import './maintenanceTimelineTestRunner';
 import { runMaintenanceTimelineIntegration } from './maintenanceTimelineIntegration';
+import { runMaintenanceSlaIntegration } from './maintenanceSlaIntegration';
+import { runMaintenanceSlaRouteRegression } from './maintenanceSlaRoutesTestRunner';
 
 const require = createRequire(import.meta.url);
 const { Client } = require('pg') as typeof import('pg');
@@ -134,7 +136,13 @@ async function testRls():Promise<void>{
 }
 
 async function main():Promise<void>{
-  await seed(); await testHttpSecurity(); await testAtomicLifecycle(); await testRls(); await runMaintenanceTimelineIntegration();
+  await seed();
+  await testHttpSecurity();
+  await testAtomicLifecycle();
+  await testRls();
+  await runMaintenanceTimelineIntegration();
+  await runMaintenanceSlaIntegration();
+  await runMaintenanceSlaRouteRegression();
   console.log('SECURITY-2J1 maintenance authority integration: PASS');
 }
 main().then(()=>process.exit(0)).catch((error)=>{console.error(error);process.exit(1);});

@@ -5,18 +5,15 @@ import {
   MaintenanceNotFoundError,
   MaintenanceValidationError,
 } from './maintenanceAuthority';
-import { registerMaintenanceSlaRoutes } from './maintenanceSlaRoutes';
-import {
-  MaintenanceTimelineAuthorityService,
-  type MaintenanceTimelineEventType,
-} from './maintenanceTimelineAuthority';
+import { MaintenanceSlaAuthorityService } from './maintenanceSlaAuthority';
 
 type Action = 'VIEW_MAINTENANCE' | 'MUTATE_MAINTENANCE';
 const READ = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
 const WRITE = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL']);
 const PROTECTED = new Set([
-  'companyId', 'company_id', 'userId', 'actorUserId', 'actor_user_id', 'actorName', 'actor_name',
-  'occurredAt', 'occurred_at', 'createdAt', 'created_at', 'workOrderId', 'work_order_id',
+  'companyId', 'company_id', 'userId', 'user_id', 'actorUserId', 'actor_user_id',
+  'actorName', 'actor_name', 'occurredAt', 'occurred_at', 'createdAt', 'created_at',
+  'workOrderId', 'work_order_id', 'status', 'elapsedMinutes', 'differenceMinutes', 'progressRatio',
 ]);
 
 function actor(req: Request, res: Response, action: Action): AuthenticatedPrincipal | null {
@@ -43,20 +40,9 @@ function rejectProtected(body: unknown): void {
   }
 }
 
-function requiredText(value: unknown, max: number): string {
-  const text = typeof value === 'string' ? value.trim() : '';
-  if (!text || text.length > max) throw new MaintenanceValidationError('Invalid text');
-  return text;
-}
-
-function optionalText(value: unknown, max: number): string | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  return requiredText(String(value), max);
-}
-
 function send(res: Response, error: unknown): void {
   if (error instanceof MaintenanceValidationError) {
-    res.status(400).json({ error: 'Invalid maintenance timeline request' });
+    res.status(400).json({ error: 'Invalid maintenance SLA request' });
     return;
   }
   if (error instanceof MaintenanceNotFoundError) {
@@ -64,37 +50,57 @@ function send(res: Response, error: unknown): void {
     return;
   }
   if (error instanceof MaintenanceConflictError) {
-    res.status(409).json({ error: 'Maintenance timeline conflict' });
+    res.status(409).json({ error: 'Maintenance SLA conflict' });
     return;
   }
-  console.error('AUTOERP_MAINTENANCE_TIMELINE_FAILURE', error);
-  res.status(500).json({ error: 'Maintenance timeline operation failed' });
+  console.error('AUTOERP_MAINTENANCE_SLA_FAILURE', error);
+  res.status(500).json({ error: 'Maintenance SLA operation failed' });
 }
 
-export function registerMaintenanceTimelineRoutes(app: Express): void {
-  registerMaintenanceSlaRoutes(app);
-
-  app.get('/api/maintenance/work-orders/:id/timeline', async (req, res) => {
+export function registerMaintenanceSlaRoutes(app: Express): void {
+  app.get('/api/maintenance/work-orders/:id/sla', async (req, res) => {
     const principal = actor(req, res, 'VIEW_MAINTENANCE');
     if (!principal) return;
     try {
-      res.json(await MaintenanceTimelineAuthorityService.list(principal.companyId, req.params.id));
+      res.json(await MaintenanceSlaAuthorityService.get(principal.companyId, req.params.id));
     } catch (error) {
       send(res, error);
     }
   });
 
-  app.post('/api/maintenance/work-orders/:id/timeline/events', async (req, res) => {
+  app.put('/api/maintenance/work-orders/:id/sla', async (req, res) => {
     const principal = actor(req, res, 'MUTATE_MAINTENANCE');
     if (!principal) return;
     try {
       rejectProtected(req.body);
-      const result = await MaintenanceTimelineAuthorityService.register(principal, req.params.id, {
-        eventType: requiredText(req.body?.eventType, 80).toUpperCase() as MaintenanceTimelineEventType,
-        idempotencyKey: requiredText(req.body?.idempotencyKey, 200),
-        note: optionalText(req.body?.note, 2000),
-      });
-      res.status(result.replayed ? 200 : 201).json(result);
+      const allowed = new Set(['expectedDurationMinutes']);
+      for (const key of Object.keys(req.body as Record<string, unknown>)) {
+        if (!allowed.has(key)) throw new MaintenanceValidationError(`Unexpected field: ${key}`);
+      }
+      if (!Object.prototype.hasOwnProperty.call(req.body, 'expectedDurationMinutes')) {
+        throw new MaintenanceValidationError('Missing expectedDurationMinutes');
+      }
+      res.json(await MaintenanceSlaAuthorityService.setExpectedDuration(
+        principal,
+        req.params.id,
+        req.body.expectedDurationMinutes,
+      ));
+    } catch (error) {
+      send(res, error);
+    }
+  });
+
+  app.post('/api/maintenance/work-orders/:id/sla/delay-reasons', async (req, res) => {
+    const principal = actor(req, res, 'MUTATE_MAINTENANCE');
+    if (!principal) return;
+    try {
+      rejectProtected(req.body);
+      const allowed = new Set(['reason']);
+      for (const key of Object.keys(req.body as Record<string, unknown>)) {
+        if (!allowed.has(key)) throw new MaintenanceValidationError(`Unexpected field: ${key}`);
+      }
+      const result = await MaintenanceSlaAuthorityService.addDelayReason(principal, req.params.id, req.body.reason);
+      res.status(201).json(result);
     } catch (error) {
       send(res, error);
     }
