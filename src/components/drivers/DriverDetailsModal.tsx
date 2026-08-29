@@ -51,6 +51,7 @@ import {
   DriverLegacyDetailsBridge,
   type DriverLegacyDetailedSummary,
 } from './DriverLegacyDetailsBridge';
+import { DriverProfilePhoto } from './DriverProfilePhoto';
 import {
   createWhatsappTaskProposalCounts,
   filterWhatsappTaskProposals,
@@ -75,7 +76,6 @@ type DriverTab =
   | 'communications'
   | 'health'
   | 'history';
-
 
 export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   isOpen,
@@ -422,9 +422,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
         <div className="space-y-5">
           <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col md:flex-row justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-700 font-bold">
-                {driver.fullName.substring(0, 2).toUpperCase()}
-              </div>
+              <DriverProfilePhoto driverId={driver.id} driverName={driver.fullName} />
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-lg font-bold">{driver.fullName}</h2>
@@ -621,39 +619,22 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                       {whatsappConsent?.status === 'GRANTED' ? 'Autorizado' : whatsappConsent?.status === 'REVOKED' ? 'Revogado' : 'Não registrado'}
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    Número verificado pelo servidor: {whatsappConsent?.phoneMasked || 'disponível somente após decisão'}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    A decisão deve refletir uma autorização real do motorista. O navegador não escolhe empresa, telefone ou conteúdo.
-                  </p>
+                  <p className="text-xs text-slate-500">Número verificado pelo servidor: {whatsappConsent?.phoneMasked || 'disponível somente após decisão'}</p>
+                  <p className="text-xs text-slate-500">A decisão deve refletir uma autorização real do motorista. O navegador não escolhe empresa, telefone ou conteúdo.</p>
                   <div className="flex flex-wrap gap-2">
                     {whatsappConsent?.status !== 'GRANTED' && (
-                      <Button size="sm" onClick={() => handleWhatsappConsent('GRANT')} isLoading={whatsappLoading}>
-                        Registrar consentimento
-                      </Button>
+                      <Button size="sm" onClick={() => handleWhatsappConsent('GRANT')} isLoading={whatsappLoading}>Registrar consentimento</Button>
                     )}
                     {whatsappConsent?.status === 'GRANTED' && (
-                      <Button size="sm" variant="danger" onClick={() => handleWhatsappConsent('REVOKE')} isLoading={whatsappLoading}>
-                        Revogar e cancelar pendências
-                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => handleWhatsappConsent('REVOKE')} isLoading={whatsappLoading}>Revogar e cancelar pendências</Button>
                     )}
                   </div>
                 </Card>
 
                 <Card className="p-4 space-y-3">
                   <h3 className="text-sm font-bold">Lembrete de vencimento da CNH</h3>
-                  <p className="text-xs text-slate-500">
-                    Template fixo, com nome e validade derivados do PostgreSQL pelo servidor. Nenhum texto livre é aceito.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={whatsappConsent?.status !== 'GRANTED' || whatsappLoading}
-                    onClick={handlePrepareCnhReminder}
-                  >
-                    Preparar lembrete — sem enviar
-                  </Button>
+                  <p className="text-xs text-slate-500">Template fixo, com nome e validade derivados do PostgreSQL pelo servidor. Nenhum texto livre é aceito.</p>
+                  <Button size="sm" variant="outline" disabled={whatsappConsent?.status !== 'GRANTED' || whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
                   {whatsappConsent?.status !== 'GRANTED' && (
                     <p className="text-[11px] text-amber-700 dark:text-amber-300">É necessário consentimento vigente para preparar a solicitação.</p>
                   )}
@@ -687,23 +668,12 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                     <p className="text-xs text-slate-500">O conteúdo bruto não é armazenado nem exibido. Aprovar cria somente uma tarefa operacional; não altera financeiro, contratos ou documentos.</p>
                   </div>
                   <div className="flex flex-col gap-2 sm:min-w-52">
-                    <Select
-                      label="Triagem"
-                      value={whatsappProposalFilter}
-                      onChange={(event) => setWhatsappProposalFilter(event.target.value as WhatsappTaskProposalFilter)}
-                    >
+                    <Select label="Triagem" value={whatsappProposalFilter} onChange={(event) => setWhatsappProposalFilter(event.target.value as WhatsappTaskProposalFilter)}>
                       <option value="ALL">Todas ({whatsappTaskProposalCounts.ALL})</option>
                       <option value="PENDING">Aguardando revisão ({whatsappTaskProposalCounts.PENDING})</option>
                       <option value="COMPLETED">Concluídas ({whatsappTaskProposalCounts.COMPLETED})</option>
                     </Select>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={whatsappLoading || whatsappTaskProposalCounts.PENDING === 0}
-                      onClick={() => setWhatsappProposalFilter('PENDING')}
-                    >
-                      Priorizar pendências
-                    </Button>
+                    <Button size="sm" variant="outline" disabled={whatsappLoading || whatsappTaskProposalCounts.PENDING === 0} onClick={() => setWhatsappProposalFilter('PENDING')}>Priorizar pendências</Button>
                   </div>
                 </div>
                 {whatsappLoading && <span className="text-xs text-slate-400">Atualizando…</span>}
@@ -712,9 +682,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 ) : visibleWhatsappTaskProposals.length === 0 ? (
                   <div className="rounded-xl border border-dashed p-4 text-xs text-slate-500">
                     <p>Nenhuma proposta corresponde à triagem atual. As outras propostas autorizadas continuam disponíveis.</p>
-                    <Button size="sm" variant="outline" className="mt-2" onClick={() => setWhatsappProposalFilter('ALL')}>
-                      Mostrar todas
-                    </Button>
+                    <Button size="sm" variant="outline" className="mt-2" onClick={() => setWhatsappProposalFilter('ALL')}>Mostrar todas</Button>
                   </div>
                 ) : visibleWhatsappTaskProposals.map((proposal) => (
                   <div key={proposal.id} className="p-3 border rounded-xl text-xs space-y-2">
@@ -732,12 +700,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                     )}
                     {proposal.status === 'PENDING' && (
                       <div className="flex flex-wrap gap-2">
-                        <Button size="sm" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'APPROVE')}>
-                          Aprovar e criar tarefa
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'REJECT')}>
-                          Rejeitar proposta
-                        </Button>
+                        <Button size="sm" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'APPROVE')}>Aprovar e criar tarefa</Button>
+                        <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={() => handleWhatsappTaskProposalReview(proposal, 'REJECT')}>Rejeitar proposta</Button>
                       </div>
                     )}
                   </div>
