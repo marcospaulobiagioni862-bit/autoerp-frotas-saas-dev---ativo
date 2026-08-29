@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
+const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', import.meta.url), 'utf8');
 
 for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
   assert.equal(
@@ -52,4 +53,12 @@ assert.doesNotMatch(
   'driver modal fallback must not expose raw errors',
 );
 
-console.log('Deferred driver modals regression: PASS');
+assert.match(profilePhotoSource, /documentType:\s*PROFILE_PHOTO_DOCUMENT_TYPE/, 'profile photo must use the canonical attachment document type');
+assert.match(profilePhotoSource, /entityType:\s*'Driver'/, 'profile photo must remain bound to Driver attachment authority');
+assert.match(profilePhotoSource, /AttachmentClient\.content\(current\.id\)/, 'profile photo preview must load through authenticated attachment content');
+assert.match(profilePhotoSource, /if \(previous\) await AttachmentClient\.archive\(previous\.id\)/, 'previous photo must only archive after the replacement upload succeeds');
+assert.match(profilePhotoSource, /await AttachmentClient\.archive\(photo\.id\)/, 'profile photo removal must archive instead of deleting bytes directly');
+assert.match(profilePhotoSource, /image\/jpeg.*image\/jpg.*image\/png.*image\/webp/, 'profile photo UI must allow only image MIME types');
+assert.doesNotMatch(profilePhotoSource, /application\/pdf|storageKey|companyId|x-autoerp-/, 'profile photo component must not allow PDF or consume server authority fields');
+
+console.log('Deferred driver modals and profile photo authority regression: PASS');
