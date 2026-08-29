@@ -5,6 +5,7 @@ import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } f
 import type { DocumentAiProvider } from '../documentAiProcessor';
 import {
   createDocumentAiRuntimeFromEnvironment,
+  dispatchDocumentAiExtractionFromEnvironment,
   DocumentAiRuntimeUnavailableError,
   parseSyntheticChecksumAllowlist,
 } from '../documentAiRuntime';
@@ -14,6 +15,7 @@ const checksum = createHash('sha256').update(bytes).digest('hex');
 let providerCreations = 0;
 let queueCalls = 0;
 let observedRead: { companyId: string; storageKey: string } | undefined;
+let observedExpectedExtractionId: string | undefined;
 
 const storage: AttachmentByteStorage = {
   provider: 'SERVER_FS',
@@ -63,6 +65,24 @@ for (const environment of [
 assert.equal(providerCreations, 0, 'invalid or disabled runtime created a provider');
 assert.deepEqual([...parseSyntheticChecksumAllowlist(`${checksum},${checksum}`)], [checksum]);
 
+const disabledDispatch = await dispatchDocumentAiExtractionFromEnvironment(
+  'company-disabled',
+  'extraction-disabled',
+  'worker-disabled',
+  { ...baseEnvironment, DOC_AI_WORKER_ENABLED: 'false' },
+  {
+    storage,
+    createProvider: () => { providerCreations += 1; return provider; },
+    async processNext() {
+      queueCalls += 1;
+      return { id: 'unexpected', status: 'REVIEW_REQUIRED' };
+    },
+  },
+);
+assert.deepEqual(disabledDispatch, { state: 'DISABLED' });
+assert.equal(providerCreations, 0, 'disabled dispatch created a provider');
+assert.equal(queueCalls, 0, 'disabled dispatch reached the queue');
+
 const runtime = createDocumentAiRuntimeFromEnvironment(baseEnvironment, {
   storage,
   createProvider(configuration) {
@@ -72,16 +92,17 @@ const runtime = createDocumentAiRuntimeFromEnvironment(baseEnvironment, {
     assert.deepEqual([...configuration.allowedSyntheticChecksums], [checksum]);
     return provider;
   },
-  async processNext(companyId, workerId, selectedProvider, reader) {
+  async processNext(companyId, workerId, selectedProvider, reader, expectedExtractionId) {
     queueCalls += 1;
     assert.equal(companyId, 'company-synthetic');
     assert.equal(workerId, 'worker-synthetic');
     assert.equal(selectedProvider, provider);
+    observedExpectedExtractionId = expectedExtractionId;
     assert.deepEqual(
       Array.from(await reader.read(companyId, `${companyId}/attachment-synthetic`)),
       Array.from(bytes),
     );
-    return { id: 'extraction-synthetic', status: 'REVIEW_REQUIRED' };
+    return { id: expectedExtractionId || 'extraction-synthetic', status: 'REVIEW_REQUIRED' };
   },
 });
 
@@ -91,11 +112,42 @@ assert.deepEqual(
   await runtime.processNextForTenant('company-synthetic', 'worker-synthetic'),
   { id: 'extraction-synthetic', status: 'REVIEW_REQUIRED' },
 );
+assert.equal(observedExpectedExtractionId, undefined);
 assert.equal(providerCreations, 1);
 assert.equal(queueCalls, 1);
 assert.deepEqual(observedRead, {
   companyId: 'company-synthetic', storageKey: 'company-synthetic/attachment-synthetic',
 });
+
+const exactDispatch = await dispatchDocumentAiExtractionFromEnvironment(
+  'company-synthetic',
+  'extraction-exact',
+  'worker-synthetic',
+  baseEnvironment,
+  {
+    storage,
+    createProvider() {
+      providerCreations += 1;
+      return provider;
+    },
+    async processNext(companyId, workerId, selectedProvider, _reader, expectedExtractionId) {
+      queueCalls += 1;
+      assert.equal(companyId, 'company-synthetic');
+      assert.equal(workerId, 'worker-synthetic');
+      assert.equal(selectedProvider, provider);
+      assert.equal(expectedExtractionId, 'extraction-exact');
+      observedExpectedExtractionId = expectedExtractionId;
+      return { id: 'extraction-exact', status: 'REVIEW_REQUIRED' };
+    },
+  },
+);
+assert.deepEqual(exactDispatch, {
+  state: 'PROCESSED',
+  item: { id: 'extraction-exact', status: 'REVIEW_REQUIRED' },
+});
+assert.equal(observedExpectedExtractionId, 'extraction-exact');
+assert.equal(providerCreations, 2);
+assert.equal(queueCalls, 2);
 
 const attachment = {
   isArchived: false,
@@ -118,4 +170,4 @@ assert.equal(isDocumentAiAttachmentEligible({ ...attachment, isArchived: true },
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', checksum), true);
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', 'b'.repeat(64)), false);
 
-console.log('DOC-AI-1B2 runtime composition checks passed.');
+console.log('DOC-AI-1B2 runtime composition and exact dispatch checks passed.');
