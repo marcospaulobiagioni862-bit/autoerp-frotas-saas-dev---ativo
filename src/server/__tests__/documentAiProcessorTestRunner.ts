@@ -5,6 +5,7 @@ import {
   processDocumentAiBytes,
   type DocumentAiProvider,
 } from '../documentAiProcessor';
+import { runDriverDocumentIntakePromotionChecks } from './driverDocumentIntakePromotionTestRunner';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -97,6 +98,7 @@ async function run(): Promise<void> {
     async extract() { throw new Error('secret provider detail'); },
   }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }), 'PROVIDER_FAILURE');
 
+  await runDriverDocumentIntakePromotionChecks();
   console.log('DOC-AI-1B processor foundation: PASS');
 }
 
@@ -104,4 +106,3 @@ void run().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-
