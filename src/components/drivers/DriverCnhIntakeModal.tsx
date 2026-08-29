@@ -21,11 +21,12 @@ const CNH_FIELDS = [
 ] as const;
 
 type CnhFieldKey = (typeof CNH_FIELDS)[number][0];
+type ApprovedCnhDraftWithSource = ApprovedCnhDriverDraft & { sourceIntakeId?: string };
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  onDraftReady: (draft: ApprovedCnhDriverDraft) => void;
+  onDraftReady: (draft: ApprovedCnhDraftWithSource) => void;
 };
 
 function valueText(value: unknown): string {
@@ -179,9 +180,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setError(null);
     try {
       const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
+      const withSource: ApprovedCnhDraftWithSource = { ...approved, sourceIntakeId: intakeId };
       reset();
       onClose();
-      onDraftReady(approved);
+      onDraftReady(withSource);
     } catch (err) {
       setError(safeError(err));
     } finally {
