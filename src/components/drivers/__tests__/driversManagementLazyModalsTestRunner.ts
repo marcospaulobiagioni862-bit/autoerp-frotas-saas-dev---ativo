@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
+const detailsSource = readFileSync(new URL('../DriverDetailsModal.tsx', import.meta.url), 'utf8');
 const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', import.meta.url), 'utf8');
 
 for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
@@ -53,6 +54,10 @@ assert.doesNotMatch(
   'driver modal fallback must not expose raw errors',
 );
 
+assert.match(detailsSource, /import\s+\{\s*DriverProfilePhoto\s*\}\s+from\s+'\.\/DriverProfilePhoto'/, 'driver details must import the approved profile photo component');
+assert.match(detailsSource, /<DriverProfilePhoto\s+driverId=\{driver\.id\}\s+driverName=\{driver\.fullName\}\s*\/>/, 'driver header must render the approved profile photo component');
+assert.doesNotMatch(detailsSource, /driver\.fullName\.substring\(0,\s*2\)\.toUpperCase\(\)/, 'legacy initials avatar must not remain in the driver header');
+
 assert.match(profilePhotoSource, /documentType:\s*PROFILE_PHOTO_DOCUMENT_TYPE/, 'profile photo must use the canonical attachment document type');
 assert.match(profilePhotoSource, /entityType:\s*'Driver'/, 'profile photo must remain bound to Driver attachment authority');
 assert.match(profilePhotoSource, /AttachmentClient\.content\(current\.id\)/, 'profile photo preview must load through authenticated attachment content');
@@ -61,4 +66,4 @@ assert.match(profilePhotoSource, /await AttachmentClient\.archive\(photo\.id\)/,
 assert.match(profilePhotoSource, /image\/jpeg.*image\/jpg.*image\/png.*image\/webp/, 'profile photo UI must allow only image MIME types');
 assert.doesNotMatch(profilePhotoSource, /application\/pdf|storageKey|companyId|x-autoerp-/, 'profile photo component must not allow PDF or consume server authority fields');
 
-console.log('Deferred driver modals and profile photo authority regression: PASS');
+console.log('Deferred driver modals and profile photo header regression: PASS');
