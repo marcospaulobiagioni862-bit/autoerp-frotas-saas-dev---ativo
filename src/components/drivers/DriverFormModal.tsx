@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput } from '../../api/driverClient';
+import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
 
@@ -9,6 +10,7 @@ interface DriverFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   driverToEdit?: Driver | null;
+  initialCnhDraft?: ApprovedCnhDriverDraft | null;
   onSuccess: () => void;
 }
 
@@ -16,6 +18,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
   isOpen,
   onClose,
   driverToEdit,
+  initialCnhDraft,
   onSuccess,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -69,10 +72,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       setStatus(driverToEdit.status || DriverStatus.ACTIVE);
       setNotes(driverToEdit.notes || '');
     } else {
-      setFullName('');
-      setCpf('');
+      setFullName(initialCnhDraft?.fullName || '');
+      setCpf(initialCnhDraft?.cpf || '');
       setRg('');
-      setBirthDate('');
+      setBirthDate(initialCnhDraft?.birthDate || '');
       setPhone('');
       setWhatsapp('');
       setEmail('');
@@ -85,15 +88,15 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
       setCity('');
       setState('');
 
-      setCnhNumber('');
-      setCnhCategory('');
-      setCnhExpiration('');
+      setCnhNumber(initialCnhDraft?.cnhNumber || '');
+      setCnhCategory(initialCnhDraft?.cnhCategory || '');
+      setCnhExpiration(initialCnhDraft?.cnhExpiration || '');
       setAppPlatforms([]);
       setStatus(DriverStatus.ACTIVE);
       setNotes('');
     }
     setErrorMessage(null);
-  }, [driverToEdit, isOpen]);
+  }, [driverToEdit, initialCnhDraft, isOpen]);
 
   const togglePlatform = (platform: string) => {
     if (appPlatforms.includes(platform)) {
@@ -166,6 +169,13 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2.5">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {!driverToEdit && initialCnhDraft && Object.keys(initialCnhDraft).length > 0 && (
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 text-sm flex items-start gap-2.5">
+            <FileText className="w-5 h-5 shrink-0 mt-0.5" />
+            <span>Dados preenchidos a partir de uma CNH aprovada. Revise as informações, complete telefone, endereço e plataformas e clique em Cadastrar Motorista para confirmar.</span>
           </div>
         )}
 
