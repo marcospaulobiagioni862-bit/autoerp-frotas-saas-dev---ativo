@@ -6,6 +6,7 @@ import {
   MaintenanceValidationError,
 } from './maintenanceAuthority';
 import { MaintenanceSlaAuthorityService } from './maintenanceSlaAuthority';
+import { MaintenanceWorkshopPerformanceAuthorityService } from './maintenanceWorkshopPerformanceAuthority';
 
 type Action = 'VIEW_MAINTENANCE' | 'MUTATE_MAINTENANCE';
 const READ = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'OPERATIONAL', 'READONLY']);
@@ -58,6 +59,21 @@ function send(res: Response, error: unknown): void {
 }
 
 export function registerMaintenanceSlaRoutes(app: Express): void {
+  app.get('/api/maintenance/workshops/performance', async (req, res) => {
+    const principal = actor(req, res, 'VIEW_MAINTENANCE');
+    if (!principal) return;
+    try {
+      res.json(await MaintenanceWorkshopPerformanceAuthorityService.get(principal.companyId, {
+        from: typeof req.query.from === 'string' ? req.query.from : undefined,
+        to: typeof req.query.to === 'string' ? req.query.to : undefined,
+        supplierId: typeof req.query.supplierId === 'string' ? req.query.supplierId : undefined,
+        vehicleId: typeof req.query.vehicleId === 'string' ? req.query.vehicleId : undefined,
+      }));
+    } catch (error) {
+      send(res, error);
+    }
+  });
+
   app.get('/api/maintenance/work-orders/:id/sla', async (req, res) => {
     const principal = actor(req, res, 'VIEW_MAINTENANCE');
     if (!principal) return;

@@ -10,6 +10,7 @@ import './maintenanceTimelineTestRunner';
 import { runMaintenanceTimelineIntegration } from './maintenanceTimelineIntegration';
 import { runMaintenanceSlaIntegration } from './maintenanceSlaIntegration';
 import { runMaintenanceSlaRouteRegression } from './maintenanceSlaRoutesTestRunner';
+import { runMaintenanceWorkshopPerformanceIntegration } from './maintenanceWorkshopPerformanceIntegration';
 
 const require = createRequire(import.meta.url);
 const { Client } = require('pg') as typeof import('pg');
@@ -142,6 +143,7 @@ async function main():Promise<void>{
   await testRls();
   await runMaintenanceTimelineIntegration();
   await runMaintenanceSlaIntegration();
+  await runMaintenanceWorkshopPerformanceIntegration();
   await runMaintenanceSlaRouteRegression();
   console.log('SECURITY-2J1 maintenance authority integration: PASS');
 }
