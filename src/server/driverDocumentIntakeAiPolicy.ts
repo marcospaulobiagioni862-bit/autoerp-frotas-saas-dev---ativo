@@ -1,4 +1,5 @@
 export interface DriverDocumentIntakeAiCandidate {
+  id: string;
   companyId: string;
   createdBy: string;
   status: string;
@@ -40,8 +41,7 @@ export function canQueueDriverDocumentIntakeCnh(
   if (!Number.isFinite(now) || !Number.isFinite(expiresAt) || expiresAt <= now) return false;
 
   if (!intake.attachmentId || intake.attachmentId !== attachment.id) return false;
-  if (attachment.entityType !== 'DriverDocumentIntake' || attachment.entityId === '') return false;
-  if (attachment.entityId !== (attachment.entityId.trim())) return false;
+  if (attachment.entityType !== 'DriverDocumentIntake' || attachment.entityId !== intake.id) return false;
   if (attachment.documentType?.trim().toUpperCase() !== 'CNH') return false;
   if (attachment.isArchived || attachment.contentState !== 'AVAILABLE') return false;
   if (!PRIVATE_STORAGE_PROVIDERS.has(attachment.storageProvider.trim().toUpperCase())) return false;
