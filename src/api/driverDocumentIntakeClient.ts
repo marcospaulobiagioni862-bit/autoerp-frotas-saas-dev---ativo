@@ -24,6 +24,15 @@ export interface DriverDocumentIntake {
   updatedAt: string;
 }
 
+export interface DriverDocumentIntakeExtractionSummary {
+  id: string;
+  attachmentId: string;
+  attachmentChecksum: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'DRAFT',
   'DOCUMENT_UPLOADED',
@@ -66,6 +75,19 @@ function validate(value: unknown): DriverDocumentIntake {
   return item as unknown as DriverDocumentIntake;
 }
 
+function validateExtractionSummary(value: unknown): DriverDocumentIntakeExtractionSummary {
+  const item = asRecord(value);
+  for (const key of ['id', 'attachmentId', 'attachmentChecksum', 'status', 'createdAt', 'updatedAt'] as const) {
+    if (typeof item[key] !== 'string' || !String(item[key]).trim()) {
+      throw new Error('Invalid driver document intake extraction payload');
+    }
+  }
+  if (!/^[a-f0-9]{64}$/.test(String(item.attachmentChecksum))) {
+    throw new Error('Invalid driver document intake extraction payload');
+  }
+  return item as unknown as DriverDocumentIntakeExtractionSummary;
+}
+
 async function errorMessage(response: Response): Promise<string> {
   try {
     const payload = asRecord(await response.json());
@@ -92,5 +114,18 @@ export class DriverDocumentIntakeClient {
     const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}`, { credentials: 'include' });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validate(asRecord(await response.json()).item);
+  }
+
+  static async requestDocumentAi(id: string): Promise<{ item: DriverDocumentIntakeExtractionSummary; created: boolean }> {
+    const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}/document-ai`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    const payload = asRecord(await response.json());
+    if (typeof payload.created !== 'boolean') throw new Error('Invalid driver document intake extraction payload');
+    return { item: validateExtractionSummary(payload.item), created: payload.created };
   }
 }
