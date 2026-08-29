@@ -49,6 +49,23 @@ assert(approved.status === 'APPROVED' && approved.approvedExtractionId === 'extr
 const consumed = consumeDriverDocumentIntake(approved, 'driver-1', '2026-08-28T23:05:00.000Z');
 assert(consumed.status === 'CONSUMED' && consumed.driverId === 'driver-1' && Boolean(consumed.consumedAt), 'consume failed');
 
+const renewalBase: DriverDocumentIntakeState = {
+  ...base,
+  id: 'intake-2',
+  idempotencyKey: 'driver-cnh:user-a:2',
+  createdAt: '2026-08-29T00:00:00.000Z',
+  updatedAt: '2026-08-29T00:00:00.000Z',
+};
+const renewalUploaded = attachDriverDocument(renewalBase, 'attachment-2', '2026-08-29T00:01:00.000Z');
+const renewalExtracting = startDriverDocumentExtraction(renewalUploaded, '2026-08-29T00:02:00.000Z');
+const renewalReview = requireDriverDocumentReview(renewalExtracting, '2026-08-29T00:03:00.000Z');
+const renewalApproved = approveDriverDocumentIntake(renewalReview, 'extraction-2', '2026-08-29T00:04:00.000Z');
+const renewalConsumed = consumeDriverDocumentIntake(renewalApproved, 'driver-1', '2026-08-29T00:05:00.000Z');
+assert(
+  renewalConsumed.status === 'CONSUMED' && renewalConsumed.driverId === consumed.driverId,
+  'sequential renewal intake for the same driver failed',
+);
+
 mustReject(() => consumeDriverDocumentIntake(review, 'driver-1', '2026-08-28T23:05:00.000Z'), 'unapproved intake was consumed');
 mustReject(() => consumeDriverDocumentIntake(approved, '', '2026-08-28T23:05:00.000Z'), 'empty driver id was consumed');
 mustReject(() => attachDriverDocument(uploaded, 'attachment-2', '2026-08-28T23:05:00.000Z'), 'second attachment replaced intake authority');
