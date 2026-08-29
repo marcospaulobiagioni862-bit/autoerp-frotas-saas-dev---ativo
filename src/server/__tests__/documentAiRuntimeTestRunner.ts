@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import type { AttachmentByteStorage } from '../attachmentStorage';
+import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from '../documentAiAttachmentPolicy';
 import type { DocumentAiProvider } from '../documentAiProcessor';
 import {
   createDocumentAiRuntimeFromEnvironment,
@@ -95,5 +96,25 @@ assert.equal(queueCalls, 1);
 assert.deepEqual(observedRead, {
   companyId: 'company-synthetic', storageKey: 'company-synthetic/attachment-synthetic',
 });
+
+const attachment = {
+  isArchived: false,
+  storageProvider: 'R2',
+  contentState: 'AVAILABLE',
+  storageKey: 'company-synthetic/attachment-r2',
+  checksum,
+};
+assert.equal(configuredDocumentAiStorageProvider(undefined), 'SERVER_FS');
+assert.equal(configuredDocumentAiStorageProvider('r2'), 'R2');
+assert.equal(configuredDocumentAiStorageProvider('legacy_browser'), null);
+assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2'), true);
+assert.equal(isDocumentAiAttachmentEligible(attachment, 'SERVER_FS'), false);
+assert.equal(isDocumentAiAttachmentEligible({ ...attachment, storageProvider: 'SERVER_FS' }, 'SERVER_FS'), true);
+assert.equal(isDocumentAiAttachmentEligible({ ...attachment, storageProvider: 'LEGACY_BROWSER' }, null), false);
+assert.equal(isDocumentAiAttachmentEligible({ ...attachment, contentState: 'MISSING' }, 'R2'), false);
+assert.equal(isDocumentAiAttachmentEligible({ ...attachment, checksum: 'bad' }, 'R2'), false);
+assert.equal(isDocumentAiAttachmentEligible({ ...attachment, isArchived: true }, 'R2'), false);
+assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', checksum), true);
+assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', 'b'.repeat(64)), false);
 
 console.log('DOC-AI-1B2 runtime composition checks passed.');
