@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
+import { syncDriverDocumentIntakeWorkerResult } from './driverDocumentIntakeAiWorkerSync';
 import {
   DocumentAiProcessingError,
   processDocumentAiBytes,
@@ -138,6 +139,15 @@ async function complete(
       RETURNING id
     `);
     if (rows(result).length !== 1) throw new Error('Document AI processing claim lost');
+
+    await syncDriverDocumentIntakeWorkerResult(context, {
+      companyId,
+      extractionId: item.id,
+      attachmentId: item.attachmentId,
+      targetStatus: 'REVIEW_REQUIRED',
+      now,
+    });
+
     await context.getAuditLogRepo().create({
       id: randomUUID(),
       companyId,
@@ -183,6 +193,16 @@ async function fail(companyId: string, claimedBy: string, item: ClaimedExtractio
       RETURNING id
     `);
     if (rows(result).length !== 1) throw new Error('Document AI processing claim lost');
+
+    await syncDriverDocumentIntakeWorkerResult(context, {
+      companyId,
+      extractionId: item.id,
+      attachmentId: item.attachmentId,
+      targetStatus: 'FAILED',
+      failureCode,
+      now,
+    });
+
     await context.getAuditLogRepo().create({
       id: randomUUID(),
       companyId,
