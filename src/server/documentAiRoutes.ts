@@ -5,8 +5,11 @@ import { UnitOfWork } from '../db/uow';
 import { auditLogs, documentAiExtractions, fileAttachments } from '../db/schema';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import {
+  DriverDocumentIntakeReviewSyncError,
+  syncDriverDocumentIntakeHumanReview,
+} from './driverDocumentIntakeAiReviewSync';
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
-import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from './documentAiAttachmentPolicy';
 import { createDocumentAiAttachmentStatusSnapshot, createDocumentAiObservabilitySnapshot } from './documentAiObservability';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -146,7 +149,7 @@ function sendError(res: Response, error: unknown): void {
     res.status(404).json({ error: 'Not found' });
     return;
   }
-  if (error instanceof DocumentAiConflictError) {
+  if (error instanceof DocumentAiConflictError || error instanceof DriverDocumentIntakeReviewSyncError) {
     res.status(409).json({ error: 'Document AI conflict' });
     return;
   }
@@ -186,8 +189,6 @@ function sanitizeExtractionAuditHistory(changes: unknown, timestamp: unknown): S
 }
 
 export function registerDocumentAiRoutes(app: Express): void {
-  const configuredStorageProvider = configuredDocumentAiStorageProvider(process.env.ATTACHMENT_STORAGE_PROVIDER);
-
   app.post('/api/document-ai/extractions', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, true);
     if (!principal) return;
@@ -202,16 +203,18 @@ export function registerDocumentAiRoutes(app: Express): void {
           ))
           .limit(1);
         const attachment = attachments[0];
-        if (!isDocumentAiAttachmentEligible(attachment, configuredStorageProvider)) {
-          throw new DocumentAiNotFoundError();
-        }
+        if (
+          !attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' ||
+          attachment.contentState !== 'AVAILABLE' || !attachment.storageKey ||
+          !attachment.checksum || !/^[a-f0-9]{64}$/.test(attachment.checksum)
+        ) throw new DocumentAiNotFoundError();
 
         const now = new Date().toISOString();
         const createdRows = await tx.insert(documentAiExtractions).values({
           id: randomUUID(),
           companyId: principal.companyId,
           attachmentId: attachment.id,
-          attachmentChecksum: attachment.checksum!,
+          attachmentChecksum: attachment.checksum,
           idempotencyKey: input.idempotencyKey,
           status: 'PENDING',
           requestedBy: principal.userId,
@@ -288,9 +291,11 @@ export function registerDocumentAiRoutes(app: Express): void {
           .for('update')
           .limit(1);
         const attachment = attachmentRows[0];
-        if (!isDocumentAiAttachmentEligible(attachment, configuredStorageProvider, current.attachmentChecksum)) {
-          throw new DocumentAiConflictError();
-        }
+        if (
+          !attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' ||
+          attachment.contentState !== 'AVAILABLE' || !attachment.storageKey ||
+          attachment.checksum !== current.attachmentChecksum
+        ) throw new DocumentAiConflictError();
 
         const now = new Date().toISOString();
         const updatedRows = await tx.update(documentAiExtractions).set({
@@ -370,6 +375,12 @@ export function registerDocumentAiRoutes(app: Express): void {
             stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
             (current.reviewNotes ?? null) === input.notes;
           if (!samePayload) throw new DocumentAiConflictError();
+          await syncDriverDocumentIntakeHumanReview(context, principal, {
+            id: current.id,
+            attachmentId: current.attachmentId,
+            status: targetStatus,
+            detectedDocumentType: current.detectedDocumentType,
+          }, new Date().toISOString());
           return { item: current, idempotent: true };
         }
         if (current.status !== 'REVIEW_REQUIRED') throw new DocumentAiConflictError();
@@ -390,6 +401,13 @@ export function registerDocumentAiRoutes(app: Express): void {
         )).returning();
         const updated = updatedRows[0];
         if (!updated) throw new DocumentAiConflictError();
+
+        await syncDriverDocumentIntakeHumanReview(context, principal, {
+          id: updated.id,
+          attachmentId: updated.attachmentId,
+          status: targetStatus,
+          detectedDocumentType: updated.detectedDocumentType,
+        }, now);
 
         await context.getAuditLogRepo().create({
           id: randomUUID(),
