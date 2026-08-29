@@ -21,6 +21,7 @@ const CNH_FIELDS = [
 ] as const;
 
 type CnhFieldKey = (typeof CNH_FIELDS)[number][0];
+type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId: string };
 
 type Props = {
   isOpen: boolean;
@@ -179,9 +180,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setError(null);
     try {
       const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
+      const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = { ...approved, intakeId };
       reset();
       onClose();
-      onDraftReady(approved);
+      onDraftReady(approvedWithIntake);
     } catch (err) {
       setError(safeError(err));
     } finally {
