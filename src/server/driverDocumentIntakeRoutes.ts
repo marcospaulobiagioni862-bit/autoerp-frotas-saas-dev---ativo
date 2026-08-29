@@ -11,6 +11,11 @@ import {
   DriverDocumentIntakeAiNotFoundError,
   enqueueDriverDocumentIntakeCnh,
 } from './driverDocumentIntakeAiQueue';
+import {
+  DriverDocumentIntakePromotionConflictError,
+  DriverDocumentIntakePromotionNotFoundError,
+  promoteApprovedDriverDocumentIntake,
+} from './driverDocumentIntakePromotion';
 
 type DriverIntakeAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'PROCESS_DOCUMENT_AI';
 
@@ -66,6 +71,21 @@ function requiredIntakeId(value: unknown): string {
   return id;
 }
 
+function requiredEntityId(value: unknown): string {
+  const id = typeof value === 'string' ? value.trim() : '';
+  if (!id || id.length > 120 || !/^[A-Za-z0-9._:-]+$/.test(id)) throw new DriverDocumentIntakeValidationError();
+  return id;
+}
+
+function parsePromotion(body: unknown): { driverId: string } {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new DriverDocumentIntakeValidationError();
+  const item = body as Record<string, unknown>;
+  if (Object.keys(item).length !== 1 || !Object.prototype.hasOwnProperty.call(item, 'driverId')) {
+    throw new DriverDocumentIntakeValidationError();
+  }
+  return { driverId: requiredEntityId(item.driverId) };
+}
+
 function requireEmptyBody(body: unknown): void {
   if (body === undefined || body === null) return;
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body as Record<string, unknown>).length !== 0) {
@@ -108,11 +128,19 @@ function sendError(res: Response, error: unknown): void {
     res.status(400).json({ error: 'Invalid driver document intake request' });
     return;
   }
-  if (error instanceof DriverDocumentIntakeNotFoundError || error instanceof DriverDocumentIntakeAiNotFoundError) {
+  if (
+    error instanceof DriverDocumentIntakeNotFoundError ||
+    error instanceof DriverDocumentIntakeAiNotFoundError ||
+    error instanceof DriverDocumentIntakePromotionNotFoundError
+  ) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
-  if (error instanceof DriverDocumentIntakeConflictError || error instanceof DriverDocumentIntakeAiConflictError) {
+  if (
+    error instanceof DriverDocumentIntakeConflictError ||
+    error instanceof DriverDocumentIntakeAiConflictError ||
+    error instanceof DriverDocumentIntakePromotionConflictError
+  ) {
     res.status(409).json({ error: 'Driver document intake conflict' });
     return;
   }
@@ -256,6 +284,21 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         return projected;
       });
       res.json({ draft });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/driver-document-intakes/:id/promote', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'CREATE_DRIVER');
+    if (!principal) return;
+    try {
+      const intakeId = requiredIntakeId(req.params.id);
+      const { driverId } = parsePromotion(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (context) =>
+        promoteApprovedDriverDocumentIntake(context, principal, intakeId, driverId)
+      );
+      res.status(200).json({ item: result });
     } catch (error) {
       sendError(res, error);
     }
