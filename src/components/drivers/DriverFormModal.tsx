@@ -2,16 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput } from '../../api/driverClient';
-import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
+import {
+  DriverDocumentIntakeClient,
+  type ApprovedCnhDriverDraft,
+} from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
+
+type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId?: string };
 
 interface DriverFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   driverToEdit?: Driver | null;
   initialCnhDraft?: ApprovedCnhDriverDraft | null;
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
 }
 
 export const DriverFormModal: React.FC<DriverFormModalProps> = ({
@@ -23,6 +28,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdDriverId, setCreatedDriverId] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
@@ -47,7 +53,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
   const [status, setStatus] = useState<DriverStatus>(DriverStatus.ACTIVE);
   const [notes, setNotes] = useState('');
 
+  const cnhIntakeId = (initialCnhDraft as ApprovedCnhDriverDraftWithIntake | null | undefined)?.intakeId;
+
   useEffect(() => {
+    setCreatedDriverId(null);
     if (driverToEdit) {
       setFullName(driverToEdit.fullName || '');
       setCpf(driverToEdit.cpf || '');
@@ -145,10 +154,21 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           );
         }
       } else {
-        await DriverClient.create(input);
+        let driverId = createdDriverId;
+        if (!driverId) {
+          const created = await DriverClient.create(input);
+          driverId = created.id;
+          if (cnhIntakeId) setCreatedDriverId(created.id);
+        }
+        if (cnhIntakeId) {
+          const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, driverId);
+          if (promotion.driverId !== driverId) {
+            throw new Error('A CNH não foi vinculada ao motorista criado. Tente concluir o vínculo novamente.');
+          }
+        }
       }
 
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Ocorreu um erro ao salvar os dados do motorista.');
@@ -176,6 +196,13 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 text-sm flex items-start gap-2.5">
             <FileText className="w-5 h-5 shrink-0 mt-0.5" />
             <span>Dados preenchidos a partir de uma CNH aprovada. Revise as informações, complete telefone, endereço e plataformas e clique em Cadastrar Motorista para confirmar.</span>
+          </div>
+        )}
+
+        {createdDriverId && cnhIntakeId && (
+          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl text-amber-800 dark:text-amber-300 text-sm flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <span>O motorista já foi criado. A próxima tentativa concluirá apenas o vínculo seguro da CNH, sem criar outro cadastro.</span>
           </div>
         )}
 
@@ -418,7 +445,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             Cancelar
           </Button>
           <Button type="submit" variant="primary" isLoading={loading}>
-            {driverToEdit ? 'Salvar Alterações' : 'Cadastrar Motorista'}
+            {driverToEdit ? 'Salvar Alterações' : createdDriverId && cnhIntakeId ? 'Concluir vínculo da CNH' : 'Cadastrar Motorista'}
           </Button>
         </div>
       </form>
