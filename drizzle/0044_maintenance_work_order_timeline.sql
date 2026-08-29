@@ -41,3 +41,17 @@ CREATE POLICY tenant_isolation_maintenance_work_order_events ON maintenance_work
   FOR ALL
   USING (company_id = current_setting('app.current_tenant', true))
   WITH CHECK (company_id = current_setting('app.current_tenant', true));
+
+CREATE OR REPLACE FUNCTION reject_maintenance_work_order_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'maintenance_work_order_events is append-only' USING ERRCODE = '55000';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS maintenance_work_order_events_append_only ON maintenance_work_order_events;
+CREATE TRIGGER maintenance_work_order_events_append_only
+BEFORE UPDATE OR DELETE ON maintenance_work_order_events
+FOR EACH ROW EXECUTE FUNCTION reject_maintenance_work_order_event_mutation();
