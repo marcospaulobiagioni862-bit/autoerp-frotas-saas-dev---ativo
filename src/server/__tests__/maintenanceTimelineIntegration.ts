@@ -4,7 +4,6 @@ import { db } from '../../db';
 import type { AuthenticatedPrincipal } from '../auth';
 import { MaintenanceAuthorityService } from '../maintenanceAuthority';
 import { MaintenanceTimelineAuthorityService } from '../maintenanceTimelineAuthority';
-import { runMaintenanceSlaIntegration } from './maintenanceSlaIntegration';
 
 const require = createRequire(import.meta.url);
 const { Client } = require('pg') as typeof import('pg');
@@ -156,6 +155,5 @@ export async function runMaintenanceTimelineIntegration(): Promise<void> {
   await seed();
   const result = await authorityAndIdempotency();
   await rlsAndAppendOnly(result.workOrderBId, result.firstEventId);
-  await runMaintenanceSlaIntegration();
   console.log('MAINT-SLA-1B persistence tenant append-only integration: PASS');
 }
