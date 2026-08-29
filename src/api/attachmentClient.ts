@@ -55,6 +55,7 @@ export interface AttachmentUploadInput {
   entityType:
     | 'Vehicle'
     | 'Driver'
+    | 'DriverDocumentIntake'
     | 'Contract'
     | 'HealthAndEmergency'
     | 'TrafficTicket'
