@@ -41,7 +41,15 @@ export async function runMaintenanceSlaRouteRegression(): Promise<void> {
   const base = `http://127.0.0.1:${address.port}`;
 
   try {
-    let response = await fetch(`${base}/api/maintenance/work-orders/synthetic/sla`);
+    let response = await fetch(`${base}/api/maintenance/workshops/performance`);
+    assert(response.status === 401, `workshop performance no-session expected 401 got ${response.status}`);
+
+    response = await fetch(`${base}/api/maintenance/workshops/performance?from=not-a-date`, {
+      headers: { 'x-test-principal': 'readonly' },
+    });
+    assert(response.status === 400, `workshop performance invalid filter expected 400 got ${response.status}`);
+
+    response = await fetch(`${base}/api/maintenance/work-orders/synthetic/sla`);
     assert(response.status === 401, `SLA no-session expected 401 got ${response.status}`);
 
     response = await fetch(`${base}/api/maintenance/work-orders/synthetic/sla`, {
@@ -74,5 +82,5 @@ export async function runMaintenanceSlaRouteRegression(): Promise<void> {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
 
-  console.log('MAINT-SLA-1C protected route regression: PASS');
+  console.log('MAINT-SLA protected route regressions: PASS');
 }
