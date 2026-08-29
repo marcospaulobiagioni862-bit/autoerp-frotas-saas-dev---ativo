@@ -57,7 +57,7 @@ function promotableRow(overrides: Record<string, unknown> = {}) {
 
 function contextFor(options: {
   row: Record<string, unknown>;
-  selectedDriver?: typeof driver | { id: string; cnhNumber: string; cnhExpiration: string; cpf: string; birthDate: string; isArchived: boolean };
+  selectedDriver?: Record<string, unknown>;
   updateResults?: Array<{ rows: Array<{ id: string }> }>;
 }) {
   const executeResults: unknown[] = [
@@ -98,86 +98,82 @@ function contextFor(options: {
   };
 }
 
-{
-  const fixture = contextFor({
-    row: promotableRow(),
-    updateResults: [
-      { rows: [{ id: 'attachment-601' }] },
-      { rows: [{ id: 'intake-601' }] },
-    ],
-  });
-  const result = await promoteApprovedDriverDocumentIntake(
-    fixture.context,
-    principal,
-    'intake-601',
-    driver.id,
-  );
-  assert.deepEqual(result, {
-    driverId: driver.id,
-    attachmentId: 'attachment-601',
-    promoted: true,
-  });
-  assert.equal(fixture.executeCount(), 3, 'promotion must lock/read and perform exactly two authoritative writes');
-  assert.equal(fixture.auditEntries.length, 2, 'promotion must audit attachment and intake transitions');
-}
+export async function runDriverDocumentIntakePromotionChecks(): Promise<void> {
+  {
+    const fixture = contextFor({
+      row: promotableRow(),
+      updateResults: [
+        { rows: [{ id: 'attachment-601' }] },
+        { rows: [{ id: 'intake-601' }] },
+      ],
+    });
+    const result = await promoteApprovedDriverDocumentIntake(
+      fixture.context,
+      principal,
+      'intake-601',
+      driver.id,
+    );
+    assert.deepEqual(result, {
+      driverId: driver.id,
+      attachmentId: 'attachment-601',
+      promoted: true,
+    });
+    assert.equal(fixture.executeCount(), 3, 'promotion must lock/read and perform exactly two authoritative writes');
+    assert.equal(fixture.auditEntries.length, 2, 'promotion must audit attachment and intake transitions');
+  }
 
-{
-  const fixture = contextFor({
-    row: promotableRow({
-      intake_status: 'CONSUMED',
-      driver_id: driver.id,
-      consumed_at: '2026-08-29T13:40:00.000Z',
-      entity_type: 'Driver',
-      entity_id: driver.id,
-    }),
-  });
-  const result = await promoteApprovedDriverDocumentIntake(
-    fixture.context,
-    principal,
-    'intake-601',
-    driver.id,
-  );
-  assert.equal(result.promoted, false, 'same-driver replay must be idempotent');
-  assert.equal(fixture.executeCount(), 1, 'idempotent replay must not write again');
-  assert.equal(fixture.auditEntries.length, 0, 'idempotent replay must not duplicate audit mutations');
-}
+  {
+    const fixture = contextFor({
+      row: promotableRow({
+        intake_status: 'CONSUMED',
+        driver_id: driver.id,
+        consumed_at: '2026-08-29T13:40:00.000Z',
+        entity_type: 'Driver',
+        entity_id: driver.id,
+      }),
+    });
+    const result = await promoteApprovedDriverDocumentIntake(
+      fixture.context,
+      principal,
+      'intake-601',
+      driver.id,
+    );
+    assert.equal(result.promoted, false, 'same-driver replay must be idempotent');
+    assert.equal(fixture.executeCount(), 1, 'idempotent replay must not write again');
+    assert.equal(fixture.auditEntries.length, 0, 'idempotent replay must not duplicate audit mutations');
+  }
 
-{
-  const otherDriver = {
-    ...driver,
-    id: 'driver-601-other',
-  };
-  const fixture = contextFor({
-    row: promotableRow({
-      intake_status: 'CONSUMED',
-      driver_id: driver.id,
-      consumed_at: '2026-08-29T13:40:00.000Z',
-      entity_type: 'Driver',
-      entity_id: driver.id,
-    }),
-    selectedDriver: otherDriver,
-  });
-  await assert.rejects(
-    () => promoteApprovedDriverDocumentIntake(fixture.context, principal, 'intake-601', otherDriver.id),
-    (error: unknown) => error instanceof DriverDocumentIntakePromotionConflictError && error.message === 'CONSUMED_BY_DIFFERENT_DRIVER',
-    'consumed intake must fail closed for a different Driver',
-  );
-  assert.equal(fixture.executeCount(), 1, 'different-driver replay must not write');
-}
+  {
+    const otherDriver = { ...driver, id: 'driver-601-other' };
+    const fixture = contextFor({
+      row: promotableRow({
+        intake_status: 'CONSUMED',
+        driver_id: driver.id,
+        consumed_at: '2026-08-29T13:40:00.000Z',
+        entity_type: 'Driver',
+        entity_id: driver.id,
+      }),
+      selectedDriver: otherDriver,
+    });
+    await assert.rejects(
+      () => promoteApprovedDriverDocumentIntake(fixture.context, principal, 'intake-601', otherDriver.id),
+      (error: unknown) => error instanceof DriverDocumentIntakePromotionConflictError && error.message === 'CONSUMED_BY_DIFFERENT_DRIVER',
+      'consumed intake must fail closed for a different Driver',
+    );
+    assert.equal(fixture.executeCount(), 1, 'different-driver replay must not write');
+  }
 
-{
-  const incompatibleDriver = {
-    ...driver,
-    cnhNumber: '98765432100',
-  };
-  const fixture = contextFor({ row: promotableRow(), selectedDriver: incompatibleDriver });
-  await assert.rejects(
-    () => promoteApprovedDriverDocumentIntake(fixture.context, principal, 'intake-601', incompatibleDriver.id),
-    (error: unknown) => error instanceof DriverDocumentIntakePromotionConflictError && error.message === 'DRIVER_CNH_IDENTITY_MISMATCH',
-    'approved CNH must not be promoted to an identity-incompatible Driver',
-  );
-  assert.equal(fixture.executeCount(), 1, 'identity mismatch must fail before any write');
-  assert.equal(fixture.auditEntries.length, 0, 'identity mismatch must not emit mutation audits');
-}
+  {
+    const incompatibleDriver = { ...driver, cnhNumber: '98765432100' };
+    const fixture = contextFor({ row: promotableRow(), selectedDriver: incompatibleDriver });
+    await assert.rejects(
+      () => promoteApprovedDriverDocumentIntake(fixture.context, principal, 'intake-601', incompatibleDriver.id),
+      (error: unknown) => error instanceof DriverDocumentIntakePromotionConflictError && error.message === 'DRIVER_CNH_IDENTITY_MISMATCH',
+      'approved CNH must not be promoted to an identity-incompatible Driver',
+    );
+    assert.equal(fixture.executeCount(), 1, 'identity mismatch must fail before any write');
+    assert.equal(fixture.auditEntries.length, 0, 'identity mismatch must not emit mutation audits');
+  }
 
-console.log('Driver CNH intake promotion lifecycle checks passed.');
+  console.log('Driver CNH intake promotion lifecycle checks passed.');
+}
