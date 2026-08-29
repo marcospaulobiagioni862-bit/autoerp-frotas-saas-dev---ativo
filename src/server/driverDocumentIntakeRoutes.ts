@@ -11,7 +11,10 @@ import {
   DriverDocumentIntakeAiNotFoundError,
   enqueueDriverDocumentIntakeCnh,
 } from './driverDocumentIntakeAiQueue';
-import { dispatchDocumentAiExtractionFromEnvironment } from './documentAiRuntime';
+import {
+  dispatchDocumentAiExtractionFromEnvironment,
+  isDocumentAiRuntimeAvailableFromEnvironment,
+} from './documentAiRuntime';
 import {
   DriverDocumentIntakePromotionConflictError,
   DriverDocumentIntakePromotionNotFoundError,
@@ -238,6 +241,13 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
     try {
       const intakeId = requiredIntakeId(req.params.id);
       requireEmptyBody(req.body);
+      if (!isDocumentAiRuntimeAvailableFromEnvironment()) {
+        res.status(503).json({
+          error: 'Análise automática de CNH indisponível neste ambiente. Configure o Document AI antes de tentar novamente.',
+          code: 'DOCUMENT_AI_RUNTIME_UNAVAILABLE',
+        });
+        return;
+      }
       const result = await UnitOfWork.run(principal.companyId, async (context) => (
         enqueueDriverDocumentIntakeCnh(context, principal, intakeId)
       ));
