@@ -2,6 +2,7 @@ import type {Express,Request,Response} from 'express';
 import type {AuthenticatedPrincipal} from './auth';
 import {MaintenanceAuthorityService,MaintenanceConflictError,MaintenanceNotFoundError,MaintenanceValidationError,type CreatePartInput,type CreateSupplierInput,type CreateWorkOrderInput,type UpdatePartInput,type UpdateSupplierInput} from './maintenanceAuthority';
 import {registerMaintenancePreventiveRoutes} from './maintenancePreventiveRoutes';
+import {registerMaintenanceTimelineRoutes} from './maintenanceTimelineRoutes';
 
 type Action='VIEW_MAINTENANCE'|'MUTATE_MAINTENANCE';
 const READ=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']),WRITE=new Set(['ADMIN','MANAGER','OPERATIONAL']);
@@ -20,6 +21,7 @@ function send(res:Response,e:unknown){const m=e instanceof Error?e.message:'';if
 
 export function registerMaintenanceRoutes(app:Express):void{
   registerMaintenancePreventiveRoutes(app);
+  registerMaintenanceTimelineRoutes(app);
   app.get('/api/maintenance/work-orders',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const vehicleId=typeof req.query.vehicleId==='string'&&req.query.vehicleId.trim()?req.query.vehicleId.trim():undefined;res.json({items:await MaintenanceAuthorityService.listWorkOrders(p.companyId,vehicleId)});}catch(e){send(res,e);}});
   app.get('/api/maintenance/work-orders/:id',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const item=await MaintenanceAuthorityService.getWorkOrder(p.companyId,req.params.id);if(!item)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');res.json({item});}catch(e){send(res,e);}});
   app.post('/api/maintenance/work-orders',async(req,res)=>{const p=actor(req,res,'MUTATE_MAINTENANCE');if(!p)return;try{reject(req.body);const input:CreateWorkOrderInput={number:text(req.body?.number,80),vehicleId:text(req.body?.vehicleId,200),supplierId:opt(req.body?.supplierId,200),entryKm:nonneg(req.body?.entryKm),description:text(req.body?.description,1000),diagnosis:opt(req.body?.diagnosis,1000),notes:opt(req.body?.notes,2000),parts:items(req.body?.parts,'parts'),services:items(req.body?.services,'services'),laborItems:items(req.body?.laborItems,'labor'),discount:req.body?.discount===undefined?undefined:nonneg(req.body.discount)};res.status(201).json({item:await MaintenanceAuthorityService.createWorkOrder(p,input)});}catch(e){send(res,e);}});
