@@ -42,6 +42,7 @@ const baseEnvironment = {
   DOC_AI_WORKER_ENABLED: 'true',
   DOC_AI_PROVIDER: 'GEMINI',
   DOC_AI_GEMINI_MODEL: 'gemini-2.5-flash',
+  DOC_AI_REAL_DOCUMENTS_ENABLED: 'false',
   DOC_AI_SYNTHETIC_SHA256_ALLOWLIST: checksum,
   GEMINI_API_KEY: 'synthetic-test-key-not-real',
 };
@@ -65,6 +66,32 @@ for (const environment of [
 assert.equal(providerCreations, 0, 'invalid or disabled runtime created a provider');
 assert.deepEqual([...parseSyntheticChecksumAllowlist(`${checksum},${checksum}`)], [checksum]);
 
+const realDocumentEnvironment = {
+  ...baseEnvironment,
+  DOC_AI_REAL_DOCUMENTS_ENABLED: 'true',
+  DOC_AI_SYNTHETIC_SHA256_ALLOWLIST: '',
+};
+const realRuntime = createDocumentAiRuntimeFromEnvironment(realDocumentEnvironment, {
+  storage,
+  createProvider(configuration) {
+    providerCreations += 1;
+    assert.equal(configuration.allowRealDocuments, true);
+    assert.deepEqual([...configuration.allowedSyntheticChecksums], []);
+    return provider;
+  },
+  async processNext(_companyId, _workerId, selectedProvider) {
+    queueCalls += 1;
+    assert.equal(selectedProvider, provider);
+    return { id: 'real-document-extraction', status: 'REVIEW_REQUIRED' };
+  },
+});
+assert.deepEqual(
+  await realRuntime.processNextForTenant('company-real', 'worker-real'),
+  { id: 'real-document-extraction', status: 'REVIEW_REQUIRED' },
+);
+assert.equal(providerCreations, 1);
+assert.equal(queueCalls, 1);
+
 const disabledDispatch = await dispatchDocumentAiExtractionFromEnvironment(
   'company-disabled',
   'extraction-disabled',
@@ -80,8 +107,8 @@ const disabledDispatch = await dispatchDocumentAiExtractionFromEnvironment(
   },
 );
 assert.deepEqual(disabledDispatch, { state: 'DISABLED' });
-assert.equal(providerCreations, 0, 'disabled dispatch created a provider');
-assert.equal(queueCalls, 0, 'disabled dispatch reached the queue');
+assert.equal(providerCreations, 1, 'disabled dispatch created a provider');
+assert.equal(queueCalls, 1, 'disabled dispatch reached the queue');
 
 const runtime = createDocumentAiRuntimeFromEnvironment(baseEnvironment, {
   storage,
@@ -89,6 +116,7 @@ const runtime = createDocumentAiRuntimeFromEnvironment(baseEnvironment, {
     providerCreations += 1;
     assert.equal(configuration.apiKey, baseEnvironment.GEMINI_API_KEY);
     assert.equal(configuration.model, 'gemini-2.5-flash');
+    assert.equal(configuration.allowRealDocuments, false);
     assert.deepEqual([...configuration.allowedSyntheticChecksums], [checksum]);
     return provider;
   },
@@ -113,8 +141,8 @@ assert.deepEqual(
   { id: 'extraction-synthetic', status: 'REVIEW_REQUIRED' },
 );
 assert.equal(observedExpectedExtractionId, undefined);
-assert.equal(providerCreations, 1);
-assert.equal(queueCalls, 1);
+assert.equal(providerCreations, 2);
+assert.equal(queueCalls, 2);
 assert.deepEqual(observedRead, {
   companyId: 'company-synthetic', storageKey: 'company-synthetic/attachment-synthetic',
 });
@@ -146,8 +174,8 @@ assert.deepEqual(exactDispatch, {
   item: { id: 'extraction-exact', status: 'REVIEW_REQUIRED' },
 });
 assert.equal(observedExpectedExtractionId, 'extraction-exact');
-assert.equal(providerCreations, 2);
-assert.equal(queueCalls, 2);
+assert.equal(providerCreations, 3);
+assert.equal(queueCalls, 3);
 
 const attachment = {
   isArchived: false,
@@ -170,4 +198,4 @@ assert.equal(isDocumentAiAttachmentEligible({ ...attachment, isArchived: true },
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', checksum), true);
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', 'b'.repeat(64)), false);
 
-console.log('DOC-AI-1B2 runtime composition and exact dispatch checks passed.');
+console.log('DOC-AI-1B2 runtime composition, real-document opt-in and exact dispatch checks passed.');
