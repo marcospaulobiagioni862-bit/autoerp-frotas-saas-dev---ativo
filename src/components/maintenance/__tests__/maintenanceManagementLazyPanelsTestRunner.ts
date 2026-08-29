@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import './maintenanceSlaTestRunner';
 
 const source = readFileSync(new URL('../MaintenanceManagement.tsx', import.meta.url), 'utf8');
 
