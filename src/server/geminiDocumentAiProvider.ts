@@ -26,16 +26,17 @@ export interface GeminiDocumentAiProviderOptions {
   apiKey: string;
   model: string;
   /**
-   * Hard safety boundary: Gemini is called only when the exact byte checksum was
-   * approved as synthetic by the caller. An empty allowlist is rejected.
+   * Synthetic-only is the safe default. Real documents are accepted only when
+   * the server explicitly enables them through the runtime configuration.
    */
+  allowRealDocuments?: boolean;
   allowedSyntheticChecksums: ReadonlySet<string>;
   client?: GenerateContentClient;
 }
 
 export class SyntheticDocumentRequiredError extends Error {
   constructor() {
-    super('Gemini document AI accepts only allowlisted synthetic bytes');
+    super('Gemini document AI accepts only allowlisted synthetic bytes unless real-document mode is explicitly enabled');
     this.name = 'SyntheticDocumentRequiredError';
   }
 }
@@ -86,6 +87,7 @@ const RESPONSE_SCHEMA = {
 export class GeminiDocumentAiProvider implements DocumentAiProvider {
   readonly name = 'GEMINI';
   readonly model: string;
+  private readonly allowRealDocuments: boolean;
   private readonly allowedSyntheticChecksums: ReadonlySet<string>;
   private readonly client: GenerateContentClient;
 
@@ -93,7 +95,10 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
     const apiKey = options.apiKey.trim();
     if (!apiKey) throw new Error('Missing Gemini API key');
     this.model = safeIdentifier(options.model, 'model');
-    if (options.allowedSyntheticChecksums.size === 0) throw new SyntheticDocumentRequiredError();
+    this.allowRealDocuments = options.allowRealDocuments === true;
+    if (!this.allowRealDocuments && options.allowedSyntheticChecksums.size === 0) {
+      throw new SyntheticDocumentRequiredError();
+    }
     for (const checksum of options.allowedSyntheticChecksums) {
       if (!/^[a-f0-9]{64}$/.test(checksum)) throw new Error('Invalid synthetic document checksum');
     }
@@ -111,15 +116,17 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
   }
 
   async extract(request: DocumentAiProviderRequest, signal: AbortSignal): Promise<unknown> {
-    const checksum = exactSha256(request.content);
-    if (!this.allowedSyntheticChecksums.has(checksum)) throw new SyntheticDocumentRequiredError();
+    if (!this.allowRealDocuments) {
+      const checksum = exactSha256(request.content);
+      if (!this.allowedSyntheticChecksums.has(checksum)) throw new SyntheticDocumentRequiredError();
+    }
 
     const response = await this.client.models.generateContent({
       model: this.model,
       contents: [{
         role: 'user',
         parts: [
-          { text: 'Extract only values visibly present in this synthetic document. Return the configured JSON schema.' },
+          { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
           { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
         ],
       }],
