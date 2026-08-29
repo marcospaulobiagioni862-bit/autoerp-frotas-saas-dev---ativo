@@ -11,15 +11,8 @@ export interface DriverCnhDraft {
 }
 
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
-const ALLOWED_FIELDS = new Set<keyof DriverCnhDraft>([
-  'fullName',
-  'cpf',
-  'rg',
-  'birthDate',
-  'cnhNumber',
-  'cnhCategory',
-  'cnhExpiration',
-]);
+
+type ExtractionFields = Record<string, unknown>;
 
 function cleanText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -42,6 +35,20 @@ function digits(value: unknown, min: number, max: number): string | undefined {
   return clean;
 }
 
+function sourceValue(
+  corrections: ExtractionFields,
+  proposed: ExtractionFields,
+  aliases: readonly string[],
+): unknown {
+  for (const key of aliases) {
+    if (Object.prototype.hasOwnProperty.call(corrections, key)) return corrections[key];
+  }
+  for (const key of aliases) {
+    if (Object.prototype.hasOwnProperty.call(proposed, key)) return proposed[key];
+  }
+  return undefined;
+}
+
 export function buildApprovedCnhDriverDraft(
   extraction: DocumentAiExtraction,
   allowedAttachmentIds: ReadonlySet<string>,
@@ -54,25 +61,20 @@ export function buildApprovedCnhDriverDraft(
     return null;
   }
 
-  const effective: Record<string, unknown> = {
-    ...extraction.proposedFields,
-    ...(extraction.corrections || {}),
-  };
+  const proposed = extraction.proposedFields || {};
+  const corrections = extraction.corrections || {};
   const safe: DriverCnhDraft = {};
 
-  for (const key of ALLOWED_FIELDS) {
-    const value = effective[key];
-    if (key === 'fullName') safe.fullName = cleanText(value, 160);
-    if (key === 'cpf') safe.cpf = digits(value, 11, 11);
-    if (key === 'rg') safe.rg = cleanText(value, 30);
-    if (key === 'birthDate') safe.birthDate = isoDate(value);
-    if (key === 'cnhNumber') safe.cnhNumber = digits(value, 9, 20);
-    if (key === 'cnhCategory') {
-      const category = cleanText(value, 3)?.toUpperCase();
-      if (category && CNH_CATEGORIES.has(category)) safe.cnhCategory = category;
-    }
-    if (key === 'cnhExpiration') safe.cnhExpiration = isoDate(value);
-  }
+  safe.fullName = cleanText(sourceValue(corrections, proposed, ['fullName', 'name']), 160);
+  safe.cpf = digits(sourceValue(corrections, proposed, ['cpf']), 11, 11);
+  safe.rg = cleanText(sourceValue(corrections, proposed, ['rg']), 30);
+  safe.birthDate = isoDate(sourceValue(corrections, proposed, ['birthDate']));
+  safe.cnhNumber = digits(sourceValue(corrections, proposed, ['cnhNumber', 'registrationNumber']), 9, 20);
+
+  const category = cleanText(sourceValue(corrections, proposed, ['cnhCategory', 'category']), 3)?.toUpperCase();
+  if (category && CNH_CATEGORIES.has(category)) safe.cnhCategory = category;
+
+  safe.cnhExpiration = isoDate(sourceValue(corrections, proposed, ['cnhExpiration', 'expirationDate']));
 
   for (const key of Object.keys(safe) as Array<keyof DriverCnhDraft>) {
     if (safe[key] === undefined) delete safe[key];
