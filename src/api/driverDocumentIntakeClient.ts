@@ -33,6 +33,15 @@ export interface DriverDocumentIntakeExtractionSummary {
   updatedAt: string;
 }
 
+export interface ApprovedCnhDriverDraft {
+  fullName?: string;
+  cpf?: string;
+  birthDate?: string;
+  cnhNumber?: string;
+  cnhCategory?: string;
+  cnhExpiration?: string;
+}
+
 const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'DRAFT',
   'DOCUMENT_UPLOADED',
@@ -43,6 +52,9 @@ const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'FAILED',
   'ARCHIVED',
 ]);
+
+const DRAFT_KEYS = new Set(['fullName', 'cpf', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhExpiration']);
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid driver document intake payload');
@@ -88,6 +100,33 @@ function validateExtractionSummary(value: unknown): DriverDocumentIntakeExtracti
   return item as unknown as DriverDocumentIntakeExtractionSummary;
 }
 
+function validIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function validateApprovedCnhDraft(value: unknown): ApprovedCnhDriverDraft {
+  const item = asRecord(value);
+  if (!Object.keys(item).every((key) => DRAFT_KEYS.has(key)) || Object.keys(item).length === 0) {
+    throw new Error('Invalid approved CNH draft payload');
+  }
+  for (const [key, raw] of Object.entries(item)) {
+    if (typeof raw !== 'string' || !raw.trim()) throw new Error('Invalid approved CNH draft payload');
+    if ((key === 'cpf' || key === 'cnhNumber') && !/^\d{11}$/.test(raw)) {
+      throw new Error('Invalid approved CNH draft payload');
+    }
+    if ((key === 'birthDate' || key === 'cnhExpiration') && !validIsoDate(raw)) {
+      throw new Error('Invalid approved CNH draft payload');
+    }
+    if (key === 'cnhCategory' && !CNH_CATEGORIES.has(raw)) {
+      throw new Error('Invalid approved CNH draft payload');
+    }
+    if (key === 'fullName' && raw.length > 160) throw new Error('Invalid approved CNH draft payload');
+  }
+  return item as ApprovedCnhDriverDraft;
+}
+
 async function errorMessage(response: Response): Promise<string> {
   try {
     const payload = asRecord(await response.json());
@@ -127,5 +166,13 @@ export class DriverDocumentIntakeClient {
     const payload = asRecord(await response.json());
     if (typeof payload.created !== 'boolean') throw new Error('Invalid driver document intake extraction payload');
     return { item: validateExtractionSummary(payload.item), created: payload.created };
+  }
+
+  static async getApprovedCnhDraft(id: string): Promise<ApprovedCnhDriverDraft> {
+    const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}/approved-cnh-draft`, {
+      credentials: 'include',
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    return validateApprovedCnhDraft(asRecord(await response.json()).draft);
   }
 }
