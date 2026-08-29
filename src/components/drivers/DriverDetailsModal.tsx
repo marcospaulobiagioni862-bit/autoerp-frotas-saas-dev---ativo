@@ -46,7 +46,6 @@ import { FileUpload } from '../documents/FileUpload';
 import { AttachmentList } from '../documents/AttachmentList';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
 import type { DriverHealthAndEmergency } from '../../types/entities';
-import { DRIVER_DOCUMENT_TYPES } from './driverDocumentTypes';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import {
   DriverLegacyDetailsBridge,
@@ -795,9 +794,10 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
         <ModalContainer isOpen={isAddDocOpen} onClose={() => setIsAddDocOpen(false)} title="Anexar Novo Documento" maxWidth="max-w-md">
           <form onSubmit={handleAddDocument} className="space-y-4">
             <Select label="Tipo de Documento *" value={docType} onChange={(event) => setDocType(event.target.value)} required>
-              {DRIVER_DOCUMENT_TYPES.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
+              <option value="Comprovante de Residência">Comprovante de Residência</option>
+              <option value="Certidão de Antecedentes Criminais">Certidão de Antecedentes Criminais</option>
+              <option value="Contrato Assinado">Contrato Assinado</option>
+              <option value="Outro Documento">Outro Documento</option>
             </Select>
             <Input label="Número do Documento" value={docNumber} onChange={(event) => setDocNumber(event.target.value)} />
             <Input label="Data de Validade" type="date" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />

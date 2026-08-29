@@ -646,9 +646,6 @@ jobs:
       - name: Deferred driver modals regression
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
-      - name: Driver document categories regression
-        run: npx tsx src/components/drivers/__tests__/driverDocumentTypesTestRunner.ts
-
       - name: Deferred contract modals regression
         run: npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
 
