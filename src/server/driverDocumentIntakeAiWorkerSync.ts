@@ -21,6 +21,16 @@ function rows(result: QueryResult): Record<string, unknown>[] {
   return [];
 }
 
+export function resolveDriverDocumentIntakeWorkerTransition(
+  entityType: string,
+  currentStatus: string,
+  targetStatus: DriverDocumentIntakeWorkerTarget,
+): DriverDocumentIntakeWorkerTarget | null {
+  if (entityType !== 'DriverDocumentIntake') return null;
+  if (currentStatus !== 'EXTRACTING') throw new DriverDocumentIntakeWorkerSyncError('INTAKE_STATE_MISMATCH');
+  return targetStatus;
+}
+
 export async function syncDriverDocumentIntakeWorkerResult(
   context: any,
   input: {
@@ -50,7 +60,27 @@ export async function syncDriverDocumentIntakeWorkerResult(
   const intakeId = String(attachment.entity_id || '');
   if (!intakeId) throw new DriverDocumentIntakeWorkerSyncError('INTAKE_ENTITY_ID_MISSING');
 
-  const nextStatus = input.targetStatus;
+  const intakeResult = await tx.execute(sql`
+    SELECT status
+    FROM driver_document_intakes
+    WHERE company_id = ${input.companyId}
+      AND id = ${intakeId}
+      AND attachment_id = ${input.attachmentId}
+      AND archived_at IS NULL
+      AND consumed_at IS NULL
+    LIMIT 1
+    FOR UPDATE
+  `);
+  const intake = rows(intakeResult)[0];
+  if (!intake) throw new DriverDocumentIntakeWorkerSyncError('INTAKE_NOT_FOUND');
+
+  const nextStatus = resolveDriverDocumentIntakeWorkerTransition(
+    String(attachment.entity_type),
+    String(intake.status),
+    input.targetStatus,
+  );
+  if (!nextStatus) return false;
+
   const updateResult = await tx.execute(sql`
     UPDATE driver_document_intakes
     SET status = ${nextStatus},
