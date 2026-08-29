@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
 
-for (const modal of ['DriverFormModal', 'DriverDetailsModal']) {
+for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
   assert.equal(
     new RegExp(`import\\s+\\{\\s*${modal}\\s*\\}\\s+from`).test(source),
     false,
@@ -11,29 +11,34 @@ for (const modal of ['DriverFormModal', 'DriverDetailsModal']) {
   );
   assert.match(
     source,
-    new RegExp(`const\\s+${modal}=lazy\\(\\(\\)=>import\\('\\./${modal}'\\)`),
+    new RegExp(`const\\s+${modal}\\s*=\\s*lazy\\(\\s*\\(\\)\\s*=>\\s*import\\('\\./${modal}'\\)`),
     `${modal} must be loaded through React.lazy`,
   );
 }
 
 assert.equal(
-  (source.match(/=lazy\(\(\)=>import\('\.\/Driver(?:Form|Details)Modal'/g) ?? []).length,
-  2,
-  'DriversManagement must define exactly two lazy modal loaders',
+  (source.match(/=\s*lazy\(\s*\(\)\s*=>\s*import\('\.\/Driver(?:Form|Details|CnhIntake)Modal'/g) ?? []).length,
+  3,
+  'DriversManagement must define exactly three lazy modal loaders',
 );
 assert.match(
   source,
-  /\{isFormOpen&&<DriverFormModal/,
+  /\{isFormOpen\s*&&\s*<DriverFormModal/,
   'driver form must only render after an explicit open action',
 );
 assert.match(
   source,
-  /\{isDetailsOpen&&selectedDriverId&&<DriverDetailsModal/,
+  /\{isDetailsOpen\s*&&\s*selectedDriverId\s*&&\s*<DriverDetailsModal/,
   'driver details must only render when open with a selected server id',
 );
 assert.match(
   source,
-  /<LazyModuleErrorBoundary resetKey=\{driverModalResetKey\} onRetry=\{\(\)=>window\.location\.reload\(\)\}>/,
+  /\{isCnhIntakeOpen\s*&&\s*<DriverCnhIntakeModal/,
+  'CNH intake must only render after an explicit open action',
+);
+assert.match(
+  source,
+  /<LazyModuleErrorBoundary resetKey=\{driverModalResetKey\} onRetry=\{\(\)\s*=>\s*window\.location\.reload\(\)\}>/,
   'driver modal recovery must reset between modal targets',
 );
 assert.match(
