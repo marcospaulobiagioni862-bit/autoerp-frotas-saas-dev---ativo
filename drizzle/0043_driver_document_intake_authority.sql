@@ -42,7 +42,8 @@ CREATE INDEX IF NOT EXISTS idx_driver_document_intake_company_expiry
 CREATE UNIQUE INDEX IF NOT EXISTS uq_driver_document_intake_company_attachment
   ON driver_document_intakes(company_id, attachment_id)
   WHERE attachment_id IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_driver_document_intake_company_driver
+-- A Driver may consume multiple intakes over time (for example, CNH renewal).
+CREATE INDEX IF NOT EXISTS idx_driver_document_intake_company_driver
   ON driver_document_intakes(company_id, driver_id)
   WHERE driver_id IS NOT NULL;
 
