@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileUp, RefreshCw, ScanLine, ShieldCheck, XCircle } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiExtraction } from '../../api/documentAiClient';
@@ -49,6 +49,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const step = useMemo(() => {
     if (!extractionId) return 'UPLOAD';
@@ -57,6 +58,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
 
   const reset = () => {
     setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setIntakeId('');
     setExtractionId('');
     setExtraction(null);
@@ -80,15 +82,24 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     }
     if (!ALLOWED_MIME_TYPES.has(selected.type)) {
       setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setError('Use PDF, JPG, PNG ou WebP para a CNH.');
       return;
     }
     if (selected.size <= 0 || selected.size > MAX_BYTES) {
       setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setError('O arquivo da CNH deve ter no máximo 20 MB.');
       return;
     }
     setFile(selected);
+  };
+
+  const clearSelectedFile = () => {
+    if (busy) return;
+    setFile(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const loadExtraction = async (id: string) => {
@@ -213,19 +224,36 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
 
         {step === 'UPLOAD' && (
           <div className="space-y-4">
-            <label className="block rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
-              <FileUp className="mx-auto mb-2 h-7 w-7 text-slate-400" />
-              <span className="block text-sm font-semibold text-slate-800 dark:text-slate-200">Selecione a CNH</span>
-              <span className="mt-1 block text-xs text-slate-500">PDF, JPG, PNG ou WebP · até 20 MB</span>
+            <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+              <FileUp className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Adicionar arquivo da CNH</p>
+              <p className="mt-1 text-xs text-slate-500">PDF, JPG, PNG ou WebP · até 20 MB</p>
               <input
-                className="mt-4 block w-full text-xs"
+                ref={fileInputRef}
+                className="hidden"
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp"
                 onChange={(event) => selectFile(event.target.files?.[0] || null)}
                 disabled={busy}
               />
-            </label>
-            {file && <p className="text-xs text-slate-500">Arquivo selecionado: <strong>{file.name}</strong></p>}
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+                  <FileUp className="mr-1.5 h-4 w-4" />{file ? 'Trocar arquivo' : 'Selecionar CNH'}
+                </Button>
+                {file && (
+                  <Button type="button" variant="outline" onClick={clearSelectedFile} disabled={busy}>
+                    Remover arquivo
+                  </Button>
+                )}
+              </div>
+            </div>
+            {file ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+                <strong>CNH selecionada:</strong> {file.name}
+              </div>
+            ) : (
+              <p className="text-center text-xs text-slate-500">Nenhum arquivo selecionado. Selecione a CNH para liberar a análise.</p>
+            )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={close} disabled={busy}>Cancelar</Button>
               <Button type="button" variant="primary" onClick={start} disabled={!file || busy} isLoading={busy}>
