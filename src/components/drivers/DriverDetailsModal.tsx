@@ -794,6 +794,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
         <ModalContainer isOpen={isAddDocOpen} onClose={() => setIsAddDocOpen(false)} title="Anexar Novo Documento" maxWidth="max-w-md">
           <form onSubmit={handleAddDocument} className="space-y-4">
             <Select label="Tipo de Documento *" value={docType} onChange={(event) => setDocType(event.target.value)} required>
+              <option value="CNH">CNH</option>
+              <option value="RG">RG</option>
+              <option value="CPF">CPF</option>
               <option value="Comprovante de Residência">Comprovante de Residência</option>
               <option value="Certidão de Antecedentes Criminais">Certidão de Antecedentes Criminais</option>
               <option value="Contrato Assinado">Contrato Assinado</option>
