@@ -12,6 +12,7 @@ interface DocumentAiRuntimeEnvironment {
   DOC_AI_WORKER_ENABLED?: string;
   DOC_AI_PROVIDER?: string;
   DOC_AI_GEMINI_MODEL?: string;
+  DOC_AI_REAL_DOCUMENTS_ENABLED?: string;
   DOC_AI_SYNTHETIC_SHA256_ALLOWLIST?: string;
   GEMINI_API_KEY?: string;
   ATTACHMENT_STORAGE_PROVIDER?: string;
@@ -26,6 +27,7 @@ interface DocumentAiRuntimeEnvironment {
 interface ProviderConfiguration {
   apiKey: string;
   model: string;
+  allowRealDocuments: boolean;
   allowedSyntheticChecksums: ReadonlySet<string>;
 }
 
@@ -78,6 +80,12 @@ export function parseSyntheticChecksumAllowlist(value: string | undefined): Read
   return new Set(checksums);
 }
 
+function parseOptionalSyntheticChecksumAllowlist(value: string | undefined): ReadonlySet<string> {
+  const normalized = String(value || '').trim();
+  if (!normalized) return new Set();
+  return parseSyntheticChecksumAllowlist(normalized);
+}
+
 export function createDocumentAiRuntimeFromEnvironment(
   environment: DocumentAiRuntimeEnvironment = process.env,
   dependencies: DocumentAiRuntimeDependencies = {},
@@ -87,10 +95,14 @@ export function createDocumentAiRuntimeFromEnvironment(
     throw new DocumentAiRuntimeUnavailableError();
   }
 
+  const allowRealDocuments = enabled(environment.DOC_AI_REAL_DOCUMENTS_ENABLED);
   const configuration: ProviderConfiguration = {
     apiKey: required(environment.GEMINI_API_KEY),
     model: required(environment.DOC_AI_GEMINI_MODEL),
-    allowedSyntheticChecksums: parseSyntheticChecksumAllowlist(environment.DOC_AI_SYNTHETIC_SHA256_ALLOWLIST),
+    allowRealDocuments,
+    allowedSyntheticChecksums: allowRealDocuments
+      ? parseOptionalSyntheticChecksumAllowlist(environment.DOC_AI_SYNTHETIC_SHA256_ALLOWLIST)
+      : parseSyntheticChecksumAllowlist(environment.DOC_AI_SYNTHETIC_SHA256_ALLOWLIST),
   };
   const storage = dependencies.storage ?? createAttachmentStorageFromEnvironment(environment);
   if (!storage.getConfiguration().configured) throw new DocumentAiRuntimeUnavailableError();
