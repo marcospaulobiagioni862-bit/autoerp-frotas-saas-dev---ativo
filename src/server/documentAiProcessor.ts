@@ -29,6 +29,10 @@ const DOCUMENT_FIELDS: Record<string, ReadonlySet<string>> = {
   MAINTENANCE: new Set(['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount']),
 };
 
+const ALL_DOCUMENT_FIELDS = new Set(
+  Object.values(DOCUMENT_FIELDS).flatMap((fields) => [...fields]),
+);
+
 type JsonScalar = string | number | boolean | null;
 
 export interface DocumentAiProviderRequest {
@@ -104,15 +108,20 @@ function validateProviderOutput(value: unknown): {
   }
   const documentType = output.documentType as keyof typeof DOCUMENT_FIELDS;
   const allowedFields = DOCUMENT_FIELDS[documentType];
-  const fields = exactRecord(output.fields, allowedFields);
-  const confidence = exactRecord(output.confidence, allowedFields);
+  const fields = exactRecord(output.fields, ALL_DOCUMENT_FIELDS);
+  const confidence = exactRecord(output.confidence, ALL_DOCUMENT_FIELDS);
   const normalizedFields: Record<string, JsonScalar> = {};
   const normalizedConfidence: Record<string, number> = {};
 
-  if (Object.keys(fields).length === 0 || Object.keys(fields).length > allowedFields.size) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
-  }
   for (const [key, fieldValue] of Object.entries(fields)) {
+    if (!allowedFields.has(key)) {
+      if (fieldValue !== null) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      const extraScore = confidence[key];
+      if (extraScore !== undefined && extraScore !== 0) {
+        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      }
+      continue;
+    }
     if (!safeScalar(fieldValue)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
     const score = confidence[key];
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) {
@@ -121,8 +130,20 @@ function validateProviderOutput(value: unknown): {
     normalizedFields[key] = fieldValue;
     normalizedConfidence[key] = score;
   }
-  if (Object.keys(confidence).some((key) => !(key in normalizedFields))) {
+
+  if (Object.keys(normalizedFields).length === 0 || Object.keys(normalizedFields).length > allowedFields.size) {
     throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+  }
+
+  for (const [key, score] of Object.entries(confidence)) {
+    if (!allowedFields.has(key)) {
+      const extraFieldValue = fields[key];
+      if (extraFieldValue !== null || score !== 0) {
+        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      }
+      continue;
+    }
+    if (!(key in normalizedFields)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
   }
 
   const raw = exactRecord(output.raw ?? {}, new Set(['text', 'pages']));
