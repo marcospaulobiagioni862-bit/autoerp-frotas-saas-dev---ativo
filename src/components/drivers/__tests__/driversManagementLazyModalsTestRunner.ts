@@ -75,7 +75,7 @@ assert.match(formSource, /if \(profilePhoto && !profilePhotoUploaded\)[\s\S]*Att
 assert.match(formSource, /setProfilePhotoUploaded\(true\)/, 'a confirmed photo upload must not be repeated after a later retry');
 assert.match(formSource, /PROFILE_PHOTO_MIME_TYPES\.includes\(selected\.type\)/, 'new driver photo must use the canonical MIME allowlist');
 assert.match(formSource, /selected\.size <= 0 \|\| selected\.size > PROFILE_PHOTO_MAX_BYTES/, 'new driver photo must use the canonical size policy');
-assert.match(formSource, /clearProfilePhoto\(\)[\s\S]*profilePhotoInputRef\.current\.value = ''/, 'invalid or removed photo must clear state and native input');
+assert.match(formSource, /const clearProfilePhoto = \(\) => \{[\s\S]*setProfilePhoto\(null\)[\s\S]*profilePhotoInputRef\.current\.value = ''/, 'invalid or removed photo must clear state and native input');
 assert.doesNotMatch(formSource, /required[^\n]*profilePhoto|profilePhoto[^\n]*required/, 'photo must not become a driver creation prerequisite');
 
 const vehicleDocumentCatalog = [
