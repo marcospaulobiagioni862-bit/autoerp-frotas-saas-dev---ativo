@@ -55,6 +55,23 @@ jobs:
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
 
+      - name: DOC-AI-CNH progress and RG regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx src/server/__tests__/driverDocumentIntakeApprovedCnhDraftTestRunner.ts
+          grep -F "type LocalPhase = 'IDLE' | 'UPLOADING' | 'REQUESTING';" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "if (step === 'UPLOADING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "if (step === 'REQUESTING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "if (step === 'PENDING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "if (step === 'PROCESSING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "window.setInterval" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "window.clearInterval(timer)" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "(step !== 'PENDING' && step !== 'PROCESSING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "['rg', 'RG / documento de identidade']" src/components/drivers/DriverCnhIntakeModal.tsx
+          grep -F "setRg(initialCnhDraft?.rg || '')" src/components/drivers/DriverFormModal.tsx
+          echo "DOC-AI-CNH progress and RG regressions: PASS"
+
       - name: FINANCE-R12 source invariants
         shell: bash
         run: |
