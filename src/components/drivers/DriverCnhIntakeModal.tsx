@@ -145,11 +145,11 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     if (!file || busy) return;
     setBusy(true);
     setError(null);
+    setLocalPhase('UPLOADING');
     try {
       const idempotencyKey = `driver-cnh-ui:${crypto.randomUUID()}`;
       const intake = await DriverDocumentIntakeClient.create(idempotencyKey);
       setIntakeId(intake.id);
-      setLocalPhase('UPLOADING');
       await AttachmentClient.upload({
         entityType: 'DriverDocumentIntake',
         entityId: intake.id,
