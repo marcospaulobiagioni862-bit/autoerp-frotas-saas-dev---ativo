@@ -84,6 +84,16 @@ const RESPONSE_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+function providerFailureMetadata(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== 'object') return { errorType: typeof error };
+  const record = error as Record<string, unknown>;
+  const metadata: Record<string, unknown> = {};
+  if (typeof record.name === 'string') metadata.name = record.name.slice(0, 80);
+  if (typeof record.status === 'number' || typeof record.status === 'string') metadata.status = record.status;
+  if (typeof record.code === 'number' || typeof record.code === 'string') metadata.code = record.code;
+  return metadata;
+}
+
 export class GeminiDocumentAiProvider implements DocumentAiProvider {
   readonly name = 'GEMINI';
   readonly model: string;
@@ -121,24 +131,34 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
       if (!this.allowedSyntheticChecksums.has(checksum)) throw new SyntheticDocumentRequiredError();
     }
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
-          { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
-        ],
-      }],
-      config: {
-        systemInstruction: request.policy,
-        responseMimeType: 'application/json',
-        responseJsonSchema: RESPONSE_SCHEMA,
-        temperature: 0,
-        candidateCount: 1,
-        abortSignal: signal,
-      },
-    });
+    let response: GenerateContentResponse;
+    try {
+      response = await this.client.models.generateContent({
+        model: this.model,
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
+            { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
+          ],
+        }],
+        config: {
+          systemInstruction: request.policy,
+          responseMimeType: 'application/json',
+          responseJsonSchema: RESPONSE_SCHEMA,
+          temperature: 0,
+          candidateCount: 1,
+          abortSignal: signal,
+        },
+      });
+    } catch (error) {
+      console.error('[DocumentAI] Gemini generateContent failed', {
+        provider: this.name,
+        model: this.model,
+        ...providerFailureMetadata(error),
+      });
+      throw error;
+    }
     if (typeof response.text !== 'string' || !response.text.trim()) throw new Error('Empty Gemini response');
     return JSON.parse(response.text);
   }
