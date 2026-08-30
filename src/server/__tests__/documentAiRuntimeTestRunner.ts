@@ -7,6 +7,7 @@ import {
   createDocumentAiRuntimeFromEnvironment,
   dispatchDocumentAiExtractionFromEnvironment,
   DocumentAiRuntimeUnavailableError,
+  isDocumentAiRuntimeAvailableFromEnvironment,
   parseSyntheticChecksumAllowlist,
 } from '../documentAiRuntime';
 
@@ -64,6 +65,23 @@ for (const environment of [
   );
 }
 assert.equal(providerCreations, 0, 'invalid or disabled runtime created a provider');
+assert.equal(
+  isDocumentAiRuntimeAvailableFromEnvironment(baseEnvironment, {
+    storage,
+    createProvider: () => provider,
+  }),
+  true,
+  'valid runtime was reported unavailable',
+);
+assert.equal(
+  isDocumentAiRuntimeAvailableFromEnvironment(
+    { ...baseEnvironment, DOC_AI_WORKER_ENABLED: 'false' },
+    { storage, createProvider: () => { providerCreations += 1; return provider; } },
+  ),
+  false,
+  'disabled runtime was reported available',
+);
+assert.equal(providerCreations, 0, 'availability check created provider for disabled runtime');
 assert.deepEqual([...parseSyntheticChecksumAllowlist(`${checksum},${checksum}`)], [checksum]);
 
 const realDocumentEnvironment = {
