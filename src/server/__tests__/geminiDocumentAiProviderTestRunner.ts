@@ -66,6 +66,48 @@ await assert.rejects(
 );
 assert.equal(calls, 1, 'non-allowlisted bytes must be rejected before any external call');
 
+const sensitiveApiKey = 'gemini-secret-must-not-leak';
+const sensitiveDocument = 'base64-document-must-not-leak';
+const sensitivePrompt = 'private-policy-must-not-leak';
+const sensitiveResponse = 'raw-provider-response-must-not-leak';
+const providerError = Object.assign(new Error(`provider failure ${sensitiveApiKey} ${sensitiveDocument} ${sensitivePrompt} ${sensitiveResponse}`), {
+  name: 'GeminiProviderError',
+  status: 429,
+  code: 'RATE_LIMITED',
+  apiKey: sensitiveApiKey,
+  request: { document: sensitiveDocument, prompt: sensitivePrompt },
+  response: sensitiveResponse,
+});
+const logged: unknown[][] = [];
+const originalConsoleError = console.error;
+console.error = (...args: unknown[]) => { logged.push(args); };
+try {
+  const failingProvider = new GeminiDocumentAiProvider({
+    apiKey: sensitiveApiKey,
+    model: 'gemini-2.5-flash',
+    allowedSyntheticChecksums: new Set([checksum]),
+    client: { models: { async generateContent() { throw providerError; } } },
+  });
+  await assert.rejects(
+    failingProvider.extract({
+      content: syntheticPdf,
+      mimeType: 'application/pdf',
+      policy: sensitivePrompt,
+    }, new AbortController().signal),
+    error => error === providerError,
+  );
+} finally {
+  console.error = originalConsoleError;
+}
+assert.equal(logged.length, 1, 'provider failure must emit exactly one sanitized diagnostic');
+const serializedLog = JSON.stringify(logged);
+assert.match(serializedLog, /GeminiProviderError/);
+assert.match(serializedLog, /429/);
+assert.match(serializedLog, /RATE_LIMITED/);
+for (const forbidden of [sensitiveApiKey, sensitiveDocument, sensitivePrompt, sensitiveResponse]) {
+  assert.equal(serializedLog.includes(forbidden), false, `sanitized diagnostic leaked: ${forbidden}`);
+}
+
 assert.throws(() => new GeminiDocumentAiProvider({
   apiKey: 'test-only-not-a-real-key',
   model: 'gemini-2.5-flash',
