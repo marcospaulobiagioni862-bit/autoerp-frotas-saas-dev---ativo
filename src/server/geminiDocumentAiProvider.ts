@@ -148,8 +148,6 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
           systemInstruction: request.policy,
           responseMimeType: 'application/json',
           responseJsonSchema: RESPONSE_SCHEMA,
-          temperature: 0,
-          candidateCount: 1,
           abortSignal: signal,
         },
       });
