@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileUp, RefreshCw, ScanLine, ShieldCheck, XCircle } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiExtraction } from '../../api/documentAiClient';
@@ -14,6 +14,7 @@ const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png'
 const CNH_FIELDS = [
   ['name', 'Nome completo'],
   ['cpf', 'CPF'],
+  ['rg', 'RG / documento de identidade'],
   ['birthDate', 'Data de nascimento'],
   ['registrationNumber', 'Número da CNH'],
   ['category', 'Categoria'],
@@ -22,6 +23,7 @@ const CNH_FIELDS = [
 
 type CnhFieldKey = (typeof CNH_FIELDS)[number][0];
 type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId: string };
+type LocalPhase = 'IDLE' | 'UPLOADING' | 'REQUESTING';
 
 type Props = {
   isOpen: boolean;
@@ -38,23 +40,34 @@ function safeError(error: unknown): string {
   return error instanceof Error ? error.message : 'Não foi possível concluir o processamento da CNH.';
 }
 
+function progressFor(step: string): { percent: number; label: string; detail: string } {
+  if (step === 'UPLOADING') return { percent: 20, label: 'Enviando CNH', detail: 'Transferindo o arquivo com segurança.' };
+  if (step === 'REQUESTING') return { percent: 40, label: 'Preparando análise', detail: 'Arquivo recebido. Preparando a leitura pela IA.' };
+  if (step === 'PENDING') return { percent: 55, label: 'CNH na fila de análise', detail: 'Aguardando o processamento iniciar.' };
+  if (step === 'PROCESSING') return { percent: 80, label: 'CNH sendo analisada', detail: 'Extraindo e validando os dados visíveis no documento.' };
+  return { percent: 100, label: 'Análise concluída', detail: 'Dados prontos para revisão.' };
+}
+
 export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraftReady }) => {
   const [file, setFile] = useState<File | null>(null);
   const [intakeId, setIntakeId] = useState('');
   const [extractionId, setExtractionId] = useState('');
   const [extraction, setExtraction] = useState<DocumentAiExtraction | null>(null);
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
-    name: '', cpf: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
+    name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
   });
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localPhase, setLocalPhase] = useState<LocalPhase>('IDLE');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const step = useMemo(() => {
+    if (localPhase === 'UPLOADING') return 'UPLOADING';
+    if (localPhase === 'REQUESTING') return 'REQUESTING';
     if (!extractionId) return 'UPLOAD';
     return extraction?.status || 'PENDING';
-  }, [extractionId, extraction?.status]);
+  }, [localPhase, extractionId, extraction?.status]);
 
   const reset = () => {
     setFile(null);
@@ -62,10 +75,11 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setIntakeId('');
     setExtractionId('');
     setExtraction(null);
-    setDraft({ name: '', cpf: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
+    setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
     setNotes('');
     setError(null);
     setBusy(false);
+    setLocalPhase('IDLE');
   };
 
   const close = () => {
@@ -109,6 +123,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
       setDraft({
         name: valueText(item.proposedFields.name),
         cpf: valueText(item.proposedFields.cpf),
+        rg: valueText(item.proposedFields.rg),
         birthDate: valueText(item.proposedFields.birthDate),
         registrationNumber: valueText(item.proposedFields.registrationNumber),
         category: valueText(item.proposedFields.category),
@@ -118,6 +133,14 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     return item;
   };
 
+  useEffect(() => {
+    if (!isOpen || !extractionId || (step !== 'PENDING' && step !== 'PROCESSING')) return undefined;
+    const timer = window.setInterval(() => {
+      void loadExtraction(extractionId).catch((err) => setError(safeError(err)));
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [isOpen, extractionId, step]);
+
   const start = async () => {
     if (!file || busy) return;
     setBusy(true);
@@ -126,6 +149,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
       const idempotencyKey = `driver-cnh-ui:${crypto.randomUUID()}`;
       const intake = await DriverDocumentIntakeClient.create(idempotencyKey);
       setIntakeId(intake.id);
+      setLocalPhase('UPLOADING');
       await AttachmentClient.upload({
         entityType: 'DriverDocumentIntake',
         entityId: intake.id,
@@ -135,10 +159,13 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
         content: file,
         description: 'CNH para pré-cadastro de motorista',
       });
+      setLocalPhase('REQUESTING');
       const requested = await DriverDocumentIntakeClient.requestDocumentAi(intake.id);
       setExtractionId(requested.item.id);
+      setLocalPhase('IDLE');
       await loadExtraction(requested.item.id);
     } catch (err) {
+      setLocalPhase('IDLE');
       setError(safeError(err));
     } finally {
       setBusy(false);
@@ -202,6 +229,9 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     }
   };
 
+  const progress = progressFor(step);
+  const showProgress = ['UPLOADING', 'REQUESTING', 'PENDING', 'PROCESSING'].includes(step);
+
   return (
     <ModalContainer isOpen={isOpen} onClose={close} title="Cadastrar motorista pela CNH" maxWidth="2xl">
       <div className="space-y-5">
@@ -263,14 +293,27 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
           </div>
         )}
 
-        {(step === 'PENDING' || step === 'PROCESSING') && (
-          <div className="space-y-4 text-center py-4">
-            <RefreshCw className={`mx-auto h-8 w-8 text-emerald-600 ${busy ? 'animate-spin' : ''}`} />
-            <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">{step === 'PENDING' ? 'CNH na fila de análise' : 'CNH sendo analisada'}</p>
-              <p className="mt-1 text-xs text-slate-500">Atualize o estado quando o processamento estiver disponível.</p>
+        {showProgress && (
+          <div className="space-y-4 py-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">{progress.label}</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{progress.percent}%</span>
             </div>
-            <Button type="button" variant="outline" onClick={refresh} disabled={busy}>Atualizar estado</Button>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
+              <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${progress.percent}%` }} />
+            </div>
+            <div className="text-center">
+              <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-emerald-600" />
+              <p className="text-xs text-slate-500">{progress.detail}</p>
+              {(step === 'PENDING' || step === 'PROCESSING') && (
+                <p className="mt-1 text-[11px] text-slate-400">O status é atualizado automaticamente a cada 4 segundos.</p>
+              )}
+            </div>
+            {(step === 'PENDING' || step === 'PROCESSING') && (
+              <div className="text-center">
+                <Button type="button" variant="outline" onClick={refresh} disabled={busy}>Atualizar agora</Button>
+              </div>
+            )}
           </div>
         )}
 
