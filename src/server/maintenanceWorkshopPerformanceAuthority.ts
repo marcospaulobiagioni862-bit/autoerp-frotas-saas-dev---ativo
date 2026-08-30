@@ -9,6 +9,7 @@ export interface MaintenanceWorkshopPerformanceFilters {
   to?: string;
   supplierId?: string;
   vehicleId?: string;
+  dailyRevenueBasisCents?: number;
 }
 
 export interface MaintenanceWorkshopPerformanceRow {
@@ -24,12 +25,15 @@ export interface MaintenanceWorkshopPerformanceRow {
   averageWaitingPartsMinutes: number | null;
   averageWaitingApprovalMinutes: number | null;
   delayReasonCount: number;
+  lostRevenueOpportunityCents: number | null;
 }
 
 export interface MaintenanceWorkshopPerformanceResult {
   generatedAt: string;
   filters: MaintenanceWorkshopPerformanceFilters;
   totalCompletedWorkOrders: number;
+  revenueOpportunityBasis: { dailyRevenueBasisCents: number; projectionKind: 'NON_ACCOUNTING_ESTIMATE' } | null;
+  totalLostRevenueOpportunityCents: number | null;
   workshops: MaintenanceWorkshopPerformanceRow[];
 }
 
@@ -49,6 +53,23 @@ function optionalDate(value: unknown, field: string): string | undefined {
   const date = new Date(`${text}T00:00:00.000Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== text) throw new MaintenanceValidationError(`Invalid ${field}`);
   return text;
+}
+
+function optionalPositiveInteger(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number <= 0 || number > 2_147_483_647) {
+    throw new MaintenanceValidationError(`Invalid ${field}`);
+  }
+  return number;
+}
+
+export function projectLostRevenueOpportunityCents(totalMinutes: number, dailyRevenueBasisCents: number | null): number | null {
+  if (dailyRevenueBasisCents === null) return null;
+  if (!Number.isSafeInteger(totalMinutes) || totalMinutes < 0) throw new MaintenanceValidationError('Invalid totalMinutes');
+  const projection = Math.round((totalMinutes / 1440) * dailyRevenueBasisCents);
+  if (!Number.isSafeInteger(projection)) throw new MaintenanceValidationError('Revenue opportunity projection overflow');
+  return projection;
 }
 
 function average(values: number[]): number | null {
@@ -82,6 +103,7 @@ export class MaintenanceWorkshopPerformanceAuthorityService {
       to: optionalDate(input.to, 'to'),
       supplierId: optionalText(input.supplierId, 'supplierId'),
       vehicleId: optionalText(input.vehicleId, 'vehicleId'),
+      dailyRevenueBasisCents: optionalPositiveInteger(input.dailyRevenueBasisCents, 'dailyRevenueBasisCents'),
     };
     if (filters.from && filters.to && filters.from > filters.to) throw new MaintenanceValidationError('Invalid date range');
 
@@ -134,13 +156,15 @@ export class MaintenanceWorkshopPerformanceAuthorityService {
         }));
       }
 
-      const grouped = new Map<string, { workshopName: string; total: number[]; active: number[]; parts: number[]; approval: number[]; slaEligible: number; within: number; late: number; delayReasons: number }>();
+      const grouped = new Map<string, { workshopName: string; total: number[]; active: number[]; parts: number[]; approval: number[]; slaEligible: number; within: number; late: number; delayReasons: number; lostRevenueOpportunityCents: number }>();
       for (const item of workOrders.values()) {
         const summary = summarizeMaintenanceTimeline(item.events);
         if (summary.totalElapsedMs == null) continue;
         const sla = projectMaintenanceSla(item.expectedDurationMinutes, item.events, new Date());
-        const bucket = grouped.get(item.supplierId) ?? { workshopName: item.workshopName, total: [], active: [], parts: [], approval: [], slaEligible: 0, within: 0, late: 0, delayReasons: 0 };
-        bucket.total.push(Math.round(summary.totalElapsedMs / 60000));
+        const bucket = grouped.get(item.supplierId) ?? { workshopName: item.workshopName, total: [], active: [], parts: [], approval: [], slaEligible: 0, within: 0, late: 0, delayReasons: 0, lostRevenueOpportunityCents: 0 };
+        const totalMinutes = Math.round(summary.totalElapsedMs / 60000);
+        bucket.total.push(totalMinutes);
+        bucket.lostRevenueOpportunityCents += projectLostRevenueOpportunityCents(totalMinutes, filters.dailyRevenueBasisCents ?? null) ?? 0;
         bucket.active.push(Math.round(summary.activeWorkMs / 60000));
         bucket.parts.push(Math.round(summary.waitingPartsMs / 60000));
         bucket.approval.push(Math.round(summary.waitingApprovalMs / 60000));
@@ -166,6 +190,7 @@ export class MaintenanceWorkshopPerformanceAuthorityService {
         averageWaitingPartsMinutes: average(bucket.parts),
         averageWaitingApprovalMinutes: average(bucket.approval),
         delayReasonCount: bucket.delayReasons,
+        lostRevenueOpportunityCents: filters.dailyRevenueBasisCents === undefined ? null : bucket.lostRevenueOpportunityCents,
       })).sort((a, b) => {
         const aScore = a.slaCompliancePercent ?? -1;
         const bScore = b.slaCompliancePercent ?? -1;
@@ -181,6 +206,12 @@ export class MaintenanceWorkshopPerformanceAuthorityService {
         generatedAt: asIso(rows(nowResult)[0]?.current_time),
         filters,
         totalCompletedWorkOrders: workshops.reduce((sum, item) => sum + item.completedWorkOrders, 0),
+        revenueOpportunityBasis: filters.dailyRevenueBasisCents === undefined ? null : {
+          dailyRevenueBasisCents: filters.dailyRevenueBasisCents,
+          projectionKind: 'NON_ACCOUNTING_ESTIMATE',
+        },
+        totalLostRevenueOpportunityCents: filters.dailyRevenueBasisCents === undefined ? null :
+          workshops.reduce((sum, item) => sum + (item.lostRevenueOpportunityCents ?? 0), 0),
         workshops,
       };
     });

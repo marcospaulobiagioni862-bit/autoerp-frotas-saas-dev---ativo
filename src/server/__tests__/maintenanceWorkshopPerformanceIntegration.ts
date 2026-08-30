@@ -4,7 +4,7 @@ import type { AuthenticatedPrincipal } from '../auth';
 import { MaintenanceAuthorityService } from '../maintenanceAuthority';
 import { MaintenanceSlaAuthorityService } from '../maintenanceSlaAuthority';
 import { MaintenanceTimelineAuthorityService } from '../maintenanceTimelineAuthority';
-import { MaintenanceWorkshopPerformanceAuthorityService } from '../maintenanceWorkshopPerformanceAuthority';
+import { MaintenanceWorkshopPerformanceAuthorityService, projectLostRevenueOpportunityCents } from '../maintenanceWorkshopPerformanceAuthority';
 
 const companyA = 'maint-perf-company-a';
 const companyB = 'maint-perf-company-b';
@@ -87,6 +87,22 @@ export async function runMaintenanceWorkshopPerformanceIntegration(): Promise<vo
   assert(workshopA.completedWithinSla === 1 && workshopA.completedLate === 0, 'SLA classification mismatch');
   assert(workshopA.slaCompliancePercent === 100, 'SLA compliance percentage mismatch');
   assert(workshopA.averageTotalMinutes !== null && workshopA.averageTotalMinutes >= 0, 'total duration was not derived');
+  assert(resultA.revenueOpportunityBasis === null && resultA.totalLostRevenueOpportunityCents === null, 'missing basis must not invent a revenue projection');
+  assert(workshopA.lostRevenueOpportunityCents === null, 'workshop projection must remain unavailable without explicit basis');
+  assert(projectLostRevenueOpportunityCents(720, 144000) === 72000, 'half-day projection did not use the explicit daily basis');
+
+  const projected = await MaintenanceWorkshopPerformanceAuthorityService.get(companyA, { dailyRevenueBasisCents: 144000 });
+  assert(projected.revenueOpportunityBasis?.dailyRevenueBasisCents === 144000, 'explicit revenue basis was not traced in the response');
+  assert(projected.revenueOpportunityBasis?.projectionKind === 'NON_ACCOUNTING_ESTIMATE', 'projection was not marked as non-accounting');
+  assert(projected.totalLostRevenueOpportunityCents !== null, 'explicit basis did not enable the projection');
+  assert(projected.workshops[0]?.lostRevenueOpportunityCents !== null, 'workshop projection remained unavailable with explicit basis');
+  let invalidBasisRejected = false;
+  try {
+    await MaintenanceWorkshopPerformanceAuthorityService.get(companyA, { dailyRevenueBasisCents: 0 });
+  } catch {
+    invalidBasisRejected = true;
+  }
+  assert(invalidBasisRejected, 'zero revenue basis was not rejected fail-closed');
 
   const filtered = await MaintenanceWorkshopPerformanceAuthorityService.get(companyA, { supplierId: supplierA.id, vehicleId: vehicleA });
   assert(filtered.totalCompletedWorkOrders === 1, 'valid workshop/vehicle filters lost the authorized order');
@@ -96,5 +112,5 @@ export async function runMaintenanceWorkshopPerformanceIntegration(): Promise<vo
   const afterFinance = await financialCounts(companyA);
   assert(JSON.stringify(afterFinance) === JSON.stringify(beforeFinance), 'performance read-model flow mutated financial records');
 
-  console.log('MAINT-SLA-1D-A workshop performance persistence/tenant/zero-finance integration: PASS');
+  console.log('MAINT-SLA-1D/1E workshop performance and non-accounting lost-revenue projection: PASS');
 }
