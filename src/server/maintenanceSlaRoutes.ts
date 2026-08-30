@@ -68,6 +68,7 @@ export function registerMaintenanceSlaRoutes(app: Express): void {
         to: typeof req.query.to === 'string' ? req.query.to : undefined,
         supplierId: typeof req.query.supplierId === 'string' ? req.query.supplierId : undefined,
         vehicleId: typeof req.query.vehicleId === 'string' ? req.query.vehicleId : undefined,
+        dailyRevenueBasisCents: typeof req.query.dailyRevenueBasisCents === 'string' ? Number(req.query.dailyRevenueBasisCents) : undefined,
       }));
     } catch (error) {
       send(res, error);
