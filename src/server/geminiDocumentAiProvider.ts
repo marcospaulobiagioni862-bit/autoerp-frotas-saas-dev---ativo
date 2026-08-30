@@ -8,7 +8,7 @@ const DOCUMENT_TYPES = [
 ] as const;
 
 const FIELD_NAMES = [
-  'name', 'cpf', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate',
+  'name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate',
   'plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName',
   'taxYear', 'amount', 'dueDate', 'installmentNumber', 'noticeNumber', 'infractionCode', 'infractionDate',
   'discountAmount', 'issuerName', 'issuerDocument', 'invoiceNumber', 'paymentMethod', 'contractNumber',

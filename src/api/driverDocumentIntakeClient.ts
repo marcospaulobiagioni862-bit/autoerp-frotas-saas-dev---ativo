@@ -36,6 +36,7 @@ export interface DriverDocumentIntakeExtractionSummary {
 export interface ApprovedCnhDriverDraft {
   fullName?: string;
   cpf?: string;
+  rg?: string;
   birthDate?: string;
   cnhNumber?: string;
   cnhCategory?: string;
@@ -59,7 +60,7 @@ const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'ARCHIVED',
 ]);
 
-const DRAFT_KEYS = new Set(['fullName', 'cpf', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhExpiration']);
+const DRAFT_KEYS = new Set(['fullName', 'cpf', 'rg', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhExpiration']);
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -140,6 +141,7 @@ function validateApprovedCnhDraft(value: unknown): ApprovedCnhDriverDraft {
       throw new Error('Invalid approved CNH draft payload');
     }
     if (key === 'fullName' && raw.length > 160) throw new Error('Invalid approved CNH draft payload');
+    if (key === 'rg' && raw.length > 32) throw new Error('Invalid approved CNH draft payload');
   }
   return item as ApprovedCnhDriverDraft;
 }

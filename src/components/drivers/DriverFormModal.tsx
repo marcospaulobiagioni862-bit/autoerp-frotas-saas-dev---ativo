@@ -102,7 +102,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
     } else {
       setFullName(initialCnhDraft?.fullName || '');
       setCpf(initialCnhDraft?.cpf || '');
-      setRg('');
+      setRg(initialCnhDraft?.rg || '');
       setBirthDate(initialCnhDraft?.birthDate || '');
       setPhone('');
       setWhatsapp('');
