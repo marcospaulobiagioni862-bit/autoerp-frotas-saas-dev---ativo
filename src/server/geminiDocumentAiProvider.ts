@@ -94,6 +94,34 @@ function providerFailureMetadata(error: unknown): Record<string, unknown> {
   return metadata;
 }
 
+function providerStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const status = (error as Record<string, unknown>).status;
+  if (typeof status === 'number' && Number.isInteger(status)) return status;
+  if (typeof status === 'string' && /^\d{3}$/.test(status)) return Number(status);
+  return null;
+}
+
+function isRetryableProviderFailure(error: unknown): boolean {
+  const status = providerStatus(error);
+  return status === 503 || status === 429;
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(new Error('Gemini request aborted'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error('Gemini request aborted'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export class GeminiDocumentAiProvider implements DocumentAiProvider {
   readonly name = 'GEMINI';
   readonly model: string;
@@ -133,32 +161,56 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
       if (!this.allowedSyntheticChecksums.has(checksum)) throw new SyntheticDocumentRequiredError();
     }
 
-    let response: GenerateContentResponse;
-    try {
-      response = await this.client.models.generateContent({
-        model: this.model,
-        contents: [{
-          role: 'user',
-          parts: [
-            { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
-            { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
-          ],
-        }],
-        config: {
-          systemInstruction: request.policy,
-          responseMimeType: 'application/json',
-          responseJsonSchema: RESPONSE_SCHEMA,
-          abortSignal: signal,
-        },
-      });
-    } catch (error) {
-      console.error('[DocumentAI] Gemini generateContent failed', {
-        provider: this.name,
-        model: this.model,
-        ...providerFailureMetadata(error),
-      });
-      throw error;
+    const maxAttempts = 3;
+    let response: GenerateContentResponse | undefined;
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (signal.aborted) throw new Error('Gemini request aborted');
+      try {
+        response = await this.client.models.generateContent({
+          model: this.model,
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
+              { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
+            ],
+          }],
+          config: {
+            systemInstruction: request.policy,
+            responseMimeType: 'application/json',
+            responseJsonSchema: RESPONSE_SCHEMA,
+            abortSignal: signal,
+          },
+        });
+        break;
+      } catch (error) {
+        lastError = error;
+        const retryable = isRetryableProviderFailure(error);
+        if (retryable && attempt < maxAttempts && !signal.aborted) {
+          const delayMs = attempt === 1 ? 1_000 : 2_000;
+          console.warn('[DocumentAI] Gemini transient failure; retry scheduled', {
+            provider: this.name,
+            model: this.model,
+            status: providerStatus(error),
+            attempt,
+            nextAttempt: attempt + 1,
+            delayMs,
+          });
+          await waitForRetry(delayMs, signal);
+          continue;
+        }
+        console.error('[DocumentAI] Gemini generateContent failed', {
+          provider: this.name,
+          model: this.model,
+          attempt,
+          ...providerFailureMetadata(error),
+        });
+        throw error;
+      }
     }
+
+    if (!response) throw lastError ?? new Error('Gemini response missing');
     if (typeof response.text !== 'string' || !response.text.trim()) throw new Error('Empty Gemini response');
     return JSON.parse(response.text);
   }
