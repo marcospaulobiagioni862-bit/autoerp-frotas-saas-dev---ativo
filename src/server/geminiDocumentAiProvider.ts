@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { GoogleGenAI } from '@google/genai';
 import type { DocumentAiProvider, DocumentAiProviderRequest } from './documentAiProcessor';
+
+const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
 const DOCUMENT_TYPES = [
   'CNH', 'CRLV', 'IPVA', 'TRAFFIC_TICKET', 'INVOICE', 'RECEIPT', 'CONTRACT', 'INSURANCE', 'MAINTENANCE',
@@ -15,11 +16,11 @@ const FIELD_NAMES = [
   'deductibleAmount', 'supplierName', 'supplierDocument', 'serviceDate', 'odometer', 'description',
 ] as const;
 
-type GenerateContentResponse = { text?: string };
-type GenerateContentClient = {
-  models: {
-    generateContent(request: Record<string, unknown>): Promise<GenerateContentResponse>;
-  };
+type InteractionContent = { type?: string; text?: string };
+type InteractionStep = { type?: string; content?: InteractionContent[] };
+type InteractionResponse = { output_text?: string; steps?: InteractionStep[] };
+type InteractionsClient = {
+  create(request: Record<string, unknown>, signal: AbortSignal): Promise<InteractionResponse>;
 };
 
 export interface GeminiDocumentAiProviderOptions {
@@ -31,7 +32,7 @@ export interface GeminiDocumentAiProviderOptions {
    */
   allowRealDocuments?: boolean;
   allowedSyntheticChecksums: ReadonlySet<string>;
-  client?: GenerateContentClient;
+  client?: InteractionsClient;
 }
 
 export class SyntheticDocumentRequiredError extends Error {
@@ -122,12 +123,52 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+function outputText(response: InteractionResponse): string | undefined {
+  if (typeof response.output_text === 'string' && response.output_text.trim()) return response.output_text;
+  const chunks: string[] = [];
+  for (const step of response.steps ?? []) {
+    if (step.type !== 'model_output') continue;
+    for (const content of step.content ?? []) {
+      if (content.type === 'text' && typeof content.text === 'string') chunks.push(content.text);
+    }
+  }
+  const joined = chunks.join('').trim();
+  return joined || undefined;
+}
+
+function mediaType(mimeType: string): 'document' | 'image' {
+  return mimeType === 'application/pdf' ? 'document' : 'image';
+}
+
+function createHttpClient(apiKey: string): InteractionsClient {
+  return {
+    async create(request, signal) {
+      const response = await fetch(GEMINI_INTERACTIONS_URL, {
+        method: 'POST',
+        headers: {
+          'x-goog-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+        signal,
+      });
+      if (!response.ok) {
+        const error = new Error('Gemini Interactions API request failed') as Error & { status?: number; code?: string };
+        error.status = response.status;
+        error.code = response.statusText || 'GEMINI_INTERACTIONS_ERROR';
+        throw error;
+      }
+      return await response.json() as InteractionResponse;
+    },
+  };
+}
+
 export class GeminiDocumentAiProvider implements DocumentAiProvider {
   readonly name = 'GEMINI';
   readonly model: string;
   private readonly allowRealDocuments: boolean;
   private readonly allowedSyntheticChecksums: ReadonlySet<string>;
-  private readonly client: GenerateContentClient;
+  private readonly client: InteractionsClient;
 
   constructor(options: GeminiDocumentAiProviderOptions) {
     const apiKey = options.apiKey.trim();
@@ -141,18 +182,7 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
       if (!/^[a-f0-9]{64}$/.test(checksum)) throw new Error('Invalid synthetic document checksum');
     }
     this.allowedSyntheticChecksums = new Set(options.allowedSyntheticChecksums);
-    if (options.client) {
-      this.client = options.client;
-    } else {
-      // For the Gemini Developer API, let the SDK use its default beta endpoint.
-      // This matches Google's current server-side quickstart for API-key usage.
-      const client = new GoogleGenAI({ apiKey });
-      this.client = {
-        models: {
-          generateContent: (request) => client.models.generateContent(request as any),
-        },
-      };
-    }
+    this.client = options.client ?? createHttpClient(apiKey);
   }
 
   async extract(request: DocumentAiProviderRequest, signal: AbortSignal): Promise<unknown> {
@@ -162,27 +192,29 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
     }
 
     const maxAttempts = 3;
-    let response: GenerateContentResponse | undefined;
+    let response: InteractionResponse | undefined;
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       if (signal.aborted) throw new Error('Gemini request aborted');
       try {
-        response = await this.client.models.generateContent({
+        response = await this.client.create({
           model: this.model,
-          contents: [{
-            role: 'user',
-            parts: [
-              { text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
-              { inlineData: { mimeType: request.mimeType, data: Buffer.from(request.content).toString('base64') } },
-            ],
-          }],
-          config: {
-            systemInstruction: request.policy,
-            responseMimeType: 'application/json',
-            responseJsonSchema: RESPONSE_SCHEMA,
-            abortSignal: signal,
+          input: [
+            { type: 'text', text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
+            {
+              type: mediaType(request.mimeType),
+              data: Buffer.from(request.content).toString('base64'),
+              mime_type: request.mimeType,
+            },
+          ],
+          system_instruction: request.policy,
+          response_format: {
+            type: 'text',
+            mime_type: 'application/json',
+            schema: RESPONSE_SCHEMA,
           },
-        });
+          store: false,
+        }, signal);
         break;
       } catch (error) {
         lastError = error;
@@ -200,7 +232,7 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
           await waitForRetry(delayMs, signal);
           continue;
         }
-        console.error('[DocumentAI] Gemini generateContent failed', {
+        console.error('[DocumentAI] Gemini interaction failed', {
           provider: this.name,
           model: this.model,
           attempt,
@@ -211,7 +243,8 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
     }
 
     if (!response) throw lastError ?? new Error('Gemini response missing');
-    if (typeof response.text !== 'string' || !response.text.trim()) throw new Error('Empty Gemini response');
-    return JSON.parse(response.text);
+    const text = outputText(response);
+    if (!text) throw new Error('Empty Gemini response');
+    return JSON.parse(text);
   }
 }
