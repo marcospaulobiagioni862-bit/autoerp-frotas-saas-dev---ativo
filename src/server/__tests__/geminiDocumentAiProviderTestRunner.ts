@@ -16,22 +16,26 @@ let captured: Record<string, unknown> | undefined;
 
 const provider = new GeminiDocumentAiProvider({
   apiKey: 'test-only-not-a-real-key',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.6-flash',
   allowedSyntheticChecksums: new Set([checksum]),
   client: {
-    models: {
-      async generateContent(request) {
-        calls += 1;
-        captured = request;
-        return {
-          text: JSON.stringify({
-            documentType: 'INVOICE',
-            fields: { invoiceNumber: 'SYNTHETIC-001', amount: 10 },
-            confidence: { invoiceNumber: 1, amount: 0.99 },
-            raw: { text: 'synthetic fixture', pages: 1 },
-          }),
-        };
-      },
+    async create(request) {
+      calls += 1;
+      captured = request;
+      return {
+        steps: [{
+          type: 'model_output',
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              documentType: 'INVOICE',
+              fields: { invoiceNumber: 'SYNTHETIC-001', amount: 10 },
+              confidence: { invoiceNumber: 1, amount: 0.99 },
+              raw: { text: 'synthetic fixture', pages: 1 },
+            }),
+          }],
+        }],
+      };
     },
   },
 });
@@ -44,17 +48,23 @@ const allowed = await processDocumentAiBytes(provider, {
 assert.equal(calls, 1);
 assert.equal(allowed.detectedDocumentType, 'INVOICE');
 assert.deepEqual(allowed.proposedFields, { invoiceNumber: 'SYNTHETIC-001', amount: 10 });
-assert.equal(captured?.model, 'gemini-2.5-flash');
+assert.equal(captured?.model, 'gemini-3.6-flash');
+assert.equal(captured?.system_instruction, DOCUMENT_AI_SYSTEM_POLICY);
+assert.equal(captured?.store, false);
 
-const config = captured?.config as Record<string, unknown> | undefined;
-assert.ok(config, 'Gemini request config was not captured');
-assert.equal(config.systemInstruction, DOCUMENT_AI_SYSTEM_POLICY);
-assert.equal(config.responseMimeType, 'application/json');
-assert.ok(config.responseJsonSchema, 'strict JSON schema was not sent');
-assert.equal('tools' in config, false);
-assert.equal('toolConfig' in config, false);
-assert.equal('automaticFunctionCalling' in config, false);
+const responseFormat = captured?.response_format as Record<string, unknown> | undefined;
+assert.ok(responseFormat, 'Gemini response format was not captured');
+assert.equal(responseFormat.type, 'text');
+assert.equal(responseFormat.mime_type, 'application/json');
+assert.ok(responseFormat.schema, 'strict JSON schema was not sent');
 assert.equal('tools' in (captured ?? {}), false);
+
+const input = captured?.input as Array<Record<string, unknown>> | undefined;
+assert.ok(input && input.length === 2, 'Gemini multimodal input was not captured');
+assert.equal(input[0]?.type, 'text');
+assert.equal(input[1]?.type, 'document');
+assert.equal(input[1]?.mime_type, 'application/pdf');
+assert.equal(typeof input[1]?.data, 'string');
 
 await assert.rejects(
   provider.extract({
@@ -84,9 +94,9 @@ console.error = (...args: unknown[]) => { logged.push(args); };
 try {
   const failingProvider = new GeminiDocumentAiProvider({
     apiKey: sensitiveApiKey,
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.6-flash',
     allowedSyntheticChecksums: new Set([checksum]),
-    client: { models: { async generateContent() { throw providerError; } } },
+    client: { async create() { throw providerError; } },
   });
   await assert.rejects(
     failingProvider.extract({
@@ -110,8 +120,8 @@ for (const forbidden of [sensitiveApiKey, sensitiveDocument, sensitivePrompt, se
 
 assert.throws(() => new GeminiDocumentAiProvider({
   apiKey: 'test-only-not-a-real-key',
-  model: 'gemini-2.5-flash',
+  model: 'gemini-3.6-flash',
   allowedSyntheticChecksums: new Set(),
 }), SyntheticDocumentRequiredError);
 
-console.log('Gemini Document AI provider synthetic-only checks passed.');
+console.log('Gemini Document AI Interactions API synthetic-only checks passed.');
