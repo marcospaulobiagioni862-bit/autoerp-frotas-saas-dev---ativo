@@ -4,8 +4,9 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import type { FileAttachment } from '../../types/entities';
 import { Button } from '../ui/Button';
 
-const PROFILE_PHOTO_DOCUMENT_TYPE = 'DRIVER_PROFILE_PHOTO';
-const PROFILE_PHOTO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+export const PROFILE_PHOTO_DOCUMENT_TYPE = 'DRIVER_PROFILE_PHOTO';
+export const PROFILE_PHOTO_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+export const PROFILE_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
 
 interface DriverProfilePhotoProps {
   driverId: string;
@@ -67,7 +68,7 @@ export const DriverProfilePhoto: React.FC<DriverProfilePhotoProps> = ({ driverId
     try {
       if (!PROFILE_PHOTO_MIME_TYPES.includes(file.type)) throw new Error('Use uma imagem JPEG, PNG ou WEBP.');
       if (file.size <= 0) throw new Error('A imagem está vazia.');
-      if (file.size > 10 * 1024 * 1024) throw new Error('A imagem excede 10 MB.');
+      if (file.size > PROFILE_PHOTO_MAX_BYTES) throw new Error('A imagem excede 10 MB.');
 
       const previous = photo;
       await AttachmentClient.upload({
