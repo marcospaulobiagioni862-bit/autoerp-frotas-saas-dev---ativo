@@ -62,6 +62,20 @@ jobs:
           npx tsx src/server/__tests__/driverDocumentIntakeApprovedCnhDraftTestRunner.ts
           grep -F "type LocalPhase = 'IDLE' | 'UPLOADING' | 'REQUESTING';" src/components/drivers/DriverCnhIntakeModal.tsx
           grep -F "if (step === 'UPLOADING')" src/components/drivers/DriverCnhIntakeModal.tsx
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('src/components/drivers/DriverCnhIntakeModal.tsx', 'utf8');
+          const start = source.indexOf('const start = async () => {');
+          const end = source.indexOf('const refresh = async () => {', start);
+          const body = source.slice(start, end);
+          const progress = body.indexOf("setLocalPhase('UPLOADING');");
+          const create = body.indexOf('DriverDocumentIntakeClient.create(idempotencyKey)');
+          if (progress < 0 || create < 0 || progress > create) {
+            console.error('FAIL: CNH progress must start before the first intake request');
+            process.exit(1);
+          }
+          console.log('DOC-AI-CNH immediate progress ordering: PASS');
+          NODE
           grep -F "if (step === 'REQUESTING')" src/components/drivers/DriverCnhIntakeModal.tsx
           grep -F "if (step === 'PENDING')" src/components/drivers/DriverCnhIntakeModal.tsx
           grep -F "if (step === 'PROCESSING')" src/components/drivers/DriverCnhIntakeModal.tsx
