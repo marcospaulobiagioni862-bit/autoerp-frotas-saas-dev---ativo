@@ -50,6 +50,21 @@ async function run(): Promise<void> {
   assert(proposal.detectedDocumentType === 'CRLV', 'document type missing');
   assert(proposal.proposedFields.plate === 'ABC1D23', 'structured field missing');
 
+  const cnhWithGlobalNulls = await processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: 'MOTORISTA TESTE', cpf: '12345678900', plate: null, renavam: null },
+        confidence: { name: 0.99, cpf: 0.98, plate: 0, renavam: 0 },
+        raw: { text: 'fixture CNH', pages: 1 },
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+  assert(cnhWithGlobalNulls.detectedDocumentType === 'CNH', 'CNH output should remain valid');
+  assert(cnhWithGlobalNulls.proposedFields.name === 'MOTORISTA TESTE', 'CNH relevant field missing');
+  assert(!('plate' in cnhWithGlobalNulls.proposedFields), 'irrelevant null field must be discarded');
+
   let called = false;
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
