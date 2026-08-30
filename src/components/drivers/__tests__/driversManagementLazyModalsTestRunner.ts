@@ -81,8 +81,11 @@ const vehicleDocumentCatalog = [
   ['VEHICLE_DOCUMENT', 'Outro documento'],
 ] as const;
 for (const [value, label] of vehicleDocumentCatalog) {
-  assert.match(fileUploadSource, new RegExp(`\\['${value}',\\s*'${label.replace(/[.*+?^$\{\}()|[\\]\\\\]/g, '\\\\
-console.log('Deferred driver modals and profile photo header regression: PASS');')}'\\]`), `vehicle document catalog must preserve ${value}`);
+  assert.equal(
+    fileUploadSource.includes(`['${value}', '${label}']`),
+    true,
+    `vehicle document catalog must preserve ${value}`,
+  );
 }
 assert.match(fileUploadSource, /useState\('CRLV'\)/, 'vehicle document type must default to CRLV');
 assert.match(fileUploadSource, /effectiveDocumentType\s*=\s*isVehicleDocument\s*\?\s*selectedVehicleDocumentType\s*:\s*documentType/, 'selected vehicle type must be sent as documentType');
