@@ -8,7 +8,7 @@ export const DOCUMENT_AI_SYSTEM_POLICY = [
 ].join(' ');
 
 export const DOCUMENT_AI_MAX_BYTES = 20 * 1024 * 1024;
-export const DOCUMENT_AI_DEFAULT_TIMEOUT_MS = 30_000;
+export const DOCUMENT_AI_DEFAULT_TIMEOUT_MS = 90_000;
 
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
