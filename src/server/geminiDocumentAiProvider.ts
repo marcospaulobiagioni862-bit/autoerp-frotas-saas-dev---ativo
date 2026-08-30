@@ -116,7 +116,9 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
     if (options.client) {
       this.client = options.client;
     } else {
-      const client = new GoogleGenAI({ apiKey, apiVersion: 'v1' });
+      // For the Gemini Developer API, let the SDK use its default beta endpoint.
+      // This matches Google's current server-side quickstart for API-key usage.
+      const client = new GoogleGenAI({ apiKey });
       this.client = {
         models: {
           generateContent: (request) => client.models.generateContent(request as any),
