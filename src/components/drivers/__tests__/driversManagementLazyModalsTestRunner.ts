@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
 const detailsSource = readFileSync(new URL('../DriverDetailsModal.tsx', import.meta.url), 'utf8');
 const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', import.meta.url), 'utf8');
+const formSource = readFileSync(new URL('../DriverFormModal.tsx', import.meta.url), 'utf8');
 const cnhIntakeSource = readFileSync(new URL('../DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
 const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
 
@@ -67,6 +68,15 @@ assert.match(profilePhotoSource, /if \(previous\) await AttachmentClient\.archiv
 assert.match(profilePhotoSource, /await AttachmentClient\.archive\(photo\.id\)/, 'profile photo removal must archive instead of deleting bytes directly');
 assert.match(profilePhotoSource, /image\/jpeg.*image\/jpg.*image\/png.*image\/webp/, 'profile photo UI must allow only image MIME types');
 assert.doesNotMatch(profilePhotoSource, /application\/pdf|storageKey|companyId|x-autoerp-/, 'profile photo component must not allow PDF or consume server authority fields');
+
+assert.match(formSource, /Foto do motorista \(opcional\)/, 'new driver form must explicitly keep the photo optional');
+assert.match(formSource, /const created = await DriverClient\.create\(input\);[\s\S]*setCreatedDriverId\(created\.id\);/, 'created driver id must be retained before optional post-create work');
+assert.match(formSource, /if \(profilePhoto && !profilePhotoUploaded\)[\s\S]*AttachmentClient\.upload\(\{[\s\S]*entityType: 'Driver'[\s\S]*entityId: driverId[\s\S]*documentType: PROFILE_PHOTO_DOCUMENT_TYPE/, 'selected photo must upload only after creation through Driver attachment authority');
+assert.match(formSource, /setProfilePhotoUploaded\(true\)/, 'a confirmed photo upload must not be repeated after a later retry');
+assert.match(formSource, /PROFILE_PHOTO_MIME_TYPES\.includes\(selected\.type\)/, 'new driver photo must use the canonical MIME allowlist');
+assert.match(formSource, /selected\.size <= 0 \|\| selected\.size > PROFILE_PHOTO_MAX_BYTES/, 'new driver photo must use the canonical size policy');
+assert.match(formSource, /clearProfilePhoto\(\)[\s\S]*profilePhotoInputRef\.current\.value = ''/, 'invalid or removed photo must clear state and native input');
+assert.doesNotMatch(formSource, /required[^\n]*profilePhoto|profilePhoto[^\n]*required/, 'photo must not become a driver creation prerequisite');
 
 const vehicleDocumentCatalog = [
   ['CRLV', 'CRLV / Licenciamento'],
