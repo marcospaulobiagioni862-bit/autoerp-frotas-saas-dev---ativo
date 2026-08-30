@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
 const detailsSource = readFileSync(new URL('../DriverDetailsModal.tsx', import.meta.url), 'utf8');
 const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', import.meta.url), 'utf8');
+const cnhIntakeSource = readFileSync(new URL('../DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
+const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
 
 for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
   assert.equal(
@@ -66,4 +68,38 @@ assert.match(profilePhotoSource, /await AttachmentClient\.archive\(photo\.id\)/,
 assert.match(profilePhotoSource, /image\/jpeg.*image\/jpg.*image\/png.*image\/webp/, 'profile photo UI must allow only image MIME types');
 assert.doesNotMatch(profilePhotoSource, /application\/pdf|storageKey|companyId|x-autoerp-/, 'profile photo component must not allow PDF or consume server authority fields');
 
-console.log('Deferred driver modals and profile photo header regression: PASS');
+const vehicleDocumentCatalog = [
+  ['CRLV', 'CRLV / Licenciamento'],
+  ['CRV', 'CRV'],
+  ['ATPV_E', 'ATPV-e'],
+  ['IPVA', 'IPVA'],
+  ['DPVAT_SPVAT', 'DPVAT / SPVAT'],
+  ['INSURANCE_POLICY', 'Seguro / Apólice'],
+  ['INSPECTION_REPORT', 'Vistoria / Laudo'],
+  ['PURCHASE_INVOICE', 'Nota fiscal / Compra'],
+  ['FINANCING', 'Financiamento'],
+  ['VEHICLE_DOCUMENT', 'Outro documento'],
+] as const;
+for (const [value, label] of vehicleDocumentCatalog) {
+  assert.equal(
+    fileUploadSource.includes(`['${value}', '${label}']`),
+    true,
+    `vehicle document catalog must preserve ${value}`,
+  );
+}
+assert.match(fileUploadSource, /useState\('CRLV'\)/, 'vehicle document type must default to CRLV');
+assert.match(fileUploadSource, /effectiveDocumentType\s*=\s*isVehicleDocument\s*\?\s*selectedVehicleDocumentType\s*:\s*documentType/, 'selected vehicle type must be sent as documentType');
+assert.match(fileUploadSource, /documentType:\s*effectiveDocumentType/, 'upload must use the effective vehicle document type');
+assert.match(fileUploadSource, /description:\s*isVehicleDocument[\s\S]*Documento do veículo:/, 'vehicle upload must preserve a typed description');
+assert.match(fileUploadSource, /finally\s*\{[\s\S]*fileInputRef\.current\.value\s*=\s*''/, 'vehicle upload must clear the native input after every attempt');
+
+assert.match(cnhIntakeSource, /const ALLOWED_MIME_TYPES = new Set\(\['application\/pdf', 'image\/jpeg', 'image\/png', 'image\/webp'\]\)/, 'CNH intake must keep the explicit MIME allowlist');
+assert.match(cnhIntakeSource, /if \(!file \|\| busy\) return;/, 'CNH analysis must not start without a selected file');
+assert.match(cnhIntakeSource, /if \(!ALLOWED_MIME_TYPES\.has\(selected\.type\)\)[\s\S]*setFile\(null\)[\s\S]*fileInputRef\.current\.value = ''/, 'invalid CNH MIME must clear state and native input');
+assert.match(cnhIntakeSource, /if \(selected\.size <= 0 \|\| selected\.size > MAX_BYTES\)[\s\S]*setFile\(null\)[\s\S]*fileInputRef\.current\.value = ''/, 'invalid CNH size must clear state and native input');
+assert.match(cnhIntakeSource, /const clearSelectedFile = \(\) => \{[\s\S]*setFile\(null\)[\s\S]*fileInputRef\.current\.value = ''/, 'CNH removal must clear state and native input');
+assert.match(cnhIntakeSource, /\{file \? 'Trocar arquivo' : 'Selecionar CNH'\}/, 'CNH intake must expose selection and replacement states');
+assert.match(cnhIntakeSource, />\s*Remover arquivo\s*</, 'CNH intake must expose explicit removal');
+assert.match(cnhIntakeSource, /disabled=\{!file \|\| busy\}/, 'CNH analysis action must remain disabled without a file');
+
+console.log('Deferred driver modals, profile photo and document upload UX regression: PASS');
