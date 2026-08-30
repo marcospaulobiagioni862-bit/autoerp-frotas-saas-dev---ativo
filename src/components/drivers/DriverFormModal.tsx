@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { User, CreditCard, MapPin, FileText, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2 } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput } from '../../api/driverClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 import {
   DriverDocumentIntakeClient,
   type ApprovedCnhDriverDraft,
@@ -10,6 +11,11 @@ import { Driver } from '../../types/entities';
 import { DriverStatus } from '../../types/enums';
 import { DriverCnhPrefillButton } from './DriverCnhPrefillButton';
 import type { DriverCnhDraft } from '../../api/driverCnhPrefill';
+import {
+  PROFILE_PHOTO_DOCUMENT_TYPE,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_MIME_TYPES,
+} from './DriverProfilePhoto';
 
 type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId?: string };
 
@@ -31,6 +37,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdDriverId, setCreatedDriverId] = useState<string | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const [profilePhotoPreviewUrl, setProfilePhotoPreviewUrl] = useState<string | null>(null);
+  const [profilePhotoUploaded, setProfilePhotoUploaded] = useState(false);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const [fullName, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
@@ -59,6 +69,13 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
 
   useEffect(() => {
     setCreatedDriverId(null);
+    setProfilePhoto(null);
+    setProfilePhotoUploaded(false);
+    setProfilePhotoPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
     if (driverToEdit) {
       setFullName(driverToEdit.fullName || '');
       setCpf(driverToEdit.cpf || '');
@@ -108,6 +125,40 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
     }
     setErrorMessage(null);
   }, [driverToEdit, initialCnhDraft, isOpen]);
+
+  useEffect(() => () => {
+    if (profilePhotoPreviewUrl) URL.revokeObjectURL(profilePhotoPreviewUrl);
+  }, [profilePhotoPreviewUrl]);
+
+  const clearProfilePhoto = () => {
+    setProfilePhoto(null);
+    setProfilePhotoPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
+  };
+
+  const selectProfilePhoto = (selected: File | undefined) => {
+    setErrorMessage(null);
+    if (!selected) return;
+    if (!PROFILE_PHOTO_MIME_TYPES.includes(selected.type)) {
+      clearProfilePhoto();
+      setErrorMessage('Use uma foto JPEG, PNG ou WEBP.');
+      return;
+    }
+    if (selected.size <= 0 || selected.size > PROFILE_PHOTO_MAX_BYTES) {
+      clearProfilePhoto();
+      setErrorMessage(selected.size <= 0 ? 'A foto está vazia.' : 'A foto excede 10 MB.');
+      return;
+    }
+    setProfilePhoto(selected);
+    setProfilePhotoUploaded(false);
+    setProfilePhotoPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(selected);
+    });
+  };
 
   const applyApprovedCnhDraft = (draft: DriverCnhDraft) => {
     if (draft.fullName !== undefined) setFullName(draft.fullName);
@@ -170,7 +221,18 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
         if (!driverId) {
           const created = await DriverClient.create(input);
           driverId = created.id;
-          if (cnhIntakeId) setCreatedDriverId(created.id);
+          setCreatedDriverId(created.id);
+        }
+        if (profilePhoto && !profilePhotoUploaded) {
+          await AttachmentClient.upload({
+            entityType: 'Driver',
+            entityId: driverId,
+            documentType: PROFILE_PHOTO_DOCUMENT_TYPE,
+            fileName: profilePhoto.name,
+            mimeType: profilePhoto.type,
+            content: profilePhoto,
+          });
+          setProfilePhotoUploaded(true);
         }
         if (cnhIntakeId) {
           const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, driverId);
@@ -211,10 +273,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
           </div>
         )}
 
-        {createdDriverId && cnhIntakeId && (
+        {createdDriverId && (cnhIntakeId || (profilePhoto && !profilePhotoUploaded)) && (
           <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl text-amber-800 dark:text-amber-300 text-sm flex items-start gap-2.5">
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            <span>O motorista já foi criado. A próxima tentativa concluirá apenas o vínculo seguro da CNH, sem criar outro cadastro.</span>
+            <span>O motorista já foi criado. A próxima tentativa concluirá apenas os anexos pendentes, sem criar outro cadastro.</span>
           </div>
         )}
 
@@ -286,6 +348,44 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             </div>
           </div>
         </div>
+
+        {!driverToEdit && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+              <Camera className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Foto do motorista (opcional)</h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                {profilePhotoPreviewUrl ? (
+                  <img src={profilePhotoPreviewUrl} alt="Prévia da foto do motorista" className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-8 w-8 text-slate-400" aria-label="Motorista sem foto selecionada" />
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => profilePhotoInputRef.current?.click()} disabled={loading}>
+                    <Camera className="mr-1 h-4 w-4" />{profilePhoto ? 'Trocar foto' : 'Selecionar foto'}
+                  </Button>
+                  {profilePhoto && (
+                    <Button type="button" size="sm" variant="ghost" onClick={clearProfilePhoto} disabled={loading}>
+                      <Trash2 className="mr-1 h-4 w-4 text-rose-600" />Remover foto
+                    </Button>
+                  )}
+                </div>
+                <span className="text-xs text-slate-500 dark:text-slate-400">JPEG, PNG ou WEBP, até 10 MB. Você pode adicionar a foto depois.</span>
+              </div>
+              <input
+                ref={profilePhotoInputRef}
+                type="file"
+                className="hidden"
+                accept={PROFILE_PHOTO_MIME_TYPES.join(',')}
+                onChange={(event) => selectProfilePhoto(event.target.files?.[0])}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
@@ -461,7 +561,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({
             Cancelar
           </Button>
           <Button type="submit" variant="primary" isLoading={loading}>
-            {driverToEdit ? 'Salvar Alterações' : createdDriverId && cnhIntakeId ? 'Concluir vínculo da CNH' : 'Cadastrar Motorista'}
+            {driverToEdit ? 'Salvar Alterações' : createdDriverId ? 'Concluir cadastro' : 'Cadastrar Motorista'}
           </Button>
         </div>
       </form>
