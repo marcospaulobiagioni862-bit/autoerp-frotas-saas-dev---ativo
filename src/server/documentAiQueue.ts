@@ -11,6 +11,7 @@ import {
 } from './documentAiProcessor';
 
 export const DOCUMENT_AI_MAX_ATTEMPTS = 3;
+export const DOCUMENT_AI_STALE_PROCESSING_MS = 180_000;
 
 const SYSTEM_USER_ID = 'SYSTEM_DOC_AI';
 const SYSTEM_USER_NAME = 'AutoERP Document AI Worker';
@@ -63,6 +64,100 @@ export type DocumentAiQueueResult =
   | { id: string; status: 'REVIEW_REQUIRED' }
   | { id: string; status: 'FAILED'; failureCode: string }
   | null;
+
+async function recoverStaleProcessing(companyId: string): Promise<void> {
+  await UnitOfWork.run(companyId, async (context: any) => {
+    const tx = context.getRawTransaction?.();
+    if (!tx) throw new Error('Document AI persistence unavailable');
+
+    const now = new Date().toISOString();
+    const staleBefore = new Date(Date.now() - DOCUMENT_AI_STALE_PROCESSING_MS).toISOString();
+
+    const requeuedResult = await tx.execute(sql`
+      UPDATE document_ai_extractions
+      SET status = 'PENDING',
+          worker_id = NULL,
+          processing_started_at = NULL,
+          failure_code = NULL,
+          updated_at = ${now}
+      WHERE company_id = ${companyId}
+        AND status = 'PROCESSING'
+        AND processing_started_at IS NOT NULL
+        AND processing_started_at < ${staleBefore}
+        AND attempt_count < ${DOCUMENT_AI_MAX_ATTEMPTS}
+      RETURNING id
+    `);
+
+    for (const item of rows(requeuedResult)) {
+      const extractionId = requiredString(item.id, 'extraction id');
+      await context.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId,
+        entityName: 'DocumentAiExtraction',
+        entityId: extractionId,
+        action: AuditAction.UPDATE,
+        previousState: JSON.stringify({ status: 'PROCESSING' }),
+        newState: JSON.stringify({
+          event: 'AI_EXTRACTION_STALE_REQUEUED',
+          status: 'PENDING',
+          businessMutationApplied: false,
+        }),
+        userId: SYSTEM_USER_ID,
+        userName: SYSTEM_USER_NAME,
+        timestamp: now,
+      });
+    }
+
+    const failedResult = await tx.execute(sql`
+      UPDATE document_ai_extractions
+      SET status = 'FAILED',
+          worker_id = NULL,
+          processing_started_at = NULL,
+          failure_code = 'PROVIDER_TIMEOUT',
+          raw_extraction = '{}'::jsonb,
+          proposed_fields = '{}'::jsonb,
+          field_confidence = '{}'::jsonb,
+          completed_at = ${now},
+          updated_at = ${now}
+      WHERE company_id = ${companyId}
+        AND status = 'PROCESSING'
+        AND processing_started_at IS NOT NULL
+        AND processing_started_at < ${staleBefore}
+        AND attempt_count >= ${DOCUMENT_AI_MAX_ATTEMPTS}
+      RETURNING id, attachment_id
+    `);
+
+    for (const item of rows(failedResult)) {
+      const extractionId = requiredString(item.id, 'extraction id');
+      const attachmentId = requiredString(item.attachment_id, 'attachment id');
+      await syncDriverDocumentIntakeWorkerResult(context, {
+        companyId,
+        extractionId,
+        attachmentId,
+        targetStatus: 'FAILED',
+        failureCode: 'PROVIDER_TIMEOUT',
+        now,
+      });
+      await context.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId,
+        entityName: 'DocumentAiExtraction',
+        entityId: extractionId,
+        action: AuditAction.UPDATE,
+        previousState: JSON.stringify({ status: 'PROCESSING' }),
+        newState: JSON.stringify({
+          event: 'AI_EXTRACTION_STALE_FAILED',
+          status: 'FAILED',
+          failureCode: 'PROVIDER_TIMEOUT',
+          businessMutationApplied: false,
+        }),
+        userId: SYSTEM_USER_ID,
+        userName: SYSTEM_USER_NAME,
+        timestamp: now,
+      });
+    }
+  });
+}
 
 async function claim(
   companyId: string,
@@ -242,6 +337,7 @@ export class DocumentAiQueueService {
     expectedExtractionId?: string,
   ): Promise<DocumentAiQueueResult> {
     const claimedBy = workerId(worker);
+    await recoverStaleProcessing(companyId);
     const item = await claim(companyId, claimedBy, expectedExtractionId);
     if (!item) return null;
     try {

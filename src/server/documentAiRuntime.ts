@@ -1,3 +1,6 @@
+import { eq } from 'drizzle-orm';
+import { db } from '../db/index';
+import { companies } from '../db/schema';
 import type { AttachmentByteStorage } from './attachmentStorage';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
 import {
@@ -7,6 +10,8 @@ import {
 } from './documentAiQueue';
 import type { DocumentAiProvider } from './documentAiProcessor';
 import { GeminiDocumentAiProvider } from './geminiDocumentAiProvider';
+
+const DOCUMENT_AI_WORKER_INTERVAL_MS = 15_000;
 
 interface DocumentAiRuntimeEnvironment {
   DOC_AI_WORKER_ENABLED?: string;
@@ -169,4 +174,70 @@ export async function dispatchDocumentAiExtractionFromEnvironment(
   const item = await runtime.processExtractionForTenant(companyId, extractionId, workerId);
   if (!item) return { state: 'IDLE' };
   return { state: 'PROCESSED', item };
+}
+
+let recurringWorkerStarted = false;
+let recurringWorkerRunning = false;
+let recurringWorkerTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function startDocumentAiRecurringWorkerFromEnvironment(
+  environment: DocumentAiRuntimeEnvironment = process.env,
+): boolean {
+  if (recurringWorkerStarted) return true;
+  if (!enabled(environment.DOC_AI_WORKER_ENABLED)) return false;
+
+  let runtime: DocumentAiRuntime;
+  try {
+    runtime = createDocumentAiRuntimeFromEnvironment(environment);
+  } catch (error) {
+    if (error instanceof DocumentAiRuntimeUnavailableError) return false;
+    console.error('AUTOERP_DOCUMENT_AI_WORKER_START_FAILURE');
+    return false;
+  }
+
+  recurringWorkerStarted = true;
+  const recurringWorkerId = `doc-ai-recurring-${process.pid}`;
+
+  const scheduleNext = () => {
+    recurringWorkerTimer = setTimeout(() => {
+      void runOnce();
+    }, DOCUMENT_AI_WORKER_INTERVAL_MS);
+    recurringWorkerTimer.unref?.();
+  };
+
+  const runOnce = async () => {
+    if (recurringWorkerRunning) {
+      scheduleNext();
+      return;
+    }
+    recurringWorkerRunning = true;
+    try {
+      const activeCompanies = await db
+        .select({ id: companies.id })
+        .from(companies)
+        .where(eq(companies.status, 'ACTIVE'));
+      for (const company of activeCompanies) {
+        await runtime.processNextForTenant(String(company.id), recurringWorkerId);
+      }
+    } catch {
+      console.error('AUTOERP_DOCUMENT_AI_WORKER_FAILURE');
+    } finally {
+      recurringWorkerRunning = false;
+      scheduleNext();
+    }
+  };
+
+  void runOnce();
+  return true;
+}
+
+export function stopDocumentAiRecurringWorkerForTests(): void {
+  recurringWorkerStarted = false;
+  recurringWorkerRunning = false;
+  if (recurringWorkerTimer) clearTimeout(recurringWorkerTimer);
+  recurringWorkerTimer = undefined;
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  startDocumentAiRecurringWorkerFromEnvironment();
 }
