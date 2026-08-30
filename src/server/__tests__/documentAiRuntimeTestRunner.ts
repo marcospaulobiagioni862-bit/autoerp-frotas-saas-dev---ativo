@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type { AttachmentByteStorage } from '../attachmentStorage';
 import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from '../documentAiAttachmentPolicy';
 import type { DocumentAiProvider } from '../documentAiProcessor';
@@ -216,4 +217,22 @@ assert.equal(isDocumentAiAttachmentEligible({ ...attachment, isArchived: true },
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', checksum), true);
 assert.equal(isDocumentAiAttachmentEligible(attachment, 'R2', 'b'.repeat(64)), false);
 
-console.log('DOC-AI-1B2 runtime composition, real-document opt-in and exact dispatch checks passed.');
+const intakeRoutesSource = readFileSync(new URL('../driverDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
+const unavailableCheck = intakeRoutesSource.indexOf('if (!isDocumentAiRuntimeAvailableFromEnvironment())');
+const unavailableResponse = intakeRoutesSource.indexOf("res.status(503).json({", unavailableCheck);
+const unavailableCode = intakeRoutesSource.indexOf("code: 'DOCUMENT_AI_RUNTIME_UNAVAILABLE'", unavailableResponse);
+const enqueueTransaction = intakeRoutesSource.indexOf('const result = await UnitOfWork.run', unavailableCode);
+const enqueueCall = intakeRoutesSource.indexOf('enqueueDriverDocumentIntakeCnh(', enqueueTransaction);
+assert.ok(unavailableCheck >= 0, 'driver CNH route must fail closed when Document AI runtime is unavailable');
+assert.ok(unavailableResponse > unavailableCheck && unavailableCode > unavailableResponse, 'unavailable runtime must return sanitized 503 code');
+assert.ok(
+  enqueueTransaction > unavailableCode && enqueueCall > enqueueTransaction,
+  'runtime availability must be checked before opening the transaction or mutating intake/queue',
+);
+assert.equal(
+  intakeRoutesSource.slice(unavailableCheck, enqueueTransaction).includes('UnitOfWork.run'),
+  false,
+  'unavailable runtime path must not reach tenant transaction',
+);
+
+console.log('DOC-AI-1B2 runtime composition, route fail-closed, real-document opt-in and exact dispatch checks passed.');
