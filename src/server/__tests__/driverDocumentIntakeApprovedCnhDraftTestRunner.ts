@@ -4,6 +4,7 @@ import { projectApprovedCnhDriverDraft } from '../driverDocumentIntakeApprovedCn
 const proposed = {
   name: 'Nome Proposto',
   cpf: '123.456.789-01',
+  rg: '12.345.678-9',
   registrationNumber: '12345678901',
   category: 'b',
   birthDate: '1990-01-02',
@@ -14,10 +15,11 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'APPROVED',
   detectedDocumentType: 'CNH',
   proposedFields: proposed,
-  corrections: { name: 'Nome Corrigido', category: 'AB' },
+  corrections: { name: 'Nome Corrigido', rg: 'MG-99.888.777', category: 'AB' },
 }), {
   fullName: 'Nome Corrigido',
   cpf: '12345678901',
+  rg: 'MG-99.888.777',
   birthDate: '1990-01-02',
   cnhNumber: '12345678901',
   cnhCategory: 'AB',
@@ -41,6 +43,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   proposedFields: {
     ...proposed,
     cpf: '123',
+    rg: 'R'.repeat(33),
     registrationNumber: 'bad',
     category: 'Z',
     birthDate: '2026-02-31',
