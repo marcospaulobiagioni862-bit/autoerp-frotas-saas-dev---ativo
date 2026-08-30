@@ -1,6 +1,7 @@
 export interface ApprovedCnhDriverDraft {
   fullName?: string;
   cpf?: string;
+  rg?: string;
   birthDate?: string;
   cnhNumber?: string;
   cnhCategory?: string;
@@ -72,6 +73,7 @@ export function projectApprovedCnhDriverDraft(input: {
 
   const fullName = normalizedText(sourceValue(corrections, proposed, ['fullName', 'name']), 160);
   const cpf = digits(sourceValue(corrections, proposed, ['cpf']), 11);
+  const rg = normalizedText(sourceValue(corrections, proposed, ['rg']), 32);
   const birthDate = isoDate(sourceValue(corrections, proposed, ['birthDate']));
   const cnhNumber = digits(sourceValue(corrections, proposed, ['cnhNumber', 'registrationNumber']), 11);
   const cnhCategory = category(sourceValue(corrections, proposed, ['cnhCategory', 'category']));
@@ -79,6 +81,7 @@ export function projectApprovedCnhDriverDraft(input: {
 
   if (fullName) draft.fullName = fullName;
   if (cpf) draft.cpf = cpf;
+  if (rg) draft.rg = rg;
   if (birthDate) draft.birthDate = birthDate;
   if (cnhNumber) draft.cnhNumber = cnhNumber;
   if (cnhCategory) draft.cnhCategory = cnhCategory;
