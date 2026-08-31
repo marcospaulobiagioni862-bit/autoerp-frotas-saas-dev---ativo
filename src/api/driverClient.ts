@@ -16,6 +16,7 @@ function asRecord(value: unknown): JsonRecord {
 
 const DRIVER_STATUSES = new Set(Object.values(DriverStatus));
 const DOCUMENT_STATUSES = new Set(Object.values(DocumentStatus));
+const RESIDENCE_TYPES = new Set(['HOUSE', 'APARTMENT', 'OTHER']);
 
 function validateDriver(value: unknown): Driver {
   const item = asRecord(value);
@@ -46,6 +47,12 @@ function validateDriver(value: unknown): Driver {
   ) {
     throw new Error('Invalid Driver payload');
   }
+  if (address.residenceType !== undefined && (typeof address.residenceType !== 'string' || !RESIDENCE_TYPES.has(address.residenceType))) {
+    throw new Error('Invalid Driver payload');
+  }
+  for (const key of ['complement', 'condominiumName', 'building', 'unit', 'floor', 'reference', 'otherResidenceType'] as const) {
+    if (address[key] !== undefined && typeof address[key] !== 'string') throw new Error('Invalid Driver payload');
+  }
   for (const key of ['currentVehicleId', 'currentContractId', 'rg', 'email', 'photoUrl', 'notes'] as const) {
     if (item[key] !== undefined && typeof item[key] !== 'string') throw new Error('Invalid Driver payload');
   }
@@ -64,6 +71,7 @@ async function apiError(response: Response): Promise<DriverApiError> {
 }
 
 export interface DriverAddressInput {
+  residenceType?: 'HOUSE' | 'APARTMENT' | 'OTHER';
   street?: string;
   number?: string;
   complement?: string;
@@ -71,6 +79,12 @@ export interface DriverAddressInput {
   city?: string;
   state?: string;
   zipCode?: string;
+  condominiumName?: string;
+  building?: string;
+  unit?: string;
+  floor?: string;
+  reference?: string;
+  otherResidenceType?: string;
 }
 
 export interface DriverCreateInput {
