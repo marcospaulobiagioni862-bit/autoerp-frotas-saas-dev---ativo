@@ -45,10 +45,13 @@ function digits(value: unknown, length: number): string | undefined {
 function isoDate(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const text = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return undefined;
-  const date = new Date(`${text}T00:00:00.000Z`);
-  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== text) return undefined;
-  return text;
+  let normalized = text;
+  const brazilian = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(text);
+  if (brazilian) normalized = `${brazilian[3]}-${brazilian[2]}-${brazilian[1]}`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return undefined;
+  const date = new Date(`${normalized}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== normalized) return undefined;
+  return normalized;
 }
 
 function category(value: unknown): string | undefined {

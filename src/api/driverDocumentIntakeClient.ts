@@ -49,6 +49,12 @@ export interface DriverDocumentIntakePromotionResult {
   promoted: boolean;
 }
 
+export interface DriverDocumentIntakeMaterializationResult {
+  driverId: string;
+  attachmentId: string;
+  created: boolean;
+}
+
 const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'DRAFT',
   'DOCUMENT_UPLOADED',
@@ -116,6 +122,17 @@ function validatePromotionResult(value: unknown): DriverDocumentIntakePromotionR
     !Object.keys(item).every((key) => ['driverId', 'attachmentId', 'promoted'].includes(key))
   ) throw new Error('Invalid driver document intake promotion payload');
   return item as unknown as DriverDocumentIntakePromotionResult;
+}
+
+function validateMaterializationResult(value: unknown): DriverDocumentIntakeMaterializationResult {
+  const item = asRecord(value);
+  if (
+    typeof item.driverId !== 'string' || !item.driverId.trim() ||
+    typeof item.attachmentId !== 'string' || !item.attachmentId.trim() ||
+    typeof item.created !== 'boolean' ||
+    !Object.keys(item).every((key) => ['driverId', 'attachmentId', 'created'].includes(key))
+  ) throw new Error('Invalid driver document intake materialization payload');
+  return item as unknown as DriverDocumentIntakeMaterializationResult;
 }
 
 function validIsoDate(value: string): boolean {
@@ -193,6 +210,17 @@ export class DriverDocumentIntakeClient {
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateApprovedCnhDraft(asRecord(await response.json()).draft);
+  }
+
+  static async materializeApprovedCnh(id: string): Promise<DriverDocumentIntakeMaterializationResult> {
+    const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}/materialize-driver`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    return validateMaterializationResult(asRecord(await response.json()).item);
   }
 
   static async promote(id: string, driverId: string): Promise<DriverDocumentIntakePromotionResult> {

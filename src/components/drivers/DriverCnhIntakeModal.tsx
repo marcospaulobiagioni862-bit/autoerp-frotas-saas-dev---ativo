@@ -22,7 +22,7 @@ const CNH_FIELDS = [
 ] as const;
 
 type CnhFieldKey = (typeof CNH_FIELDS)[number][0];
-type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId: string };
+type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId: string; driverId: string };
 type LocalPhase = 'IDLE' | 'UPLOADING' | 'REQUESTING';
 
 type Props = {
@@ -53,6 +53,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const [intakeId, setIntakeId] = useState('');
   const [extractionId, setExtractionId] = useState('');
   const [extraction, setExtraction] = useState<DocumentAiExtraction | null>(null);
+  const [savedDriverId, setSavedDriverId] = useState('');
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
     name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
   });
@@ -75,6 +76,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setIntakeId('');
     setExtractionId('');
     setExtraction(null);
+    setSavedDriverId('');
     setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
     setNotes('');
     setError(null);
@@ -205,6 +207,11 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
         notes: notes.trim() || undefined,
       });
       setExtraction(reviewed);
+      if (decision === 'APPROVE' && reviewed.status === 'APPROVED') {
+        if (!intakeId) throw new Error('A aprovação não possui um processo de CNH válido.');
+        const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);
+        setSavedDriverId(materialized.driverId);
+      }
     } catch (err) {
       setError(safeError(err));
     } finally {
@@ -213,12 +220,16 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   };
 
   const useApprovedDraft = async () => {
-    if (!intakeId || extraction?.status !== 'APPROVED' || busy) return;
+    if (!intakeId || extraction?.status !== 'APPROVED' || !savedDriverId || busy) return;
     setBusy(true);
     setError(null);
     try {
       const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
-      const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = { ...approved, intakeId };
+      const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = {
+        ...approved,
+        intakeId,
+        driverId: savedDriverId,
+      };
       reset();
       onClose();
       onDraftReady(approvedWithIntake);
@@ -239,8 +250,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">A CNH não cadastra ninguém sozinha.</p>
-              <p className="mt-1 text-xs text-slate-500">O documento gera uma proposta, você revisa os dados e o cadastro final continua exigindo confirmação.</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">A CNH salva o documento e cria o cadastro inicial após sua aprovação.</p>
+              <p className="mt-1 text-xs text-slate-500">Você revisa os dados da habilitação. Telefone, endereço, e-mail e plataformas podem ser completados depois.</p>
             </div>
           </div>
         </div>
@@ -347,7 +358,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
                 <XCircle className="mr-1.5 h-4 w-4" />Rejeitar
               </Button>
               <Button type="button" variant="primary" onClick={() => review('APPROVE')} disabled={busy || extraction.detectedDocumentType !== 'CNH'} isLoading={busy}>
-                <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprovar CNH
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprovar e salvar CNH
               </Button>
             </div>
           </div>
@@ -357,10 +368,18 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
           <div className="space-y-4 text-center py-4">
             <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">CNH revisada e aprovada</p>
-              <p className="mt-1 text-xs text-slate-500">Agora os dados aprovados podem preencher o rascunho do novo motorista.</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                {savedDriverId ? 'CNH revisada, aprovada e salva' : 'CNH aprovada, aguardando gravação'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {savedDriverId
+                  ? 'O arquivo original e os dados da habilitação já estão vinculados ao cadastro inicial. Os demais dados podem ser completados agora ou depois.'
+                  : 'A CNH foi aprovada, mas o cadastro inicial ainda não foi salvo. Verifique o aviso acima antes de continuar.'}
+              </p>
             </div>
-            <Button type="button" variant="primary" onClick={useApprovedDraft} disabled={busy} isLoading={busy}>Preencher cadastro</Button>
+            <Button type="button" variant="primary" onClick={useApprovedDraft} disabled={busy || !savedDriverId} isLoading={busy}>
+              Completar dados agora
+            </Button>
           </div>
         )}
 

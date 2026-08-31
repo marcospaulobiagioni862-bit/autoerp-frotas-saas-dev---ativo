@@ -27,6 +27,24 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
 });
 
 assert.deepEqual(projectApprovedCnhDriverDraft({
+  status: 'APPROVED',
+  detectedDocumentType: 'CNH',
+  proposedFields: {
+    ...proposed,
+    birthDate: '27/05/2003',
+    expirationDate: '10/09/2031',
+  },
+}), {
+  fullName: 'Nome Proposto',
+  cpf: '12345678901',
+  rg: '12.345.678-9',
+  birthDate: '2003-05-27',
+  cnhNumber: '12345678901',
+  cnhCategory: 'B',
+  cnhExpiration: '2031-09-10',
+});
+
+assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'REVIEW_REQUIRED',
   detectedDocumentType: 'CNH',
   proposedFields: proposed,
@@ -46,7 +64,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
     rg: 'R'.repeat(33),
     registrationNumber: 'bad',
     category: 'Z',
-    birthDate: '2026-02-31',
+    birthDate: '31/02/2026',
     expirationDate: 'not-a-date',
     unexpectedAuthorityField: 'ignored',
   },
@@ -56,7 +74,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'APPROVED',
   detectedDocumentType: 'CNH',
   proposedFields: { name: 'Legacy Name', registrationNumber: '12345678901', expirationDate: '2031-01-01' },
-  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhExpiration: '2032-02-02' },
+  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhExpiration: '02/02/2032' },
 }), {
   fullName: 'Correção Canônica',
   cnhNumber: '10987654321',
