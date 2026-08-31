@@ -212,8 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarContent = (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none h-full">
-      <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+    <aside className="w-64 h-dvh max-h-dvh min-h-0 overflow-hidden bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
+      <div className="shrink-0 p-4 border-b border-slate-800/80 flex items-center justify-between">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">AutoERP Fleet Manager</span>
           <span className="mt-1 block text-[9px] uppercase tracking-wide text-emerald-400">Production server authority</span>
@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+      <nav className="min-h-0 flex-1 p-3 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
             <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">{category.title}</div>
@@ -245,7 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
+      <div className="shrink-0 p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
         <div className="flex items-center justify-between font-mono">
           <span>Confiança:</span>
           <span className="text-emerald-400 font-semibold">Server-side</span>
@@ -256,11 +256,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className="hidden md:block h-full">{sidebarContent}</div>
+      <div className="hidden md:block h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
       {isMobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden flex">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={onCloseMobile} aria-hidden="true" />
-          <div className="relative z-50 h-full">{sidebarContent}</div>
+          <div className="relative z-50 h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
         </div>
       )}
     </>
