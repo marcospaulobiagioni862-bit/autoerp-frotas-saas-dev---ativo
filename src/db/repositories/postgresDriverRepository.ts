@@ -26,6 +26,12 @@ function platformArraySql(values: string[]): SQL<unknown> {
   return sql`ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(values)}::jsonb))`;
 }
 
+function duplicateIdentityError(message: string): Error & { code: string } {
+  const error = new Error(message) as Error & { code: string };
+  error.code = '23505';
+  return error;
+}
+
 export class PostgresDriverRepository implements ITransactionDriverRepository {
   constructor(private readonly tx: any) {}
 
@@ -134,14 +140,40 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
   }
 
   async findByCpf(companyId: string, cpf: string): Promise<Driver | null> {
-    return await this.queryOne(companyId, sql`d.cpf = ${cpf}`);
+    return await this.queryOne(companyId, sql`d.cpf = ${cpf} AND d.is_archived = false`);
   }
 
   async findByCnh(companyId: string, cnh: string): Promise<Driver | null> {
-    return await this.queryOne(companyId, sql`d.cnh = ${cnh}`);
+    return await this.queryOne(companyId, sql`d.cnh = ${cnh} AND d.is_archived = false`);
   }
 
   async create(item: Driver): Promise<Driver> {
+    const archivedByCpf = await this.queryOne(
+      item.companyId,
+      sql`d.cpf = ${item.cpf} AND d.is_archived = true`
+    );
+    const archivedByCnh = await this.queryOne(
+      item.companyId,
+      sql`d.cnh = ${item.cnhNumber} AND d.is_archived = true`
+    );
+
+    if (archivedByCpf || archivedByCnh) {
+      if (!archivedByCpf || !archivedByCnh || archivedByCpf.id !== archivedByCnh.id) {
+        throw duplicateIdentityError('Archived driver identity conflicts with CPF/CNH combination');
+      }
+
+      const restored: Driver = {
+        ...item,
+        id: archivedByCpf.id,
+        isArchived: false,
+        createdAt: archivedByCpf.createdAt,
+        updatedAt: item.updatedAt,
+      };
+      const saved = await this.updateForCompany(item.companyId, archivedByCpf.id, restored);
+      if (!saved) throw new Error('Driver restore failed');
+      return saved;
+    }
+
     await this.tx.execute(sql`
       INSERT INTO drivers (
         id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email,
