@@ -377,12 +377,71 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
 
         const repo = context.getDriverRepo();
         const byCpf = await repo.findByCpf(principal.companyId, draft.cpf);
-        if (byCpf) throw new DriverDocumentIntakeDuplicateCnhError(byCpf.id);
         const byCnh = await repo.findByCnh(principal.companyId, draft.cnhNumber);
-        if (byCnh) throw new DriverDocumentIntakeDuplicateCnhError(byCnh.id);
-
         const now = new Date().toISOString();
         const cnhStatus = evaluateCnhStatus(draft.cnhExpiration);
+
+        const visibleDuplicate = [byCpf, byCnh].find((item) => item && !item.isArchived);
+        if (visibleDuplicate) throw new DriverDocumentIntakeDuplicateCnhError(visibleDuplicate.id);
+
+        if (byCpf && byCnh && byCpf.id !== byCnh.id) {
+          throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_IDENTITY_CONFLICT');
+        }
+
+        const archivedDriver = byCpf?.isArchived ? byCpf : (byCnh?.isArchived ? byCnh : null);
+        if (archivedDriver) {
+          if (byCnh && byCnh.cpf !== draft.cpf) {
+            throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_CPF_MISMATCH');
+          }
+
+          const restored = await repo.updateForCompany(principal.companyId, archivedDriver.id, {
+            ...archivedDriver,
+            fullName: draft.fullName,
+            cpf: draft.cpf,
+            rg: draft.rg ?? archivedDriver.rg,
+            birthDate: draft.birthDate,
+            cnhNumber: draft.cnhNumber,
+            cnhCategory: draft.cnhCategory,
+            cnhExpiration: draft.cnhExpiration,
+            cnhStatus,
+            status: cnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.PENDING_DOCS,
+            isArchived: false,
+            notes: archivedDriver.notes || 'Cadastro restaurado pela aprovação da CNH. Dados complementares pendentes.',
+            updatedAt: now,
+          });
+          if (!restored) throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_RESTORE_FAILED');
+
+          await context.getAuditLogRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            entityName: 'Driver',
+            entityId: restored.id,
+            action: AuditAction.UPDATE,
+            previousState: JSON.stringify({
+              event: 'ARCHIVED_DRIVER_BEFORE_CNH_RESTORE',
+              isArchived: true,
+              status: archivedDriver.status,
+              cnhNumber: archivedDriver.cnhNumber,
+            }),
+            newState: JSON.stringify({
+              event: 'RESTORE_FROM_APPROVED_CNH',
+              isArchived: false,
+              status: restored.status,
+              cnhNumber: restored.cnhNumber,
+            }),
+            userId: principal.userId,
+            userName: principal.name,
+            timestamp: now,
+          });
+
+          const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, restored.id);
+          return {
+            driverId: restored.id,
+            attachmentId: promotion.attachmentId,
+            created: false,
+          };
+        }
+
         const created = await repo.create({
           id: randomUUID(),
           companyId: principal.companyId,
