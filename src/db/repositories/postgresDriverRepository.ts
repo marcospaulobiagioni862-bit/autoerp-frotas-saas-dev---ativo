@@ -41,6 +41,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
       whatsapp: String(row.whatsapp || row.phone || ''),
       email: row.email || undefined,
       address: {
+        residenceType: row.address_residence_type || undefined,
         street: String(row.address_street || ''),
         number: String(row.address_number || ''),
         complement: row.address_complement || undefined,
@@ -48,6 +49,12 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         city: String(row.address_city || ''),
         state: String(row.address_state || ''),
         zipCode: String(row.address_zip_code || ''),
+        condominiumName: row.address_condominium_name || undefined,
+        building: row.address_building || undefined,
+        unit: row.address_unit || undefined,
+        floor: row.address_floor || undefined,
+        reference: row.address_reference || undefined,
+        otherResidenceType: row.address_other_residence_type || undefined,
       },
       cnhNumber: String(row.cnh || ''),
       cnhCategory: String(row.cnh_category || ''),
@@ -145,17 +152,20 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
     await this.tx.execute(sql`
       INSERT INTO drivers (
         id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email,
-        address_street, address_number, address_complement, address_neighborhood,
-        address_city, address_state, address_zip_code, cnh_category, cnh_expiration,
-        app_platforms, status, photo_url, notes, is_archived, created_at, updated_at
+        address_residence_type, address_street, address_number, address_complement, address_neighborhood,
+        address_city, address_state, address_zip_code, address_condominium_name, address_building,
+        address_unit, address_floor, address_reference, address_other_residence_type,
+        cnh_category, cnh_expiration, app_platforms, status, photo_url, notes, is_archived, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.fullName}, ${item.cpf}, ${item.cnhNumber},
         ${activeFor(item)}, ${item.rg || null}, ${item.birthDate}, ${item.phone},
-        ${item.whatsapp}, ${item.email || null}, ${item.address.street}, ${item.address.number},
-        ${item.address.complement || null}, ${item.address.neighborhood}, ${item.address.city},
-        ${item.address.state}, ${item.address.zipCode}, ${item.cnhCategory}, ${item.cnhExpiration},
-        ${platformArraySql(item.appPlatforms)}, ${item.status}, ${item.photoUrl || null}, ${item.notes || null},
-        ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
+        ${item.whatsapp}, ${item.email || null}, ${item.address.residenceType || null},
+        ${item.address.street}, ${item.address.number}, ${item.address.complement || null},
+        ${item.address.neighborhood}, ${item.address.city}, ${item.address.state}, ${item.address.zipCode},
+        ${item.address.condominiumName || null}, ${item.address.building || null}, ${item.address.unit || null},
+        ${item.address.floor || null}, ${item.address.reference || null}, ${item.address.otherResidenceType || null},
+        ${item.cnhCategory}, ${item.cnhExpiration}, ${platformArraySql(item.appPlatforms)}, ${item.status},
+        ${item.photoUrl || null}, ${item.notes || null}, ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
       )
     `);
     const created = await this.findByIdForCompany(item.companyId, item.id);
@@ -175,6 +185,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         phone = ${item.phone},
         whatsapp = ${item.whatsapp},
         email = ${item.email || null},
+        address_residence_type = ${item.address.residenceType || null},
         address_street = ${item.address.street},
         address_number = ${item.address.number},
         address_complement = ${item.address.complement || null},
@@ -182,6 +193,12 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         address_city = ${item.address.city},
         address_state = ${item.address.state},
         address_zip_code = ${item.address.zipCode},
+        address_condominium_name = ${item.address.condominiumName || null},
+        address_building = ${item.address.building || null},
+        address_unit = ${item.address.unit || null},
+        address_floor = ${item.address.floor || null},
+        address_reference = ${item.address.reference || null},
+        address_other_residence_type = ${item.address.otherResidenceType || null},
         cnh_category = ${item.cnhCategory},
         cnh_expiration = ${item.cnhExpiration},
         app_platforms = ${platformArraySql(item.appPlatforms)},
