@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction } from '../types/enums';
+import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { projectApprovedCnhDriverDraft } from './driverDocumentIntakeApprovedCnhDraft';
 import type { DriverDocumentIntakeState } from './driverDocumentIntakeAuthority';
@@ -30,6 +30,11 @@ const INTAKE_TTL_MS = 24 * 60 * 60 * 1000;
 class DriverDocumentIntakeValidationError extends Error {}
 class DriverDocumentIntakeNotFoundError extends Error {}
 class DriverDocumentIntakeConflictError extends Error {}
+class DriverDocumentIntakeDuplicateCnhError extends Error {
+  constructor(public readonly driverId: string) {
+    super('CNH_ALREADY_REGISTERED');
+  }
+}
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
@@ -108,6 +113,16 @@ function sanitizeExtraction(item: any) {
   };
 }
 
+function evaluateCnhStatus(expiration: string): DocumentStatus {
+  const end = new Date(`${expiration}T00:00:00Z`).getTime();
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const days = Math.ceil((end - today) / 86_400_000);
+  if (days < 0) return DocumentStatus.EXPIRED;
+  if (days <= 30) return DocumentStatus.EXPIRING_SOON;
+  return DocumentStatus.VALID;
+}
+
 function scheduleDocumentAiExtraction(companyId: string, extractionId: string): void {
   setImmediate(() => {
     void dispatchDocumentAiExtractionFromEnvironment(
@@ -118,6 +133,51 @@ function scheduleDocumentAiExtraction(companyId: string, extractionId: string): 
       console.error('AUTOERP_DOCUMENT_AI_DISPATCH_FAILURE');
     });
   });
+}
+
+async function loadApprovedCnhDraft(context: any, principal: AuthenticatedPrincipal, intakeId: string) {
+  const tx = context.getRawTransaction?.();
+  if (!tx) throw new Error('Raw tenant transaction unavailable');
+  const result: any = await tx.execute(sql`
+    SELECT
+      intake.status AS intake_status,
+      intake.attachment_id,
+      intake.approved_extraction_id,
+      extraction.id AS extraction_id,
+      extraction.attachment_id AS extraction_attachment_id,
+      extraction.status AS extraction_status,
+      extraction.detected_document_type,
+      extraction.proposed_fields,
+      extraction.corrections
+    FROM driver_document_intakes intake
+    JOIN document_ai_extractions extraction
+      ON extraction.company_id = intake.company_id
+     AND extraction.id = intake.approved_extraction_id
+    WHERE intake.company_id = ${principal.companyId}
+      AND intake.id = ${intakeId}
+      AND intake.created_by = ${principal.userId}
+    LIMIT 1
+    FOR UPDATE OF intake
+  `);
+  const row = result.rows?.[0];
+  if (!row) throw new DriverDocumentIntakeNotFoundError();
+  if (
+    String(row.intake_status) !== 'APPROVED' ||
+    !row.attachment_id || !row.approved_extraction_id ||
+    String(row.approved_extraction_id) !== String(row.extraction_id) ||
+    String(row.attachment_id) !== String(row.extraction_attachment_id) ||
+    String(row.extraction_status) !== 'APPROVED' ||
+    String(row.detected_document_type || '').toUpperCase() !== 'CNH'
+  ) throw new DriverDocumentIntakeConflictError();
+
+  const projected = projectApprovedCnhDriverDraft({
+    status: String(row.extraction_status),
+    detectedDocumentType: String(row.detected_document_type),
+    proposedFields: row.proposed_fields,
+    corrections: row.corrections,
+  });
+  if (Object.keys(projected).length === 0) throw new DriverDocumentIntakeConflictError();
+  return projected;
 }
 
 export function mapDriverDocumentIntakeRow(row: any): DriverDocumentIntakeState {
@@ -140,6 +200,14 @@ export function mapDriverDocumentIntakeRow(row: any): DriverDocumentIntakeState 
 }
 
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof DriverDocumentIntakeDuplicateCnhError) {
+    res.status(409).json({
+      error: 'Esta CNH já está cadastrada. Abra o cadastro existente antes de substituir ou reenviar o documento.',
+      code: 'CNH_ALREADY_REGISTERED',
+      driverId: error.driverId,
+    });
+    return;
+  }
   if (error instanceof DriverDocumentIntakeValidationError) {
     res.status(400).json({ error: 'Invalid driver document intake request' });
     return;
@@ -263,51 +331,113 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
     if (!principal) return;
     try {
       const intakeId = requiredIntakeId(req.params.id);
-      const draft = await UnitOfWork.run(principal.companyId, async (context) => {
+      const draft = await UnitOfWork.run(principal.companyId, async (context) =>
+        loadApprovedCnhDraft(context, principal, intakeId)
+      );
+      res.json({ draft });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/driver-document-intakes/:id/materialize-driver', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'CREATE_DRIVER');
+    if (!principal) return;
+    try {
+      const intakeId = requiredIntakeId(req.params.id);
+      requireEmptyBody(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (context) => {
         const tx = context.getRawTransaction?.();
         if (!tx) throw new Error('Raw tenant transaction unavailable');
-        const result: any = await tx.execute(sql`
-          SELECT
-            intake.status AS intake_status,
-            intake.attachment_id,
-            intake.approved_extraction_id,
-            extraction.id AS extraction_id,
-            extraction.attachment_id AS extraction_attachment_id,
-            extraction.status AS extraction_status,
-            extraction.detected_document_type,
-            extraction.proposed_fields,
-            extraction.corrections
-          FROM driver_document_intakes intake
-          JOIN document_ai_extractions extraction
-            ON extraction.company_id = intake.company_id
-           AND extraction.id = intake.approved_extraction_id
-          WHERE intake.company_id = ${principal.companyId}
-            AND intake.id = ${intakeId}
-            AND intake.created_by = ${principal.userId}
+
+        const intakeResult: any = await tx.execute(sql`
+          SELECT status, driver_id, attachment_id
+          FROM driver_document_intakes
+          WHERE company_id = ${principal.companyId}
+            AND id = ${intakeId}
+            AND created_by = ${principal.userId}
           LIMIT 1
-          FOR UPDATE OF intake
+          FOR UPDATE
         `);
-        const row = result.rows?.[0];
-        if (!row) throw new DriverDocumentIntakeNotFoundError();
+        const intake = intakeResult.rows?.[0];
+        if (!intake) throw new DriverDocumentIntakeNotFoundError();
+        if (String(intake.status) === 'CONSUMED' && intake.driver_id && intake.attachment_id) {
+          return {
+            driverId: String(intake.driver_id),
+            attachmentId: String(intake.attachment_id),
+            created: false,
+          };
+        }
+
+        const draft = await loadApprovedCnhDraft(context, principal, intakeId);
         if (
-          String(row.intake_status) !== 'APPROVED' ||
-          !row.attachment_id || !row.approved_extraction_id ||
-          String(row.approved_extraction_id) !== String(row.extraction_id) ||
-          String(row.attachment_id) !== String(row.extraction_attachment_id) ||
-          String(row.extraction_status) !== 'APPROVED' ||
-          String(row.detected_document_type || '').toUpperCase() !== 'CNH'
+          !draft.fullName || !draft.cpf || !draft.birthDate || !draft.cnhNumber ||
+          !draft.cnhCategory || !draft.cnhExpiration
         ) throw new DriverDocumentIntakeConflictError();
 
-        const projected = projectApprovedCnhDriverDraft({
-          status: String(row.extraction_status),
-          detectedDocumentType: String(row.detected_document_type),
-          proposedFields: row.proposed_fields,
-          corrections: row.corrections,
+        const repo = context.getDriverRepo();
+        const byCpf = await repo.findByCpf(principal.companyId, draft.cpf);
+        if (byCpf) throw new DriverDocumentIntakeDuplicateCnhError(byCpf.id);
+        const byCnh = await repo.findByCnh(principal.companyId, draft.cnhNumber);
+        if (byCnh) throw new DriverDocumentIntakeDuplicateCnhError(byCnh.id);
+
+        const now = new Date().toISOString();
+        const cnhStatus = evaluateCnhStatus(draft.cnhExpiration);
+        const created = await repo.create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          fullName: draft.fullName,
+          cpf: draft.cpf,
+          rg: draft.rg,
+          birthDate: draft.birthDate,
+          phone: '',
+          whatsapp: '',
+          email: undefined,
+          address: {
+            street: '',
+            number: '',
+            neighborhood: '',
+            city: '',
+            state: '',
+            zipCode: '',
+          },
+          cnhNumber: draft.cnhNumber,
+          cnhCategory: draft.cnhCategory,
+          cnhExpiration: draft.cnhExpiration,
+          cnhStatus,
+          appPlatforms: [],
+          status: cnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.PENDING_DOCS,
+          photoUrl: undefined,
+          notes: 'Cadastro inicial criado pela aprovação da CNH. Dados complementares pendentes.',
+          isArchived: false,
+          createdAt: now,
+          updatedAt: now,
         });
-        if (Object.keys(projected).length === 0) throw new DriverDocumentIntakeConflictError();
-        return projected;
+
+        await context.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Driver',
+          entityId: created.id,
+          action: AuditAction.CREATE,
+          newState: JSON.stringify({
+            event: 'CREATE_FROM_APPROVED_CNH',
+            status: created.status,
+            cnhNumber: created.cnhNumber,
+          }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+
+        const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, created.id);
+        return {
+          driverId: created.id,
+          attachmentId: promotion.attachmentId,
+          created: true,
+        };
       });
-      res.json({ draft });
+      res.status(result.created ? 201 : 200).json({ item: result });
     } catch (error) {
       sendError(res, error);
     }
