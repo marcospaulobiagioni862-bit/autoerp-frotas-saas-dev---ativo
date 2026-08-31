@@ -12,6 +12,7 @@ const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FIN
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUS_VALUES = new Set(Object.values(DriverStatus));
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const RESIDENCE_TYPES = new Set(['HOUSE', 'APARTMENT', 'OTHER']);
 const MUTABLE_STATUS_VALUES = new Set([
   DriverStatus.ACTIVE,
   DriverStatus.INACTIVE,
@@ -161,9 +162,13 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
     : {};
   const state = optionalText(input.state)?.toUpperCase() ?? fallback?.state ?? '';
   const zipCode = optionalText(input.zipCode)?.replace(/\D/g, '') ?? fallback?.zipCode ?? '';
+  const rawResidenceType = optionalText(input.residenceType)?.toUpperCase() ?? fallback?.residenceType;
   if (state && !/^[A-Z]{2}$/.test(state)) throw new DriverValidationError('Invalid state');
   if (zipCode && !/^\d{8}$/.test(zipCode)) throw new DriverValidationError('Invalid zipCode');
-  return {
+  if (rawResidenceType && !RESIDENCE_TYPES.has(rawResidenceType)) throw new DriverValidationError('Invalid residenceType');
+
+  const address: Driver['address'] = {
+    residenceType: rawResidenceType as Driver['address']['residenceType'],
     street: optionalText(input.street) ?? fallback?.street ?? '',
     number: optionalText(input.number) ?? fallback?.number ?? '',
     complement: optionalText(input.complement) ?? fallback?.complement,
@@ -171,7 +176,30 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
     city: optionalText(input.city) ?? fallback?.city ?? '',
     state,
     zipCode,
+    condominiumName: optionalText(input.condominiumName) ?? fallback?.condominiumName,
+    building: optionalText(input.building) ?? fallback?.building,
+    unit: optionalText(input.unit) ?? fallback?.unit,
+    floor: optionalText(input.floor) ?? fallback?.floor,
+    reference: optionalText(input.reference) ?? fallback?.reference,
+    otherResidenceType: optionalText(input.otherResidenceType) ?? fallback?.otherResidenceType,
   };
+
+  const hasAddressData = Boolean(
+    address.residenceType || address.street || address.number || address.complement || address.neighborhood ||
+    address.city || address.state || address.zipCode || address.condominiumName || address.building ||
+    address.unit || address.floor || address.reference || address.otherResidenceType
+  );
+  if (!hasAddressData) return address;
+  if (!address.residenceType) throw new DriverValidationError('Invalid residenceType');
+  if (!address.number) throw new DriverValidationError('Invalid addressNumber');
+  if (address.residenceType === 'APARTMENT') {
+    if (!address.condominiumName) throw new DriverValidationError('Invalid condominiumName');
+    if (!address.unit) throw new DriverValidationError('Invalid addressUnit');
+  }
+  if (address.residenceType === 'OTHER' && !address.otherResidenceType) {
+    throw new DriverValidationError('Invalid otherResidenceType');
+  }
+  return address;
 }
 
 function platformsFrom(value: unknown, fallback: string[] = []): string[] {
@@ -191,7 +219,7 @@ function isUniqueViolation(error: unknown): boolean {
 
 function sendDriverError(res: Response, error: unknown): void {
   if (error instanceof DriverValidationError) {
-    res.status(400).json({ error: 'Invalid driver request' });
+    res.status(400).json({ error: 'Invalid driver request', detail: error.message });
     return;
   }
   if (error instanceof DriverConflictError || isUniqueViolation(error)) {
@@ -258,6 +286,8 @@ export function registerDriverRoutes(app: Express): void {
       const cnhNumber = normalizeCnh(req.body?.cnhNumber);
       const birthDate = normalizeIsoDate(req.body?.birthDate, 'birthDate', false);
       const phone = normalizePhone(req.body?.phone, 'phone')!;
+      const email = normalizeEmail(req.body?.email);
+      if (!email) throw new DriverValidationError('Invalid email');
       const cnhExpiration = normalizeIsoDate(req.body?.cnhExpiration, 'cnhExpiration', true);
       const cnhState = evaluateCnhStatus(cnhExpiration);
       const now = new Date().toISOString();
@@ -274,7 +304,7 @@ export function registerDriverRoutes(app: Express): void {
           birthDate,
           phone,
           whatsapp: normalizePhone(req.body?.whatsapp, 'whatsapp', false) || phone,
-          email: normalizeEmail(req.body?.email),
+          email,
           address: addressFrom(req.body?.address),
           cnhNumber,
           cnhCategory: normalizeCnhCategory(req.body?.cnhCategory),
@@ -338,6 +368,7 @@ export function registerDriverRoutes(app: Express): void {
           notes: body.notes === undefined ? existing.notes : optionalText(body.notes),
           updatedAt: new Date().toISOString(),
         };
+        if (Object.prototype.hasOwnProperty.call(body, 'email') && !updated.email) throw new DriverValidationError('Invalid email');
         const cpfDuplicate = await repo.findByCpf(principal.companyId, updated.cpf);
         if (cpfDuplicate && cpfDuplicate.id !== existing.id) throw new DriverConflictError();
         const cnhDuplicate = await repo.findByCnh(principal.companyId, updated.cnhNumber);
