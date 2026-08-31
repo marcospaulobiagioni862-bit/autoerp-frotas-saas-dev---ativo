@@ -24,6 +24,7 @@ export interface Driver {
   whatsapp: string;
   email?: string;
   address: {
+    residenceType?: 'HOUSE' | 'APARTMENT' | 'OTHER';
     street: string;
     number: string;
     complement?: string;
@@ -31,6 +32,12 @@ export interface Driver {
     city: string;
     state: string;
     zipCode: string;
+    condominiumName?: string;
+    building?: string;
+    unit?: string;
+    floor?: string;
+    reference?: string;
+    otherResidenceType?: string;
   };
   cnhNumber: string;
   cnhCategory: string;
