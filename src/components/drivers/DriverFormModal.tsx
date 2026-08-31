@@ -158,7 +158,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       const normalizedCpf = digits(cpf); const normalizedCnh = digits(cnhNumber); const normalizedPhone = digits(phone); const normalizedWhatsapp = digits(whatsapp); const normalizedZipCode = digits(zipCode);
       const addressHasData = !!(normalizedZipCode || street.trim() || number.trim() || complement.trim() || neighborhood.trim() || city.trim() || state.trim());
       const input: DriverCreateInput = { fullName: fullName.trim(), cpf: normalizedCpf, rg: rg.trim() || undefined, birthDate, phone: normalizedPhone, whatsapp: normalizedWhatsapp || normalizedPhone, email: email.trim() || undefined, address: addressHasData ? { zipCode: normalizedZipCode, street: street.trim(), number: number.trim(), complement: complement.trim() || undefined, neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim().toUpperCase() } : undefined, cnhNumber: normalizedCnh, cnhCategory, cnhExpiration, appPlatforms, notes: notes.trim() || undefined };
-      let targetDriverId = driverToEdit?.id || cnhDriverId || createdDriverId || undefined;
+      let driverId = driverToEdit?.id || cnhDriverId || createdDriverId || undefined;
       if (driverToEdit) {
         await DriverClient.update(driverToEdit.id, input);
         if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) await DriverClient.changeStatus(driverToEdit.id, status as Exclude<DriverStatus, DriverStatus.ARCHIVED>);
@@ -167,10 +167,21 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
         if (normalizedPhone) update.phone = normalizedPhone; if (normalizedWhatsapp) update.whatsapp = normalizedWhatsapp; else if (normalizedPhone) update.whatsapp = normalizedPhone; if (email.trim()) update.email = email.trim(); if (input.address) update.address = input.address;
         await DriverClient.update(cnhDriverId, update);
       } else {
-        if (!targetDriverId) { const created = await DriverClient.create(input); targetDriverId = created.id; setCreatedDriverId(created.id); }
-        if (cnhIntakeId && targetDriverId) { const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, targetDriverId); if (promotion.driverId !== targetDriverId) throw new Error('A CNH não foi vinculada ao motorista criado. Tente concluir o vínculo novamente.'); }
+        if (!driverId) { const created = await DriverClient.create(input); driverId = created.id; setCreatedDriverId(created.id); }
+        if (cnhIntakeId && driverId) { const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, driverId); if (promotion.driverId !== driverId) throw new Error('A CNH não foi vinculada ao motorista criado. Tente concluir o vínculo novamente.'); }
       }
-      if (profilePhoto && !profilePhotoUploaded && targetDriverId) { await AttachmentClient.upload({ entityType: 'Driver', entityId: targetDriverId, documentType: PROFILE_PHOTO_DOCUMENT_TYPE, fileName: profilePhoto.name, mimeType: profilePhoto.type, content: profilePhoto }); setProfilePhotoUploaded(true); }
+      if (profilePhoto && !profilePhotoUploaded) {
+        if (!driverId) throw new Error('O cadastro do motorista precisa existir antes de salvar a foto.');
+        await AttachmentClient.upload({
+          entityType: 'Driver',
+          entityId: driverId,
+          documentType: PROFILE_PHOTO_DOCUMENT_TYPE,
+          fileName: profilePhoto.name,
+          mimeType: profilePhoto.type,
+          content: profilePhoto,
+        });
+        setProfilePhotoUploaded(true);
+      }
       await onSuccess(); setSuccessMessage(isCnhCompletion ? 'Dados complementares salvos com sucesso. A CNH já permanece arquivada no cadastro.' : 'Cadastro salvo com sucesso.'); window.setTimeout(() => onClose(), 1100);
     } catch (err: unknown) { setErrorMessage(err instanceof Error ? err.message : 'Ocorreu um erro ao salvar os dados do motorista.'); }
     finally { setLoading(false); }
