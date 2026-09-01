@@ -204,14 +204,21 @@ export function registerContractTemplateRoutes(app: Express): void {
         const title = body.title === undefined ? source.title : text(body.title, 'title', 2, 160);
         const mode = sourceMode(body.sourceMode ?? (source.contentMarkdown.trim() ? 'MARKDOWN' : 'FILE'));
         const contentMarkdown = contentForMode(body, mode, source.contentMarkdown);
+        const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, source.templateKey);
+        const nextVersionNumber = Math.max(...versions.map((version) => version.versionNumber), 0) + 1;
         const now = new Date().toISOString();
-        const old = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, source.id, {
-          isCurrent: false, updatedAt: now,
-        });
-        if (!old) throw new TemplateNotFoundError();
+
+        if (mode === 'MARKDOWN') {
+          const old = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, source.id, {
+            isCurrent: false, updatedAt: now,
+          });
+          if (!old) throw new TemplateNotFoundError();
+        }
+
         const created = await tx.getContractTemplateRepo().create({
           id: randomUUID(), companyId: principal.companyId, templateKey: source.templateKey, title, contentMarkdown,
-          versionNumber: source.versionNumber + 1, supersedesTemplateId: source.id, isCurrent: true,
+          versionNumber: nextVersionNumber, supersedesTemplateId: source.id,
+          isCurrent: mode === 'MARKDOWN',
           isActive: mode === 'FILE' ? false : body.isActive === undefined ? source.isActive : body.isActive === true,
           isArchived: false, createdBy: principal.userId, createdAt: now, updatedAt: now,
         });
@@ -223,6 +230,55 @@ export function registerContractTemplateRoutes(app: Express): void {
         return created;
       });
       res.status(201).json({ item });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/contract-templates/:id/promote-file-source', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'MANAGE_CONTRACT_TEMPLATE');
+    if (!principal) return;
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const candidate = await tx.getContractTemplateRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!candidate || candidate.isArchived) throw new TemplateNotFoundError();
+        if (candidate.contentMarkdown.trim()) throw new TemplateConflictError();
+
+        const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', candidate.id);
+        const sources = attachments.filter((attachment) =>
+          !attachment.isArchived &&
+          attachment.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+          attachment.contentState === 'AVAILABLE'
+        );
+        if (sources.length !== 1) throw new TemplateConflictError();
+        if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(sources[0].mimeType)) {
+          throw new TemplateConflictError();
+        }
+        if (candidate.isCurrent) return candidate;
+
+        const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
+        const now = new Date().toISOString();
+        if (current && current.id !== candidate.id) {
+          const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
+            isCurrent: false, updatedAt: now,
+          });
+          if (!demoted) throw new TemplateConflictError();
+        }
+        const promoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, candidate.id, {
+          isCurrent: true,
+          isActive: false,
+          updatedAt: now,
+        });
+        if (!promoted) throw new TemplateNotFoundError();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'ContractTemplate', entityId: promoted.id,
+          action: AuditAction.UPDATE, previousState: JSON.stringify(candidate),
+          newState: JSON.stringify({ ...promoted, event: 'PROMOTE_FILE_SOURCE', attachmentId: sources[0].id }),
+          userId: principal.userId, userName: principal.name, timestamp: now,
+        });
+        return promoted;
+      });
+      res.json({ item });
     } catch (error) {
       sendError(res, error);
     }
