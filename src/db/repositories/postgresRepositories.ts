@@ -294,7 +294,7 @@ export class PostgresFinancialAccountRepository extends PostgresBaseRepository<a
 
   async findByIdWithLock(id: string): Promise<any | undefined> {
     const res = await this.tx.execute(
-      sql`SELECT * FROM financial_accounts WHERE id = ${id} FOR UPDATE`
+      sql`SELECT * FROM financial_accounts WHERE company_id = ${this.companyId} AND id = ${id} FOR UPDATE`
     );
     return res.rows[0];
   }
@@ -302,17 +302,17 @@ export class PostgresFinancialAccountRepository extends PostgresBaseRepository<a
   async lockTwoAccounts(id1: string, id2: string): Promise<any[]> {
     const [firstId, secondId] = id1 < id2 ? [id1, id2] : [id2, id1];
     const res1 = await this.tx.execute(
-      sql`SELECT * FROM financial_accounts WHERE id = ${firstId} FOR UPDATE`
+      sql`SELECT * FROM financial_accounts WHERE company_id = ${this.companyId} AND id = ${firstId} FOR UPDATE`
     );
     const res2 = await this.tx.execute(
-      sql`SELECT * FROM financial_accounts WHERE id = ${secondId} FOR UPDATE`
+      sql`SELECT * FROM financial_accounts WHERE company_id = ${this.companyId} AND id = ${secondId} FOR UPDATE`
     );
     return id1 < id2 ? [res1.rows[0], res2.rows[0]] : [res2.rows[0], res1.rows[0]];
   }
 
   async updateBalance(accountId: string, delta: number): Promise<any> {
     const res = await this.tx.execute(
-      sql`UPDATE financial_accounts SET current_balance = current_balance + ${delta}, updated_at = NOW() WHERE id = ${accountId} RETURNING *`
+      sql`UPDATE financial_accounts SET current_balance = current_balance + ${delta}, updated_at = NOW() WHERE company_id = ${this.companyId} AND id = ${accountId} RETURNING *`
     );
     if (!res.rows[0]) throw new Error('Account not found or update failed');
     return res.rows[0];
