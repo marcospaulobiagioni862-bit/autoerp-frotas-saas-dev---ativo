@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { ContractExecutionAuthorityIntegrationRunner } from './contractExecutionAuthorityIntegration';
 import { runContractSuspendRegression } from './contractSuspendRegression';
+import { runContractTemplateFileSourceRegression } from './contractTemplateFileSourceRegression';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -177,6 +178,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
   }
 
   await runContractSuspendRegression();
+  await runContractTemplateFileSourceRegression();
 }
 
 if (process.argv[1]?.includes('contractSignatureTimeGateRegression')) {
