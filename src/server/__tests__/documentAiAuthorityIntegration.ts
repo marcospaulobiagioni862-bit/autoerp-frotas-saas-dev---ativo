@@ -263,13 +263,13 @@ export class DocumentAiAuthorityIntegrationRunner {
         const tx = context.getRawTransaction();
         const extractionRows = await tx.select().from(documentAiExtractions)
           .where(eq(documentAiExtractions.companyId, companyA));
-        const byId = new Map(extractionRows.map((item: any) => [item.id, item]));
+        const byId = new Map<string, any>(extractionRows.map((item: any) => [item.id, item]));
         assert(byId.get(disposable.id)?.status === 'REJECTED', 'fully disposable failure was not removed');
         assert(byId.get(mixedDisposable.id)?.status === 'REJECTED', 'eligible sibling failure was not removed');
         assert(byId.get(mixedWithData.id)?.status === 'FAILED', 'failure with proposed data must be preserved');
         const attachmentRows = await tx.select().from(fileAttachments)
           .where(eq(fileAttachments.companyId, companyA));
-        const attachmentById = new Map(attachmentRows.map((item: any) => [item.id, item]));
+        const attachmentById = new Map<string, any>(attachmentRows.map((item: any) => [item.id, item]));
         assert(attachmentById.get('doc-ai-att-clean')?.isArchived === true, 'fully disposable attachment was not archived');
         assert(attachmentById.get('doc-ai-att-mixed')?.isArchived === false, 'attachment with useful sibling data must be preserved');
       });
