@@ -9,6 +9,7 @@ const proposed = {
   registrationNumber: '12345678901',
   category: 'b',
   birthDate: '1990-01-02',
+  issueDate: '2026-01-15',
   expirationDate: '2030-12-31',
   ear: true,
 };
@@ -25,6 +26,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   birthDate: '1990-01-02',
   cnhNumber: '12345678901',
   cnhCategory: 'AB',
+  cnhIssueDate: '2026-01-15',
   cnhExpiration: '2030-12-31',
   cnhEar: true,
 });
@@ -35,6 +37,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   proposedFields: {
     ...proposed,
     birthDate: '27/05/2003',
+    issueDate: '15/01/2026',
     expirationDate: '10/09/2031',
   },
 }), {
@@ -44,9 +47,23 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   birthDate: '2003-05-27',
   cnhNumber: '12345678901',
   cnhCategory: 'B',
+  cnhIssueDate: '2026-01-15',
   cnhExpiration: '2031-09-10',
   cnhEar: true,
 });
+
+const distinctDates = projectApprovedCnhDriverDraft({
+  status: 'APPROVED',
+  detectedDocumentType: 'CNH',
+  proposedFields: {
+    ...proposed,
+    issueDate: '15/01/2026',
+    expirationDate: '13/01/2036',
+  },
+});
+assert.equal(distinctDates.cnhIssueDate, '2026-01-15', 'data de emissão deve permanecer separada');
+assert.equal(distinctDates.cnhExpiration, '2036-01-13', 'validade deve vir exclusivamente de expirationDate');
+assert.notEqual(distinctDates.cnhIssueDate, distinctDates.cnhExpiration, 'emissão nunca deve substituir a validade');
 
 const pendingEar = projectApprovedCnhDriverDraft({
   status: 'APPROVED',
@@ -58,6 +75,7 @@ const pendingEar = projectApprovedCnhDriverDraft({
     registrationNumber: proposed.registrationNumber,
     category: proposed.category,
     birthDate: proposed.birthDate,
+    issueDate: proposed.issueDate,
     expirationDate: proposed.expirationDate,
   },
 });
@@ -91,6 +109,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
     registrationNumber: 'bad',
     category: 'Z',
     birthDate: '31/02/2026',
+    issueDate: 'not-a-date',
     expirationDate: 'not-a-date',
     ear: 'desconhecido',
     unexpectedAuthorityField: 'ignored',
@@ -100,11 +119,12 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
 assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'APPROVED',
   detectedDocumentType: 'CNH',
-  proposedFields: { name: 'Legacy Name', registrationNumber: '12345678901', expirationDate: '2031-01-01' },
-  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhExpiration: '02/02/2032', cnhEar: false },
+  proposedFields: { name: 'Legacy Name', registrationNumber: '12345678901', issueDate: '2030-01-01', expirationDate: '2031-01-01' },
+  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhIssueDate: '01/02/2031', cnhExpiration: '02/02/2032', cnhEar: false },
 }), {
   fullName: 'Correção Canônica',
   cnhNumber: '10987654321',
+  cnhIssueDate: '2031-02-01',
   cnhExpiration: '2032-02-02',
   cnhEar: false,
 });
@@ -114,6 +134,10 @@ const approvedDraftRead = modalSource.indexOf('const approved = await DriverDocu
 const materialization = modalSource.indexOf('const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);');
 assert.ok(approvedDraftRead >= 0, 'CNH flow must fetch the server-authoritative approved draft');
 assert.ok(materialization > approvedDraftRead, 'approved draft must be captured before materialization consumes the intake');
+assert.match(modalSource, /\['issueDate', 'Data de emissão da CNH'\]/, 'revisão deve exibir data de emissão');
+assert.match(modalSource, /\['expirationDate', 'Validade da CNH'\]/, 'revisão deve exibir validade separadamente');
+assert.match(modalSource, /issueDate: valueText\(item\.proposedFields\.issueDate\)/, 'emissão deve vir de issueDate');
+assert.match(modalSource, /expirationDate: valueText\(item\.proposedFields\.expirationDate\)/, 'validade deve vir de expirationDate');
 
 const completionStart = modalSource.indexOf('const useApprovedDraft = () => {');
 const completionEnd = modalSource.indexOf('const progress = progressFor(step);', completionStart);
