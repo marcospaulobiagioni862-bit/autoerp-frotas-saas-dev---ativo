@@ -52,6 +52,7 @@ import {
   type DriverLegacyDetailedSummary,
 } from './DriverLegacyDetailsBridge';
 import { DriverProfilePhoto } from './DriverProfilePhoto';
+import { DriverCnhDocumentCard } from './DriverCnhDocumentCard';
 import {
   createWhatsappTaskProposalCounts,
   filterWhatsappTaskProposals,
@@ -490,6 +491,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
           {activeTab === 'cnh' && (
             <div className="space-y-4">
+              <DriverCnhDocumentCard driverId={driver.id} />
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-semibold">Documentos Registrados</h3>
                 <Button size="sm" onClick={() => setIsAddDocOpen(true)}><Plus className="w-4 h-4 mr-1" />Anexar Documento</Button>
