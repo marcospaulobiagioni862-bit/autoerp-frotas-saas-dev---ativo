@@ -46,6 +46,7 @@ export interface Driver {
   cnhNumber: string;
   cnhCategory: string;
   cnhExpiration: string;
+  cnhEar?: boolean;
   cnhStatus: DocumentStatus;
   appPlatforms: string[]; // e.g., ['Uber', '99', 'Indrive']
   status: DriverStatus;
