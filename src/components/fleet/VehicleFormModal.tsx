@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
-import { VehicleClient } from '../../api/vehicleClient';
+import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
-import { Car, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 interface VehicleFormModalProps {
   isOpen: boolean;
@@ -34,6 +34,9 @@ interface VehicleFormData {
   rentalValueBase: number;
   notes?: string;
 }
+
+const cleanText = (value: string | undefined) => (value || '').trim();
+const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   isOpen,
@@ -114,6 +117,30 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     if (errorMessage) setErrorMessage(null);
   };
 
+  const buildChangedFields = (existing: Vehicle): VehicleUpdateInput => {
+    const changes: VehicleUpdateInput = {};
+    const originalMaintenanceKm = existing.nextMaintenanceKm || existing.currentKm + 10000;
+
+    if (normalizePlate(formData.plate) !== normalizePlate(existing.plate)) changes.plate = normalizePlate(formData.plate);
+    if (cleanText(formData.renavam) !== cleanText(existing.renavam)) changes.renavam = cleanText(formData.renavam);
+    if (cleanText(formData.brand) !== cleanText(existing.brand)) changes.brand = cleanText(formData.brand);
+    if (cleanText(formData.model) !== cleanText(existing.model)) changes.model = cleanText(formData.model);
+    if (cleanText(formData.version) !== cleanText(existing.version)) changes.version = cleanText(formData.version);
+    if (formData.yearFabrication !== existing.yearFabrication) changes.yearFabrication = formData.yearFabrication;
+    if (formData.yearModel !== existing.yearModel) changes.yearModel = formData.yearModel;
+    if (cleanText(formData.color) !== cleanText(existing.color)) changes.color = cleanText(formData.color);
+    if (cleanText(formData.chassis).toUpperCase() !== cleanText(existing.chassis).toUpperCase()) changes.chassis = cleanText(formData.chassis).toUpperCase();
+    if ((formData.nextMaintenanceKm || 0) !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm || 0;
+    if (cleanText(formData.fuelType) !== cleanText(existing.fuelType)) changes.fuelType = cleanText(formData.fuelType);
+    if (cleanText(formData.category) !== cleanText(existing.category)) changes.category = cleanText(formData.category);
+    if (formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
+    if (formData.currentValue !== existing.currentValue) changes.currentValue = formData.currentValue;
+    if (formData.rentalValueBase !== existing.rentalValueBase) changes.rentalValueBase = formData.rentalValueBase;
+    if (cleanText(formData.notes) !== cleanText(existing.notes)) changes.notes = cleanText(formData.notes);
+
+    return changes;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -121,10 +148,12 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     try {
       if (vehicleToEdit) {
-        const { currentKm: _serverManagedKm, ...editableFields } = formData;
-        await VehicleClient.update(vehicleToEdit.id, editableFields);
+        const changedFields = buildChangedFields(vehicleToEdit);
+        if (Object.keys(changedFields).length > 0) {
+          await VehicleClient.update(vehicleToEdit.id, changedFields);
+        }
       } else {
-        await VehicleClient.create(formData);
+        await VehicleClient.create({ ...formData, plate: normalizePlate(formData.plate) });
       }
       onSuccess();
       onClose();
@@ -152,82 +181,21 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Input
-            label="Placa *"
-            placeholder="ABC1D23"
-            required
-            value={formData.plate}
-            onChange={(e) => handleChange('plate', e.target.value.toUpperCase())}
-            helperText="Formato Mercosul ou Padrão"
-          />
-
-          <Input
-            label="RENAVAM *"
-            placeholder="12345678900"
-            required
-            value={formData.renavam}
-            onChange={(e) => handleChange('renavam', e.target.value)}
-          />
-
-          <Input
-            label="Chassi *"
-            placeholder="9BW..."
-            required
-            value={formData.chassis}
-            onChange={(e) => handleChange('chassis', e.target.value.toUpperCase())}
-          />
+          <Input label="Placa *" placeholder="ABC1D23" required value={formData.plate} onChange={(e) => handleChange('plate', e.target.value.toUpperCase())} helperText="Formato Mercosul ou Padrão" />
+          <Input label="RENAVAM *" placeholder="12345678900" required value={formData.renavam} onChange={(e) => handleChange('renavam', e.target.value)} />
+          <Input label="Chassi *" placeholder="9BW..." required value={formData.chassis} onChange={(e) => handleChange('chassis', e.target.value.toUpperCase())} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Input
-            label="Marca *"
-            placeholder="Ex: Chevrolet"
-            required
-            value={formData.brand}
-            onChange={(e) => handleChange('brand', e.target.value)}
-          />
-
-          <Input
-            label="Modelo *"
-            placeholder="Ex: Onix 1.0"
-            required
-            value={formData.model}
-            onChange={(e) => handleChange('model', e.target.value)}
-          />
-
-          <Input
-            label="Versão"
-            placeholder="Ex: LT Turbo Flex"
-            value={formData.version || ''}
-            onChange={(e) => handleChange('version', e.target.value)}
-          />
+          <Input label="Marca *" placeholder="Ex: Chevrolet" required value={formData.brand} onChange={(e) => handleChange('brand', e.target.value)} />
+          <Input label="Modelo *" placeholder="Ex: Onix 1.0" required value={formData.model} onChange={(e) => handleChange('model', e.target.value)} />
+          <Input label="Versão" placeholder="Ex: LT Turbo Flex" value={formData.version || ''} onChange={(e) => handleChange('version', e.target.value)} />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Input
-            label="Ano Fab. *"
-            type="number"
-            required
-            value={formData.yearFabrication}
-            onChange={(e) => handleChange('yearFabrication', Number(e.target.value))}
-          />
-
-          <Input
-            label="Ano Modelo *"
-            type="number"
-            required
-            value={formData.yearModel}
-            onChange={(e) => handleChange('yearModel', Number(e.target.value))}
-          />
-
-          <Input
-            label="Cor *"
-            placeholder="Branco"
-            required
-            value={formData.color}
-            onChange={(e) => handleChange('color', e.target.value)}
-          />
-
+          <Input label="Ano Fab. *" type="number" required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
+          <Input label="Ano Modelo *" type="number" required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
+          <Input label="Cor *" placeholder="Branco" required value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
           <Select
             label="Combustível *"
             value={formData.fuelType}
@@ -254,57 +222,21 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             onChange={(e) => handleChange('currentKm', Number(e.target.value))}
             helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
-
-          <Input
-            label="Próx. Manutenção (KM)"
-            type="number"
-            value={formData.nextMaintenanceKm || ''}
-            onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))}
-          />
-
-          <Select
-            label="Categoria *"
-            value={formData.category}
-            onChange={(e) => handleChange('category', e.target.value)}
-            options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))}
-          />
+          <Input label="Próx. Manutenção (KM)" type="number" value={formData.nextMaintenanceKm || ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
+          <Select label="Categoria *" value={formData.category} onChange={(e) => handleChange('category', e.target.value)} options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))} />
         </div>
 
         <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
-          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-            Valores Financeiros
-          </h4>
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Valores Financeiros</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              label="Valor de Aquisição (R$) *"
-              type="number"
-              required
-              value={formData.acquisitionValue}
-              onChange={(e) => handleChange('acquisitionValue', Number(e.target.value))}
-            />
-
-            <Input
-              label="Valor Comercial Atual (R$) *"
-              type="number"
-              required
-              value={formData.currentValue}
-              onChange={(e) => handleChange('currentValue', Number(e.target.value))}
-            />
-
-            <Input
-              label="Valor Aluguel Semanal (R$) *"
-              type="number"
-              required
-              value={formData.rentalValueBase}
-              onChange={(e) => handleChange('rentalValueBase', Number(e.target.value))}
-            />
+            <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleChange('acquisitionValue', Number(e.target.value))} />
+            <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleChange('currentValue', Number(e.target.value))} />
+            <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleChange('rentalValueBase', Number(e.target.value))} />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-            Observações
-          </label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações</label>
           <textarea
             rows={2}
             value={formData.notes || ''}
@@ -315,12 +247,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button type="submit" variant="primary" isLoading={loading}>
-            {vehicleToEdit ? 'Atualizar Veículo' : 'Cadastrar Veículo'}
-          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button type="submit" variant="primary" isLoading={loading}>{vehicleToEdit ? 'Atualizar Veículo' : 'Cadastrar Veículo'}</Button>
         </div>
       </form>
     </ModalContainer>
