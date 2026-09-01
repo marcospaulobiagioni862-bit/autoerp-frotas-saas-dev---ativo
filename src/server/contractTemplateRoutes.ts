@@ -257,6 +257,9 @@ export function registerContractTemplateRoutes(app: Express): void {
         if (candidate.isCurrent) return candidate;
 
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
+        if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
+          throw new TemplateConflictError();
+        }
         const now = new Date().toISOString();
         if (current && current.id !== candidate.id) {
           const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
