@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
-import { VehicleClient } from '../../api/vehicleClient';
+import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -77,7 +77,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         renavam: vehicleToEdit.renavam,
         chassis: vehicleToEdit.chassis,
         currentKm: vehicleToEdit.currentKm,
-        nextMaintenanceKm: vehicleToEdit.nextMaintenanceKm || vehicleToEdit.currentKm + 10000,
+        nextMaintenanceKm: vehicleToEdit.nextMaintenanceKm ?? vehicleToEdit.currentKm + 10000,
         fuelType: vehicleToEdit.fuelType,
         category: vehicleToEdit.category,
         acquisitionValue: vehicleToEdit.acquisitionValue,
@@ -121,8 +121,49 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     try {
       if (vehicleToEdit) {
-        const { currentKm: _serverManagedKm, ...editableFields } = formData;
-        await VehicleClient.update(vehicleToEdit.id, editableFields);
+        const editableFields: VehicleUpdateInput = {
+          plate: formData.plate,
+          brand: formData.brand,
+          model: formData.model,
+          version: formData.version || '',
+          yearFabrication: formData.yearFabrication,
+          yearModel: formData.yearModel,
+          color: formData.color,
+          renavam: formData.renavam,
+          chassis: formData.chassis,
+          nextMaintenanceKm: formData.nextMaintenanceKm,
+          fuelType: formData.fuelType,
+          category: formData.category,
+          acquisitionValue: formData.acquisitionValue,
+          currentValue: formData.currentValue,
+          rentalValueBase: formData.rentalValueBase,
+          notes: formData.notes || '',
+        };
+        const originalFields: VehicleUpdateInput = {
+          plate: vehicleToEdit.plate,
+          brand: vehicleToEdit.brand,
+          model: vehicleToEdit.model,
+          version: vehicleToEdit.version || '',
+          yearFabrication: vehicleToEdit.yearFabrication,
+          yearModel: vehicleToEdit.yearModel,
+          color: vehicleToEdit.color,
+          renavam: vehicleToEdit.renavam,
+          chassis: vehicleToEdit.chassis,
+          nextMaintenanceKm: vehicleToEdit.nextMaintenanceKm ?? vehicleToEdit.currentKm + 10000,
+          fuelType: vehicleToEdit.fuelType,
+          category: vehicleToEdit.category,
+          acquisitionValue: vehicleToEdit.acquisitionValue,
+          currentValue: vehicleToEdit.currentValue,
+          rentalValueBase: vehicleToEdit.rentalValueBase,
+          notes: vehicleToEdit.notes || '',
+        };
+        const changes = Object.fromEntries(
+          Object.entries(editableFields).filter(([key, value]) => value !== originalFields[key as keyof VehicleUpdateInput]),
+        ) as VehicleUpdateInput;
+
+        if (Object.keys(changes).length > 0) {
+          await VehicleClient.update(vehicleToEdit.id, changes);
+        }
       } else {
         await VehicleClient.create(formData);
       }
@@ -258,8 +299,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           <Input
             label="Próx. Manutenção (KM)"
             type="number"
-            value={formData.nextMaintenanceKm || ''}
-            onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))}
+            value={formData.nextMaintenanceKm ?? ''}
+            onChange={(e) => handleChange('nextMaintenanceKm', e.target.value === '' ? undefined : Number(e.target.value))}
           />
 
           <Select
