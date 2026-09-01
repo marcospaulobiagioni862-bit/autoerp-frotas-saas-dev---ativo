@@ -2,6 +2,11 @@ import { VehicleStatus } from '../../types/enums';
 
 export interface VehicleStatusTransitionContext {
   hasActiveContract?: boolean;
+  /**
+   * Reserved for a future maintenance-authority gate. The fleet status route
+   * must not infer this flag merely from the vehicle already being in
+   * MAINTENANCE, otherwise every exit from maintenance becomes impossible.
+   */
   hasBlockingMaintenance?: boolean;
 }
 
@@ -92,7 +97,11 @@ export function canManuallyTransitionVehicleStatus(
   if (from === to) return true;
   if (to === VehicleStatus.RENTED) return false;
   if (context.hasActiveContract) return false;
-  if (context.hasBlockingMaintenance && from === VehicleStatus.MAINTENANCE && to !== VehicleStatus.MAINTENANCE) return false;
+
+  // Do not block a maintenance exit based only on a generic boolean supplied
+  // by the fleet screen. A real blocking-work-order check must come from the
+  // maintenance authority. Until that authority is wired here, the canonical
+  // transition table is the source of truth for manual exits from maintenance.
   return MANUAL_TRANSITIONS[from]?.has(to) ?? false;
 }
 
