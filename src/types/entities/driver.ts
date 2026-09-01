@@ -13,6 +13,25 @@ export interface DriverHealthAndEmergency {
   responsibleUser?: string;
 }
 
+export type DriverResidenceType = 'HOUSE' | 'APARTMENT' | 'OTHER';
+
+export interface DriverAddress {
+  street: string;
+  number: string;
+  complement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  residenceType?: DriverResidenceType;
+  residenceTypeOther?: string;
+  condominiumName?: string;
+  blockTower?: string;
+  unit?: string;
+  floor?: string;
+  reference?: string;
+}
+
 export interface Driver {
   id: string; // UUID
   companyId: string;
@@ -23,15 +42,7 @@ export interface Driver {
   phone: string;
   whatsapp: string;
   email?: string;
-  address: {
-    street: string;
-    number: string;
-    complement?: string;
-    neighborhood: string;
-    city: string;
-    state: string;
-    zipCode: string;
-  };
+  address: DriverAddress;
   cnhNumber: string;
   cnhCategory: string;
   cnhExpiration: string;
