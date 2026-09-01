@@ -130,6 +130,18 @@ function validateProviderOutput(value: unknown): {
       }
       continue;
     }
+
+    // Gemini may include schema fields as explicit nulls when the document does not
+    // visibly contain a value. Null means "not extracted": discard it instead of
+    // inventing a value or requiring a confidence score for missing information.
+    if (fieldValue === null) {
+      const nullScore = confidence[key];
+      if (nullScore !== undefined && nullScore !== 0) {
+        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      }
+      continue;
+    }
+
     if (!safeScalar(fieldValue)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
     const score = confidence[key];
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) {
@@ -149,6 +161,10 @@ function validateProviderOutput(value: unknown): {
       if (extraFieldValue !== null || score !== 0) {
         throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
       }
+      continue;
+    }
+    if (fields[key] === null) {
+      if (score !== 0) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
       continue;
     }
     if (!(key in normalizedFields)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
