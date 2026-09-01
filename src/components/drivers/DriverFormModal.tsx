@@ -213,7 +213,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
         await DriverClient.update(cnhDriverId, update);
       } else {
         if (!driverId) { const created = await DriverClient.create(input); driverId = created.id; setCreatedDriverId(created.id); }
-        if (cnhIntakeId && driverId) { const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, driverId); if (promotion.driverId !== driverId) throw new Error('A CNH não foi vinculada ao motorista criado. Tente concluir o vínculo novamente.'); }
+      }
+      if (cnhIntakeId && driverId) {
+        const promotion = await DriverDocumentIntakeClient.promote(cnhIntakeId, driverId);
+        if (promotion.driverId !== driverId) throw new Error('A CNH não foi vinculada ao motorista. Tente concluir o vínculo novamente.');
       }
       if (profilePhoto && !profilePhotoUploaded) {
         if (!driverId) throw new Error('O cadastro do motorista precisa existir antes de salvar a foto.');
