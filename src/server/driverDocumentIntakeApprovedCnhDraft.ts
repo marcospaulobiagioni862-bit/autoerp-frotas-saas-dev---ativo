@@ -6,6 +6,7 @@ export interface ApprovedCnhDriverDraft {
   cnhNumber?: string;
   cnhCategory?: string;
   cnhExpiration?: string;
+  cnhEar?: boolean;
 }
 
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
@@ -60,6 +61,15 @@ function category(value: unknown): string | undefined {
   return CNH_CATEGORIES.has(normalized) ? normalized : undefined;
 }
 
+function ear(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'SIM' || normalized === 'YES' || normalized === 'TRUE') return true;
+  if (normalized === 'NÃO' || normalized === 'NAO' || normalized === 'NO' || normalized === 'FALSE') return false;
+  return undefined;
+}
+
 export function projectApprovedCnhDriverDraft(input: {
   status: string;
   detectedDocumentType?: string | null;
@@ -81,6 +91,7 @@ export function projectApprovedCnhDriverDraft(input: {
   const cnhNumber = digits(sourceValue(corrections, proposed, ['cnhNumber', 'registrationNumber']), 11);
   const cnhCategory = category(sourceValue(corrections, proposed, ['cnhCategory', 'category']));
   const cnhExpiration = isoDate(sourceValue(corrections, proposed, ['cnhExpiration', 'expirationDate']));
+  const cnhEar = ear(sourceValue(corrections, proposed, ['cnhEar', 'ear']));
 
   if (fullName) draft.fullName = fullName;
   if (cpf) draft.cpf = cpf;
@@ -89,6 +100,7 @@ export function projectApprovedCnhDriverDraft(input: {
   if (cnhNumber) draft.cnhNumber = cnhNumber;
   if (cnhCategory) draft.cnhCategory = cnhCategory;
   if (cnhExpiration) draft.cnhExpiration = cnhExpiration;
+  if (cnhEar !== undefined) draft.cnhEar = cnhEar;
 
   return draft;
 }

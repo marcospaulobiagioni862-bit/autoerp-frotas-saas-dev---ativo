@@ -18,7 +18,7 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 const DOCUMENT_FIELDS: Record<string, ReadonlySet<string>> = {
-  CNH: new Set(['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate']),
+  CNH: new Set(['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate', 'ear']),
   CRLV: new Set(['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName']),
   IPVA: new Set(['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber']),
   TRAFFIC_TICKET: new Set(['plate', 'noticeNumber', 'infractionCode', 'infractionDate', 'dueDate', 'amount', 'discountAmount']),
@@ -180,6 +180,12 @@ function validateProviderOutput(value: unknown): {
         throw invalidProviderOutput('OUTPUT_NULL_FIELD_WITH_CONFIDENCE');
       }
       continue;
+    }
+
+    // EAR is asymmetric by design: the AI may assert only a positive finding.
+    // Absence/uncertainty must be null/omitted; "Não" is a human decision during review.
+    if (documentType === 'CNH' && key === 'ear' && fieldValue !== true) {
+      throw invalidProviderOutput('OUTPUT_INVALID_FIELD_VALUE');
     }
 
     if (!safeScalar(fieldValue)) throw invalidProviderOutput('OUTPUT_INVALID_FIELD_VALUE');

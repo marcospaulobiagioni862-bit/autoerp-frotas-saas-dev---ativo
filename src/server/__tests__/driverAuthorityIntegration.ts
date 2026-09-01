@@ -87,6 +87,7 @@ export class DriverAuthorityIntegrationRunner {
       cnhNumber: '12345678900',
       cnhCategory: 'B',
       cnhExpiration: '2035-01-01',
+      cnhEar: true,
       appPlatforms: ['Uber'],
     };
 
@@ -113,6 +114,8 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'email-format', body: { ...baseDriver, email: 'sem-arroba' } },
         { label: 'email-required', body: { ...baseDriver, email: '' } },
         { label: 'cnhCategory', body: { ...baseDriver, cnhCategory: 'Z' } },
+        { label: 'cnhEar-required', body: { ...baseDriver, cnhEar: undefined } },
+        { label: 'cnhEar-type', body: { ...baseDriver, cnhEar: 'sim' } },
         { label: 'state', body: { ...baseDriver, address: { ...baseDriver.address, state: 'SPO' } } },
         { label: 'zipCode', body: { ...baseDriver, address: { ...baseDriver.address, zipCode: '123' } } },
         { label: 'address-number', body: { ...baseDriver, address: { ...baseDriver.address, number: '' } } },
@@ -153,6 +156,7 @@ export class DriverAuthorityIntegrationRunner {
       assert(driverA.phone === '11999999999' && driverA.whatsapp === '11999999999', 'phone normalization mismatch');
       assert(driverA.address.residenceType === 'HOUSE', 'residence type was not persisted');
       assert(driverA.address.complement === 'Casa principal', 'address complement was not persisted');
+      assert(driverA.cnhEar === true, 'CNH EAR was not persisted');
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
         method: 'PATCH', body: JSON.stringify({ phone: '(15) 99742-4411', whatsapp: '+55 (15) 99742-4411' }),
@@ -164,12 +168,13 @@ export class DriverAuthorityIntegrationRunner {
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ email: 'MOTORISTA@EXAMPLE.COM', cnhCategory: 'ab', address: { state: 'sp', zipCode: '18075-350' } }),
+        body: JSON.stringify({ email: 'MOTORISTA@EXAMPLE.COM', cnhCategory: 'ab', cnhEar: false, address: { state: 'sp', zipCode: '18075-350' } }),
       }, adminA);
       assert(response.status === 200, `normalized identity update expected 200, got ${response.status}`);
       const normalizedIdentity = (await json(response)).item;
       assert(normalizedIdentity.email === 'motorista@example.com', 'email was not normalized');
       assert(normalizedIdentity.cnhCategory === 'AB', 'CNH category was not normalized');
+      assert(normalizedIdentity.cnhEar === false, 'CNH EAR manual Não was not persisted');
       assert(normalizedIdentity.address.state === 'SP' && normalizedIdentity.address.zipCode === '18075350', 'address identity fields were not normalized');
       assert(normalizedIdentity.address.residenceType === 'HOUSE', 'partial address update discarded residence type');
 

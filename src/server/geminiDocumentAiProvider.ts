@@ -8,7 +8,7 @@ import {
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
 const DOCUMENT_FIELD_NAMES = {
-  CNH: ['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate'],
+  CNH: ['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate', 'ear'],
   CRLV: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
   IPVA: ['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber'],
   TRAFFIC_TICKET: ['plate', 'noticeNumber', 'infractionCode', 'infractionDate', 'dueDate', 'amount', 'discountAmount'],
@@ -211,7 +211,10 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
         response = await this.client.create({
           model: this.model,
           input: [
-            { type: 'text', text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values.' },
+            {
+              type: 'text',
+              text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values. For CNH field "ear", return true only when the document visibly states exercício de atividade remunerada, atividade remunerada, or EAR; otherwise return null. Never infer false from absence.',
+            },
             {
               type: mediaType(request.mimeType),
               data: Buffer.from(request.content).toString('base64'),

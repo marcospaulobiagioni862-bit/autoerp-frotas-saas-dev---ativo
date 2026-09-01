@@ -65,6 +65,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
       cnhNumber: String(row.cnh || ''),
       cnhCategory: String(row.cnh_category || ''),
       cnhExpiration: String(row.cnh_expiration || ''),
+      cnhEar: typeof row.cnh_ear === 'boolean' ? row.cnh_ear : undefined,
       cnhStatus: evaluateCnhStatus(String(row.cnh_expiration || '')),
       appPlatforms: Array.isArray(row.app_platforms) ? row.app_platforms.map(String) : [],
       status: String(row.status || (row.active ? 'ACTIVE' : 'INACTIVE')) as DriverStatus,
@@ -200,6 +201,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
           floor: item.address.floor ?? previous.address.floor,
           reference: item.address.reference ?? previous.address.reference,
         },
+        cnhEar: item.cnhEar ?? previous.cnhEar,
         appPlatforms: item.appPlatforms.length > 0 ? item.appPlatforms : previous.appPlatforms,
         photoUrl: item.photoUrl ?? previous.photoUrl,
         notes: item.notes ?? previous.notes,
@@ -218,7 +220,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         address_street, address_number, address_complement, address_neighborhood,
         address_city, address_state, address_zip_code, address_residence_type,
         address_residence_type_other, address_condominium_name, address_block_tower,
-        address_unit, address_floor, address_reference, cnh_category, cnh_expiration,
+        address_unit, address_floor, address_reference, cnh_category, cnh_expiration, cnh_ear,
         app_platforms, status, photo_url, notes, is_archived, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.fullName}, ${item.cpf}, ${item.cnhNumber},
@@ -228,7 +230,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         ${item.address.state}, ${item.address.zipCode}, ${item.address.residenceType || null},
         ${item.address.residenceTypeOther || null}, ${item.address.condominiumName || null},
         ${item.address.blockTower || null}, ${item.address.unit || null}, ${item.address.floor || null},
-        ${item.address.reference || null}, ${item.cnhCategory}, ${item.cnhExpiration},
+        ${item.address.reference || null}, ${item.cnhCategory}, ${item.cnhExpiration}, ${item.cnhEar ?? null},
         ${platformArraySql(item.appPlatforms)}, ${item.status}, ${item.photoUrl || null}, ${item.notes || null},
         ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
       )
@@ -266,6 +268,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         address_reference = ${item.address.reference || null},
         cnh_category = ${item.cnhCategory},
         cnh_expiration = ${item.cnhExpiration},
+        cnh_ear = ${item.cnhEar ?? null},
         app_platforms = ${platformArraySql(item.appPlatforms)},
         status = ${item.status},
         photo_url = ${item.photoUrl || null},

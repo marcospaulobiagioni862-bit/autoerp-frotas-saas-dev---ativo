@@ -113,7 +113,7 @@ export async function promoteApprovedDriverDocumentIntake(
     text(row.detected_document_type).toUpperCase() !== 'CNH'
   ) throw new DriverDocumentIntakePromotionConflictError('INTAKE_EXTRACTION_MISMATCH');
 
-  const driver = await context.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
+  let driver = await context.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
   if (!driver || driver.isArchived) throw new DriverDocumentIntakePromotionNotFoundError();
 
   const attachmentOnDriver = text(row.entity_type) === 'Driver' && text(row.entity_id) === driver.id;
@@ -179,6 +179,29 @@ export async function promoteApprovedDriverDocumentIntake(
   ) throw new DriverDocumentIntakePromotionConflictError('DRIVER_CNH_IDENTITY_MISMATCH');
 
   const now = new Date().toISOString();
+  if (approved.cnhEar !== undefined && driver.cnhEar !== approved.cnhEar) {
+    const previousEar = driver.cnhEar;
+    const updated = await context.getDriverRepo().updateForCompany(principal.companyId, driver.id, {
+      ...driver,
+      cnhEar: approved.cnhEar,
+      updatedAt: now,
+    });
+    if (!updated) throw new DriverDocumentIntakePromotionConflictError('DRIVER_CNH_EAR_UPDATE_FAILED');
+    driver = updated;
+    await context.getAuditLogRepo().create({
+      id: randomUUID(),
+      companyId: principal.companyId,
+      entityName: 'Driver',
+      entityId: driver.id,
+      action: AuditAction.UPDATE,
+      previousState: JSON.stringify({ cnhEar: previousEar ?? null }),
+      newState: JSON.stringify({ event: 'UPDATE_CNH_EAR_FROM_APPROVED_CNH', cnhEar: approved.cnhEar }),
+      userId: principal.userId,
+      userName: principal.name,
+      timestamp: now,
+    });
+  }
+
   if (attachmentOnIntake) {
     const attachmentUpdate = await tx.execute(sql`
       UPDATE file_attachments

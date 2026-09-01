@@ -78,6 +78,12 @@ function normalizeCnhCategory(value: unknown, fallback = ''): string {
   return category;
 }
 
+function normalizeCnhEar(value: unknown): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') throw new DriverValidationError('Invalid cnhEar');
+  return value;
+}
+
 function normalizePhone(value: unknown, field: string, required = true): string | undefined {
   const raw = typeof value === 'string' ? value.trim() : '';
   if (!raw) {
@@ -186,6 +192,7 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
 
 function requireCompletedProfile(driver: Driver): void {
   if (!driver.email) throw new DriverValidationError('Missing email');
+  if (driver.cnhEar === undefined) throw new DriverValidationError('Missing cnhEar');
   const address = driver.address;
   if (!address.residenceType) throw new DriverValidationError('Missing residenceType');
   if (!address.zipCode || !address.street || !address.number || !address.complement || !address.neighborhood || !address.city || !address.state) {
@@ -307,6 +314,7 @@ export function registerDriverRoutes(app: Express): void {
           cnhNumber,
           cnhCategory: normalizeCnhCategory(req.body?.cnhCategory),
           cnhExpiration,
+          cnhEar: normalizeCnhEar(req.body?.cnhEar),
           cnhStatus: cnhState,
           appPlatforms: platformsFrom(req.body?.appPlatforms),
           status: cnhState === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.ACTIVE,
@@ -340,7 +348,7 @@ export function registerDriverRoutes(app: Express): void {
       res.status(400).json({ error: 'Invalid driver authority surface' });
       return;
     }
-    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','address','cnhNumber','cnhCategory','cnhExpiration','appPlatforms','photoUrl','notes'];
+    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','address','cnhNumber','cnhCategory','cnhExpiration','cnhEar','appPlatforms','photoUrl','notes'];
     if (!editable.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
       res.status(400).json({ error: 'Invalid driver request' });
       return;
@@ -366,6 +374,7 @@ export function registerDriverRoutes(app: Express): void {
           cnhNumber: body.cnhNumber === undefined ? existing.cnhNumber : normalizeCnh(body.cnhNumber),
           cnhCategory: body.cnhCategory === undefined ? existing.cnhCategory : normalizeCnhCategory(body.cnhCategory),
           cnhExpiration: updatedCnhExpiration,
+          cnhEar: body.cnhEar === undefined ? existing.cnhEar : normalizeCnhEar(body.cnhEar),
           cnhStatus: updatedCnhStatus,
           appPlatforms: platformsFrom(body.appPlatforms, existing.appPlatforms),
           photoUrl: body.photoUrl === undefined ? existing.photoUrl : optionalText(body.photoUrl),
