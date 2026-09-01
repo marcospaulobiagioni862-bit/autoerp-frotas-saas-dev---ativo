@@ -85,6 +85,74 @@ assert.equal(input[0]?.type, 'text');
 assert.equal(input[1]?.type, 'document');
 assert.equal(input[1]?.mime_type, 'application/pdf');
 assert.equal(typeof input[1]?.data, 'string');
+assert.match(String(input[0]?.text ?? ''), /omit any field that is absent or uncertain/i);
+assert.match(String(input[0]?.text ?? ''), /otherwise omit the field/i);
+
+const tolerantProvider = new GeminiDocumentAiProvider({
+  apiKey: 'test-only-not-a-real-key',
+  model: 'gemini-3.6-flash',
+  allowedSyntheticChecksums: new Set([checksum]),
+  client: {
+    async create() {
+      return {
+        output_text: JSON.stringify({
+          documentType: 'CNH',
+          fields: {
+            name: 'MOTORISTA LEGIVEL',
+            cpf: '12345678900',
+            registrationNumber: '01234567890',
+            category: null,
+            ear: false,
+          },
+          confidence: {
+            name: 0.99,
+            cpf: 'alta',
+            registrationNumber: 1.2,
+            category: 0.8,
+            ear: 0.95,
+          },
+          raw: { text: 'CNH sintética legível', pages: 1 },
+        }),
+      };
+    },
+  },
+});
+
+const tolerantCnh = await processDocumentAiBytes(tolerantProvider, {
+  content: syntheticPdf,
+  mimeType: 'application/pdf',
+  expectedChecksum: checksum,
+});
+assert.equal(tolerantCnh.detectedDocumentType, 'CNH');
+assert.deepEqual(tolerantCnh.proposedFields, { name: 'MOTORISTA LEGIVEL' });
+assert.deepEqual(tolerantCnh.fieldConfidence, { name: 0.99 });
+assert.equal('ear' in tolerantCnh.proposedFields, false, 'EAR=false from AI must be discarded for human review');
+assert.equal('cpf' in tolerantCnh.proposedFields, false, 'field with malformed confidence must not invalidate readable CNH');
+assert.equal('registrationNumber' in tolerantCnh.proposedFields, false, 'field with out-of-range confidence must be discarded only');
+
+const positiveEarProvider = new GeminiDocumentAiProvider({
+  apiKey: 'test-only-not-a-real-key',
+  model: 'gemini-3.6-flash',
+  allowedSyntheticChecksums: new Set([checksum]),
+  client: {
+    async create() {
+      return {
+        output_text: JSON.stringify({
+          documentType: 'CNH',
+          fields: { name: 'MOTORISTA EAR', ear: true },
+          confidence: { name: 0.99, ear: 0.91 },
+          raw: {},
+        }),
+      };
+    },
+  },
+});
+const positiveEar = await processDocumentAiBytes(positiveEarProvider, {
+  content: syntheticPdf,
+  mimeType: 'application/pdf',
+  expectedChecksum: checksum,
+});
+assert.equal(positiveEar.proposedFields.ear, true, 'visible positive EAR must remain eligible for approval');
 
 await assert.rejects(
   provider.extract({
