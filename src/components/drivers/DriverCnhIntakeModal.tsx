@@ -7,7 +7,7 @@ import {
   DriverDocumentIntakeClient,
   type ApprovedCnhDriverDraft,
 } from '../../api/driverDocumentIntakeClient';
-import { Button, Input, ModalContainer } from '../ui';
+import { Button, Input, ModalContainer, Select } from '../ui';
 
 const MAX_BYTES = 20 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
@@ -22,6 +22,7 @@ const CNH_FIELDS = [
 ] as const;
 
 type CnhFieldKey = (typeof CNH_FIELDS)[number][0];
+type EarReviewValue = '' | 'YES' | 'NO';
 type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & { intakeId: string; driverId: string };
 type LocalPhase = 'IDLE' | 'UPLOADING' | 'REQUESTING';
 
@@ -58,6 +59,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
     name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
   });
+  const [earReview, setEarReview] = useState<EarReviewValue>('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setApprovedDraft(null);
     setSavedDriverId('');
     setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
+    setEarReview('');
     setNotes('');
     setError(null);
     setBusy(false);
@@ -133,6 +136,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
         category: valueText(item.proposedFields.category),
         expirationDate: valueText(item.proposedFields.expirationDate),
       });
+      setEarReview(item.proposedFields.ear === true ? 'YES' : '');
     }
     return item;
   };
@@ -203,6 +207,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
         const original = valueText(extraction.proposedFields[key]);
         if (draft[key] !== original) corrections[key] = draft[key];
       }
+      const proposedEar: EarReviewValue = extraction.proposedFields.ear === true ? 'YES' : '';
+      if (earReview && earReview !== proposedEar) corrections.ear = earReview === 'YES';
       const reviewed = await DocumentAiClient.review(extraction.id, {
         decision,
         corrections,
@@ -339,6 +345,22 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
                   onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))}
                 />
               ))}
+              <div>
+                <Select
+                  label="Exerce atividade remunerada (EAR)"
+                  value={earReview}
+                  onChange={(event) => setEarReview(event.target.value as EarReviewValue)}
+                >
+                  <option value="">Selecione para revisar</option>
+                  <option value="YES">Sim</option>
+                  <option value="NO">Não</option>
+                </Select>
+                {!earReview && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    EAR não identificado com segurança. A CNH pode ser salva agora; confirme Sim ou Não ao concluir o cadastro.
+                  </p>
+                )}
+              </div>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observação da revisão</label>
