@@ -100,6 +100,12 @@ export class ContractTemplateClient {
     });
   }
 
+  static async promoteFileSource(id: string): Promise<ContractTemplate> {
+    return itemRequest(`/api/contract-templates/${encodeURIComponent(id)}/promote-file-source`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+  }
+
   static async archive(id: string): Promise<ContractTemplate> {
     return itemRequest(`/api/contract-templates/${encodeURIComponent(id)}/archive`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
