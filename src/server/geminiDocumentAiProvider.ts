@@ -168,7 +168,8 @@ function providerStatus(error: unknown): number | null {
 }
 
 function isRetryableProviderFailure(error: unknown): boolean {
-  return providerStatus(error) === 503;
+  const status = providerStatus(error);
+  return status !== null && status >= 500 && status <= 599;
 }
 
 function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {

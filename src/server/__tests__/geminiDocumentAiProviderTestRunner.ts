@@ -164,6 +164,48 @@ await assert.rejects(
 );
 assert.equal(calls, 1, 'non-allowlisted bytes must be rejected before any external call');
 
+let transientCalls = 0;
+const transientWarnings: unknown[][] = [];
+const originalTransientConsoleWarn = console.warn;
+console.warn = (...args: unknown[]) => { transientWarnings.push(args); };
+try {
+  const transientProvider = new GeminiDocumentAiProvider({
+    apiKey: 'test-only-not-a-real-key',
+    model: 'gemini-3.7-flash',
+    allowedSyntheticChecksums: new Set([checksum]),
+    client: {
+      async create() {
+        transientCalls += 1;
+        if (transientCalls === 1) {
+          throw Object.assign(new Error('temporary upstream failure'), {
+            status: 500,
+            code: 'Internal Server Error',
+          });
+        }
+        return {
+          output_text: JSON.stringify({
+            documentType: 'CNH',
+            fields: { name: 'MOTORISTA APOS RETRY' },
+            confidence: { name: 0.99 },
+            raw: {},
+          }),
+        };
+      },
+    },
+  });
+  const recovered = await processDocumentAiBytes(transientProvider, {
+    content: syntheticPdf,
+    mimeType: 'application/pdf',
+    expectedChecksum: checksum,
+  });
+  assert.equal(recovered.proposedFields.name, 'MOTORISTA APOS RETRY');
+} finally {
+  console.warn = originalTransientConsoleWarn;
+}
+assert.equal(transientCalls, 2, 'HTTP 500 must receive one bounded retry before succeeding');
+assert.equal(transientWarnings.length, 1, 'transient retry must emit one sanitized warning');
+assert.match(JSON.stringify(transientWarnings), /500/);
+
 const sensitiveApiKey = 'gemini-secret-must-not-leak';
 const sensitiveDocument = 'base64-document-must-not-leak';
 const sensitivePrompt = 'private-policy-must-not-leak';
