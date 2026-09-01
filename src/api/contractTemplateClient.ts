@@ -52,10 +52,13 @@ async function itemRequest(url: string, init?: RequestInit): Promise<ContractTem
   return validateTemplate(asRecord(await response.json()).item);
 }
 
+export type ContractTemplateSourceMode = 'MARKDOWN' | 'FILE';
+
 export interface ContractTemplateCreateInput {
   templateKey: string;
   title: string;
-  contentMarkdown: string;
+  contentMarkdown?: string;
+  sourceMode?: ContractTemplateSourceMode;
   isActive?: boolean;
 }
 
@@ -91,7 +94,7 @@ export class ContractTemplateClient {
     });
   }
 
-  static async createVersion(id: string, input: { title?: string; contentMarkdown?: string; isActive?: boolean }): Promise<ContractTemplate> {
+  static async createVersion(id: string, input: { title?: string; contentMarkdown?: string; sourceMode?: ContractTemplateSourceMode; isActive?: boolean }): Promise<ContractTemplate> {
     return itemRequest(`/api/contract-templates/${encodeURIComponent(id)}/versions`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
