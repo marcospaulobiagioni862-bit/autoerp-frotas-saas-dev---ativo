@@ -106,15 +106,24 @@ async function run(): Promise<void> {
   assert(!('issueDate' in partialCnh.proposedFields), 'missing CNH issue date must not be invented');
   assert(!('rg' in partialCnh.fieldConfidence), 'discarded null field must not require synthetic confidence');
 
-  await expectFailure(() => processDocumentAiBytes({
+  const crlvWithNull = await processDocumentAiBytes({
     ...validProvider,
     async extract() {
       return {
-        documentType: 'CNH',
-        fields: { name: null, cpf: null },
-        confidence: {},
+        documentType: 'CRLV',
+        fields: { plate: 'ABC1D23', renavam: null },
+        confidence: { plate: 0.99 },
         raw: {},
       };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+  assert(crlvWithNull.proposedFields.plate === 'ABC1D23', 'CRLV valid field must remain');
+  assert(!('renavam' in crlvWithNull.proposedFields), 'CRLV null field must be discarded consistently');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return { documentType: 'CNH', fields: { name: null, cpf: null }, confidence: {}, raw: {} };
     },
   }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
   'PROVIDER_OUTPUT_INVALID', 'OUTPUT_NO_USEFUL_FIELDS');
@@ -122,12 +131,15 @@ async function run(): Promise<void> {
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
     async extract() {
-      return {
-        documentType: 'CNH',
-        fields: { name: 'SEM CONFIANCA' },
-        confidence: {},
-        raw: {},
-      };
+      return { documentType: 'CNH', fields: { name: null }, confidence: { name: 0.2 }, raw: {} };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_NULL_FIELD_WITH_CONFIDENCE');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return { documentType: 'CNH', fields: { name: 'SEM CONFIANCA' }, confidence: {}, raw: {} };
     },
   }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
   'PROVIDER_OUTPUT_INVALID', 'OUTPUT_MISSING_CONFIDENCE_FOR_VALUE');
@@ -135,15 +147,26 @@ async function run(): Promise<void> {
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
     async extract() {
-      return {
-        documentType: 'CNH',
-        fields: { name: 'CONFIANCA INVALIDA' },
-        confidence: { name: 1.1 },
-        raw: {},
-      };
+      return { documentType: 'CNH', fields: { name: 'CONFIANCA INVALIDA' }, confidence: { name: 1.1 }, raw: {} };
     },
   }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
   'PROVIDER_OUTPUT_INVALID', 'OUTPUT_INVALID_CONFIDENCE_FOR_VALUE');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return { documentType: 'CNH', fields: { name: 'SEM RAW' }, confidence: { name: 0.99 } };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_INVALID_RAW');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return { documentType: 'CNH', fields: { name: 'RAW NULO' }, confidence: { name: 0.99 }, raw: null };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_INVALID_RAW');
 
   let called = false;
   await expectFailure(() => processDocumentAiBytes({
