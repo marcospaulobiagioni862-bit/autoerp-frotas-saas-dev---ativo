@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, FileText, Save, X } from 'lucide-react';
+import { AlertCircle, FileText, Paperclip, Save, X } from 'lucide-react';
 import { Button, Input, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
@@ -16,6 +17,9 @@ interface ContractFormModalProps {
   onSuccess: () => void;
 }
 
+const CONTRACT_FILE_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
+
 export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -23,6 +27,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '700',
     billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
@@ -35,6 +40,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     if (!isOpen) return;
     let active = true;
     setError(null);
+    setContractFile(null);
     setLoadingOptions(true);
     Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.list()])
       .then(([vehicleList, driverList, templateList]) => {
@@ -76,6 +82,25 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     return () => { active = false; };
   }, [isOpen, contractToEdit, companyId]);
 
+  const chooseContractFile = (file: File | null) => {
+    setError(null);
+    if (!file) {
+      setContractFile(null);
+      return;
+    }
+    if (!CONTRACT_FILE_TYPES.has(file.type)) {
+      setContractFile(null);
+      setError('Arquivo do contrato inválido. Use PDF, JPG, PNG ou WebP.');
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_CONTRACT_FILE_BYTES) {
+      setContractFile(null);
+      setError('O arquivo do contrato deve ter até 10 MB e não pode estar vazio.');
+      return;
+    }
+    setContractFile(file);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -106,8 +131,22 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         templateId: form.templateId || undefined,
         notes: form.notes || undefined,
       };
-      if (contractToEdit) await ContractClient.update(contractToEdit.id, input);
-      else await ContractClient.create(input);
+      const savedContract = contractToEdit
+        ? await ContractClient.update(contractToEdit.id, input)
+        : await ContractClient.create(input);
+
+      if (contractFile) {
+        await AttachmentClient.upload({
+          entityType: 'Contract',
+          entityId: savedContract.id,
+          documentType: 'RENTAL_CONTRACT',
+          fileName: contractFile.name,
+          mimeType: contractFile.type,
+          content: contractFile,
+          description: `Contrato de locação ${savedContract.contractNumber}`,
+        });
+      }
+
       onSuccess();
       onClose();
     } catch (caught) {
@@ -142,6 +181,24 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
         </div>
         <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
+
+        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <Paperclip className="h-4 w-4" /> Arquivo do contrato de locação
+          </div>
+          <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
+            {contractFile ? contractFile.name : 'Selecionar PDF ou imagem do contrato'}
+            <input
+              type="file"
+              className="hidden"
+              accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
+              onChange={(event) => chooseContractFile(event.target.files?.[0] || null)}
+            />
+          </label>
+          <p className="mt-2 text-[11px] text-slate-500">PDF, JPG, PNG ou WebP · até 10 MB. O arquivo será salvo junto com o contrato.</p>
+          {contractFile && <button type="button" onClick={() => setContractFile(null)} className="mt-2 text-xs font-semibold text-rose-600 hover:underline">Remover arquivo selecionado</button>}
+        </div>
+
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
           Após salvar, a ativação e o faturamento são realizados no detalhe do contrato, onde a categoria financeira canônica da receita é selecionada.
         </div>
