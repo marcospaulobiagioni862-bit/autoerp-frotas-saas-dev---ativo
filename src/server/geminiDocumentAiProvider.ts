@@ -7,18 +7,19 @@ import {
 
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
-const DOCUMENT_TYPES = [
-  'CNH', 'CRLV', 'IPVA', 'TRAFFIC_TICKET', 'INVOICE', 'RECEIPT', 'CONTRACT', 'INSURANCE', 'MAINTENANCE',
-] as const;
+const DOCUMENT_FIELD_NAMES = {
+  CNH: ['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate'],
+  CRLV: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
+  IPVA: ['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber'],
+  TRAFFIC_TICKET: ['plate', 'noticeNumber', 'infractionCode', 'infractionDate', 'dueDate', 'amount', 'discountAmount'],
+  INVOICE: ['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount'],
+  RECEIPT: ['issuerName', 'issuerDocument', 'issueDate', 'amount', 'paymentMethod'],
+  CONTRACT: ['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount'],
+  INSURANCE: ['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount'],
+  MAINTENANCE: ['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount'],
+} as const;
 
-const FIELD_NAMES = [
-  'name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate',
-  'plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName',
-  'taxYear', 'amount', 'dueDate', 'installmentNumber', 'noticeNumber', 'infractionCode', 'infractionDate',
-  'discountAmount', 'issuerName', 'issuerDocument', 'invoiceNumber', 'paymentMethod', 'contractNumber',
-  'startDate', 'endDate', 'driverName', 'driverDocument', 'insurer', 'policyNumber', 'insuredAmount',
-  'deductibleAmount', 'supplierName', 'supplierDocument', 'serviceDate', 'odometer', 'description',
-] as const;
+const DOCUMENT_TYPES = Object.keys(DOCUMENT_FIELD_NAMES) as Array<keyof typeof DOCUMENT_FIELD_NAMES>;
 
 type InteractionContent = { type?: string; text?: string };
 type InteractionStep = { type?: string; content?: InteractionContent[] };
@@ -62,31 +63,38 @@ function scalarSchema(): Record<string, unknown> {
   return { anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }, { type: 'null' }] };
 }
 
-function fieldObjectSchema(value: Record<string, unknown>): Record<string, unknown> {
+function fieldObjectSchema(fields: readonly string[], value: Record<string, unknown>): Record<string, unknown> {
   return {
     type: 'object',
-    properties: Object.fromEntries(FIELD_NAMES.map((field) => [field, value])),
+    properties: Object.fromEntries(fields.map((field) => [field, value])),
+    additionalProperties: false,
+  };
+}
+
+function documentResponseSchema(documentType: keyof typeof DOCUMENT_FIELD_NAMES): Record<string, unknown> {
+  const fields = DOCUMENT_FIELD_NAMES[documentType];
+  return {
+    type: 'object',
+    properties: {
+      documentType: { type: 'string', enum: [documentType] },
+      fields: fieldObjectSchema(fields, scalarSchema()),
+      confidence: fieldObjectSchema(fields, { type: 'number', minimum: 0, maximum: 1 }),
+      raw: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          pages: { type: 'integer', minimum: 1, maximum: 500 },
+        },
+        additionalProperties: false,
+      },
+    },
+    required: ['documentType', 'fields', 'confidence', 'raw'],
     additionalProperties: false,
   };
 }
 
 const RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    documentType: { type: 'string', enum: [...DOCUMENT_TYPES] },
-    fields: fieldObjectSchema(scalarSchema()),
-    confidence: fieldObjectSchema({ type: 'number', minimum: 0, maximum: 1 }),
-    raw: {
-      type: 'object',
-      properties: {
-        text: { type: 'string' },
-        pages: { type: 'integer', minimum: 1, maximum: 500 },
-      },
-      additionalProperties: false,
-    },
-  },
-  required: ['documentType', 'fields', 'confidence', 'raw'],
-  additionalProperties: false,
+  anyOf: DOCUMENT_TYPES.map((documentType) => documentResponseSchema(documentType)),
 } as const;
 
 function providerFailureMetadata(error: unknown): Record<string, unknown> {

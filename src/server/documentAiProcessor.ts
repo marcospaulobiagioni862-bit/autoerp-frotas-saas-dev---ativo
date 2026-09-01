@@ -111,7 +111,6 @@ export class DocumentAiProcessingError extends Error {
 }
 
 function invalidProviderOutput(reason: DocumentAiOutputInvalidReason): DocumentAiProcessingError {
-  // Structural reason only: never log provider values, OCR text, document bytes or PII.
   console.warn('[DocumentAI] provider output rejected', { reason });
   return new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID', reason);
 }
@@ -175,8 +174,6 @@ function validateProviderOutput(value: unknown): {
       continue;
     }
 
-    // Explicit null means "not extracted". It is discarded and never becomes
-    // business data. A provider may omit confidence or explicitly return zero.
     if (fieldValue === null) {
       const nullScore = confidence[key];
       if (nullScore !== undefined && nullScore !== 0) {
@@ -214,7 +211,7 @@ function validateProviderOutput(value: unknown): {
     if (!(key in normalizedFields)) throw invalidProviderOutput('OUTPUT_CONFIDENCE_WITHOUT_FIELD');
   }
 
-  const raw = exactRecord(output.raw ?? {}, new Set(['text', 'pages']), 'OUTPUT_INVALID_RAW', 'OUTPUT_EXTRA_RAW_KEY');
+  const raw = exactRecord(output.raw, new Set(['text', 'pages']), 'OUTPUT_INVALID_RAW', 'OUTPUT_EXTRA_RAW_KEY');
   if (raw.text !== undefined && (typeof raw.text !== 'string' || raw.text.length > 100_000)) {
     throw invalidProviderOutput('OUTPUT_INVALID_RAW_TEXT');
   }

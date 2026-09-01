@@ -60,6 +60,25 @@ assert.equal(responseFormat.mime_type, 'application/json');
 assert.ok(responseFormat.schema, 'strict JSON schema was not sent');
 assert.equal('tools' in (captured ?? {}), false);
 
+const schema = responseFormat.schema as Record<string, unknown>;
+const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
+assert.ok(Array.isArray(variants) && variants.length === 9, 'schema must contain one variant per document type');
+const cnhVariant = variants.find((variant) => {
+  const properties = variant.properties as Record<string, unknown> | undefined;
+  const documentType = properties?.documentType as Record<string, unknown> | undefined;
+  const values = documentType?.enum as unknown[] | undefined;
+  return Array.isArray(values) && values.length === 1 && values[0] === 'CNH';
+});
+assert.ok(cnhVariant, 'CNH schema variant missing');
+const cnhProperties = cnhVariant.properties as Record<string, unknown>;
+const cnhFields = cnhProperties.fields as Record<string, unknown>;
+const cnhFieldProperties = cnhFields.properties as Record<string, unknown>;
+assert.equal('name' in cnhFieldProperties, true, 'CNH schema must expose CNH fields');
+assert.equal('registrationNumber' in cnhFieldProperties, true, 'CNH schema must expose CNH number');
+assert.equal('plate' in cnhFieldProperties, false, 'CNH schema must not expose CRLV fields');
+assert.equal('renavam' in cnhFieldProperties, false, 'CNH schema must not expose CRLV fields');
+assert.deepEqual(cnhVariant.required, ['documentType', 'fields', 'confidence', 'raw']);
+
 const input = captured?.input as Array<Record<string, unknown>> | undefined;
 assert.ok(input && input.length === 2, 'Gemini multimodal input was not captured');
 assert.equal(input[0]?.type, 'text');
