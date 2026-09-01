@@ -97,6 +97,58 @@ const RESPONSE_SCHEMA = {
   anyOf: DOCUMENT_TYPES.map((documentType) => documentResponseSchema(documentType)),
 } as const;
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function isSafeProviderScalar(value: unknown): value is string | number | boolean {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return value.length <= 4_000;
+  return typeof value === 'boolean';
+}
+
+/**
+ * Gemini structured output is strict at the object boundary, but in practice a
+ * single optional field can still arrive with a value/confidence pair that our
+ * generic processor correctly rejects. Salvage only well-formed fields here so
+ * one bad optional field does not discard an otherwise readable document.
+ *
+ * Structural/top-level deviations are deliberately preserved and remain
+ * fail-closed in documentAiProcessor.
+ */
+function normalizeGeminiProviderOutput(value: unknown): unknown {
+  if (!isPlainRecord(value) || typeof value.documentType !== 'string') return value;
+  if (!(value.documentType in DOCUMENT_FIELD_NAMES)) return value;
+  if (!isPlainRecord(value.fields) || !isPlainRecord(value.confidence)) return value;
+
+  const documentType = value.documentType as keyof typeof DOCUMENT_FIELD_NAMES;
+  const allowedFields = new Set<string>(DOCUMENT_FIELD_NAMES[documentType]);
+  const fields: Record<string, unknown> = {};
+  const confidence: Record<string, number> = {};
+
+  for (const key of allowedFields) {
+    const fieldValue = value.fields[key];
+    if (fieldValue === undefined || fieldValue === null) continue;
+
+    // EAR is intentionally asymmetric: only a visible positive finding may be
+    // promoted by AI. false/text/uncertain values are discarded for review.
+    if (documentType === 'CNH' && key === 'ear' && fieldValue !== true) continue;
+    if (!isSafeProviderScalar(fieldValue)) continue;
+
+    const score = value.confidence[key];
+    if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) continue;
+
+    fields[key] = fieldValue;
+    confidence[key] = score;
+  }
+
+  return {
+    ...value,
+    fields,
+    confidence,
+  };
+}
+
 function providerFailureMetadata(error: unknown): Record<string, unknown> {
   if (!error || typeof error !== 'object') return { errorType: typeof error };
   const record = error as Record<string, unknown>;
@@ -213,7 +265,7 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
           input: [
             {
               type: 'text',
-              text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values. For CNH field "ear", return true only when the document visibly states exercício de atividade remunerada, atividade remunerada, or EAR; otherwise return null. Never infer false from absence.',
+              text: 'Extract only values visibly present in this document. Return the configured JSON schema. Do not infer missing values. Omit any field that is absent or uncertain. For CNH field "ear", return true only when the document visibly states exercício de atividade remunerada, atividade remunerada, or EAR; otherwise omit the field. Never infer false from absence.',
             },
             {
               type: mediaType(request.mimeType),
@@ -269,6 +321,6 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
     if (!response) throw lastError ?? new Error('Gemini response missing');
     const text = outputText(response);
     if (!text) throw new Error('Empty Gemini response');
-    return JSON.parse(text);
+    return normalizeGeminiProviderOutput(JSON.parse(text));
   }
 }
