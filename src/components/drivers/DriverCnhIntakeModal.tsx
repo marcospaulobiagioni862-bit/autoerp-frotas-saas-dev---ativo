@@ -18,6 +18,7 @@ const CNH_FIELDS = [
   ['birthDate', 'Data de nascimento'],
   ['registrationNumber', 'Número da CNH'],
   ['category', 'Categoria'],
+  ['issueDate', 'Data de emissão da CNH'],
   ['expirationDate', 'Validade da CNH'],
 ] as const;
 
@@ -57,7 +58,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const [approvedDraft, setApprovedDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [savedDriverId, setSavedDriverId] = useState('');
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
-    name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
+    name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '',
   });
   const [earReview, setEarReview] = useState<EarReviewValue>('');
   const [notes, setNotes] = useState('');
@@ -81,7 +82,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setExtraction(null);
     setApprovedDraft(null);
     setSavedDriverId('');
-    setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
+    setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '' });
     setEarReview('');
     setNotes('');
     setError(null);
@@ -134,6 +135,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
         birthDate: valueText(item.proposedFields.birthDate),
         registrationNumber: valueText(item.proposedFields.registrationNumber),
         category: valueText(item.proposedFields.category),
+        issueDate: valueText(item.proposedFields.issueDate),
         expirationDate: valueText(item.proposedFields.expirationDate),
       });
       setEarReview(item.proposedFields.ear === true ? 'YES' : '');
