@@ -25,16 +25,6 @@ import {
   type DocumentCenterFilterState,
 } from './documentAiStatusFilter';
 
-function collapseExactAttachmentDuplicates(attachments: FileAttachment[]): FileAttachment[] {
-  const seen = new Set<string>();
-  return attachments.filter((attachment) => {
-    const key = [attachment.entityType, attachment.entityId, attachment.documentType || '', attachment.checksum || attachment.id].join('|');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 export function DocumentCenter() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,8 +105,6 @@ export function DocumentCenter() {
     extractionSort,
     attachmentStatuses,
   );
-  const visibleAttachments = collapseExactAttachmentDuplicates(filteredAttachments);
-  const groupedDuplicateCount = filteredAttachments.length - visibleAttachments.length;
   const statusCountLabel = (count: number | null) => count === null ? '—' : String(count);
   const actionRequiredSelection = getDocumentAiActionRequiredSelection(attachmentStatusesUnavailable);
   const focusActionRequired = () => {
@@ -148,7 +136,7 @@ export function DocumentCenter() {
   };
   const resultSummary = createDocumentCenterResultSummary(
     availableAttachmentCount,
-    visibleAttachments.length,
+    filteredAttachments.length,
     filtersActive,
   );
 
@@ -274,9 +262,6 @@ export function DocumentCenter() {
           Resultados ({resultSummary.filtered ? `${resultSummary.visible} de ${resultSummary.total}` : resultSummary.visible})
         </div>
         <div className="p-4">
-          {groupedDuplicateCount > 0 ? (
-            <p className="mb-3 text-xs text-gray-500">{groupedDuplicateCount} cópia(s) idêntica(s) agrupada(s); o histórico foi preservado.</p>
-          ) : null}
           {loading ? (
             <div className="text-center py-10 text-gray-500">Carregando documentos...</div>
           ) : error ? (
@@ -295,7 +280,7 @@ export function DocumentCenter() {
             </div>
           ) : (
             <AttachmentList
-              attachments={visibleAttachments}
+              attachments={filteredAttachments}
               onRefresh={() => void fetchDocuments()}
               attachmentStatuses={attachmentStatuses}
               attachmentStatusesUnavailable={attachmentStatusesUnavailable}
