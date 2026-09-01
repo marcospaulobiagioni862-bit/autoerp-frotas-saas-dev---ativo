@@ -1,0 +1,1 @@
+Acompanhamento formal: issue de confiabilidade do fluxo CNH deve cobrir modelo de parsing adequado, reprocessamento sem novo upload, backoff/cooldown server-side e gate completo em staging antes de produção.
