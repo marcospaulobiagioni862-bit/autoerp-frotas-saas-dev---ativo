@@ -292,8 +292,8 @@ export function registerDocumentAiRoutes(app: Express): void {
           throw new DocumentAiNotFoundError();
         }
 
-        const candidates = failedRows.filter((row: any) => {
-          if (requested && !requested.has(row.id)) return false;
+        const isDiscardable = (row: any): boolean => {
+          if (row.status !== 'FAILED') return false;
           const proposed = row.proposedFields && typeof row.proposedFields === 'object' && !Array.isArray(row.proposedFields)
             ? row.proposedFields as Record<string, unknown>
             : {};
@@ -301,7 +301,10 @@ export function registerDocumentAiRoutes(app: Express): void {
             ? row.corrections as Record<string, unknown>
             : {};
           return Object.keys(proposed).length === 0 && Object.keys(corrections).length === 0 && !row.approvedAt;
-        });
+        };
+        const candidates = failedRows.filter((row: any) => (
+          (!requested || requested.has(row.id)) && isDiscardable(row)
+        ));
 
         const discardedIds: string[] = [];
         const archivedAttachmentIds: string[] = [];
@@ -321,19 +324,21 @@ export function registerDocumentAiRoutes(app: Express): void {
           const attachment = attachmentRows[0];
           if (!attachment || attachment.isArchived || attachment.entityType !== 'DriverDocumentIntake') continue;
 
-          const relatedExtractions = failedRows.filter((row: any) => row.attachmentId === candidate.attachmentId);
-          const allRequested = !requested || relatedExtractions.every((row: any) => requested.has(row.id));
-          if (!allRequested) continue;
-
           const relatedRows = await tx.select().from(documentAiExtractions)
             .where(and(
               eq(documentAiExtractions.companyId, principal.companyId),
               eq(documentAiExtractions.attachmentId, candidate.attachmentId),
             ))
             .for('update');
-          if (relatedRows.some((row: any) => row.status !== 'FAILED')) continue;
+          const eligibleRelated = relatedRows.filter((row: any) => (
+            isDiscardable(row) && (!requested || requested.has(row.id))
+          ));
+          if (eligibleRelated.length === 0) continue;
+          const canArchiveAttachment = relatedRows.every((row: any) => (
+            isDiscardable(row) && (!requested || requested.has(row.id))
+          ));
 
-          for (const failed of relatedExtractions) {
+          for (const failed of eligibleRelated) {
             const updatedRows = await tx.update(documentAiExtractions).set({
               status: 'REJECTED',
               reviewedBy: principal.userId,
@@ -348,7 +353,7 @@ export function registerDocumentAiRoutes(app: Express): void {
             if (updatedRows[0]) discardedIds.push(updatedRows[0].id);
           }
 
-          if (relatedExtractions.every((row: any) => discardedIds.includes(row.id))) {
+          if (canArchiveAttachment && eligibleRelated.every((row: any) => discardedIds.includes(row.id))) {
             const archivedRows = await tx.update(fileAttachments).set({ isArchived: true })
               .where(and(
                 eq(fileAttachments.companyId, principal.companyId),
