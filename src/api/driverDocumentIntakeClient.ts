@@ -40,6 +40,7 @@ export interface ApprovedCnhDriverDraft {
   birthDate?: string;
   cnhNumber?: string;
   cnhCategory?: string;
+  cnhIssueDate?: string;
   cnhExpiration?: string;
   cnhEar?: boolean;
 }
@@ -67,7 +68,7 @@ const STATUSES = new Set<DriverDocumentIntakeStatus>([
   'ARCHIVED',
 ]);
 
-const DRAFT_KEYS = new Set(['fullName', 'cpf', 'rg', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhExpiration', 'cnhEar']);
+const DRAFT_KEYS = new Set(['fullName', 'cpf', 'rg', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhIssueDate', 'cnhExpiration', 'cnhEar']);
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -156,7 +157,7 @@ function validateApprovedCnhDraft(value: unknown): ApprovedCnhDriverDraft {
     if ((key === 'cpf' || key === 'cnhNumber') && !/^\d{11}$/.test(raw)) {
       throw new Error('Invalid approved CNH draft payload');
     }
-    if ((key === 'birthDate' || key === 'cnhExpiration') && !validIsoDate(raw)) {
+    if ((key === 'birthDate' || key === 'cnhIssueDate' || key === 'cnhExpiration') && !validIsoDate(raw)) {
       throw new Error('Invalid approved CNH draft payload');
     }
     if (key === 'cnhCategory' && !CNH_CATEGORIES.has(raw)) {
