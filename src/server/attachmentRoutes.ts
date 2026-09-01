@@ -16,6 +16,7 @@ import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
+const CONTRACT_TEMPLATE_WRITE_ROLES=new Set(['ADMIN','MANAGER']);
 const DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp',DOCX_MIME]);
 function canonicalMimeType(value:string):string{return value==='image/jpg'?'image/jpeg':value;}
@@ -62,7 +63,10 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
   if(!ENTITY_TYPES.has(entityType))throw new AttachmentValidationError('Invalid entity type');if(!entityId||entityId.length>120)throw new AttachmentValidationError('Invalid entity id');
   if(entityType==='Vehicle'){const item=await tx.getVehicleRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
   if(entityType==='Contract'){const item=await tx.getContractRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
-  if(entityType==='ContractTemplate'){const item=await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
+  if(entityType==='ContractTemplate'){
+    if(write&&!CONTRACT_TEMPLATE_WRITE_ROLES.has(String(principal.role||'').toUpperCase()))throw new AttachmentForbiddenError();
+    const item=await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;
+  }
   if(entityType==='TrafficTicket'){const item=await tx.getTrafficTicketRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='MaintenanceWorkOrder'){const item=await tx.getWorkOrderRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='Insurance'){const item=await tx.getInsuranceRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
