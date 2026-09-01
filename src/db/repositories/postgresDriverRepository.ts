@@ -54,6 +54,13 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         city: String(row.address_city || ''),
         state: String(row.address_state || ''),
         zipCode: String(row.address_zip_code || ''),
+        residenceType: row.address_residence_type || undefined,
+        residenceTypeOther: row.address_residence_type_other || undefined,
+        condominiumName: row.address_condominium_name || undefined,
+        blockTower: row.address_block_tower || undefined,
+        unit: row.address_unit || undefined,
+        floor: row.address_floor || undefined,
+        reference: row.address_reference || undefined,
       },
       cnhNumber: String(row.cnh || ''),
       cnhCategory: String(row.cnh_category || ''),
@@ -92,6 +99,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         ) AS current_contract_id
       FROM drivers d
       WHERE d.company_id = ${companyId} AND ${predicate}
+      ORDER BY d.updated_at DESC, d.id
       LIMIT 1
     `);
     const row = rowsOf(result)[0];
@@ -148,11 +156,15 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
   }
 
   async create(item: Driver): Promise<Driver> {
-    const archivedByCpf = await this.queryOne(
+    const archivedExact = await this.queryOne(
+      item.companyId,
+      sql`d.cpf = ${item.cpf} AND d.cnh = ${item.cnhNumber} AND d.is_archived = true`
+    );
+    const archivedByCpf = archivedExact ?? await this.queryOne(
       item.companyId,
       sql`d.cpf = ${item.cpf} AND d.is_archived = true`
     );
-    const archivedByCnh = await this.queryOne(
+    const archivedByCnh = archivedExact ?? await this.queryOne(
       item.companyId,
       sql`d.cnh = ${item.cnhNumber} AND d.is_archived = true`
     );
@@ -162,14 +174,40 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         throw duplicateIdentityError('Archived driver identity conflicts with CPF/CNH combination');
       }
 
+      const previous = archivedExact ?? archivedByCpf;
       const restored: Driver = {
+        ...previous,
         ...item,
-        id: archivedByCpf.id,
+        id: previous.id,
+        phone: item.phone || previous.phone,
+        whatsapp: item.whatsapp || previous.whatsapp || item.phone || previous.phone,
+        email: item.email ?? previous.email,
+        address: {
+          ...previous.address,
+          ...item.address,
+          street: item.address.street || previous.address.street,
+          number: item.address.number || previous.address.number,
+          complement: item.address.complement ?? previous.address.complement,
+          neighborhood: item.address.neighborhood || previous.address.neighborhood,
+          city: item.address.city || previous.address.city,
+          state: item.address.state || previous.address.state,
+          zipCode: item.address.zipCode || previous.address.zipCode,
+          residenceType: item.address.residenceType ?? previous.address.residenceType,
+          residenceTypeOther: item.address.residenceTypeOther ?? previous.address.residenceTypeOther,
+          condominiumName: item.address.condominiumName ?? previous.address.condominiumName,
+          blockTower: item.address.blockTower ?? previous.address.blockTower,
+          unit: item.address.unit ?? previous.address.unit,
+          floor: item.address.floor ?? previous.address.floor,
+          reference: item.address.reference ?? previous.address.reference,
+        },
+        appPlatforms: item.appPlatforms.length > 0 ? item.appPlatforms : previous.appPlatforms,
+        photoUrl: item.photoUrl ?? previous.photoUrl,
+        notes: item.notes ?? previous.notes,
         isArchived: false,
-        createdAt: archivedByCpf.createdAt,
+        createdAt: previous.createdAt,
         updatedAt: item.updatedAt,
       };
-      const saved = await this.updateForCompany(item.companyId, archivedByCpf.id, restored);
+      const saved = await this.updateForCompany(item.companyId, previous.id, restored);
       if (!saved) throw new Error('Driver restore failed');
       return saved;
     }
@@ -178,14 +216,19 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
       INSERT INTO drivers (
         id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email,
         address_street, address_number, address_complement, address_neighborhood,
-        address_city, address_state, address_zip_code, cnh_category, cnh_expiration,
+        address_city, address_state, address_zip_code, address_residence_type,
+        address_residence_type_other, address_condominium_name, address_block_tower,
+        address_unit, address_floor, address_reference, cnh_category, cnh_expiration,
         app_platforms, status, photo_url, notes, is_archived, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.fullName}, ${item.cpf}, ${item.cnhNumber},
         ${activeFor(item)}, ${item.rg || null}, ${item.birthDate}, ${item.phone},
         ${item.whatsapp}, ${item.email || null}, ${item.address.street}, ${item.address.number},
         ${item.address.complement || null}, ${item.address.neighborhood}, ${item.address.city},
-        ${item.address.state}, ${item.address.zipCode}, ${item.cnhCategory}, ${item.cnhExpiration},
+        ${item.address.state}, ${item.address.zipCode}, ${item.address.residenceType || null},
+        ${item.address.residenceTypeOther || null}, ${item.address.condominiumName || null},
+        ${item.address.blockTower || null}, ${item.address.unit || null}, ${item.address.floor || null},
+        ${item.address.reference || null}, ${item.cnhCategory}, ${item.cnhExpiration},
         ${platformArraySql(item.appPlatforms)}, ${item.status}, ${item.photoUrl || null}, ${item.notes || null},
         ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
       )
@@ -214,6 +257,13 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         address_city = ${item.address.city},
         address_state = ${item.address.state},
         address_zip_code = ${item.address.zipCode},
+        address_residence_type = ${item.address.residenceType || null},
+        address_residence_type_other = ${item.address.residenceTypeOther || null},
+        address_condominium_name = ${item.address.condominiumName || null},
+        address_block_tower = ${item.address.blockTower || null},
+        address_unit = ${item.address.unit || null},
+        address_floor = ${item.address.floor || null},
+        address_reference = ${item.address.reference || null},
         cnh_category = ${item.cnhCategory},
         cnh_expiration = ${item.cnhExpiration},
         app_platforms = ${platformArraySql(item.appPlatforms)},
