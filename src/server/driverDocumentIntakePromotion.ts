@@ -25,6 +25,38 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function dateOnly(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  }
+  const parsed = value instanceof Date ? value : new Date(String(value ?? ''));
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : '';
+}
+
+async function auditAttachmentRelink(
+  context: any,
+  principal: AuthenticatedPrincipal,
+  attachmentId: string,
+  intakeId: string,
+  driverId: string,
+  now: string,
+  event = 'PROMOTE_DRIVER_CNH',
+): Promise<void> {
+  await context.getAuditLogRepo().create({
+    id: randomUUID(),
+    companyId: principal.companyId,
+    entityName: 'FileAttachment',
+    entityId: attachmentId,
+    action: AuditAction.UPDATE,
+    previousState: JSON.stringify({ entityType: 'DriverDocumentIntake', entityId: intakeId }),
+    newState: JSON.stringify({ event, entityType: 'Driver', entityId: driverId }),
+    userId: principal.userId,
+    userName: principal.name,
+    timestamp: now,
+  });
+}
+
 export async function promoteApprovedDriverDocumentIntake(
   context: any,
   principal: AuthenticatedPrincipal,
@@ -84,13 +116,43 @@ export async function promoteApprovedDriverDocumentIntake(
   const driver = await context.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
   if (!driver || driver.isArchived) throw new DriverDocumentIntakePromotionNotFoundError();
 
+  const attachmentOnDriver = text(row.entity_type) === 'Driver' && text(row.entity_id) === driver.id;
+  const attachmentOnIntake = text(row.entity_type) === 'DriverDocumentIntake' && text(row.entity_id) === intakeId;
+  const attachmentIsUsable =
+    text(row.document_type).toUpperCase() === 'CNH' &&
+    text(row.content_state) === 'AVAILABLE' &&
+    row.is_archived !== true;
+
   if (text(row.intake_status) === 'CONSUMED') {
-    if (
-      text(row.driver_id) !== driver.id ||
-      text(row.entity_type) !== 'Driver' ||
-      text(row.entity_id) !== driver.id ||
-      !row.consumed_at
-    ) throw new DriverDocumentIntakePromotionConflictError('CONSUMED_BY_DIFFERENT_DRIVER');
+    if (text(row.driver_id) !== driver.id || !row.consumed_at) {
+      throw new DriverDocumentIntakePromotionConflictError('CONSUMED_BY_DIFFERENT_DRIVER');
+    }
+    if (attachmentOnDriver) {
+      return { driverId: driver.id, attachmentId, promoted: false };
+    }
+    if (!attachmentOnIntake || !attachmentIsUsable) {
+      throw new DriverDocumentIntakePromotionConflictError('CONSUMED_ATTACHMENT_MISMATCH');
+    }
+
+    const recoveredAt = new Date().toISOString();
+    const recovered = await tx.execute(sql`
+      UPDATE file_attachments
+      SET entity_name = 'Driver',
+          entity_type = 'Driver',
+          entity_id = ${driver.id}
+      WHERE company_id = ${principal.companyId}
+        AND id = ${attachmentId}
+        AND entity_type = 'DriverDocumentIntake'
+        AND entity_id = ${intakeId}
+        AND document_type = 'CNH'
+        AND content_state = 'AVAILABLE'
+        AND is_archived = false
+      RETURNING id
+    `);
+    if (rows(recovered).length !== 1) {
+      throw new DriverDocumentIntakePromotionConflictError('CONSUMED_ATTACHMENT_RECOVERY_FAILED');
+    }
+    await auditAttachmentRelink(context, principal, attachmentId, intakeId, driver.id, recoveredAt, 'RECOVER_CONSUMED_DRIVER_CNH');
     return { driverId: driver.id, attachmentId, promoted: false };
   }
 
@@ -98,11 +160,8 @@ export async function promoteApprovedDriverDocumentIntake(
   if (
     text(row.intake_status) !== 'APPROVED' ||
     !Number.isFinite(expiresAt) || expiresAt <= Date.now() ||
-    text(row.entity_type) !== 'DriverDocumentIntake' ||
-    text(row.entity_id) !== intakeId ||
-    text(row.document_type).toUpperCase() !== 'CNH' ||
-    text(row.content_state) !== 'AVAILABLE' ||
-    row.is_archived === true
+    (!attachmentOnIntake && !attachmentOnDriver) ||
+    !attachmentIsUsable
   ) throw new DriverDocumentIntakePromotionConflictError('INTAKE_NOT_PROMOTABLE');
 
   const approved = projectApprovedCnhDriverDraft({
@@ -114,28 +173,31 @@ export async function promoteApprovedDriverDocumentIntake(
 
   if (
     !approved.cnhNumber || digits(approved.cnhNumber) !== digits(driver.cnhNumber) ||
-    !approved.cnhExpiration || approved.cnhExpiration !== driver.cnhExpiration ||
+    !approved.cnhExpiration || dateOnly(approved.cnhExpiration) !== dateOnly(driver.cnhExpiration) ||
     (approved.cpf && digits(approved.cpf) !== digits(driver.cpf)) ||
-    (approved.birthDate && approved.birthDate !== driver.birthDate)
+    (approved.birthDate && dateOnly(approved.birthDate) !== dateOnly(driver.birthDate))
   ) throw new DriverDocumentIntakePromotionConflictError('DRIVER_CNH_IDENTITY_MISMATCH');
 
   const now = new Date().toISOString();
-  const attachmentUpdate = await tx.execute(sql`
-    UPDATE file_attachments
-    SET entity_name = 'Driver',
-        entity_type = 'Driver',
-        entity_id = ${driver.id}
-    WHERE company_id = ${principal.companyId}
-      AND id = ${attachmentId}
-      AND entity_type = 'DriverDocumentIntake'
-      AND entity_id = ${intakeId}
-      AND document_type = 'CNH'
-      AND content_state = 'AVAILABLE'
-      AND is_archived = false
-    RETURNING id
-  `);
-  if (rows(attachmentUpdate).length !== 1) {
-    throw new DriverDocumentIntakePromotionConflictError('ATTACHMENT_RELINK_FAILED');
+  if (attachmentOnIntake) {
+    const attachmentUpdate = await tx.execute(sql`
+      UPDATE file_attachments
+      SET entity_name = 'Driver',
+          entity_type = 'Driver',
+          entity_id = ${driver.id}
+      WHERE company_id = ${principal.companyId}
+        AND id = ${attachmentId}
+        AND entity_type = 'DriverDocumentIntake'
+        AND entity_id = ${intakeId}
+        AND document_type = 'CNH'
+        AND content_state = 'AVAILABLE'
+        AND is_archived = false
+      RETURNING id
+    `);
+    if (rows(attachmentUpdate).length !== 1) {
+      throw new DriverDocumentIntakePromotionConflictError('ATTACHMENT_RELINK_FAILED');
+    }
+    await auditAttachmentRelink(context, principal, attachmentId, intakeId, driver.id, now);
   }
 
   const intakeUpdate = await tx.execute(sql`
@@ -161,23 +223,11 @@ export async function promoteApprovedDriverDocumentIntake(
   await context.getAuditLogRepo().create({
     id: randomUUID(),
     companyId: principal.companyId,
-    entityName: 'FileAttachment',
-    entityId: attachmentId,
-    action: AuditAction.UPDATE,
-    previousState: JSON.stringify({ entityType: 'DriverDocumentIntake', entityId: intakeId }),
-    newState: JSON.stringify({ event: 'PROMOTE_DRIVER_CNH', entityType: 'Driver', entityId: driver.id }),
-    userId: principal.userId,
-    userName: principal.name,
-    timestamp: now,
-  });
-  await context.getAuditLogRepo().create({
-    id: randomUUID(),
-    companyId: principal.companyId,
     entityName: 'DriverDocumentIntake',
     entityId: intakeId,
     action: AuditAction.UPDATE,
     previousState: JSON.stringify({ status: 'APPROVED' }),
-    newState: JSON.stringify({ event: 'PROMOTE_TO_DRIVER', status: 'CONSUMED', driverId: driver.id, attachmentId }),
+    newState: JSON.stringify({ event: attachmentOnDriver ? 'RECOVER_ALREADY_RELINKED_DRIVER_CNH' : 'PROMOTE_TO_DRIVER', status: 'CONSUMED', driverId: driver.id, attachmentId }),
     userId: principal.userId,
     userName: principal.name,
     timestamp: now,
