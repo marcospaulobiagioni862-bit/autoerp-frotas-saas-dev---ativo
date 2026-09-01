@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import type { DocumentAiProvider, DocumentAiProviderRequest } from './documentAiProcessor';
+import {
+  DocumentAiProviderRateLimitError,
+  type DocumentAiProvider,
+  type DocumentAiProviderRequest,
+} from './documentAiProcessor';
 
 const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
@@ -104,8 +108,7 @@ function providerStatus(error: unknown): number | null {
 }
 
 function isRetryableProviderFailure(error: unknown): boolean {
-  const status = providerStatus(error);
-  return status === 503 || status === 429;
+  return providerStatus(error) === 503;
 }
 
 function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
@@ -218,13 +221,23 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
         break;
       } catch (error) {
         lastError = error;
+        const status = providerStatus(error);
+        if (status === 429) {
+          console.warn('[DocumentAI] Gemini rate limited', {
+            provider: this.name,
+            model: this.model,
+            status,
+            attempt,
+          });
+          throw new DocumentAiProviderRateLimitError();
+        }
         const retryable = isRetryableProviderFailure(error);
         if (retryable && attempt < maxAttempts && !signal.aborted) {
           const delayMs = attempt === 1 ? 1_000 : 2_000;
           console.warn('[DocumentAI] Gemini transient failure; retry scheduled', {
             provider: this.name,
             model: this.model,
-            status: providerStatus(error),
+            status,
             attempt,
             nextAttempt: attempt + 1,
             delayMs,
