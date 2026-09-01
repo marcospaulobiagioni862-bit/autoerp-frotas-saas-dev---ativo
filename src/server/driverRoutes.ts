@@ -12,6 +12,7 @@ const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FIN
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUS_VALUES = new Set(Object.values(DriverStatus));
 const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const RESIDENCE_TYPES = new Set(['HOUSE', 'APARTMENT', 'OTHER']);
 const MUTABLE_STATUS_VALUES = new Set([
   DriverStatus.ACTIVE,
   DriverStatus.INACTIVE,
@@ -161,8 +162,10 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
     : {};
   const state = optionalText(input.state)?.toUpperCase() ?? fallback?.state ?? '';
   const zipCode = optionalText(input.zipCode)?.replace(/\D/g, '') ?? fallback?.zipCode ?? '';
+  const residenceType = optionalText(input.residenceType)?.toUpperCase() ?? fallback?.residenceType;
   if (state && !/^[A-Z]{2}$/.test(state)) throw new DriverValidationError('Invalid state');
   if (zipCode && !/^\d{8}$/.test(zipCode)) throw new DriverValidationError('Invalid zipCode');
+  if (residenceType && !RESIDENCE_TYPES.has(residenceType)) throw new DriverValidationError('Invalid residenceType');
   return {
     street: optionalText(input.street) ?? fallback?.street ?? '',
     number: optionalText(input.number) ?? fallback?.number ?? '',
@@ -171,7 +174,29 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
     city: optionalText(input.city) ?? fallback?.city ?? '',
     state,
     zipCode,
+    residenceType: residenceType as Driver['address']['residenceType'],
+    residenceTypeOther: optionalText(input.residenceTypeOther) ?? fallback?.residenceTypeOther,
+    condominiumName: optionalText(input.condominiumName) ?? fallback?.condominiumName,
+    blockTower: optionalText(input.blockTower) ?? fallback?.blockTower,
+    unit: optionalText(input.unit) ?? fallback?.unit,
+    floor: optionalText(input.floor) ?? fallback?.floor,
+    reference: optionalText(input.reference) ?? fallback?.reference,
   };
+}
+
+function requireCompletedProfile(driver: Driver): void {
+  if (!driver.email) throw new DriverValidationError('Missing email');
+  const address = driver.address;
+  if (!address.residenceType) throw new DriverValidationError('Missing residenceType');
+  if (!address.zipCode || !address.street || !address.number || !address.complement || !address.neighborhood || !address.city || !address.state) {
+    throw new DriverValidationError('Incomplete address');
+  }
+  if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.unit)) {
+    throw new DriverValidationError('Incomplete apartment address');
+  }
+  if (address.residenceType === 'OTHER' && !address.residenceTypeOther) {
+    throw new DriverValidationError('Missing residenceTypeOther');
+  }
 }
 
 function platformsFrom(value: unknown, fallback: string[] = []): string[] {
@@ -258,14 +283,17 @@ export function registerDriverRoutes(app: Express): void {
       const cnhNumber = normalizeCnh(req.body?.cnhNumber);
       const birthDate = normalizeIsoDate(req.body?.birthDate, 'birthDate', false);
       const phone = normalizePhone(req.body?.phone, 'phone')!;
+      const email = normalizeEmail(req.body?.email);
+      if (!email) throw new DriverValidationError('Missing email');
       const cnhExpiration = normalizeIsoDate(req.body?.cnhExpiration, 'cnhExpiration', true);
       const cnhState = evaluateCnhStatus(cnhExpiration);
+      const address = addressFrom(req.body?.address);
       const now = new Date().toISOString();
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const repo = tx.getDriverRepo();
         if (await repo.findByCpf(principal.companyId, cpf)) throw new DriverConflictError();
         if (await repo.findByCnh(principal.companyId, cnhNumber)) throw new DriverConflictError();
-        const created = await repo.create({
+        const candidate: Driver = {
           id: randomUUID(),
           companyId: principal.companyId,
           fullName,
@@ -274,8 +302,8 @@ export function registerDriverRoutes(app: Express): void {
           birthDate,
           phone,
           whatsapp: normalizePhone(req.body?.whatsapp, 'whatsapp', false) || phone,
-          email: normalizeEmail(req.body?.email),
-          address: addressFrom(req.body?.address),
+          email,
+          address,
           cnhNumber,
           cnhCategory: normalizeCnhCategory(req.body?.cnhCategory),
           cnhExpiration,
@@ -287,7 +315,9 @@ export function registerDriverRoutes(app: Express): void {
           isArchived: false,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        requireCompletedProfile(candidate);
+        const created = await repo.create(candidate);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Driver', entityId: created.id,
           action: AuditAction.CREATE, newState: auditState(created), userId: principal.userId,
@@ -320,6 +350,9 @@ export function registerDriverRoutes(app: Express): void {
         const repo = tx.getDriverRepo();
         const existing = await repo.findByIdForCompany(principal.companyId, req.params.id);
         if (!existing || existing.isArchived) throw new DriverNotFoundError();
+        const completingPendingDocs = existing.status === DriverStatus.PENDING_DOCS;
+        const updatedCnhExpiration = body.cnhExpiration === undefined ? existing.cnhExpiration : normalizeIsoDate(body.cnhExpiration, 'cnhExpiration', true);
+        const updatedCnhStatus = evaluateCnhStatus(updatedCnhExpiration);
         const updated: Driver = {
           ...existing,
           fullName: body.fullName === undefined ? existing.fullName : requiredText(body.fullName, 'fullName', 3),
@@ -332,12 +365,17 @@ export function registerDriverRoutes(app: Express): void {
           address: body.address === undefined ? existing.address : addressFrom(body.address, existing.address),
           cnhNumber: body.cnhNumber === undefined ? existing.cnhNumber : normalizeCnh(body.cnhNumber),
           cnhCategory: body.cnhCategory === undefined ? existing.cnhCategory : normalizeCnhCategory(body.cnhCategory),
-          cnhExpiration: body.cnhExpiration === undefined ? existing.cnhExpiration : normalizeIsoDate(body.cnhExpiration, 'cnhExpiration', true),
+          cnhExpiration: updatedCnhExpiration,
+          cnhStatus: updatedCnhStatus,
           appPlatforms: platformsFrom(body.appPlatforms, existing.appPlatforms),
           photoUrl: body.photoUrl === undefined ? existing.photoUrl : optionalText(body.photoUrl),
           notes: body.notes === undefined ? existing.notes : optionalText(body.notes),
+          status: completingPendingDocs
+            ? (updatedCnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.ACTIVE)
+            : existing.status,
           updatedAt: new Date().toISOString(),
         };
+        if (completingPendingDocs) requireCompletedProfile(updated);
         const cpfDuplicate = await repo.findByCpf(principal.companyId, updated.cpf);
         if (cpfDuplicate && cpfDuplicate.id !== existing.id) throw new DriverConflictError();
         const cnhDuplicate = await repo.findByCnh(principal.companyId, updated.cnhNumber);
