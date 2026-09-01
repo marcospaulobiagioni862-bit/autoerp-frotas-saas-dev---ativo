@@ -36,7 +36,7 @@ function validateContract(value: unknown): Contract {
     typeof item.status !== 'string' || !CONTRACT_STATUSES.has(item.status as ContractStatus) ||
     typeof item.rentalAmount !== 'number' || !Number.isFinite(item.rentalAmount) ||
     typeof item.billingPeriodicity !== 'string' || !PERIODICITIES.has(item.billingPeriodicity as RecurringFrequency) ||
-    !isOptionalIntegerInRange(item.billingDueDayOfWeek, 0, 6) ||
+    !isOptionalIntegerInRange(item.billingDueDayOfWeek, 1, 7) ||
     !isOptionalIntegerInRange(item.billingDueDayOfMonth, 1, 31) ||
     typeof item.securityDepositAmount !== 'number' || !Number.isFinite(item.securityDepositAmount) ||
     typeof item.franchiseKm !== 'number' || !Number.isFinite(item.franchiseKm) ||

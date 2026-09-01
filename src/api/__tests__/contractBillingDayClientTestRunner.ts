@@ -9,11 +9,14 @@ try{
   mock(base);
   const [weekly]=await ContractClient.list();
   if(weekly.billingDueDayOfWeek!==1)throw new Error('Canonical weekly billing day was not preserved');
+  mock({...base,billingDueDayOfWeek:7});
+  const [weeklyLastDay]=await ContractClient.list();
+  if(weeklyLastDay.billingDueDayOfWeek!==7)throw new Error('Weekly billing day 7 was not preserved');
   mock({...base,billingPeriodicity:'MONTHLY',billingDueDayOfWeek:undefined,billingDueDayOfMonth:31});
   const [monthly]=await ContractClient.list();
   if(monthly.billingDueDayOfMonth!==31)throw new Error('Canonical monthly billing day was not preserved');
-  await mustReject({...base,billingDueDayOfWeek:-1},'weekly below range');
-  await mustReject({...base,billingDueDayOfWeek:7},'weekly above range');
+  await mustReject({...base,billingDueDayOfWeek:0},'weekly below range');
+  await mustReject({...base,billingDueDayOfWeek:8},'weekly above range');
   await mustReject({...base,billingDueDayOfWeek:1.5},'weekly fractional');
   await mustReject({...base,billingPeriodicity:'MONTHLY',billingDueDayOfWeek:undefined,billingDueDayOfMonth:0},'monthly below range');
   await mustReject({...base,billingPeriodicity:'MONTHLY',billingDueDayOfWeek:undefined,billingDueDayOfMonth:32},'monthly above range');
