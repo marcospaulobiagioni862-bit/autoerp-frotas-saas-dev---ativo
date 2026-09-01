@@ -42,6 +42,22 @@ async function run(): Promise<void> {
       assert((await repo.findAll()).every((item: any) => item.companyId === companyA), 'findAll exposed another tenant');
       assert(await repo.count() === 1, 'count included another tenant');
 
+      assert(await repo.findByIdWithLock(accountB) === undefined, 'findByIdWithLock exposed another tenant');
+      const lockedAccounts = await repo.lockTwoAccounts(accountA, accountB);
+      assert(lockedAccounts[0]?.id === accountA, 'lockTwoAccounts did not return the same-tenant account');
+      assert(lockedAccounts[1] === undefined, 'lockTwoAccounts exposed another tenant');
+
+      let blockedBalanceUpdate = false;
+      try {
+        await repo.updateBalance(accountB, 100);
+      } catch (error) {
+        blockedBalanceUpdate = error instanceof Error
+          && error.message === 'Account not found or update failed';
+      }
+      assert(blockedBalanceUpdate, 'updateBalance changed another tenant');
+      const updatedOwnAccount = await repo.updateBalance(accountA, 7);
+      assert(Number(updatedOwnAccount.current_balance) === 7, 'updateBalance failed for the current tenant');
+
       const crossUpdate = await repo.update(accountB, { name: 'ALTERADA POR A' });
       assert(!crossUpdate, 'update changed another tenant');
       assert(await repo.delete(accountB) === false, 'delete removed another tenant');
@@ -66,10 +82,17 @@ async function run(): Promise<void> {
     });
 
     const verification: any = await db.execute(sql`
-      SELECT name FROM financial_accounts WHERE company_id=${companyB} AND id=${accountB}
+      SELECT id, name, current_balance
+      FROM financial_accounts
+      WHERE id IN (${accountA}, ${accountB})
+      ORDER BY id
     `);
-    assert(verification.rows?.[0]?.name === 'Conta B', 'tenant B record was modified');
-    console.log('AUTH-001 tenant-scoped base repositories: PASS');
+    const verifiedAccountA = verification.rows?.find((row: any) => row.id === accountA);
+    const verifiedAccountB = verification.rows?.find((row: any) => row.id === accountB);
+    assert(Number(verifiedAccountA?.current_balance) === 7, 'same-tenant balance update was not persisted');
+    assert(verifiedAccountB?.name === 'Conta B', 'tenant B record was modified');
+    assert(Number(verifiedAccountB?.current_balance) === 0, 'tenant B balance was modified');
+    console.log('AUTH-001/AUTH-002A tenant-scoped financial accounts: PASS');
   } finally {
     await cleanup();
   }
