@@ -3,7 +3,7 @@ import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
-import { Bot, Download, Eye, File, History, Trash2, X } from 'lucide-react';
+import { Bot, Download, Eye, File, History, RotateCcw, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
@@ -44,6 +44,7 @@ export function AttachmentList({
   const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<{ url: string; type: string; name: string } | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [requestingExtractionId, setRequestingExtractionId] = useState<string | null>(null);
   const [documentAiMessage, setDocumentAiMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
@@ -84,6 +85,11 @@ export function AttachmentList({
     if (previewData?.url) URL.revokeObjectURL(previewData.url);
   }, [previewData]);
 
+  const closePreview = () => {
+    setPreviewData(null);
+    setPreviewZoom(1);
+  };
+
   const hasAvailableContent = (item: FileAttachment): boolean =>
     (item.storageProvider === 'SERVER_FS' || item.storageProvider === 'R2') && item.contentState === 'AVAILABLE';
 
@@ -103,6 +109,7 @@ export function AttachmentList({
         return;
       }
       const url = URL.createObjectURL(blob);
+      setPreviewZoom(1);
       setPreviewData({ url, type: blob.type, name: item.fileName });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao carregar arquivo.');
@@ -156,7 +163,6 @@ export function AttachmentList({
       setRequestingExtractionId(null);
     }
   };
-
 
   const handleExtractionHistory = async (attachmentId: string) => {
     if (historyAttachmentId === attachmentId) {
@@ -245,38 +251,20 @@ export function AttachmentList({
                 </div>
                 <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
                   {extractionStatus && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void handleExtractionHistory(att.id)}
-                      title="Histórico sanitizado da extração"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => void handleExtractionHistory(att.id)} title="Histórico sanitizado da extração">
                       <History className="h-4 w-4" />
                       <span className="sr-only">Histórico sanitizado da extração</span>
                     </Button>
                   )}
                   {canRequestDocumentAi && documentAiEligible && !extractionStatus && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void handleExtractionRequest(att)}
-                      isLoading={requestingExtractionId === att.id}
-                      disabled={requestingExtractionId !== null}
-                      title="Solicitar extração assistida"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => void handleExtractionRequest(att)} isLoading={requestingExtractionId === att.id} disabled={requestingExtractionId !== null} title="Solicitar extração assistida">
                       <Bot className="h-4 w-4" />
                       <span className="sr-only">Solicitar extração assistida</span>
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!contentAvailable} title="Visualizar">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!contentAvailable} title="Baixar">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!contentAvailable} title="Visualizar"><Eye className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!contentAvailable} title="Baixar"><Download className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </li>
             );
@@ -286,42 +274,35 @@ export function AttachmentList({
 
       {historyAttachmentId && (
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
-          <div className="mb-2 flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100">
-            <History className="h-4 w-4" /> Histórico sanitizado da extração
-          </div>
-          {historyLoading ? (
-            <p className="text-slate-500">Carregando histórico...</p>
-          ) : historyError ? (
-            <p className="text-red-600 dark:text-red-300">{historyError}</p>
-          ) : historyItems.length === 0 ? (
-            <p className="text-slate-500">Nenhum evento sanitizado disponível para este anexo.</p>
-          ) : (
-            <ol className="space-y-1 text-slate-600 dark:text-slate-300">
-              {historyItems.map((item, index) => (
-                <li key={`${item.updatedAt}-${index}`}>
-                  {item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}
-                  {item.failureCode ? ` · ${item.failureCode}` : ''}
-                </li>
-              ))}
-            </ol>
+          <div className="mb-2 flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><History className="h-4 w-4" /> Histórico sanitizado da extração</div>
+          {historyLoading ? <p className="text-slate-500">Carregando histórico...</p> : historyError ? <p className="text-red-600 dark:text-red-300">{historyError}</p> : historyItems.length === 0 ? <p className="text-slate-500">Nenhum evento sanitizado disponível para este anexo.</p> : (
+            <ol className="space-y-1 text-slate-600 dark:text-slate-300">{historyItems.map((item, index) => <li key={`${item.updatedAt}-${index}`}>{item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}{item.failureCode ? ` · ${item.failureCode}` : ''}</li>)}</ol>
           )}
         </div>
       )}
 
       {previewData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-              <h3 className="font-medium">{previewData.name}</h3>
-              <button onClick={() => setPreviewData(null)} className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                <X className="h-5 w-5" />
-              </button>
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex flex-wrap justify-between items-center gap-3">
+              <h3 className="font-medium truncate">{previewData.name}</h3>
+              <div className="flex items-center gap-1">
+                {previewData.type.startsWith('image/') && <>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewZoom((value) => Math.max(0.5, Number((value - 0.25).toFixed(2))))} disabled={previewZoom <= 0.5} title="Diminuir zoom"><ZoomOut className="h-4 w-4" /></Button>
+                  <span className="min-w-14 text-center text-xs text-gray-500">{Math.round(previewZoom * 100)}%</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewZoom((value) => Math.min(4, Number((value + 0.25).toFixed(2))))} disabled={previewZoom >= 4} title="Aumentar zoom"><ZoomIn className="h-4 w-4" /></Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewZoom(1)} title="Restaurar zoom"><RotateCcw className="h-4 w-4" /></Button>
+                </>}
+                <button onClick={closePreview} className="p-1.5 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" title="Fechar"><X className="h-5 w-5" /></button>
+              </div>
             </div>
-            <div className="p-4 flex-1 overflow-auto bg-gray-100 dark:bg-black/50 flex items-center justify-center min-h-[300px]">
+            <div className="p-4 flex-1 overflow-auto bg-gray-100 dark:bg-black/50 min-h-[300px]">
               {previewData.type.startsWith('image/') ? (
-                <img src={previewData.url} alt={previewData.name} className="max-w-full max-h-full object-contain" />
+                <div className="min-h-full min-w-full flex items-start justify-center">
+                  <img src={previewData.url} alt={previewData.name} className="object-contain transition-transform origin-top" style={{ transform: `scale(${previewZoom})`, maxWidth: previewZoom <= 1 ? '100%' : 'none' }} />
+                </div>
               ) : (
-                <iframe src={previewData.url} title={previewData.name} className="w-full h-[70vh] border-0" />
+                <iframe src={previewData.url} title={previewData.name} className="w-full h-[72vh] border-0" />
               )}
             </div>
           </div>

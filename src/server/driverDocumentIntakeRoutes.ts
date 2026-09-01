@@ -168,7 +168,7 @@ async function loadApprovedCnhDraft(context: any, principal: AuthenticatedPrinci
     String(row.attachment_id) !== String(row.extraction_attachment_id) ||
     String(row.extraction_status) !== 'APPROVED' ||
     String(row.detected_document_type || '').toUpperCase() !== 'CNH'
-  ) throw new DriverDocumentIntakeConflictError();
+  ) throw new DriverDocumentIntakeConflictError('APPROVED_DRAFT_STATE_MISMATCH');
 
   const projected = projectApprovedCnhDriverDraft({
     status: String(row.extraction_status),
@@ -176,7 +176,7 @@ async function loadApprovedCnhDraft(context: any, principal: AuthenticatedPrinci
     proposedFields: row.proposed_fields,
     corrections: row.corrections,
   });
-  if (Object.keys(projected).length === 0) throw new DriverDocumentIntakeConflictError();
+  if (Object.keys(projected).length === 0) throw new DriverDocumentIntakeConflictError('APPROVED_DRAFT_EMPTY');
   return projected;
 }
 
@@ -197,6 +197,11 @@ export function mapDriverDocumentIntakeRow(row: any): DriverDocumentIntakeState 
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   };
+}
+
+function safeConflictCode(error: unknown): string {
+  const raw = error instanceof Error ? error.message.trim() : '';
+  return /^[A-Z][A-Z0-9_]{2,80}$/.test(raw) ? raw : 'DRIVER_DOCUMENT_INTAKE_CONFLICT';
 }
 
 function sendError(res: Response, error: unknown): void {
@@ -225,7 +230,9 @@ function sendError(res: Response, error: unknown): void {
     error instanceof DriverDocumentIntakeAiConflictError ||
     error instanceof DriverDocumentIntakePromotionConflictError
   ) {
-    res.status(409).json({ error: 'Driver document intake conflict' });
+    const code = safeConflictCode(error);
+    console.warn('AUTOERP_DRIVER_DOCUMENT_INTAKE_CONFLICT', code);
+    res.status(409).json({ error: 'Driver document intake conflict', code });
     return;
   }
   console.error('AUTOERP_DRIVER_DOCUMENT_INTAKE_FAILURE', error);
@@ -254,7 +261,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         `);
         const existing = existingResult.rows?.[0];
         if (existing) {
-          if (String(existing.created_by) !== principal.userId) throw new DriverDocumentIntakeConflictError();
+          if (String(existing.created_by) !== principal.userId) throw new DriverDocumentIntakeConflictError('IDEMPOTENCY_OWNER_MISMATCH');
           return { item: mapDriverDocumentIntakeRow(existing), created: false };
         }
 
@@ -279,7 +286,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
             LIMIT 1
           `);
           const winner = winnerResult.rows?.[0];
-          if (!winner || String(winner.created_by) !== principal.userId) throw new DriverDocumentIntakeConflictError();
+          if (!winner || String(winner.created_by) !== principal.userId) throw new DriverDocumentIntakeConflictError('IDEMPOTENCY_WINNER_MISMATCH');
           return { item: mapDriverDocumentIntakeRow(winner), created: false };
         }
 
@@ -373,77 +380,19 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         if (
           !draft.fullName || !draft.cpf || !draft.birthDate || !draft.cnhNumber ||
           !draft.cnhCategory || !draft.cnhExpiration
-        ) throw new DriverDocumentIntakeConflictError();
+        ) throw new DriverDocumentIntakeConflictError('APPROVED_DRAFT_REQUIRED_FIELDS_MISSING');
 
         const repo = context.getDriverRepo();
         const byCpf = await repo.findByCpf(principal.companyId, draft.cpf);
         const byCnh = await repo.findByCnh(principal.companyId, draft.cnhNumber);
-        const now = new Date().toISOString();
-        const cnhStatus = evaluateCnhStatus(draft.cnhExpiration);
-
-        const visibleDuplicate = [byCpf, byCnh].find((item) => item && !item.isArchived);
+        const visibleDuplicate = byCpf || byCnh;
         if (visibleDuplicate) throw new DriverDocumentIntakeDuplicateCnhError(visibleDuplicate.id);
 
-        if (byCpf && byCnh && byCpf.id !== byCnh.id) {
-          throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_IDENTITY_CONFLICT');
-        }
-
-        const archivedDriver = byCpf?.isArchived ? byCpf : (byCnh?.isArchived ? byCnh : null);
-        if (archivedDriver) {
-          if (byCnh && byCnh.cpf !== draft.cpf) {
-            throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_CPF_MISMATCH');
-          }
-
-          const restored = await repo.updateForCompany(principal.companyId, archivedDriver.id, {
-            ...archivedDriver,
-            fullName: draft.fullName,
-            cpf: draft.cpf,
-            rg: draft.rg ?? archivedDriver.rg,
-            birthDate: draft.birthDate,
-            cnhNumber: draft.cnhNumber,
-            cnhCategory: draft.cnhCategory,
-            cnhExpiration: draft.cnhExpiration,
-            cnhStatus,
-            status: cnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.PENDING_DOCS,
-            isArchived: false,
-            notes: archivedDriver.notes || 'Cadastro restaurado pela aprovação da CNH. Dados complementares pendentes.',
-            updatedAt: now,
-          });
-          if (!restored) throw new DriverDocumentIntakeConflictError('ARCHIVED_DRIVER_RESTORE_FAILED');
-
-          await context.getAuditLogRepo().create({
-            id: randomUUID(),
-            companyId: principal.companyId,
-            entityName: 'Driver',
-            entityId: restored.id,
-            action: AuditAction.UPDATE,
-            previousState: JSON.stringify({
-              event: 'ARCHIVED_DRIVER_BEFORE_CNH_RESTORE',
-              isArchived: true,
-              status: archivedDriver.status,
-              cnhNumber: archivedDriver.cnhNumber,
-            }),
-            newState: JSON.stringify({
-              event: 'RESTORE_FROM_APPROVED_CNH',
-              isArchived: false,
-              status: restored.status,
-              cnhNumber: restored.cnhNumber,
-            }),
-            userId: principal.userId,
-            userName: principal.name,
-            timestamp: now,
-          });
-
-          const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, restored.id);
-          return {
-            driverId: restored.id,
-            attachmentId: promotion.attachmentId,
-            created: false,
-          };
-        }
-
-        const created = await repo.create({
-          id: randomUUID(),
+        const now = new Date().toISOString();
+        const cnhStatus = evaluateCnhStatus(draft.cnhExpiration);
+        const candidateId = randomUUID();
+        const materialized = await repo.create({
+          id: candidateId,
           companyId: principal.companyId,
           fullName: draft.fullName,
           cpf: draft.cpf,
@@ -467,33 +416,34 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
           appPlatforms: [],
           status: cnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.PENDING_DOCS,
           photoUrl: undefined,
-          notes: 'Cadastro inicial criado pela aprovação da CNH. Dados complementares pendentes.',
+          notes: 'Cadastro criado/restaurado pela aprovação da CNH. Dados complementares pendentes.',
           isArchived: false,
           createdAt: now,
           updatedAt: now,
         });
+        const restored = materialized.id !== candidateId;
 
         await context.getAuditLogRepo().create({
           id: randomUUID(),
           companyId: principal.companyId,
           entityName: 'Driver',
-          entityId: created.id,
-          action: AuditAction.CREATE,
+          entityId: materialized.id,
+          action: restored ? AuditAction.UPDATE : AuditAction.CREATE,
           newState: JSON.stringify({
-            event: 'CREATE_FROM_APPROVED_CNH',
-            status: created.status,
-            cnhNumber: created.cnhNumber,
+            event: restored ? 'RESTORE_FROM_APPROVED_CNH' : 'CREATE_FROM_APPROVED_CNH',
+            status: materialized.status,
+            cnhNumber: materialized.cnhNumber,
           }),
           userId: principal.userId,
           userName: principal.name,
           timestamp: now,
         });
 
-        const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, created.id);
+        const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, materialized.id);
         return {
-          driverId: created.id,
+          driverId: materialized.id,
           attachmentId: promotion.attachmentId,
-          created: true,
+          created: !restored,
         };
       });
       res.status(result.created ? 201 : 200).json({ item: result });

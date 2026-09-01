@@ -144,6 +144,63 @@ export async function runDriverDocumentIntakePromotionChecks(): Promise<void> {
   }
 
   {
+    const fixture = contextFor({
+      row: promotableRow({
+        intake_status: 'CONSUMED',
+        driver_id: driver.id,
+        consumed_at: '2026-08-29T13:40:00.000Z',
+      }),
+      updateResults: [{ rows: [{ id: 'attachment-601' }] }],
+    });
+    const result = await promoteApprovedDriverDocumentIntake(
+      fixture.context,
+      principal,
+      'intake-601',
+      driver.id,
+    );
+    assert.equal(result.promoted, false, 'consumed retry with stale attachment location must recover idempotently');
+    assert.equal(fixture.executeCount(), 2, 'consumed attachment recovery must perform one relink write');
+    assert.equal(fixture.auditEntries.length, 1, 'consumed attachment recovery must audit only the repaired relink');
+  }
+
+  {
+    const fixture = contextFor({
+      row: promotableRow({
+        entity_type: 'Driver',
+        entity_id: driver.id,
+      }),
+      updateResults: [{ rows: [{ id: 'intake-601' }] }],
+    });
+    const result = await promoteApprovedDriverDocumentIntake(
+      fixture.context,
+      principal,
+      'intake-601',
+      driver.id,
+    );
+    assert.equal(result.promoted, true, 'approved intake with an already-relinked attachment must finish consumption');
+    assert.equal(fixture.executeCount(), 2, 'already-relinked recovery must only consume the intake');
+    assert.equal(fixture.auditEntries.length, 1, 'already-relinked recovery must not duplicate attachment audit');
+  }
+
+  {
+    const dateVariantDriver = {
+      ...driver,
+      birthDate: '1990-01-01T00:00:00.000Z',
+      cnhExpiration: '2035-01-01T00:00:00.000Z',
+    };
+    const fixture = contextFor({
+      row: promotableRow(),
+      selectedDriver: dateVariantDriver,
+      updateResults: [
+        { rows: [{ id: 'attachment-601' }] },
+        { rows: [{ id: 'intake-601' }] },
+      ],
+    });
+    const result = await promoteApprovedDriverDocumentIntake(fixture.context, principal, 'intake-601', driver.id);
+    assert.equal(result.promoted, true, 'equivalent ISO date representations must not create a false identity conflict');
+  }
+
+  {
     const otherDriver = { ...driver, id: 'driver-601-other' };
     const fixture = contextFor({
       row: promotableRow({
