@@ -73,6 +73,26 @@ export type DocumentAiFailureCode =
   | 'PROVIDER_FAILURE'
   | 'PROVIDER_OUTPUT_INVALID';
 
+export type DocumentAiOutputInvalidReason =
+  | 'OUTPUT_INVALID_TOP_LEVEL'
+  | 'OUTPUT_EXTRA_TOP_LEVEL_KEY'
+  | 'OUTPUT_INVALID_DOCUMENT_TYPE'
+  | 'OUTPUT_INVALID_FIELDS'
+  | 'OUTPUT_UNKNOWN_FIELD_KEY'
+  | 'OUTPUT_INVALID_CONFIDENCE'
+  | 'OUTPUT_UNKNOWN_CONFIDENCE_KEY'
+  | 'OUTPUT_FIELD_NOT_ALLOWED_FOR_DOCUMENT'
+  | 'OUTPUT_NULL_FIELD_WITH_CONFIDENCE'
+  | 'OUTPUT_INVALID_FIELD_VALUE'
+  | 'OUTPUT_MISSING_CONFIDENCE_FOR_VALUE'
+  | 'OUTPUT_INVALID_CONFIDENCE_FOR_VALUE'
+  | 'OUTPUT_NO_USEFUL_FIELDS'
+  | 'OUTPUT_CONFIDENCE_WITHOUT_FIELD'
+  | 'OUTPUT_INVALID_RAW'
+  | 'OUTPUT_EXTRA_RAW_KEY'
+  | 'OUTPUT_INVALID_RAW_TEXT'
+  | 'OUTPUT_INVALID_RAW_PAGES';
+
 export class DocumentAiProviderRateLimitError extends Error {
   constructor() {
     super('PROVIDER_RATE_LIMITED');
@@ -81,19 +101,33 @@ export class DocumentAiProviderRateLimitError extends Error {
 }
 
 export class DocumentAiProcessingError extends Error {
-  constructor(public readonly failureCode: DocumentAiFailureCode) {
+  constructor(
+    public readonly failureCode: DocumentAiFailureCode,
+    public readonly outputInvalidReason?: DocumentAiOutputInvalidReason,
+  ) {
     super(failureCode);
     this.name = 'DocumentAiProcessingError';
   }
 }
 
-function exactRecord(value: unknown, allowed: ReadonlySet<string>): Record<string, unknown> {
+function invalidProviderOutput(reason: DocumentAiOutputInvalidReason): DocumentAiProcessingError {
+  // Structural reason only: never log provider values, OCR text, document bytes or PII.
+  console.warn('[DocumentAI] provider output rejected', { reason });
+  return new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID', reason);
+}
+
+function exactRecord(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  invalidShapeReason: DocumentAiOutputInvalidReason,
+  extraKeyReason: DocumentAiOutputInvalidReason,
+): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput(invalidShapeReason);
   }
   const record = value as Record<string, unknown>;
   if (!Object.keys(record).every((key) => allowed.has(key))) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput(extraKeyReason);
   }
   return record;
 }
@@ -110,72 +144,82 @@ function validateProviderOutput(value: unknown): {
   confidence: Record<string, number>;
   raw: Record<string, unknown>;
 } {
-  const output = exactRecord(value, new Set(['documentType', 'fields', 'confidence', 'raw']));
+  const output = exactRecord(
+    value,
+    new Set(['documentType', 'fields', 'confidence', 'raw']),
+    'OUTPUT_INVALID_TOP_LEVEL',
+    'OUTPUT_EXTRA_TOP_LEVEL_KEY',
+  );
   if (typeof output.documentType !== 'string' || !(output.documentType in DOCUMENT_FIELDS)) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput('OUTPUT_INVALID_DOCUMENT_TYPE');
   }
   const documentType = output.documentType as keyof typeof DOCUMENT_FIELDS;
   const allowedFields = DOCUMENT_FIELDS[documentType];
-  const fields = exactRecord(output.fields, ALL_DOCUMENT_FIELDS);
-  const confidence = exactRecord(output.confidence, ALL_DOCUMENT_FIELDS);
+  const fields = exactRecord(output.fields, ALL_DOCUMENT_FIELDS, 'OUTPUT_INVALID_FIELDS', 'OUTPUT_UNKNOWN_FIELD_KEY');
+  const confidence = exactRecord(
+    output.confidence,
+    ALL_DOCUMENT_FIELDS,
+    'OUTPUT_INVALID_CONFIDENCE',
+    'OUTPUT_UNKNOWN_CONFIDENCE_KEY',
+  );
   const normalizedFields: Record<string, JsonScalar> = {};
   const normalizedConfidence: Record<string, number> = {};
 
   for (const [key, fieldValue] of Object.entries(fields)) {
     if (!allowedFields.has(key)) {
-      if (fieldValue !== null) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      if (fieldValue !== null) throw invalidProviderOutput('OUTPUT_FIELD_NOT_ALLOWED_FOR_DOCUMENT');
       const extraScore = confidence[key];
       if (extraScore !== undefined && extraScore !== 0) {
-        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+        throw invalidProviderOutput('OUTPUT_FIELD_NOT_ALLOWED_FOR_DOCUMENT');
       }
       continue;
     }
 
-    // Gemini may include schema fields as explicit nulls when the document does not
-    // visibly contain a value. Null means "not extracted": discard it instead of
-    // inventing a value or requiring a confidence score for missing information.
+    // Explicit null means "not extracted". It is discarded and never becomes
+    // business data. A provider may omit confidence or explicitly return zero.
     if (fieldValue === null) {
       const nullScore = confidence[key];
       if (nullScore !== undefined && nullScore !== 0) {
-        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+        throw invalidProviderOutput('OUTPUT_NULL_FIELD_WITH_CONFIDENCE');
       }
       continue;
     }
 
-    if (!safeScalar(fieldValue)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    if (!safeScalar(fieldValue)) throw invalidProviderOutput('OUTPUT_INVALID_FIELD_VALUE');
     const score = confidence[key];
+    if (score === undefined) throw invalidProviderOutput('OUTPUT_MISSING_CONFIDENCE_FOR_VALUE');
     if (typeof score !== 'number' || !Number.isFinite(score) || score < 0 || score > 1) {
-      throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      throw invalidProviderOutput('OUTPUT_INVALID_CONFIDENCE_FOR_VALUE');
     }
     normalizedFields[key] = fieldValue;
     normalizedConfidence[key] = score;
   }
 
   if (Object.keys(normalizedFields).length === 0 || Object.keys(normalizedFields).length > allowedFields.size) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput('OUTPUT_NO_USEFUL_FIELDS');
   }
 
   for (const [key, score] of Object.entries(confidence)) {
     if (!allowedFields.has(key)) {
       const extraFieldValue = fields[key];
       if (extraFieldValue !== null || score !== 0) {
-        throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+        throw invalidProviderOutput('OUTPUT_FIELD_NOT_ALLOWED_FOR_DOCUMENT');
       }
       continue;
     }
     if (fields[key] === null) {
-      if (score !== 0) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+      if (score !== 0) throw invalidProviderOutput('OUTPUT_NULL_FIELD_WITH_CONFIDENCE');
       continue;
     }
-    if (!(key in normalizedFields)) throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    if (!(key in normalizedFields)) throw invalidProviderOutput('OUTPUT_CONFIDENCE_WITHOUT_FIELD');
   }
 
-  const raw = exactRecord(output.raw ?? {}, new Set(['text', 'pages']));
+  const raw = exactRecord(output.raw ?? {}, new Set(['text', 'pages']), 'OUTPUT_INVALID_RAW', 'OUTPUT_EXTRA_RAW_KEY');
   if (raw.text !== undefined && (typeof raw.text !== 'string' || raw.text.length > 100_000)) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput('OUTPUT_INVALID_RAW_TEXT');
   }
   if (raw.pages !== undefined && (!Number.isInteger(raw.pages) || (raw.pages as number) < 1 || (raw.pages as number) > 500)) {
-    throw new DocumentAiProcessingError('PROVIDER_OUTPUT_INVALID');
+    throw invalidProviderOutput('OUTPUT_INVALID_RAW_PAGES');
   }
   return { documentType, fields: normalizedFields, confidence: normalizedConfidence, raw };
 }
