@@ -69,7 +69,16 @@ export class DriverAuthorityIntegrationRunner {
       phone: '11999999999',
       whatsapp: '11999999999',
       email: 'a@example.test',
-      address: { street: 'Rua A', number: '10', neighborhood: 'Centro', city: 'São Paulo', state: 'SP', zipCode: '01001000' },
+      address: {
+        street: 'Rua A',
+        number: '10',
+        complement: 'Casa principal',
+        neighborhood: 'Centro',
+        city: 'São Paulo',
+        state: 'SP',
+        zipCode: '01001000',
+        residenceType: 'HOUSE',
+      },
       cnhNumber: '12345678900',
       cnhCategory: 'B',
       cnhExpiration: '2035-01-01',
@@ -96,10 +105,17 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'phone-short', body: { ...baseDriver, phone: '1234' } },
         { label: 'phone-repeated', body: { ...baseDriver, phone: '11111111111' } },
         { label: 'whatsapp-invalid', body: { ...baseDriver, whatsapp: 'abc' } },
-        { label: 'email', body: { ...baseDriver, email: 'sem-arroba' } },
+        { label: 'email-format', body: { ...baseDriver, email: 'sem-arroba' } },
+        { label: 'email-required', body: { ...baseDriver, email: '' } },
         { label: 'cnhCategory', body: { ...baseDriver, cnhCategory: 'Z' } },
         { label: 'state', body: { ...baseDriver, address: { ...baseDriver.address, state: 'SPO' } } },
         { label: 'zipCode', body: { ...baseDriver, address: { ...baseDriver.address, zipCode: '123' } } },
+        { label: 'address-number', body: { ...baseDriver, address: { ...baseDriver.address, number: '' } } },
+        { label: 'address-complement', body: { ...baseDriver, address: { ...baseDriver.address, complement: '' } } },
+        { label: 'residence-type', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: undefined } } },
+        { label: 'apartment-condominium', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: '', unit: '12' } } },
+        { label: 'apartment-unit', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', unit: '' } } },
+        { label: 'other-description', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'OTHER', residenceTypeOther: '' } } },
       ];
       for (const invalid of invalidCases) {
         response = await request('/api/drivers', {
@@ -130,6 +146,8 @@ export class DriverAuthorityIntegrationRunner {
       assert(!driverA.currentVehicleId && !driverA.currentContractId, 'browser-forged links became authoritative');
       assert(!driverA.healthAndEmergency, 'health leaked into Driver core payload');
       assert(driverA.phone === '11999999999' && driverA.whatsapp === '11999999999', 'phone normalization mismatch');
+      assert(driverA.address.residenceType === 'HOUSE', 'residence type was not persisted');
+      assert(driverA.address.complement === 'Casa principal', 'address complement was not persisted');
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
         method: 'PATCH', body: JSON.stringify({ phone: '(15) 99742-4411', whatsapp: '+55 (15) 99742-4411' }),
@@ -148,6 +166,7 @@ export class DriverAuthorityIntegrationRunner {
       assert(normalizedIdentity.email === 'motorista@example.com', 'email was not normalized');
       assert(normalizedIdentity.cnhCategory === 'AB', 'CNH category was not normalized');
       assert(normalizedIdentity.address.state === 'SP' && normalizedIdentity.address.zipCode === '18075350', 'address identity fields were not normalized');
+      assert(normalizedIdentity.address.residenceType === 'HOUSE', 'partial address update discarded residence type');
 
       response = await request('/api/drivers', { method: 'POST', body: JSON.stringify(baseDriver) }, adminA);
       assert(response.status === 409, `same-tenant duplicate expected 409, got ${response.status}`);
