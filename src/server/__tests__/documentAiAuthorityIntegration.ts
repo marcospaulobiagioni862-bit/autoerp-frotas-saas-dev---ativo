@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response as ExpressRespo
 import { createServer } from 'node:http';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { auditLogs, documentAiExtractions } from '../../db/schema';
+import { auditLogs, documentAiExtractions, fileAttachments } from '../../db/schema';
 import { UnitOfWork } from '../../db/uow';
 import { registerDocumentAiRoutes } from '../documentAiRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
@@ -44,6 +44,8 @@ export class DocumentAiAuthorityIntegrationRunner {
       ) VALUES
         ('doc-ai-att-a1', ${companyA}, 'Vehicle', 'Vehicle', 'doc-ai-veh-a1', 'CRLV', 'crlv.pdf', 'application/pdf', 'attachment://a1', 4, 4, 'SERVER_FS', 'a/a1', repeat('a',64), ${adminAId}, false, 'AVAILABLE', NOW()),
         ('doc-ai-att-a2', ${companyA}, 'Vehicle', 'Vehicle', 'doc-ai-veh-a2', 'CRLV', 'crlv-2.pdf', 'application/pdf', 'attachment://a2', 4, 4, 'SERVER_FS', 'a/a2', repeat('b',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('doc-ai-att-clean', ${companyA}, 'DriverDocumentIntake', 'DriverDocumentIntake', 'doc-ai-intake-clean', 'CNH', 'clean.png', 'image/png', 'attachment://clean', 4, 4, 'SERVER_FS', 'a/clean', repeat('d',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('doc-ai-att-mixed', ${companyA}, 'DriverDocumentIntake', 'DriverDocumentIntake', 'doc-ai-intake-mixed', 'CNH', 'mixed.png', 'image/png', 'attachment://mixed', 4, 4, 'SERVER_FS', 'a/mixed', repeat('e',64), ${adminAId}, false, 'AVAILABLE', NOW()),
         ('doc-ai-att-b1', ${companyB}, 'Vehicle', 'Vehicle', 'doc-ai-veh-b1', 'CRLV', 'other.pdf', 'application/pdf', 'attachment://b1', 4, 4, 'SERVER_FS', 'b/b1', repeat('c',64), ${adminBId}, false, 'AVAILABLE', NOW())
       ON CONFLICT (id) DO NOTHING
     `);
@@ -217,6 +219,60 @@ export class DocumentAiAuthorityIntegrationRunner {
         method: 'POST', body: JSON.stringify({}),
       }, adminA);
       assert(response.status === 409, `retry beyond max attempts expected 409, got ${response.status}`);
+
+      const createExtraction = async (attachmentId: string, idempotencyKey: string): Promise<any> => {
+        const createdResponse = await request('/api/document-ai/extractions', {
+          method: 'POST',
+          body: JSON.stringify({ attachmentId, idempotencyKey }),
+        }, adminA);
+        assert(createdResponse.status === 201, `cleanup fixture expected 201, got ${createdResponse.status}`);
+        return (await json(createdResponse)).item;
+      };
+      const disposable = await createExtraction('doc-ai-att-clean', 'doc-ai-cleanup-clean');
+      const mixedDisposable = await createExtraction('doc-ai-att-mixed', 'doc-ai-cleanup-mixed-empty');
+      const mixedWithData = await createExtraction('doc-ai-att-mixed', 'doc-ai-cleanup-mixed-data');
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const now = new Date().toISOString();
+        for (const item of [disposable, mixedDisposable, mixedWithData]) {
+          await tx.update(documentAiExtractions).set({
+            status: 'FAILED',
+            failureCode: 'PROVIDER_OUTPUT_INVALID',
+            attemptCount: 1,
+            completedAt: now,
+            proposedFields: item.id === mixedWithData.id ? { cnhNumber: 'preserve-me' } : {},
+            updatedAt: now,
+          }).where(and(
+            eq(documentAiExtractions.companyId, companyA),
+            eq(documentAiExtractions.id, item.id),
+          ));
+        }
+      });
+
+      response = await request('/api/document-ai/extractions/discard-failed', {
+        method: 'POST',
+        body: JSON.stringify({ extractionIds: [disposable.id, mixedDisposable.id, mixedWithData.id] }),
+      }, adminA);
+      assert(response.status === 200, `failed cleanup expected 200, got ${response.status}`);
+      const cleanup = await json(response);
+      assert(cleanup.discarded === 2, 'cleanup must discard only individually eligible failures');
+      assert(cleanup.attachmentsArchived === 1, 'cleanup must archive only the fully disposable attachment');
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const extractionRows = await tx.select().from(documentAiExtractions)
+          .where(eq(documentAiExtractions.companyId, companyA));
+        const byId = new Map(extractionRows.map((item: any) => [item.id, item]));
+        assert(byId.get(disposable.id)?.status === 'REJECTED', 'fully disposable failure was not removed');
+        assert(byId.get(mixedDisposable.id)?.status === 'REJECTED', 'eligible sibling failure was not removed');
+        assert(byId.get(mixedWithData.id)?.status === 'FAILED', 'failure with proposed data must be preserved');
+        const attachmentRows = await tx.select().from(fileAttachments)
+          .where(eq(fileAttachments.companyId, companyA));
+        const attachmentById = new Map(attachmentRows.map((item: any) => [item.id, item]));
+        assert(attachmentById.get('doc-ai-att-clean')?.isArchived === true, 'fully disposable attachment was not archived');
+        assert(attachmentById.get('doc-ai-att-mixed')?.isArchived === false, 'attachment with useful sibling data must be preserved');
+      });
 
       await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
