@@ -109,7 +109,13 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       const description=header(req,'x-autoerp-description'),issueDate=optionalIsoDate(header(req,'x-autoerp-issue-date'),'issueDate'),expirationDate=optionalIsoDate(header(req,'x-autoerp-expiration-date'),'expirationDate');
       const mimeType=String(req.get('content-type')||'').split(';',1)[0].trim().toLowerCase();if(!ALLOWED_MIME_TYPES.has(mimeType))throw new AttachmentValidationError('Invalid mime type');
       if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
-      await UnitOfWork.run(principal.companyId,async tx=>{await validateEntity(tx,principal,entityType,entityId,true);});
+      const uploadChecksum=createHash('sha256').update(req.body).digest('hex');
+      const existingDuplicate=await UnitOfWork.run(principal.companyId,async tx=>{
+        await validateEntity(tx,principal,entityType,entityId,true);
+        const items=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);
+        return items.find((item:FileAttachment)=>!item.isArchived&&item.entityType===entityType&&item.entityId===entityId&&(item.documentType||'')===(documentType||'')&&item.checksum===uploadChecksum);
+      });
+      if(existingDuplicate){res.status(200).json({item:existingDuplicate,duplicate:true});return;}
       const id=randomUUID(),stored=await storage.write(principal.companyId,id,req.body);storageKey=stored.storageKey;const now=new Date().toISOString();
       const item=await UnitOfWork.run(principal.companyId,async tx=>{
         await validateEntity(tx,principal,entityType,entityId,true);
