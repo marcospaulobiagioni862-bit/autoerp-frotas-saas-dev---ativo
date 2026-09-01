@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AlertCircle, FileText, Save, X } from 'lucide-react';
 import { Button, Input, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
@@ -16,6 +17,9 @@ interface ContractFormModalProps {
   onSuccess: () => void;
 }
 
+const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
+
 export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -23,6 +27,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contractFile, setContractFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '700',
     billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
@@ -35,6 +40,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     if (!isOpen) return;
     let active = true;
     setError(null);
+    setContractFile(null);
     setLoadingOptions(true);
     Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.list()])
       .then(([vehicleList, driverList, templateList]) => {
@@ -76,6 +82,25 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     return () => { active = false; };
   }, [isOpen, contractToEdit, companyId]);
 
+  const selectContractFile = (file: File | null) => {
+    setError(null);
+    if (!file) {
+      setContractFile(null);
+      return;
+    }
+    if (!CONTRACT_FILE_TYPES.includes(file.type)) {
+      setContractFile(null);
+      setError('Arquivo do contrato deve ser PDF, JPG, PNG ou WebP.');
+      return;
+    }
+    if (file.size <= 0 || file.size > MAX_CONTRACT_FILE_BYTES) {
+      setContractFile(null);
+      setError('Arquivo do contrato deve ter até 10 MB e não pode estar vazio.');
+      return;
+    }
+    setContractFile(file);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -106,8 +131,29 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         templateId: form.templateId || undefined,
         notes: form.notes || undefined,
       };
-      if (contractToEdit) await ContractClient.update(contractToEdit.id, input);
-      else await ContractClient.create(input);
+      const savedContract = contractToEdit
+        ? await ContractClient.update(contractToEdit.id, input)
+        : await ContractClient.create(input);
+
+      if (contractFile) {
+        try {
+          await AttachmentClient.upload({
+            entityType: 'Contract',
+            entityId: savedContract.id,
+            documentType: 'CONTRACT_DOCUMENT',
+            fileName: contractFile.name,
+            mimeType: contractFile.type,
+            content: contractFile,
+            description: 'Contrato de locação anexado no cadastro do contrato',
+          });
+        } catch (uploadError) {
+          onSuccess();
+          onClose();
+          window.alert(`Contrato salvo, mas o arquivo não foi enviado: ${uploadError instanceof Error ? uploadError.message : 'falha no upload'}. O contrato foi preservado e o arquivo pode ser reenviado nos detalhes.`);
+          return;
+        }
+      }
+
       onSuccess();
       onClose();
     } catch (caught) {
@@ -142,6 +188,17 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
         </div>
         <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
+        <Field label="Arquivo do contrato de locação (opcional)">
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
+            onChange={(event) => selectContractFile(event.target.files?.[0] || null)}
+            className="control"
+          />
+          <span className="block text-[11px] font-normal text-slate-500">
+            {contractFile ? `Selecionado: ${contractFile.name}` : 'PDF, JPG, PNG ou WebP, até 10 MB. O arquivo será vinculado automaticamente após o contrato ser salvo.'}
+          </span>
+        </Field>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
           Após salvar, a ativação e o faturamento são realizados no detalhe do contrato, onde a categoria financeira canônica da receita é selecionada.
         </div>
