@@ -6,6 +6,7 @@ import type { AuthenticatedPrincipal } from './auth';
 import { ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
 
 type TemplateAction = 'VIEW_CONTRACT_TEMPLATE' | 'MANAGE_CONTRACT_TEMPLATE';
+type TemplateSourceMode = 'MARKDOWN' | 'FILE';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER']);
@@ -45,6 +46,12 @@ function text(value: unknown, field: string, min = 1, max = 200): string {
   return clean;
 }
 
+function sourceMode(value: unknown): TemplateSourceMode {
+  if (value === undefined || value === 'MARKDOWN') return 'MARKDOWN';
+  if (value === 'FILE') return 'FILE';
+  throw new TemplateValidationError('Invalid sourceMode');
+}
+
 function templateKey(value: unknown): string {
   const clean = text(value, 'templateKey', 2, 80).toLowerCase().replace(/\s+/g, '-');
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(clean)) throw new TemplateValidationError('Invalid templateKey');
@@ -62,6 +69,14 @@ function rejectAuthorityFields(body: Record<string, unknown>): void {
   if (forbidden.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
     throw new TemplateValidationError('Invalid template authority surface');
   }
+}
+
+function contentForMode(body: Record<string, unknown>, mode: TemplateSourceMode, fallback?: string): string {
+  if (mode === 'FILE') return '';
+  const raw = body.contentMarkdown === undefined ? fallback : body.contentMarkdown;
+  const contentMarkdown = text(raw, 'contentMarkdown', 10, 100_000);
+  validateContractTemplateContent(contentMarkdown);
+  return contentMarkdown;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -150,20 +165,21 @@ export function registerContractTemplateRoutes(app: Express): void {
       rejectAuthorityFields(body);
       const key = templateKey(body.templateKey);
       const title = text(body.title, 'title', 2, 160);
-      const contentMarkdown = text(body.contentMarkdown, 'contentMarkdown', 10, 100_000);
-      validateContractTemplateContent(contentMarkdown);
+      const mode = sourceMode(body.sourceMode);
+      const contentMarkdown = contentForMode(body, mode);
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const existing = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, key);
         if (existing) throw new TemplateConflictError();
         const now = new Date().toISOString();
         const created = await tx.getContractTemplateRepo().create({
           id: randomUUID(), companyId: principal.companyId, templateKey: key, title, contentMarkdown,
-          versionNumber: 1, isCurrent: true, isActive: body.isActive === false ? false : true,
+          versionNumber: 1, isCurrent: true,
+          isActive: mode === 'FILE' ? false : body.isActive === false ? false : true,
           isArchived: false, createdBy: principal.userId, createdAt: now, updatedAt: now,
         });
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractTemplate', entityId: created.id,
-          action: AuditAction.CREATE, newState: JSON.stringify(created), userId: principal.userId,
+          action: AuditAction.CREATE, newState: JSON.stringify({ ...created, sourceMode: mode }), userId: principal.userId,
           userName: principal.name, timestamp: now,
         });
         return created;
@@ -186,29 +202,86 @@ export function registerContractTemplateRoutes(app: Express): void {
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, source.templateKey);
         if (!current || current.id !== source.id) throw new TemplateConflictError();
         const title = body.title === undefined ? source.title : text(body.title, 'title', 2, 160);
-        const contentMarkdown = body.contentMarkdown === undefined
-          ? source.contentMarkdown
-          : text(body.contentMarkdown, 'contentMarkdown', 10, 100_000);
-        validateContractTemplateContent(contentMarkdown);
+        const mode = sourceMode(body.sourceMode ?? (source.contentMarkdown.trim() ? 'MARKDOWN' : 'FILE'));
+        const contentMarkdown = contentForMode(body, mode, source.contentMarkdown);
+        const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, source.templateKey);
+        const nextVersionNumber = Math.max(...versions.map((version) => version.versionNumber), 0) + 1;
         const now = new Date().toISOString();
-        const old = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, source.id, {
-          isCurrent: false, updatedAt: now,
-        });
-        if (!old) throw new TemplateNotFoundError();
+
+        if (mode === 'MARKDOWN') {
+          const old = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, source.id, {
+            isCurrent: false, updatedAt: now,
+          });
+          if (!old) throw new TemplateNotFoundError();
+        }
+
         const created = await tx.getContractTemplateRepo().create({
           id: randomUUID(), companyId: principal.companyId, templateKey: source.templateKey, title, contentMarkdown,
-          versionNumber: source.versionNumber + 1, supersedesTemplateId: source.id, isCurrent: true,
-          isActive: body.isActive === undefined ? source.isActive : body.isActive === true,
+          versionNumber: nextVersionNumber, supersedesTemplateId: source.id,
+          isCurrent: mode === 'MARKDOWN',
+          isActive: mode === 'FILE' ? false : body.isActive === undefined ? source.isActive : body.isActive === true,
           isArchived: false, createdBy: principal.userId, createdAt: now, updatedAt: now,
         });
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractTemplate', entityId: created.id,
-          action: AuditAction.CREATE, previousState: JSON.stringify(source), newState: JSON.stringify(created),
+          action: AuditAction.CREATE, previousState: JSON.stringify(source), newState: JSON.stringify({ ...created, sourceMode: mode }),
           userId: principal.userId, userName: principal.name, timestamp: now,
         });
         return created;
       });
       res.status(201).json({ item });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/contract-templates/:id/promote-file-source', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'MANAGE_CONTRACT_TEMPLATE');
+    if (!principal) return;
+    try {
+      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const candidate = await tx.getContractTemplateRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!candidate || candidate.isArchived) throw new TemplateNotFoundError();
+        if (candidate.contentMarkdown.trim()) throw new TemplateConflictError();
+
+        const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', candidate.id);
+        const sources = attachments.filter((attachment) =>
+          !attachment.isArchived &&
+          attachment.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+          attachment.contentState === 'AVAILABLE'
+        );
+        if (sources.length !== 1) throw new TemplateConflictError();
+        if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(sources[0].mimeType)) {
+          throw new TemplateConflictError();
+        }
+        if (candidate.isCurrent) return candidate;
+
+        const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
+        if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
+          throw new TemplateConflictError();
+        }
+        const now = new Date().toISOString();
+        if (current && current.id !== candidate.id) {
+          const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
+            isCurrent: false, updatedAt: now,
+          });
+          if (!demoted) throw new TemplateConflictError();
+        }
+        const promoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, candidate.id, {
+          isCurrent: true,
+          isActive: false,
+          updatedAt: now,
+        });
+        if (!promoted) throw new TemplateNotFoundError();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'ContractTemplate', entityId: promoted.id,
+          action: AuditAction.UPDATE, previousState: JSON.stringify(candidate),
+          newState: JSON.stringify({ ...promoted, event: 'PROMOTE_FILE_SOURCE', attachmentId: sources[0].id }),
+          userId: principal.userId, userName: principal.name, timestamp: now,
+        });
+        return promoted;
+      });
+      res.json({ item });
     } catch (error) {
       sendError(res, error);
     }

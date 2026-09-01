@@ -16,16 +16,22 @@ import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
-const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp']);
+const CONTRACT_TEMPLATE_WRITE_ROLES=new Set(['ADMIN','MANAGER']);
+const DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp',DOCX_MIME]);
 function canonicalMimeType(value:string):string{return value==='image/jpg'?'image/jpeg':value;}
 function detectedMimeType(bytes:Buffer):string|undefined{
   if(bytes.length>=4&&bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46)return'application/pdf';
   if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return'image/jpeg';
   if(bytes.length>=8&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47&&bytes[4]===0x0d&&bytes[5]===0x0a&&bytes[6]===0x1a&&bytes[7]===0x0a)return'image/png';
   if(bytes.length>=12&&bytes.subarray(0,4).toString('ascii')==='RIFF'&&bytes.subarray(8,12).toString('ascii')==='WEBP')return'image/webp';
+  if(bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===0x03&&bytes[3]===0x04){
+    const archiveText=bytes.toString('latin1');
+    if(archiveText.includes('[Content_Types].xml')&&archiveText.includes('word/document.xml'))return DOCX_MIME;
+  }
   return undefined;
 }
-const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','Contract','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
+const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
@@ -57,6 +63,10 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
   if(!ENTITY_TYPES.has(entityType))throw new AttachmentValidationError('Invalid entity type');if(!entityId||entityId.length>120)throw new AttachmentValidationError('Invalid entity id');
   if(entityType==='Vehicle'){const item=await tx.getVehicleRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
   if(entityType==='Contract'){const item=await tx.getContractRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
+  if(entityType==='ContractTemplate'){
+    if(write&&!CONTRACT_TEMPLATE_WRITE_ROLES.has(String(principal.role||'').toUpperCase()))throw new AttachmentForbiddenError();
+    const item=await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;
+  }
   if(entityType==='TrafficTicket'){const item=await tx.getTrafficTicketRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='MaintenanceWorkOrder'){const item=await tx.getWorkOrderRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='Insurance'){const item=await tx.getInsuranceRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
@@ -106,13 +116,20 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     try{
       const entityType=header(req,'x-autoerp-entity-type',true)!,entityId=header(req,'x-autoerp-entity-id',true)!,documentType=header(req,'x-autoerp-document-type'),fileName=validateFilename(header(req,'x-autoerp-file-name',true)!);
       if(entityType==='DriverDocumentIntake'&&documentType?.trim().toUpperCase()!=='CNH')throw new AttachmentValidationError('Driver intake requires CNH');
+      if(entityType==='ContractTemplate'&&documentType?.trim().toUpperCase()!=='CONTRACT_TEMPLATE_SOURCE')throw new AttachmentValidationError('Contract template requires source document type');
       const description=header(req,'x-autoerp-description'),issueDate=optionalIsoDate(header(req,'x-autoerp-issue-date'),'issueDate'),expirationDate=optionalIsoDate(header(req,'x-autoerp-expiration-date'),'expirationDate');
       const mimeType=String(req.get('content-type')||'').split(';',1)[0].trim().toLowerCase();if(!ALLOWED_MIME_TYPES.has(mimeType))throw new AttachmentValidationError('Invalid mime type');
+      if(mimeType===DOCX_MIME&&entityType!=='ContractTemplate')throw new AttachmentValidationError('DOCX is only allowed for contract template source');
+      if(entityType==='ContractTemplate'&&mimeType!=='application/pdf'&&mimeType!==DOCX_MIME)throw new AttachmentValidationError('Contract template source must be PDF or DOCX');
       if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
       await UnitOfWork.run(principal.companyId,async tx=>{await validateEntity(tx,principal,entityType,entityId,true);});
       const id=randomUUID(),stored=await storage.write(principal.companyId,id,req.body);storageKey=stored.storageKey;const now=new Date().toISOString();
       const item=await UnitOfWork.run(principal.companyId,async tx=>{
         await validateEntity(tx,principal,entityType,entityId,true);
+        if(entityType==='ContractTemplate'){
+          const existing=await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);
+          if(existing.some((candidate:FileAttachment)=>!candidate.isArchived&&candidate.documentType==='CONTRACT_TEMPLATE_SOURCE'))throw new AttachmentForbiddenError();
+        }
         const created=await tx.getAttachmentRepo().create({id,companyId:principal.companyId,entityName:entityType,entityType,entityId,documentType,fileName,fileSize:stored.fileSize,mimeType,uploadedBy:principal.name,storageProvider:storage.provider,storageKey:stored.storageKey,checksum:stored.checksum,createdBy:principal.userId,isArchived:false,contentState:'AVAILABLE',description,issueDate,expirationDate,createdAt:now});
         if(entityType==='DriverDocumentIntake'){
           const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
