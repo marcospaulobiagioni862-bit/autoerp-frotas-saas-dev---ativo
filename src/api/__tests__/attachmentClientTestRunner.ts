@@ -107,10 +107,26 @@ export class AttachmentClientTestRunner {
     });
 
     tests.push(async () => {
+      globalThis.fetch = (async () => new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })) as typeof fetch;
+      const expectations: Array<{ run: () => Promise<unknown>; operation: string }> = [
+        { run: () => AttachmentClient.list({ entityType: 'MaintenanceWorkOrder', entityId: 'wo-1' }), operation: 'Falha ao listar anexos' },
+        { run: () => AttachmentClient.content('att-1'), operation: 'Falha ao visualizar/baixar anexo' },
+        { run: () => AttachmentClient.archive('att-1'), operation: 'Falha ao arquivar anexo' },
+      ];
+      for (const expectation of expectations) {
+        let error: unknown;
+        try { await expectation.run(); } catch (caught) { error = caught; }
+        assert(error instanceof AttachmentApiError && error.status === 404, `${expectation.operation} preserves status`);
+        assert(error.message === `${expectation.operation}: Not found`, `${expectation.operation} identifies action`);
+      }
+    });
+
+    tests.push(async () => {
       globalThis.fetch = (async () => new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 })) as typeof fetch;
       let error: unknown;
       try { await AttachmentClient.archive('att-1'); } catch (caught) { error = caught; }
       assert(error instanceof AttachmentApiError && error.status === 403, '403 fail closed');
+      assert(error instanceof Error && error.message === 'Falha ao arquivar anexo: Forbidden', '403 keeps operation context');
     });
 
     tests.push(async () => {
