@@ -79,6 +79,28 @@ assert.equal('plate' in cnhFieldProperties, false, 'CNH schema must not expose C
 assert.equal('renavam' in cnhFieldProperties, false, 'CNH schema must not expose CRLV fields');
 assert.deepEqual(cnhVariant.required, ['documentType', 'fields', 'confidence', 'raw']);
 
+await assert.rejects(
+  processDocumentAiBytes({
+    name: 'SYNTHETIC',
+    model: 'fixture-only',
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: 'MOTORISTA TESTE', plate: 'ABC1D23' },
+        confidence: { name: 0.99, plate: 0.99 },
+        raw: {},
+      };
+    },
+  }, {
+    content: syntheticPdf,
+    mimeType: 'application/pdf',
+    expectedChecksum: checksum,
+  }),
+  (error: unknown) => error instanceof DocumentAiProcessingError
+    && error.failureCode === 'PROVIDER_OUTPUT_INVALID'
+    && error.outputInvalidReason === 'OUTPUT_FIELD_NOT_ALLOWED_FOR_DOCUMENT',
+);
+
 const input = captured?.input as Array<Record<string, unknown>> | undefined;
 assert.ok(input && input.length === 2, 'Gemini multimodal input was not captured');
 assert.equal(input[0]?.type, 'text');
