@@ -36,7 +36,6 @@ export const VEHICLE_STATUS_FILTERS: VehicleStatusFilterOption[] = [
 export function vehicleManualStatusOptions(status: VehicleStatus): VehicleManualStatusOption[] {
   if (
     status === VehicleStatus.RENTED ||
-    status === VehicleStatus.MAINTENANCE ||
     status === VehicleStatus.ARCHIVED
   ) {
     return [];
