@@ -5,6 +5,7 @@ export interface ApprovedCnhDriverDraft {
   birthDate?: string;
   cnhNumber?: string;
   cnhCategory?: string;
+  cnhIssueDate?: string;
   cnhExpiration?: string;
   cnhEar?: boolean;
 }
@@ -90,6 +91,7 @@ export function projectApprovedCnhDriverDraft(input: {
   const birthDate = isoDate(sourceValue(corrections, proposed, ['birthDate']));
   const cnhNumber = digits(sourceValue(corrections, proposed, ['cnhNumber', 'registrationNumber']), 11);
   const cnhCategory = category(sourceValue(corrections, proposed, ['cnhCategory', 'category']));
+  const cnhIssueDate = isoDate(sourceValue(corrections, proposed, ['cnhIssueDate', 'issueDate']));
   const cnhExpiration = isoDate(sourceValue(corrections, proposed, ['cnhExpiration', 'expirationDate']));
   const cnhEar = ear(sourceValue(corrections, proposed, ['cnhEar', 'ear']));
 
@@ -99,6 +101,7 @@ export function projectApprovedCnhDriverDraft(input: {
   if (birthDate) draft.birthDate = birthDate;
   if (cnhNumber) draft.cnhNumber = cnhNumber;
   if (cnhCategory) draft.cnhCategory = cnhCategory;
+  if (cnhIssueDate) draft.cnhIssueDate = cnhIssueDate;
   if (cnhExpiration) draft.cnhExpiration = cnhExpiration;
   if (cnhEar !== undefined) draft.cnhEar = cnhEar;
 
