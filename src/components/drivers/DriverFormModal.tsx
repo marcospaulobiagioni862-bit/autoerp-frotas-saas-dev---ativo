@@ -23,11 +23,12 @@ type ApprovedCnhDriverDraftWithIntake = ApprovedCnhDriverDraft & {
 };
 
 type ResidenceType = 'HOUSE' | 'APARTMENT' | 'OTHER' | '';
+type EarValue = '' | 'YES' | 'NO';
 type FieldName =
   | 'fullName' | 'cpf' | 'birthDate' | 'phone' | 'whatsapp' | 'email'
   | 'zipCode' | 'street' | 'number' | 'complement' | 'neighborhood' | 'city' | 'state'
   | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'unit'
-  | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration';
+  | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration' | 'cnhEar';
 type FieldErrors = Partial<Record<FieldName, string>>;
 const STANDARD_PLATFORMS = ['Uber', '99', 'InDrive', 'Particular', 'Lalamove'] as const;
 
@@ -48,6 +49,9 @@ function validIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+function earValue(value: boolean | undefined): EarValue {
+  return value === true ? 'YES' : value === false ? 'NO' : '';
 }
 
 export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClose, driverToEdit, initialCnhDraft, onSuccess }) => {
@@ -89,6 +93,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
   const [cnhNumber, setCnhNumber] = useState('');
   const [cnhCategory, setCnhCategory] = useState('');
   const [cnhExpiration, setCnhExpiration] = useState('');
+  const [cnhEar, setCnhEar] = useState<EarValue>('');
   const [appPlatforms, setAppPlatforms] = useState<string[]>([]);
   const [status, setStatus] = useState<DriverStatus>(DriverStatus.ACTIVE);
   const [notes, setNotes] = useState('');
@@ -107,12 +112,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || '');
       setZipCode(driverToEdit.address?.zipCode || ''); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
       setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
-      setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setNotes(driverToEdit.notes || '');
+      setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setNotes(driverToEdit.notes || '');
       setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
     } else {
       setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail('');
       setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
-      setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setNotes('');
+      setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setNotes('');
     }
   }, [driverToEdit, initialCnhDraft, isOpen]);
 
@@ -155,6 +160,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
     if (digits(cnhNumber).length !== 11) errors.cnhNumber = 'Número da CNH deve ter 11 números.';
     if (!cnhCategory) errors.cnhCategory = 'Selecione a categoria da CNH.';
     if (!validIsoDate(cnhExpiration)) errors.cnhExpiration = 'Informe uma validade de CNH válida.';
+    if (requiresCompleteProfile && !cnhEar) errors.cnhEar = 'Informe Sim ou Não para atividade remunerada (EAR).';
     if (!isCnhCompletion && !phone.trim()) errors.phone = 'Informe o telefone principal.'; else if (phone.trim() && !validPhone(phone)) errors.phone = 'Telefone inválido. Use 10 ou 11 números, com ou sem pontuação.';
     if (whatsapp.trim() && !validPhone(whatsapp)) errors.whatsapp = 'WhatsApp inválido.';
     if (requiresCompleteProfile && !email.trim()) errors.email = 'Informe o e-mail do motorista.'; else if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = 'Informe um e-mail válido.';
@@ -201,14 +207,14 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           floor: residenceType === 'APARTMENT' ? floor.trim() || undefined : undefined,
           reference: addressReference.trim() || undefined,
         } : undefined,
-        cnhNumber: normalizedCnh, cnhCategory, cnhExpiration, appPlatforms, notes: notes.trim() || undefined,
+        cnhNumber: normalizedCnh, cnhCategory, cnhExpiration, cnhEar: cnhEar ? cnhEar === 'YES' : undefined, appPlatforms, notes: notes.trim() || undefined,
       };
       let driverId = driverToEdit?.id || cnhDriverId || createdDriverId || undefined;
       if (driverToEdit) {
         await DriverClient.update(driverToEdit.id, input);
         if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) await DriverClient.changeStatus(driverToEdit.id, status as Exclude<DriverStatus, DriverStatus.ARCHIVED>);
       } else if (isCnhCompletion && cnhDriverId) {
-        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address };
+        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address };
         if (normalizedPhone) update.phone = normalizedPhone; if (normalizedWhatsapp) update.whatsapp = normalizedWhatsapp; else if (normalizedPhone) update.whatsapp = normalizedPhone;
         await DriverClient.update(cnhDriverId, update);
       } else {
@@ -254,8 +260,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <Input id="driver-cnhNumber" label="Número do Registro CNH" value={cnhNumber} onChange={(e) => { setCnhNumber(e.target.value); clearFieldError('cnhNumber'); }} required error={fieldErrors.cnhNumber} helperText="Pontuação é ignorada; serão usados apenas os números." />
           <Select id="driver-cnhCategory" label="Categoria" value={cnhCategory} onChange={(e) => { setCnhCategory(e.target.value); clearFieldError('cnhCategory'); }} required error={fieldErrors.cnhCategory}><option value="">Selecione</option><option value="A">A (Moto)</option><option value="B">B (Carro)</option><option value="AB">AB (Carro e Moto)</option><option value="C">C (Caminhão)</option><option value="D">D (Ônibus/Vans)</option><option value="E">E (Articulados)</option></Select>
           <Input id="driver-cnhExpiration" label="Validade da CNH" type="date" value={cnhExpiration} onChange={(e) => { setCnhExpiration(e.target.value); clearFieldError('cnhExpiration'); }} required error={fieldErrors.cnhExpiration} />
+          <Select id="driver-cnhEar" label="Atividade remunerada (EAR)" value={cnhEar} onChange={(e) => { setCnhEar(e.target.value as EarValue); clearFieldError('cnhEar'); }} required={requiresCompleteProfile} error={fieldErrors.cnhEar}><option value="">Selecione</option><option value="YES">Sim</option><option value="NO">Não</option></Select>
           {driverToEdit && <Select label="Status Operacional" value={status} onChange={(e) => setStatus(e.target.value as DriverStatus)}><option value={DriverStatus.ACTIVE}>Ativo</option><option value={DriverStatus.INACTIVE}>Inativo</option><option value={DriverStatus.PENDING_DOCS}>Pendente de Docs</option><option value={DriverStatus.BLOCKED}>Bloqueado</option></Select>}
-        </div></div>
+        </div>{!cnhEar && isCnhCompletion && <p className="text-xs text-amber-700 dark:text-amber-300">A leitura da CNH não confirmou EAR. Selecione Sim ou Não para concluir o cadastro.</p>}</div>
 
         <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800"><MapPin className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">3. Endereço {!requiresCompleteProfile && <span className="font-normal text-slate-400">(opcional)</span>}</h3></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Select id="driver-residenceType" label="Tipo de residência" value={residenceType} onChange={(e) => { setResidenceType(e.target.value as ResidenceType); clearFieldError('residenceType'); }} required={requiresCompleteProfile} error={fieldErrors.residenceType}><option value="">Selecione</option><option value="HOUSE">Casa</option><option value="APARTMENT">Apartamento</option><option value="OTHER">Outro</option></Select>
