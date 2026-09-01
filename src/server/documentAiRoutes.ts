@@ -70,6 +70,18 @@ function parseRetry(body: unknown): void {
   if (Object.keys(item).length !== 0) throw new DocumentAiValidationError();
 }
 
+function parseDiscardFailed(body: unknown): string[] | undefined {
+  if (body === undefined || body === null) return undefined;
+  const item = exactObject(body, new Set(['extractionIds']));
+  if (item.extractionIds === undefined) return undefined;
+  if (!Array.isArray(item.extractionIds) || item.extractionIds.length === 0 || item.extractionIds.length > 100) {
+    throw new DocumentAiValidationError();
+  }
+  const ids = item.extractionIds.map((value) => requiredId(value, 'extractionId'));
+  if (new Set(ids).size !== ids.length) throw new DocumentAiValidationError();
+  return ids;
+}
+
 function parseStatus(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   const status = typeof value === 'string' ? value.trim().toUpperCase() : '';
@@ -257,6 +269,118 @@ export function registerDocumentAiRoutes(app: Express): void {
         return { item: existing, created: false };
       });
       res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/document-ai/extractions/discard-failed', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, true);
+    if (!principal) return;
+    try {
+      const requestedIds = parseDiscardFailed(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const failedRows = await tx.select().from(documentAiExtractions)
+          .where(and(
+            eq(documentAiExtractions.companyId, principal.companyId),
+            eq(documentAiExtractions.status, 'FAILED'),
+          ))
+          .for('update');
+        const requested = requestedIds ? new Set(requestedIds) : null;
+        if (requested && failedRows.some((row: any) => requested.has(row.id)) === false) {
+          throw new DocumentAiNotFoundError();
+        }
+
+        const candidates = failedRows.filter((row: any) => {
+          if (requested && !requested.has(row.id)) return false;
+          const proposed = row.proposedFields && typeof row.proposedFields === 'object' && !Array.isArray(row.proposedFields)
+            ? row.proposedFields as Record<string, unknown>
+            : {};
+          const corrections = row.corrections && typeof row.corrections === 'object' && !Array.isArray(row.corrections)
+            ? row.corrections as Record<string, unknown>
+            : {};
+          return Object.keys(proposed).length === 0 && Object.keys(corrections).length === 0 && !row.approvedAt;
+        });
+
+        const discardedIds: string[] = [];
+        const archivedAttachmentIds: string[] = [];
+        const processedAttachments = new Set<string>();
+        const now = new Date().toISOString();
+
+        for (const candidate of candidates) {
+          if (processedAttachments.has(candidate.attachmentId)) continue;
+          processedAttachments.add(candidate.attachmentId);
+          const attachmentRows = await tx.select().from(fileAttachments)
+            .where(and(
+              eq(fileAttachments.companyId, principal.companyId),
+              eq(fileAttachments.id, candidate.attachmentId),
+            ))
+            .for('update')
+            .limit(1);
+          const attachment = attachmentRows[0];
+          if (!attachment || attachment.isArchived || attachment.entityType !== 'DriverDocumentIntake') continue;
+
+          const relatedExtractions = failedRows.filter((row: any) => row.attachmentId === candidate.attachmentId);
+          const allRequested = !requested || relatedExtractions.every((row: any) => requested.has(row.id));
+          if (!allRequested) continue;
+
+          const relatedRows = await tx.select().from(documentAiExtractions)
+            .where(and(
+              eq(documentAiExtractions.companyId, principal.companyId),
+              eq(documentAiExtractions.attachmentId, candidate.attachmentId),
+            ))
+            .for('update');
+          if (relatedRows.some((row: any) => row.status !== 'FAILED')) continue;
+
+          for (const failed of relatedExtractions) {
+            const updatedRows = await tx.update(documentAiExtractions).set({
+              status: 'REJECTED',
+              reviewedBy: principal.userId,
+              reviewedAt: now,
+              reviewNotes: 'Falha descartável removida da fila operacional.',
+              updatedAt: now,
+            }).where(and(
+              eq(documentAiExtractions.companyId, principal.companyId),
+              eq(documentAiExtractions.id, failed.id),
+              eq(documentAiExtractions.status, 'FAILED'),
+            )).returning({ id: documentAiExtractions.id });
+            if (updatedRows[0]) discardedIds.push(updatedRows[0].id);
+          }
+
+          if (relatedExtractions.every((row: any) => discardedIds.includes(row.id))) {
+            const archivedRows = await tx.update(fileAttachments).set({ isArchived: true })
+              .where(and(
+                eq(fileAttachments.companyId, principal.companyId),
+                eq(fileAttachments.id, candidate.attachmentId),
+                eq(fileAttachments.isArchived, false),
+              )).returning({ id: fileAttachments.id });
+            if (archivedRows[0]) archivedAttachmentIds.push(archivedRows[0].id);
+          }
+        }
+
+        if (discardedIds.length > 0) {
+          await context.getAuditLogRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            entityName: 'DocumentAiExtractionCleanup',
+            entityId: randomUUID(),
+            action: AuditAction.UPDATE,
+            newState: JSON.stringify({
+              event: 'AI_FAILED_EXTRACTIONS_DISCARDED',
+              discardedCount: discardedIds.length,
+              archivedAttachmentCount: archivedAttachmentIds.length,
+              extractionIds: discardedIds.sort(),
+              businessMutationApplied: false,
+            }),
+            userId: principal.userId,
+            userName: principal.name,
+            timestamp: now,
+          });
+        }
+        return { discarded: discardedIds.length, attachmentsArchived: archivedAttachmentIds.length };
+      });
+      res.status(200).json(result);
     } catch (error) {
       sendError(res, error);
     }
