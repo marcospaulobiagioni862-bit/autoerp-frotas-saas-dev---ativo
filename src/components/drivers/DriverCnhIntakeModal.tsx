@@ -53,6 +53,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const [intakeId, setIntakeId] = useState('');
   const [extractionId, setExtractionId] = useState('');
   const [extraction, setExtraction] = useState<DocumentAiExtraction | null>(null);
+  const [approvedDraft, setApprovedDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [savedDriverId, setSavedDriverId] = useState('');
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
     name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '',
@@ -76,6 +77,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     setIntakeId('');
     setExtractionId('');
     setExtraction(null);
+    setApprovedDraft(null);
     setSavedDriverId('');
     setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', expirationDate: '' });
     setNotes('');
@@ -209,7 +211,9 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
       setExtraction(reviewed);
       if (decision === 'APPROVE' && reviewed.status === 'APPROVED') {
         if (!intakeId) throw new Error('A aprovação não possui um processo de CNH válido.');
+        const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
         const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);
+        setApprovedDraft(approved);
         setSavedDriverId(materialized.driverId);
       }
     } catch (err) {
@@ -219,29 +223,21 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     }
   };
 
-  const useApprovedDraft = async () => {
-    if (!intakeId || extraction?.status !== 'APPROVED' || !savedDriverId || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
-      const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = {
-        ...approved,
-        intakeId,
-        driverId: savedDriverId,
-      };
-      reset();
-      onClose();
-      onDraftReady(approvedWithIntake);
-    } catch (err) {
-      setError(safeError(err));
-    } finally {
-      setBusy(false);
-    }
+  const useApprovedDraft = () => {
+    if (!intakeId || extraction?.status !== 'APPROVED' || !approvedDraft || !savedDriverId || busy) return;
+    const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = {
+      ...approvedDraft,
+      intakeId,
+      driverId: savedDriverId,
+    };
+    reset();
+    onClose();
+    onDraftReady(approvedWithIntake);
   };
 
   const progress = progressFor(step);
   const showProgress = ['UPLOADING', 'REQUESTING', 'PENDING', 'PROCESSING'].includes(step);
+  const providerRateLimited = extraction?.failureCode === 'PROVIDER_RATE_LIMITED';
 
   return (
     <ModalContainer isOpen={isOpen} onClose={close} title="Cadastrar motorista pela CNH" maxWidth="2xl">
@@ -377,7 +373,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
                   : 'A CNH foi aprovada, mas o cadastro inicial ainda não foi salvo. Verifique o aviso acima antes de continuar.'}
               </p>
             </div>
-            <Button type="button" variant="primary" onClick={useApprovedDraft} disabled={busy || !savedDriverId} isLoading={busy}>
+            <Button type="button" variant="primary" onClick={useApprovedDraft} disabled={busy || !savedDriverId || !approvedDraft} isLoading={busy}>
               Completar dados agora
             </Button>
           </div>
@@ -387,10 +383,20 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
           <div className="space-y-4 text-center py-4">
             <XCircle className="mx-auto h-9 w-9 text-rose-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">Esta tentativa não pode preencher o cadastro</p>
-              <p className="mt-1 text-xs text-slate-500">{extraction?.failureCode ? `Falha: ${extraction.failureCode}. ` : ''}Inicie uma nova tentativa com um documento legível.</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                {providerRateLimited ? 'Serviço de leitura temporariamente indisponível' : 'Esta tentativa não pode preencher o cadastro'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {providerRateLimited
+                  ? 'A CNH enviada foi preservada. O limite temporário do serviço de leitura foi atingido; não envie o documento novamente agora.'
+                  : `${extraction?.failureCode ? `Falha: ${extraction.failureCode}. ` : ''}Inicie uma nova tentativa com um documento legível.`}
+              </p>
             </div>
-            <Button type="button" variant="outline" onClick={reset} disabled={busy}>Nova tentativa</Button>
+            {providerRateLimited ? (
+              <Button type="button" variant="outline" onClick={close} disabled={busy}>Fechar e tentar mais tarde</Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={reset} disabled={busy}>Nova tentativa</Button>
+            )}
           </div>
         )}
       </div>
