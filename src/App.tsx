@@ -65,10 +65,10 @@ export default function App(){
   const handleOperationSuccess=async()=>{const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;if(!companyIdSnapshot){clearBadgeState();return;}await refreshBadges(companyIdSnapshot,requestVersion);};
   const financeModalResetKey=selectedReceivableForReceipt?'receipt':selectedPayableForPayment?'payment':isTransferModalOpen?'transfer':selectedReceivablesForRenegotiation.length>0?'renegotiation':'none';
 
-  return <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+  return <div className="h-dvh min-h-0 overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
     <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
-    <div className="flex-1 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
+    <div className="flex-1 min-h-0 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
+      <main className="flex-1 min-h-0 overflow-y-auto bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
         {activeTab==='executive-operations'&&<ExecutiveOperationsCenterView/>}
         {activeTab==='performance-management'&&<PerformanceManagementCenterView/>}
