@@ -10,6 +10,7 @@ const proposed = {
   category: 'b',
   birthDate: '1990-01-02',
   expirationDate: '2030-12-31',
+  ear: true,
 };
 
 assert.deepEqual(projectApprovedCnhDriverDraft({
@@ -25,6 +26,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   cnhNumber: '12345678901',
   cnhCategory: 'AB',
   cnhExpiration: '2030-12-31',
+  cnhEar: true,
 });
 
 assert.deepEqual(projectApprovedCnhDriverDraft({
@@ -43,7 +45,30 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   cnhNumber: '12345678901',
   cnhCategory: 'B',
   cnhExpiration: '2031-09-10',
+  cnhEar: true,
 });
+
+const pendingEar = projectApprovedCnhDriverDraft({
+  status: 'APPROVED',
+  detectedDocumentType: 'CNH',
+  proposedFields: {
+    name: proposed.name,
+    cpf: proposed.cpf,
+    rg: proposed.rg,
+    registrationNumber: proposed.registrationNumber,
+    category: proposed.category,
+    birthDate: proposed.birthDate,
+    expirationDate: proposed.expirationDate,
+  },
+});
+assert.equal(Object.prototype.hasOwnProperty.call(pendingEar, 'cnhEar'), false, 'EAR ausente deve permanecer pendente');
+
+assert.equal(projectApprovedCnhDriverDraft({
+  status: 'APPROVED',
+  detectedDocumentType: 'CNH',
+  proposedFields: { ...proposed, ear: true },
+  corrections: { ear: false },
+}).cnhEar, false, 'revisão humana deve poder confirmar EAR como Não');
 
 assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'REVIEW_REQUIRED',
@@ -67,6 +92,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
     category: 'Z',
     birthDate: '31/02/2026',
     expirationDate: 'not-a-date',
+    ear: 'desconhecido',
     unexpectedAuthorityField: 'ignored',
   },
 }), { fullName: 'Nome Proposto' });
@@ -75,11 +101,12 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   status: 'APPROVED',
   detectedDocumentType: 'CNH',
   proposedFields: { name: 'Legacy Name', registrationNumber: '12345678901', expirationDate: '2031-01-01' },
-  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhExpiration: '02/02/2032' },
+  corrections: { fullName: 'Correção Canônica', cnhNumber: '10987654321', cnhExpiration: '02/02/2032', cnhEar: false },
 }), {
   fullName: 'Correção Canônica',
   cnhNumber: '10987654321',
   cnhExpiration: '2032-02-02',
+  cnhEar: false,
 });
 
 const modalSource = readFileSync(new URL('../../components/drivers/DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
