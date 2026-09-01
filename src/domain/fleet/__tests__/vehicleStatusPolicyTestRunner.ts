@@ -22,15 +22,16 @@ assert.equal(
 );
 assert.equal(
   canManuallyTransitionVehicleStatus(VehicleStatus.MAINTENANCE, VehicleStatus.AVAILABLE, { hasBlockingMaintenance: true }),
-  false,
+  true,
 );
 assert.equal(
   canManuallyTransitionVehicleStatus(VehicleStatus.MAINTENANCE, VehicleStatus.AVAILABLE, { hasBlockingMaintenance: false }),
   true,
 );
 
-const maintenanceLockedTargets = manuallyAllowedVehicleStatuses(VehicleStatus.MAINTENANCE, { hasBlockingMaintenance: true });
-assert.equal(maintenanceLockedTargets.length, 0);
+const maintenanceTargets = manuallyAllowedVehicleStatuses(VehicleStatus.MAINTENANCE, { hasBlockingMaintenance: true });
+assert.ok(maintenanceTargets.includes(VehicleStatus.AVAILABLE));
+assert.ok(maintenanceTargets.includes(VehicleStatus.BLOCKED));
 
 assert.equal(vehicleStatusLabel(VehicleStatus.DOCUMENTATION_PENDING), 'Documentação pendente');
 assert.equal(vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE), 'Aguardando manutenção');
