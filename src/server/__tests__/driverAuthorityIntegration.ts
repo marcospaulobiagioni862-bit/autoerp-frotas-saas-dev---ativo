@@ -4,6 +4,8 @@ import { registerDriverRoutes } from '../driverRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 import { DriverStatus } from '../../types/enums';
 import { PostgresAuditLogRepository } from '../../db/repositories/postgresRepositories';
+import { runDriverDocumentIntakePromotionChecks } from './driverDocumentIntakePromotionTestRunner';
+import { runDriverDocumentIntakeArchivedRestoreChecks } from './driverDocumentIntakeArchivedRestoreTestRunner';
 
 const companyA = 'security-2i2-company-a';
 const companyB = 'security-2i2-company-b';
@@ -19,6 +21,9 @@ async function json(response: globalThis.Response): Promise<any> {
 
 export class DriverAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
+    await runDriverDocumentIntakePromotionChecks();
+    await runDriverDocumentIntakeArchivedRestoreChecks();
+
     const app = express();
     app.use(express.json());
     app.use((req: Request, _res: ExpressResponse, next: NextFunction) => {
