@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Bot, Check, ExternalLink, FileSearch, RefreshCw, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, Bot, Check, ExternalLink, FileSearch, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import {
   DocumentAiClient,
@@ -108,7 +108,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState<'APPROVE' | 'REJECT' | 'RETRY' | null>(null);
+  const [submitting, setSubmitting] = useState<'APPROVE' | 'REJECT' | 'RETRY' | 'DISCARD' | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -224,6 +224,23 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     }
   };
 
+  const discardFailed = async () => {
+    if (!canReview) return;
+    const failedIds = items.filter((item) => item.status === 'FAILED').map((item) => item.id);
+    if (failedIds.length === 0) return;
+    if (!window.confirm(`Limpar ${failedIds.length} falha(s) descartável(is)? Arquivos já vinculados ou com dados válidos serão preservados.`)) return;
+    setSubmitting('DISCARD');
+    setError(null);
+    try {
+      await DocumentAiClient.discardFailed(failedIds);
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao limpar falhas descartáveis.');
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
   const openSource = async () => {
     if (!selected) return;
     setOpeningSource(true);
@@ -284,6 +301,18 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
+        {canReview && items.some((item) => item.status === 'FAILED') && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            isLoading={submitting === 'DISCARD'}
+            onClick={() => void discardFailed()}
+            icon={<Trash2 className="h-4 w-4" />}
+          >
+            Limpar falhas descartáveis
+          </Button>
+        )}
         {items.map((item) => (
           <button
             type="button"

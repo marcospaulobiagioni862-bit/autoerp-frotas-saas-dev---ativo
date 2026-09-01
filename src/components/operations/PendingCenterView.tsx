@@ -339,7 +339,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
               <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto dark:bg-emerald-950 dark:text-emerald-400">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">Nenhuma pendência encontrada</h4>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{filter === 'DRIVER' ? 'Nenhum motorista com pendência' : 'Nenhuma pendência encontrada'}</h4>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
                 Parabéns! Sua operação está em perfeita conformidade com os critérios da Central de Alertas.
               </p>

@@ -340,6 +340,28 @@ export class DocumentAiClient {
     return payload.items.map(parseDocumentAiExtraction);
   }
 
+  static async discardFailed(extractionIds?: string[]): Promise<{ discarded: number; attachmentsArchived: number }> {
+    const response = await fetch('/api/document-ai/extractions/discard-failed', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(extractionIds ? { extractionIds } : {}),
+    });
+    if (!response.ok) throw await errorFrom(response);
+    const payload = asRecord(await response.json());
+    if (
+      !Number.isSafeInteger(payload.discarded) || (payload.discarded as number) < 0 ||
+      !Number.isSafeInteger(payload.attachmentsArchived) || (payload.attachmentsArchived as number) < 0
+    ) throw new Error('Resposta inválida da limpeza documental.');
+    return {
+      discarded: payload.discarded as number,
+      attachmentsArchived: payload.attachmentsArchived as number,
+    };
+  }
+
   static async retry(id: string): Promise<DocumentAiExtraction> {
     const response = await fetch(`/api/document-ai/extractions/${encodeURIComponent(id)}/retry`, {
       method: 'POST',
