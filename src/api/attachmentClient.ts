@@ -40,15 +40,15 @@ function validateAttachment(value: unknown): FileAttachment {
   return item as unknown as FileAttachment;
 }
 
-async function apiError(response: Response): Promise<AttachmentApiError> {
-  let message = `Attachment request failed (${response.status})`;
+async function apiError(response: Response, operation: string): Promise<AttachmentApiError> {
+  let detail = `requisição falhou (${response.status})`;
   try {
     const payload = asRecord(await response.json());
-    if (typeof payload.error === 'string') message = payload.error;
+    if (typeof payload.error === 'string') detail = payload.error;
   } catch {
     // Fail closed with status if body is not JSON.
   }
-  return new AttachmentApiError(response.status, message);
+  return new AttachmentApiError(response.status, `${operation}: ${detail}`);
 }
 
 export interface AttachmentUploadInput {
@@ -83,7 +83,7 @@ export class AttachmentClient {
     if (filters?.entityId) params.set('entityId', filters.entityId);
     const suffix = params.toString() ? `?${params.toString()}` : '';
     const response = await fetch(`/api/attachments${suffix}`, { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
+    if (!response.ok) throw await apiError(response, 'Falha ao listar anexos');
     const payload = asRecord(await response.json());
     if (!Array.isArray(payload.items)) throw new Error('Invalid attachment list payload');
     return payload.items.map(validateAttachment);
@@ -91,7 +91,7 @@ export class AttachmentClient {
 
   static async get(id: string): Promise<FileAttachment> {
     const response = await fetch(`/api/attachments/${encodeURIComponent(id)}`, { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
+    if (!response.ok) throw await apiError(response, 'Falha ao consultar anexo');
     return validateAttachment(asRecord(await response.json()).item);
   }
 
@@ -112,13 +112,13 @@ export class AttachmentClient {
       headers,
       body: input.content,
     });
-    if (!response.ok) throw await apiError(response);
+    if (!response.ok) throw await apiError(response, 'Falha ao enviar anexo');
     return validateAttachment(asRecord(await response.json()).item);
   }
 
   static async content(id: string): Promise<Blob> {
     const response = await fetch(`/api/attachments/${encodeURIComponent(id)}/content`, { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
+    if (!response.ok) throw await apiError(response, 'Falha ao visualizar/baixar anexo');
     const blob = await response.blob();
     if (!blob.type) throw new Error('Invalid attachment content response');
     return blob;
@@ -131,7 +131,10 @@ export class AttachmentClient {
       headers: { 'content-type': 'application/json' },
       body: '{}',
     });
-    if (!response.ok) throw await apiError(response);
+    if (!response.ok) {
+      const operation = action === 'archive' ? 'Falha ao arquivar anexo' : 'Falha ao restaurar anexo';
+      throw await apiError(response, operation);
+    }
     return validateAttachment(asRecord(await response.json()).item);
   }
 
