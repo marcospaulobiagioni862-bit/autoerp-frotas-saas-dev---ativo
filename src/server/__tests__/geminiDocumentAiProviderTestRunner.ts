@@ -6,6 +6,7 @@ import {
 } from '../geminiDocumentAiProvider';
 import {
   DOCUMENT_AI_SYSTEM_POLICY,
+  DocumentAiProcessingError,
   processDocumentAiBytes,
 } from '../documentAiProcessor';
 
@@ -88,34 +89,44 @@ const providerError = Object.assign(new Error(`provider failure ${sensitiveApiKe
   request: { document: sensitiveDocument, prompt: sensitivePrompt },
   response: sensitiveResponse,
 });
-const logged: unknown[][] = [];
+let rateLimitedCalls = 0;
+const warned: unknown[][] = [];
+const errored: unknown[][] = [];
+const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
-console.error = (...args: unknown[]) => { logged.push(args); };
+console.warn = (...args: unknown[]) => { warned.push(args); };
+console.error = (...args: unknown[]) => { errored.push(args); };
 try {
   const failingProvider = new GeminiDocumentAiProvider({
     apiKey: sensitiveApiKey,
     model: 'gemini-3.6-flash',
     allowedSyntheticChecksums: new Set([checksum]),
-    client: { async create() { throw providerError; } },
+    client: {
+      async create() {
+        rateLimitedCalls += 1;
+        throw providerError;
+      },
+    },
   });
   await assert.rejects(
-    failingProvider.extract({
+    processDocumentAiBytes(failingProvider, {
       content: syntheticPdf,
       mimeType: 'application/pdf',
-      policy: sensitivePrompt,
-    }, new AbortController().signal),
-    error => error === providerError,
+      expectedChecksum: checksum,
+    }),
+    (error: unknown) => error instanceof DocumentAiProcessingError && error.failureCode === 'PROVIDER_RATE_LIMITED',
   );
 } finally {
+  console.warn = originalConsoleWarn;
   console.error = originalConsoleError;
 }
-assert.equal(logged.length, 1, 'provider failure must emit exactly one sanitized diagnostic');
-const serializedLog = JSON.stringify(logged);
-assert.match(serializedLog, /GeminiProviderError/);
+assert.equal(rateLimitedCalls, 1, 'HTTP 429 must not trigger immediate repeated provider calls');
+assert.equal(warned.length, 1, 'rate limit must emit exactly one sanitized warning');
+assert.equal(errored.length, 0, 'rate limit must not be logged as a generic provider error');
+const serializedLog = JSON.stringify(warned);
 assert.match(serializedLog, /429/);
-assert.match(serializedLog, /RATE_LIMITED/);
-for (const forbidden of [sensitiveApiKey, sensitiveDocument, sensitivePrompt, sensitiveResponse]) {
-  assert.equal(serializedLog.includes(forbidden), false, `sanitized diagnostic leaked: ${forbidden}`);
+for (const forbidden of [sensitiveApiKey, sensitiveDocument, sensitivePrompt, sensitiveResponse, 'RATE_LIMITED']) {
+  assert.equal(serializedLog.includes(forbidden), false, `sanitized rate-limit diagnostic leaked: ${forbidden}`);
 }
 
 assert.throws(() => new GeminiDocumentAiProvider({

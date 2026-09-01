@@ -69,8 +69,16 @@ export type DocumentAiFailureCode =
   | 'ATTACHMENT_INTEGRITY_MISMATCH'
   | 'ATTACHMENT_INVALID'
   | 'PROVIDER_TIMEOUT'
+  | 'PROVIDER_RATE_LIMITED'
   | 'PROVIDER_FAILURE'
   | 'PROVIDER_OUTPUT_INVALID';
+
+export class DocumentAiProviderRateLimitError extends Error {
+  constructor() {
+    super('PROVIDER_RATE_LIMITED');
+    this.name = 'DocumentAiProviderRateLimitError';
+  }
+}
 
 export class DocumentAiProcessingError extends Error {
   constructor(public readonly failureCode: DocumentAiFailureCode) {
@@ -195,6 +203,9 @@ export async function processDocumentAiBytes(
       ]);
     } catch (error) {
       if (error instanceof DocumentAiProcessingError) throw error;
+      if (error instanceof DocumentAiProviderRateLimitError) {
+        throw new DocumentAiProcessingError('PROVIDER_RATE_LIMITED');
+      }
       throw new DocumentAiProcessingError('PROVIDER_FAILURE');
     }
     const validated = validateProviderOutput(rawOutput);

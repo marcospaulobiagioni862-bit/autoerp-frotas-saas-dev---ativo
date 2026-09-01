@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { projectApprovedCnhDriverDraft } from '../driverDocumentIntakeApprovedCnhDraft';
 
 const proposed = {
@@ -80,5 +81,19 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   cnhNumber: '10987654321',
   cnhExpiration: '2032-02-02',
 });
+
+const modalSource = readFileSync(new URL('../../components/drivers/DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
+const approvedDraftRead = modalSource.indexOf('const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);');
+const materialization = modalSource.indexOf('const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);');
+assert.ok(approvedDraftRead >= 0, 'CNH flow must fetch the server-authoritative approved draft');
+assert.ok(materialization > approvedDraftRead, 'approved draft must be captured before materialization consumes the intake');
+
+const completionStart = modalSource.indexOf('const useApprovedDraft = () => {');
+const completionEnd = modalSource.indexOf('const progress = progressFor(step);', completionStart);
+assert.ok(completionStart >= 0 && completionEnd > completionStart, 'completion handler must remain discoverable');
+const completionBody = modalSource.slice(completionStart, completionEnd);
+assert.equal(completionBody.includes('getApprovedCnhDraft'), false, 'completion must not re-read an already consumed intake');
+assert.match(modalSource, /PROVIDER_RATE_LIMITED/);
+assert.match(modalSource, /não envie o documento novamente agora/);
 
 console.log('Driver intake approved CNH draft checks passed.');
