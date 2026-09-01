@@ -65,6 +65,39 @@ async function run(): Promise<void> {
   assert(cnhWithGlobalNulls.proposedFields.name === 'MOTORISTA TESTE', 'CNH relevant field missing');
   assert(!('plate' in cnhWithGlobalNulls.proposedFields), 'irrelevant null field must be discarded');
 
+  const partialCnh = await processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: {
+          name: 'MOTORISTA PARCIAL',
+          cpf: '12345678900',
+          rg: null,
+          registrationNumber: '01234567890',
+          category: 'B',
+          birthDate: null,
+          issueDate: null,
+          expirationDate: '2030-12-31',
+        },
+        confidence: {
+          name: 0.99,
+          cpf: 0.98,
+          registrationNumber: 0.97,
+          category: 0.96,
+          expirationDate: 0.95,
+        },
+        raw: { text: 'fixture partial CNH', pages: 1 },
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+  assert(partialCnh.proposedFields.name === 'MOTORISTA PARCIAL', 'partial CNH name must be preserved');
+  assert(partialCnh.proposedFields.registrationNumber === '01234567890', 'partial CNH number must be preserved');
+  assert(!('rg' in partialCnh.proposedFields), 'null CNH field must be discarded');
+  assert(!('birthDate' in partialCnh.proposedFields), 'missing CNH date must not be invented');
+  assert(!('issueDate' in partialCnh.proposedFields), 'missing CNH issue date must not be invented');
+  assert(!('rg' in partialCnh.fieldConfidence), 'discarded null field must not require synthetic confidence');
+
   let called = false;
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
