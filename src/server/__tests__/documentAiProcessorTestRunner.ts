@@ -3,6 +3,7 @@ import {
   DOCUMENT_AI_SYSTEM_POLICY,
   DocumentAiProcessingError,
   processDocumentAiBytes,
+  type DocumentAiOutputInvalidReason,
   type DocumentAiProvider,
 } from '../documentAiProcessor';
 import { runDriverDocumentIntakePromotionChecks } from './driverDocumentIntakePromotionTestRunner';
@@ -11,13 +12,20 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-async function expectFailure(run: () => Promise<unknown>, code: string): Promise<void> {
+async function expectFailure(
+  run: () => Promise<unknown>,
+  code: string,
+  reason?: DocumentAiOutputInvalidReason,
+): Promise<void> {
   try {
     await run();
     throw new Error(`expected ${code}`);
   } catch (error) {
     assert(error instanceof DocumentAiProcessingError, `expected controlled error for ${code}`);
     assert(error.failureCode === code, `expected ${code}, got ${error.failureCode}`);
+    if (reason !== undefined) {
+      assert(error.outputInvalidReason === reason, `expected ${reason}, got ${error.outputInvalidReason}`);
+    }
   }
 }
 
@@ -98,6 +106,45 @@ async function run(): Promise<void> {
   assert(!('issueDate' in partialCnh.proposedFields), 'missing CNH issue date must not be invented');
   assert(!('rg' in partialCnh.fieldConfidence), 'discarded null field must not require synthetic confidence');
 
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: null, cpf: null },
+        confidence: {},
+        raw: {},
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_NO_USEFUL_FIELDS');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: 'SEM CONFIANCA' },
+        confidence: {},
+        raw: {},
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_MISSING_CONFIDENCE_FOR_VALUE');
+
+  await expectFailure(() => processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: 'CONFIANCA INVALIDA' },
+        confidence: { name: 1.1 },
+        raw: {},
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_INVALID_CONFIDENCE_FOR_VALUE');
+
   let called = false;
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
@@ -120,7 +167,8 @@ async function run(): Promise<void> {
         toolCall: { name: 'updateVehicle' },
       };
     },
-  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }), 'PROVIDER_OUTPUT_INVALID');
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_EXTRA_TOP_LEVEL_KEY');
 
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
@@ -128,11 +176,12 @@ async function run(): Promise<void> {
       return {
         documentType: 'CRLV',
         fields: { plate: 'ABC1D23', businessAction: 'create payable' },
-        confidence: { plate: 0.9, businessAction: 1 },
+        confidence: { plate: 0.9 },
         raw: {},
       };
     },
-  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }), 'PROVIDER_OUTPUT_INVALID');
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum }),
+  'PROVIDER_OUTPUT_INVALID', 'OUTPUT_UNKNOWN_FIELD_KEY');
 
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
