@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
+import { DriverClient } from '../../api/driverClient';
 import type { FileAttachment } from '../../types/entities/audit';
 import { Search, X } from 'lucide-react';
 import { Card } from '../ui/Card';
@@ -36,17 +37,24 @@ export function DocumentCenter() {
   const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
   const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
+  const [driverNamesById, setDriverNamesById] = useState<Record<string, string>>({});
 
   const fetchDocuments = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [attachmentsResult, statusesResult] = await Promise.allSettled([
+      const [attachmentsResult, statusesResult, driversResult] = await Promise.allSettled([
         AttachmentClient.list(),
         DocumentAiClient.attachmentStatuses(),
+        DriverClient.list(),
       ]);
       if (attachmentsResult.status === 'rejected') throw attachmentsResult.reason;
       setAttachments(attachmentsResult.value.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      if (driversResult.status === 'fulfilled') {
+        setDriverNamesById(Object.fromEntries(driversResult.value.map((driver) => [driver.id, driver.fullName])));
+      } else {
+        setDriverNamesById({});
+      }
       if (statusesResult.status === 'fulfilled') {
         setAttachmentStatuses(Object.fromEntries(statusesResult.value.map((item) => [item.attachmentId, item])));
         setAttachmentStatusesUnavailable(false);
@@ -73,7 +81,8 @@ export function DocumentCenter() {
     const matchesSearch =
       att.fileName.toLowerCase().includes(term) ||
       (att.description || '').toLowerCase().includes(term) ||
-      att.entityId.toLowerCase().includes(term);
+      att.entityId.toLowerCase().includes(term) ||
+      (driverNamesById[att.entityId] || '').toLowerCase().includes(term);
     const matchesEntity = entityTypeFilter === 'ALL' || att.entityType === entityTypeFilter;
     const matchesDoc = documentTypeFilter === 'ALL' || att.documentType === documentTypeFilter;
     return matchesSearch && matchesEntity && matchesDoc && !att.isArchived;
@@ -171,7 +180,7 @@ export function DocumentCenter() {
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input placeholder="Nome do arquivo, ID..." className="pl-9" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+                <Input placeholder="Nome do motorista, arquivo ou ID..." className="pl-9" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
               </div>
             </div>
             <div>
