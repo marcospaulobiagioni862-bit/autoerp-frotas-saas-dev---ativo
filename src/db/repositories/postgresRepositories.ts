@@ -11,56 +11,78 @@ import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle, KmRecord }
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
   protected tableName: any;
   protected tx: any;
+  protected companyId: string;
 
-  constructor(tableName: any, tx?: any) {
+  constructor(tableName: any, tx: any, companyId: string) {
+    if (!companyId?.trim()) throw new Error('Tenant scope required');
     this.tableName = tableName;
     this.tx = tx || db;
+    this.companyId = companyId;
   }
 
   withTransaction(tx: any) {
-    return new (this.constructor as any)(this.tableName, tx);
+    return new (this.constructor as any)(tx, this.companyId);
+  }
+
+  private byTenantAndId(id: string) {
+    return and(eq(this.tableName.companyId, this.companyId), eq(this.tableName.id, id));
+  }
+
+  private assertTenant(item: Partial<T>): void {
+    if (item.companyId !== undefined && item.companyId !== this.companyId) {
+      throw new Error('Cross-tenant repository operation blocked');
+    }
   }
 
   async findById(id: string): Promise<T | null> {
-    const results = await this.tx.select().from(this.tableName).where(eq(this.tableName.id, id));
+    const results = await this.tx.select().from(this.tableName).where(this.byTenantAndId(id)).limit(1);
     return (results[0] as T) || null;
   }
 
-  async findAll(filters?: any): Promise<T[]> {
-    return await this.tx.select().from(this.tableName);
+  async findAll(_filters?: any): Promise<T[]> {
+    return await this.tx.select().from(this.tableName).where(eq(this.tableName.companyId, this.companyId));
   }
 
   async create(item: T): Promise<T> {
-    await this.tx.insert(this.tableName).values(item);
-    return item;
+    this.assertTenant(item);
+    const scopedItem = { ...item, companyId: this.companyId };
+    await this.tx.insert(this.tableName).values(scopedItem);
+    return scopedItem as T;
   }
 
   async update(id: string, item: Partial<T>): Promise<T> {
+    this.assertTenant(item);
+    const { companyId: _ignoredCompanyId, ...safeItem } = item as any;
     const result = await this.tx.update(this.tableName)
-      .set(item)
-      .where(eq(this.tableName.id, id))
+      .set(safeItem)
+      .where(this.byTenantAndId(id))
       .returning();
     return result[0] as T;
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.tx.delete(this.tableName).where(eq(this.tableName.id, id)).returning();
+    const result = await this.tx.delete(this.tableName).where(this.byTenantAndId(id)).returning();
     return result.length > 0;
   }
 
-  async count(filters?: any): Promise<number> {
-    const res = await this.tx.execute(sql`SELECT COUNT(*) FROM ${this.tableName}`);
-    return parseInt(res.rows[0].count, 10);
+  async count(_filters?: any): Promise<number> {
+    const rows = await this.tx.select({ count: sql<number>`count(*)` })
+      .from(this.tableName)
+      .where(eq(this.tableName.companyId, this.companyId));
+    return Number(rows[0]?.count || 0);
   }
 
   async save(item: T): Promise<void> {
-    await this.tx.insert(this.tableName).values(item).onConflictDoUpdate({
-      target: this.tableName.id,
-      set: item
-    });
+    this.assertTenant(item);
+    const scopedItem = { ...item, companyId: this.companyId } as T;
+    const existing = await this.findById(item.id);
+    if (existing) {
+      await this.update(item.id, scopedItem);
+      return;
+    }
+    await this.create(scopedItem);
   }
 }
-
 export class PostgresVehicleRepository {
   private tx: any;
   constructor(tx?: any) { this.tx = tx || db; }
@@ -232,11 +254,11 @@ export class PostgresKmRecordRepository {
 }
 
 export class PostgresUserRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(users, tx); }
+  constructor(tx: any, companyId: string) { super(users, tx, companyId); }
 }
 
 export class PostgresAccountReceivableRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(accountReceivables, tx); }
+  constructor(tx: any, companyId: string) { super(accountReceivables, tx, companyId); }
 
   async findByIdempotencyKey(key: string): Promise<any | null> {
     const results = await this.tx.select().from(this.tableName).where(eq(this.tableName.idempotencyKey, key));
@@ -249,7 +271,7 @@ export class PostgresAccountReceivableRepository extends PostgresBaseRepository<
 }
 
 export class PostgresAccountPayableRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(accountPayables, tx); }
+  constructor(tx: any, companyId: string) { super(accountPayables, tx, companyId); }
 
   async findByIdempotencyKey(key: string): Promise<any | null> {
     const results = await this.tx.select().from(this.tableName).where(eq(this.tableName.idempotencyKey, key));
@@ -261,14 +283,14 @@ export class PostgresAccountPayableRepository extends PostgresBaseRepository<any
 }
 
 export class PostgresFinancialTransactionRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(financialTransactions, tx); }
+  constructor(tx: any, companyId: string) { super(financialTransactions, tx, companyId); }
   async findByReceivableId(receivableId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.receivableId, receivableId)); }
   async findByPayableId(payableId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.payableId, payableId)); }
   async findByVehicleId(vehicleId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.vehicleId, vehicleId)); /* Adjust if actual vehicleId col */ }
 }
 
 export class PostgresFinancialAccountRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(financialAccounts, tx); }
+  constructor(tx: any, companyId: string) { super(financialAccounts, tx, companyId); }
 
   async findByIdWithLock(id: string): Promise<any | undefined> {
     const res = await this.tx.execute(
@@ -298,11 +320,11 @@ export class PostgresFinancialAccountRepository extends PostgresBaseRepository<a
 }
 
 export class PostgresPaymentMethodRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(paymentMethods, tx); }
+  constructor(tx: any, companyId: string) { super(paymentMethods, tx, companyId); }
 }
 
 export class PostgresAuditLogRepository extends PostgresBaseRepository<AuditLog> {
-  constructor(tx?: any) { super(auditLogs, tx); }
+  constructor(tx: any, companyId: string) { super(auditLogs, tx, companyId); }
 
   async create(item: AuditLog): Promise<AuditLog> {
     const changes = JSON.stringify({
@@ -328,11 +350,11 @@ export class PostgresAuditLogRepository extends PostgresBaseRepository<AuditLog>
 }
 
 export class PostgresContractRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(contracts, tx); }
+  constructor(tx: any, companyId: string) { super(contracts, tx, companyId); }
 }
 
 export class PostgresFinancialPeriodRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(financialPeriods, tx); }
+  constructor(tx: any, companyId: string) { super(financialPeriods, tx, companyId); }
 }
 
 
@@ -466,7 +488,7 @@ export class PostgresSecurityDepositMovementRepository {
 }
 
 export class PostgresDriverHealthProfileRepository extends PostgresBaseRepository<any> {
-  constructor(tx?: any) { super(driverHealthProfiles, tx); }
+  constructor(tx: any, companyId: string) { super(driverHealthProfiles, tx, companyId); }
 
   async findByDriverId(driverId: string): Promise<any | null> {
     const rows = await this.tx.select().from(driverHealthProfiles).where(eq(driverHealthProfiles.driverId, driverId)).limit(1);

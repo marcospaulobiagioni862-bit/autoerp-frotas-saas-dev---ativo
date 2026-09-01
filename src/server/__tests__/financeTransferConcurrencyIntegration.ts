@@ -189,7 +189,7 @@ async function run(): Promise<void> {
   );
   await rejects(
     () => transfer({ source: 'r19-source', dest: 'r19-dest', amount: 1, key: 'r19-foreign-method', method: paymentMethodB }),
-    'Acesso negado'
+    'não encontrada'
   );
   await rejects(
     () => transfer({ source: 'r19-closed-source', dest: 'r19-closed-dest', amount: 1, key: 'r19-closed', date: '2026-07-15' }),
