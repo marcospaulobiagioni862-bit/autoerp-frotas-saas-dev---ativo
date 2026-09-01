@@ -377,27 +377,24 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         }
 
         const draft = await loadApprovedCnhDraft(context, principal, intakeId);
-        if (
-          !draft.fullName || !draft.cpf || !draft.birthDate || !draft.cnhNumber ||
-          !draft.cnhCategory || !draft.cnhExpiration
-        ) throw new DriverDocumentIntakeConflictError('APPROVED_DRAFT_REQUIRED_FIELDS_MISSING');
-
+        const cpf = draft.cpf || `PENDING-CPF-${intakeId}`;
+        const cnhNumber = draft.cnhNumber || `PENDING-CNH-${intakeId}`;
         const repo = context.getDriverRepo();
-        const byCpf = await repo.findByCpf(principal.companyId, draft.cpf);
-        const byCnh = await repo.findByCnh(principal.companyId, draft.cnhNumber);
+        const byCpf = draft.cpf ? await repo.findByCpf(principal.companyId, draft.cpf) : null;
+        const byCnh = draft.cnhNumber ? await repo.findByCnh(principal.companyId, draft.cnhNumber) : null;
         const visibleDuplicate = byCpf || byCnh;
         if (visibleDuplicate) throw new DriverDocumentIntakeDuplicateCnhError(visibleDuplicate.id);
 
         const now = new Date().toISOString();
-        const cnhStatus = evaluateCnhStatus(draft.cnhExpiration);
+        const cnhStatus = draft.cnhExpiration ? evaluateCnhStatus(draft.cnhExpiration) : DocumentStatus.PENDING;
         const candidateId = randomUUID();
         const materialized = await repo.create({
           id: candidateId,
           companyId: principal.companyId,
-          fullName: draft.fullName,
-          cpf: draft.cpf,
+          fullName: draft.fullName || 'Cadastro pendente - CNH aprovada',
+          cpf,
           rg: draft.rg,
-          birthDate: draft.birthDate,
+          birthDate: draft.birthDate || '',
           phone: '',
           whatsapp: '',
           email: undefined,
@@ -409,9 +406,10 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
             state: '',
             zipCode: '',
           },
-          cnhNumber: draft.cnhNumber,
-          cnhCategory: draft.cnhCategory,
-          cnhExpiration: draft.cnhExpiration,
+          cnhNumber,
+          cnhCategory: draft.cnhCategory || '',
+          cnhExpiration: draft.cnhExpiration || '',
+          cnhEar: draft.cnhEar,
           cnhStatus,
           appPlatforms: [],
           status: cnhStatus === DocumentStatus.EXPIRED ? DriverStatus.BLOCKED : DriverStatus.PENDING_DOCS,
