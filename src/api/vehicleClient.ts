@@ -100,6 +100,48 @@ export interface VehicleCrlvMaintenanceHandoffResult {
   reused: boolean;
 }
 
+export interface VehicleSaleInput {
+  saleDate: string;
+  reason: string;
+  disposalType: string;
+  saleValue: number;
+  finalKm: number;
+  notes: string;
+  buyerName?: string;
+  buyerDocument?: string;
+}
+
+export interface VehicleLifecycleEvent {
+  id: string;
+  action: 'SOLD';
+  effectiveDate: string;
+  reason: string;
+  disposalType: string;
+  saleValue: number;
+  buyerName?: string;
+  buyerDocument?: string;
+  finalKm: number;
+  notes: string;
+  createdAt: string;
+}
+
+export interface VehicleSaleResult {
+  item: Vehicle;
+  lifecycle: VehicleLifecycleEvent;
+}
+
+function validateSaleLifecycle(value: unknown): VehicleLifecycleEvent {
+  const item = asRecord(value);
+  if (
+    typeof item.id !== 'string' || item.action !== 'SOLD' || typeof item.effectiveDate !== 'string' ||
+    typeof item.reason !== 'string' || typeof item.disposalType !== 'string' || !Number.isFinite(item.saleValue) ||
+    !Number.isInteger(item.finalKm) || typeof item.notes !== 'string' || typeof item.createdAt !== 'string'
+  ) throw new Error('Invalid vehicle lifecycle payload');
+  if (item.buyerName !== undefined && typeof item.buyerName !== 'string') throw new Error('Invalid vehicle lifecycle payload');
+  if (item.buyerDocument !== undefined && typeof item.buyerDocument !== 'string') throw new Error('Invalid vehicle lifecycle payload');
+  return item as unknown as VehicleLifecycleEvent;
+}
+
 export class VehicleClient {
   static async list(): Promise<Vehicle[]> {
     const response = await fetch('/api/fleet/vehicles', { credentials: 'include' });
@@ -176,6 +218,15 @@ export class VehicleClient {
     });
     if (!response.ok) throw await apiError(response);
     return validateVehicle(asRecord(await response.json()).item);
+  }
+
+  static async markSold(id: string, input: VehicleSaleInput): Promise<VehicleSaleResult> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/sale`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return { item: validateVehicle(payload.item), lifecycle: validateSaleLifecycle(payload.lifecycle) };
   }
 
   static async listKm(vehicleId: string): Promise<KmRecord[]> {
