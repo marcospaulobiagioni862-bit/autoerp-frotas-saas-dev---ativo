@@ -8,6 +8,7 @@ import {UnitOfWork} from '../../db/uow';
 import {
   TrafficTicketAuthorityService,isTrafficTicketDiscountAvailable,setTrafficTicketTestHooksForTests,
 } from '../trafficTicketAuthority';
+import {TrafficTicketVehicleOperationalAuthorityService} from '../trafficTicketVehicleOperationalAuthority';
 import {registerTrafficTicketRoutes} from '../trafficTicketRoutes';
 import {registerAttachmentRoutes} from '../attachmentRoutes';
 import {TicketResponsibility,TicketStatus} from '../../types/enums';
@@ -61,6 +62,7 @@ async function atomicityAndRules():Promise<string>{
 
   const driver=await TrafficTicketAuthorityService.create(admin,input('M-DRIVER',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));
   assert(driver.item.status===TicketStatus.CHARGED_DRIVER&&Boolean(driver.item.payableId)&&Boolean(driver.item.receivableId)&&!driver.item.nicPayableId,'DRIVER aggregate mismatch');
+  assert(!driver.item.contractId,'ticket without a matching contract must remain without contract linkage');
   const driverAp=await one(sql`SELECT origin_type,origin_id,vehicle_id,original_amount FROM account_payables WHERE id=${driver.item.payableId}`);
   const driverAr=await one(sql`SELECT origin_type,origin_id,vehicle_id,driver_id,original_amount FROM account_receivables WHERE id=${driver.item.receivableId}`);
   assert(driverAp.origin_type==='TRAFFIC_TICKET_COMPANY'&&driverAp.origin_id===driver.item.id&&driverAp.vehicle_id===vehicleA&&Number(driverAp.original_amount)===200,'DRIVER base AP traceability mismatch');
@@ -103,6 +105,25 @@ async function atomicityAndRules():Promise<string>{
   return driver.item.id;
 }
 
+async function contractResolutionAndVehiclePending():Promise<void>{
+  const contractId='security-2m-contract-resolved';
+  await db.execute(sql`
+    INSERT INTO contracts(id,company_id,driver_id,vehicle_id,status,contract_number,start_date,end_date,rental_amount,billing_periodicity,billing_due_day_of_week,billing_due_day_of_month,security_deposit_amount,franchise_km,excess_km_rate,signature_required,is_archived,created_at,updated_at)
+    VALUES(${contractId},${companyA},${driverA},${vehicleA},'CLOSED','CTR-RESOLVED','2026-07-15','2026-08-15',1000,'WEEKLY',1,1,0,0,0,true,false,NOW(),NOW()) ON CONFLICT(id) DO NOTHING
+  `);
+  const resolved=await TrafficTicketAuthorityService.create(admin,input('M-RESOLVED',TicketResponsibility.DRIVER,{driverIncomeCategoryId:incomeA}));
+  assert(resolved.item.contractId===contractId&&resolved.item.driverId===driverA,'single contract covering infraction date was not resolved');
+  const alert=await one(sql`SELECT description FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${resolved.item.id} AND category='FINE'`);
+  assert(String(alert?.description||'').includes('Contrato: CTR-RESOLVED'),'resolved contract was not propagated to operational alert');
+
+  const first=await TrafficTicketVehicleOperationalAuthorityService.create(admin,resolved.item.id,'DOCUMENTATION');
+  const replay=await TrafficTicketVehicleOperationalAuthorityService.create(admin,resolved.item.id,'DOCUMENTATION');
+  assert(first.created&&first.category==='DOCUMENT'&&!replay.created&&replay.taskId===first.taskId,'vehicle documentation pending must be idempotent');
+  const task=await one(sql`SELECT category,source_type,source_id,entity_type,entity_id,status,idempotency_key FROM operational_tasks WHERE company_id=${companyA} AND id=${first.taskId}`);
+  assert(task?.category==='DOCUMENT'&&task.source_type==='TRAFFIC_TICKET'&&task.source_id===resolved.item.id&&task.entity_type==='VEHICLE'&&task.entity_id===vehicleA&&task.status==='OPEN','vehicle operational pending traceability mismatch');
+  assert(String(task.idempotency_key)===`traffic-ticket-vehicle-action:${resolved.item.id}:DOCUMENTATION`,'vehicle operational pending idempotency key mismatch');
+}
+
 async function overlappingContractIsFailClosed():Promise<void>{
   const historical=[['security-2m-contract-1','FINISHED'],['security-2m-contract-2','CLOSED']] as const;
   for(const [id,status] of historical)await db.execute(sql`
@@ -132,5 +153,5 @@ async function rls():Promise<void>{
   finally{await client.end();await db.execute(sql.raw(`DROP OWNED BY ${roleName}`));await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`));}
 }
 
-async function main():Promise<void>{await seed();await httpSecurity();const ticketId=await atomicityAndRules();await overlappingContractIsFailClosed();await attachmentBinding(ticketId);await rls();console.log('SECURITY-2M traffic ticket authority integration: PASS');}
+async function main():Promise<void>{await seed();await httpSecurity();const ticketId=await atomicityAndRules();await contractResolutionAndVehiclePending();await overlappingContractIsFailClosed();await attachmentBinding(ticketId);await rls();console.log('SECURITY-2M traffic ticket authority integration: PASS');}
 main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});
