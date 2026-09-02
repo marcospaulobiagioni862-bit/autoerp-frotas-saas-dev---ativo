@@ -364,10 +364,13 @@ export function registerContractRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(existing.status)) {
           throw new ContractConflictError('Contract is not editable');
         }
-        const generatedArtifact = await tx.getContractArtifactRepo().findCurrentForContract(
+        const generatedPdf = await tx.getContractArtifactRepo().findCurrentForContract(
           principal.companyId, existing.id, 'GENERATED_PDF', true
         );
-        if (generatedArtifact) throw new ContractConflictError('Contract terms are locked after PDF generation');
+        const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, existing.id, 'GENERATED_DOCX', true
+        );
+        if (generatedPdf || generatedDocx) throw new ContractConflictError('Contract terms are locked after document generation');
 
         const vehicleId = body.vehicleId === undefined ? existing.vehicleId : requiredText(body.vehicleId, 'vehicleId');
         const driverId = body.driverId === undefined ? existing.driverId : requiredText(body.driverId, 'driverId');
