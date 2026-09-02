@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { decideDriverCnhRenewal } from './driverCnhRenewalPolicy';
 import { projectApprovedCnhDriverDraft } from './driverDocumentIntakeApprovedCnhDraft';
 import type { DriverDocumentIntakeState } from './driverDocumentIntakeAuthority';
 import {
@@ -397,34 +398,30 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         const repo = context.getDriverRepo();
         const byCpf = draft.cpf ? await repo.findByCpf(principal.companyId, draft.cpf) : null;
         const byCnh = draft.cnhNumber ? await repo.findByCnh(principal.companyId, draft.cnhNumber) : null;
+        const renewal = decideDriverCnhRenewal(draft, byCpf, byCnh);
 
-        if (byCpf && byCnh && byCpf.id !== byCnh.id) {
-          throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', byCpf.id);
-        }
-
-        const existing = byCpf || byCnh;
         const now = new Date().toISOString();
         const cnhStatus = draft.cnhExpiration ? evaluateCnhStatus(draft.cnhExpiration) : DocumentStatus.PENDING;
 
-        if (existing) {
-          if (!draft.cpf || !draft.cnhNumber || existing.cpf !== draft.cpf || existing.cnhNumber !== draft.cnhNumber) {
-            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', existing.id);
+        if (renewal.kind !== 'NEW') {
+          if (renewal.kind === 'IDENTITY_CONFLICT') {
+            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', renewal.driver.id);
           }
-          if (!draft.cnhExpiration) {
-            throw new DriverDocumentIntakeDuplicateCnhError(existing.id);
+          if (renewal.kind === 'OLDER') {
+            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_OLDER_THAN_CURRENT', renewal.driver.id);
           }
-          if (draft.cnhExpiration < existing.cnhExpiration) {
-            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_OLDER_THAN_CURRENT', existing.id);
+          if (renewal.kind === 'DUPLICATE_WITHOUT_VALIDITY') {
+            throw new DriverDocumentIntakeDuplicateCnhError(renewal.driver.id);
           }
 
-          let target = existing;
-          if (draft.cnhExpiration > existing.cnhExpiration) {
-            const updated = await repo.updateForCompany(principal.companyId, existing.id, {
-              cnhExpiration: draft.cnhExpiration,
-              cnhCategory: draft.cnhCategory || existing.cnhCategory,
-              cnhEar: draft.cnhEar === undefined ? existing.cnhEar : draft.cnhEar,
+          let target = renewal.driver;
+          if (renewal.kind === 'RENEW') {
+            const updated = await repo.updateForCompany(principal.companyId, renewal.driver.id, {
+              cnhExpiration: draft.cnhExpiration!,
+              cnhCategory: draft.cnhCategory || renewal.driver.cnhCategory,
+              cnhEar: draft.cnhEar === undefined ? renewal.driver.cnhEar : draft.cnhEar,
               cnhStatus,
-              rg: draft.rg || existing.rg,
+              rg: draft.rg || renewal.driver.rg,
               updatedAt: now,
             });
             if (!updated) throw new DriverDocumentIntakeNotFoundError();
@@ -433,13 +430,13 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
               id: randomUUID(),
               companyId: principal.companyId,
               entityName: 'Driver',
-              entityId: existing.id,
+              entityId: renewal.driver.id,
               action: AuditAction.UPDATE,
               previousState: JSON.stringify({
                 event: 'CNH_RENEWAL',
-                cnhExpiration: existing.cnhExpiration,
-                cnhCategory: existing.cnhCategory,
-                cnhStatus: existing.cnhStatus,
+                cnhExpiration: renewal.driver.cnhExpiration,
+                cnhCategory: renewal.driver.cnhCategory,
+                cnhStatus: renewal.driver.cnhStatus,
               }),
               newState: JSON.stringify({
                 event: 'CNH_RENEWAL',
