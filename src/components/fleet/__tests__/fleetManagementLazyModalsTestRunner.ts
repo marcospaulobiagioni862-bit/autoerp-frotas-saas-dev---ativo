@@ -50,8 +50,8 @@ assert.doesNotMatch(
   'fleet modal fallback must not expose raw errors',
 );
 
-
-assert.match(source, />Ações do veículo</, 'vehicle cards must expose an explicit lifecycle action area');
+assert.match(source, /Ações do veículo/, 'vehicle cards must expose an explicit lifecycle action area');
+assert.match(source, /Histórico do veículo/, 'terminal vehicles must expose the read-only history action area');
 assert.match(source, />O histórico não será apagado\.</, 'lifecycle actions must explain history preservation');
 assert.match(
   source,
