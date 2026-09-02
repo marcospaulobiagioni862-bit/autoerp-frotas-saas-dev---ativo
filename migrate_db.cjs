@@ -4,14 +4,33 @@ const path = require('path');
 const { createHash } = require('crypto');
 
 const MIGRATION_TABLE = 'autoerp_schema_migrations';
+const CURRENT_VERIFY_FULL_ALIASES = new Set(['prefer', 'require', 'verify-ca']);
+
+function normalizePostgresConnectionString(connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') return connectionString;
+    if (parsed.searchParams.get('uselibpqcompat')?.toLowerCase() === 'true') return connectionString;
+
+    const sslMode = parsed.searchParams.get('sslmode')?.toLowerCase();
+    if (!sslMode || !CURRENT_VERIFY_FULL_ALIASES.has(sslMode)) return connectionString;
+
+    parsed.searchParams.set('sslmode', 'verify-full');
+    return parsed.toString();
+  } catch {
+    return connectionString;
+  }
+}
 
 function checksumSql(sql) {
   return createHash('sha256').update(sql, 'utf8').digest('hex');
 }
 
 async function runMigrations(options = {}) {
-  const connectionString = options.connectionString || process.env.DATABASE_URL;
-  const clientConfig = options.clientConfig || (connectionString ? { connectionString } : null);
+  const rawConnectionString = options.connectionString || process.env.DATABASE_URL;
+  const clientConfig = options.clientConfig || (rawConnectionString
+    ? { connectionString: normalizePostgresConnectionString(rawConnectionString) }
+    : null);
 
   if (!clientConfig) {
     throw new Error('DATABASE_URL is required to run AutoERP database migrations.');
@@ -71,7 +90,7 @@ async function runMigrations(options = {}) {
   }
 }
 
-module.exports = { runMigrations };
+module.exports = { normalizePostgresConnectionString, runMigrations };
 
 if (require.main === module) {
   runMigrations().catch((error) => {
