@@ -7,6 +7,7 @@ import {
   type CreateTrafficTicketAuthorityInput,type UpdateTrafficTicketAuthorityInput,
 } from './trafficTicketAuthority';
 import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
+import { TrafficTicketWhatsappAuthorityService,TrafficTicketWhatsappConsentRequiredError } from './trafficTicketWhatsappAuthority';
 
 const PROTECTED_KEYS=new Set([
   'companyId','userId','createdBy','status','payableId','basePayableId','receivableId','nicPayableId',
@@ -29,6 +30,7 @@ function sendError(res:Response,error:unknown):void{
   if(error instanceof TrafficTicketValidationError){res.status(400).json({error:'Invalid traffic ticket request'});return;}
   if(error instanceof TrafficTicketForbiddenError||message.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof TrafficTicketNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof TrafficTicketWhatsappConsentRequiredError){res.status(409).json({error:'Current WhatsApp consent required'});return;}
   if(error instanceof TrafficTicketConflictError||isUnique(error)||message.includes('Não é possível cancelar')||message.includes('já se encontra')||message.includes('período financeiro')){res.status(409).json({error:'Traffic ticket conflict'});return;}
   console.error('AUTOERP_TRAFFIC_TICKET_API_FAILURE',error);res.status(500).json({error:'Traffic ticket operation failed'});
 }
@@ -69,6 +71,10 @@ export function registerTrafficTicketRoutes(app:Express):void{
   app.post('/api/traffic-tickets/:id/driver-indication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     const allowed=new Set(['status','indicationDeadline','notes']);if(Object.keys(req.body||{}).some(key=>!allowed.has(key)))throw new TrafficTicketValidationError();
     res.json(await TrafficTicketDriverIndicationAuthorityService.update(actor,req.params.id,{status:indicationStatus(req.body?.status),indicationDeadline:date(req.body?.indicationDeadline,false),notes:req.body?.notes===undefined?undefined:String(req.body.notes).slice(0,4000)}));
+  }catch(error){sendError(res,error);}});
+  app.post('/api/traffic-tickets/:id/driver-communication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    if(req.body&&Object.keys(req.body).length)throw new TrafficTicketValidationError();
+    res.status(201).json(await TrafficTicketWhatsappAuthorityService.prepare(actor,req.params.id));
   }catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/nic',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.createNic(actor,req.params.id,text(req.body?.categoryId,200),amount(req.body?.nicAmount,false)));}catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/appeal',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.appeal(actor,req.params.id,text(req.body?.notes,2000)));}catch(error){sendError(res,error);}});
