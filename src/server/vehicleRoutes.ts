@@ -16,6 +16,7 @@ import { registerContractTemplateRoutes } from './contractTemplateRoutes';
 import { registerContractExecutionRoutes } from './contractExecutionRoutes';
 import { registerRecurringRoutes } from './recurringRoutes';
 import { registerVehicleCrlvApplyRoutes } from './vehicleCrlvApplyRoutes';
+import { registerVehicleLifecycleRoutes } from './vehicleLifecycleRoutes';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
@@ -139,6 +140,7 @@ export function registerVehicleRoutes(app: Express): void {
   registerContractExecutionRoutes(app);
   registerRecurringRoutes(app);
   registerVehicleCrlvApplyRoutes(app);
+  registerVehicleLifecycleRoutes(app);
 
   // SECURITY-2I1A-v2 foundation only. Fleet UI/KM switchover remains I1B.
   app.get('/api/fleet/vehicles', async (req: Request, res: Response) => {
@@ -383,6 +385,10 @@ export function registerVehicleRoutes(app: Express): void {
     const status = typeof req.body?.status === 'string' ? req.body.status : '';
     if (!Object.values(VehicleStatus).includes(status as VehicleStatus)) {
       res.status(400).json({ error: 'Invalid vehicle status' });
+      return;
+    }
+    if (status === VehicleStatus.SOLD || status === VehicleStatus.ARCHIVED) {
+      res.status(400).json({ error: 'Use the dedicated vehicle lifecycle action' });
       return;
     }
     try {
