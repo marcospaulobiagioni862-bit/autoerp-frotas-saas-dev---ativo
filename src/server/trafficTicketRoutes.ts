@@ -8,6 +8,7 @@ import {
 } from './trafficTicketAuthority';
 import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
 import { TrafficTicketWhatsappAuthorityService,TrafficTicketWhatsappConsentRequiredError } from './trafficTicketWhatsappAuthority';
+import { TrafficTicketVehicleOperationalAuthorityService } from './trafficTicketVehicleOperationalAuthority';
 
 const PROTECTED_KEYS=new Set([
   'companyId','userId','createdBy','status','payableId','basePayableId','receivableId','nicPayableId',
@@ -75,6 +76,10 @@ export function registerTrafficTicketRoutes(app:Express):void{
   app.post('/api/traffic-tickets/:id/driver-communication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(req.body&&Object.keys(req.body).length)throw new TrafficTicketValidationError();
     res.status(201).json(await TrafficTicketWhatsappAuthorityService.prepare(actor,req.params.id));
+  }catch(error){sendError(res,error);}});
+  app.post('/api/traffic-tickets/:id/vehicle-operational-action',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    const allowed=new Set(['cause']);if(Object.keys(req.body||{}).some(key=>!allowed.has(key)))throw new TrafficTicketValidationError();
+    res.status(201).json(await TrafficTicketVehicleOperationalAuthorityService.create(actor,req.params.id,req.body?.cause));
   }catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/nic',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.createNic(actor,req.params.id,text(req.body?.categoryId,200),amount(req.body?.nicAmount,false)));}catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/appeal',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.appeal(actor,req.params.id,text(req.body?.notes,2000)));}catch(error){sendError(res,error);}});
