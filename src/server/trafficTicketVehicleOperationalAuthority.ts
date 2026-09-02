@@ -43,6 +43,7 @@ export class TrafficTicketVehicleOperationalAuthorityService{
       const vehicle=rows(await rawTx.execute(sql`SELECT plate,brand,model FROM vehicles WHERE company_id=${principal.companyId} AND id=${String(ticket.vehicle_id)} LIMIT 1`))[0];
       if(!vehicle)throw new TrafficTicketNotFoundError('Veículo não encontrado');
       const idempotencyKey=`traffic-ticket-vehicle-action:${ticketId}:${selected}`;
+      const sourceType='TRAFFIC_TICKET_VEHICLE_ACTION',sourceId=`${ticketId}:${selected}`;
       const existing=rows(await rawTx.execute(sql`
         SELECT id FROM operational_tasks
         WHERE company_id=${principal.companyId} AND idempotency_key=${idempotencyKey}
@@ -60,7 +61,7 @@ export class TrafficTicketVehicleOperationalAuthorityService{
           id,company_id,title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,
           assigned_team,created_by_user_id,created_by_name,due_at,correlation_id,idempotency_key,created_at,updated_at
         ) VALUES(
-          ${taskId},${principal.companyId},${title},${description},${config.category},${config.priority},${config.severity},'OPEN','TRAFFIC_TICKET',${ticketId},'VEHICLE',${String(ticket.vehicle_id)},
+          ${taskId},${principal.companyId},${title},${description},${config.category},${config.priority},${config.severity},'OPEN',${sourceType},${sourceId},'VEHICLE',${String(ticket.vehicle_id)},
           'OPERATIONS',${principal.userId},${principal.name},${dueAt},${correlationId},${idempotencyKey},${now},${now}
         ) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id
       `));
@@ -71,7 +72,7 @@ export class TrafficTicketVehicleOperationalAuthorityService{
       }
       await context.getAuditLogRepo().create({
         id:randomUUID(),companyId:principal.companyId,entityName:'OperationalTask',entityId:taskId,action:AuditAction.CREATE,
-        newState:JSON.stringify({id:taskId,title,category:config.category,priority:config.priority,severity:config.severity,status:'OPEN',sourceType:'TRAFFIC_TICKET',sourceId:ticketId,entityType:'VEHICLE',entityId:String(ticket.vehicle_id),cause:selected,idempotencyKey}),
+        newState:JSON.stringify({id:taskId,title,category:config.category,priority:config.priority,severity:config.severity,status:'OPEN',sourceType,sourceId,trafficTicketId:ticketId,entityType:'VEHICLE',entityId:String(ticket.vehicle_id),cause:selected,idempotencyKey}),
         userId:principal.userId,userName:principal.name,timestamp:now,
       });
       return {taskId,created:true,cause:selected,category:config.category};
