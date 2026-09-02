@@ -353,35 +353,44 @@ export function registerContractExecutionRoutes(app: Express): void {
       const now = new Date().toISOString();
 
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
-        const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
-        if (!contract || !template) throw new ExecutionNotFoundError();
+        if (!contract || !template || contract.isArchived || template.isArchived || !template.isCurrent || !template.isActive) {
+          throw new ExecutionConflictError();
+        }
+        const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE', true);
+        if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
-        if (!driver || !vehicle) throw new ExecutionNotFoundError();
-        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, template)) throw new ExecutionConflictError();
+        if (!driver || !vehicle || !sameSnapshotTerms(snapshot, contract, driver, vehicle, template)) throw new ExecutionConflictError();
 
         const attachment = await tx.getAttachmentRepo().create({
           id: attachmentId,
           companyId: principal.companyId,
+          entityName: 'Contract',
           entityType: 'Contract',
           entityId: contract.id,
           documentType: 'CONTRACT_GENERATED_PDF',
           fileName: `${contract.contractNumber}.pdf`,
+          fileSize: stored.fileSize,
           mimeType: 'application/pdf',
-          sizeBytes: pdf.length,
-          sha256: createHash('sha256').update(pdf).digest('hex'),
+          uploadedBy: principal.name,
+          storageProvider: storage.provider,
           storageKey: stored.storageKey,
+          checksum: stored.checksum,
+          createdBy: principal.userId,
           contentState: 'AVAILABLE',
           description: 'PDF oficial do contrato gerado no servidor',
           isArchived: false,
           createdAt: now,
-          updatedAt: now,
         });
 
-        const current = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF');
+        const current = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF', true);
         if (current) {
-          await tx.getContractArtifactRepo().archive(current.id, principal.userId, now);
+          const archived = await tx.getContractArtifactRepo().updateForCompany(principal.companyId, current.id, {
+            isCurrent: false, isArchived: true, updatedAt: now,
+          });
+          if (!archived) throw new ExecutionConflictError();
         }
         const artifact = await tx.getContractArtifactRepo().create({
           id: randomUUID(),
@@ -390,41 +399,37 @@ export function registerContractExecutionRoutes(app: Express): void {
           artifactType: 'GENERATED_PDF',
           attachmentId: attachment.id,
           templateId: template.id,
-          templateVersion: template.versionNumber,
           snapshotJson,
-          snapshotSha256: snapshotHash,
-          signedAt: null,
-          signerName: null,
-          signerDocument: null,
-          signatureProvider: null,
+          snapshotHash,
           isCurrent: true,
           isArchived: false,
+          createdBy: principal.userId,
           createdAt: now,
           updatedAt: now,
         });
 
-        const updatedContract = await tx.getContractRepo().update(contract.id, {
+        const updatedContract = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           templateId: template.id,
           generatedPdfUrl: attachment.storageKey,
-          generatedPdfSha256: attachment.sha256,
-          generatedAt: now,
           status: contract.signatureRequired === false ? contract.status : ContractStatus.AWAITING_SIGNATURE,
           updatedAt: now,
-          updatedBy: principal.userId,
         });
+        if (!updatedContract) throw new ExecutionConflictError();
 
-        await tx.getAuditRepo().create({
-          id: randomUUID(), companyId: principal.companyId, userId: principal.userId,
-          action: AuditAction.UPDATE, entityType: 'Contract', entityId: contract.id,
-          changes: { generatedPdf: true, templateId: template.id, snapshotSha256: snapshotHash }, createdAt: now,
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
+          action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
+          newState: JSON.stringify({ event: 'GENERATE_PDF', templateId: template.id, snapshotHash }),
+          timestamp: now,
         });
 
         return { artifact, attachment, contract: updatedContract };
       });
 
+      storedKey = undefined;
       res.status(201).json(result);
     } catch (error) {
-      if (storedKey) await storage.remove(storedKey).catch(() => undefined);
+      if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
       sendError(res, error);
     }
   });
@@ -433,21 +438,11 @@ export function registerContractExecutionRoutes(app: Express): void {
     const principal = requirePrincipal(req, res, 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE');
     if (!principal) return;
     const body = bodyOf(req);
-    let storedKey: string | undefined;
     try {
-      rejectAuthorityFields(body, ['fileName', 'mimeType', 'contentBase64', 'signedAt', 'signerName', 'signerDocument', 'signatureProvider']);
-      const fileName = text(body.fileName, 'fileName', 1, 180);
-      const mimeType = text(body.mimeType, 'mimeType', 1, 120);
-      if (mimeType !== 'application/pdf') throw new ExecutionValidationError('Invalid signature evidence mimeType');
-      const contentBase64 = text(body.contentBase64, 'contentBase64', 1, 14_000_000);
-      const signerName = text(body.signerName, 'signerName', 1, 180);
-      const signerDocument = text(body.signerDocument, 'signerDocument', 1, 80);
-      const signatureProvider = text(body.signatureProvider, 'signatureProvider', 1, 120);
+      rejectAuthorityFields(body, ['attachmentId', 'signedByName', 'signedAt']);
+      const attachmentId = text(body.attachmentId, 'attachmentId', 1, 120);
+      const signedByName = text(body.signedByName, 'signedByName', 1, 180);
       const signedAt = parseSignedAt(body.signedAt);
-      const bytes = Buffer.from(contentBase64, 'base64');
-      if (!bytes.length || bytes.length > 10 * 1024 * 1024 || bytes.subarray(0, 5).toString('ascii') !== '%PDF-') {
-        throw new ExecutionValidationError('Invalid signature evidence content');
-      }
 
       const prepared = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
@@ -455,39 +450,42 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF');
         if (!generated) throw new ExecutionConflictError();
+        if (new Date(signedAt).getTime() < new Date(generated.createdAt).getTime()) throw new ExecutionConflictError();
         const currentSigned = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (currentSigned) throw new ExecutionConflictError();
-        return { contract, generated };
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
+        if (
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== contract.id || attachment.documentType !== 'SIGNED_CONTRACT' ||
+          attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
+          attachment.storageProvider !== storage.provider || !attachment.storageKey
+        ) throw new ExecutionConflictError();
+        return { contract, generated, attachment };
       });
 
-      const generatedSnapshotHash = prepared.generated.snapshotSha256;
-      const attachmentId = randomUUID();
-      const stored = await storage.write(principal.companyId, attachmentId, bytes);
-      storedKey = stored.storageKey;
+      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const checksum = createHash('sha256').update(bytes).digest('hex');
+      if (
+        !bytes.length || bytes.length > 10 * 1024 * 1024 ||
+        bytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
+        bytes.length !== prepared.attachment.fileSize ||
+        !prepared.attachment.checksum || checksum !== prepared.attachment.checksum
+      ) throw new ExecutionValidationError('Invalid signature evidence content');
+
       const now = new Date().toISOString();
-
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
-        const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
-        const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'GENERATED_PDF');
-        if (!contract || !generated || generated.snapshotSha256 !== generatedSnapshotHash) throw new ExecutionConflictError();
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'GENERATED_PDF', true);
+        const currentSigned = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'SIGNED_EVIDENCE', true);
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
+        if (
+          !contract || !generated || currentSigned || generated.id !== prepared.generated.id ||
+          generated.snapshotHash !== prepared.generated.snapshotHash ||
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== contract.id || attachment.documentType !== 'SIGNED_CONTRACT' ||
+          attachment.checksum !== checksum || attachment.contentState !== 'AVAILABLE'
+        ) throw new ExecutionConflictError();
 
-        const attachment = await tx.getAttachmentRepo().create({
-          id: attachmentId,
-          companyId: principal.companyId,
-          entityType: 'Contract',
-          entityId: contract.id,
-          documentType: 'CONTRACT_SIGNED_EVIDENCE',
-          fileName,
-          mimeType,
-          sizeBytes: bytes.length,
-          sha256: createHash('sha256').update(bytes).digest('hex'),
-          storageKey: stored.storageKey,
-          contentState: 'AVAILABLE',
-          description: 'Evidência PDF assinada do contrato',
-          isArchived: false,
-          createdAt: now,
-          updatedAt: now,
-        });
         const artifact = await tx.getContractArtifactRepo().create({
           id: randomUUID(),
           companyId: principal.companyId,
@@ -495,37 +493,34 @@ export function registerContractExecutionRoutes(app: Express): void {
           artifactType: 'SIGNED_EVIDENCE',
           attachmentId: attachment.id,
           templateId: generated.templateId,
-          templateVersion: generated.templateVersion,
+          sourceArtifactId: generated.id,
           snapshotJson: generated.snapshotJson,
-          snapshotSha256: generated.snapshotSha256,
+          snapshotHash: generated.snapshotHash,
+          signatureMethod: 'SIGNED_PDF_UPLOAD',
+          signedByName,
           signedAt,
-          signerName,
-          signerDocument,
-          signatureProvider,
           isCurrent: true,
           isArchived: false,
+          createdBy: principal.userId,
           createdAt: now,
           updatedAt: now,
         });
-        const updatedContract = await tx.getContractRepo().update(contract.id, {
-          signedPdfUrl: attachment.storageKey,
-          signedPdfSha256: attachment.sha256,
-          signedAt,
-          signatureProvider,
+        const updatedContract = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
+          signedContractUrl: attachment.storageKey,
           updatedAt: now,
-          updatedBy: principal.userId,
         });
-        await tx.getAuditRepo().create({
-          id: randomUUID(), companyId: principal.companyId, userId: principal.userId,
-          action: AuditAction.UPDATE, entityType: 'Contract', entityId: contract.id,
-          changes: { signedEvidence: true, signatureProvider, signedAt }, createdAt: now,
+        if (!updatedContract) throw new ExecutionConflictError();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'ContractArtifact', entityId: artifact.id,
+          action: AuditAction.CREATE, userId: principal.userId, userName: principal.name,
+          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: generated.id, checksum }),
+          timestamp: now,
         });
         return { artifact, attachment, contract: updatedContract };
       });
 
       res.status(201).json(result);
     } catch (error) {
-      if (storedKey) await storage.remove(storedKey).catch(() => undefined);
       sendError(res, error);
     }
   });
