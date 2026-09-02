@@ -147,7 +147,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`); if (!response.ok) throw new Error('CEP_LOOKUP_FAILED');
       const data = await response.json() as { erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
       if (data.erro) { setCepMessage('CEP não encontrado. Preencha o endereço manualmente.'); return; }
-      setZipCode(cep); setStreet(data.logradouro || ''); setNeighborhood(data.bairro || ''); setCity(data.localidade || ''); setState((data.uf || '').toUpperCase()); clearFieldError('zipCode'); setCepMessage('Endereço localizado. Complete tipo de residência, número e complemento.');
+      setZipCode(cep); setStreet(data.logradouro || ''); setNeighborhood(data.bairro || ''); setCity(data.localidade || ''); setState((data.uf || '').toUpperCase()); clearFieldError('zipCode'); setCepMessage('Endereço localizado. Complete tipo de residência e número.');
     } catch { setCepMessage('Não foi possível consultar o CEP agora. Você pode preencher o endereço manualmente.'); }
     finally { setCepLoading(false); }
   };
@@ -171,7 +171,6 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       if (digits(zipCode).length !== 8) errors.zipCode = 'Informe um CEP válido com 8 números.';
       if (!street.trim()) errors.street = 'Informe o logradouro.';
       if (!number.trim()) errors.number = 'Informe o número do endereço.';
-      if (!complement.trim()) errors.complement = 'Informe o complemento. Se não houver, escreva “Sem complemento”.';
       if (!neighborhood.trim()) errors.neighborhood = 'Informe o bairro.';
       if (!city.trim()) errors.city = 'Informe a cidade.';
       if (!/^[A-Za-z]{2}$/.test(state.trim())) errors.state = 'Informe a UF com 2 letras.';
@@ -270,7 +269,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <Input id="driver-zipCode" label="CEP" value={zipCode} onChange={(e) => { setZipCode(e.target.value); clearFieldError('zipCode'); setCepMessage(null); }} onBlur={lookupCep} required={requiresCompleteProfile} error={fieldErrors.zipCode} helperText={cepLoading ? 'Consultando CEP...' : cepMessage || 'Ao informar o CEP, rua, bairro, cidade e UF serão preenchidos automaticamente.'} />
           <div className="sm:col-span-2"><Input id="driver-street" label="Logradouro / Rua" value={street} onChange={(e) => { setStreet(e.target.value); clearFieldError('street'); }} required={requiresCompleteProfile} error={fieldErrors.street} /></div>
           <Input id="driver-number" label="Número" value={number} onChange={(e) => { setNumber(e.target.value); clearFieldError('number'); }} required={requiresCompleteProfile} error={fieldErrors.number} />
-          <Input id="driver-complement" label="Complemento" value={complement} onChange={(e) => { setComplement(e.target.value); clearFieldError('complement'); }} required={requiresCompleteProfile} error={fieldErrors.complement} helperText={requiresCompleteProfile ? 'Se não houver, escreva “Sem complemento”.' : undefined} />
+          <Input id="driver-complement" label="Complemento" value={complement} onChange={(e) => { setComplement(e.target.value); clearFieldError('complement'); }} helperText="Opcional." />
           <Input id="driver-neighborhood" label="Bairro" value={neighborhood} onChange={(e) => { setNeighborhood(e.target.value); clearFieldError('neighborhood'); }} required={requiresCompleteProfile} error={fieldErrors.neighborhood} />
           <Input id="driver-city" label="Cidade" value={city} onChange={(e) => { setCity(e.target.value); clearFieldError('city'); }} required={requiresCompleteProfile} error={fieldErrors.city} />
           <Input id="driver-state" label="Estado (UF)" value={state} onChange={(e) => { setState(e.target.value.toUpperCase()); clearFieldError('state'); }} maxLength={2} required={requiresCompleteProfile} error={fieldErrors.state} />
