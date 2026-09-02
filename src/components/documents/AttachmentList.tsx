@@ -198,10 +198,15 @@ export function AttachmentList({
   };
 
   if (loading) return <div className="text-sm text-gray-500">Carregando documentos...</div>;
-  if (error) return <div className="text-sm text-red-500">{error}</div>;
+  if (error && attachments.length === 0) return <div role="alert" className="text-sm text-red-500">{error}</div>;
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {error} Os anexos já carregados continuam disponíveis abaixo.
+        </div>
+      )}
       {attachmentStatusesUnavailable && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           Estados de extração temporariamente indisponíveis. Os documentos continuam acessíveis.
