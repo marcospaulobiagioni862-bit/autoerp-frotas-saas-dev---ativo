@@ -31,6 +31,8 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   onDraftReady: (draft: ApprovedCnhDriverDraft) => void;
+  expectedDriverId?: string;
+  onRenewed?: (driverId: string) => void;
 };
 
 function valueText(value: unknown): string {
@@ -50,7 +52,14 @@ function progressFor(step: string): { percent: number; label: string; detail: st
   return { percent: 100, label: 'Análise concluída', detail: 'Dados prontos para revisão.' };
 }
 
-export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraftReady }) => {
+export const DriverCnhIntakeModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  onDraftReady,
+  expectedDriverId,
+  onRenewed,
+}) => {
+  const isRenewal = Boolean(expectedDriverId);
   const [file, setFile] = useState<File | null>(null);
   const [intakeId, setIntakeId] = useState('');
   const [extractionId, setExtractionId] = useState('');
@@ -235,7 +244,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
       if (decision === 'APPROVE' && reviewed.status === 'APPROVED') {
         if (!intakeId) throw new Error('A aprovação não possui um processo de CNH válido.');
         const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);
-        const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);
+        const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId, expectedDriverId);
         setApprovedDraft(approved);
         setSavedDriverId(materialized.driverId);
       }
@@ -246,8 +255,14 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     }
   };
 
-  const useApprovedDraft = () => {
+  const completeApprovedCnh = () => {
     if (!intakeId || extraction?.status !== 'APPROVED' || !approvedDraft || !savedDriverId || busy) return;
+    if (isRenewal) {
+      reset();
+      onClose();
+      onRenewed?.(savedDriverId);
+      return;
+    }
     const approvedWithIntake: ApprovedCnhDriverDraftWithIntake = {
       ...approvedDraft,
       intakeId,
@@ -263,14 +278,22 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
   const providerRateLimited = extraction?.failureCode === 'PROVIDER_RATE_LIMITED';
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={close} title="Cadastrar motorista pela CNH" maxWidth="2xl">
+    <ModalContainer isOpen={isOpen} onClose={close} title={isRenewal ? 'Nova CNH / Renovar CNH' : 'Cadastrar motorista pela CNH'} maxWidth="2xl">
       <div className="space-y-5">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">A CNH salva o documento e cria o cadastro inicial após sua aprovação.</p>
-              <p className="mt-1 text-xs text-slate-500">Você revisa os dados da habilitação. Telefone, endereço, e-mail e plataformas podem ser completados depois.</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">
+                {isRenewal
+                  ? 'A nova CNH será salva no motorista selecionado após análise e revisão.'
+                  : 'A CNH salva o documento e cria o cadastro inicial após sua aprovação.'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {isRenewal
+                  ? 'A validade e os dados aprovados serão atualizados; o documento anterior permanecerá no histórico.'
+                  : 'Você revisa os dados da habilitação. Telefone, endereço, e-mail e plataformas podem ser completados depois.'}
+              </p>
             </div>
           </div>
         </div>
@@ -408,12 +431,14 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {savedDriverId
-                  ? 'O arquivo original e os dados da habilitação já estão vinculados ao cadastro inicial. Os demais dados podem ser completados agora ou depois.'
-                  : 'A CNH foi aprovada, mas o cadastro inicial ainda não foi salvo. Verifique o aviso acima antes de continuar.'}
+                  ? (isRenewal
+                    ? 'A nova CNH foi vinculada ao motorista correto, e o documento anterior foi preservado no histórico.'
+                    : 'O arquivo original e os dados da habilitação já estão vinculados ao cadastro inicial. Os demais dados podem ser completados agora ou depois.')
+                  : 'A CNH foi aprovada, mas o cadastro ainda não foi atualizado. Verifique o aviso acima antes de continuar.'}
               </p>
             </div>
-            <Button type="button" variant="primary" onClick={useApprovedDraft} disabled={busy || !savedDriverId || !approvedDraft} isLoading={busy}>
-              Completar dados agora
+            <Button type="button" variant="primary" onClick={completeApprovedCnh} disabled={busy || !savedDriverId || !approvedDraft} isLoading={busy}>
+              {isRenewal ? 'Concluir renovação' : 'Completar dados agora'}
             </Button>
           </div>
         )}
