@@ -9,6 +9,8 @@ const source = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.ur
 const crlvSource = readFileSync(new URL('../VehicleCrlvImportPanel.tsx', import.meta.url), 'utf8');
 const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRoutes.ts', import.meta.url), 'utf8');
 const vehicleClientSource = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
+const attachmentModalSource = readFileSync(new URL('../../documents/AttachmentModal.tsx', import.meta.url), 'utf8');
+const maintenanceHandoffSource = readFileSync(new URL('../../maintenance/MaintenanceCrlvHandoffPanel.tsx', import.meta.url), 'utf8');
 
 assert.ok(source.includes('Últimas 5 leituras de KM'), 'overview must label the bounded KM summary');
 assert.ok(source.includes('summary.kmRecords.slice(0,5).map'), 'overview must render no more than five authorized readings');
@@ -28,6 +30,15 @@ assert.ok(crlvSource.includes('VehicleClient.applyApprovedCrlv('), 'selected CRL
 assert.ok(crlvSource.includes('disabled={applying || selectedFields.size === 0}'), 'apply must require an explicit non-empty selection');
 assert.ok(!crlvSource.includes('VehicleClient.update'), 'CRLV UI must not write browser-derived field values through the generic vehicle update');
 assert.ok(vehicleClientSource.includes('JSON.stringify({ extractionId, fields })'), 'CRLV client must send identifiers and selected field names only');
+
+assert.ok(attachmentModalSource.includes("entityType === 'MaintenanceWorkOrder'"), 'maintenance attachment modal must expose the dedicated CRLV handoff only for work orders');
+assert.ok(attachmentModalSource.includes('MaintenanceCrlvHandoffPanel'), 'maintenance attachment modal must render the isolated handoff panel');
+assert.ok(maintenanceHandoffSource.includes('Usar este CRLV para revisar dados do veículo'), 'maintenance operator must receive an explicit CRLV review action');
+assert.ok(maintenanceHandoffSource.includes("entityType: 'MaintenanceWorkOrder'"), 'handoff panel must read attachments under maintenance authority');
+assert.ok(maintenanceHandoffSource.includes('VehicleClient.reuseMaintenanceCrlv(workOrderId, attachment.id)'), 'handoff must send only work order and attachment identifiers');
+assert.ok(!maintenanceHandoffSource.includes('AttachmentClient.upload'), 'handoff must never perform a second upload');
+assert.ok(vehicleClientSource.includes("'/api/fleet/vehicles/crlv-from-maintenance'"), 'handoff client must use the dedicated authoritative endpoint');
+assert.ok(vehicleClientSource.includes('JSON.stringify({ workOrderId, attachmentId })'), 'handoff client must not send browser-derived vehicle identity or storage data');
 
 const selected = parseVehicleCrlvSelectedFields(['plate', 'renavam', 'chassis', 'brand', 'manufactureYear']);
 const changes = buildVehicleChangesFromReviewedCrlv(
@@ -65,6 +76,21 @@ for (const invariant of [
 ]) {
   assert.ok(crlvRouteSource.includes(invariant), `CRLV authority invariant missing: ${invariant}`);
 }
+for (const invariant of [
+  "source.entityType !== 'MaintenanceWorkOrder'",
+  'source.entityId !== workOrder.id',
+  "source.contentState !== 'AVAILABLE'",
+  "source.storageProvider !== 'SERVER_FS'",
+  "source.storageProvider !== 'R2'",
+  "documentType: 'CRLV'",
+  "entityType: 'Vehicle'",
+  'source.storageKey',
+  'source.checksum',
+  "event: 'CRLV_MAINTENANCE_HANDOFF'",
+]) {
+  assert.ok(crlvRouteSource.includes(invariant), `maintenance CRLV handoff invariant missing: ${invariant}`);
+}
+assert.ok(crlvRouteSource.includes("attachmentRepo.findByEntity(principal.companyId, 'Vehicle', vehicle.id)"), 'handoff must be idempotent against an existing Vehicle CRLV reference');
 assert.ok(!crlvRouteSource.includes('req.body?.plate'), 'server must not accept browser-supplied CRLV field values');
 
-console.log('Vehicle latest KM and authoritative CRLV regressions: PASS');
+console.log('Vehicle latest KM, authoritative CRLV and maintenance handoff regressions: PASS');
