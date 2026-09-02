@@ -94,6 +94,12 @@ export interface VehicleCrlvApplyResult {
   appliedFields: string[];
 }
 
+export interface VehicleCrlvMaintenanceHandoffResult {
+  vehicleId: string;
+  attachmentId: string;
+  reused: boolean;
+}
+
 export class VehicleClient {
   static async list(): Promise<Vehicle[]> {
     const response = await fetch('/api/fleet/vehicles', { credentials: 'include' });
@@ -123,6 +129,27 @@ export class VehicleClient {
     });
     if (!response.ok) throw await apiError(response);
     return validateVehicle(asRecord(await response.json()).item);
+  }
+
+  static async reuseMaintenanceCrlv(workOrderId: string, attachmentId: string): Promise<VehicleCrlvMaintenanceHandoffResult> {
+    const response = await fetch('/api/fleet/vehicles/crlv-from-maintenance', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workOrderId, attachmentId }),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (
+      typeof payload.vehicleId !== 'string' ||
+      typeof payload.attachmentId !== 'string' ||
+      typeof payload.reused !== 'boolean'
+    ) throw new Error('Invalid maintenance CRLV handoff response');
+    return {
+      vehicleId: payload.vehicleId,
+      attachmentId: payload.attachmentId,
+      reused: payload.reused,
+    };
   }
 
   static async applyApprovedCrlv(id: string, extractionId: string, fields: string[]): Promise<VehicleCrlvApplyResult> {
