@@ -65,6 +65,7 @@ interface DriverDetailsModalProps {
   driverId: string | null;
   onSelectVehicle?: (vehicleId: string) => void;
   onDriverUpdated?: () => void;
+  onRenewCnh?: (driverId: string) => void;
 }
 
 type DriverTab =
@@ -84,6 +85,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   driverId,
   onSelectVehicle,
   onDriverUpdated,
+  onRenewCnh,
 }) => {
   const bridge = useMemo(() => new DriverLegacyDetailsBridge(), []);
   const [activeTab, setActiveTab] = useState<DriverTab>('overview');
@@ -491,6 +493,14 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
           {activeTab === 'cnh' && (
             <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">CNH vigente e histórico</h3>
+                {onRenewCnh && (
+                  <Button size="sm" variant="primary" onClick={() => onRenewCnh(driver.id)}>
+                    <CreditCard className="w-4 h-4 mr-1" />Nova CNH / Renovar CNH
+                  </Button>
+                )}
+              </div>
               <DriverCnhDocumentCard driverId={driver.id} />
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-semibold">Documentos Registrados</h3>
