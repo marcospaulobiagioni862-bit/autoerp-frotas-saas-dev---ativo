@@ -55,6 +55,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [isCnhIntakeOpen, setIsCnhIntakeOpen] = useState(false);
+  const [cnhRenewalDriverId, setCnhRenewalDriverId] = useState<string | null>(null);
   const [cnhDraft, setCnhDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   };
 
   const handleOpenCnhIntake = () => {
+    setCnhRenewalDriverId(null);
     setEditingDriver(null);
     setCnhDraft(null);
     setIsFormOpen(false);
@@ -149,6 +151,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   };
 
   const handleCnhDraftReady = (draft: ApprovedCnhDriverDraft) => {
+    setCnhRenewalDriverId(null);
     setCnhDraft(draft);
     setEditingDriver(null);
     setIsCnhIntakeOpen(false);
@@ -165,6 +168,21 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const handleOpenDetails = (driverId: string) => {
     setSelectedDriverId(driverId);
     setIsDetailsOpen(true);
+  };
+
+  const handleOpenCnhRenewal = (driverId: string) => {
+    setSelectedDriverId(driverId);
+    setIsDetailsOpen(false);
+    setCnhRenewalDriverId(driverId);
+    setIsCnhIntakeOpen(true);
+  };
+
+  const handleCnhRenewed = (driverId: string) => {
+    setIsCnhIntakeOpen(false);
+    setCnhRenewalDriverId(null);
+    setSelectedDriverId(driverId);
+    setIsDetailsOpen(true);
+    void loadData();
   };
 
   const handleDelete = async () => {
@@ -198,7 +216,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   };
 
   const driverModalResetKey = isCnhIntakeOpen
-    ? 'cnh-intake'
+    ? `cnh-intake:${cnhRenewalDriverId ?? 'new'}`
     : isFormOpen
       ? `form:${editingDriver?.id ?? (cnhDraft ? 'new-cnh' : 'new')}`
       : isDetailsOpen
@@ -425,8 +443,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do motorista...</div></div>}>
           {isCnhIntakeOpen && <DriverCnhIntakeModal
             isOpen
-            onClose={() => setIsCnhIntakeOpen(false)}
+            onClose={() => {
+              setIsCnhIntakeOpen(false);
+              setCnhRenewalDriverId(null);
+            }}
             onDraftReady={handleCnhDraftReady}
+            expectedDriverId={cnhRenewalDriverId || undefined}
+            onRenewed={handleCnhRenewed}
           />}
           {isFormOpen && <DriverFormModal
             isOpen
@@ -444,6 +467,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             driverId={selectedDriverId}
             onSelectVehicle={onSelectVehicle}
             onDriverUpdated={loadData}
+            onRenewCnh={handleOpenCnhRenewal}
           />}
         </Suspense>
       </LazyModuleErrorBoundary>

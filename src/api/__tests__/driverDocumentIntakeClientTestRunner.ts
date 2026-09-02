@@ -99,6 +99,19 @@ try {
   }
   assert(malformedExtractionRejected, 'malformed extraction summary must fail closed');
 
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestUrl = String(input);
+    requestInit = init;
+    return new Response(JSON.stringify({
+      item: { driverId: 'driver-expected', attachmentId: 'att-renewed', created: false },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }) as typeof fetch;
+  const renewed = await DriverDocumentIntakeClient.materializeApprovedCnh('intake/encoded', 'driver-expected');
+  assert(renewed.driverId === 'driver-expected', 'renewal materialization payload was not accepted');
+  assert(requestUrl.endsWith('/intake%2Fencoded/materialize-driver'), 'materialization intake id was not URL encoded');
+  assert(requestInit?.method === 'POST', 'materialization must use POST');
+  assert(String(requestInit?.body) === JSON.stringify({ expectedDriverId: 'driver-expected' }), 'renewal must bind materialization to the selected driver');
+
   console.log('Driver document intake client tests PASS');
 } finally {
   globalThis.fetch = originalFetch;

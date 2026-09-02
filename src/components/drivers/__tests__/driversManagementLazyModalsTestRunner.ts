@@ -111,5 +111,10 @@ assert.match(cnhIntakeSource, /const clearSelectedFile = \(\) => \{[\s\S]*setFil
 assert.match(cnhIntakeSource, /\{file \? 'Trocar arquivo' : 'Selecionar CNH'\}/, 'CNH intake must expose selection and replacement states');
 assert.match(cnhIntakeSource, />\s*Remover arquivo\s*</, 'CNH intake must expose explicit removal');
 assert.match(cnhIntakeSource, /disabled=\{!file \|\| busy\}/, 'CNH analysis action must remain disabled without a file');
+assert.match(detailsSource, /Nova CNH \/ Renovar CNH/, 'driver details must expose the explicit CNH renewal action');
+assert.match(detailsSource, /onRenewCnh\(driver\.id\)/, 'CNH renewal action must keep the selected driver id');
+assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, 'CNH intake must receive the selected renewal driver');
+assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must be wired to the renewal intake');
+assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
 
 console.log('Deferred driver modals, profile photo and document upload UX regression: PASS');
