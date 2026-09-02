@@ -79,7 +79,6 @@ export class DriverAuthorityIntegrationRunner {
       address: {
         street: 'Rua A',
         number: '10',
-        complement: 'Casa principal',
         neighborhood: 'Centro',
         city: 'São Paulo',
         state: 'SP',
@@ -121,7 +120,6 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'state', body: { ...baseDriver, address: { ...baseDriver.address, state: 'SPO' } } },
         { label: 'zipCode', body: { ...baseDriver, address: { ...baseDriver.address, zipCode: '123' } } },
         { label: 'address-number', body: { ...baseDriver, address: { ...baseDriver.address, number: '' } } },
-        { label: 'address-complement', body: { ...baseDriver, address: { ...baseDriver.address, complement: '' } } },
         { label: 'residence-type', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: undefined } } },
         { label: 'apartment-condominium', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: '', unit: '12' } } },
         { label: 'apartment-unit', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', unit: '' } } },
@@ -157,7 +155,7 @@ export class DriverAuthorityIntegrationRunner {
       assert(!driverA.healthAndEmergency, 'health leaked into Driver core payload');
       assert(driverA.phone === '11999999999' && driverA.whatsapp === '11999999999', 'phone normalization mismatch');
       assert(driverA.address.residenceType === 'HOUSE', 'residence type was not persisted');
-      assert(driverA.address.complement === 'Casa principal', 'address complement was not persisted');
+      assert(!driverA.address.complement, 'optional address complement should remain absent when omitted');
       assert(driverA.cnhEar === true, 'CNH EAR was not persisted');
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
