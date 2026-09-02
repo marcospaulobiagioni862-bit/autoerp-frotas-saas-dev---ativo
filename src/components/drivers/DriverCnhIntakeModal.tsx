@@ -3,6 +3,8 @@ import { AlertCircle, CheckCircle2, FileUp, RefreshCw, ScanLine, ShieldCheck, XC
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiExtraction } from '../../api/documentAiClient';
 import { DocumentAiFocusedClient } from '../../api/documentAiFocusedClient';
+import { DriverClient } from '../../api/driverClient';
+import type { Driver } from '../../types/entities';
 import {
   DriverDocumentIntakeClient,
   type ApprovedCnhDriverDraft,
@@ -44,6 +46,14 @@ function safeError(error: unknown): string {
   return error instanceof Error ? error.message : 'Não foi possível concluir o processamento da CNH.';
 }
 
+function normalizedComparisonValue(key: CnhFieldKey | 'ear', value: string): string {
+  const trimmed = value.trim();
+  if (key === 'cpf' || key === 'registrationNumber') return trimmed.replace(/\D/g, '');
+  if (key === 'name') return trimmed.toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ');
+  if (key === 'category') return trimmed.toUpperCase();
+  return trimmed;
+}
+
 function progressFor(step: string): { percent: number; label: string; detail: string } {
   if (step === 'UPLOADING') return { percent: 20, label: 'Enviando CNH', detail: 'Transferindo o arquivo com segurança.' };
   if (step === 'REQUESTING') return { percent: 40, label: 'Preparando análise', detail: 'Arquivo recebido. Preparando a leitura pela IA.' };
@@ -66,6 +76,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
   const [extraction, setExtraction] = useState<DocumentAiExtraction | null>(null);
   const [approvedDraft, setApprovedDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [savedDriverId, setSavedDriverId] = useState('');
+  const [renewalDriver, setRenewalDriver] = useState<Driver | null>(null);
+  const [additionalChangesConfirmed, setAdditionalChangesConfirmed] = useState(false);
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
     name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '',
   });
@@ -83,6 +95,37 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
     return extraction?.status || 'PENDING';
   }, [localPhase, extractionId, extraction?.status]);
 
+  const renewalDifferences = useMemo(() => {
+    if (!renewalDriver) return [];
+    const candidates: Array<{ key: CnhFieldKey | 'ear'; label: string; current: string; next: string }> = [
+      { key: 'name', label: 'Nome', current: renewalDriver.fullName, next: draft.name },
+      { key: 'cpf', label: 'CPF', current: renewalDriver.cpf, next: draft.cpf },
+      { key: 'rg', label: 'RG', current: renewalDriver.rg || '', next: draft.rg },
+      { key: 'birthDate', label: 'Nascimento', current: renewalDriver.birthDate, next: draft.birthDate },
+      { key: 'registrationNumber', label: 'Número da CNH', current: renewalDriver.cnhNumber, next: draft.registrationNumber },
+      { key: 'category', label: 'Categoria', current: renewalDriver.cnhCategory, next: draft.category },
+      { key: 'expirationDate', label: 'Validade', current: renewalDriver.cnhExpiration, next: draft.expirationDate },
+      {
+        key: 'ear',
+        label: 'EAR',
+        current: renewalDriver.cnhEar === true ? 'Sim' : renewalDriver.cnhEar === false ? 'Não' : 'Pendente',
+        next: earReview === 'YES' ? 'Sim' : earReview === 'NO' ? 'Não' : '',
+      },
+    ];
+    return candidates.filter((item) => (
+      item.next.trim() &&
+      normalizedComparisonValue(item.key, item.current) !== normalizedComparisonValue(item.key, item.next)
+    ));
+  }, [renewalDriver, draft, earReview]);
+
+  const additionalRenewalDifferences = useMemo(
+    () => renewalDifferences.filter((item) => item.key !== 'expirationDate'),
+    [renewalDifferences],
+  );
+  const renewalDifferenceSignature = renewalDifferences
+    .map((item) => `${item.key}:${item.current}->${item.next}`)
+    .join('|');
+
   const reset = () => {
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -91,6 +134,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
     setExtraction(null);
     setApprovedDraft(null);
     setSavedDriverId('');
+    setAdditionalChangesConfirmed(false);
     setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '' });
     setEarReview('');
     setNotes('');
@@ -151,6 +195,22 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
     }
     return item;
   };
+
+  useEffect(() => {
+    if (!isOpen || !expectedDriverId) {
+      setRenewalDriver(null);
+      return undefined;
+    }
+    let cancelled = false;
+    void DriverClient.get(expectedDriverId)
+      .then((driver) => { if (!cancelled) setRenewalDriver(driver); })
+      .catch((err: unknown) => { if (!cancelled) setError(safeError(err)); });
+    return () => { cancelled = true; };
+  }, [isOpen, expectedDriverId]);
+
+  useEffect(() => {
+    setAdditionalChangesConfirmed(false);
+  }, [renewalDifferenceSignature]);
 
   useEffect(() => {
     if (!isOpen || !extractionId || (step !== 'PENDING' && step !== 'PROCESSING')) return undefined;
@@ -223,6 +283,14 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
     if (!extraction || extraction.status !== 'REVIEW_REQUIRED' || busy) return;
     if (decision === 'APPROVE' && extraction.detectedDocumentType !== 'CNH') {
       setError('O documento analisado não foi reconhecido como CNH e não pode preencher o motorista.');
+      return;
+    }
+    if (decision === 'APPROVE' && isRenewal && !renewalDriver) {
+      setError('Não foi possível comparar a nova CNH com o motorista selecionado.');
+      return;
+    }
+    if (decision === 'APPROVE' && additionalRenewalDifferences.length > 0 && !additionalChangesConfirmed) {
+      setError('Confirme as alterações adicionais destacadas antes de aprovar a renovação.');
       return;
     }
     setBusy(true);
@@ -376,6 +444,34 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Revise os dados reconhecidos</p>
               <p className="text-xs text-slate-500">Documento detectado: {extraction.detectedDocumentType || 'não identificado'}</p>
             </div>
+            {isRenewal && renewalDriver && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Comparação com a CNH vigente</p>
+                {renewalDifferences.length === 0 ? (
+                  <p className="mt-1 text-xs text-slate-500">Nenhuma diferença identificada nos campos preenchidos.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {renewalDifferences.map((item) => (
+                      <div key={item.key} className={`rounded-lg border px-3 py-2 text-xs ${item.key === 'expirationDate' ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30' : 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'}`}>
+                        <strong>{item.label}:</strong> {item.current || 'não informado'} → {item.next}
+                        {item.key !== 'expirationDate' && <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300">alteração adicional</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {additionalRenewalDifferences.length > 0 && (
+                  <label className="mt-3 flex items-start gap-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={additionalChangesConfirmed}
+                      onChange={(event) => setAdditionalChangesConfirmed(event.target.checked)}
+                    />
+                    Confirmo as alterações adicionais destacadas além da validade.
+                  </label>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {CNH_FIELDS.map(([key, label]) => (
                 <Input
@@ -415,7 +511,18 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               <Button type="button" variant="outline" onClick={() => review('REJECT')} disabled={busy}>
                 <XCircle className="mr-1.5 h-4 w-4" />Rejeitar
               </Button>
-              <Button type="button" variant="primary" onClick={() => review('APPROVE')} disabled={busy || extraction.detectedDocumentType !== 'CNH'} isLoading={busy}>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => review('APPROVE')}
+                disabled={
+                  busy ||
+                  extraction.detectedDocumentType !== 'CNH' ||
+                  (isRenewal && !renewalDriver) ||
+                  (additionalRenewalDifferences.length > 0 && !additionalChangesConfirmed)
+                }
+                isLoading={busy}
+              >
                 <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprovar e salvar CNH
               </Button>
             </div>

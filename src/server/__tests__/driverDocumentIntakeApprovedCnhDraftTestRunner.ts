@@ -147,6 +147,11 @@ assert.equal(completionBody.includes('getApprovedCnhDraft'), false, 'completion 
 assert.match(modalSource, /title=\{isRenewal \? 'Nova CNH \/ Renovar CNH'/, 'renewal mode must use an explicit title');
 assert.match(modalSource, /materializeApprovedCnh\(intakeId, expectedDriverId\)/, 'renewal must bind materialization to the selected driver');
 assert.match(modalSource, /documento anterior foi preservado no histórico/, 'renewal confirmation must preserve history explicitly');
+assert.match(modalSource, /Comparação com a CNH vigente/, 'renewal review must compare current and proposed data');
+assert.match(modalSource, /alteração adicional/, 'differences beyond validity must be highlighted');
+assert.match(modalSource, /Confirmo as alterações adicionais destacadas além da validade/, 'additional renewal changes must require explicit confirmation');
+assert.match(modalSource, /additionalRenewalDifferences\.length > 0 && !additionalChangesConfirmed/, 'approval must remain disabled until additional changes are confirmed');
+assert.match(modalSource, /DriverClient\.get\(expectedDriverId\)/, 'renewal comparison must load the selected driver through server authority');
 assert.match(modalSource, /PROVIDER_RATE_LIMITED/);
 assert.match(modalSource, /não envie o documento novamente agora/);
 assert.match(modalSource, /const retryRateLimited = async \(\) =>/);
