@@ -282,9 +282,10 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await request('/api/attachments/i4a-legacy-a1/content', {}, adminA);
       assert(response.status === 404, `legacy browser content expected explicit 404, got ${response.status}`);
 
+      const filesBeforeArchive = await fileCount(storageRoot, companyA);
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/archive`, { method: 'POST' }, adminA);
       assert(response.status === 200 && (await json(response)).item.isArchived === true, 'archive soft-state failed');
-      assert(await fileCount(storageRoot, companyA) === 1, 'archive physically deleted bytes');
+      assert(await fileCount(storageRoot, companyA) === filesBeforeArchive, 'archive physically deleted bytes');
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/content`, {}, adminA);
       assert(response.status === 404, `archived content expected 404, got ${response.status}`);
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/restore`, { method: 'POST' }, adminA);
