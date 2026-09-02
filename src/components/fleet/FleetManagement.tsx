@@ -10,16 +10,13 @@ import {
   Gauge,
   Eye,
   Edit,
-  Clock,
-  ShieldCheck,
-  User,
-  AlertCircle,
-  MoreVertical,
 } from 'lucide-react';
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { VehicleSaleModal } from './VehicleSaleModal';
+import { VehicleArchiveModal } from './VehicleArchiveModal';
+import { ArchivedVehicleHistoryModal } from './ArchivedVehicleHistoryModal';
 import {
   VEHICLE_STATUS_FILTERS,
   vehicleManualStatusOptions,
@@ -33,6 +30,7 @@ const RecordKmModal=lazy(()=>import('./RecordKmModal').then(module=>({default:mo
 
 export const FleetManagement: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -42,8 +40,10 @@ export const FleetManagement: React.FC = () => {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
   const [selectedVehicleIdForDetails, setSelectedVehicleIdForDetails] = useState<string | null>(null);
+  const [archivedVehicleIdForHistory, setArchivedVehicleIdForHistory] = useState<string | null>(null);
   const [vehicleForKmRecord, setVehicleForKmRecord] = useState<Vehicle | null>(null);
   const [vehicleForSale, setVehicleForSale] = useState<Vehicle | null>(null);
+  const [vehicleForArchive, setVehicleForArchive] = useState<Vehicle | null>(null);
 
   // Status Change Dialog
   const [vehicleForStatusChange, setVehicleForStatusChange] = useState<Vehicle | null>(null);
@@ -51,19 +51,26 @@ export const FleetManagement: React.FC = () => {
   const [isConfirmingStatus, setIsConfirmingStatus] = useState<boolean>(false);
 
   useEffect(() => {
-    loadVehicles();
-  }, []);
+    void loadVehicles();
+  }, [showArchived]);
 
   const loadVehicles = async () => {
     setLoading(true);
     try {
-      const list = await VehicleClient.list();
+      const list = showArchived ? await VehicleClient.listArchived() : await VehicleClient.list();
       setVehicles(list);
     } catch (err) {
       console.error('Erro ao carregar veículos:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleArchivedView = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setCategoryFilter('ALL');
+    setShowArchived((current) => !current);
   };
 
   const filteredVehicles = vehicles.filter((v) => {
@@ -121,10 +128,12 @@ export const FleetManagement: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
-        title="Veículos"
-        description="Cadastro, disponibilidade, odômetros, manutenções e ciclo de vida operacional da frota"
+        title={showArchived ? 'Veículos Arquivados' : 'Veículos'}
+        description={showArchived
+          ? 'Histórico preservado da frota fora da operação, disponível somente para consulta'
+          : 'Cadastro, disponibilidade, odômetros, manutenções e ciclo de vida operacional da frota'}
         breadcrumb="Operação • Gestão de Frota"
-        primaryAction={{
+        primaryAction={showArchived ? undefined : {
           label: 'Novo Veículo',
           onClick: () => {
             setVehicleToEdit(null);
@@ -134,35 +143,37 @@ export const FleetManagement: React.FC = () => {
         }}
       />
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-          <span className="text-xs text-slate-400 block">Total Frota</span>
-          <strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">{totalCount}</strong>
+      {!showArchived && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+            <span className="text-xs text-slate-400 block">Total Frota</span>
+            <strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">{totalCount}</strong>
+          </div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span>
+            <strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong>
+          </div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl">
+            <span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span>
+            <strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong>
+          </div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl">
+            <span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span>
+            <strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong>
+          </div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+            <span className="text-xs text-slate-400 block">Inativos / Vendidos</span>
+            <strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong>
+          </div>
         </div>
+      )}
 
-        <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span>
-          <strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong>
+      {showArchived && (
+        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">
+          {totalCount} veículo(s) arquivado(s). Esta área é somente leitura; o histórico não foi apagado.
         </div>
+      )}
 
-        <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl">
-          <span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span>
-          <strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong>
-        </div>
-
-        <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl">
-          <span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span>
-          <strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong>
-        </div>
-
-        <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-          <span className="text-xs text-slate-400 block">Inativos / Vendidos</span>
-          <strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong>
-        </div>
-      </div>
-
-      {/* Search & Filter Bar */}
       <Card padding="sm">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="w-full md:w-96">
@@ -176,8 +187,11 @@ export const FleetManagement: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
-            {VEHICLE_STATUS_FILTERS.map((st) => (
+            <Button variant="outline" size="sm" onClick={toggleArchivedView}>
+              {showArchived ? 'Voltar à frota ativa' : 'Ver arquivados'}
+            </Button>
+            {!showArchived && <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />}
+            {!showArchived && VEHICLE_STATUS_FILTERS.map((st) => (
               <button
                 key={st.id}
                 onClick={() => setStatusFilter(st.id)}
@@ -205,7 +219,6 @@ export const FleetManagement: React.FC = () => {
         </div>
       </Card>
 
-      {/* Grid of Vehicles */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <Skeleton className="h-56 w-full" />
@@ -215,30 +228,22 @@ export const FleetManagement: React.FC = () => {
       ) : filteredVehicles.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <Car className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Nenhum veículo encontrado</h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+            {showArchived ? 'Nenhum veículo arquivado' : 'Nenhum veículo encontrado'}
+          </h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.
+            {showArchived ? 'Os veículos arquivados aparecerão aqui sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}
           </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSearchTerm('');
-              setStatusFilter('ALL');
-              setCategoryFilter('ALL');
-            }}
-            className="mt-4"
-          >
-            Limpar Filtros
-          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVehicles.map((vehicle) => {
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
-            const manualStatusOptions = vehicleManualStatusOptions(vehicle.status).filter(
+            const allManualStatusOptions = vehicleManualStatusOptions(vehicle.status);
+            const manualStatusOptions = allManualStatusOptions.filter(
               (option) => option.value !== VehicleStatus.SOLD && option.value !== VehicleStatus.ARCHIVED,
             );
+            const canArchive = allManualStatusOptions.some((option) => option.value === VehicleStatus.ARCHIVED);
             const canPlaceOutOfUse =
               vehicle.status !== VehicleStatus.RENTED &&
               vehicle.status !== VehicleStatus.INACTIVE &&
@@ -253,96 +258,78 @@ export const FleetManagement: React.FC = () => {
                     <span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">{vehicle.plate}</span>
                     <Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge>
                   </div>
-
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
                   <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
-
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Quilometragem:</span>
-                      <strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Aluguel Semanal:</span>
-                      <strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyBRL(vehicle.rentalValueBase)} / sem</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">RENAVAM:</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">{vehicle.renavam}</span>
-                    </div>
+                    <div className="flex justify-between"><span className="text-slate-400">Quilometragem:</span><strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyBRL(vehicle.rentalValueBase)} / sem</strong></div>
+                    <div className="flex justify-between"><span className="text-slate-400">RENAVAM:</span><span className="font-mono text-slate-700 dark:text-slate-300">{vehicle.renavam}</span></div>
                   </div>
                 </div>
 
-                {/* Quick Action Buttons */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">Ações do veículo</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{showArchived ? 'Histórico do veículo' : 'Ações do veículo'}</span>
                     <span className="text-[10px] text-slate-400">O histórico não será apagado.</span>
                   </div>
-                  {manualStatusOptions.length > 0 && (
-                    <Select
-                      aria-label={`Alterar status do veículo ${vehicle.plate}`}
-                      value=""
-                      onChange={(event) => {
-                        const nextStatus = event.target.value as VehicleStatus;
-                        if (nextStatus) handleStatusChangeClick(vehicle, nextStatus);
-                      }}
-                      options={[{ value: '', label: 'Alterar status...', disabled: true }, ...manualStatusOptions]}
-                    />
-                  )}
 
-                  <div className="flex items-center justify-between gap-2">
-                    <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline">
-                      <Eye className="w-3.5 h-3.5" /> Detalhes →
+                  {showArchived ? (
+                    <button
+                      onClick={() => setArchivedVehicleIdForHistory(vehicle.id)}
+                      className="flex items-center justify-center gap-1 px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Abrir histórico somente leitura
                     </button>
-
-                    <div className="flex items-center gap-1">
-                      {canPlaceOutOfUse && (
-                        <button
-                          onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)}
-                          title="Colocar fora de uso"
-                          aria-label={`Colocar ${vehicle.plate} fora de uso`}
-                          className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md"
-                        >
-                          Fora de uso
-                        </button>
+                  ) : (
+                    <>
+                      {manualStatusOptions.length > 0 && (
+                        <Select
+                          aria-label={`Alterar status do veículo ${vehicle.plate}`}
+                          value=""
+                          onChange={(event) => {
+                            const nextStatus = event.target.value as VehicleStatus;
+                            if (nextStatus) handleStatusChangeClick(vehicle, nextStatus);
+                          }}
+                          options={[{ value: '', label: 'Alterar status...', disabled: true }, ...manualStatusOptions]}
+                        />
                       )}
-                      {canMarkSold && (
-                        <button
-                          onClick={() => setVehicleForSale(vehicle)}
-                          title="Marcar veículo como vendido"
-                          aria-label={`Marcar ${vehicle.plate} como vendido`}
-                          className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md"
-                        >
-                          Vendido
-                        </button>
-                      )}
-                      <button onClick={() => setVehicleForKmRecord(vehicle)} title="Registrar KM" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
-                        <Gauge className="w-4 h-4" />
-                      </button>
 
-                      <button
-                        onClick={() => {
-                          setVehicleToEdit(vehicle);
-                          setIsFormOpen(true);
-                        }}
-                        title="Editar Veículo"
-                        className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-
-                      {isAvailable && (
-                        <button
-                          onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)}
-                          title="Enviar para Manutenção"
-                          className="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded-md"
-                        >
-                          Oficina
+                      <div className="flex items-center justify-between gap-2">
+                        <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                          <Eye className="w-3.5 h-3.5" /> Detalhes →
                         </button>
-                      )}
-                    </div>
-                  </div>
+
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          {canPlaceOutOfUse && (
+                            <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} title="Colocar fora de uso" aria-label={`Colocar ${vehicle.plate} fora de uso`} className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md">
+                              Fora de uso
+                            </button>
+                          )}
+                          {canMarkSold && (
+                            <button onClick={() => setVehicleForSale(vehicle)} title="Marcar veículo como vendido" aria-label={`Marcar ${vehicle.plate} como vendido`} className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md">
+                              Vendido
+                            </button>
+                          )}
+                          {canArchive && (
+                            <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar veículo" aria-label={`Arquivar ${vehicle.plate}`} className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md">
+                              Arquivar
+                            </button>
+                          )}
+                          <button onClick={() => setVehicleForKmRecord(vehicle)} title="Registrar KM" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <Gauge className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} title="Editar Veículo" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          {isAvailable && (
+                            <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} title="Enviar para Manutenção" className="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded-md">
+                              Oficina
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </Card>
             );
@@ -350,15 +337,11 @@ export const FleetManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Modals */}
       <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
           {isFormOpen&&<VehicleFormModal
             isOpen
-            onClose={() => {
-              setIsFormOpen(false);
-              setVehicleToEdit(null);
-            }}
+            onClose={() => { setIsFormOpen(false); setVehicleToEdit(null); }}
             onSuccess={loadVehicles}
             vehicleToEdit={vehicleToEdit}
           />}
@@ -369,18 +352,11 @@ export const FleetManagement: React.FC = () => {
             vehicleId={selectedVehicleIdForDetails}
             onEditRequest={() => {
               const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
-              if (v) {
-                setSelectedVehicleIdForDetails(null);
-                setVehicleToEdit(v);
-                setIsFormOpen(true);
-              }
+              if (v) { setSelectedVehicleIdForDetails(null); setVehicleToEdit(v); setIsFormOpen(true); }
             }}
             onRecordKmRequest={() => {
               const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails);
-              if (v) {
-                setSelectedVehicleIdForDetails(null);
-                setVehicleForKmRecord(v);
-              }
+              if (v) { setSelectedVehicleIdForDetails(null); setVehicleForKmRecord(v); }
             }}
           />}
 
@@ -393,12 +369,9 @@ export const FleetManagement: React.FC = () => {
         </Suspense>
       </LazyModuleErrorBoundary>
 
-      {vehicleForSale&&<VehicleSaleModal
-        isOpen
-        vehicle={vehicleForSale}
-        onClose={() => setVehicleForSale(null)}
-        onSuccess={loadVehicles}
-      />}
+      {vehicleForSale&&<VehicleSaleModal isOpen vehicle={vehicleForSale} onClose={() => setVehicleForSale(null)} onSuccess={loadVehicles}/>} 
+      {vehicleForArchive&&<VehicleArchiveModal isOpen vehicle={vehicleForArchive} onClose={() => setVehicleForArchive(null)} onSuccess={loadVehicles}/>} 
+      {archivedVehicleIdForHistory&&<ArchivedVehicleHistoryModal isOpen vehicleId={archivedVehicleIdForHistory} onClose={() => setArchivedVehicleIdForHistory(null)}/>} 
 
       <ConfirmDialog
         isOpen={isConfirmingStatus}
