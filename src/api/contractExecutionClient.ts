@@ -17,7 +17,7 @@ function validateArtifact(value: unknown): ContractArtifact {
   const item = asRecord(value);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractId !== 'string' ||
-    (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'REVIEWED_FINAL_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
+    (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'GENERATED_DOCX' && item.artifactType !== 'REVIEWED_FINAL_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
     typeof item.attachmentId !== 'string' || typeof item.snapshotHash !== 'string' || !/^[0-9a-f]{64}$/.test(item.snapshotHash) ||
     typeof item.isCurrent !== 'boolean' || typeof item.isArchived !== 'boolean' ||
     typeof item.createdBy !== 'string' || typeof item.createdAt !== 'string' || typeof item.updatedAt !== 'string'
@@ -72,6 +72,20 @@ export class ContractExecutionClient {
 
   static async generatePdf(contractId: string, templateId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-pdf`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ templateId }),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return {
+      artifact: validateArtifact(payload.artifact),
+      attachment: validateAttachment(payload.attachment),
+      contract: validateContract(payload.contract),
+    };
+  }
+
+  static async generateDocx(contractId: string, templateId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-docx`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ templateId }),
     });

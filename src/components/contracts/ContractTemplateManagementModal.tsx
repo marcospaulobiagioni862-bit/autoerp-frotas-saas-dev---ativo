@@ -243,7 +243,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-600">Arquivo-fonte PDF ou DOCX<input className="mt-2 block w-full text-xs" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setSourceFile(event.target.files?.[0] || null)} /></label>
               {sourceFile && <p className="text-xs text-slate-500">Selecionado: {sourceFile.name}</p>}
-              <p className="text-[11px] text-slate-500">O original ficará preservado nesta versão. Nesta etapa, modelos por arquivo ficam inativos para geração automática de contrato; PDF é referência estática e DOCX é preservado como fonte.</p>
+              <p className="text-[11px] text-slate-500">O original ficará preservado nesta versão. PDF permanece como referência estática; DOCX com placeholders canônicos será ativado após validação para gerar um arquivo preenchido e revisável.</p>
             </div>
           )}
 
