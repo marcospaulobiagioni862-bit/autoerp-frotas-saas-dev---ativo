@@ -220,6 +220,42 @@ export class DocumentAiAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 409, `retry beyond max attempts expected 409, got ${response.status}`);
 
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const now = new Date().toISOString();
+        await tx.update(documentAiExtractions).set({
+          status: 'FAILED',
+          failureCode: 'PROVIDER_RATE_LIMITED',
+          attemptCount: 1,
+          completedAt: now,
+          updatedAt: now,
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, pending.id),
+        ));
+      });
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminA);
+      assert(response.status === 409, `rate-limit retry inside cooldown expected 409, got ${response.status}`);
+
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        const cooldownElapsedAt = new Date(Date.now() - 120_000).toISOString();
+        await tx.update(documentAiExtractions).set({
+          completedAt: cooldownElapsedAt,
+          updatedAt: cooldownElapsedAt,
+        }).where(and(
+          eq(documentAiExtractions.companyId, companyA),
+          eq(documentAiExtractions.id, pending.id),
+        ));
+      });
+      response = await request(`/api/document-ai/extractions/${encodeURIComponent(pending.id)}/retry`, {
+        method: 'POST', body: JSON.stringify({}),
+      }, adminA);
+      assert(response.status === 200, `rate-limit retry after cooldown expected 200, got ${response.status}`);
+      assert((await json(response)).item.status === 'PENDING', 'elapsed rate-limit cooldown must requeue the same extraction');
+
       const createExtraction = async (attachmentId: string, idempotencyKey: string): Promise<any> => {
         const createdResponse = await request('/api/document-ai/extractions', {
           method: 'POST',
