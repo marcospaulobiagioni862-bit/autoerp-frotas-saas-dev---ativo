@@ -295,6 +295,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
           Atualizar
         </Button>
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+        {notice && <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-3">{notice}</p>}
         </div>
       </div>
     );
