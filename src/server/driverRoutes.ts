@@ -195,7 +195,7 @@ function requireCompletedProfile(driver: Driver): void {
   if (driver.cnhEar === undefined) throw new DriverValidationError('Missing cnhEar');
   const address = driver.address;
   if (!address.residenceType) throw new DriverValidationError('Missing residenceType');
-  if (!address.zipCode || !address.street || !address.number || !address.complement || !address.neighborhood || !address.city || !address.state) {
+  if (!address.zipCode || !address.street || !address.number || !address.neighborhood || !address.city || !address.state) {
     throw new DriverValidationError('Incomplete address');
   }
   if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.unit)) {
