@@ -1,6 +1,13 @@
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { runAdminUserAuthorityIntegration } from './adminUserAuthorityIntegration';
 import { AdminUserClientTestRunner } from '../../api/__tests__/adminUserClientTestRunner';
+import { normalizePostgresConnectionString } from '../../db/postgresConnectionString';
+
+const require = createRequire(import.meta.url);
+const migrationConnection = require('../../../migrate_db.cjs') as {
+  normalizePostgresConnectionString(value: string): string;
+};
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -172,6 +179,32 @@ async function main(): Promise<void> {
   for (const [name, source] of Object.entries({ tenantAuthority, tenantRoutes, tenantClient, tenantView })) {
     assert(!source.includes('localRepositories'), `SECURITY-2Q2 ${name} references localRepositories`);
     assert(!source.includes('localStorage'), `SECURITY-2Q2 ${name} references localStorage`);
+  }
+
+  // DB-TLS-1 preserves today's verified TLS behavior explicitly before pg v9 changes aliases.
+  const tlsAliases = ['prefer', 'require', 'verify-ca'];
+  for (const mode of tlsAliases) {
+    const input = `postgres://user:p%40ss@db.example.test:5432/autoerp?application_name=autoerp&sslmode=${mode}`;
+    for (const [surface, normalizer] of [
+      ['runtime', normalizePostgresConnectionString],
+      ['migrations', migrationConnection.normalizePostgresConnectionString],
+    ] as const) {
+      const normalized = new URL(normalizer(input));
+      assert(normalized.searchParams.get('sslmode') === 'verify-full', `DB-TLS-1 ${surface} did not preserve verified TLS for ${mode}`);
+      assert(normalized.username === 'user' && normalized.password === 'p@ss', `DB-TLS-1 ${surface} changed credentials`);
+      assert(normalized.searchParams.get('application_name') === 'autoerp', `DB-TLS-1 ${surface} changed unrelated parameters`);
+    }
+  }
+  const preservedTlsUrls = [
+    'postgres://user:secret@localhost:5432/autoerp',
+    'postgres://user:secret@localhost:5432/autoerp?sslmode=disable',
+    'postgres://user:secret@localhost:5432/autoerp?sslmode=verify-full',
+    'postgres://user:secret@localhost:5432/autoerp?uselibpqcompat=true&sslmode=require',
+    'not-a-postgres-url',
+  ];
+  for (const input of preservedTlsUrls) {
+    assert(normalizePostgresConnectionString(input) === input, 'DB-TLS-1 runtime changed an explicit/non-TLS connection mode');
+    assert(migrationConnection.normalizePostgresConnectionString(input) === input, 'DB-TLS-1 migrations changed an explicit/non-TLS connection mode');
   }
 
   const clientResult = await AdminUserClientTestRunner.runAllTests();
