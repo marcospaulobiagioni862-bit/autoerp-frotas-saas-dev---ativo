@@ -111,6 +111,18 @@ function requireEmptyBody(body: unknown): void {
   }
 }
 
+function parseMaterialization(body: unknown): { expectedDriverId?: string } {
+  if (body === undefined || body === null) return {};
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new DriverDocumentIntakeValidationError();
+  const item = body as Record<string, unknown>;
+  const keys = Object.keys(item);
+  if (keys.length === 0) return {};
+  if (keys.length !== 1 || !Object.prototype.hasOwnProperty.call(item, 'expectedDriverId')) {
+    throw new DriverDocumentIntakeValidationError();
+  }
+  return { expectedDriverId: requiredEntityId(item.expectedDriverId) };
+}
+
 function sanitizeExtraction(item: any) {
   return {
     id: String(item.id),
@@ -368,7 +380,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
     if (!principal) return;
     try {
       const intakeId = requiredIntakeId(req.params.id);
-      requireEmptyBody(req.body);
+      const { expectedDriverId } = parseMaterialization(req.body);
       const result = await UnitOfWork.run(principal.companyId, async (context) => {
         const tx = context.getRawTransaction?.();
         if (!tx) throw new Error('Raw tenant transaction unavailable');
@@ -385,6 +397,9 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         const intake = intakeResult.rows?.[0];
         if (!intake) throw new DriverDocumentIntakeNotFoundError();
         if (String(intake.status) === 'CONSUMED' && intake.driver_id && intake.attachment_id) {
+          if (expectedDriverId && String(intake.driver_id) !== expectedDriverId) {
+            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', expectedDriverId);
+          }
           return {
             driverId: String(intake.driver_id),
             attachmentId: String(intake.attachment_id),
@@ -399,6 +414,13 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         const byCpf = draft.cpf ? await repo.findByCpf(principal.companyId, draft.cpf) : null;
         const byCnh = draft.cnhNumber ? await repo.findByCnh(principal.companyId, draft.cnhNumber) : null;
         const renewal = decideDriverCnhRenewal(draft, byCpf, byCnh);
+        if (expectedDriverId && (
+          renewal.kind === 'NEW' ||
+          renewal.kind === 'IDENTITY_CONFLICT' ||
+          renewal.driver.id !== expectedDriverId
+        )) {
+          throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', expectedDriverId);
+        }
 
         const now = new Date().toISOString();
         const cnhStatus = draft.cnhExpiration ? evaluateCnhStatus(draft.cnhExpiration) : DocumentStatus.PENDING;
