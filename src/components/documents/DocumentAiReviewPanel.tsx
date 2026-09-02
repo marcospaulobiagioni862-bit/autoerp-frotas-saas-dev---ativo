@@ -262,10 +262,13 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     setNotice(null);
     try {
       const result = await DocumentAiClient.discardFailed(extractionIds);
+      const protectedSummary = result.protected.length > 0
+        ? ` Vínculo ativo: ${result.protected.map((item) => `${item.entityType} (${item.entityId})`).join(', ')}.`
+        : '';
       setNotice(
         result.discarded > 0
-          ? `${result.discarded} extração(ões) arquivada(s). ${result.attachmentsArchived} anexo(s) sem uso também foi(ram) arquivado(s).`
-          : 'Nenhuma extração foi arquivada: os itens selecionados estão em uso ou possuem dados que devem ser preservados.',
+          ? `${result.discarded} extração(ões) arquivada(s). ${result.attachmentsArchived} anexo(s) sem uso também foi(ram) arquivado(s).${protectedSummary}`
+          : `Nenhuma extração foi arquivada: os itens selecionados estão em uso ou possuem dados que devem ser preservados.${protectedSummary}`,
       );
       setSelectedFailedIds(new Set());
       await load();

@@ -271,7 +271,7 @@ export class DocumentAiAuthorityIntegrationRunner {
       await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
         const now = new Date().toISOString();
-        for (const item of [disposable, mixedDisposable, mixedWithData]) {
+        for (const item of [disposable, mixedDisposable, mixedWithData, created]) {
           await tx.update(documentAiExtractions).set({
             status: 'FAILED',
             failureCode: 'PROVIDER_OUTPUT_INVALID',
@@ -288,12 +288,15 @@ export class DocumentAiAuthorityIntegrationRunner {
 
       response = await request('/api/document-ai/extractions/discard-failed', {
         method: 'POST',
-        body: JSON.stringify({ extractionIds: [disposable.id, mixedDisposable.id, mixedWithData.id] }),
+        body: JSON.stringify({ extractionIds: [disposable.id, mixedDisposable.id, mixedWithData.id, created.id] }),
       }, adminA);
       assert(response.status === 200, `failed cleanup expected 200, got ${response.status}`);
       const cleanup = await json(response);
       assert(cleanup.discarded === 2, 'cleanup must discard only individually eligible failures');
       assert(cleanup.attachmentsArchived === 1, 'cleanup must archive only the fully disposable attachment');
+      assert(cleanup.protected.length === 1, 'cleanup must report the exact active entity link');
+      assert(cleanup.protected[0].extractionId === created.id, 'cleanup protection must identify the blocked extraction');
+      assert(cleanup.protected[0].entityType === 'Vehicle' && cleanup.protected[0].entityId === 'doc-ai-veh-a1', 'cleanup protection must identify the linked vehicle');
 
       await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
