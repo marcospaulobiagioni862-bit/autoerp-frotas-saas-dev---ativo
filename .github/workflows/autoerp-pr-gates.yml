@@ -726,6 +726,7 @@ jobs:
 
       - name: Fleet domain regressions
         run: |
+          npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
           npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
           npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
           npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
