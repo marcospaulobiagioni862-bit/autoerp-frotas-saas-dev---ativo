@@ -7,6 +7,7 @@ import { ContractTemplatePolicyError, validateContractTemplateContent } from '..
 
 type TemplateAction = 'VIEW_CONTRACT_TEMPLATE' | 'MANAGE_CONTRACT_TEMPLATE';
 type TemplateSourceMode = 'MARKDOWN' | 'FILE';
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER']);
@@ -251,7 +252,7 @@ export function registerContractTemplateRoutes(app: Express): void {
           attachment.contentState === 'AVAILABLE'
         );
         if (sources.length !== 1) throw new TemplateConflictError();
-        if (!['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(sources[0].mimeType)) {
+        if (!['application/pdf', DOCX_MIME].includes(sources[0].mimeType)) {
           throw new TemplateConflictError();
         }
         if (candidate.isCurrent) return candidate;
@@ -269,7 +270,7 @@ export function registerContractTemplateRoutes(app: Express): void {
         }
         const promoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, candidate.id, {
           isCurrent: true,
-          isActive: false,
+          isActive: sources[0].mimeType === DOCX_MIME,
           updatedAt: now,
         });
         if (!promoted) throw new TemplateNotFoundError();
