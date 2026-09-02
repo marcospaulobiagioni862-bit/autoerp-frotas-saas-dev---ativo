@@ -18,7 +18,7 @@ O adaptador não está conectado automaticamente à fila. Uma ativação futura 
 ## Configuração permitida em staging
 
 - `GEMINI_API_KEY`: segredo somente no servidor; nunca no bundle do navegador, log, issue ou PR.
-- modelo inicial: `gemini-2.5-flash` pela API estável `v1`.
+- modelo inicial: `gemini-3.5-flash-lite` pela API estável `v1`.
 - lista de SHA-256: somente hashes produzidos de fixtures sintéticas versionadas ou geradas pelo roteiro de validação.
 
 Não copiar essas variáveis para produção. Não inserir documento real na allowlist.
@@ -50,7 +50,7 @@ A fábrica `createDocumentAiRuntimeFromEnvironment` continua sem importação em
 
 - `DOC_AI_WORKER_ENABLED=true`;
 - `DOC_AI_PROVIDER=GEMINI`;
-- `DOC_AI_GEMINI_MODEL=gemini-2.5-flash` (modelo inicial autorizado);
+- `DOC_AI_GEMINI_MODEL=gemini-3.5-flash-lite` (modelo inicial autorizado);
 - `GEMINI_API_KEY` presente apenas no servidor;
 - `DOC_AI_SYNTHETIC_SHA256_ALLOWLIST` contendo um ou mais SHA-256 canônicos separados por vírgula;
 - storage selecionado completamente configurado.
