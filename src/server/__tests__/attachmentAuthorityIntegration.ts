@@ -85,6 +85,18 @@ export class AttachmentAuthorityIntegrationRunner {
       ON CONFLICT (id) DO NOTHING
     `);
     await db.execute(sql`
+      INSERT INTO work_orders (
+        id, company_id, number, vehicle_id, status, opened_at, cancelled_at, entry_km,
+        description, subtotal_parts, subtotal_services, subtotal_labor, discount, total,
+        created_by, created_at, updated_at
+      ) VALUES
+        ('i4a-wo-cancelled-a1', ${companyA}, 'I4A-WO-CANCELLED-A1', 'i4a-veh-a1', 'CANCELLED',
+         NOW(), NOW(), 1000, 'Cancelled work order A', 0, 0, 0, 0, 0, ${adminAId}, NOW(), NOW()),
+        ('i4a-wo-cancelled-b1', ${companyB}, 'I4A-WO-CANCELLED-B1', 'i4a-veh-b1', 'CANCELLED',
+         NOW(), NOW(), 1000, 'Cancelled work order B', 0, 0, 0, 0, 0, ${adminBId}, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
       INSERT INTO file_attachments (
         id, company_id, entity_type, entity_name, entity_id, file_name, mime_type, url,
         size, file_size, storage_provider, is_archived, content_state, created_at
@@ -139,13 +151,13 @@ export class AttachmentAuthorityIntegrationRunner {
 
     const upload = async (
       principal: typeof adminA,
-      input: { entityType?: string; entityId?: string; fileName?: string; mimeType?: string; bytes?: Uint8Array; extraHeaders?: Record<string, string> } = {}
+      input: { entityType?: string; entityId?: string; documentType?: string; fileName?: string; mimeType?: string; bytes?: Uint8Array; extraHeaders?: Record<string, string> } = {}
     ) => {
       const headers = new Headers(input.extraHeaders || {});
       headers.set('content-type', input.mimeType || 'application/pdf');
       headers.set('x-autoerp-entity-type', encodeURIComponent(input.entityType || 'Vehicle'));
       headers.set('x-autoerp-entity-id', encodeURIComponent(input.entityId || 'i4a-veh-a1'));
-      headers.set('x-autoerp-document-type', encodeURIComponent('CRLV'));
+      headers.set('x-autoerp-document-type', encodeURIComponent(input.documentType || 'CRLV'));
       headers.set('x-autoerp-file-name', encodeURIComponent(input.fileName || 'crlv.pdf'));
       return await request('/api/attachments', {
         method: 'POST', headers, body: (input.bytes || new Uint8Array([37, 80, 68, 70])) as any,
@@ -202,6 +214,47 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await upload(adminA, { entityId: 'i4a-veh-b1' });
       assert(response.status === 404, `cross-tenant entity upload expected 404, got ${response.status}`);
 
+      response = await upload(adminA, {
+        entityType: 'MaintenanceWorkOrder',
+        entityId: 'i4a-wo-cancelled-a1',
+        documentType: 'MAINTENANCE_DOCUMENT',
+        fileName: 'cancelled-work-order.pdf',
+      });
+      assert(response.status === 201, `cancelled work order upload expected 201, got ${response.status}`);
+      const cancelledWorkOrderAttachment = (await json(response)).item;
+
+      response = await request(
+        '/api/attachments?entityType=MaintenanceWorkOrder&entityId=i4a-wo-cancelled-a1',
+        {},
+        adminA
+      );
+      assert(response.status === 200, `cancelled work order list expected 200, got ${response.status}`);
+      const cancelledItems = (await json(response)).items;
+      assert(
+        cancelledItems.some((item: any) => item.id === cancelledWorkOrderAttachment.id),
+        'cancelled work order list omitted its persisted attachment'
+      );
+
+      response = await request(
+        `/api/attachments/${encodeURIComponent(cancelledWorkOrderAttachment.id)}/content`,
+        {},
+        adminA
+      );
+      assert(response.status === 200, `cancelled work order content expected 200, got ${response.status}`);
+
+      response = await request(
+        '/api/attachments?entityType=MaintenanceWorkOrder&entityId=i4a-wo-cancelled-a1',
+        {},
+        adminB
+      );
+      assert(response.status === 404, `cross-tenant cancelled work order list expected 404, got ${response.status}`);
+      response = await request(
+        `/api/attachments/${encodeURIComponent(cancelledWorkOrderAttachment.id)}/content`,
+        {},
+        adminB
+      );
+      assert(response.status === 404, `cross-tenant cancelled work order content expected 404, got ${response.status}`);
+
       response = await upload(adminA, { mimeType: 'text/plain', fileName: 'notes.txt' });
       assert(response.status === 400, `invalid MIME expected 400, got ${response.status}`);
 
@@ -229,9 +282,10 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await request('/api/attachments/i4a-legacy-a1/content', {}, adminA);
       assert(response.status === 404, `legacy browser content expected explicit 404, got ${response.status}`);
 
+      const filesBeforeArchive = await fileCount(storageRoot, companyA);
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/archive`, { method: 'POST' }, adminA);
       assert(response.status === 200 && (await json(response)).item.isArchived === true, 'archive soft-state failed');
-      assert(await fileCount(storageRoot, companyA) === 1, 'archive physically deleted bytes');
+      assert(await fileCount(storageRoot, companyA) === filesBeforeArchive, 'archive physically deleted bytes');
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/content`, {}, adminA);
       assert(response.status === 404, `archived content expected 404, got ${response.status}`);
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/restore`, { method: 'POST' }, adminA);
