@@ -67,7 +67,7 @@ async function atomicityAndRules():Promise<string>{
   const driverTask=await one(sql`SELECT title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,due_at FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${driver.item.id}`);
   assert(driverTask?.title==='Tratar multa M-DRIVER'&&driverTask.category==='FINE'&&driverTask.priority==='P2'&&driverTask.severity==='MEDIUM'&&driverTask.status==='OPEN','DRIVER operational alert classification mismatch');
   assert(driverTask.entity_type==='TRAFFIC_TICKET'&&driverTask.entity_id===driver.item.id&&driverTask.assigned_team==='OPERATIONS','DRIVER operational alert traceability mismatch');
-  assert(String(driverTask.description).includes('Veículo MAA1A01')&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
+  assert(['Auto: M-DRIVER','Veículo: MAA1A01','Motorista: Motorista A','Contrato: não localizado','Pontos: 4','Valor: R$ 200,00','Responsabilidade: DRIVER'].every(value=>String(driverTask.description).includes(value))&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
@@ -86,8 +86,9 @@ async function atomicityAndRules():Promise<string>{
 
   const changed=await TrafficTicketAuthorityService.changeResponsibility(admin,unidentified.item.id,{responsibility:TicketResponsibility.DRIVER,driverId:driverA,driverIncomeCategoryId:incomeA});
   assert(changed.item.payableId===unidentified.item.payableId&&Boolean(changed.item.receivableId)&&!changed.item.nicPayableId,'responsibility transition did not preserve base AP/reconcile secondary obligations');
-  const reclassifiedTask=await one(sql`SELECT title,priority,severity,status,version FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${changed.item.id}`);
+  const reclassifiedTask=await one(sql`SELECT title,description,priority,severity,status,version FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${changed.item.id}`);
   assert(reclassifiedTask?.title==='Tratar multa M-UNIDENTIFIED'&&reclassifiedTask.priority==='P2'&&reclassifiedTask.severity==='MEDIUM'&&reclassifiedTask.status==='OPEN'&&Number(reclassifiedTask.version)===2,'responsibility transition did not reclassify the operational task');
+  assert(String(reclassifiedTask.description).includes('Motorista: Motorista A')&&String(reclassifiedTask.description).includes('Responsabilidade: DRIVER'),'responsibility transition left stale operational alert context');
   const oldNic=await one(sql`SELECT status FROM account_payables WHERE id=${unidentified.item.nicPayableId}`);assert(oldNic.status==='CANCELLED','old NIC not cancelled');
 
   const blocked=await TrafficTicketAuthorityService.create(admin,input('M-PAID-BLOCK',TicketResponsibility.UNIDENTIFIED,{nicExpenseCategoryId:expenseA}));
