@@ -15,7 +15,7 @@ import {
   ServerAttachmentStorage,
 } from './attachmentStorage';
 
-type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
+type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 
@@ -434,6 +434,92 @@ export function registerContractExecutionRoutes(app: Express): void {
     }
   });
 
+  app.post('/api/contracts/:id/reviewed-final-pdf', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF');
+    if (!principal) return;
+    const body = bodyOf(req);
+    try {
+      rejectAuthorityFields(body, ['attachmentId']);
+      const attachmentId = text(body.attachmentId, 'attachmentId', 1, 120);
+
+      const prepared = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ExecutionNotFoundError();
+        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
+        const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF');
+        const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
+        if (!generated || signed) throw new ExecutionConflictError();
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
+        if (
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== contract.id || attachment.documentType !== 'CONTRACT_FINAL_PDF' ||
+          attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
+          attachment.storageProvider !== storage.provider || !attachment.storageKey
+        ) throw new ExecutionConflictError();
+        return { contract, generated, attachment };
+      });
+
+      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const checksum = createHash('sha256').update(bytes).digest('hex');
+      if (
+        !bytes.length || bytes.length > 10 * 1024 * 1024 ||
+        bytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
+        bytes.length !== prepared.attachment.fileSize ||
+        !prepared.attachment.checksum || checksum !== prepared.attachment.checksum
+      ) throw new ExecutionValidationError('Invalid reviewed final PDF content');
+
+      const now = new Date().toISOString();
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'GENERATED_PDF', true);
+        const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'SIGNED_EVIDENCE', true);
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
+        if (
+          !contract || !generated || signed || generated.id !== prepared.generated.id ||
+          generated.snapshotHash !== prepared.generated.snapshotHash ||
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== contract.id || attachment.documentType !== 'CONTRACT_FINAL_PDF' ||
+          attachment.checksum !== checksum || attachment.contentState !== 'AVAILABLE'
+        ) throw new ExecutionConflictError();
+
+        const current = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'REVIEWED_FINAL_PDF', true);
+        if (current) {
+          const archived = await tx.getContractArtifactRepo().updateForCompany(principal.companyId, current.id, {
+            isCurrent: false, isArchived: true, updatedAt: now,
+          });
+          if (!archived) throw new ExecutionConflictError();
+        }
+        const artifact = await tx.getContractArtifactRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          contractId: contract.id,
+          artifactType: 'REVIEWED_FINAL_PDF',
+          attachmentId: attachment.id,
+          templateId: generated.templateId,
+          sourceArtifactId: generated.id,
+          snapshotJson: generated.snapshotJson,
+          snapshotHash: generated.snapshotHash,
+          isCurrent: true,
+          isArchived: false,
+          createdBy: principal.userId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'ContractArtifact', entityId: artifact.id,
+          action: AuditAction.CREATE, userId: principal.userId, userName: principal.name,
+          newState: JSON.stringify({ event: 'REGISTER_REVIEWED_FINAL_PDF', contractId: contract.id, sourceArtifactId: generated.id, checksum }),
+          timestamp: now,
+        });
+        return { artifact, attachment, contract };
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.post('/api/contracts/:id/signature-evidence', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE');
     if (!principal) return;
@@ -450,7 +536,9 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'GENERATED_PDF');
         if (!generated) throw new ExecutionConflictError();
-        if (new Date(signedAt).getTime() < new Date(generated.createdAt).getTime()) throw new ExecutionConflictError();
+        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'REVIEWED_FINAL_PDF');
+        const source = reviewed || generated;
+        if (new Date(signedAt).getTime() < new Date(source.createdAt).getTime()) throw new ExecutionConflictError();
         const currentSigned = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (currentSigned) throw new ExecutionConflictError();
         const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
@@ -460,7 +548,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
           attachment.storageProvider !== storage.provider || !attachment.storageKey
         ) throw new ExecutionConflictError();
-        return { contract, generated, attachment };
+        return { contract, source, attachment };
       });
 
       const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
@@ -476,11 +564,13 @@ export function registerContractExecutionRoutes(app: Express): void {
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         const generated = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'GENERATED_PDF', true);
+        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'REVIEWED_FINAL_PDF', true);
+        const source = reviewed || generated;
         const currentSigned = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, req.params.id, 'SIGNED_EVIDENCE', true);
         const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
         if (
-          !contract || !generated || currentSigned || generated.id !== prepared.generated.id ||
-          generated.snapshotHash !== prepared.generated.snapshotHash ||
+          !contract || !generated || !source || currentSigned || source.id !== prepared.source.id ||
+          source.snapshotHash !== prepared.source.snapshotHash ||
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
           attachment.entityId !== contract.id || attachment.documentType !== 'SIGNED_CONTRACT' ||
           attachment.checksum !== checksum || attachment.contentState !== 'AVAILABLE'
@@ -492,10 +582,10 @@ export function registerContractExecutionRoutes(app: Express): void {
           contractId: contract.id,
           artifactType: 'SIGNED_EVIDENCE',
           attachmentId: attachment.id,
-          templateId: generated.templateId,
-          sourceArtifactId: generated.id,
-          snapshotJson: generated.snapshotJson,
-          snapshotHash: generated.snapshotHash,
+          templateId: source.templateId,
+          sourceArtifactId: source.id,
+          snapshotJson: source.snapshotJson,
+          snapshotHash: source.snapshotHash,
           signatureMethod: 'SIGNED_PDF_UPLOAD',
           signedByName,
           signedAt,
@@ -513,7 +603,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractArtifact', entityId: artifact.id,
           action: AuditAction.CREATE, userId: principal.userId, userName: principal.name,
-          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: generated.id, checksum }),
+          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: source.id, checksum }),
           timestamp: now,
         });
         return { artifact, attachment, contract: updatedContract };

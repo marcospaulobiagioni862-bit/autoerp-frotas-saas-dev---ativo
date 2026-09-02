@@ -19,6 +19,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(contract.templateId || '');
+  const [reviewedAttachment, setReviewedAttachment] = useState<FileAttachment | null>(null);
   const [signedAttachment, setSignedAttachment] = useState<FileAttachment | null>(null);
   const [signedByName, setSignedByName] = useState('');
   const [signedAt, setSignedAt] = useState('');
@@ -28,6 +29,10 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
   const generated = useMemo(
     () => artifacts.find((item) => item.artifactType === 'GENERATED_PDF' && item.isCurrent && !item.isArchived),
+    [artifacts]
+  );
+  const reviewed = useMemo(
+    () => artifacts.find((item) => item.artifactType === 'REVIEWED_FINAL_PDF' && item.isCurrent && !item.isArchived),
     [artifacts]
   );
   const signed = useMemo(
@@ -50,6 +55,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   };
 
   useEffect(() => {
+    setReviewedAttachment(null);
     setSignedAttachment(null);
     setSignedByName('');
     setSignedAt('');
@@ -94,6 +100,17 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao abrir PDF.');
     }
+  };
+
+  const registerReviewedFinal = () => {
+    if (!reviewedAttachment) {
+      setError('Envie o PDF final revisado antes de registrá-lo.');
+      return;
+    }
+    void run(async () => {
+      await ContractExecutionClient.registerReviewedFinalPdf(contract.id, reviewedAttachment.id);
+      setReviewedAttachment(null);
+    }, 'PDF final revisado registrado sem marcar o contrato como assinado.');
   };
 
   const registerEvidence = () => {
@@ -146,7 +163,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       {error && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
       {success && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">PDF oficial</b></div>
           <label className="block text-xs font-semibold text-slate-600">
@@ -177,6 +194,35 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
             <Button size="sm" variant="primary" isLoading={loading} onClick={generatePdf} disabled={!selectedTemplateId}>
               {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar PDF oficial' : 'Gerar PDF oficial'}
             </Button>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+          <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">PDF final revisado</b></div>
+          <p className="text-[11px] text-slate-500">Arquivo preenchido e conferido. Este registro não declara assinatura.</p>
+          {reviewed ? (
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>PDF final preservado</b></div>
+              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50"><b>Snapshot SHA-256</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{reviewed.snapshotHash}</div></div>
+              <Button size="sm" variant="secondary" onClick={() => void openAttachment(reviewed.attachmentId)}><Download className="w-4 h-4" />Abrir PDF final</Button>
+            </div>
+          ) : generated ? (
+            <div className="space-y-3">
+              <FileUpload
+                entityType="Contract"
+                entityId={contract.id}
+                documentType="CONTRACT_FINAL_PDF"
+                allowedTypes={['application/pdf']}
+                multiple={false}
+                onUploadComplete={(attachment) => setReviewedAttachment(attachment as FileAttachment)}
+              />
+              {reviewedAttachment && <div className="rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-900/50">Arquivo pronto: <b>{reviewedAttachment.fileName}</b></div>}
+              <Button size="sm" variant="primary" isLoading={loading} onClick={registerReviewedFinal} disabled={!reviewedAttachment}>
+                <FileText className="w-4 h-4" />Registrar PDF final revisado
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Gere o PDF oficial antes de registrar a versão final revisada.</p>
           )}
         </div>
 
