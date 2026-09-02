@@ -1,5 +1,7 @@
 export class ContractDocxTemplateError extends Error {}
 
+const OPTIONAL_EMPTY_PLACEHOLDER_KEYS = new Set(['driver.address.complement']);
+
 interface TextNode {
   open: string;
   value: string;
@@ -70,6 +72,9 @@ export function renderContractDocxXmlTemplate(
     }
     const replacement = values[placeholder.key];
     if (typeof replacement !== 'string') throw new ContractDocxTemplateError('Invalid DOCX placeholder value');
+    if (!replacement.trim() && !OPTIONAL_EMPTY_PLACEHOLDER_KEYS.has(placeholder.key)) {
+      throw new ContractDocxTemplateError(`Missing DOCX placeholder value: ${placeholder.key}`);
+    }
 
     const affected = nodes.filter((node) => node.end > placeholder.start && node.start < placeholder.end);
     if (!affected.length) throw new ContractDocxTemplateError('DOCX placeholder mapping failed');
