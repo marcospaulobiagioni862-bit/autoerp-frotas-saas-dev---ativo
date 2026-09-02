@@ -12,6 +12,7 @@ import {
 } from './vehicleCrlvApplyAuthority';
 
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+const CRLV_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
 class VehicleCrlvNotFoundError extends Error {}
 class VehicleCrlvConflictError extends Error {}
@@ -54,6 +55,23 @@ function parseBody(value: unknown): { extractionId: string; fields: unknown } {
   return { extractionId, fields: body.fields };
 }
 
+function parseMaintenanceHandoffBody(value: unknown): { workOrderId: string; attachmentId: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new VehicleCrlvApplyValidationError('Invalid CRLV maintenance handoff request');
+  }
+  const body = value as Record<string, unknown>;
+  const keys = Object.keys(body).sort();
+  if (keys.join(',') !== 'attachmentId,workOrderId') {
+    throw new VehicleCrlvApplyValidationError('Invalid CRLV maintenance handoff request');
+  }
+  const workOrderId = typeof body.workOrderId === 'string' ? body.workOrderId.trim() : '';
+  const attachmentId = typeof body.attachmentId === 'string' ? body.attachmentId.trim() : '';
+  if (!/^[A-Za-z0-9._:-]{1,120}$/.test(workOrderId) || !/^[A-Za-z0-9._:-]{1,120}$/.test(attachmentId)) {
+    throw new VehicleCrlvApplyValidationError('Invalid CRLV maintenance handoff request');
+  }
+  return { workOrderId, attachmentId };
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof VehicleCrlvApplyValidationError) {
     res.status(400).json({ error: 'Invalid CRLV apply request' });
@@ -72,6 +90,104 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerVehicleCrlvApplyRoutes(app: Express): void {
+  app.post('/api/fleet/vehicles/crlv-from-maintenance', async (req: Request, res: Response) => {
+    const principal = requireEditPrincipal(req, res);
+    if (!principal) return;
+
+    try {
+      const body = parseMaintenanceHandoffBody(req.body);
+      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const workOrder = await txContext.getWorkOrderRepo().findByIdForCompany(principal.companyId, body.workOrderId);
+        if (!workOrder) throw new VehicleCrlvNotFoundError();
+
+        const vehicle = await txContext.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, workOrder.vehicleId);
+        if (!vehicle || vehicle.isArchived) throw new VehicleCrlvNotFoundError();
+
+        const attachmentRepo = txContext.getAttachmentRepo();
+        const source = await attachmentRepo.findByIdForCompany(principal.companyId, body.attachmentId);
+        if (
+          !source ||
+          source.isArchived ||
+          source.entityType !== 'MaintenanceWorkOrder' ||
+          source.entityId !== workOrder.id ||
+          source.contentState !== 'AVAILABLE' ||
+          (source.storageProvider !== 'SERVER_FS' && source.storageProvider !== 'R2') ||
+          !source.storageKey ||
+          !source.checksum ||
+          !/^[a-f0-9]{64}$/i.test(source.checksum) ||
+          !Number.isFinite(source.fileSize) ||
+          source.fileSize <= 0 ||
+          !CRLV_MIME_TYPES.has(source.mimeType)
+        ) {
+          throw new VehicleCrlvNotFoundError();
+        }
+
+        const current = await attachmentRepo.findByEntity(principal.companyId, 'Vehicle', vehicle.id);
+        const existing = current.find((candidate) =>
+          !candidate.isArchived &&
+          candidate.documentType === 'CRLV' &&
+          candidate.contentState === 'AVAILABLE' &&
+          candidate.storageProvider === source.storageProvider &&
+          candidate.storageKey === source.storageKey &&
+          candidate.checksum === source.checksum
+        );
+        if (existing) {
+          return { vehicleId: vehicle.id, attachmentId: existing.id, reused: true };
+        }
+
+        const now = new Date().toISOString();
+        const created = await attachmentRepo.create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityType: 'Vehicle',
+          entityId: vehicle.id,
+          documentType: 'CRLV',
+          fileName: source.fileName,
+          fileSize: source.fileSize,
+          mimeType: source.mimeType,
+          uploadedBy: principal.name,
+          storageProvider: source.storageProvider,
+          storageKey: source.storageKey,
+          checksum: source.checksum,
+          createdBy: principal.userId,
+          isArchived: false,
+          contentState: 'AVAILABLE',
+          description: `CRLV reutilizado da OS ${workOrder.number}; sourceAttachmentId=${source.id}`,
+          issueDate: source.issueDate,
+          expirationDate: source.expirationDate,
+          createdAt: now,
+        });
+
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'FileAttachment',
+          entityId: created.id,
+          action: AuditAction.CREATE,
+          newState: JSON.stringify({
+            event: 'CRLV_MAINTENANCE_HANDOFF',
+            vehicleId: vehicle.id,
+            workOrderId: workOrder.id,
+            sourceAttachmentId: source.id,
+            attachmentId: created.id,
+            storageProvider: created.storageProvider,
+            checksum: created.checksum,
+          }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+
+        return { vehicleId: vehicle.id, attachmentId: created.id, reused: false };
+      });
+
+      res.status(result.reused ? 200 : 201).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.post('/api/fleet/vehicles/:id/crlv-apply', async (req: Request, res: Response) => {
     const principal = requireEditPrincipal(req, res);
     if (!principal) return;

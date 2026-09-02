@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ModalContainer } from '../ui/ModalContainer';
 import { AttachmentList } from './AttachmentList';
 import { FileUpload } from './FileUpload';
+import { MaintenanceCrlvHandoffPanel } from '../maintenance/MaintenanceCrlvHandoffPanel';
 
 interface AttachmentModalProps {
   isOpen: boolean;
@@ -36,6 +37,11 @@ export function AttachmentModal({ isOpen, onClose, entityType, entityId, documen
           <h4 className="text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Anexos Existentes</h4>
           <div key={uploadCount}><AttachmentList entityType={entityType} entityId={entityId} /></div>
         </div>
+        {entityType === 'MaintenanceWorkOrder' && (
+          <div key={`maintenance-crlv-${uploadCount}`}>
+            <MaintenanceCrlvHandoffPanel workOrderId={entityId} />
+          </div>
+        )}
       </div>
     </ModalContainer>
   );
