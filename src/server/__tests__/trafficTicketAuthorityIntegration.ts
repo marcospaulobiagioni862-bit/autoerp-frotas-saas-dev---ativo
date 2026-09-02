@@ -71,6 +71,9 @@ async function atomicityAndRules():Promise<string>{
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
+  await TrafficTicketAuthorityService.cancel(admin,company.item.id,'Auto de infração cancelado');
+  const cancelledTask=await one(sql`SELECT status,version FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${company.item.id}`);
+  assert(cancelledTask?.status==='CANCELLED'&&Number(cancelledTask.version)===2,'cancelled ticket left an actionable operational task');
 
   const unidentified=await TrafficTicketAuthorityService.create(admin,input('M-UNIDENTIFIED',TicketResponsibility.UNIDENTIFIED,{nicExpenseCategoryId:expenseA}));
   assert(unidentified.item.status===TicketStatus.PENDING_IDENTIFICATION&&Boolean(unidentified.item.payableId)&&Boolean(unidentified.item.nicPayableId)&&!unidentified.item.receivableId,'UNIDENTIFIED aggregate mismatch');
@@ -83,6 +86,8 @@ async function atomicityAndRules():Promise<string>{
 
   const changed=await TrafficTicketAuthorityService.changeResponsibility(admin,unidentified.item.id,{responsibility:TicketResponsibility.DRIVER,driverId:driverA,driverIncomeCategoryId:incomeA});
   assert(changed.item.payableId===unidentified.item.payableId&&Boolean(changed.item.receivableId)&&!changed.item.nicPayableId,'responsibility transition did not preserve base AP/reconcile secondary obligations');
+  const reclassifiedTask=await one(sql`SELECT title,priority,severity,status,version FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${changed.item.id}`);
+  assert(reclassifiedTask?.title==='Tratar multa M-UNIDENTIFIED'&&reclassifiedTask.priority==='P2'&&reclassifiedTask.severity==='MEDIUM'&&reclassifiedTask.status==='OPEN'&&Number(reclassifiedTask.version)===2,'responsibility transition did not reclassify the operational task');
   const oldNic=await one(sql`SELECT status FROM account_payables WHERE id=${unidentified.item.nicPayableId}`);assert(oldNic.status==='CANCELLED','old NIC not cancelled');
 
   const blocked=await TrafficTicketAuthorityService.create(admin,input('M-PAID-BLOCK',TicketResponsibility.UNIDENTIFIED,{nicExpenseCategoryId:expenseA}));

@@ -129,6 +129,20 @@ async function createOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ti
   });
 }
 
+async function syncOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ticket:TrafficTicket,cancelled=false):Promise<void>{
+  const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Operational task persistence unavailable');
+  const result=await rawTx.execute(sql`SELECT * FROM operational_tasks WHERE company_id=${principal.companyId} AND source_type='TRAFFIC_TICKET' AND source_id=${ticket.id} FOR UPDATE`);
+  const before=rows(result)[0];if(!before||['COMPLETED','CLOSED','CANCELLED'].includes(String(before.status)))return;
+  const unidentified=ticket.responsibility===TicketResponsibility.UNIDENTIFIED;
+  const title=unidentified?`Identificar condutor da multa ${ticket.autoNumber}`:`Tratar multa ${ticket.autoNumber}`;
+  const priority=unidentified?'P1':'P2',severity=unidentified?'HIGH':'MEDIUM',status=cancelled?'CANCELLED':String(before.status),now=new Date().toISOString();
+  const updated=await rawTx.execute(sql`UPDATE operational_tasks SET title=${title},priority=${priority},severity=${severity},status=${status},version=version+1,updated_at=${now} WHERE company_id=${principal.companyId} AND id=${String(before.id)} RETURNING *`);
+  await tx.getAuditLogRepo().create({
+    id:randomUUID(),companyId:principal.companyId,entityName:'OperationalTask',entityId:String(before.id),action:cancelled?AuditAction.CANCEL:AuditAction.UPDATE,
+    previousState:JSON.stringify(before),newState:JSON.stringify(rows(updated)[0]),userId:principal.userId,userName:principal.name,timestamp:now,
+  });
+}
+
 export class TrafficTicketAuthorityService {
   static async list(companyId:string,filters:{vehicleId?:string;driverId?:string;status?:TicketStatus;responsibility?:TicketResponsibility}={}):Promise<TrafficTicket[]>{
     return await UnitOfWork.run(companyId,async tx=>{
@@ -237,7 +251,7 @@ export class TrafficTicketAuthorityService {
         const nicPay=(await PayableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId,vehicleId:next.vehicleId,contractId:next.contractId,categoryId:category,description:`NIC multa ${next.autoNumber}`,totalAmount:nicAmount,dueDate:next.dueDate,competenceDate:next.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
         next.nicAmount=nicAmount;next.nicPayableId=nicPay.id;next.status=TicketStatus.PENDING_IDENTIFICATION;
       }
-      const saved=await repo.save(next);await audit(tx,principal,AuditAction.UPDATE,current,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};
+      const saved=await repo.save(next);await audit(tx,principal,AuditAction.UPDATE,current,saved);await syncOperationalAlert(tx,principal,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};
     },{financialPeriodLock:'SHARED'});
   }
 
@@ -264,6 +278,6 @@ export class TrafficTicketAuthorityService {
 
   static async cancel(principal:AuthenticatedPrincipal,id:string,reason:string):Promise<TrafficTicketDetails>{
     assertWrite(principal);const clean=reason.trim();if(!clean)throw new TrafficTicketValidationError('Motivo obrigatório');
-    return await UnitOfWork.run(principal.companyId,async tx=>{const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED){const financial=await currentFinancial(tx,current);return {item:current,financial};}await cancelReceivableIfOpen(tx,principal,current.receivableId);await cancelPayableIfOpen(tx,principal,current.nicPayableId);await cancelPayableIfOpen(tx,principal,current.payableId);const now=new Date().toISOString();const saved=await repo.save({...current,status:TicketStatus.CANCELLED,cancelReason:clean,cancelledAt:now,updatedAt:now});await audit(tx,principal,AuditAction.CANCEL,current,saved);const financial=await currentFinancial(tx,saved);return {item:saved,financial};},{financialPeriodLock:'SHARED'});
+    return await UnitOfWork.run(principal.companyId,async tx=>{const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED){const financial=await currentFinancial(tx,current);return {item:current,financial};}await cancelReceivableIfOpen(tx,principal,current.receivableId);await cancelPayableIfOpen(tx,principal,current.nicPayableId);await cancelPayableIfOpen(tx,principal,current.payableId);const now=new Date().toISOString();const saved=await repo.save({...current,status:TicketStatus.CANCELLED,cancelReason:clean,cancelledAt:now,updatedAt:now});await audit(tx,principal,AuditAction.CANCEL,current,saved);await syncOperationalAlert(tx,principal,saved,true);const financial=await currentFinancial(tx,saved);return {item:saved,financial};},{financialPeriodLock:'SHARED'});
   }
 }
