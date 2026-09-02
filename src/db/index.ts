@@ -1,6 +1,7 @@
 import * as schema from './schema';
 import * as dotenv from 'dotenv';
 import { createRequire } from 'module';
+import { normalizePostgresConnectionString } from './postgresConnectionString';
 
 const require = createRequire(import.meta.url);
 dotenv.config();
@@ -22,10 +23,11 @@ if (process.env.USE_PGLITE === 'true' || (!process.env.DATABASE_URL && process.e
   const { drizzle } = require('drizzle-orm/node-postgres');
   const pgPkg = require('pg');
   const { Pool } = pgPkg;
-  const connectionString = process.env.DATABASE_URL || (process.env.NODE_ENV === 'test' ? 'postgres://ai_studio_app_user:@localhost:5432/autoerp_phase1_test' : undefined);
-  if (!connectionString) {
+  const rawConnectionString = process.env.DATABASE_URL || (process.env.NODE_ENV === 'test' ? 'postgres://ai_studio_app_user:@localhost:5432/autoerp_phase1_test' : undefined);
+  if (!rawConnectionString) {
     throw new Error('DATABASE_URL environment variable is required.');
   }
+  const connectionString = normalizePostgresConnectionString(rawConnectionString);
   const pool = new Pool({ connectionString });
   dbInstance = drizzle(pool, { schema });
 }
