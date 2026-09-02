@@ -200,6 +200,34 @@ export class ContractExecutionAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 409, `term mutation after PDF expected 409, got ${response.status}`);
 
+      const finalHeaders = new Headers({
+        'content-type': 'application/pdf',
+        'x-autoerp-entity-type': 'Contract',
+        'x-autoerp-entity-id': contract.id,
+        'x-autoerp-document-type': 'CONTRACT_FINAL_PDF',
+        'x-autoerp-file-name': 'contrato-final-revisado.pdf',
+      });
+      response = await request('/api/attachments', { method: 'POST', headers: finalHeaders, body: generatedPdfBytes }, adminA);
+      assert(response.status === 201, `reviewed final upload expected 201, got ${response.status}`);
+      const reviewedAttachment = (await json(response)).item;
+
+      response = await request(`/api/contracts/${contract.id}/reviewed-final-pdf`, {
+        method: 'POST', body: JSON.stringify({ attachmentId: reviewedAttachment.id }),
+      }, readonlyA);
+      assert(response.status === 403, `READONLY reviewed final registration expected 403, got ${response.status}`);
+
+      response = await request(`/api/contracts/${contract.id}/reviewed-final-pdf`, {
+        method: 'POST', body: JSON.stringify({ attachmentId: reviewedAttachment.id }),
+      }, adminA);
+      assert(response.status === 201, `reviewed final registration expected 201, got ${response.status}`);
+      const reviewedArtifact = (await json(response)).artifact;
+      assert(
+        reviewedArtifact.artifactType === 'REVIEWED_FINAL_PDF' &&
+        reviewedArtifact.sourceArtifactId === generated.artifact.id &&
+        reviewedArtifact.attachmentId === reviewedAttachment.id,
+        'reviewed final artifact link mismatch',
+      );
+
       const signedHeaders = new Headers({
         'content-type': 'application/pdf',
         'x-autoerp-entity-type': 'Contract',
@@ -217,7 +245,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 201, `signature evidence expected 201, got ${response.status}`);
       const signedArtifact = (await json(response)).artifact;
-      assert(signedArtifact.artifactType === 'SIGNED_EVIDENCE' && signedArtifact.sourceArtifactId === generated.artifact.id, 'signed artifact link mismatch');
+      assert(signedArtifact.artifactType === 'SIGNED_EVIDENCE' && signedArtifact.sourceArtifactId === reviewedArtifact.id, 'signed artifact link mismatch');
 
       response = await request(`/api/contracts/${contract.id}/generate-pdf`, {
         method: 'POST', body: JSON.stringify({ templateId: template.id }),
