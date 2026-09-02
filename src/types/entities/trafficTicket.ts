@@ -11,6 +11,7 @@ export interface TrafficTicket {
   infractionCode: string;
   description: string;
   infractionDate: string;
+  infractionLocation?: string;
   dueDate: string;
   discountDueDate?: string;
   originalAmount: number;
