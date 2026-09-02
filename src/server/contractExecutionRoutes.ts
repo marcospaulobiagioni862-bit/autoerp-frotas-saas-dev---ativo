@@ -461,7 +461,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
         if (!template || template.isArchived) throw new ExecutionNotFoundError();
-        if (!template.isCurrent || template.contentMarkdown.trim()) throw new ExecutionConflictError();
+        if (!template.isCurrent || !template.isActive || template.contentMarkdown.trim()) throw new ExecutionConflictError();
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
@@ -499,7 +499,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
-        if (!contract || !template || contract.isArchived || template.isArchived || !template.isCurrent || template.contentMarkdown.trim()) {
+        if (!contract || !template || contract.isArchived || template.isArchived || !template.isCurrent || !template.isActive || template.contentMarkdown.trim()) {
           throw new ExecutionConflictError();
         }
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE', true);
