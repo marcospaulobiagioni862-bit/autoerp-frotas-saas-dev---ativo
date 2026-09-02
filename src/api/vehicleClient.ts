@@ -89,6 +89,11 @@ export interface VehicleKmResult {
   vehicle: Vehicle;
 }
 
+export interface VehicleCrlvApplyResult {
+  item: Vehicle;
+  appliedFields: string[];
+}
+
 export class VehicleClient {
   static async list(): Promise<Vehicle[]> {
     const response = await fetch('/api/fleet/vehicles', { credentials: 'include' });
@@ -118,6 +123,24 @@ export class VehicleClient {
     });
     if (!response.ok) throw await apiError(response);
     return validateVehicle(asRecord(await response.json()).item);
+  }
+
+  static async applyApprovedCrlv(id: string, extractionId: string, fields: string[]): Promise<VehicleCrlvApplyResult> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/crlv-apply`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ extractionId, fields }),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (!Array.isArray(payload.appliedFields) || payload.appliedFields.some((field) => typeof field !== 'string')) {
+      throw new Error('Invalid CRLV apply response');
+    }
+    return {
+      item: validateVehicle(payload.item),
+      appliedFields: payload.appliedFields as string[],
+    };
   }
 
   static async changeStatus(id: string, status: VehicleStatus, reason?: string): Promise<Vehicle> {
