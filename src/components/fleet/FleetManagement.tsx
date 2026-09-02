@@ -19,6 +19,7 @@ import {
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { VehicleSaleModal } from './VehicleSaleModal';
 import {
   VEHICLE_STATUS_FILTERS,
   vehicleManualStatusOptions,
@@ -40,10 +41,9 @@ export const FleetManagement: React.FC = () => {
   // Modal States
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
-
   const [selectedVehicleIdForDetails, setSelectedVehicleIdForDetails] = useState<string | null>(null);
-
   const [vehicleForKmRecord, setVehicleForKmRecord] = useState<Vehicle | null>(null);
+  const [vehicleForSale, setVehicleForSale] = useState<Vehicle | null>(null);
 
   // Status Change Dialog
   const [vehicleForStatusChange, setVehicleForStatusChange] = useState<Vehicle | null>(null);
@@ -138,37 +138,27 @@ export const FleetManagement: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
           <span className="text-xs text-slate-400 block">Total Frota</span>
-          <strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">
-            {totalCount}
-          </strong>
+          <strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">{totalCount}</strong>
         </div>
 
         <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
           <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span>
-          <strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">
-            {rentedCount}
-          </strong>
+          <strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong>
         </div>
 
         <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl">
           <span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span>
-          <strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">
-            {availableCount}
-          </strong>
+          <strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong>
         </div>
 
         <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl">
           <span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span>
-          <strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">
-            {maintenanceCount}
-          </strong>
+          <strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong>
         </div>
 
         <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
           <span className="text-xs text-slate-400 block">Inativos / Vendidos</span>
-          <strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">
-            {inactiveCount}
-          </strong>
+          <strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong>
         </div>
       </div>
 
@@ -225,9 +215,7 @@ export const FleetManagement: React.FC = () => {
       ) : filteredVehicles.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <Car className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-            Nenhum veículo encontrado
-          </h3>
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Nenhum veículo encontrado</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
             Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.
           </p>
@@ -248,52 +236,36 @@ export const FleetManagement: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredVehicles.map((vehicle) => {
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
-            const manualStatusOptions = vehicleManualStatusOptions(vehicle.status);
+            const manualStatusOptions = vehicleManualStatusOptions(vehicle.status).filter(
+              (option) => option.value !== VehicleStatus.SOLD && option.value !== VehicleStatus.ARCHIVED,
+            );
             const canPlaceOutOfUse =
               vehicle.status !== VehicleStatus.RENTED &&
               vehicle.status !== VehicleStatus.INACTIVE &&
               vehicle.status !== VehicleStatus.SOLD &&
               vehicle.status !== VehicleStatus.ARCHIVED;
+            const canMarkSold = [VehicleStatus.AVAILABLE, VehicleStatus.DAMAGED, VehicleStatus.INACTIVE].includes(vehicle.status);
 
             return (
-              <Card
-                key={vehicle.id}
-                padding="md"
-                hoverEffect
-                className="flex flex-col justify-between border-slate-200 dark:border-slate-800"
-              >
+              <Card key={vehicle.id} padding="md" hoverEffect className="flex flex-col justify-between border-slate-200 dark:border-slate-800">
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">
-                      {vehicle.plate}
-                    </span>
-                    <Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>
-                      {vehicleStatusLabel(vehicle.status)}
-                    </Badge>
+                    <span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">{vehicle.plate}</span>
+                    <Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge>
                   </div>
 
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">
-                    {vehicle.brand} {vehicle.model}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}
-                  </p>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
+                  <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
 
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Quilometragem:</span>
-                      <strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">
-                        {vehicle.currentKm.toLocaleString('pt-BR')} KM
-                      </strong>
+                      <strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong>
                     </div>
-
                     <div className="flex justify-between">
                       <span className="text-slate-400">Aluguel Semanal:</span>
-                      <strong className="font-mono text-emerald-600 dark:text-emerald-400">
-                        {formatCurrencyBRL(vehicle.rentalValueBase)} / sem
-                      </strong>
+                      <strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyBRL(vehicle.rentalValueBase)} / sem</strong>
                     </div>
-
                     <div className="flex justify-between">
                       <span className="text-slate-400">RENAVAM:</span>
                       <span className="font-mono text-slate-700 dark:text-slate-300">{vehicle.renavam}</span>
@@ -315,18 +287,12 @@ export const FleetManagement: React.FC = () => {
                         const nextStatus = event.target.value as VehicleStatus;
                         if (nextStatus) handleStatusChangeClick(vehicle, nextStatus);
                       }}
-                      options={[
-                        { value: '', label: 'Alterar status...', disabled: true },
-                        ...manualStatusOptions,
-                      ]}
+                      options={[{ value: '', label: 'Alterar status...', disabled: true }, ...manualStatusOptions]}
                     />
                   )}
 
                   <div className="flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => setSelectedVehicleIdForDetails(vehicle.id)}
-                      className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
-                    >
+                    <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline">
                       <Eye className="w-3.5 h-3.5" /> Detalhes →
                     </button>
 
@@ -341,11 +307,17 @@ export const FleetManagement: React.FC = () => {
                           Fora de uso
                         </button>
                       )}
-                      <button
-                        onClick={() => setVehicleForKmRecord(vehicle)}
-                        title="Registrar KM"
-                        className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
-                      >
+                      {canMarkSold && (
+                        <button
+                          onClick={() => setVehicleForSale(vehicle)}
+                          title="Marcar veículo como vendido"
+                          aria-label={`Marcar ${vehicle.plate} como vendido`}
+                          className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md"
+                        >
+                          Vendido
+                        </button>
+                      )}
+                      <button onClick={() => setVehicleForKmRecord(vehicle)} title="Registrar KM" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
                         <Gauge className="w-4 h-4" />
                       </button>
 
@@ -420,6 +392,13 @@ export const FleetManagement: React.FC = () => {
           />}
         </Suspense>
       </LazyModuleErrorBoundary>
+
+      {vehicleForSale&&<VehicleSaleModal
+        isOpen
+        vehicle={vehicleForSale}
+        onClose={() => setVehicleForSale(null)}
+        onSuccess={loadVehicles}
+      />}
 
       <ConfirmDialog
         isOpen={isConfirmingStatus}
