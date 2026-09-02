@@ -76,9 +76,26 @@ interface ContractSnapshot {
     id: string; number: string; startDate: string; endDate: string; rentalAmount: number;
     billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
   };
-  driver: { id: string; name: string; cpf: string; cnh: string; cnhExpiration: string };
+  driver: {
+    id: string; name: string; cpf: string; cnh: string; cnhExpiration: string;
+    address: {
+      street: string; number: string; complement: string; neighborhood: string;
+      city: string; state: string; zipCode: string; full: string;
+    };
+  };
   vehicle: { id: string; plate: string; brand: string; model: string; renavam: string };
   template: { id: string; templateKey: string; versionNumber: number; title: string };
+}
+
+function fullDriverAddress(driver: Driver): string {
+  const address = driver.address;
+  return [
+    [address.street, address.number].filter(Boolean).join(', '),
+    address.complement || '',
+    address.neighborhood,
+    [address.city, address.state].filter(Boolean).join(' - '),
+    address.zipCode ? `CEP ${address.zipCode}` : '',
+  ].filter(Boolean).join(', ');
 }
 
 function makeSnapshot(
@@ -107,6 +124,16 @@ function makeSnapshot(
       cpf: driver.cpf,
       cnh: driver.cnhNumber,
       cnhExpiration: driver.cnhExpiration,
+      address: {
+        street: driver.address.street,
+        number: driver.address.number,
+        complement: driver.address.complement || '',
+        neighborhood: driver.address.neighborhood,
+        city: driver.address.city,
+        state: driver.address.state,
+        zipCode: driver.address.zipCode,
+        full: fullDriverAddress(driver),
+      },
     },
     vehicle: {
       id: vehicle.id,
@@ -140,6 +167,14 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'driver.cpf': snapshot.driver.cpf,
     'driver.cnh': snapshot.driver.cnh,
     'driver.cnhExpiration': snapshot.driver.cnhExpiration,
+    'driver.address.street': snapshot.driver.address.street,
+    'driver.address.number': snapshot.driver.address.number,
+    'driver.address.complement': snapshot.driver.address.complement,
+    'driver.address.neighborhood': snapshot.driver.address.neighborhood,
+    'driver.address.city': snapshot.driver.address.city,
+    'driver.address.state': snapshot.driver.address.state,
+    'driver.address.zipCode': snapshot.driver.address.zipCode,
+    'driver.address.full': snapshot.driver.address.full,
     'vehicle.plate': snapshot.vehicle.plate,
     'vehicle.brand': snapshot.vehicle.brand,
     'vehicle.model': snapshot.vehicle.model,
