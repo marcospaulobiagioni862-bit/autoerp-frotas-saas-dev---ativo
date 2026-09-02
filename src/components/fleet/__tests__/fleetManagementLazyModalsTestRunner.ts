@@ -58,7 +58,7 @@ assert.match(
   /handleStatusChangeClick\(vehicle, VehicleStatus\.INACTIVE\)/,
   'out-of-use action must reuse the authoritative INACTIVE status transition',
 );
-assert.match(source, />Fora de uso</, 'out-of-use action must be visible without the generic status selector');
+assert.match(source, />\s*Fora de uso\s*</, 'out-of-use action must be visible without the generic status selector');
 assert.match(
   source,
   /targetStatus === VehicleStatus\.INACTIVE[\s\S]*O histórico não será apagado\./,
