@@ -76,10 +76,7 @@ interface ContractSnapshot {
     id: string; number: string; startDate: string; endDate: string; rentalAmount: number;
     billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
   };
-  driver: {
-    id: string; name: string; cpf: string; cnh: string; cnhExpiration: string;
-    cep: string; address: string; number: string; complement: string; neighborhood: string; city: string; state: string;
-  };
+  driver: { id: string; name: string; cpf: string; cnh: string; cnhExpiration: string };
   vehicle: { id: string; plate: string; brand: string; model: string; renavam: string };
   template: { id: string; templateKey: string; versionNumber: number; title: string };
 }
@@ -110,13 +107,6 @@ function makeSnapshot(
       cpf: driver.cpf,
       cnh: driver.cnhNumber,
       cnhExpiration: driver.cnhExpiration,
-      cep: driver.cep || '',
-      address: driver.address || '',
-      number: driver.addressNumber || '',
-      complement: driver.addressComplement || '',
-      neighborhood: driver.neighborhood || '',
-      city: driver.city || '',
-      state: driver.state || '',
     },
     vehicle: {
       id: vehicle.id,
@@ -150,13 +140,6 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'driver.cpf': snapshot.driver.cpf,
     'driver.cnh': snapshot.driver.cnh,
     'driver.cnhExpiration': snapshot.driver.cnhExpiration,
-    'driver.cep': snapshot.driver.cep,
-    'driver.address': snapshot.driver.address,
-    'driver.number': snapshot.driver.number,
-    'driver.complement': snapshot.driver.complement,
-    'driver.neighborhood': snapshot.driver.neighborhood,
-    'driver.city': snapshot.driver.city,
-    'driver.state': snapshot.driver.state,
     'vehicle.plate': snapshot.vehicle.plate,
     'vehicle.brand': snapshot.vehicle.brand,
     'vehicle.model': snapshot.vehicle.model,
