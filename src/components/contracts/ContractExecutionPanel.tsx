@@ -27,10 +27,15 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const generated = useMemo(
+  const generatedPdf = useMemo(
     () => artifacts.find((item) => item.artifactType === 'GENERATED_PDF' && item.isCurrent && !item.isArchived),
     [artifacts]
   );
+  const generatedDocx = useMemo(
+    () => artifacts.find((item) => item.artifactType === 'GENERATED_DOCX' && item.isCurrent && !item.isArchived),
+    [artifacts]
+  );
+  const generated = generatedDocx || generatedPdf;
   const reviewed = useMemo(
     () => artifacts.find((item) => item.artifactType === 'REVIEWED_FINAL_PDF' && item.isCurrent && !item.isArchived),
     [artifacts]
@@ -43,7 +48,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   const load = async () => {
     try {
       const [templateList, artifactList] = await Promise.all([
-        ContractTemplateClient.list(),
+        ContractTemplateClient.list({ activeOnly: false }),
         ContractExecutionClient.listArtifacts(contract.id),
       ]);
       setTemplates(templateList);
@@ -80,14 +85,23 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     }
   };
 
-  const generatePdf = () => {
+  const generateOfficial = () => {
     if (!selectedTemplateId) {
-      setError('Selecione um modelo de contrato ativo.');
+      setError('Selecione um modelo de contrato.');
       return;
     }
+    const selected = templates.find((item) => item.id === selectedTemplateId);
+    if (!selected) {
+      setError('O modelo selecionado não está disponível.');
+      return;
+    }
+    const docxBacked = !selected.contentMarkdown.trim();
     void run(async () => {
-      await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
-    }, 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
+      if (docxBacked) await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
+      else await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
+    }, docxBacked
+      ? 'DOCX preenchido no servidor e preservado para revisão humana.'
+      : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
   };
 
   const openAttachment = async (attachmentId: string) => {
@@ -98,7 +112,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       window.open(url, '_blank', 'noopener,noreferrer');
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Erro ao abrir PDF.');
+      setError(caught instanceof Error ? caught.message : 'Erro ao abrir documento.');
     }
   };
 
@@ -152,11 +166,11 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            PDF gerado no servidor. O PDF assinado é registrado como evidência; esta tela não declara certificação ICP-Brasil.
+            PDF ou DOCX preenchido no servidor. O PDF assinado é registrado como evidência; esta tela não declara certificação ICP-Brasil.
           </p>
         </div>
         <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
-          {signed ? 'ASSINADO / EVIDÊNCIA' : generated ? 'AGUARDANDO ASSINATURA' : 'PDF NÃO GERADO'}
+          {signed ? 'ASSINADO / EVIDÊNCIA' : generated ? 'AGUARDANDO ASSINATURA' : 'DOCUMENTO NÃO GERADO'}
         </Badge>
       </div>
 
@@ -165,7 +179,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-          <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">PDF oficial</b></div>
+          <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">Documento oficial</b></div>
           <label className="block text-xs font-semibold text-slate-600">
             Modelo do contrato
             <select
@@ -175,7 +189,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               onChange={(event) => setSelectedTemplateId(event.target.value)}
             >
               <option value="">Selecione</option>
-              {templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}
+              {templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber} • {item.contentMarkdown.trim() ? 'PDF' : 'DOCX'}</option>)}
             </select>
           </label>
           {generated ? (
@@ -184,15 +198,15 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                 <b>Snapshot SHA-256</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{generated.snapshotHash}</div>
               </div>
               <Button size="sm" variant="secondary" onClick={() => void openAttachment(generated.attachmentId)}>
-                <Download className="w-4 h-4" />Abrir PDF gerado
+                <Download className="w-4 h-4" />Abrir {generatedDocx ? 'DOCX preenchido' : 'PDF gerado'}
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Nenhum PDF oficial foi gerado para este contrato.</p>
+            <p className="text-xs text-slate-500">Nenhum documento oficial foi gerado para este contrato.</p>
           )}
           {canGenerate && (
-            <Button size="sm" variant="primary" isLoading={loading} onClick={generatePdf} disabled={!selectedTemplateId}>
-              {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar PDF oficial' : 'Gerar PDF oficial'}
+            <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!selectedTemplateId}>
+              {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar documento' : 'Gerar documento'}
             </Button>
           )}
         </div>
@@ -222,7 +236,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Gere o PDF oficial antes de registrar a versão final revisada.</p>
+            <p className="text-xs text-slate-500">Gere o documento oficial antes de registrar a versão final revisada.</p>
           )}
         </div>
 
@@ -254,7 +268,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               </Button>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Gere o PDF oficial antes de enviar o documento assinado.</p>
+            <p className="text-xs text-slate-500">Gere o documento oficial antes de enviar o documento assinado.</p>
           )}
         </div>
       </div>
