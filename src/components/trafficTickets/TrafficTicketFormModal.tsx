@@ -40,6 +40,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
       <label>Código *<Input value={infractionCode} onChange={e=>setInfractionCode(e.target.value)}/></label>
       <label className="md:col-span-2">Descrição *<Input value={description} onChange={e=>setDescription(e.target.value)}/></label>
       <label>Data infração *<Input type="date" value={infractionDate} onChange={e=>setInfractionDate(e.target.value)}/></label>
+      <label>Horário da infração<Input type="time" value={infractionTime} onChange={e=>setInfractionTime(e.target.value)}/></label>
       <label>Vencimento *<Input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label>
       <label>Valor original *<Input value={originalAmount} onChange={e=>setOriginalAmount(e.target.value)} placeholder="195,23"/></label>
       <label>Pontos<Input type="number" min="0" value={points} onChange={e=>setPoints(e.target.value)}/></label>
