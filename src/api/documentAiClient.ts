@@ -41,6 +41,20 @@ export interface DocumentAiReviewInput {
   notes?: string;
 }
 
+export interface DocumentAiCleanupProtection {
+  extractionId: string;
+  attachmentId: string;
+  entityType: string;
+  entityId: string;
+  reason: 'ACTIVE_ENTITY_LINK' | 'ATTACHMENT_UNAVAILABLE';
+}
+
+export interface DocumentAiCleanupResult {
+  discarded: number;
+  attachmentsArchived: number;
+  protected: DocumentAiCleanupProtection[];
+}
+
 export type DocumentAiRuntimeMode = 'DISABLED' | 'MISCONFIGURED' | 'READY_SYNTHETIC_ONLY';
 
 export interface DocumentAiAttachmentStatus {
@@ -340,7 +354,7 @@ export class DocumentAiClient {
     return payload.items.map(parseDocumentAiExtraction);
   }
 
-  static async discardFailed(extractionIds?: string[]): Promise<{ discarded: number; attachmentsArchived: number }> {
+  static async discardFailed(extractionIds?: string[]): Promise<DocumentAiCleanupResult> {
     const response = await fetch('/api/document-ai/extractions/discard-failed', {
       method: 'POST',
       credentials: 'include',
@@ -354,11 +368,22 @@ export class DocumentAiClient {
     const payload = asRecord(await response.json());
     if (
       !Number.isSafeInteger(payload.discarded) || (payload.discarded as number) < 0 ||
-      !Number.isSafeInteger(payload.attachmentsArchived) || (payload.attachmentsArchived as number) < 0
+      !Number.isSafeInteger(payload.attachmentsArchived) || (payload.attachmentsArchived as number) < 0 ||
+      !Array.isArray(payload.protected)
     ) throw new Error('Resposta inválida da limpeza documental.');
+    const protectedItems = payload.protected.map((value) => {
+      const item = asRecord(value);
+      if (
+        typeof item.extractionId !== 'string' || typeof item.attachmentId !== 'string' ||
+        typeof item.entityType !== 'string' || typeof item.entityId !== 'string' ||
+        (item.reason !== 'ACTIVE_ENTITY_LINK' && item.reason !== 'ATTACHMENT_UNAVAILABLE')
+      ) throw new Error('Resposta inválida da limpeza documental.');
+      return item as unknown as DocumentAiCleanupProtection;
+    });
     return {
       discarded: payload.discarded as number,
       attachmentsArchived: payload.attachmentsArchived as number,
+      protected: protectedItems,
     };
   }
 
