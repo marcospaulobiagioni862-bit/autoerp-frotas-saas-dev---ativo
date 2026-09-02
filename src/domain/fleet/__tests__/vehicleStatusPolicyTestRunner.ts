@@ -48,11 +48,27 @@ assert.equal(
 );
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.RESERVED, VehicleStatus.SOLD), false);
 
+assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.ARCHIVED), true);
+assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.INACTIVE, VehicleStatus.ARCHIVED), true);
+assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.SOLD, VehicleStatus.ARCHIVED), true);
+assert.equal(
+  canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.ARCHIVED, { hasActiveContract: true }),
+  false,
+  'archive must fail closed while an active/current contract binding exists',
+);
+assert.equal(
+  canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.ARCHIVED, { hasBlockingMaintenance: true }),
+  false,
+  'archive must fail closed while blocking maintenance exists',
+);
+
 const lifecycleRoute = readFileSync(new URL('../../../server/vehicleLifecycleRoutes.ts', import.meta.url), 'utf8');
 const vehicleRoutes = readFileSync(new URL('../../../server/vehicleRoutes.ts', import.meta.url), 'utf8');
 const vehicleClient = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const fleetManagement = readFileSync(new URL('../../../components/fleet/FleetManagement.tsx', import.meta.url), 'utf8');
 const saleModal = readFileSync(new URL('../../../components/fleet/VehicleSaleModal.tsx', import.meta.url), 'utf8');
+const archiveModal = readFileSync(new URL('../../../components/fleet/VehicleArchiveModal.tsx', import.meta.url), 'utf8');
+const archivedHistoryModal = readFileSync(new URL('../../../components/fleet/ArchivedVehicleHistoryModal.tsx', import.meta.url), 'utf8');
 const lifecycleMigration = readFileSync(new URL('../../../../drizzle/0053_vehicle_lifecycle_events.sql', import.meta.url), 'utf8');
 
 assert.match(lifecycleRoute, /app\.post\('\/api\/fleet\/vehicles\/:id\/sale'/, 'sale must use a dedicated server route');
@@ -74,6 +90,28 @@ assert.match(saleModal, /Data da venda \*/, 'sale form must require the sale dat
 assert.match(saleModal, /Valor da venda \*/, 'sale form must require the sale value');
 assert.match(saleModal, /KM final \*/, 'sale form must require final KM');
 assert.match(saleModal, /Observação \*/, 'sale form must require an observation');
+
+assert.match(lifecycleRoute, /app\.post\('\/api\/fleet\/vehicles\/:id\/archive'/, 'archive must use a dedicated server route');
+assert.match(lifecycleRoute, /app\.get\('\/api\/fleet\/vehicles\/archived'/, 'archived vehicles must have an explicit read-only collection');
+assert.match(lifecycleRoute, /app\.get\('\/api\/fleet\/vehicles\/:id\/lifecycle'/, 'lifecycle history must be tenant-scoped and readable');
+assert.match(lifecycleRoute, /status: VehicleStatus\.ARCHIVED,[\s\S]*isArchived: true/, 'archive must soft-delete through canonical archived state');
+assert.doesNotMatch(lifecycleRoute, /DELETE\s+FROM\s+vehicles/i, 'archive must never hard-delete a vehicle');
+assert.match(vehicleClient, /static async listArchived\(/, 'client must expose archived collection');
+assert.match(vehicleClient, /static async lifecycle\(/, 'client must expose lifecycle history');
+assert.match(vehicleClient, /static async archive\(/, 'client must expose dedicated archive action');
+assert.match(fleetManagement, /showArchived \? await VehicleClient\.listArchived\(\) : await VehicleClient\.list\(\)/, 'fleet must separate active and archived collections');
+assert.match(fleetManagement, /setVehicleForArchive\(vehicle\)/, 'fleet UI must expose explicit archive action');
+assert.match(fleetManagement, /Abrir histórico somente leitura/, 'archived cards must expose read-only history instead of operational actions');
+assert.match(archiveModal, /Data do arquivamento \*/, 'archive form must require an effective date');
+assert.match(archiveModal, /Motivo do arquivamento \*/, 'archive form must require a reason');
+assert.match(archiveModal, /O histórico não será apagado/, 'archive confirmation must explain history preservation');
+assert.match(archivedHistoryModal, /Visualização somente leitura/, 'archived history must be explicitly read-only');
+assert.match(archivedHistoryModal, /AttachmentList/, 'archived history must retain document visibility');
+assert.doesNotMatch(archivedHistoryModal, /FileUpload|VehicleCrlvImportPanel|recordKm|markSold|archive\(/, 'archived history must not expose mutation controls');
+assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id'[\s\S]*if \(!item\) throw new VehicleNotFoundError/, 'archived vehicle detail must remain readable');
+assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*if \(!vehicle\) throw new VehicleNotFoundError/, 'archived KM history must remain readable');
+assert.match(vehicleRoutes, /app\.post\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*vehicle\.isArchived/, 'archived vehicles must remain immutable for new KM writes');
+
 assert.match(lifecycleMigration, /FORCE ROW LEVEL SECURITY/, 'lifecycle persistence must enforce tenant RLS');
 assert.match(lifecycleMigration, /vehicle_lifecycle_events_tenant_policy/, 'lifecycle persistence must define tenant policy');
 
