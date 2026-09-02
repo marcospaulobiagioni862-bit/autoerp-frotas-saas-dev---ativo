@@ -31,6 +31,64 @@ async function scalar(query: any): Promise<any> {
   return result.rows?.[0];
 }
 
+function crc32(bytes: Buffer): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function syntheticContractDocx(): Buffer {
+  const entries = [
+    { name: '[Content_Types].xml', content: Buffer.from('<Types/>') },
+    {
+      name: 'word/document.xml',
+      content: Buffer.from(
+        '<w:document xmlns:w="urn:test"><w:body><w:p>' +
+        '<w:r><w:t>Contrato {{contract.number}} - {{driver.</w:t></w:r>' +
+        '<w:r><w:t>name}} - {{vehicle.plate}} - {{company.name}}</w:t></w:r>' +
+        '</w:p></w:body></w:document>'
+      ),
+    },
+  ];
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name);
+    const checksum = crc32(entry.content);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(checksum, 14);
+    local.writeUInt32LE(entry.content.length, 18);
+    local.writeUInt32LE(entry.content.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    localParts.push(local, name, entry.content);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(checksum, 16);
+    central.writeUInt32LE(entry.content.length, 20);
+    central.writeUInt32LE(entry.content.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+    offset += local.length + name.length + entry.content.length;
+  }
+  const directory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...localParts, directory, end]);
+}
+
 export class ContractExecutionAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
     await db.execute(sql`
@@ -160,6 +218,30 @@ export class ContractExecutionAuthorityIntegrationRunner {
       }, adminB);
       assert(response.status === 201, `cross-tenant same template key expected 201, got ${response.status}`);
 
+      response = await request('/api/contract-templates', {
+        method: 'POST', body: JSON.stringify({
+          templateKey: 'rental-docx', title: 'Contrato DOCX', sourceMode: 'FILE',
+        }),
+      }, adminA);
+      assert(response.status === 201, `DOCX template create expected 201, got ${response.status}`);
+      const docxTemplate = (await json(response)).item;
+      assert(docxTemplate.isCurrent === true && docxTemplate.isActive === false, 'DOCX template initial state mismatch');
+
+      const docxSource = syntheticContractDocx();
+      const docxHeaders = new Headers({
+        'content-type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'x-autoerp-entity-type': 'ContractTemplate',
+        'x-autoerp-entity-id': docxTemplate.id,
+        'x-autoerp-document-type': 'CONTRACT_TEMPLATE_SOURCE',
+        'x-autoerp-file-name': 'modelo-locacao.docx',
+      });
+      response = await request('/api/attachments', { method: 'POST', headers: docxHeaders, body: docxSource }, adminA);
+      assert(response.status === 201, `DOCX source upload expected 201, got ${response.status}`);
+      response = await request(`/api/contract-templates/${docxTemplate.id}/promote-file-source`, {
+        method: 'POST', body: '{}',
+      }, adminA);
+      assert(response.status === 200, `DOCX source promotion expected 200, got ${response.status}`);
+
       const contractInput = {
         contractNumber: 'CNT-I4C-A-001', driverId: 'i4c-drv-a1', vehicleId: 'i4c-veh-a1', startDate: '2026-09-01',
         rentalAmount: 800, billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: 1, billingDueDayOfMonth: 1,
@@ -195,6 +277,36 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const generatedPdfBytes = new Uint8Array(await response.arrayBuffer());
       assert(new TextDecoder('ascii').decode(generatedPdfBytes.slice(0, 5)) === '%PDF-', 'generated content is not a real PDF');
 
+      response = await request(`/api/contracts/${contract.id}/generate-docx`, {
+        method: 'POST', body: JSON.stringify({ templateId: docxTemplate.id }),
+      }, readonlyA);
+      assert(response.status === 403, `READONLY DOCX generate expected 403, got ${response.status}`);
+
+      response = await request(`/api/contracts/${contract.id}/generate-docx`, {
+        method: 'POST', body: JSON.stringify({ templateId: docxTemplate.id }),
+      }, adminA);
+      assert(response.status === 201, `generate DOCX expected 201, got ${response.status}`);
+      const generatedDocx = await json(response);
+      assert(
+        generatedDocx.artifact.artifactType === 'GENERATED_DOCX' &&
+        /^[0-9a-f]{64}$/.test(generatedDocx.artifact.snapshotHash),
+        'generated DOCX artifact invalid'
+      );
+      assert(
+        generatedDocx.attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+        generatedDocx.attachment.storageProvider === 'SERVER_FS',
+        'generated DOCX attachment invalid'
+      );
+      response = await request(`/api/attachments/${generatedDocx.attachment.id}/content`, {}, adminA);
+      assert(response.status === 200, `generated DOCX content expected 200, got ${response.status}`);
+      const generatedDocxBytes = new Uint8Array(await response.arrayBuffer());
+      assert(new TextDecoder('ascii').decode(generatedDocxBytes.slice(0, 2)) === 'PK', 'generated content is not a DOCX ZIP');
+
+      const supersededPdf = await scalar(sql`
+        SELECT is_current, is_archived FROM contract_artifacts WHERE id=${generated.artifact.id}
+      `);
+      assert(supersededPdf?.is_current === false && supersededPdf?.is_archived === true, 'DOCX generation did not archive prior PDF');
+
       response = await request(`/api/contracts/${contract.id}`, {
         method: 'PATCH', body: JSON.stringify({ rentalAmount: 999 }),
       }, adminA);
@@ -223,7 +335,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const reviewedArtifact = (await json(response)).artifact;
       assert(
         reviewedArtifact.artifactType === 'REVIEWED_FINAL_PDF' &&
-        reviewedArtifact.sourceArtifactId === generated.artifact.id &&
+        reviewedArtifact.sourceArtifactId === generatedDocx.artifact.id &&
         reviewedArtifact.attachmentId === reviewedAttachment.id,
         'reviewed final artifact link mismatch',
       );
