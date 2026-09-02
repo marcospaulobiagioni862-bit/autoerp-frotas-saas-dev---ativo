@@ -19,3 +19,11 @@ CREATE TABLE IF NOT EXISTS traffic_ticket_driver_indications (
 
 CREATE INDEX IF NOT EXISTS idx_traffic_ticket_driver_indications_company_status_deadline
   ON traffic_ticket_driver_indications(company_id, status, indication_deadline);
+
+ALTER TABLE traffic_ticket_driver_indications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE traffic_ticket_driver_indications FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_traffic_ticket_driver_indications ON traffic_ticket_driver_indications;
+CREATE POLICY tenant_isolation_traffic_ticket_driver_indications ON traffic_ticket_driver_indications
+  FOR ALL
+  USING (company_id = current_setting('app.current_tenant', true))
+  WITH CHECK (company_id = current_setting('app.current_tenant', true));
