@@ -146,5 +146,14 @@ const completionBody = modalSource.slice(completionStart, completionEnd);
 assert.equal(completionBody.includes('getApprovedCnhDraft'), false, 'completion must not re-read an already consumed intake');
 assert.match(modalSource, /PROVIDER_RATE_LIMITED/);
 assert.match(modalSource, /não envie o documento novamente agora/);
+assert.match(modalSource, /const retryRateLimited = async \(\) =>/);
+const retryStart = modalSource.indexOf('const retryRateLimited = async () => {');
+const retryEnd = modalSource.indexOf("const review = async (decision: 'APPROVE' | 'REJECT') => {", retryStart);
+assert.ok(retryStart >= 0 && retryEnd > retryStart, 'rate-limit retry handler must remain discoverable');
+const retryBody = modalSource.slice(retryStart, retryEnd);
+assert.match(retryBody, /DocumentAiClient\.retry\(extractionId\)/, 'retry must reuse the existing extraction');
+assert.equal(retryBody.includes('AttachmentClient.upload'), false, 'retry must not upload the CNH again');
+assert.equal(retryBody.includes('DriverDocumentIntakeClient.create'), false, 'retry must not create another intake');
+assert.match(modalSource, /Tentar novamente com esta CNH/);
 
 console.log('Driver intake approved CNH draft checks passed.');

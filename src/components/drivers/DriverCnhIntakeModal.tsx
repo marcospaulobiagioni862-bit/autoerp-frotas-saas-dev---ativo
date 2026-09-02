@@ -195,6 +195,21 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
     }
   };
 
+  const retryRateLimited = async () => {
+    if (!extractionId || !providerRateLimited || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const retried = await DocumentAiClient.retry(extractionId);
+      setExtraction(retried);
+      await loadExtraction(extractionId);
+    } catch (err) {
+      setError(safeError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const review = async (decision: 'APPROVE' | 'REJECT') => {
     if (!extraction || extraction.status !== 'REVIEW_REQUIRED' || busy) return;
     if (decision === 'APPROVE' && extraction.detectedDocumentType !== 'CNH') {
@@ -417,7 +432,12 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({ isOpen, onClose, onDraft
               </p>
             </div>
             {providerRateLimited ? (
-              <Button type="button" variant="outline" onClick={close} disabled={busy}>Fechar e tentar mais tarde</Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button type="button" variant="primary" onClick={retryRateLimited} disabled={busy} isLoading={busy}>
+                  <RefreshCw className="mr-1.5 h-4 w-4" />Tentar novamente com esta CNH
+                </Button>
+                <Button type="button" variant="outline" onClick={close} disabled={busy}>Fechar e tentar mais tarde</Button>
+              </div>
             ) : (
               <Button type="button" variant="outline" onClick={reset} disabled={busy}>Nova tentativa</Button>
             )}
