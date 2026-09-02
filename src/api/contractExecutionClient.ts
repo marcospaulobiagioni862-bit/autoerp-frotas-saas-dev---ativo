@@ -17,7 +17,7 @@ function validateArtifact(value: unknown): ContractArtifact {
   const item = asRecord(value);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractId !== 'string' ||
-    (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
+    (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'REVIEWED_FINAL_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
     typeof item.attachmentId !== 'string' || typeof item.snapshotHash !== 'string' || !/^[0-9a-f]{64}$/.test(item.snapshotHash) ||
     typeof item.isCurrent !== 'boolean' || typeof item.isArchived !== 'boolean' ||
     typeof item.createdBy !== 'string' || typeof item.createdAt !== 'string' || typeof item.updatedAt !== 'string'
@@ -82,6 +82,18 @@ export class ContractExecutionClient {
       attachment: validateAttachment(payload.attachment),
       contract: validateContract(payload.contract),
     };
+  }
+
+  static async registerReviewedFinalPdf(
+    contractId: string,
+    attachmentId: string
+  ): Promise<ContractArtifact> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/reviewed-final-pdf`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ attachmentId }),
+    });
+    if (!response.ok) throw await apiError(response);
+    return validateArtifact(asRecord(await response.json()).artifact);
   }
 
   static async registerSignatureEvidence(
