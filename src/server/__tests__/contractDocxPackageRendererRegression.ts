@@ -131,6 +131,25 @@ export async function runContractDocxPackageRendererRegression(): Promise<void> 
   expectRejected(
     storedZip([
       { name: '[Content_Types].xml', content: Buffer.from('<Types/>') },
+      { name: 'word/document.xml', content: Buffer.from('<w:document><w:t>{{driver.name}}</w:t></w:document>') },
+    ]),
+    { 'driver.name': '   ' },
+    'empty required package placeholder did not fail closed'
+  );
+  const optionalEmpty = renderContractDocxPackage(
+    storedZip([
+      { name: '[Content_Types].xml', content: Buffer.from('<Types/>') },
+      { name: 'word/document.xml', content: Buffer.from('<w:document><w:t>{{driver.address.complement}}</w:t></w:document>') },
+    ]),
+    { 'driver.address.complement': '' }
+  );
+  assert(
+    !entryContent(optionalEmpty.bytes, 'word/document.xml').toString('utf8').includes('{{'),
+    'optional empty package placeholder was not rendered'
+  );
+  expectRejected(
+    storedZip([
+      { name: '[Content_Types].xml', content: Buffer.from('<Types/>') },
       { name: 'word/media/image1.png', content: binary },
     ]),
     { 'driver.name': 'Teste' },

@@ -298,6 +298,23 @@ export class ContractExecutionAuthorityIntegrationRunner {
         generatedDocx.attachment.storageProvider === 'SERVER_FS',
         'generated DOCX attachment invalid'
       );
+
+      response = await request(`/api/contracts/${contract.id}/generate-docx`, {
+        method: 'POST', body: JSON.stringify({ templateId: docxTemplate.id }),
+      }, adminA);
+      assert(response.status === 200, `DOCX replay expected 200, got ${response.status}`);
+      const replayedDocx = await json(response);
+      assert(
+        replayedDocx.artifact.id === generatedDocx.artifact.id &&
+        replayedDocx.attachment.id === generatedDocx.attachment.id,
+        'DOCX replay created a different authority chain'
+      );
+      row = await scalar(sql`
+        SELECT count(*)::int AS count FROM contract_artifacts
+        WHERE contract_id=${contract.id} AND artifact_type='GENERATED_DOCX'
+      `);
+      assert(Number(row?.count) === 1, 'DOCX replay created an extra artifact');
+
       response = await request(`/api/attachments/${generatedDocx.attachment.id}/content`, {}, adminA);
       assert(response.status === 200, `generated DOCX content expected 200, got ${response.status}`);
       const generatedDocxBytes = new Uint8Array(await response.arrayBuffer());
