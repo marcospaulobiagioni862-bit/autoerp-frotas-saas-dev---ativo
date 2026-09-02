@@ -441,9 +441,13 @@ export function registerContractRoutes(app: Express): void {
           throw new ContractConflictError('Contract lifecycle does not allow activation');
         }
         if (contract.signatureRequired) {
-          const generated = await tx.getContractArtifactRepo().findCurrentForContract(
+          const generatedPdf = await tx.getContractArtifactRepo().findCurrentForContract(
             principal.companyId, contract.id, 'GENERATED_PDF', true
           );
+          const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
+            principal.companyId, contract.id, 'GENERATED_DOCX', true
+          );
+          const generated = generatedDocx || generatedPdf;
           const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(
             principal.companyId, contract.id, 'REVIEWED_FINAL_PDF', true
           );
