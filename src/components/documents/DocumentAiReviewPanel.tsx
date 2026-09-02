@@ -111,6 +111,8 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
   const [submitting, setSubmitting] = useState<'APPROVE' | 'REJECT' | 'RETRY' | 'DISCARD' | null>(null);
   const [openingSource, setOpeningSource] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [selectedFailedIds, setSelectedFailedIds] = useState<Set<string>>(() => new Set());
 
   const canReview =
     WRITE_ROLES.has(user.role.toUpperCase()) ||
@@ -224,15 +226,29 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     }
   };
 
-  const discardFailed = async () => {
-    if (!canReview) return;
-    const failedIds = items.filter((item) => item.status === 'FAILED').map((item) => item.id);
-    if (failedIds.length === 0) return;
-    if (!window.confirm(`Limpar ${failedIds.length} falha(s) descartável(is)? Arquivos já vinculados ou com dados válidos serão preservados.`)) return;
+  const toggleFailedSelection = (id: string) => {
+    setSelectedFailedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const discardFailed = async (extractionIds: string[]) => {
+    if (!canReview || extractionIds.length === 0) return;
+    if (!window.confirm(`Arquivar ${extractionIds.length} falha(s) selecionada(s)? Itens em uso e arquivos com dados válidos serão preservados.`)) return;
     setSubmitting('DISCARD');
     setError(null);
+    setNotice(null);
     try {
-      await DocumentAiClient.discardFailed(failedIds);
+      const result = await DocumentAiClient.discardFailed(extractionIds);
+      setNotice(
+        result.discarded > 0
+          ? `${result.discarded} extração(ões) arquivada(s). ${result.attachmentsArchived} anexo(s) sem uso também foi(ram) arquivado(s).`
+          : 'Nenhuma extração foi arquivada: os itens selecionados estão em uso ou possuem dados que devem ser preservados.',
+      );
+      setSelectedFailedIds(new Set());
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao limpar falhas descartáveis.');
@@ -306,19 +322,29 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             variant="outline"
             size="sm"
             className="w-full"
+            disabled={selectedFailedIds.size === 0}
             isLoading={submitting === 'DISCARD'}
-            onClick={() => void discardFailed()}
+            onClick={() => void discardFailed([...selectedFailedIds])}
             icon={<Trash2 className="h-4 w-4" />}
           >
-            Limpar falhas descartáveis
+            Limpar selecionados ({selectedFailedIds.size})
           </Button>
         )}
         {items.map((item) => (
-          <button
+          <div key={item.id} className="flex items-start gap-2">
+            {item.status === 'FAILED' && canReview && (
+              <input
+                type="checkbox"
+                className="mt-4 h-4 w-4 rounded border-slate-300"
+                checked={selectedFailedIds.has(item.id)}
+                onChange={() => toggleFailedSelection(item.id)}
+                aria-label={`Selecionar falha do anexo ${item.attachmentId}`}
+              />
+            )}
+            <button
             type="button"
-            key={item.id}
             onClick={() => selectItem(item.id)}
-            className={`w-full text-left rounded-lg border p-3 transition-colors ${
+            className={`min-w-0 flex-1 text-left rounded-lg border p-3 transition-colors ${
               item.id === selected.id
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
                 : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900'
@@ -336,7 +362,8 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             </div>
             <p className="text-xs text-slate-500 mt-1 truncate">Anexo {item.attachmentId}</p>
             <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
-          </button>
+            </button>
+          </div>
         ))}
       </aside>
 
@@ -445,17 +472,29 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
           </p>
         )}
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {notice && <p className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           {selected.status === 'FAILED' ? (
-            <Button
-              disabled={!canReview || selected.attemptCount >= 3}
-              isLoading={submitting === 'RETRY'}
-              onClick={() => void retry()}
-              icon={<RefreshCw className="h-4 w-4" />}
-            >
-              {selected.attemptCount >= 3 ? 'Limite de tentativas atingido' : 'Solicitar nova tentativa'}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                disabled={!canReview}
+                isLoading={submitting === 'DISCARD'}
+                onClick={() => void discardFailed([selected.id])}
+                icon={<Trash2 className="h-4 w-4" />}
+              >
+                Arquivar esta falha
+              </Button>
+              <Button
+                disabled={!canReview || selected.attemptCount >= 3}
+                isLoading={submitting === 'RETRY'}
+                onClick={() => void retry()}
+                icon={<RefreshCw className="h-4 w-4" />}
+              >
+                {selected.attemptCount >= 3 ? 'Limite de tentativas atingido' : 'Solicitar nova tentativa'}
+              </Button>
+            </>
           ) : (
             <>
               <Button
