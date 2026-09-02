@@ -255,7 +255,8 @@ export function registerContractTemplateRoutes(app: Express): void {
         if (!['application/pdf', DOCX_MIME].includes(sources[0].mimeType)) {
           throw new TemplateConflictError();
         }
-        if (candidate.isCurrent) return candidate;
+        const shouldActivate = sources[0].mimeType === DOCX_MIME;
+        if (candidate.isCurrent && candidate.isActive === shouldActivate) return candidate;
 
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
         if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
@@ -270,7 +271,7 @@ export function registerContractTemplateRoutes(app: Express): void {
         }
         const promoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, candidate.id, {
           isCurrent: true,
-          isActive: sources[0].mimeType === DOCX_MIME,
+          isActive: shouldActivate,
           updatedAt: now,
         });
         if (!promoted) throw new TemplateNotFoundError();
