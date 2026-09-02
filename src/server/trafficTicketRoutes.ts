@@ -1,11 +1,12 @@
 import type { Express,Request,Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
-import { TicketResponsibility,TicketStatus } from '../types/enums';
+import { TicketResponsibility,TicketStatus,TrafficTicketDriverIndicationStatus } from '../types/enums';
 import {
   TrafficTicketAuthorityService,TrafficTicketConflictError,TrafficTicketForbiddenError,
   TrafficTicketNotFoundError,TrafficTicketValidationError,type ChangeTicketResponsibilityInput,
   type CreateTrafficTicketAuthorityInput,type UpdateTrafficTicketAuthorityInput,
 } from './trafficTicketAuthority';
+import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
 
 const PROTECTED_KEYS=new Set([
   'companyId','userId','createdBy','status','payableId','basePayableId','receivableId','nicPayableId',
@@ -21,6 +22,7 @@ function integer(value:unknown):number{const item=Number(value??0);if(!Number.is
 function date(value:unknown,required=true):string|undefined{if(value===undefined||value===null||value===''){if(required)throw new TrafficTicketValidationError();return undefined;}const item=String(value).trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(item))throw new TrafficTicketValidationError();const parsed=new Date(`${item}T00:00:00Z`);if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==item)throw new TrafficTicketValidationError();return item;}
 function responsibility(value:unknown):TicketResponsibility{const item=String(value||'') as TicketResponsibility;if(!Object.values(TicketResponsibility).includes(item))throw new TrafficTicketValidationError();return item;}
 function status(value:unknown):TicketStatus|undefined{if(value===undefined||value===null||value==='')return undefined;const item=String(value) as TicketStatus;if(!Object.values(TicketStatus).includes(item))throw new TrafficTicketValidationError();return item;}
+function indicationStatus(value:unknown):TrafficTicketDriverIndicationStatus{const item=String(value||'') as TrafficTicketDriverIndicationStatus;if(!Object.values(TrafficTicketDriverIndicationStatus).includes(item))throw new TrafficTicketValidationError();return item;}
 function isUnique(error:unknown):boolean{let current:any=error;for(let i=0;i<6&&current;i++,current=current.cause)if(current.code==='23505')return true;return false;}
 function sendError(res:Response,error:unknown):void{
   const message=error instanceof Error?error.message:'';
@@ -38,6 +40,7 @@ export function registerTrafficTicketRoutes(app:Express):void{
     res.json({items:await TrafficTicketAuthorityService.list(actor.companyId,filters)});
   }catch(error){sendError(res,error);}});
   app.get('/api/traffic-tickets/:id',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{const details=await TrafficTicketAuthorityService.getDetails(actor.companyId,req.params.id);if(!details)throw new TrafficTicketNotFoundError();res.json(details);}catch(error){sendError(res,error);}});
+  app.get('/api/traffic-tickets/:id/driver-indication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{res.json(await TrafficTicketDriverIndicationAuthorityService.get(actor.companyId,req.params.id));}catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(hasProtected(req.body))throw new TrafficTicketValidationError();
     const input:CreateTrafficTicketAuthorityInput={
@@ -62,6 +65,10 @@ export function registerTrafficTicketRoutes(app:Express):void{
   app.post('/api/traffic-tickets/:id/responsibility',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(hasProtected(req.body))throw new TrafficTicketValidationError();const input:ChangeTicketResponsibilityInput={responsibility:responsibility(req.body?.responsibility),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),driverIncomeCategoryId:optionalText(req.body?.driverIncomeCategoryId,200),nicExpenseCategoryId:optionalText(req.body?.nicExpenseCategoryId,200),nicAmount:amount(req.body?.nicAmount,false)};
     res.json(await TrafficTicketAuthorityService.changeResponsibility(actor,req.params.id,input));
+  }catch(error){sendError(res,error);}});
+  app.post('/api/traffic-tickets/:id/driver-indication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    const allowed=new Set(['status','indicationDeadline','notes']);if(Object.keys(req.body||{}).some(key=>!allowed.has(key)))throw new TrafficTicketValidationError();
+    res.json(await TrafficTicketDriverIndicationAuthorityService.update(actor,req.params.id,{status:indicationStatus(req.body?.status),indicationDeadline:date(req.body?.indicationDeadline,false),notes:req.body?.notes===undefined?undefined:String(req.body.notes).slice(0,4000)}));
   }catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/nic',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.createNic(actor,req.params.id,text(req.body?.categoryId,200),amount(req.body?.nicAmount,false)));}catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/appeal',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{if(hasProtected(req.body))throw new TrafficTicketValidationError();res.json(await TrafficTicketAuthorityService.appeal(actor,req.params.id,text(req.body?.notes,2000)));}catch(error){sendError(res,error);}});
