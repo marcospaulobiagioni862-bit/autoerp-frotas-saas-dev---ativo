@@ -241,6 +241,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
         method: 'POST', body: '{}',
       }, adminA);
       assert(response.status === 200, `DOCX source promotion expected 200, got ${response.status}`);
+      assert((await json(response)).item.isActive === true, 'valid DOCX source was not activated');
 
       const contractInput = {
         contractNumber: 'CNT-I4C-A-001', driverId: 'i4c-drv-a1', vehicleId: 'i4c-veh-a1', startDate: '2026-09-01',
