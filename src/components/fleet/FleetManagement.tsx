@@ -249,6 +249,11 @@ export const FleetManagement: React.FC = () => {
           {filteredVehicles.map((vehicle) => {
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
             const manualStatusOptions = vehicleManualStatusOptions(vehicle.status);
+            const canPlaceOutOfUse =
+              vehicle.status !== VehicleStatus.RENTED &&
+              vehicle.status !== VehicleStatus.INACTIVE &&
+              vehicle.status !== VehicleStatus.SOLD &&
+              vehicle.status !== VehicleStatus.ARCHIVED;
 
             return (
               <Card
@@ -298,6 +303,10 @@ export const FleetManagement: React.FC = () => {
 
                 {/* Quick Action Buttons */}
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">Ações do veículo</span>
+                    <span className="text-[10px] text-slate-400">O histórico não será apagado.</span>
+                  </div>
                   {manualStatusOptions.length > 0 && (
                     <Select
                       aria-label={`Alterar status do veículo ${vehicle.plate}`}
@@ -322,6 +331,16 @@ export const FleetManagement: React.FC = () => {
                     </button>
 
                     <div className="flex items-center gap-1">
+                      {canPlaceOutOfUse && (
+                        <button
+                          onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)}
+                          title="Colocar fora de uso"
+                          aria-label={`Colocar ${vehicle.plate} fora de uso`}
+                          className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md"
+                        >
+                          Fora de uso
+                        </button>
+                      )}
                       <button
                         onClick={() => setVehicleForKmRecord(vehicle)}
                         title="Registrar KM"
@@ -406,8 +425,10 @@ export const FleetManagement: React.FC = () => {
         isOpen={isConfirmingStatus}
         onClose={() => setIsConfirmingStatus(false)}
         onConfirm={handleConfirmStatusChange}
-        title="Alterar Status do Veículo"
-        message={`Deseja alterar o status do veículo ${vehicleForStatusChange?.plate} para ${targetStatus ? vehicleStatusLabel(targetStatus) : ''}?`}
+        title={targetStatus === VehicleStatus.INACTIVE ? 'Colocar veículo fora de uso' : 'Alterar Status do Veículo'}
+        message={targetStatus === VehicleStatus.INACTIVE
+          ? `Deseja colocar o veículo ${vehicleForStatusChange?.plate} fora de uso? O histórico não será apagado.`
+          : `Deseja alterar o status do veículo ${vehicleForStatusChange?.plate} para ${targetStatus ? vehicleStatusLabel(targetStatus) : ''}?`}
         confirmLabel="Confirmar Alteração"
         variant="warning"
         requireReason

@@ -50,4 +50,19 @@ assert.doesNotMatch(
   'fleet modal fallback must not expose raw errors',
 );
 
+
+assert.match(source, />Ações do veículo</, 'vehicle cards must expose an explicit lifecycle action area');
+assert.match(source, />O histórico não será apagado\.</, 'lifecycle actions must explain history preservation');
+assert.match(
+  source,
+  /handleStatusChangeClick\(vehicle, VehicleStatus\.INACTIVE\)/,
+  'out-of-use action must reuse the authoritative INACTIVE status transition',
+);
+assert.match(source, />\s*Fora de uso\s*</, 'out-of-use action must be visible without the generic status selector');
+assert.match(
+  source,
+  /targetStatus === VehicleStatus\.INACTIVE[\s\S]*O histórico não será apagado\./,
+  'out-of-use confirmation must preserve the explicit history warning',
+);
+
 console.log('Deferred fleet modals regression: PASS');
