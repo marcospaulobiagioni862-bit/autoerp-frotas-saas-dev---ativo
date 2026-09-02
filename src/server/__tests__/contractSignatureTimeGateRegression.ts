@@ -7,6 +7,7 @@ import { ContractExecutionAuthorityIntegrationRunner } from './contractExecution
 import { runContractSuspendRegression } from './contractSuspendRegression';
 import { runContractTemplateFileSourceRegression } from './contractTemplateFileSourceRegression';
 import { runContractDocxTemplateRendererRegression } from './contractDocxTemplateRendererRegression';
+import { runContractDocxPackageRendererRegression } from './contractDocxPackageRendererRegression';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -181,6 +182,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
   await runContractSuspendRegression();
   await runContractTemplateFileSourceRegression();
   await runContractDocxTemplateRendererRegression();
+  await runContractDocxPackageRendererRegression();
 }
 
 if (process.argv[1]?.includes('contractSignatureTimeGateRegression')) {
