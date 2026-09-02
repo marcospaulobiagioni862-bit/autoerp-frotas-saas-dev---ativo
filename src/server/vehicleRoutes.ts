@@ -393,11 +393,14 @@ export function registerVehicleRoutes(app: Express): void {
         if (existing.status === status) return existing;
 
         const targetStatus = status as VehicleStatus;
-        const hasCurrentBinding = Boolean(existing.currentContractId || existing.currentDriverId);
-        const maintenanceControlled = existing.status === VehicleStatus.MAINTENANCE;
+        const [activeContract, hasBlockingMaintenance] = await Promise.all([
+          txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id),
+          txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, ''),
+        ]);
+        const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
         if (!canManuallyTransitionVehicleStatus(existing.status, targetStatus, {
           hasActiveContract: hasCurrentBinding,
-          hasBlockingMaintenance: maintenanceControlled,
+          hasBlockingMaintenance,
         })) {
           throw new VehicleConflictError('Invalid vehicle status transition');
         }
