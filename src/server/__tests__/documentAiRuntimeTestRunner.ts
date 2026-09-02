@@ -235,4 +235,16 @@ assert.equal(
   'unavailable runtime path must not reach tenant transaction',
 );
 
+const documentAiRoutesSource = readFileSync(new URL('../documentAiRoutes.ts', import.meta.url), 'utf8');
+assert.match(documentAiRoutesSource, /configuredDocumentAiStorageProvider\(process\.env\.ATTACHMENT_STORAGE_PROVIDER\)/);
+assert.match(documentAiRoutesSource, /isDocumentAiAttachmentEligible\(attachment, configuredStorageProvider\)/);
+assert.match(documentAiRoutesSource, /isDocumentAiAttachmentEligible\(attachment, configuredStorageProvider, current\.attachmentChecksum\)/);
+assert.equal(
+  documentAiRoutesSource.includes("attachment.storageProvider !== 'SERVER_FS'"),
+  false,
+  'request and retry routes must not regress to a hard-coded storage provider',
+);
+assert.match(documentAiRoutesSource, /DOCUMENT_AI_RATE_LIMIT_RETRY_COOLDOWN_MS = 60_000/);
+assert.match(documentAiRoutesSource, /current\.failureCode === 'PROVIDER_RATE_LIMITED'/);
+
 console.log('DOC-AI-1B2 runtime composition, route fail-closed, real-document opt-in and exact dispatch checks passed.');
