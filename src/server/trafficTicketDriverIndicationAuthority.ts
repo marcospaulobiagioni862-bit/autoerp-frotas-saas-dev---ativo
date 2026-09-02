@@ -64,6 +64,10 @@ function map(row:any):TrafficTicketDriverIndication{
     statusChangedAt:iso(row.status_changed_at),createdBy:optional(row.created_by),updatedBy:optional(row.updated_by),createdAt:iso(row.created_at),updatedAt:iso(row.updated_at),
   };
 }
+function virtualPending(companyId:string,ticketId:string,driverId?:string,current?:TrafficTicketDriverIndication):TrafficTicketDriverIndication{
+  const now=new Date().toISOString();
+  return {id:current?.id||ticketId,companyId,trafficTicketId:ticketId,driverId,status:TrafficTicketDriverIndicationStatus.PENDING,statusChangedAt:now,createdAt:current?.createdAt||now,updatedAt:now};
+}
 
 export function canTransitionTrafficTicketDriverIndication(from:TrafficTicketDriverIndicationStatus,to:TrafficTicketDriverIndicationStatus):boolean{
   return from===to||TRANSITIONS[from].has(to);
@@ -87,9 +91,9 @@ export class TrafficTicketDriverIndicationAuthorityService {
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket indication persistence unavailable');
       const ticketResult=await rawTx.execute(sql`SELECT id,driver_id FROM traffic_tickets WHERE company_id=${companyId} AND id=${ticketId} AND canonical_ready=true LIMIT 1`);
       const ticket=rows(ticketResult)[0];if(!ticket)throw new TrafficTicketNotFoundError('Multa não encontrada');
-      const current=await currentRow(rawTx,companyId,ticketId);if(current)return map(current);
-      const now=new Date().toISOString();
-      return {id:ticketId,companyId,trafficTicketId:ticketId,driverId:optional(ticket.driver_id),status:TrafficTicketDriverIndicationStatus.PENDING,statusChangedAt:now,createdAt:now,updatedAt:now};
+      const driverId=optional(ticket.driver_id),currentRaw=await currentRow(rawTx,companyId,ticketId),current=currentRaw?map(currentRaw):undefined;
+      if(current&&current.driverId===driverId)return current;
+      return virtualPending(companyId,ticketId,driverId,current);
     });
   }
 
@@ -101,6 +105,7 @@ export class TrafficTicketDriverIndicationAuthorityService {
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket indication persistence unavailable');
       const ticket=await ticketForUpdate(rawTx,principal.companyId,ticketId);
       if(String(ticket.status)===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada');
+      if(input.status===TrafficTicketDriverIndicationStatus.APPEAL&&String(ticket.status)!==TicketStatus.APPEALED)throw new TrafficTicketConflictError('Registre o recurso da multa antes de mover a indicação para recurso');
       const driverId=optional(ticket.driver_id),responsibility=String(ticket.responsibility) as TicketResponsibility;
       const requiresDriver=!([TrafficTicketDriverIndicationStatus.PENDING,TrafficTicketDriverIndicationStatus.APPEAL,TrafficTicketDriverIndicationStatus.CANCELLED] as TrafficTicketDriverIndicationStatus[]).includes(input.status);
       if(requiresDriver&&(responsibility!==TicketResponsibility.DRIVER||!driverId))throw new TrafficTicketConflictError('Indicação exige motorista identificado como responsável');
