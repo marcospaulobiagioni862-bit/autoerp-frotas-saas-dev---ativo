@@ -249,12 +249,11 @@ export const FleetManagement: React.FC = () => {
           {filteredVehicles.map((vehicle) => {
             const isAvailable = vehicle.status === VehicleStatus.AVAILABLE;
             const manualStatusOptions = vehicleManualStatusOptions(vehicle.status);
-            const canPlaceOutOfUse = ![
-              VehicleStatus.RENTED,
-              VehicleStatus.INACTIVE,
-              VehicleStatus.SOLD,
-              VehicleStatus.ARCHIVED,
-            ].includes(vehicle.status);
+            const canPlaceOutOfUse =
+              vehicle.status !== VehicleStatus.RENTED &&
+              vehicle.status !== VehicleStatus.INACTIVE &&
+              vehicle.status !== VehicleStatus.SOLD &&
+              vehicle.status !== VehicleStatus.ARCHIVED;
 
             return (
               <Card
