@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Car, FileText, Gauge, ShieldCheck, TrendingUp, User, Wrench, AlertTriangle } from 'lucide-react';
 import { VehicleClient, type VehicleLifecycleEvent } from '../../api/vehicleClient';
 import { VehicleLegacyDetailsBridge, type VehicleDetailedSummary } from '../../domain/services/VehicleLegacyDetailsBridge';
+import { VehicleStatus } from '../../types/enums';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { AttachmentList } from '../documents/AttachmentList';
 import { Badge } from '../ui/Badge';
@@ -40,7 +41,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
         setSummary(await new VehicleLegacyDetailsBridge().compose(vehicle, kmRecords));
         setLifecycle(lifecycleResult.lifecycle);
       } catch (err: any) {
-        setError(err.message || 'Não foi possível carregar o histórico do veículo arquivado.');
+        setError(err.message || 'Não foi possível carregar o histórico do veículo.');
       } finally {
         setLoading(false);
       }
@@ -49,6 +50,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
 
   if (!isOpen || !vehicleId) return null;
   const vehicle = summary?.vehicle;
+  const isSold = vehicle?.status === VehicleStatus.SOLD;
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ElementType; count?: number }> = [
     { id: 'overview', label: 'Visão Geral', icon: Car },
@@ -65,8 +67,8 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
     <ModalContainer
       isOpen={isOpen}
       onClose={onClose}
-      title={vehicle ? `Histórico arquivado — ${vehicle.plate} (${vehicle.brand} ${vehicle.model})` : 'Histórico do veículo'}
-      subtitle="Visualização somente leitura. O arquivamento não apaga vínculos, documentos ou histórico operacional."
+      title={vehicle ? `Histórico somente leitura — ${vehicle.plate} (${vehicle.brand} ${vehicle.model})` : 'Histórico do veículo'}
+      subtitle="Visualização somente leitura. Venda ou arquivamento não apagam vínculos, documentos nem histórico operacional."
       maxWidth="4xl"
     >
       {loading ? (
@@ -79,7 +81,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-base font-black px-3 py-1 bg-slate-900 text-white rounded-md tracking-widest">{vehicle.plate}</span>
-                <Badge variant="default">Arquivado</Badge>
+                <Badge variant="default">{isSold ? 'Vendido' : 'Arquivado'}</Badge>
               </div>
               <p className="mt-2 text-xs text-slate-500">RENAVAM {vehicle.renavam} • Chassi {vehicle.chassis}</p>
             </div>
@@ -150,7 +152,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
 
           {activeTab === 'documents' && (
             <div className="space-y-4 text-xs">
-              <div className="p-3 border rounded-xl bg-slate-50 dark:bg-slate-800/40">Documentos preservados em modo somente leitura. Upload e importação de CRLV ficam desativados para veículo arquivado.</div>
+              <div className="p-3 border rounded-xl bg-slate-50 dark:bg-slate-800/40">Documentos preservados em modo somente leitura. Upload e importação de CRLV ficam desativados para veículo vendido ou arquivado.</div>
               <AttachmentList entityType="Vehicle" entityId={vehicle.id}/>
               {summary.insurances.map((insurance: any) => <div key={insurance.id} className="p-3 border rounded-xl"><strong>Seguro — {insurance.insuranceCompany}</strong><p>Apólice: {insurance.policyNumber}</p><AttachmentList entityType="Insurance" entityId={insurance.id}/></div>)}
             </div>
