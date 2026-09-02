@@ -165,6 +165,17 @@ export enum TicketStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum TrafficTicketDriverIndicationStatus {
+  PENDING = 'PENDING',
+  COMMUNICATED = 'COMMUNICATED',
+  DOCUMENTS_SENT = 'DOCUMENTS_SENT',
+  SIGNED = 'SIGNED',
+  INDICATED = 'INDICATED',
+  COMPLETED = 'COMPLETED',
+  APPEAL = 'APPEAL',
+  CANCELLED = 'CANCELLED',
+}
+
 export enum AuditAction {
   CREATE = 'CREATE',
   UPDATE = 'UPDATE',
