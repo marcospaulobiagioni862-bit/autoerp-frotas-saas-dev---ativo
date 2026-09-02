@@ -16,7 +16,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
   const [loading,setLoading]=useState(false),[submitting,setSubmitting]=useState(false),[error,setError]=useState<string|null>(null);
   const [vehicleId,setVehicleId]=useState(initialVehicleId||''),[driverId,setDriverId]=useState(initialDriverId||''),[autoNumber,setAutoNumber]=useState('');
   const [organName,setOrganName]=useState('DETRAN'),[infractionCode,setInfractionCode]=useState(''),[description,setDescription]=useState('');
-  const [infractionDate,setInfractionDate]=useState(new Date().toISOString().slice(0,10)),[dueDate,setDueDate]=useState(new Date(Date.now()+30*86400000).toISOString().slice(0,10));
+  const [infractionDate,setInfractionDate]=useState(new Date().toISOString().slice(0,10)),[infractionTime,setInfractionTime]=useState(''),[dueDate,setDueDate]=useState(new Date(Date.now()+30*86400000).toISOString().slice(0,10));
   const [discountDueDate,setDiscountDueDate]=useState(''),[originalAmount,setOriginalAmount]=useState(''),[discountedAmount,setDiscountedAmount]=useState('');
   const [nicAmount,setNicAmount]=useState(''),[points,setPoints]=useState('0'),[responsibility,setResponsibility]=useState<TicketResponsibility>(TicketResponsibility.UNIDENTIFIED),[notes,setNotes]=useState('');
   const [baseCategory,setBaseCategory]=useState(''),[incomeCategory,setIncomeCategory]=useState(''),[nicCategory,setNicCategory]=useState('');
@@ -26,7 +26,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
 
   const number=(value:string)=>{const parsed=Number(value.replace(',','.'));return Number.isFinite(parsed)?parsed:NaN;};
   const submit=async(event:React.FormEvent)=>{event.preventDefault();setError(null);const original=number(originalAmount);if(!vehicleId||!autoNumber.trim()||!infractionCode.trim()||!description.trim()||!Number.isFinite(original)||original<=0||!baseCategory){setError('Preencha veículo, auto, infração, descrição, valor e categoria de despesa.');return;}if(responsibility===TicketResponsibility.DRIVER&&(!driverId||!incomeCategory)){setError('Para responsabilidade DRIVER selecione motorista e categoria de receita.');return;}setSubmitting(true);try{
-    await TrafficTicketClient.create({vehicleId,driverId:responsibility===TicketResponsibility.DRIVER?driverId||undefined:undefined,autoNumber:autoNumber.trim(),organName:organName.trim()||'DETRAN',infractionCode:infractionCode.trim(),description:description.trim(),infractionDate,dueDate,discountDueDate:discountDueDate||undefined,originalAmount:original,discountedAmount:discountedAmount?number(discountedAmount):undefined,nicAmount:nicAmount?number(nicAmount):undefined,points:Number(points)||0,responsibility,notes:notes.trim()||undefined,baseExpenseCategoryId:baseCategory,driverIncomeCategoryId:responsibility===TicketResponsibility.DRIVER?incomeCategory:undefined,nicExpenseCategoryId:responsibility===TicketResponsibility.UNIDENTIFIED?(nicCategory||baseCategory):undefined});
+    await TrafficTicketClient.create({vehicleId,driverId:responsibility===TicketResponsibility.DRIVER?driverId||undefined:undefined,autoNumber:autoNumber.trim(),organName:organName.trim()||'DETRAN',infractionCode:infractionCode.trim(),description:description.trim(),infractionDate,infractionTime:infractionTime||undefined,dueDate,discountDueDate:discountDueDate||undefined,originalAmount:original,discountedAmount:discountedAmount?number(discountedAmount):undefined,nicAmount:nicAmount?number(nicAmount):undefined,points:Number(points)||0,responsibility,notes:notes.trim()||undefined,baseExpenseCategoryId:baseCategory,driverIncomeCategoryId:responsibility===TicketResponsibility.DRIVER?incomeCategory:undefined,nicExpenseCategoryId:responsibility===TicketResponsibility.UNIDENTIFIED?(nicCategory||baseCategory):undefined});
     onSuccess();onClose();
   }catch(err){setError(err instanceof Error?err.message:'Erro ao salvar multa.');}finally{setSubmitting(false);}};
   return <ModalContainer isOpen={isOpen} onClose={onClose} title="Cadastrar Multa" size="lg"><form onSubmit={submit} className="space-y-4 text-xs">
@@ -40,6 +40,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
       <label>Código *<Input value={infractionCode} onChange={e=>setInfractionCode(e.target.value)}/></label>
       <label className="md:col-span-2">Descrição *<Input value={description} onChange={e=>setDescription(e.target.value)}/></label>
       <label>Data infração *<Input type="date" value={infractionDate} onChange={e=>setInfractionDate(e.target.value)}/></label>
+      <label>Horário da infração<Input type="time" value={infractionTime} onChange={e=>setInfractionTime(e.target.value)}/></label>
       <label>Vencimento *<Input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label>
       <label>Valor original *<Input value={originalAmount} onChange={e=>setOriginalAmount(e.target.value)} placeholder="195,23"/></label>
       <label>Pontos<Input type="number" min="0" value={points} onChange={e=>setPoints(e.target.value)}/></label>

@@ -12,7 +12,7 @@ function map(row:any):TrafficTicket{
     id:String(row.id),companyId:String(row.company_id),vehicleId:String(row.vehicle_id),
     driverId:optional(row.driver_id),contractId:optional(row.contract_id),
     autoNumber:String(row.auto_number),organName:String(row.organ_name||''),infractionCode:String(row.infraction_code||''),
-    description:String(row.description||''),infractionDate:dateOnly(row.infraction_date||row.issue_date),infractionLocation:optional(row.infraction_location),
+    description:String(row.description||''),infractionDate:dateOnly(row.infraction_date||row.issue_date),infractionTime:optional(row.infraction_time),infractionLocation:optional(row.infraction_location),
     dueDate:dateOnly(row.due_date||row.issue_date),discountDueDate:row.discount_due_date?dateOnly(row.discount_due_date):undefined,
     originalAmount:Number(row.original_amount??row.amount??0),
     discountedAmount:row.discounted_amount==null?undefined:Number(row.discounted_amount),
@@ -57,14 +57,14 @@ export class PostgresTrafficTicketRepository {
     const result=await this.tx.execute(sql`
       INSERT INTO traffic_tickets(
         id,company_id,vehicle_id,driver_id,contract_id,auto_number,amount,issue_date,status,
-        organ_name,infraction_code,description,infraction_date,infraction_location,due_date,discount_due_date,
+        organ_name,infraction_code,description,infraction_date,infraction_time,infraction_location,due_date,discount_due_date,
         original_amount,discounted_amount,nic_amount,points,responsibility,
         base_payable_id,receivable_id,nic_payable_id,notes,created_by,cancelled_at,cancel_reason,
         responsibility_version,canonical_ready,created_at,updated_at
       ) VALUES (
         ${item.id},${item.companyId},${item.vehicleId},${item.driverId||null},${item.contractId||null},${item.autoNumber},
         ${String(item.originalAmount)},${item.infractionDate},${item.status},
-        ${item.organName},${item.infractionCode},${item.description},${item.infractionDate},${item.infractionLocation||null},${item.dueDate},${item.discountDueDate||null},
+        ${item.organName},${item.infractionCode},${item.description},${item.infractionDate},${item.infractionTime||null},${item.infractionLocation||null},${item.dueDate},${item.discountDueDate||null},
         ${String(item.originalAmount)},${item.discountedAmount==null?null:String(item.discountedAmount)},
         ${item.nicAmount==null?null:String(item.nicAmount)},${item.points},${item.responsibility},
         ${item.payableId||null},${item.receivableId||null},${item.nicPayableId||null},${item.notes||null},${item.createdBy||null},
@@ -78,7 +78,7 @@ export class PostgresTrafficTicketRepository {
     const result=await this.tx.execute(sql`
       UPDATE traffic_tickets SET
         driver_id=${item.driverId||null},contract_id=${item.contractId||null},organ_name=${item.organName},
-        infraction_code=${item.infractionCode},description=${item.description},infraction_location=${item.infractionLocation||null},due_date=${item.dueDate},
+        infraction_code=${item.infractionCode},description=${item.description},infraction_time=${item.infractionTime||null},infraction_location=${item.infractionLocation||null},due_date=${item.dueDate},
         discount_due_date=${item.discountDueDate||null},discounted_amount=${item.discountedAmount==null?null:String(item.discountedAmount)},
         nic_amount=${item.nicAmount==null?null:String(item.nicAmount)},points=${item.points},responsibility=${item.responsibility},
         status=${item.status},base_payable_id=${item.payableId||null},receivable_id=${item.receivableId||null},
