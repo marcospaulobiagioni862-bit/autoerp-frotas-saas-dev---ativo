@@ -92,6 +92,7 @@ export function canManuallyTransitionVehicleStatus(
   if (from === to) return true;
   if (to === VehicleStatus.RENTED) return false;
   if (context.hasActiveContract) return false;
+  if (context.hasBlockingMaintenance && to !== VehicleStatus.MAINTENANCE) return false;
   // A vehicle being labelled MAINTENANCE must not, by itself, become a circular lock.
   // Blocking work orders must be enforced by the maintenance workflow, not inferred from
   // the current vehicle status. This keeps MAINTENANCE -> AVAILABLE/BLOCKED transitions usable.
