@@ -8,6 +8,9 @@ BEGIN
   ) THEN
     ALTER TABLE traffic_tickets
       ADD CONSTRAINT traffic_tickets_infraction_time_chk
-      CHECK (infraction_time IS NULL OR infraction_time ~ '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$');
+      CHECK (infraction_time IS NULL OR infraction_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]);
+  END IF;
+END $$;
+);
   END IF;
 END $$;
