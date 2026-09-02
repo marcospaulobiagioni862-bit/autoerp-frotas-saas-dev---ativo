@@ -4,6 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction, TicketResponsibility, TicketStatus, TrafficTicketDriverIndicationStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import {
+  syncOperationalAlert,
   TrafficTicketConflictError,
   TrafficTicketForbiddenError,
   TrafficTicketNotFoundError,
@@ -135,6 +136,8 @@ export class TrafficTicketDriverIndicationAuthorityService {
         action:existingMapped?AuditAction.UPDATE:AuditAction.CREATE,previousState:existingMapped?JSON.stringify(existingMapped):undefined,newState:JSON.stringify(saved),
         userId:principal.userId,userName:principal.name,timestamp:now,
       });
+      const canonical=await tx.getTrafficTicketRepo().findByIdForCompany(principal.companyId,ticketId);
+      if(canonical)await syncOperationalAlert(tx,principal,canonical);
       return saved;
     });
   }

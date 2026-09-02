@@ -46,7 +46,7 @@ export function registerTrafficTicketRoutes(app:Express):void{
     const input:CreateTrafficTicketAuthorityInput={
       vehicleId:text(req.body?.vehicleId,200),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),
       autoNumber:text(req.body?.autoNumber,160),organName:text(req.body?.organName,200),infractionCode:text(req.body?.infractionCode,120),
-      description:text(req.body?.description,2000),infractionDate:date(req.body?.infractionDate,true)!,dueDate:date(req.body?.dueDate,true)!,
+      description:text(req.body?.description,2000),infractionDate:date(req.body?.infractionDate,true)!,infractionLocation:optionalText(req.body?.infractionLocation,500),dueDate:date(req.body?.dueDate,true)!,
       discountDueDate:date(req.body?.discountDueDate,false),originalAmount:amount(req.body?.originalAmount,true)!,
       discountedAmount:amount(req.body?.discountedAmount,false),nicAmount:amount(req.body?.nicAmount,false),points:integer(req.body?.points),
       responsibility:responsibility(req.body?.responsibility),notes:optionalText(req.body?.notes,4000),
@@ -56,10 +56,10 @@ export function registerTrafficTicketRoutes(app:Express):void{
     res.status(201).json(await TrafficTicketAuthorityService.create(actor,input));
   }catch(error){sendError(res,error);}});
   app.patch('/api/traffic-tickets/:id',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
-    if(hasProtected(req.body))throw new TrafficTicketValidationError();const allowed=new Set(['organName','infractionCode','description','notes']);if(Object.keys(req.body||{}).some(key=>!allowed.has(key)))throw new TrafficTicketValidationError();
+    if(hasProtected(req.body))throw new TrafficTicketValidationError();const allowed=new Set(['organName','infractionCode','description','infractionLocation','notes']);if(Object.keys(req.body||{}).some(key=>!allowed.has(key)))throw new TrafficTicketValidationError();
     const input:UpdateTrafficTicketAuthorityInput={};
     if(req.body?.organName!==undefined)input.organName=text(req.body.organName,200);if(req.body?.infractionCode!==undefined)input.infractionCode=text(req.body.infractionCode,120);
-    if(req.body?.description!==undefined)input.description=text(req.body.description,2000);if(req.body?.notes!==undefined)input.notes=String(req.body.notes||'').slice(0,4000);
+    if(req.body?.description!==undefined)input.description=text(req.body.description,2000);if(req.body?.infractionLocation!==undefined)input.infractionLocation=optionalText(req.body.infractionLocation,500);if(req.body?.notes!==undefined)input.notes=String(req.body.notes||'').slice(0,4000);
     res.json(await TrafficTicketAuthorityService.patch(actor,req.params.id,input));
   }catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets/:id/responsibility',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
