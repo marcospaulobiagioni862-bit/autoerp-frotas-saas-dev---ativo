@@ -142,7 +142,6 @@ export function registerVehicleRoutes(app: Express): void {
   registerVehicleCrlvApplyRoutes(app);
   registerVehicleLifecycleRoutes(app);
 
-  // SECURITY-2I1A-v2 foundation only. Fleet UI/KM switchover remains I1B.
   app.get('/api/fleet/vehicles', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
     if (!principal) return;
@@ -163,7 +162,7 @@ export function registerVehicleRoutes(app: Express): void {
       const item = await UnitOfWork.run(principal.companyId, async (txContext) =>
         await txContext.getVehicleRepo().findByIdForCompany(principal.companyId, req.params.id)
       );
-      if (!item || item.isArchived) throw new VehicleNotFoundError();
+      if (!item) throw new VehicleNotFoundError();
       res.json({ item });
     } catch (error) {
       sendVehicleError(res, error);
@@ -193,50 +192,23 @@ export function registerVehicleRoutes(app: Express): void {
         if (await repo.findByRenavam(principal.companyId, renavam)) throw new VehicleConflictError();
         const now = new Date().toISOString();
         const created = await repo.create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          plate,
-          brand,
-          model,
-          version: optionalText(req.body?.version),
-          yearFabrication,
-          yearModel,
-          color: optionalText(req.body?.color) || '',
-          renavam,
-          chassis: (optionalText(req.body?.chassis) || '').toUpperCase(),
-          currentKm,
-          nextMaintenanceKm,
-          fuelType: optionalText(req.body?.fuelType) || 'Flex',
-          category,
-          acquisitionValue,
-          currentValue,
-          rentalValueBase,
-          status: VehicleStatus.AVAILABLE,
-          notes: optionalText(req.body?.notes),
-          isArchived: false,
-          createdAt: now,
-          updatedAt: now,
+          id: randomUUID(), companyId: principal.companyId, plate, brand, model,
+          version: optionalText(req.body?.version), yearFabrication, yearModel,
+          color: optionalText(req.body?.color) || '', renavam,
+          chassis: (optionalText(req.body?.chassis) || '').toUpperCase(), currentKm, nextMaintenanceKm,
+          fuelType: optionalText(req.body?.fuelType) || 'Flex', category, acquisitionValue, currentValue,
+          rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes),
+          isArchived: false, createdAt: now, updatedAt: now,
         });
         await txContext.getKmRecordRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          vehicleId: created.id,
-          kmValue: created.currentKm,
-          recordDate: now.split('T')[0],
-          readingType: 'PERIODIC',
-          notes: 'Cadastro inicial do veículo',
-          createdAt: now,
+          id: randomUUID(), companyId: principal.companyId, vehicleId: created.id,
+          kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC',
+          notes: 'Cadastro inicial do veículo', createdAt: now,
         });
         await txContext.getAuditLogRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          entityName: 'Vehicle',
-          entityId: created.id,
-          action: AuditAction.CREATE,
-          newState: JSON.stringify(created),
-          userId: principal.userId,
-          userName: principal.name,
-          timestamp: now,
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: created.id,
+          action: AuditAction.CREATE, newState: JSON.stringify(created), userId: principal.userId,
+          userName: principal.name, timestamp: now,
         });
         return created;
       });
@@ -291,16 +263,9 @@ export function registerVehicleRoutes(app: Express): void {
         const updated = await repo.updateForCompany(principal.companyId, existing.id, changes);
         if (!updated) throw new VehicleNotFoundError();
         await txContext.getAuditLogRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          entityName: 'Vehicle',
-          entityId: existing.id,
-          action: AuditAction.UPDATE,
-          previousState: JSON.stringify(existing),
-          newState: JSON.stringify(updated),
-          userId: principal.userId,
-          userName: principal.name,
-          timestamp: changes.updatedAt!,
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: existing.id,
+          action: AuditAction.UPDATE, previousState: JSON.stringify(existing), newState: JSON.stringify(updated),
+          userId: principal.userId, userName: principal.name, timestamp: changes.updatedAt!,
         });
         return updated;
       });
@@ -316,7 +281,7 @@ export function registerVehicleRoutes(app: Express): void {
     try {
       const items = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const vehicle = await txContext.getVehicleRepo().findByIdForCompany(principal.companyId, req.params.id);
-        if (!vehicle || vehicle.isArchived) throw new VehicleNotFoundError();
+        if (!vehicle) throw new VehicleNotFoundError();
         return await txContext.getKmRecordRepo().findByVehicleIdForCompany(principal.companyId, vehicle.id);
       });
       res.json({ items });
@@ -343,33 +308,22 @@ export function registerVehicleRoutes(app: Express): void {
         if (newKm < vehicle.currentKm) throw new VehicleValidationError('KM regression');
         const now = new Date().toISOString();
         const record = await txContext.getKmRecordRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          vehicleId: vehicle.id,
-          driverId: vehicle.currentDriverId,
-          contractId: vehicle.currentContractId,
-          kmValue: newKm,
-          recordDate: now.split('T')[0],
+          id: randomUUID(), companyId: principal.companyId, vehicleId: vehicle.id,
+          driverId: vehicle.currentDriverId, contractId: vehicle.currentContractId,
+          kmValue: newKm, recordDate: now.split('T')[0],
           readingType: readingType as 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE',
-          notes: optionalText(req.body?.notes),
-          createdAt: now,
+          notes: optionalText(req.body?.notes), createdAt: now,
         });
         const updated = await vehicleRepo.updateForCompany(principal.companyId, vehicle.id, {
-          currentKm: newKm,
-          updatedAt: now,
+          currentKm: newKm, updatedAt: now,
         });
         if (!updated) throw new VehicleNotFoundError();
         await txContext.getAuditLogRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          entityName: 'KmRecord',
-          entityId: record.id,
+          id: randomUUID(), companyId: principal.companyId, entityName: 'KmRecord', entityId: record.id,
           action: AuditAction.CREATE,
           previousState: JSON.stringify({ vehicleId: vehicle.id, currentKm: vehicle.currentKm }),
           newState: JSON.stringify({ vehicleId: vehicle.id, currentKm: newKm, readingType }),
-          userId: principal.userId,
-          userName: principal.name,
-          timestamp: now,
+          userId: principal.userId, userName: principal.name, timestamp: now,
         });
         return { record, vehicle: updated };
       });
@@ -407,9 +361,7 @@ export function registerVehicleRoutes(app: Express): void {
         if (!canManuallyTransitionVehicleStatus(existing.status, targetStatus, {
           hasActiveContract: hasCurrentBinding,
           hasBlockingMaintenance,
-        })) {
-          throw new VehicleConflictError('Invalid vehicle status transition');
-        }
+        })) throw new VehicleConflictError('Invalid vehicle status transition');
 
         const now = new Date().toISOString();
         const reason = optionalText(req.body?.reason);
@@ -421,16 +373,11 @@ export function registerVehicleRoutes(app: Express): void {
         });
         if (!updated) throw new VehicleNotFoundError();
         await txContext.getAuditLogRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          entityName: 'Vehicle',
-          entityId: existing.id,
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: existing.id,
           action: AuditAction.UPDATE,
           previousState: JSON.stringify({ status: existing.status, isArchived: existing.isArchived }),
           newState: JSON.stringify({ status: updated.status, isArchived: updated.isArchived, reason }),
-          userId: principal.userId,
-          userName: principal.name,
-          timestamp: now,
+          userId: principal.userId, userName: principal.name, timestamp: now,
         });
         return updated;
       });
