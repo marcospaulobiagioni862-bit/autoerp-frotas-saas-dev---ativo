@@ -120,7 +120,7 @@ async function contractResolutionAndVehiclePending():Promise<void>{
   const replay=await TrafficTicketVehicleOperationalAuthorityService.create(admin,resolved.item.id,'DOCUMENTATION');
   assert(first.created&&first.category==='DOCUMENT'&&!replay.created&&replay.taskId===first.taskId,'vehicle documentation pending must be idempotent');
   const task=await one(sql`SELECT category,source_type,source_id,entity_type,entity_id,status,idempotency_key FROM operational_tasks WHERE company_id=${companyA} AND id=${first.taskId}`);
-  assert(task?.category==='DOCUMENT'&&task.source_type==='TRAFFIC_TICKET'&&task.source_id===resolved.item.id&&task.entity_type==='VEHICLE'&&task.entity_id===vehicleA&&task.status==='OPEN','vehicle operational pending traceability mismatch');
+  assert(task?.category==='DOCUMENT'&&task.source_type==='TRAFFIC_TICKET_VEHICLE_ACTION'&&task.source_id===`${resolved.item.id}:DOCUMENTATION`&&task.entity_type==='VEHICLE'&&task.entity_id===vehicleA&&task.status==='OPEN','vehicle operational pending traceability mismatch');
   assert(String(task.idempotency_key)===`traffic-ticket-vehicle-action:${resolved.item.id}:DOCUMENTATION`,'vehicle operational pending idempotency key mismatch');
 }
 
