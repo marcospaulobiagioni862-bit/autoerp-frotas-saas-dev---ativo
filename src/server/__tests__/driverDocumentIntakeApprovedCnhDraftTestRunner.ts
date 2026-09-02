@@ -131,7 +131,7 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
 
 const modalSource = readFileSync(new URL('../../components/drivers/DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
 const approvedDraftRead = modalSource.indexOf('const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);');
-const materialization = modalSource.indexOf('const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId);');
+const materialization = modalSource.indexOf('const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId, expectedDriverId);');
 assert.ok(approvedDraftRead >= 0, 'CNH flow must fetch the server-authoritative approved draft');
 assert.ok(materialization > approvedDraftRead, 'approved draft must be captured before materialization consumes the intake');
 assert.match(modalSource, /\['issueDate', 'Data de emissão da CNH'\]/, 'revisão deve exibir data de emissão');
@@ -139,11 +139,14 @@ assert.match(modalSource, /\['expirationDate', 'Validade da CNH'\]/, 'revisão d
 assert.match(modalSource, /issueDate: valueText\(item\.proposedFields\.issueDate\)/, 'emissão deve vir de issueDate');
 assert.match(modalSource, /expirationDate: valueText\(item\.proposedFields\.expirationDate\)/, 'validade deve vir de expirationDate');
 
-const completionStart = modalSource.indexOf('const useApprovedDraft = () => {');
+const completionStart = modalSource.indexOf('const completeApprovedCnh = () => {');
 const completionEnd = modalSource.indexOf('const progress = progressFor(step);', completionStart);
 assert.ok(completionStart >= 0 && completionEnd > completionStart, 'completion handler must remain discoverable');
 const completionBody = modalSource.slice(completionStart, completionEnd);
 assert.equal(completionBody.includes('getApprovedCnhDraft'), false, 'completion must not re-read an already consumed intake');
+assert.match(modalSource, /title=\{isRenewal \? 'Nova CNH \/ Renovar CNH'/, 'renewal mode must use an explicit title');
+assert.match(modalSource, /materializeApprovedCnh\(intakeId, expectedDriverId\)/, 'renewal must bind materialization to the selected driver');
+assert.match(modalSource, /documento anterior foi preservado no histórico/, 'renewal confirmation must preserve history explicitly');
 assert.match(modalSource, /PROVIDER_RATE_LIMITED/);
 assert.match(modalSource, /não envie o documento novamente agora/);
 assert.match(modalSource, /const retryRateLimited = async \(\) =>/);
@@ -155,5 +158,10 @@ assert.match(retryBody, /DocumentAiClient\.retry\(extractionId\)/, 'retry must r
 assert.equal(retryBody.includes('AttachmentClient.upload'), false, 'retry must not upload the CNH again');
 assert.equal(retryBody.includes('DriverDocumentIntakeClient.create'), false, 'retry must not create another intake');
 assert.match(modalSource, /Tentar novamente com esta CNH/);
+
+const routesSource = readFileSync(new URL('../driverDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
+assert.match(routesSource, /function parseMaterialization\(body: unknown\): \{ expectedDriverId\?: string \}/, 'materialization must parse the optional selected driver');
+assert.match(routesSource, /String\(intake\.driver_id\) !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'consumed replay must reject a different selected driver');
+assert.match(routesSource, /renewal\.kind === 'NEW'[\s\S]*renewal\.driver\.id !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'renewal must fail closed when the approved CNH does not match the selected driver');
 
 console.log('Driver intake approved CNH draft checks passed.');
