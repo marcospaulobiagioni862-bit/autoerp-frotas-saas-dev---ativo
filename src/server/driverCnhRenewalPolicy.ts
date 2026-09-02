@@ -3,6 +3,10 @@ export interface DriverCnhRenewalCandidate {
   cpf: string;
   cnhNumber: string;
   cnhExpiration: string;
+  cnhCategory?: string;
+  cnhEar?: boolean;
+  rg?: string;
+  cnhStatus?: string;
 }
 
 export interface DriverCnhRenewalDraft {
