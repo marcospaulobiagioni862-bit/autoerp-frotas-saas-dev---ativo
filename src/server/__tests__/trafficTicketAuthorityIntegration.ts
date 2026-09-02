@@ -56,6 +56,7 @@ async function atomicityAndRules():Promise<string>{
   assert(rolled,'induced failure did not propagate');
   assert(Number((await one(sql`SELECT count(*)::int count FROM traffic_tickets WHERE company_id=${companyA} AND auto_number='M-ROLLBACK'`))?.count)===0,'ticket survived rollback');
   assert(Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND description LIKE 'Multa M-ROLLBACK%'`))?.count)===0,'base AP survived rollback');
+  assert(Number((await one(sql`SELECT count(*)::int count FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND title LIKE '%M-ROLLBACK%'`))?.count)===0,'operational alert survived rollback');
 
   const driver=await TrafficTicketAuthorityService.create(admin,input('M-DRIVER',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));
   assert(driver.item.status===TicketStatus.CHARGED_DRIVER&&Boolean(driver.item.payableId)&&Boolean(driver.item.receivableId)&&!driver.item.nicPayableId,'DRIVER aggregate mismatch');
@@ -63,12 +64,18 @@ async function atomicityAndRules():Promise<string>{
   const driverAr=await one(sql`SELECT origin_type,origin_id,vehicle_id,driver_id,original_amount FROM account_receivables WHERE id=${driver.item.receivableId}`);
   assert(driverAp.origin_type==='TRAFFIC_TICKET_COMPANY'&&driverAp.origin_id===driver.item.id&&driverAp.vehicle_id===vehicleA&&Number(driverAp.original_amount)===200,'DRIVER base AP traceability mismatch');
   assert(driverAr.origin_type==='TRAFFIC_TICKET_DRIVER'&&driverAr.origin_id===driver.item.id&&driverAr.driver_id===driverA&&Number(driverAr.original_amount)===200,'DRIVER AR traceability mismatch');
+  const driverTask=await one(sql`SELECT title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,due_at FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${driver.item.id}`);
+  assert(driverTask?.title==='Tratar multa M-DRIVER'&&driverTask.category==='FINE'&&driverTask.priority==='P2'&&driverTask.severity==='MEDIUM'&&driverTask.status==='OPEN','DRIVER operational alert classification mismatch');
+  assert(driverTask.entity_type==='TRAFFIC_TICKET'&&driverTask.entity_id===driver.item.id&&driverTask.assigned_team==='OPERATIONS','DRIVER operational alert traceability mismatch');
+  assert(String(driverTask.description).includes('Veículo MAA1A01')&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
 
   const unidentified=await TrafficTicketAuthorityService.create(admin,input('M-UNIDENTIFIED',TicketResponsibility.UNIDENTIFIED,{nicExpenseCategoryId:expenseA}));
   assert(unidentified.item.status===TicketStatus.PENDING_IDENTIFICATION&&Boolean(unidentified.item.payableId)&&Boolean(unidentified.item.nicPayableId)&&!unidentified.item.receivableId,'UNIDENTIFIED aggregate mismatch');
+  const unidentifiedTask=await one(sql`SELECT title,priority,severity,source_id FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${unidentified.item.id}`);
+  assert(unidentifiedTask?.title==='Identificar condutor da multa M-UNIDENTIFIED'&&unidentifiedTask.priority==='P1'&&unidentifiedTask.severity==='HIGH','UNIDENTIFIED alert must prioritize driver identification');
   const totals=await one(sql`SELECT sum(original_amount)::numeric total,count(*)::int count FROM account_payables WHERE company_id=${companyA} AND id IN (${unidentified.item.payableId!},${unidentified.item.nicPayableId!})`);
   assert(Number(totals.total)===400&&Number(totals.count)===2,'NIC default must produce two separate APs totaling 2x');
 

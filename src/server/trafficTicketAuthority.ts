@@ -111,6 +111,24 @@ async function audit(tx:any,principal:AuthenticatedPrincipal,action:AuditAction,
   });
 }
 
+async function createOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ticket:TrafficTicket,plate:string):Promise<void>{
+  const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Operational task persistence unavailable');
+  const now=new Date().toISOString(),candidate=new Date(`${ticket.dueDate}T23:59:59.000Z`).toISOString();
+  const dueAt=candidate>=now?candidate:new Date(Date.now()+24*60*60*1000).toISOString();
+  const unidentified=ticket.responsibility===TicketResponsibility.UNIDENTIFIED;
+  const id=randomUUID(),correlationId=randomUUID(),idempotencyKey=`traffic-ticket-alert:${ticket.id}`;
+  const title=unidentified?`Identificar condutor da multa ${ticket.autoNumber}`:`Tratar multa ${ticket.autoNumber}`;
+  const description=`Veículo ${plate}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Infração: ${ticket.infractionDate}. Vencimento: ${ticket.dueDate}. Responsabilidade: ${ticket.responsibility}.`;
+  const task={id,companyId:principal.companyId,title,description,category:'FINE',priority:unidentified?'P1':'P2',severity:unidentified?'HIGH':'MEDIUM',status:'OPEN',sourceType:'TRAFFIC_TICKET',sourceId:ticket.id,entityType:'TRAFFIC_TICKET',entityId:ticket.id,assignedTeam:'OPERATIONS',createdByUserId:principal.userId,createdByName:principal.name,dueAt,correlationId,idempotencyKey,createdAt:now,updatedAt:now};
+  await rawTx.execute(sql`INSERT INTO operational_tasks(
+    id,company_id,title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,created_by_user_id,created_by_name,due_at,correlation_id,idempotency_key,created_at,updated_at)
+    VALUES(${id},${principal.companyId},${title},${description},'FINE',${task.priority},${task.severity},'OPEN','TRAFFIC_TICKET',${ticket.id},'TRAFFIC_TICKET',${ticket.id},'OPERATIONS',${principal.userId},${principal.name},${dueAt},${correlationId},${idempotencyKey},${now},${now})`);
+  await tx.getAuditLogRepo().create({
+    id:randomUUID(),companyId:principal.companyId,entityName:'OperationalTask',entityId:id,action:AuditAction.CREATE,
+    newState:JSON.stringify(task),userId:principal.userId,userName:principal.name,timestamp:now,
+  });
+}
+
 export class TrafficTicketAuthorityService {
   static async list(companyId:string,filters:{vehicleId?:string;driverId?:string;status?:TicketStatus;responsibility?:TicketResponsibility}={}):Promise<TrafficTicket[]>{
     return await UnitOfWork.run(companyId,async tx=>{
@@ -181,6 +199,7 @@ export class TrafficTicketAuthorityService {
         },tx))[0];ticket.nicAmount=nicAmount;ticket.nicPayableId=nicPay.id;await testHooks.afterSecondaryObligationCreated?.();
       }
       ticket.updatedAt=new Date().toISOString();ticket=await repo.save(ticket);await audit(tx,principal,AuditAction.CREATE,null,ticket);
+      await createOperationalAlert(tx,principal,ticket,String(vehicle.plate||ticket.vehicleId));
       const financial=await currentFinancial(tx,ticket);return {item:projected(ticket,financial),financial};
     },{financialPeriodLock:'SHARED'});
   }
