@@ -310,6 +310,13 @@ export function registerDocumentAiRoutes(app: Express): void {
 
         const discardedIds: string[] = [];
         const archivedAttachmentIds: string[] = [];
+        const protectedLinks: Array<{
+          extractionId: string;
+          attachmentId: string;
+          entityType: string;
+          entityId: string;
+          reason: 'ACTIVE_ENTITY_LINK' | 'ATTACHMENT_UNAVAILABLE';
+        }> = [];
         const processedAttachments = new Set<string>();
         const now = new Date().toISOString();
 
@@ -324,7 +331,26 @@ export function registerDocumentAiRoutes(app: Express): void {
             .for('update')
             .limit(1);
           const attachment = attachmentRows[0];
-          if (!attachment || attachment.isArchived || attachment.entityType !== 'DriverDocumentIntake') continue;
+          if (!attachment || attachment.isArchived) {
+            protectedLinks.push({
+              extractionId: candidate.id,
+              attachmentId: candidate.attachmentId,
+              entityType: attachment?.entityType || 'Attachment',
+              entityId: attachment?.entityId || candidate.attachmentId,
+              reason: 'ATTACHMENT_UNAVAILABLE',
+            });
+            continue;
+          }
+          if (attachment.entityType !== 'DriverDocumentIntake') {
+            protectedLinks.push({
+              extractionId: candidate.id,
+              attachmentId: candidate.attachmentId,
+              entityType: attachment.entityType,
+              entityId: attachment.entityId,
+              reason: 'ACTIVE_ENTITY_LINK',
+            });
+            continue;
+          }
 
           const relatedRows = await tx.select().from(documentAiExtractions)
             .where(and(
@@ -385,7 +411,11 @@ export function registerDocumentAiRoutes(app: Express): void {
             timestamp: now,
           });
         }
-        return { discarded: discardedIds.length, attachmentsArchived: archivedAttachmentIds.length };
+        return {
+          discarded: discardedIds.length,
+          attachmentsArchived: archivedAttachmentIds.length,
+          protected: protectedLinks,
+        };
       });
       res.status(200).json(result);
     } catch (error) {
