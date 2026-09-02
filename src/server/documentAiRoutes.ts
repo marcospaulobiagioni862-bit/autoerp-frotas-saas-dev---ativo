@@ -10,11 +10,13 @@ import {
   syncDriverDocumentIntakeHumanReview,
 } from './driverDocumentIntakeAiReviewSync';
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
+import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from './documentAiAttachmentPolicy';
 import { createDocumentAiAttachmentStatusSnapshot, createDocumentAiObservabilitySnapshot } from './documentAiObservability';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUSES = new Set(['PENDING', 'PROCESSING', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'FAILED']);
+export const DOCUMENT_AI_RATE_LIMIT_RETRY_COOLDOWN_MS = 60_000;
 
 class DocumentAiValidationError extends Error {}
 class DocumentAiForbiddenError extends Error {}
@@ -201,6 +203,8 @@ function sanitizeExtractionAuditHistory(changes: unknown, timestamp: unknown): S
 }
 
 export function registerDocumentAiRoutes(app: Express): void {
+  const configuredStorageProvider = configuredDocumentAiStorageProvider(process.env.ATTACHMENT_STORAGE_PROVIDER);
+
   app.post('/api/document-ai/extractions', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, true);
     if (!principal) return;
@@ -215,11 +219,9 @@ export function registerDocumentAiRoutes(app: Express): void {
           ))
           .limit(1);
         const attachment = attachments[0];
-        if (
-          !attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' ||
-          attachment.contentState !== 'AVAILABLE' || !attachment.storageKey ||
-          !attachment.checksum || !/^[a-f0-9]{64}$/.test(attachment.checksum)
-        ) throw new DocumentAiNotFoundError();
+        if (!isDocumentAiAttachmentEligible(attachment, configuredStorageProvider)) {
+          throw new DocumentAiNotFoundError();
+        }
 
         const now = new Date().toISOString();
         const createdRows = await tx.insert(documentAiExtractions).values({
@@ -411,6 +413,12 @@ export function registerDocumentAiRoutes(app: Express): void {
         if (current.status !== 'FAILED' || current.attemptCount >= DOCUMENT_AI_MAX_ATTEMPTS) {
           throw new DocumentAiConflictError();
         }
+        if (current.failureCode === 'PROVIDER_RATE_LIMITED') {
+          const failedAt = new Date(current.completedAt || current.updatedAt).getTime();
+          if (!Number.isFinite(failedAt) || Date.now() - failedAt < DOCUMENT_AI_RATE_LIMIT_RETRY_COOLDOWN_MS) {
+            throw new DocumentAiConflictError();
+          }
+        }
 
         const attachmentRows = await tx.select().from(fileAttachments)
           .where(and(
@@ -420,11 +428,9 @@ export function registerDocumentAiRoutes(app: Express): void {
           .for('update')
           .limit(1);
         const attachment = attachmentRows[0];
-        if (
-          !attachment || attachment.isArchived || attachment.storageProvider !== 'SERVER_FS' ||
-          attachment.contentState !== 'AVAILABLE' || !attachment.storageKey ||
-          attachment.checksum !== current.attachmentChecksum
-        ) throw new DocumentAiConflictError();
+        if (!isDocumentAiAttachmentEligible(attachment, configuredStorageProvider, current.attachmentChecksum)) {
+          throw new DocumentAiConflictError();
+        }
 
         const now = new Date().toISOString();
         const updatedRows = await tx.update(documentAiExtractions).set({
