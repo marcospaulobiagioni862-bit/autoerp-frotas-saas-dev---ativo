@@ -444,10 +444,14 @@ export function registerContractRoutes(app: Express): void {
           const generated = await tx.getContractArtifactRepo().findCurrentForContract(
             principal.companyId, contract.id, 'GENERATED_PDF', true
           );
+          const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(
+            principal.companyId, contract.id, 'REVIEWED_FINAL_PDF', true
+          );
           const signed = await tx.getContractArtifactRepo().findCurrentForContract(
             principal.companyId, contract.id, 'SIGNED_EVIDENCE', true
           );
-          if (!generated || !signed || signed.sourceArtifactId !== generated.id) {
+          const expectedSource = reviewed || generated;
+          if (!generated || !signed || !expectedSource || signed.sourceArtifactId !== expectedSource.id) {
             throw new ContractConflictError('Signed contract evidence required');
           }
         }
