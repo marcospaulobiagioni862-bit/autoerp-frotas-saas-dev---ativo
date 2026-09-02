@@ -48,7 +48,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   const load = async () => {
     try {
       const [templateList, artifactList] = await Promise.all([
-        ContractTemplateClient.list({ activeOnly: false }),
+        ContractTemplateClient.list(),
         ContractExecutionClient.listArtifacts(contract.id),
       ]);
       setTemplates(templateList);
