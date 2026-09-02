@@ -490,6 +490,30 @@ export function registerContractExecutionRoutes(app: Express): void {
       const snapshot = makeSnapshot(company, prepared.contract, prepared.driver, prepared.vehicle, prepared.template);
       const snapshotJson = JSON.stringify(snapshot);
       const snapshotHash = createHash('sha256').update(snapshotJson).digest('hex');
+
+      const replay = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const artifact = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, prepared.contract.id, 'GENERATED_DOCX'
+        );
+        if (
+          !artifact || artifact.templateId !== prepared.template.id ||
+          artifact.snapshotHash !== snapshotHash || artifact.snapshotJson !== snapshotJson
+        ) return null;
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, artifact.attachmentId);
+        if (
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== prepared.contract.id || attachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
+          attachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          attachment.contentState !== 'AVAILABLE' || attachment.storageProvider !== storage.provider ||
+          !attachment.storageKey || !attachment.checksum
+        ) throw new ExecutionConflictError();
+        return { artifact, attachment, contract: prepared.contract };
+      });
+      if (replay) {
+        res.status(200).json(replay);
+        return;
+      }
+
       const rendered = renderContractDocxPackage(sourceBytes, valuesFromSnapshot(snapshot));
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, rendered.bytes);
@@ -515,6 +539,26 @@ export function registerContractExecutionRoutes(app: Express): void {
           source.contentState !== 'AVAILABLE' || source.storageProvider !== storage.provider ||
           source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum
         ) throw new ExecutionConflictError();
+
+        const currentDocx = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, contract.id, 'GENERATED_DOCX', true
+        );
+        if (
+          currentDocx && currentDocx.templateId === template.id &&
+          currentDocx.snapshotHash === snapshotHash && currentDocx.snapshotJson === snapshotJson
+        ) {
+          const currentAttachment = await tx.getAttachmentRepo().findByIdForCompany(
+            principal.companyId, currentDocx.attachmentId
+          );
+          if (
+            !currentAttachment || currentAttachment.isArchived || currentAttachment.entityType !== 'Contract' ||
+            currentAttachment.entityId !== contract.id || currentAttachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
+            currentAttachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            currentAttachment.contentState !== 'AVAILABLE' || currentAttachment.storageProvider !== storage.provider ||
+            !currentAttachment.storageKey || !currentAttachment.checksum
+          ) throw new ExecutionConflictError();
+          return { artifact: currentDocx, attachment: currentAttachment, contract, replayed: true as const };
+        }
 
         const attachment = await tx.getAttachmentRepo().create({
           id: attachmentId,
@@ -582,11 +626,19 @@ export function registerContractExecutionRoutes(app: Express): void {
           }),
           timestamp: now,
         });
-        return { artifact, attachment, contract: updatedContract };
+        return { artifact, attachment, contract: updatedContract, replayed: false as const };
       });
 
+      if (result.replayed) {
+        await storage.remove(principal.companyId, stored.storageKey).catch(() => undefined);
+        storedKey = undefined;
+        const { replayed: _replayed, ...payload } = result;
+        res.status(200).json(payload);
+        return;
+      }
       storedKey = undefined;
-      res.status(201).json(result);
+      const { replayed: _replayed, ...payload } = result;
+      res.status(201).json(payload);
     } catch (error) {
       if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
       sendError(res, error);
