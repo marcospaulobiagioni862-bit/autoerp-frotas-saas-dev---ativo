@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  buildVehicleChangesFromReviewedCrlv,
+  parseVehicleCrlvSelectedFields,
+} from '../../../server/vehicleCrlvApplyAuthority';
 
 const source = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
 const crlvSource = readFileSync(new URL('../VehicleCrlvImportPanel.tsx', import.meta.url), 'utf8');
+const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRoutes.ts', import.meta.url), 'utf8');
+const vehicleClientSource = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 
 assert.ok(source.includes('Últimas 5 leituras de KM'), 'overview must label the bounded KM summary');
 assert.ok(source.includes('summary.kmRecords.slice(0,5).map'), 'overview must render no more than five authorized readings');
@@ -15,10 +21,50 @@ assert.ok(source.includes('summary.kmRecords.map'), 'complete odometer tab must 
 assert.ok(crlvSource.includes("DocumentAiClient.list('APPROVED')"), 'CRLV comparison must use approved extractions only');
 assert.ok(crlvSource.includes("attachment.documentType === 'CRLV'"), 'CRLV comparison must be restricted to vehicle CRLV attachments');
 assert.ok(crlvSource.includes("extraction.detectedDocumentType === 'CRLV'"), 'CRLV comparison must reject another detected document type');
-assert.ok(crlvSource.includes('...(approvedExtraction.corrections || {})'), 'human corrections must override provider proposals');
+assert.ok(crlvSource.includes('...(approvedExtraction.corrections || {})'), 'human corrections must override provider proposals in the comparison');
 assert.ok(crlvSource.includes('Valor atual') && crlvSource.includes('Valor lido'), 'CRLV review must show current versus reviewed values');
 assert.ok(crlvSource.includes('type="checkbox"'), 'review fields must support explicit operator selection');
-assert.ok(crlvSource.includes('disabled'), 'apply action must stay disabled until server-side authority exists');
-assert.ok(!crlvSource.includes('VehicleClient.update'), 'CRLV review must not mutate the vehicle from browser-derived values');
+assert.ok(crlvSource.includes('VehicleClient.applyApprovedCrlv('), 'selected CRLV fields must use the dedicated authoritative endpoint');
+assert.ok(crlvSource.includes('disabled={applying || selectedFields.size === 0}'), 'apply must require an explicit non-empty selection');
+assert.ok(!crlvSource.includes('VehicleClient.update'), 'CRLV UI must not write browser-derived field values through the generic vehicle update');
+assert.ok(vehicleClientSource.includes('JSON.stringify({ extractionId, fields })'), 'CRLV client must send identifiers and selected field names only');
 
-console.log('Vehicle latest KM and CRLV review regressions: PASS');
+const selected = parseVehicleCrlvSelectedFields(['plate', 'renavam', 'chassis', 'brand', 'manufactureYear']);
+const changes = buildVehicleChangesFromReviewedCrlv(
+  {
+    plate: 'abc-1d23',
+    renavam: '12345678901',
+    chassis: '9BWZZZ377VT004251',
+    brand: 'VW',
+    manufactureYear: 2024,
+  },
+  { brand: 'Volkswagen' },
+  selected,
+);
+assert.equal(changes.plate, 'ABC1D23', 'reviewed plate must be normalized on the server');
+assert.equal(changes.renavam, '12345678901', 'reviewed RENAVAM must be validated and normalized');
+assert.equal(changes.chassis, '9BWZZZ377VT004251', 'reviewed chassis must be strongly validated');
+assert.equal(changes.brand, 'Volkswagen', 'human correction must override the provider proposal on apply');
+assert.equal(changes.yearFabrication, 2024, 'manufactureYear must map to vehicle yearFabrication');
+assert.throws(() => parseVehicleCrlvSelectedFields(['ownerName']), 'non-mappable CRLV fields must be rejected');
+assert.throws(() => parseVehicleCrlvSelectedFields(['plate', 'plate']), 'duplicate selections must be rejected');
+assert.throws(() => buildVehicleChangesFromReviewedCrlv({ plate: 'INVALID' }, {}, ['plate']), 'invalid plate must fail closed');
+assert.throws(() => buildVehicleChangesFromReviewedCrlv({ renavam: '123' }, {}, ['renavam']), 'invalid RENAVAM must fail closed');
+assert.throws(() => buildVehicleChangesFromReviewedCrlv({ chassis: 'ABC' }, {}, ['chassis']), 'invalid chassis must fail closed');
+
+for (const invariant of [
+  "eq(documentAiExtractions.companyId, principal.companyId)",
+  "extraction.status !== 'APPROVED'",
+  "extraction.detectedDocumentType !== 'CRLV'",
+  "eq(fileAttachments.entityType, 'Vehicle')",
+  'eq(fileAttachments.entityId, existing.id)',
+  "eq(fileAttachments.documentType, 'CRLV')",
+  'extraction.proposedFields',
+  'extraction.corrections',
+  'getAuditLogRepo().create',
+]) {
+  assert.ok(crlvRouteSource.includes(invariant), `CRLV authority invariant missing: ${invariant}`);
+}
+assert.ok(!crlvRouteSource.includes('req.body?.plate'), 'server must not accept browser-supplied CRLV field values');
+
+console.log('Vehicle latest KM and authoritative CRLV regressions: PASS');

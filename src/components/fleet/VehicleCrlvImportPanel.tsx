@@ -41,12 +41,15 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
   const [approvedExtraction, setApprovedExtraction] = useState<DocumentAiExtraction | null>(null);
   const [selectedFields, setSelectedFields] = useState<Set<string>>(() => new Set());
   const [loadingReview, setLoadingReview] = useState(true);
+  const [applying, setApplying] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoadingReview(true);
     setReviewError(null);
+    setApplyNotice(null);
 
     Promise.all([
       VehicleClient.get(vehicleId),
@@ -103,6 +106,27 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
       else next.add(field);
       return next;
     });
+  };
+
+  const applySelected = async () => {
+    if (!approvedExtraction || selectedFields.size === 0 || applying) return;
+    setApplying(true);
+    setReviewError(null);
+    setApplyNotice(null);
+    try {
+      const result = await VehicleClient.applyApprovedCrlv(
+        vehicleId,
+        approvedExtraction.id,
+        Array.from(selectedFields),
+      );
+      setVehicle(result.item);
+      setSelectedFields(new Set());
+      setApplyNotice(`${result.appliedFields.length} campo(s) aplicado(s) a partir do CRLV aprovado.`);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'Não foi possível aplicar os campos selecionados do CRLV.');
+    } finally {
+      setApplying(false);
+    }
   };
 
   return (
@@ -178,13 +202,14 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
             </div>
             <button
               type="button"
-              disabled
-              className="rounded-md bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-500 cursor-not-allowed"
-              title="A aplicação server-side autoritativa será habilitada na próxima etapa segura."
+              disabled={applying || selectedFields.size === 0}
+              onClick={applySelected}
+              className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
             >
-              Aplicar selecionados ({selectedFields.size})
+              {applying ? 'Aplicando...' : `Aplicar selecionados (${selectedFields.size})`}
             </button>
-            <p className="text-[11px] text-slate-500">A seleção é apenas para conferência nesta etapa; nenhum valor é enviado ao cadastro do veículo.</p>
+            <p className="text-[11px] text-slate-500">O servidor relê o CRLV aprovado e aplica somente os campos selecionados; os valores não são enviados pelo navegador.</p>
+            {applyNotice && <p className="text-xs font-medium text-emerald-700">{applyNotice}</p>}
           </>
         )}
       </div>
