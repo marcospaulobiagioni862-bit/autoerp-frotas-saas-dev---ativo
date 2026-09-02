@@ -35,6 +35,14 @@ class DriverDocumentIntakeDuplicateCnhError extends Error {
     super('CNH_ALREADY_REGISTERED');
   }
 }
+class DriverDocumentIntakeRenewalConflictError extends Error {
+  constructor(
+    public readonly code: 'CNH_RENEWAL_IDENTITY_CONFLICT' | 'CNH_RENEWAL_OLDER_THAN_CURRENT',
+    public readonly driverId: string,
+  ) {
+    super(code);
+  }
+}
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
@@ -205,6 +213,13 @@ function safeConflictCode(error: unknown): string {
 }
 
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof DriverDocumentIntakeRenewalConflictError) {
+    const message = error.code === 'CNH_RENEWAL_OLDER_THAN_CURRENT'
+      ? 'A CNH enviada tem validade menor que a CNH vigente. O cadastro atual não foi alterado.'
+      : 'Os dados da CNH enviada não correspondem de forma segura ao mesmo motorista. Revise a identidade antes de continuar.';
+    res.status(409).json({ error: message, code: error.code, driverId: error.driverId });
+    return;
+  }
   if (error instanceof DriverDocumentIntakeDuplicateCnhError) {
     res.status(409).json({
       error: 'Esta CNH já está cadastrada. Abra o cadastro existente antes de substituir ou reenviar o documento.',
@@ -382,11 +397,70 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         const repo = context.getDriverRepo();
         const byCpf = draft.cpf ? await repo.findByCpf(principal.companyId, draft.cpf) : null;
         const byCnh = draft.cnhNumber ? await repo.findByCnh(principal.companyId, draft.cnhNumber) : null;
-        const visibleDuplicate = byCpf || byCnh;
-        if (visibleDuplicate) throw new DriverDocumentIntakeDuplicateCnhError(visibleDuplicate.id);
 
+        if (byCpf && byCnh && byCpf.id !== byCnh.id) {
+          throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', byCpf.id);
+        }
+
+        const existing = byCpf || byCnh;
         const now = new Date().toISOString();
         const cnhStatus = draft.cnhExpiration ? evaluateCnhStatus(draft.cnhExpiration) : DocumentStatus.PENDING;
+
+        if (existing) {
+          if (!draft.cpf || !draft.cnhNumber || existing.cpf !== draft.cpf || existing.cnhNumber !== draft.cnhNumber) {
+            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_IDENTITY_CONFLICT', existing.id);
+          }
+          if (!draft.cnhExpiration) {
+            throw new DriverDocumentIntakeDuplicateCnhError(existing.id);
+          }
+          if (draft.cnhExpiration < existing.cnhExpiration) {
+            throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_OLDER_THAN_CURRENT', existing.id);
+          }
+
+          let target = existing;
+          if (draft.cnhExpiration > existing.cnhExpiration) {
+            const updated = await repo.updateForCompany(principal.companyId, existing.id, {
+              cnhExpiration: draft.cnhExpiration,
+              cnhCategory: draft.cnhCategory || existing.cnhCategory,
+              cnhEar: draft.cnhEar === undefined ? existing.cnhEar : draft.cnhEar,
+              cnhStatus,
+              rg: draft.rg || existing.rg,
+              updatedAt: now,
+            });
+            if (!updated) throw new DriverDocumentIntakeNotFoundError();
+            target = updated;
+            await context.getAuditLogRepo().create({
+              id: randomUUID(),
+              companyId: principal.companyId,
+              entityName: 'Driver',
+              entityId: existing.id,
+              action: AuditAction.UPDATE,
+              previousState: JSON.stringify({
+                event: 'CNH_RENEWAL',
+                cnhExpiration: existing.cnhExpiration,
+                cnhCategory: existing.cnhCategory,
+                cnhStatus: existing.cnhStatus,
+              }),
+              newState: JSON.stringify({
+                event: 'CNH_RENEWAL',
+                cnhExpiration: updated.cnhExpiration,
+                cnhCategory: updated.cnhCategory,
+                cnhStatus: updated.cnhStatus,
+              }),
+              userId: principal.userId,
+              userName: principal.name,
+              timestamp: now,
+            });
+          }
+
+          const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, target.id);
+          return {
+            driverId: target.id,
+            attachmentId: promotion.attachmentId,
+            created: false,
+          };
+        }
+
         const candidateId = randomUUID();
         const materialized = await repo.create({
           id: candidateId,
