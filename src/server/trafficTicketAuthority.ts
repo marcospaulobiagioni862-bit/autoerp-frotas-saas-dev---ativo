@@ -111,14 +111,25 @@ async function audit(tx:any,principal:AuthenticatedPrincipal,action:AuditAction,
   });
 }
 
-async function createOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ticket:TrafficTicket,plate:string):Promise<void>{
+async function operationalAlertDescription(rawTx:any,companyId:string,ticket:TrafficTicket):Promise<string>{
+  const result=await rawTx.execute(sql`SELECT
+    (SELECT plate FROM vehicles WHERE company_id=${companyId} AND id=${ticket.vehicleId} LIMIT 1) AS plate,
+    (SELECT name FROM drivers WHERE company_id=${companyId} AND id=${ticket.driverId||null} LIMIT 1) AS driver_name,
+    (SELECT contract_number FROM contracts WHERE company_id=${companyId} AND id=${ticket.contractId||null} LIMIT 1) AS contract_number`);
+  const context=rows(result)[0]||{},plate=String(context.plate||ticket.vehicleId);
+  const driver=String(context.driver_name||ticket.driverId||'não identificado'),contract=String(context.contract_number||ticket.contractId||'não localizado');
+  const amount=Number(ticket.originalAmount).toFixed(2).replace('.',',');
+  return `Auto: ${ticket.autoNumber}. Veículo: ${plate}. Motorista: ${driver}. Contrato: ${contract}. Infração: ${ticket.infractionDate}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Descrição: ${ticket.description}. Pontos: ${ticket.points}. Valor: R$ ${amount}. Vencimento: ${ticket.dueDate}. Responsabilidade: ${ticket.responsibility}.`;
+}
+
+async function createOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ticket:TrafficTicket):Promise<void>{
   const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Operational task persistence unavailable');
   const now=new Date().toISOString(),candidate=new Date(`${ticket.dueDate}T23:59:59.000Z`).toISOString();
   const dueAt=candidate>=now?candidate:new Date(Date.now()+24*60*60*1000).toISOString();
   const unidentified=ticket.responsibility===TicketResponsibility.UNIDENTIFIED;
   const id=randomUUID(),correlationId=randomUUID(),idempotencyKey=`traffic-ticket-alert:${ticket.id}`;
   const title=unidentified?`Identificar condutor da multa ${ticket.autoNumber}`:`Tratar multa ${ticket.autoNumber}`;
-  const description=`Veículo ${plate}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Infração: ${ticket.infractionDate}. Vencimento: ${ticket.dueDate}. Responsabilidade: ${ticket.responsibility}.`;
+  const description=await operationalAlertDescription(rawTx,principal.companyId,ticket);
   const task={id,companyId:principal.companyId,title,description,category:'FINE',priority:unidentified?'P1':'P2',severity:unidentified?'HIGH':'MEDIUM',status:'OPEN',sourceType:'TRAFFIC_TICKET',sourceId:ticket.id,entityType:'TRAFFIC_TICKET',entityId:ticket.id,assignedTeam:'OPERATIONS',createdByUserId:principal.userId,createdByName:principal.name,dueAt,correlationId,idempotencyKey,createdAt:now,updatedAt:now};
   await rawTx.execute(sql`INSERT INTO operational_tasks(
     id,company_id,title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,created_by_user_id,created_by_name,due_at,correlation_id,idempotency_key,created_at,updated_at)
@@ -135,8 +146,9 @@ async function syncOperationalAlert(tx:any,principal:AuthenticatedPrincipal,tick
   const before=rows(result)[0];if(!before||['COMPLETED','CLOSED','CANCELLED'].includes(String(before.status)))return;
   const unidentified=ticket.responsibility===TicketResponsibility.UNIDENTIFIED;
   const title=unidentified?`Identificar condutor da multa ${ticket.autoNumber}`:`Tratar multa ${ticket.autoNumber}`;
+  const description=await operationalAlertDescription(rawTx,principal.companyId,ticket);
   const priority=unidentified?'P1':'P2',severity=unidentified?'HIGH':'MEDIUM',status=cancelled?'CANCELLED':String(before.status),now=new Date().toISOString();
-  const updated=await rawTx.execute(sql`UPDATE operational_tasks SET title=${title},priority=${priority},severity=${severity},status=${status},version=version+1,updated_at=${now} WHERE company_id=${principal.companyId} AND id=${String(before.id)} RETURNING *`);
+  const updated=await rawTx.execute(sql`UPDATE operational_tasks SET title=${title},description=${description},priority=${priority},severity=${severity},status=${status},version=version+1,updated_at=${now} WHERE company_id=${principal.companyId} AND id=${String(before.id)} RETURNING *`);
   await tx.getAuditLogRepo().create({
     id:randomUUID(),companyId:principal.companyId,entityName:'OperationalTask',entityId:String(before.id),action:cancelled?AuditAction.CANCEL:AuditAction.UPDATE,
     previousState:JSON.stringify(before),newState:JSON.stringify(rows(updated)[0]),userId:principal.userId,userName:principal.name,timestamp:now,
@@ -213,7 +225,7 @@ export class TrafficTicketAuthorityService {
         },tx))[0];ticket.nicAmount=nicAmount;ticket.nicPayableId=nicPay.id;await testHooks.afterSecondaryObligationCreated?.();
       }
       ticket.updatedAt=new Date().toISOString();ticket=await repo.save(ticket);await audit(tx,principal,AuditAction.CREATE,null,ticket);
-      await createOperationalAlert(tx,principal,ticket,String(vehicle.plate||ticket.vehicleId));
+      await createOperationalAlert(tx,principal,ticket);
       const financial=await currentFinancial(tx,ticket);return {item:projected(ticket,financial),financial};
     },{financialPeriodLock:'SHARED'});
   }
