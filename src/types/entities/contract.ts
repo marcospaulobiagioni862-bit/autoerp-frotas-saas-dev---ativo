@@ -44,7 +44,7 @@ export interface ContractTemplate {
   updatedAt: string;
 }
 
-export type ContractArtifactType = 'GENERATED_PDF' | 'SIGNED_EVIDENCE';
+export type ContractArtifactType = 'GENERATED_PDF' | 'REVIEWED_FINAL_PDF' | 'SIGNED_EVIDENCE';
 export type ContractSignatureMethod = 'SIGNED_PDF_UPLOAD';
 
 export interface ContractArtifact {
