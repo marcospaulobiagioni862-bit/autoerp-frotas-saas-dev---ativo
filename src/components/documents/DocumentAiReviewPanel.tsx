@@ -99,6 +99,16 @@ function DocumentAiObservabilitySummary({
   );
 }
 
+type CleanupFilter = 'ALL' | 'IN_USE' | 'UNUSED' | 'FAILED';
+
+function cleanupClassification(item: DocumentAiExtraction): { category: 'IN_USE' | 'UNUSED'; reason: string } {
+  if (item.status !== 'FAILED') return { category: 'IN_USE', reason: 'Em revisão humana; limpeza bloqueada.' };
+  if (item.approvedAt) return { category: 'IN_USE', reason: 'Extração já aprovada; limpeza bloqueada.' };
+  if (Object.keys(item.proposedFields).length > 0) return { category: 'IN_USE', reason: 'Possui dados extraídos; limpeza bloqueada.' };
+  if (item.corrections && Object.keys(item.corrections).length > 0) return { category: 'IN_USE', reason: 'Possui correções humanas; limpeza bloqueada.' };
+  return { category: 'UNUSED', reason: 'Sem dados aproveitados; o servidor ainda confirmará se existe vínculo ativo.' };
+}
+
 export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const { user } = useAuth();
   const [items, setItems] = useState<DocumentAiExtraction[]>([]);
@@ -113,15 +123,24 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedFailedIds, setSelectedFailedIds] = useState<Set<string>>(() => new Set());
+  const [cleanupFilter, setCleanupFilter] = useState<CleanupFilter>('ALL');
 
   const canReview =
     WRITE_ROLES.has(user.role.toUpperCase()) ||
     user.permissions.includes('*') ||
     user.permissions.includes('PROCESS_DOCUMENT_AI');
 
+  const visibleItems = useMemo(() => items.filter((item) => {
+    if (cleanupFilter === 'FAILED') return item.status === 'FAILED';
+    const classification = cleanupClassification(item);
+    if (cleanupFilter === 'IN_USE') return classification.category === 'IN_USE';
+    if (cleanupFilter === 'UNUSED') return classification.category === 'UNUSED';
+    return true;
+  }), [items, cleanupFilter]);
+
   const selected = useMemo(
-    () => items.find((item) => item.id === selectedId) || items[0] || null,
-    [items, selectedId],
+    () => visibleItems.find((item) => item.id === selectedId) || visibleItems[0] || null,
+    [visibleItems, selectedId],
   );
 
   const resetDraft = (item: DocumentAiExtraction | null) => {
@@ -301,7 +320,17 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     );
   }
 
-  if (!selected) return null;
+  if (!selected) {
+    return (
+      <div>
+        <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
+        <div className="p-6 text-center">
+          <p className="font-medium text-slate-900 dark:text-white">Nenhum item neste filtro</p>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => setCleanupFilter('ALL')}>Mostrar todos</Button>
+        </div>
+      </div>
+    );
+  }
 
   const fields = Object.entries(selected.proposedFields);
 
@@ -318,6 +347,25 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
+        <div className="grid grid-cols-2 gap-1 px-1" aria-label="Filtros de limpeza documental">
+          {([
+            ['ALL', 'Todos'],
+            ['IN_USE', 'Em uso'],
+            ['UNUSED', 'Não utilizados'],
+            ['FAILED', 'Falhas'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setCleanupFilter(value)}
+              className={`rounded-md px-2 py-1.5 text-xs font-medium ${cleanupFilter === value
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {canReview && items.some((item) => item.status === 'FAILED') && (
           <Button
             variant="outline"
@@ -331,7 +379,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             Limpar selecionados ({selectedFailedIds.size})
           </Button>
         )}
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <div key={item.id} className="flex items-start gap-2">
             {item.status === 'FAILED' && canReview && (
               <input
@@ -362,6 +410,9 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1 truncate">Anexo {item.attachmentId}</p>
+            <p className={`mt-1 text-[11px] ${cleanupClassification(item).category === 'UNUSED' ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {cleanupClassification(item).reason}
+            </p>
             <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
             </button>
           </div>

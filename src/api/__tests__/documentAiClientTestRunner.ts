@@ -257,6 +257,13 @@ assert(reviewPanelSource.includes('DocumentAiClient.discardFailed(extractionIds)
 assert(reviewPanelSource.includes('window.confirm'), 'destructive-looking cleanup must require explicit confirmation');
 assert(reviewPanelSource.includes('Itens em uso e arquivos com dados válidos serão preservados'), 'confirmation must explain preservation policy');
 assert(reviewPanelSource.includes('Nenhuma extração foi arquivada'), 'blocked cleanup must explain that selected items remain protected');
+for (const label of ['Todos', 'Em uso', 'Não utilizados', 'Falhas']) {
+  assert(reviewPanelSource.includes(`'${label}'`), `cleanup filter ${label} is missing`);
+}
+assert(reviewPanelSource.includes('cleanupClassification(item)'), 'cleanup classification must drive filters and item reasons');
+assert(reviewPanelSource.includes('Possui dados extraídos; limpeza bloqueada.'), 'protected extracted data must have a visible reason');
+assert(reviewPanelSource.includes('Possui correções humanas; limpeza bloqueada.'), 'human corrections must have a visible reason');
+assert(reviewPanelSource.includes('o servidor ainda confirmará se existe vínculo ativo'), 'local eligibility must not bypass server authority');
 
 DocumentAiClientTestRunner.runAllTests()
   .then(() => console.log('Document AI client tests PASS'))
