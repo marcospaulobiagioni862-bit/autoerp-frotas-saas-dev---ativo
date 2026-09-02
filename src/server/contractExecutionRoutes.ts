@@ -456,7 +456,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
           attachment.storageProvider !== storage.provider || !attachment.storageKey
         ) throw new ExecutionConflictError();
-        return { contract, source, attachment };
+        return { contract, generated, attachment };
       });
 
       const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
@@ -548,7 +548,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
           attachment.storageProvider !== storage.provider || !attachment.storageKey
         ) throw new ExecutionConflictError();
-        return { contract, generated, attachment };
+        return { contract, source, attachment };
       });
 
       const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
