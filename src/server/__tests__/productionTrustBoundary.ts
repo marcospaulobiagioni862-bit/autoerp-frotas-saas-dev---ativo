@@ -189,9 +189,10 @@ async function main(): Promise<void> {
       ['runtime', normalizePostgresConnectionString],
       ['migrations', migrationConnection.normalizePostgresConnectionString],
     ] as const) {
+      const original = new URL(input);
       const normalized = new URL(normalizer(input));
       assert(normalized.searchParams.get('sslmode') === 'verify-full', `DB-TLS-1 ${surface} did not preserve verified TLS for ${mode}`);
-      assert(normalized.username === 'user' && normalized.password === 'p@ss', `DB-TLS-1 ${surface} changed credentials`);
+      assert(normalized.username === original.username && normalized.password === original.password, `DB-TLS-1 ${surface} changed credentials`);
       assert(normalized.searchParams.get('application_name') === 'autoerp', `DB-TLS-1 ${surface} changed unrelated parameters`);
     }
   }
