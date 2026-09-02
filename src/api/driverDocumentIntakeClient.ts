@@ -218,12 +218,12 @@ export class DriverDocumentIntakeClient {
     return validateApprovedCnhDraft(asRecord(await response.json()).draft);
   }
 
-  static async materializeApprovedCnh(id: string): Promise<DriverDocumentIntakeMaterializationResult> {
+  static async materializeApprovedCnh(id: string, expectedDriverId?: string): Promise<DriverDocumentIntakeMaterializationResult> {
     const response = await fetch(`/api/driver-document-intakes/${encodeURIComponent(id)}/materialize-driver`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify(expectedDriverId ? { expectedDriverId } : {}),
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateMaterializationResult(asRecord(await response.json()).item);
