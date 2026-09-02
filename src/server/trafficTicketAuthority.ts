@@ -10,11 +10,11 @@ import type { AuthenticatedPrincipal } from './auth';
 export interface TicketFinancialCategory { id:string; name:string; type:string; }
 export interface CreateTrafficTicketAuthorityInput {
   vehicleId:string;driverId?:string;contractId?:string;autoNumber:string;organName:string;infractionCode:string;
-  description:string;infractionDate:string;infractionLocation?:string;dueDate:string;discountDueDate?:string;originalAmount:number;
+  description:string;infractionDate:string;infractionTime?:string;infractionLocation?:string;dueDate:string;discountDueDate?:string;originalAmount:number;
   discountedAmount?:number;nicAmount?:number;points:number;responsibility:TicketResponsibility;notes?:string;
   baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;
 }
-export interface UpdateTrafficTicketAuthorityInput { organName?:string;infractionCode?:string;description?:string;infractionLocation?:string;notes?:string; }
+export interface UpdateTrafficTicketAuthorityInput { organName?:string;infractionCode?:string;description?:string;infractionTime?:string;infractionLocation?:string;notes?:string; }
 export interface ChangeTicketResponsibilityInput {
   responsibility:TicketResponsibility;driverId?:string;contractId?:string;driverIncomeCategoryId?:string;
   nicExpenseCategoryId?:string;nicAmount?:number;
@@ -45,6 +45,11 @@ function assertWrite(principal:AuthenticatedPrincipal):void{
 function validateDate(value:string,label:string):void{
   if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new TrafficTicketValidationError(`${label} inválida`);
   const parsed=new Date(`${value}T00:00:00Z`);if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==value)throw new TrafficTicketValidationError(`${label} inválida`);
+}
+function normalizeTime(value?:string):string|undefined{
+  const item=value?.trim();if(!item)return undefined;
+  if(!/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(item))throw new TrafficTicketValidationError('Horário da infração inválido');
+  return item;
 }
 function originForVersion(ticketId:string,version:number):string{return version===0?ticketId:`${ticketId}:v${version}`;}
 export function isTrafficTicketDiscountAvailable(ticket:Pick<TrafficTicket,'discountDueDate'|'discountedAmount'>,date:string):boolean{
@@ -120,7 +125,7 @@ async function operationalAlertDescription(rawTx:any,companyId:string,ticket:Tra
   const context=rows(result)[0]||{},plate=String(context.plate||ticket.vehicleId);
   const driver=String(context.driver_name||ticket.driverId||'não identificado'),contract=String(context.contract_number||ticket.contractId||'não localizado');
   const amount=Number(ticket.originalAmount).toFixed(2).replace('.',','),indicationDeadline=context.indication_deadline?String(context.indication_deadline).slice(0,10):'não informado';
-  return `Auto: ${ticket.autoNumber}. Veículo: ${plate}. Motorista: ${driver}. Contrato: ${contract}. Infração: ${ticket.infractionDate}. Local: ${ticket.infractionLocation||'não informado'}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Descrição: ${ticket.description}. Pontos: ${ticket.points}. Valor: R$ ${amount}. Vencimento: ${ticket.dueDate}. Prazo de indicação: ${indicationDeadline}. Responsabilidade: ${ticket.responsibility}.`;
+  return `Auto: ${ticket.autoNumber}. Veículo: ${plate}. Motorista: ${driver}. Contrato: ${contract}. Infração: ${ticket.infractionDate}${ticket.infractionTime?` às ${ticket.infractionTime}`:''}. Local: ${ticket.infractionLocation||'não informado'}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Descrição: ${ticket.description}. Pontos: ${ticket.points}. Valor: R$ ${amount}. Vencimento: ${ticket.dueDate}. Prazo de indicação: ${indicationDeadline}. Responsabilidade: ${ticket.responsibility}.`;
 }
 
 async function createOperationalAlert(tx:any,principal:AuthenticatedPrincipal,ticket:TrafficTicket):Promise<void>{
@@ -171,7 +176,7 @@ export class TrafficTicketAuthorityService {
   }
   static async create(principal:AuthenticatedPrincipal,input:CreateTrafficTicketAuthorityInput):Promise<TrafficTicketDetails>{
     assertWrite(principal);
-    const autoNumber=normalizeAuto(input.autoNumber),organName=input.organName.trim(),infractionCode=input.infractionCode.trim(),description=input.description.trim(),infractionLocation=input.infractionLocation?.trim()||undefined;
+    const autoNumber=normalizeAuto(input.autoNumber),organName=input.organName.trim(),infractionCode=input.infractionCode.trim(),description=input.description.trim(),infractionTime=normalizeTime(input.infractionTime),infractionLocation=input.infractionLocation?.trim()||undefined;
     if(!input.vehicleId||!autoNumber||!organName||!infractionCode||!description||!input.baseExpenseCategoryId)throw new TrafficTicketValidationError('Campos obrigatórios ausentes');
     validateDate(input.infractionDate,'Data da infração');validateDate(input.dueDate,'Vencimento');if(input.dueDate<input.infractionDate)throw new TrafficTicketValidationError('Vencimento anterior à infração');
     if(input.discountDueDate){validateDate(input.discountDueDate,'Data de desconto');if(input.discountDueDate>input.dueDate)throw new TrafficTicketValidationError('Data de desconto posterior ao vencimento');}
@@ -199,7 +204,7 @@ export class TrafficTicketAuthorityService {
       const now=new Date().toISOString(),id=randomUUID();
       let ticket:TrafficTicket=await repo.create({
         id,companyId:principal.companyId,vehicleId:input.vehicleId,driverId:input.responsibility===TicketResponsibility.UNIDENTIFIED?undefined:driverId,
-        contractId,autoNumber,organName,infractionCode,description,infractionDate:input.infractionDate,infractionLocation,dueDate:input.dueDate,
+        contractId,autoNumber,organName,infractionCode,description,infractionDate:input.infractionDate,infractionTime,infractionLocation,dueDate:input.dueDate,
         discountDueDate:input.discountDueDate,originalAmount:original,discountedAmount:discounted,nicAmount:nic,points:input.points,
         responsibility:input.responsibility,status:input.responsibility===TicketResponsibility.UNIDENTIFIED?TicketStatus.PENDING_IDENTIFICATION:TicketStatus.IDENTIFIED,
         notes:input.notes?.trim()||undefined,createdBy:principal.userId,responsibilityVersion:0,createdAt:now,updatedAt:now,
@@ -233,7 +238,7 @@ export class TrafficTicketAuthorityService {
 
   static async patch(principal:AuthenticatedPrincipal,id:string,input:UpdateTrafficTicketAuthorityInput):Promise<TrafficTicketDetails>{
     assertWrite(principal);if(!Object.keys(input).length)throw new TrafficTicketValidationError();
-    return await UnitOfWork.run(principal.companyId,async tx=>{const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada não pode ser editada');const next={...current};if(input.organName!==undefined){const v=input.organName.trim();if(!v)throw new TrafficTicketValidationError();next.organName=v;}if(input.infractionCode!==undefined){const v=input.infractionCode.trim();if(!v)throw new TrafficTicketValidationError();next.infractionCode=v;}if(input.description!==undefined){const v=input.description.trim();if(!v)throw new TrafficTicketValidationError();next.description=v;}if(input.infractionLocation!==undefined)next.infractionLocation=input.infractionLocation.trim()||undefined;if(input.notes!==undefined)next.notes=input.notes.trim()||undefined;next.updatedAt=new Date().toISOString();const saved=await repo.save(next);await audit(tx,principal,AuditAction.UPDATE,current,saved);await syncOperationalAlert(tx,principal,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};});
+    return await UnitOfWork.run(principal.companyId,async tx=>{const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada não pode ser editada');const next={...current};if(input.organName!==undefined){const v=input.organName.trim();if(!v)throw new TrafficTicketValidationError();next.organName=v;}if(input.infractionCode!==undefined){const v=input.infractionCode.trim();if(!v)throw new TrafficTicketValidationError();next.infractionCode=v;}if(input.description!==undefined){const v=input.description.trim();if(!v)throw new TrafficTicketValidationError();next.description=v;}if(input.infractionTime!==undefined)next.infractionTime=normalizeTime(input.infractionTime);if(input.infractionLocation!==undefined)next.infractionLocation=input.infractionLocation.trim()||undefined;if(input.notes!==undefined)next.notes=input.notes.trim()||undefined;next.updatedAt=new Date().toISOString();const saved=await repo.save(next);await audit(tx,principal,AuditAction.UPDATE,current,saved);await syncOperationalAlert(tx,principal,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};});
   }
 
   static async changeResponsibility(principal:AuthenticatedPrincipal,id:string,input:ChangeTicketResponsibilityInput):Promise<TrafficTicketDetails>{
