@@ -24,7 +24,7 @@ function assert(condition:unknown,message:string):asserts condition{if(!conditio
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 async function one(query:any):Promise<any>{return rows(await db.execute(query))[0];}
 function input(autoNumber:string,responsibility:TicketResponsibility,extra:any={}){
-  return {vehicleId:vehicleA,autoNumber,organName:'DETRAN',infractionCode:'745-50',description:'Teste SECURITY-2M',infractionDate:'2026-08-01',dueDate:'2026-09-10',originalAmount:200,points:4,responsibility,baseExpenseCategoryId:expenseA,...extra};
+  return {vehicleId:vehicleA,autoNumber,organName:'DETRAN',infractionCode:'745-50',description:'Teste SECURITY-2M',infractionDate:'2026-08-01',infractionTime:'14:35',dueDate:'2026-09-10',originalAmount:200,points:4,responsibility,baseExpenseCategoryId:expenseA,...extra};
 }
 
 async function seed():Promise<void>{
@@ -53,6 +53,7 @@ async function httpSecurity():Promise<void>{
 async function atomicityAndRules():Promise<string>{
   setTrafficTicketTestHooksForTests({afterBasePayableCreated:()=>{throw new Error('INDUCED_M_FAILURE');}});let rolled=false;
   try{await TrafficTicketAuthorityService.create(admin,input('M-ROLLBACK',TicketResponsibility.COMPANY));}catch(error){rolled=String(error).includes('INDUCED_M_FAILURE');}finally{setTrafficTicketTestHooksForTests({});}
+  let invalidTime=false;try{await TrafficTicketAuthorityService.create(admin,input('M-BAD-TIME',TicketResponsibility.COMPANY,{infractionTime:'24:61'}));}catch(error){invalidTime=String(error).includes('Horário da infração inválido');}assert(invalidTime,'invalid infraction time was accepted');
   assert(rolled,'induced failure did not propagate');
   assert(Number((await one(sql`SELECT count(*)::int count FROM traffic_tickets WHERE company_id=${companyA} AND auto_number='M-ROLLBACK'`))?.count)===0,'ticket survived rollback');
   assert(Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND description LIKE 'Multa M-ROLLBACK%'`))?.count)===0,'base AP survived rollback');
@@ -67,7 +68,7 @@ async function atomicityAndRules():Promise<string>{
   const driverTask=await one(sql`SELECT title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,due_at FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${driver.item.id}`);
   assert(driverTask?.title==='Tratar multa M-DRIVER'&&driverTask.category==='FINE'&&driverTask.priority==='P2'&&driverTask.severity==='MEDIUM'&&driverTask.status==='OPEN','DRIVER operational alert classification mismatch');
   assert(driverTask.entity_type==='TRAFFIC_TICKET'&&driverTask.entity_id===driver.item.id&&driverTask.assigned_team==='OPERATIONS','DRIVER operational alert traceability mismatch');
-  assert(['Auto: M-DRIVER','Veículo: MAA1A01','Motorista: Motorista A','Contrato: não localizado','Pontos: 4','Valor: R$ 200,00','Responsabilidade: DRIVER'].every(value=>String(driverTask.description).includes(value))&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
+  assert(['Auto: M-DRIVER','Veículo: MAA1A01','Motorista: Motorista A','Contrato: não localizado','Pontos: 4','Valor: R$ 200,00','Infração: 2026-08-01 às 14:35','Responsabilidade: DRIVER'].every(value=>String(driverTask.description).includes(value))&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
