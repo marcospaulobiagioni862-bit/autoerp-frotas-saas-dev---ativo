@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../TrafficTicketsManagement.tsx', import.meta.url), 'utf8');
+const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx', import.meta.url), 'utf8');
+const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
 
 for (const modal of ['TrafficTicketFormModal', 'TrafficTicketDetailsModal']) {
   assert.equal(
@@ -38,4 +40,15 @@ assert.doesNotMatch(
   'ticket modal fallback must not expose raw errors',
 );
 
-console.log('Deferred traffic-ticket modals regression: PASS');
+assert.match(
+  source,
+  /const TollPassagesManagement=lazy\(\(\)=>import\('\.\.\/tolls\/TollPassagesManagement'\)/,
+  'Free Flow management must remain lazy-loaded from traffic operations',
+);
+assert.match(source, /Pedágios \/ Free Flow/, 'traffic operations must expose the Free Flow entry');
+assert.match(tollSource, /Nenhuma cobrança financeira é criada nesta etapa\./, 'Free Flow UI must disclose the no-finance boundary');
+assert.match(tollSource, /Motorista, contrato, tenant e chave de idempotência não são enviados pelo formulário/, 'browser must not claim authority over derived toll links');
+assert.match(tollClient, /JSON\.stringify\(input\)/, 'toll client must use the explicit create DTO');
+assert.doesNotMatch(tollClient, /companyId|driverId:|contractId:|idempotencyKey/, 'toll create client must not send protected authority fields');
+
+console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
