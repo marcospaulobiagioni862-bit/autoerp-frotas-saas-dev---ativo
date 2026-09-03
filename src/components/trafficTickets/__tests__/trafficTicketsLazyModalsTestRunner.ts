@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../TrafficTicketsManagement.tsx', import.meta.url), 'utf8');
 const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx', import.meta.url), 'utf8');
 const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
+const tollAuthority = readFileSync(new URL('../../../server/tollPassageAuthority.ts', import.meta.url), 'utf8');
+const tollRoutes = readFileSync(new URL('../../../server/tollPassageRoutes.ts', import.meta.url), 'utf8');
+const tollMigration = readFileSync(new URL('../../../../drizzle/0054_toll_passage_authority.sql', import.meta.url), 'utf8');
 
 for (const modal of ['TrafficTicketFormModal', 'TrafficTicketDetailsModal']) {
   assert.equal(
@@ -40,6 +43,17 @@ assert.doesNotMatch(
   'ticket modal fallback must not expose raw errors',
 );
 
+assert.match(tollMigration, /FORCE ROW LEVEL SECURITY/, 'toll passages must enforce tenant RLS');
+assert.match(tollMigration, /UNIQUE \(company_id, idempotency_key\)/, 'toll idempotency must remain tenant-scoped');
+assert.match(tollAuthority, /resolveVehicle\(rawTx,principal\.companyId/, 'toll vehicle identity must come from server tenant authority');
+assert.match(tollAuthority, /start_date<=\$\{occurredDate\}/, 'toll contract resolution must use the passage date');
+assert.match(tollAuthority, /matches\.length!==1\)return \{\}/, 'ambiguous contract resolution must not guess a contract');
+assert.match(tollAuthority, /input\.vehicleId[\s\S]*normalizedIdentity\(input\.concessionaire\)[\s\S]*input\.sourceReference/, 'external references must be scoped by vehicle and concessionaire');
+assert.match(tollAuthority, /replayOrConflict\(existing,canonical\)/, 'idempotent replay must verify canonical payload');
+assert.match(tollAuthority, /throw new TollPassageConflictError/, 'divergent replay must fail closed');
+assert.match(tollRoutes, /TollPassageConflictError[\s\S]*res\.status\(409\)/, 'divergent external-reference replay must return HTTP 409');
+assert.doesNotMatch(tollAuthority, /Payable|Receivable|FinancialTransaction|getPayableRepo|getReceivableRepo|getTransactionRepo/, 'TOLL-1A must not mutate finance');
+
 assert.match(
   source,
   /const TollPassagesManagement=lazy\(\(\)=>import\('\.\.\/tolls\/TollPassagesManagement'\)/,
@@ -55,4 +69,4 @@ assert.ok(createInputStart>=0&&createInputEnd>createInputStart,'toll create DTO 
 const createInput=tollClient.slice(createInputStart,createInputEnd);
 assert.doesNotMatch(createInput, /companyId|driverId|contractId|idempotencyKey/, 'toll create DTO must not accept protected authority fields');
 
-console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
+console.log('Deferred traffic-ticket modals and Free Flow authority regression: PASS');
