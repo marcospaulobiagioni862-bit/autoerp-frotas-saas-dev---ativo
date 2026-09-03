@@ -6,10 +6,12 @@ const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx'
 const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
 const tollAuthority = readFileSync(new URL('../../../server/tollPassageAuthority.ts', import.meta.url), 'utf8');
 const tollFinance = readFileSync(new URL('../../../server/tollPassageFinanceAuthority.ts', import.meta.url), 'utf8');
+const tollDriverFinance = readFileSync(new URL('../../../server/tollPassageDriverReceivableAuthority.ts', import.meta.url), 'utf8');
 const tollRoutes = readFileSync(new URL('../../../server/tollPassageRoutes.ts', import.meta.url), 'utf8');
 const tollAlerts = readFileSync(new URL('../../../server/tollPassageAlerts.ts', import.meta.url), 'utf8');
 const recurringAlerts = readFileSync(new URL('../../../server/insuranceAlerts.ts', import.meta.url), 'utf8');
 const tollMigration = readFileSync(new URL('../../../../drizzle/0054_toll_passage_authority.sql', import.meta.url), 'utf8');
+const tollDriverMigration = readFileSync(new URL('../../../../drizzle/0055_toll_contract_pass_through.sql', import.meta.url), 'utf8');
 
 for (const modal of ['TrafficTicketFormModal', 'TrafficTicketDetailsModal']) {
   assert.equal(
@@ -52,7 +54,7 @@ assert.match(
   'Free Flow management must remain lazy-loaded from traffic operations',
 );
 assert.match(source, /Pedágios \/ Free Flow/, 'traffic operations must expose the Free Flow entry');
-assert.match(tollSource, /Nenhuma cobrança financeira é criada nesta etapa\./, 'Free Flow UI must disclose the no-finance boundary');
+assert.match(tollSource, /Nenhuma cobrança financeira é criada nesta etapa\./, 'Free Flow UI must disclose the current UI no-finance boundary');
 assert.match(tollSource, /Motorista, contrato, tenant e chave de idempotência não são enviados pelo formulário/, 'browser must not claim authority over derived toll links');
 assert.match(tollClient, /JSON\.stringify\(input\)/, 'toll client must use the explicit create DTO');
 const createInputStart=tollClient.indexOf('export interface CreateTollPassageInput');
@@ -120,5 +122,19 @@ assert.match(tollFinance, /PayableService\.create/, 'TOLL-1F must reuse the cano
 assert.match(tollFinance, /originType: TOLL_PASSAGE_COMPANY_ORIGIN/, 'toll company obligation must have a dedicated origin identity');
 assert.match(tollFinance, /vehicleId:[\s\S]*driverId:[\s\S]*contractId:/, 'company payable must preserve derived vehicle, driver and contract traceability');
 assert.doesNotMatch(tollFinance, /ReceivableService|FinancialTransaction/, 'TOLL-1F must not create driver receivables or settlements');
+
+assert.match(tollDriverMigration, /PRIMARY KEY \(company_id, contract_id\)/, 'contract toll policy must be unique per tenant contract');
+assert.match(tollDriverMigration, /pass_through_enabled boolean NOT NULL DEFAULT false/, 'toll pass-through must fail closed by default');
+assert.match(tollDriverMigration, /FORCE ROW LEVEL SECURITY/, 'contract toll policy must force tenant RLS');
+assert.match(tollRoutes, /\/api\/toll-contract-policies\/:contractId/, 'TOLL-1G must expose explicit contract toll policy authority');
+assert.match(tollRoutes, /\/api\/toll-passages\/:id\/driver-receivable/, 'TOLL-1G must expose an explicit driver receivable action');
+assert.match(tollDriverFinance, /WHERE company_id=\$\{principal\.companyId\} AND id=\$\{passageId\}/, 'driver receivable lookup must remain tenant-scoped');
+assert.match(tollDriverFinance, /if \(!passage\.contract_id \|\| !passage\.driver_id\)/, 'driver receivable must require server-derived contract and driver');
+assert.match(tollDriverFinance, /if \(!policy\?\.pass_through_enabled\)/, 'driver receivable must fail closed unless contract policy opts in');
+assert.match(tollDriverFinance, /\['INCOME', 'BOTH'\]\.includes/, 'driver receivable category must be income-compatible');
+assert.match(tollDriverFinance, /ReceivableService\.create/, 'TOLL-1G must reuse canonical ReceivableService');
+assert.match(tollDriverFinance, /originType: TOLL_PASSAGE_DRIVER_ORIGIN/, 'driver toll charge must use a dedicated idempotent origin identity');
+assert.match(tollDriverFinance, /vehicleId:[\s\S]*driverId:[\s\S]*contractId:/, 'driver receivable must preserve passage traceability');
+assert.doesNotMatch(tollDriverFinance, /FinancialTransaction|SettlementService/, 'TOLL-1G must not settle or move cash');
 
 console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
