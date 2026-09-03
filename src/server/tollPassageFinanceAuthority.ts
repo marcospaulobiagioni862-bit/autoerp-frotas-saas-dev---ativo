@@ -1,10 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { PayableService } from '../domain/finance/PayableService';
-import { OriginType } from '../types/enums';
+import type { OriginType } from '../types/enums';
 import type { AccountPayable } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 import { TollPassageConflictError, TollPassageNotFoundError, TollPassageValidationError } from './tollPassageAuthority';
+
+const TOLL_PASSAGE_COMPANY_ORIGIN = 'TOLL_PASSAGE_COMPANY' as OriginType;
 
 export interface TollPassageCompanyPayableResult {
   payable: AccountPayable;
@@ -66,7 +68,7 @@ export class TollPassageFinanceAuthorityService {
       const existing = rows(await rawTx.execute(sql`
         SELECT id FROM account_payables
         WHERE company_id=${principal.companyId}
-          AND origin_type=${OriginType.TOLL_PASSAGE_COMPANY}
+          AND origin_type=${TOLL_PASSAGE_COMPANY_ORIGIN}
           AND origin_id=${passageId}
           AND installment_number=1
         ORDER BY created_at,id
@@ -75,7 +77,7 @@ export class TollPassageFinanceAuthorityService {
 
       const payable = (await PayableService.create({
         companyId: principal.companyId,
-        originType: OriginType.TOLL_PASSAGE_COMPANY,
+        originType: TOLL_PASSAGE_COMPANY_ORIGIN,
         originId: passageId,
         vehicleId: String(passage.vehicle_id),
         driverId: passage.driver_id ? String(passage.driver_id) : undefined,
