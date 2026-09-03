@@ -1,7 +1,7 @@
 import type { Express,Request,Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import {
-  TollPassageAuthorityService,TollPassageForbiddenError,TollPassageNotFoundError,TollPassageValidationError,
+  TollPassageAuthorityService,TollPassageConflictError,TollPassageForbiddenError,TollPassageNotFoundError,TollPassageValidationError,
   type CreateTollPassageInput,type TollPassageStatus,type TollPassageSource,
 } from './tollPassageAuthority';
 
@@ -12,7 +12,7 @@ function requiredText(value:unknown,max=300):string{const item=typeof value==='s
 function amount(value:unknown):number{const item=Number(value);if(!Number.isFinite(item)||item<=0||item>999999999.99)throw new TollPassageValidationError();return Math.round(item*100)/100;}
 function passageStatus(value:unknown):TollPassageStatus{const item=String(value||'') as TollPassageStatus;if(!['PENDING','PAID','OVERDUE','CONTESTED'].includes(item))throw new TollPassageValidationError();return item;}
 function passageSource(value:unknown):TollPassageSource{const item=String(value||'') as TollPassageSource;if(!['MANUAL','CSV'].includes(item))throw new TollPassageValidationError();return item;}
-function sendError(res:Response,error:unknown):void{if(error instanceof TollPassageValidationError){res.status(400).json({error:'Invalid toll passage request'});return;}if(error instanceof TollPassageForbiddenError){res.status(403).json({error:'Forbidden'});return;}if(error instanceof TollPassageNotFoundError){res.status(404).json({error:'Not found'});return;}console.error('AUTOERP_TOLL_PASSAGE_API_FAILURE',error);res.status(500).json({error:'Toll passage operation failed'});}
+function sendError(res:Response,error:unknown):void{if(error instanceof TollPassageValidationError){res.status(400).json({error:'Invalid toll passage request'});return;}if(error instanceof TollPassageForbiddenError){res.status(403).json({error:'Forbidden'});return;}if(error instanceof TollPassageNotFoundError){res.status(404).json({error:'Not found'});return;}if(error instanceof TollPassageConflictError){res.status(409).json({error:'Toll passage source reference conflict'});return;}console.error('AUTOERP_TOLL_PASSAGE_API_FAILURE',error);res.status(500).json({error:'Toll passage operation failed'});}
 
 export function registerTollPassageRoutes(app:Express):void{
   app.get('/api/toll-passages',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{const filters={vehicleId:optionalText(req.query.vehicleId,200),driverId:optionalText(req.query.driverId,200),contractId:optionalText(req.query.contractId,200),status:req.query.status?passageStatus(req.query.status):undefined};res.json({items:await TollPassageAuthorityService.list(actor.companyId,filters)});}catch(error){sendError(res,error);}});
