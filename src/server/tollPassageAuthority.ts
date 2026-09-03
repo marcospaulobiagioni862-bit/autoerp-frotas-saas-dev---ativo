@@ -16,6 +16,7 @@ export interface TollPassage{
   createdAt:string;updatedAt:string;
 }
 export interface TollPassageCreateResult{item:TollPassage;created:boolean;}
+export interface TollPassageListFilters{vehicleId?:string;driverId?:string;contractId?:string;status?:TollPassageStatus;concessionaire?:string;occurredFrom?:string;occurredTo?:string;}
 type CanonicalCreate={vehicleId:string;concessionaire:string;road:string;tollPoint:string;occurredAt:string;amount:number;dueDate?:string;status:TollPassageStatus;source:TollPassageSource;sourceReference?:string;notes?:string;};
 
 export class TollPassageValidationError extends Error{}
@@ -67,7 +68,7 @@ async function resolveContract(rawTx:any,companyId:string,vehicleId:string,occur
 }
 
 export class TollPassageAuthorityService{
-  static async list(companyId:string,filters:{vehicleId?:string;driverId?:string;contractId?:string;status?:TollPassageStatus}={}):Promise<TollPassage[]>{
+  static async list(companyId:string,filters:TollPassageListFilters={}):Promise<TollPassage[]>{
     return await UnitOfWork.run(companyId,async context=>{const rawTx=context.getRawTransaction?.();if(!rawTx)throw new Error('Toll persistence unavailable');const result=await rawTx.execute(sql`
       SELECT * FROM toll_passages
       WHERE company_id=${companyId}
@@ -75,6 +76,9 @@ export class TollPassageAuthorityService{
         AND (${filters.driverId||null}::text IS NULL OR driver_id=${filters.driverId||null})
         AND (${filters.contractId||null}::text IS NULL OR contract_id=${filters.contractId||null})
         AND (${filters.status||null}::text IS NULL OR status=${filters.status||null})
+        AND (${filters.concessionaire||null}::text IS NULL OR LOWER(concessionaire)=LOWER(${filters.concessionaire||null}))
+        AND (${filters.occurredFrom||null}::date IS NULL OR occurred_at>=${filters.occurredFrom||null}::date)
+        AND (${filters.occurredTo||null}::date IS NULL OR occurred_at<(${filters.occurredTo||null}::date+INTERVAL '1 day'))
       ORDER BY occurred_at DESC,id DESC
       LIMIT 500
     `);return rows(result).map(fromRow);});
