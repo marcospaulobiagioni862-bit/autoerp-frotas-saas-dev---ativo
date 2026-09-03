@@ -5,12 +5,14 @@ import {
   type CreateTollPassageInput,type TollPassageStatus,type TollPassageSource,
 } from './tollPassageAuthority';
 import { TollPassageFinanceAuthorityService } from './tollPassageFinanceAuthority';
+import { TollPassageDriverReceivableAuthorityService } from './tollPassageDriverReceivableAuthority';
 
 function principal(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function requirePrincipal(req:Request,res:Response):AuthenticatedPrincipal|null{const item=principal(req);if(!item){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}return item;}
 function optionalText(value:unknown,max=300):string|undefined{if(value===undefined||value===null||value==='')return undefined;const item=String(value).trim();if(!item||item.length>max)throw new TollPassageValidationError();return item;}
 function optionalDate(value:unknown):string|undefined{const item=optionalText(value,10);if(!item)return undefined;if(!/^\d{4}-\d{2}-\d{2}$/.test(item))throw new TollPassageValidationError();const date=new Date(`${item}T00:00:00Z`);if(!Number.isFinite(date.getTime())||date.toISOString().slice(0,10)!==item)throw new TollPassageValidationError();return item;}
 function requiredText(value:unknown,max=300):string{const item=typeof value==='string'?value.trim():'';if(!item||item.length>max)throw new TollPassageValidationError();return item;}
+function requiredBoolean(value:unknown):boolean{if(typeof value!=='boolean')throw new TollPassageValidationError();return value;}
 function amount(value:unknown):number{const item=Number(value);if(!Number.isFinite(item)||item<=0||item>999999999.99)throw new TollPassageValidationError();return Math.round(item*100)/100;}
 function passageStatus(value:unknown):TollPassageStatus{const item=String(value||'') as TollPassageStatus;if(!['PENDING','PAID','OVERDUE','CONTESTED'].includes(item))throw new TollPassageValidationError();return item;}
 function passageSource(value:unknown):TollPassageSource{const item=String(value||'') as TollPassageSource;if(!['MANUAL','CSV'].includes(item))throw new TollPassageValidationError();return item;}
@@ -26,5 +28,16 @@ export function registerTollPassageRoutes(app:Express):void{
   app.post('/api/toll-passages/:id/company-payable',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     const allowed=new Set(['expenseCategoryId']);if(!req.body||typeof req.body!=='object'||Array.isArray(req.body)||Object.keys(req.body).some(key=>!allowed.has(key)))throw new TollPassageValidationError();
     const result=await TollPassageFinanceAuthorityService.createCompanyPayable(actor,req.params.id,requiredText(req.body.expenseCategoryId,200));res.status(result.created?201:200).json(result);
+  }catch(error){sendError(res,error);}});
+  app.get('/api/toll-contract-policies/:contractId',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    res.json({item:await TollPassageDriverReceivableAuthorityService.getContractPolicy(actor.companyId,req.params.contractId)});
+  }catch(error){sendError(res,error);}});
+  app.put('/api/toll-contract-policies/:contractId',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    const allowed=new Set(['passThroughEnabled']);if(!req.body||typeof req.body!=='object'||Array.isArray(req.body)||Object.keys(req.body).some(key=>!allowed.has(key)))throw new TollPassageValidationError();
+    res.json({item:await TollPassageDriverReceivableAuthorityService.setContractPolicy(actor,req.params.contractId,requiredBoolean(req.body.passThroughEnabled))});
+  }catch(error){sendError(res,error);}});
+  app.post('/api/toll-passages/:id/driver-receivable',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+    const allowed=new Set(['receivableCategoryId']);if(!req.body||typeof req.body!=='object'||Array.isArray(req.body)||Object.keys(req.body).some(key=>!allowed.has(key)))throw new TollPassageValidationError();
+    const result=await TollPassageDriverReceivableAuthorityService.createDriverReceivable(actor,req.params.id,requiredText(req.body.receivableCategoryId,200));res.status(result.created?201:200).json(result);
   }catch(error){sendError(res,error);}});
 }
