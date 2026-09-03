@@ -6,6 +6,8 @@ const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx'
 const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
 const tollAuthority = readFileSync(new URL('../../../server/tollPassageAuthority.ts', import.meta.url), 'utf8');
 const tollRoutes = readFileSync(new URL('../../../server/tollPassageRoutes.ts', import.meta.url), 'utf8');
+const tollAlerts = readFileSync(new URL('../../../server/tollPassageAlerts.ts', import.meta.url), 'utf8');
+const recurringAlerts = readFileSync(new URL('../../../server/insuranceAlerts.ts', import.meta.url), 'utf8');
 const tollMigration = readFileSync(new URL('../../../../drizzle/0054_toll_passage_authority.sql', import.meta.url), 'utf8');
 
 for (const modal of ['TrafficTicketFormModal', 'TrafficTicketDetailsModal']) {
@@ -68,5 +70,15 @@ assert.match(tollAuthority, /replayOrConflict\(existing,canonical\)/, 'idempoten
 assert.match(tollAuthority, /throw new TollPassageConflictError/, 'divergent replay must fail closed');
 assert.match(tollRoutes, /TollPassageConflictError[\s\S]*res\.status\(409\)/, 'divergent external-reference replay must return HTTP 409');
 assert.doesNotMatch(tollAuthority, /Payable|Receivable|FinancialTransaction|getPayableRepo|getReceivableRepo|getTransactionRepo/, 'TOLL-1A must not mutate finance');
+
+assert.match(tollAlerts, /p\.status IN \('PENDING','OVERDUE'\)/, 'toll alerts must only materialize for unpaid states');
+assert.match(tollAlerts, /p\.due_date IS NOT NULL/, 'toll alerts require an authoritative due date');
+assert.match(tollAlerts, /alertStageForDays\(days\)/, 'toll alerts must reuse the canonical expiration stages');
+assert.match(tollAlerts, /TOLL_PASSAGE_ALERT:\$\{passage\.id\}:\$\{stage\}/, 'toll alerts must deduplicate by passage and stage');
+assert.match(tollAlerts, /ON CONFLICT\(company_id,user_id,dedup_key\) DO NOTHING/, 'toll alerts must remain idempotent per tenant user');
+assert.match(tollAlerts, /trustedSystemActor:'RECURRING'/, 'toll alerts must run only through the trusted recurring authority');
+assert.match(recurringAlerts, /await materializeTollPassageAlerts\(companyId,today\)/, 'toll alerts must reuse the existing compliance sweep');
+assert.doesNotMatch(tollAlerts, /Payable|Receivable|FinancialTransaction|getPayableRepo|getReceivableRepo|getTransactionRepo/, 'TOLL-1C alerts must not mutate finance');
+assert.doesNotMatch(tollAlerts, /UPDATE toll_passages/, 'alert materialization must not rewrite passage state');
 
 console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
