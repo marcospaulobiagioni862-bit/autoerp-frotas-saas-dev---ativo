@@ -7,7 +7,7 @@ export interface TollPassage{
 }
 export interface CreateTollPassageInput{
   plate:string;concessionaire:string;road:string;tollPoint:string;occurredAt:string;amount:number;dueDate?:string;
-  status:TollPassageStatus;source:'MANUAL';sourceReference?:string;notes?:string;
+  status:TollPassageStatus;source:TollPassageSource;sourceReference?:string;notes?:string;
 }
 export interface TollPassageListFilters{vehicleId?:string;driverId?:string;contractId?:string;status?:TollPassageStatus;concessionaire?:string;occurredFrom?:string;occurredTo?:string;}
 type JsonRecord=Record<string,unknown>;
