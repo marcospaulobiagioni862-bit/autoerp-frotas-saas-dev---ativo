@@ -82,6 +82,23 @@ assert.match(tollSource, /Todos os motoristas/, 'Free Flow history must expose a
 assert.match(tollSource, /Filtrar por concessionária/, 'Free Flow history must expose a concessionaire filter');
 assert.match(tollSource, /Aplicar filtros/, 'Free Flow filters must require an explicit server refresh');
 
+assert.match(createInput, /source:TollPassageSource/, 'strict toll DTO must explicitly allow only known passage sources');
+assert.match(tollSource, /accept="\.csv,text\/csv"/, 'Free Flow must expose a CSV-only file picker');
+assert.match(tollSource, /lines\.length-1>500/, 'CSV import must cap rows before sending');
+assert.match(tollSource, /file\.size>2_000_000/, 'CSV import must cap file size before parsing');
+assert.match(tollSource, /CSV contém cabeçalho não permitido/, 'CSV import must reject unexpected columns');
+assert.match(tollSource, /const rows=parseCsv\(await file\.text\(\)\)/, 'CSV must be fully parsed before the first create request');
+assert.match(tollSource, /source:'CSV'/, 'CSV rows must be explicitly tagged as CSV origin');
+assert.match(tollSource, /for\(const row of rows\)\{const result=await TollPassageClient\.create\(row\)/, 'validated CSV rows must reuse authoritative create semantics');
+assert.match(tollSource, /Tenant, contrato, motorista e chave de idempotência continuam sob autoridade do servidor/, 'CSV UI must disclose protected server authority');
+const csvParserStart=tollSource.indexOf('function parseCsv');
+const csvParserEnd=tollSource.indexOf('\n\nexport const TollPassagesManagement',csvParserStart);
+const csvImportStart=tollSource.indexOf('const importCsv=');
+const csvImportEnd=tollSource.indexOf('return <div',csvImportStart);
+assert.ok(csvParserStart>=0&&csvParserEnd>csvParserStart&&csvImportStart>=0&&csvImportEnd>csvImportStart,'CSV write path must be identifiable');
+const csvWritePath=`${tollSource.slice(csvParserStart,csvParserEnd)}\n${tollSource.slice(csvImportStart,csvImportEnd)}`;
+assert.doesNotMatch(csvWritePath, /companyId\s*:|driverId\s*:|contractId\s*:|idempotencyKey\s*:/, 'CSV/browser import must not send protected authority fields');
+
 assert.match(tollAlerts, /p\.status IN \('PENDING','OVERDUE'\)/, 'toll alerts must only materialize for unpaid states');
 assert.match(tollAlerts, /p\.due_date IS NOT NULL/, 'toll alerts require an authoritative due date');
 assert.match(tollAlerts, /alertStageForDays\(days\)/, 'toll alerts must reuse the canonical expiration stages');
