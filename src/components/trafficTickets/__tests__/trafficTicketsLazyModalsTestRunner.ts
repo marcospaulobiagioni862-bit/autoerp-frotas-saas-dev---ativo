@@ -5,6 +5,7 @@ const source = readFileSync(new URL('../TrafficTicketsManagement.tsx', import.me
 const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx', import.meta.url), 'utf8');
 const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
 const tollAuthority = readFileSync(new URL('../../../server/tollPassageAuthority.ts', import.meta.url), 'utf8');
+const tollFinance = readFileSync(new URL('../../../server/tollPassageFinanceAuthority.ts', import.meta.url), 'utf8');
 const tollRoutes = readFileSync(new URL('../../../server/tollPassageRoutes.ts', import.meta.url), 'utf8');
 const tollAlerts = readFileSync(new URL('../../../server/tollPassageAlerts.ts', import.meta.url), 'utf8');
 const recurringAlerts = readFileSync(new URL('../../../server/insuranceAlerts.ts', import.meta.url), 'utf8');
@@ -108,5 +109,16 @@ assert.match(tollAlerts, /trustedSystemActor:'RECURRING'/, 'toll alerts must run
 assert.match(recurringAlerts, /await materializeTollPassageAlerts\(companyId,today\)/, 'toll alerts must reuse the existing compliance sweep');
 assert.doesNotMatch(tollAlerts, /Payable|Receivable|FinancialTransaction|getPayableRepo|getReceivableRepo|getTransactionRepo/, 'TOLL-1C alerts must not mutate finance');
 assert.doesNotMatch(tollAlerts, /UPDATE toll_passages/, 'alert materialization must not rewrite passage state');
+
+assert.match(tollRoutes, /\/api\/toll-passages\/:id\/company-payable/, 'TOLL-1F must expose an explicit company-payable action');
+assert.match(tollRoutes, /new Set\(\['expenseCategoryId'\]\)/, 'company payable route must accept only the financial category input');
+assert.match(tollFinance, /WHERE company_id=\$\{principal\.companyId\} AND id=\$\{passageId\}/, 'company payable lookup must remain tenant-scoped');
+assert.match(tollFinance, /\['PENDING', 'OVERDUE'\]\.includes/, 'only unpaid toll states may create the company payable');
+assert.match(tollFinance, /if \(!passage\.due_date\)/, 'company payable requires an authoritative toll due date');
+assert.match(tollFinance, /financial_categories[\s\S]*company_id=\$\{companyId\}/, 'expense category validation must remain tenant-scoped');
+assert.match(tollFinance, /PayableService\.create/, 'TOLL-1F must reuse the canonical payable service');
+assert.match(tollFinance, /originType: TOLL_PASSAGE_COMPANY_ORIGIN/, 'toll company obligation must have a dedicated origin identity');
+assert.match(tollFinance, /vehicleId:[\s\S]*driverId:[\s\S]*contractId:/, 'company payable must preserve derived vehicle, driver and contract traceability');
+assert.doesNotMatch(tollFinance, /ReceivableService|FinancialTransaction/, 'TOLL-1F must not create driver receivables or settlements');
 
 console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
