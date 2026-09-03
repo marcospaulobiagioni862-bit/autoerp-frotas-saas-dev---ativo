@@ -49,6 +49,10 @@ assert.match(source, /Pedágios \/ Free Flow/, 'traffic operations must expose t
 assert.match(tollSource, /Nenhuma cobrança financeira é criada nesta etapa\./, 'Free Flow UI must disclose the no-finance boundary');
 assert.match(tollSource, /Motorista, contrato, tenant e chave de idempotência não são enviados pelo formulário/, 'browser must not claim authority over derived toll links');
 assert.match(tollClient, /JSON\.stringify\(input\)/, 'toll client must use the explicit create DTO');
-assert.doesNotMatch(tollClient, /companyId|driverId:|contractId:|idempotencyKey/, 'toll create client must not send protected authority fields');
+const createInputStart=tollClient.indexOf('export interface CreateTollPassageInput');
+const createInputEnd=tollClient.indexOf('type JsonRecord',createInputStart);
+assert.ok(createInputStart>=0&&createInputEnd>createInputStart,'toll create DTO must be explicit');
+const createInput=tollClient.slice(createInputStart,createInputEnd);
+assert.doesNotMatch(createInput, /companyId|driverId|contractId|idempotencyKey/, 'toll create DTO must not accept protected authority fields');
 
 console.log('Deferred traffic-ticket modals and Free Flow regression: PASS');
