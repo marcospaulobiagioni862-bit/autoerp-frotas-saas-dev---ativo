@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { alertStageForDays, daysUntilExpiration } from '../domain/documents/documentPolicy';
 import { materializeMaintenanceAlerts } from './maintenancePreventiveAlerts';
+import { materializeTollPassageAlerts } from './tollPassageAlerts';
 
 const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','DUE_TODAY','POST_DUE']);
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
@@ -29,7 +30,8 @@ export async function materializeInsuranceAlerts(companyId:string,today:string):
     }
     return inserted;
   },{trustedSystemActor:'RECURRING'});
-  // SECURITY-2J2 extends the existing I5 compliance sweep; this preserves one scheduler/timer.
+  // Extend the existing compliance sweep; preserve one scheduler/timer for recurring alerts.
   await materializeMaintenanceAlerts(companyId,today);
+  await materializeTollPassageAlerts(companyId,today);
   return insuranceInserted;
 }
