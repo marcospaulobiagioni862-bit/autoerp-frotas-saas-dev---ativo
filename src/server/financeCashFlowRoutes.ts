@@ -5,6 +5,7 @@ import { CashFlowService } from '../domain/finance/CashFlowService';
 import { FinancialAuthorizationService } from '../domain/finance/FinancialAuthorizationService';
 import { registerAdminUserRoutes } from './adminUserRoutes';
 import { registerTenantProfileRoutes } from './tenantProfileRoutes';
+import { registerTollPassageRoutes } from './tollPassageRoutes';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -35,10 +36,11 @@ function sendError(res: Response, error: unknown): void {
 
 export function registerFinanceCashFlowRoutes(app: Express): void {
   // recurringRoutes is the current server route bootstrap aggregator. Register
-  // the production administration slice here so it is mounted exactly once
-  // without creating a second top-level bootstrap path.
+  // the production administration and provider-neutral toll slices here so they
+  // are mounted exactly once without creating a second top-level bootstrap path.
   registerAdminUserRoutes(app);
   registerTenantProfileRoutes(app);
+  registerTollPassageRoutes(app);
 
   app.get('/api/finance/reports/cash-flow', async (req: Request, res: Response) => {
     const actor = principal(req);
