@@ -19,6 +19,7 @@ const SERVER_ENTITY_TYPES = new Set([
   'HealthAndEmergency',
   'TrafficTicket',
   'MaintenanceWorkOrder',
+  'VehicleInspection',
   'Insurance',
   'Tracker',
 ]);
