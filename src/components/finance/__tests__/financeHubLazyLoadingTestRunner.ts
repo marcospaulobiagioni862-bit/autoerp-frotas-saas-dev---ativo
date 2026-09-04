@@ -29,6 +29,9 @@ for (const view of views) {
 assert.equal((source.match(/=lazy\(\(\)=>import\('\.\//g) ?? []).length, views.length, 'Finance Hub must define exactly one lazy loader per financial subview');
 assert.match(source, /<LazyModuleErrorBoundary resetKey=\{activeSubTab\} onRetry=\{\(\)=>window\.location\.reload\(\)\}>/, 'financial lazy recovery must reset when the active subtab changes');
 assert.match(source, /<Suspense fallback=\{<div[^>]*>Carregando área financeira\.\.\.<\/div>\}>/, 'financial subviews must expose a neutral loading fallback');
+assert.match(source, /min-w-0 bg-white[\s\S]*overflow-x-auto md:flex-wrap md:overflow-x-visible/, 'finance tabs must scroll only on small screens and wrap on desktop');
+assert.match(source, /className="mt-6 min-w-0"/, 'financial subview container must be allowed to shrink inside the page');
+
 
 for (const tab of ['overview', 'receivables', 'payables', 'transactions', 'cashflow', 'delinquency', 'reconciliation', 'cards', 'periods', 'dre', 'settings']) {
   assert.match(source, new RegExp(`activeSubTab === ['"]${tab}['"]`), `financial subtab ${tab} must remain routed`);
