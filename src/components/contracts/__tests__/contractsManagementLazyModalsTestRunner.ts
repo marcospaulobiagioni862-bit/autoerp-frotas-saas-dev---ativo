@@ -73,6 +73,15 @@ for (const placeholder of [
 }
 assert.match(executionRoutes, /rg: driver\.rg \|\| ''/, 'contract snapshot must source driver RG from the server-authoritative driver');
 assert.match(executionRoutes, /cnhCategory: driver\.cnhCategory/, 'contract snapshot must source CNH category');
+for (const placeholder of ['driver.maritalStatus','driver.profession','driver.motherName','driver.pixKey']) {
+  assert.ok(templatePolicy.includes(`'${placeholder}'`), `MoveFlex driver profile placeholder missing: ${placeholder}`);
+}
+assert.match(executionRoutes, /maritalStatus: driver\.maritalStatus \|\| ''/, 'contract snapshot must source marital status');
+assert.match(executionRoutes, /profession: driver\.profession \|\| ''/, 'contract snapshot must source profession');
+assert.match(executionRoutes, /motherName: driver\.motherName \|\| ''/, 'contract snapshot must source mother name');
+assert.match(executionRoutes, /pixKey: driver\.pixKey \|\| ''/, 'contract snapshot must source PIX key');
+assert.match(executionRoutes, /'driver\.pixKey': snapshot\.driver\.pixKey/, 'PIX key must be exposed to template renderer');
+
 assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
 assert.match(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must prefer the active standard rental template');
