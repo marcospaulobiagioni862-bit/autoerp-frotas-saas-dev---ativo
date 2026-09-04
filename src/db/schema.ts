@@ -79,6 +79,26 @@ export const vehicles = pgTable('vehicles', {
   idx_company_status: index('idx_veh_company_status').on(t.companyId, t.status),
 }));
 
+export const vehicleInspections = pgTable('vehicle_inspections', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  driverId: text('driver_id'),
+  contractId: text('contract_id'),
+  inspectionType: text('inspection_type').notNull(),
+  inspectionDate: timestamp('inspection_date', { mode: 'string' }).notNull(),
+  odometer: integer('odometer').notNull(),
+  fuelLevel: integer('fuel_level').notNull(),
+  checklist: jsonb('checklist').notNull().default({}),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idxCompanyVehicleDate: index('idx_vehicle_inspection_company_vehicle_date').on(t.companyId, t.vehicleId, t.inspectionDate),
+  idxCompanyContract: index('idx_vehicle_inspection_company_contract').on(t.companyId, t.contractId),
+}));
+
 export const vehicleKmRecords = pgTable('vehicle_km_records', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
