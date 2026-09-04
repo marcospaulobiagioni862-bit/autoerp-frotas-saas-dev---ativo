@@ -10,6 +10,8 @@ const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1bet
 const DOCUMENT_FIELD_NAMES = {
   CNH: ['name', 'cpf', 'rg', 'registrationNumber', 'category', 'birthDate', 'issueDate', 'expirationDate', 'ear'],
   CRLV: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
+  CRV: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
+  ATPV_E: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
   IPVA: ['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber'],
   TRAFFIC_TICKET: ['plate', 'noticeNumber', 'infractionCode', 'infractionDate', 'dueDate', 'amount', 'discountAmount'],
   INVOICE: ['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount'],

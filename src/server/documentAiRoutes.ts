@@ -9,6 +9,10 @@ import {
   DriverDocumentIntakeReviewSyncError,
   syncDriverDocumentIntakeHumanReview,
 } from './driverDocumentIntakeAiReviewSync';
+import {
+  VehicleDocumentIntakeReviewSyncError,
+  syncVehicleDocumentIntakeHumanReview,
+} from './vehicleDocumentIntakeAiReviewSync';
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
 import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from './documentAiAttachmentPolicy';
 import { createDocumentAiAttachmentStatusSnapshot, createDocumentAiObservabilitySnapshot } from './documentAiObservability';
@@ -150,6 +154,16 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+async function syncDocumentIntakeHumanReview(
+  context: any,
+  principal: AuthenticatedPrincipal,
+  extraction: { id: string; attachmentId: string; status: 'APPROVED' | 'REJECTED'; detectedDocumentType?: string | null },
+  now: string,
+): Promise<void> {
+  const driverHandled = await syncDriverDocumentIntakeHumanReview(context, principal, extraction, now);
+  if (!driverHandled) await syncVehicleDocumentIntakeHumanReview(context, principal, extraction, now);
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof DocumentAiValidationError) {
     res.status(400).json({ error: 'Invalid document AI request' });
@@ -163,7 +177,7 @@ function sendError(res: Response, error: unknown): void {
     res.status(404).json({ error: 'Not found' });
     return;
   }
-  if (error instanceof DocumentAiConflictError || error instanceof DriverDocumentIntakeReviewSyncError) {
+  if (error instanceof DocumentAiConflictError || error instanceof DriverDocumentIntakeReviewSyncError || error instanceof VehicleDocumentIntakeReviewSyncError) {
     res.status(409).json({ error: 'Document AI conflict' });
     return;
   }
@@ -540,7 +554,7 @@ export function registerDocumentAiRoutes(app: Express): void {
             stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
             (current.reviewNotes ?? null) === input.notes;
           if (!samePayload) throw new DocumentAiConflictError();
-          await syncDriverDocumentIntakeHumanReview(context, principal, {
+          await syncDocumentIntakeHumanReview(context, principal, {
             id: current.id,
             attachmentId: current.attachmentId,
             status: targetStatus,
@@ -567,7 +581,7 @@ export function registerDocumentAiRoutes(app: Express): void {
         const updated = updatedRows[0];
         if (!updated) throw new DocumentAiConflictError();
 
-        await syncDriverDocumentIntakeHumanReview(context, principal, {
+        await syncDocumentIntakeHumanReview(context, principal, {
           id: updated.id,
           attachmentId: updated.attachmentId,
           status: targetStatus,

@@ -2,6 +2,15 @@ export type VehicleDocumentIntakeStatus =
   | 'DRAFT' | 'DOCUMENT_UPLOADED' | 'EXTRACTING' | 'REVIEW_REQUIRED' | 'APPROVED' | 'CONSUMED' | 'FAILED' | 'ARCHIVED';
 export type VehicleIntakeDocumentType = 'CRLV' | 'CRV' | 'ATPV_E';
 
+export interface VehicleDocumentAiExtraction {
+  id:string;
+  attachmentId:string;
+  attachmentChecksum:string;
+  status:string;
+  createdAt:string;
+  updatedAt:string;
+}
+
 export interface VehicleDocumentIntake {
   id: string;
   companyId: string;
@@ -50,5 +59,16 @@ export class VehicleDocumentIntakeClient {
     const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}`, { credentials: 'include' });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validate(record(await response.json()).item);
+  }
+  static async analyze(id: string): Promise<VehicleDocumentAiExtraction> {
+    const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/document-ai`, {
+      method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}',
+    });
+    if(!response.ok) throw new Error(await errorMessage(response));
+    const item=record(record(await response.json()).item);
+    for(const key of ['id','attachmentId','attachmentChecksum','status','createdAt','updatedAt']){
+      if(typeof item[key]!=='string') throw new Error('Invalid vehicle document AI payload');
+    }
+    return item as unknown as VehicleDocumentAiExtraction;
   }
 }
