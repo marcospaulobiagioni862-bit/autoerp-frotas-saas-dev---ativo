@@ -186,11 +186,9 @@ export class MaintenanceSlaAuthorityService {
     return UnitOfWork.run(companyId, async tx => {
       const raw = await rawTransaction(tx);
       const workOrder = await requireWorkOrder(raw, companyId, safeWorkOrderId);
-      const [events, now, delayReasons] = await Promise.all([
-        listTimeline(raw, companyId, safeWorkOrderId),
-        databaseNow(raw),
-        listDelayReasonsRaw(raw, companyId, safeWorkOrderId),
-      ]);
+      const events = await listTimeline(raw, companyId, safeWorkOrderId);
+      const now = await databaseNow(raw);
+      const delayReasons = await listDelayReasonsRaw(raw, companyId, safeWorkOrderId);
       const expected = workOrder.expected_duration_minutes == null ? null : Number(workOrder.expected_duration_minutes);
       return { projection: projectMaintenanceSla(expected, events, now), delayReasons };
     });
@@ -211,10 +209,8 @@ export class MaintenanceSlaAuthorityService {
         SET expected_duration_minutes=${expected}, updated_at=now()
         WHERE company_id=${principal.companyId} AND id=${safeWorkOrderId}
       `);
-      const [events, now] = await Promise.all([
-        listTimeline(raw, principal.companyId, safeWorkOrderId),
-        databaseNow(raw),
-      ]);
+      const events = await listTimeline(raw, principal.companyId, safeWorkOrderId);
+      const now = await databaseNow(raw);
       return { projection: projectMaintenanceSla(expected, events, now) };
     });
   }
@@ -229,10 +225,8 @@ export class MaintenanceSlaAuthorityService {
     return UnitOfWork.run(principal.companyId, async tx => {
       const raw = await rawTransaction(tx);
       const workOrder = await requireWorkOrder(raw, principal.companyId, safeWorkOrderId, true);
-      const [events, now] = await Promise.all([
-        listTimeline(raw, principal.companyId, safeWorkOrderId),
-        databaseNow(raw),
-      ]);
+      const events = await listTimeline(raw, principal.companyId, safeWorkOrderId);
+      const now = await databaseNow(raw);
       const expected = workOrder.expected_duration_minutes == null ? null : Number(workOrder.expected_duration_minutes);
       const projection = projectMaintenanceSla(expected, events, now);
       if (projection.status !== 'ATRASADO' && projection.status !== 'CONCLUIDO_ATRASADO') {
