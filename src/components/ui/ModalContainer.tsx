@@ -83,10 +83,10 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       />
 
       <div
-        className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative w-full min-w-0 ${widthClass} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
       >
-        <div className="flex items-start justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-          <div>
+        <div className="flex min-w-0 items-start justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="min-w-0">
             <h2 id="modal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">
               {title}
             </h2>
@@ -105,7 +105,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto space-y-3">
+        <div className="min-w-0 p-4 overflow-y-auto overflow-x-hidden space-y-3">
           {children}
         </div>
       </div>
