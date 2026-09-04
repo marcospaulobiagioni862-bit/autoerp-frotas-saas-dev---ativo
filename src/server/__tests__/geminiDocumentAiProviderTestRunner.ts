@@ -62,7 +62,7 @@ assert.equal('tools' in (captured ?? {}), false);
 
 const schema = responseFormat.schema as Record<string, unknown>;
 const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
-assert.ok(Array.isArray(variants) && variants.length === 9, 'schema must contain one variant per document type');
+assert.ok(Array.isArray(variants) && variants.length === 11, 'schema must contain one variant per document type');
 const cnhVariant = variants.find((variant) => {
   const properties = variant.properties as Record<string, unknown> | undefined;
   const documentType = properties?.documentType as Record<string, unknown> | undefined;
@@ -70,6 +70,16 @@ const cnhVariant = variants.find((variant) => {
   return Array.isArray(values) && values.length === 1 && values[0] === 'CNH';
 });
 assert.ok(cnhVariant, 'CNH schema variant missing');
+for (const vehicleDocumentType of ['CRLV', 'CRV', 'ATPV_E']) {
+  const vehicleVariant = variants.find((variant) => {
+    const properties = variant.properties as Record<string, unknown> | undefined;
+    const documentType = properties?.documentType as Record<string, unknown> | undefined;
+    const values = documentType?.enum as unknown[] | undefined;
+    return Array.isArray(values) && values.length === 1 && values[0] === vehicleDocumentType;
+  });
+  assert.ok(vehicleVariant, `${vehicleDocumentType} schema variant missing`);
+}
+
 const cnhProperties = cnhVariant.properties as Record<string, unknown>;
 const cnhFields = cnhProperties.fields as Record<string, unknown>;
 const cnhFieldProperties = cnhFields.properties as Record<string, unknown>;
