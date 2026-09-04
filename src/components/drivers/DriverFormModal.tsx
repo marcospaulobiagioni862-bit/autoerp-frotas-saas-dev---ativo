@@ -237,8 +237,8 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
   const customPlatforms = appPlatforms.filter((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number]));
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} title={driverToEdit ? 'Editar Cadastro de Motorista' : isCnhCompletion ? 'Completar Cadastro do Motorista' : 'Novo Cadastro de Motorista'} maxWidth="4xl">
-      <form onSubmit={handleSubmit} className="space-y-6" noValidate autoComplete="off">
+    <ModalContainer isOpen={isOpen} onClose={onClose} title={driverToEdit ? 'Editar Cadastro de Motorista' : isCnhCompletion ? 'Completar Cadastro do Motorista' : 'Novo Cadastro de Motorista'} maxWidth="6xl">
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate autoComplete="off">
         {errorMessage && <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-700 dark:text-rose-300 text-sm flex items-center gap-2.5"><AlertCircle className="w-5 h-5 shrink-0" /><span>{errorMessage}</span></div>}
         {successMessage && <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl text-emerald-800 dark:text-emerald-300 text-sm flex items-center gap-2.5"><CheckCircle2 className="w-5 h-5 shrink-0" /><span>{successMessage}</span></div>}
         {!driverToEdit && initialCnhDraft && Object.keys(initialCnhDraft).length > 0 && <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 text-sm flex items-start gap-2.5"><FileText className="w-5 h-5 shrink-0 mt-0.5" /><span>{isCnhCompletion ? 'A CNH e os dados da habilitação já foram salvos. Para concluir o cadastro, preencha os campos obrigatórios destacados abaixo.' : 'Dados preenchidos a partir de uma CNH aprovada. Revise as informações antes de salvar.'}</span></div>}
