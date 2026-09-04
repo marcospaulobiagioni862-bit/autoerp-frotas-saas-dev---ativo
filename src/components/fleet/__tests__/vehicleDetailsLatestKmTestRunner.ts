@@ -15,6 +15,13 @@ const vehicleIntakeRoutesSource = readFileSync(new URL('../../../server/vehicleD
 const attachmentRoutesSource = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
 const vehicleIntakeClientSource = readFileSync(new URL('../../../api/vehicleDocumentIntakeClient.ts', import.meta.url), 'utf8');
 const vehicleIntakeMigrationSource = readFileSync(new URL('../../../../drizzle/0056_vehicle_document_intake_authority.sql', import.meta.url), 'utf8');
+const vehicleIntakeAiQueueSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiQueue.ts', import.meta.url), 'utf8');
+const vehicleIntakeWorkerSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiWorkerSync.ts', import.meta.url), 'utf8');
+const vehicleIntakeReviewSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiReviewSync.ts', import.meta.url), 'utf8');
+const documentAiProcessorSource = readFileSync(new URL('../../../server/documentAiProcessor.ts', import.meta.url), 'utf8');
+const geminiSource = readFileSync(new URL('../../../server/geminiDocumentAiProvider.ts', import.meta.url), 'utf8');
+const documentAiQueueSource = readFileSync(new URL('../../../server/documentAiQueue.ts', import.meta.url), 'utf8');
+const documentAiRoutesSource = readFileSync(new URL('../../../server/documentAiRoutes.ts', import.meta.url), 'utf8');
 
 assert.ok(source.includes('Últimas 5 leituras de KM'), 'overview must label the bounded KM summary');
 assert.ok(source.includes('summary.kmRecords.slice(0,5).map'), 'overview must render no more than five authorized readings');
@@ -114,5 +121,19 @@ assert.ok(attachmentRoutesSource.includes("status='DOCUMENT_UPLOADED'"), 'vehicl
 assert.ok(attachmentRoutesSource.includes("['CRLV','CRV','ATPV_E']"), 'pre-vehicle intake must only accept approved vehicle document classes');
 assert.ok(vehicleIntakeClientSource.includes("VehicleIntakeDocumentType = 'CRLV' | 'CRV' | 'ATPV_E'"), 'client must expose only approved initial vehicle document classes');
 assert.ok(!vehicleIntakeRoutesSource.includes('getVehicleRepo().create'), 'intake foundation must never create a Vehicle automatically');
+assert.ok(vehicleIntakeRoutesSource.includes("/api/vehicle-document-intakes/:id/document-ai"), 'vehicle intake must expose a dedicated Document AI queue action');
+assert.ok(vehicleIntakeRoutesSource.includes('enqueueVehicleDocumentIntake'), 'vehicle intake route must queue through server authority');
+assert.ok(vehicleIntakeRoutesSource.includes('dispatchDocumentAiExtractionFromEnvironment'), 'vehicle intake must dispatch through the configured Document AI runtime');
+assert.ok(vehicleIntakeAiQueueSource.includes("source:'VEHICLE_DOCUMENT_INTAKE'"), 'vehicle AI queue must audit its intake source');
+assert.ok(vehicleIntakeAiQueueSource.includes("String(attachment.entityType)!=='VehicleDocumentIntake'"), 'vehicle AI queue must reject attachments outside the intake');
+assert.ok(vehicleIntakeWorkerSyncSource.includes("status='EXTRACTING'"), 'worker result may transition only an extracting vehicle intake');
+assert.ok(vehicleIntakeReviewSyncSource.includes('detected!==expectedType'), 'human approval must reject a mismatched detected document type');
+assert.ok(vehicleIntakeReviewSyncSource.includes('businessMutationApplied:false'), 'human review must not create or mutate a Vehicle');
+assert.ok(documentAiProcessorSource.includes('CRV: new Set') && documentAiProcessorSource.includes('ATPV_E: new Set'), 'Document AI processor must recognize CRV and ATPV-e');
+assert.ok(geminiSource.includes("CRV: ['plate'") && geminiSource.includes("ATPV_E: ['plate'"), 'Gemini schema must recognize CRV and ATPV-e');
+assert.ok(documentAiQueueSource.includes('syncVehicleDocumentIntakeWorkerResult'), 'shared Document AI worker must synchronize vehicle intake state');
+assert.ok(documentAiRoutesSource.includes('syncVehicleDocumentIntakeHumanReview'), 'shared Document AI review must synchronize vehicle intake state');
+assert.ok(vehicleIntakeClientSource.includes('static async analyze'), 'vehicle intake client must expose the Document AI action');
+
 
 console.log('Vehicle latest KM, authoritative CRLV, pre-create intake and maintenance handoff regressions: PASS');
