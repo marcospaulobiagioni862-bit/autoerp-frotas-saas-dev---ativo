@@ -11,6 +11,10 @@ const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRo
 const vehicleClientSource = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const attachmentModalSource = readFileSync(new URL('../../documents/AttachmentModal.tsx', import.meta.url), 'utf8');
 const maintenanceHandoffSource = readFileSync(new URL('../../maintenance/MaintenanceCrlvHandoffPanel.tsx', import.meta.url), 'utf8');
+const vehicleIntakeRoutesSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
+const attachmentRoutesSource = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
+const vehicleIntakeClientSource = readFileSync(new URL('../../../api/vehicleDocumentIntakeClient.ts', import.meta.url), 'utf8');
+const vehicleIntakeMigrationSource = readFileSync(new URL('../../../../drizzle/0056_vehicle_document_intake_authority.sql', import.meta.url), 'utf8');
 
 assert.ok(source.includes('Últimas 5 leituras de KM'), 'overview must label the bounded KM summary');
 assert.ok(source.includes('summary.kmRecords.slice(0,5).map'), 'overview must render no more than five authorized readings');
@@ -93,4 +97,22 @@ for (const invariant of [
 assert.ok(crlvRouteSource.includes("attachmentRepo.findByEntity(principal.companyId, 'Vehicle', vehicle.id)"), 'handoff must be idempotent against an existing Vehicle CRLV reference');
 assert.ok(!crlvRouteSource.includes('req.body?.plate'), 'server must not accept browser-supplied CRLV field values');
 
-console.log('Vehicle latest KM, authoritative CRLV and maintenance handoff regressions: PASS');
+for (const invariant of [
+  'vehicle_document_intakes',
+  "document_type IN ('CRLV','CRV','ATPV_E')",
+  'ENABLE ROW LEVEL SECURITY',
+  'FORCE ROW LEVEL SECURITY',
+  "company_id = current_setting('app.current_tenant', true)",
+]) {
+  assert.ok(vehicleIntakeMigrationSource.includes(invariant), `vehicle intake migration invariant missing: ${invariant}`);
+}
+assert.ok(vehicleIntakeRoutesSource.includes("app.post('/api/vehicle-document-intakes'"), 'vehicle intake must exist before Vehicle creation');
+assert.ok(vehicleIntakeRoutesSource.includes('action: AuditAction.CREATE'), 'vehicle intake creation must be audited');
+assert.ok(vehicleIntakeRoutesSource.includes('created_by=${principal.userId}'), 'vehicle intake reads must remain actor scoped');
+assert.ok(attachmentRoutesSource.includes("entityType==='VehicleDocumentIntake'"), 'attachment authority must recognize pre-vehicle intake');
+assert.ok(attachmentRoutesSource.includes("status='DOCUMENT_UPLOADED'"), 'vehicle intake upload must advance intake state');
+assert.ok(attachmentRoutesSource.includes("['CRLV','CRV','ATPV_E']"), 'pre-vehicle intake must only accept approved vehicle document classes');
+assert.ok(vehicleIntakeClientSource.includes("VehicleIntakeDocumentType = 'CRLV' | 'CRV' | 'ATPV_E'"), 'client must expose only approved initial vehicle document classes');
+assert.ok(!vehicleIntakeRoutesSource.includes('getVehicleRepo().create'), 'intake foundation must never create a Vehicle automatically');
+
+console.log('Vehicle latest KM, authoritative CRLV, pre-create intake and maintenance handoff regressions: PASS');
