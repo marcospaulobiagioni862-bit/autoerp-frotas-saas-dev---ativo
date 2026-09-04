@@ -86,11 +86,9 @@ async function resolveContract(rawTx:any,companyId:string,vehicleId:string,infra
   return {contractId:String(match.id),driverId:driverId||String(match.driver_id)};
 }
 async function currentFinancial(tx:any,ticket:TrafficTicket):Promise<TrafficTicketFinancialState>{
-  const [basePayable,receivable,nicPayable]=await Promise.all([
-    ticket.payableId?tx.getPayableRepo().findById(ticket.payableId):Promise.resolve(null),
-    ticket.receivableId?tx.getReceivableRepo().findById(ticket.receivableId):Promise.resolve(null),
-    ticket.nicPayableId?tx.getPayableRepo().findById(ticket.nicPayableId):Promise.resolve(null),
-  ]);
+  const basePayable=ticket.payableId?await tx.getPayableRepo().findById(ticket.payableId):null;
+  const receivable=ticket.receivableId?await tx.getReceivableRepo().findById(ticket.receivableId):null;
+  const nicPayable=ticket.nicPayableId?await tx.getPayableRepo().findById(ticket.nicPayableId):null;
   return {
     basePayable:basePayable||undefined,receivable:receivable||undefined,nicPayable:nicPayable||undefined,
     discountAvailable:isTrafficTicketDiscountAvailable(ticket,new Date().toISOString().slice(0,10)),
@@ -165,7 +163,9 @@ export class TrafficTicketAuthorityService {
   static async list(companyId:string,filters:{vehicleId?:string;driverId?:string;status?:TicketStatus;responsibility?:TicketResponsibility}={}):Promise<TrafficTicket[]>{
     return await UnitOfWork.run(companyId,async tx=>{
       const items=await tx.getTrafficTicketRepo().findAllByCompany(companyId,filters);
-      return await Promise.all(items.map(async(item:TrafficTicket)=>projected(item,await currentFinancial(tx,item))));
+      const projectedItems:TrafficTicket[]=[];
+      for(const item of items)projectedItems.push(projected(item,await currentFinancial(tx,item)));
+      return projectedItems;
     });
   }
   static async getDetails(companyId:string,id:string):Promise<TrafficTicketDetails|null>{
