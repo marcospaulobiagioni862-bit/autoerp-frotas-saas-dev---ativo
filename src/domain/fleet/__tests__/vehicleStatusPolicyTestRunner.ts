@@ -120,3 +120,14 @@ assert.equal(vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE), 'Aguardando 
 assert.equal(vehicleStatusLabel(VehicleStatus.DAMAGED), 'Sinistrado');
 
 console.log('vehicle status policy regressions: PASS');
+
+assert.match(
+  readFileSync(new URL('../../../components/fleet/VehicleDetailsModal.tsx', import.meta.url), 'utf8'),
+  /Situação \/ Ciclo de Vida/,
+  'vehicle details must expose lifecycle controls',
+);
+assert.match(
+  readFileSync(new URL('../../../components/fleet/FleetManagement.tsx', import.meta.url), 'utf8'),
+  /onStatusChangeRequest/,
+  'vehicle details lifecycle actions must reuse fleet status authority',
+);
