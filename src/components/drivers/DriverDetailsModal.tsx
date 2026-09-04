@@ -520,7 +520,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               </div>
               <Card className="p-4 space-y-3">
                 <h4 className="text-xs font-bold uppercase text-slate-400">Arquivos do Motorista — authority do servidor</h4>
-                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList entityType="Driver" entityId={driver.id} showPdfActions /></div>
+                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList entityType="Driver" entityId={driver.id} showPdfActions protectLatestDriverCnh /></div>
               </Card>
             </div>
           )}
