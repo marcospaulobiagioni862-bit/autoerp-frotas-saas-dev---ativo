@@ -88,12 +88,12 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
             <div className="text-xs font-semibold text-slate-500">Somente leitura</div>
           </div>
 
-          <div className="flex items-center gap-1 overflow-x-auto border-b pb-2">
+          <div className="grid grid-cols-2 gap-2 border-b pb-3 sm:grid-cols-3 lg:grid-cols-4">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 ${selected ? 'bg-blue-600 text-white font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}>
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`min-h-11 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 ${selected ? 'bg-blue-600 text-white font-semibold' : 'border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-800'}`}>
                   <Icon className="w-3.5 h-3.5"/>{tab.label}
                   {tab.count !== undefined && <span className={`ml-1 px-1.5 rounded-full text-[10px] ${selected ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>{tab.count}</span>}
                 </button>
