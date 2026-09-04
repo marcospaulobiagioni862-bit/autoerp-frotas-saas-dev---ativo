@@ -1,0 +1,13 @@
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS trade_name text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS email text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS phone text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS whatsapp text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_street text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_number text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_complement text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_neighborhood text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_city text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_state text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address_zip_code text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS legal_representative_name text;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS legal_representative_cpf text;
