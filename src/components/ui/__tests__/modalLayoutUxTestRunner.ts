@@ -13,6 +13,9 @@ assert.match(modal, /'max-w-5xl': 'max-w-5xl'/, 'legacy max-width values must re
 assert.match(modal, /max-h-\[96vh\]/, 'modal should use nearly all available viewport height before scrolling');
 
 assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
+assert.match(contractForm, /title=\{contractToEdit \? 'Editar Contrato' : 'Novo Contrato'\}/, 'contract form must use ModalContainer title');
+assert.doesNotMatch(contractForm, /<h2 className="flex items-center gap-2 font-bold">/, 'contract form must not render a second modal header');
+assert.doesNotMatch(contractForm, /<button onClick=\{onClose\} className="text-slate-400">/, 'contract form must not render a second close button');
 assert.doesNotMatch(contractForm, /max-h-\[80vh\][^"]*overflow-y-auto/, 'contract form must not create nested vertical scroll');
 
 assert.match(contractDetails, /size="6xl"/, 'contract details should use a near-full desktop workspace');
