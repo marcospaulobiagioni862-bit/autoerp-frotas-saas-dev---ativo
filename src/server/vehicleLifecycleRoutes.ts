@@ -182,10 +182,8 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
         if (existing.status === VehicleStatus.SOLD) throw new VehicleLifecycleConflictError('Vehicle already sold');
         if (finalKm < existing.currentKm) throw new VehicleLifecycleValidationError('finalKm below currentKm');
 
-        const [activeContract, hasBlockingMaintenance] = await Promise.all([
-          txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id),
-          txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, ''),
-        ]);
+        const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);
+        const hasBlockingMaintenance = await txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, '');
         const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
         if (!canManuallyTransitionVehicleStatus(existing.status, VehicleStatus.SOLD, {
           hasActiveContract: hasCurrentBinding,
@@ -261,10 +259,8 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
         if (!existing) throw new VehicleLifecycleNotFoundError();
         if (existing.isArchived || existing.status === VehicleStatus.ARCHIVED) throw new VehicleLifecycleConflictError('Vehicle already archived');
 
-        const [activeContract, hasBlockingMaintenance] = await Promise.all([
-          txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id),
-          txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, ''),
-        ]);
+        const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);
+        const hasBlockingMaintenance = await txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, '');
         const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
         if (!canManuallyTransitionVehicleStatus(existing.status, VehicleStatus.ARCHIVED, {
           hasActiveContract: hasCurrentBinding,
