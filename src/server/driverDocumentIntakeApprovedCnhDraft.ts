@@ -58,7 +58,7 @@ function isoDate(value: unknown): string | undefined {
 
 function category(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
-  const normalized = value.trim().toUpperCase().replace(/\s+/g, '');
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z]/g, '');
   return CNH_CATEGORIES.has(normalized) ? normalized : undefined;
 }
 
