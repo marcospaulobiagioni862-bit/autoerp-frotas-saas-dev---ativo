@@ -323,15 +323,13 @@ export class OperationalAuthorityService {
 
   static async getExecutiveSnapshot(principal:AuthenticatedPrincipal):Promise<ExecutiveOperationsSnapshot>{
     assertRead(principal);return await UnitOfWork.run(principal.companyId,async tx=>{const raw=tx.getRawTransaction();const now=new Date().toISOString();
-      const [taskAgg,incidentAgg,vehicleAgg,contractAgg,userAgg,priorityTaskResult,criticalIncidentResult]=await Promise.all([
-        raw.execute(sql`SELECT status,count(*)::int AS count FROM operational_tasks WHERE company_id=${principal.companyId} GROUP BY status`),
-        raw.execute(sql`SELECT status,severity,count(*)::int AS count FROM operational_incidents WHERE company_id=${principal.companyId} GROUP BY status,severity`),
-        raw.execute(sql`SELECT status,count(*)::int AS count FROM vehicles WHERE company_id=${principal.companyId} AND is_archived=false GROUP BY status`),
-        raw.execute(sql`SELECT status,count(*)::int AS count FROM contracts WHERE company_id=${principal.companyId} AND is_archived=false GROUP BY status`),
-        raw.execute(sql`SELECT count(*)::int AS count FROM users WHERE company_id=${principal.companyId} AND active=true`),
-        raw.execute(sql`SELECT * FROM operational_tasks WHERE company_id=${principal.companyId} AND status NOT IN ('COMPLETED','CLOSED','CANCELLED') ORDER BY CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,due_at LIMIT 8`),
-        raw.execute(sql`SELECT * FROM operational_incidents WHERE company_id=${principal.companyId} AND status NOT IN ('RESOLVED','CLOSED','CANCELLED') ORDER BY CASE severity WHEN 'SEV0' THEN 0 WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 ELSE 4 END,detected_at LIMIT 6`),
-      ]);
+      const taskAgg=await raw.execute(sql`SELECT status,count(*)::int AS count FROM operational_tasks WHERE company_id=${principal.companyId} GROUP BY status`);
+      const incidentAgg=await raw.execute(sql`SELECT status,severity,count(*)::int AS count FROM operational_incidents WHERE company_id=${principal.companyId} GROUP BY status,severity`);
+      const vehicleAgg=await raw.execute(sql`SELECT status,count(*)::int AS count FROM vehicles WHERE company_id=${principal.companyId} AND is_archived=false GROUP BY status`);
+      const contractAgg=await raw.execute(sql`SELECT status,count(*)::int AS count FROM contracts WHERE company_id=${principal.companyId} AND is_archived=false GROUP BY status`);
+      const userAgg=await raw.execute(sql`SELECT count(*)::int AS count FROM users WHERE company_id=${principal.companyId} AND active=true`);
+      const priorityTaskResult=await raw.execute(sql`SELECT * FROM operational_tasks WHERE company_id=${principal.companyId} AND status NOT IN ('COMPLETED','CLOSED','CANCELLED') ORDER BY CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,due_at LIMIT 8`);
+      const criticalIncidentResult=await raw.execute(sql`SELECT * FROM operational_incidents WHERE company_id=${principal.companyId} AND status NOT IN ('RESOLVED','CLOSED','CANCELLED') ORDER BY CASE severity WHEN 'SEV0' THEN 0 WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 ELSE 4 END,detected_at LIMIT 6`);
       const taskCounts=resultRows(taskAgg),incidentCounts=resultRows(incidentAgg),vehicleCounts=resultRows(vehicleAgg),contractCounts=resultRows(contractAgg);const users=Number(resultRows(userAgg)[0]?.count||0);
       const openTasks=taskCounts.filter(r=>!['COMPLETED','CLOSED','CANCELLED'].includes(String(r.status))).reduce((s,r)=>s+Number(r.count||0),0);const blocked=countBy(taskCounts,'BLOCKED');const completed=countBy(taskCounts,'COMPLETED')+countBy(taskCounts,'CLOSED');
       const overdueResult=await raw.execute(sql`SELECT count(*)::int AS count FROM operational_tasks WHERE company_id=${principal.companyId} AND status NOT IN ('COMPLETED','CLOSED','CANCELLED') AND due_at<now()`);const overdue=Number(resultRows(overdueResult)[0]?.count||0);
