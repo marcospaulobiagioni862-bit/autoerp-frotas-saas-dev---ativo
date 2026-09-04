@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import { syncDriverDocumentIntakeWorkerResult } from './driverDocumentIntakeAiWorkerSync';
+import { syncVehicleDocumentIntakeWorkerResult } from './vehicleDocumentIntakeAiWorkerSync';
 import {
   DocumentAiProcessingError,
   processDocumentAiBytes,
@@ -24,6 +25,14 @@ function rows(result: QueryResult): Record<string, unknown>[] {
     return result.rows as Record<string, unknown>[];
   }
   return [];
+}
+
+async function syncDocumentIntakeWorkerResult(
+  context: any,
+  input: { companyId: string; extractionId: string; attachmentId: string; targetStatus: 'REVIEW_REQUIRED' | 'FAILED'; now: string; failureCode?: string },
+): Promise<void> {
+  const driverHandled = await syncDriverDocumentIntakeWorkerResult(context, input);
+  if (!driverHandled) await syncVehicleDocumentIntakeWorkerResult(context, input);
 }
 
 function requiredString(value: unknown, label: string): string {
@@ -130,7 +139,7 @@ async function recoverStaleProcessing(companyId: string): Promise<void> {
     for (const item of rows(failedResult)) {
       const extractionId = requiredString(item.id, 'extraction id');
       const attachmentId = requiredString(item.attachment_id, 'attachment id');
-      await syncDriverDocumentIntakeWorkerResult(context, {
+      await syncDocumentIntakeWorkerResult(context, {
         companyId,
         extractionId,
         attachmentId,
@@ -250,7 +259,7 @@ async function complete(
     `);
     if (rows(result).length !== 1) throw new Error('Document AI processing claim lost');
 
-    await syncDriverDocumentIntakeWorkerResult(context, {
+    await syncDocumentIntakeWorkerResult(context, {
       companyId,
       extractionId: item.id,
       attachmentId: item.attachmentId,
@@ -304,7 +313,7 @@ async function fail(companyId: string, claimedBy: string, item: ClaimedExtractio
     `);
     if (rows(result).length !== 1) throw new Error('Document AI processing claim lost');
 
-    await syncDriverDocumentIntakeWorkerResult(context, {
+    await syncDocumentIntakeWorkerResult(context, {
       companyId,
       extractionId: item.id,
       attachmentId: item.attachmentId,
