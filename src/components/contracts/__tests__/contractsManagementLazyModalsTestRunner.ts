@@ -77,6 +77,18 @@ assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, veh
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
 assert.match(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must prefer the active standard rental template');
 assert.match(executionPanel, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'contract execution must prefer the standard rental template');
+for (const placeholder of [
+  'company.tradeName','company.email','company.phone','company.whatsapp',
+  'company.address.street','company.address.number','company.address.complement','company.address.neighborhood',
+  'company.address.city','company.address.state','company.address.zipCode','company.address.full',
+  'company.legalRepresentative.name','company.legalRepresentative.cpf',
+]) {
+  assert.ok(templatePolicy.includes(`'${placeholder}'`), `MoveFlex company placeholder missing: ${placeholder}`);
+}
+assert.match(executionRoutes, /tradeName: company\.tradeName \|\| ''/, 'contract generator must source company trade name server-side');
+assert.match(executionRoutes, /legalRepresentativeName/, 'contract generator must source the legal representative from the company profile');
+assert.match(executionRoutes, /'company\.address\.full': snapshot\.company\.address\.full/, 'company full address must be exposed to the template renderer');
+
 
 
 
