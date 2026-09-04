@@ -164,11 +164,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
-      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <h2 className="flex items-center gap-2 font-bold"><FileText className="w-5 h-5 text-emerald-600" />{contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
-        <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
-      </div>
+    <ModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      size="5xl"
+      title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
+    >
       <form onSubmit={submit} className="p-3 space-y-3">
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
