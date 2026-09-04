@@ -6,11 +6,21 @@ const contractForm = readFileSync(new URL('../../contracts/ContractFormModal.tsx
 const contractDetails = readFileSync(new URL('../../contracts/ContractDetailsModal.tsx', import.meta.url), 'utf8');
 const vehicleDetails = readFileSync(new URL('../../fleet/VehicleDetailsModal.tsx', import.meta.url), 'utf8');
 const archivedVehicle = readFileSync(new URL('../../fleet/ArchivedVehicleHistoryModal.tsx', import.meta.url), 'utf8');
+const input = readFileSync(new URL('../Input.tsx', import.meta.url), 'utf8');
+const select = readFileSync(new URL('../Select.tsx', import.meta.url), 'utf8');
 
 assert.match(modal, /overflow-hidden bg-slate-900\/60/, 'modal overlay must not create a second vertical scrollbar');
 assert.match(modal, /document\.querySelector\('main'\)/, 'modal must lock the app scroll root behind it');
 assert.match(modal, /'max-w-5xl': 'max-w-5xl'/, 'legacy max-width values must resolve instead of falling back to lg');
 assert.match(modal, /max-h-\[96vh\]/, 'modal should use nearly all available viewport height before scrolling');
+assert.match(modal, /relative w-full min-w-0/, 'modal shell must allow responsive shrinking');
+assert.match(modal, /min-w-0 p-4 overflow-y-auto overflow-x-hidden/, 'modal body must not create a page-level horizontal scrollbar');
+assert.match(input, /dark:text-slate-200/, 'shared input labels must remain legible in dark mode');
+assert.match(input, /dark:placeholder-slate-400/, 'shared input placeholders must remain legible in dark mode');
+assert.match(input, /helperText[\s\S]*dark:text-slate-300/, 'shared input helper text must remain legible in dark mode');
+assert.match(select, /dark:text-slate-200/, 'shared select labels must remain legible in dark mode');
+assert.match(select, /helperText[\s\S]*dark:text-slate-300/, 'shared select helper text must remain legible in dark mode');
+
 
 assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
 assert.match(contractForm, /title=\{contractToEdit \? 'Editar Contrato' : 'Novo Contrato'\}/, 'contract form must use ModalContainer title');

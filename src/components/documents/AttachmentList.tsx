@@ -292,8 +292,8 @@ export function AttachmentList({
             const extractionStatus = attachmentStatuses[att.id];
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
             return (
-              <li key={att.id} className="p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                <div className="flex items-center space-x-3 truncate">
+              <li key={att.id} className="p-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <div className="flex min-w-0 items-center space-x-3 truncate">
                   <File className="h-5 w-5 text-gray-400 flex-shrink-0" />
                   <div className="truncate">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{att.fileName}</p>
@@ -312,7 +312,7 @@ export function AttachmentList({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+                <div className="flex flex-wrap items-center justify-end gap-1 sm:ml-4 sm:flex-shrink-0">
                   {extractionStatus && (
                     <Button variant="ghost" size="sm" onClick={() => void handleExtractionHistory(att.id)} title="Histórico sanitizado da extração">
                       <History className="h-4 w-4" />

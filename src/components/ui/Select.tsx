@@ -29,7 +29,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({
   return (
     <div className="w-full space-y-1.5">
       {label && (
-        <label htmlFor={selectId} className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+        <label htmlFor={selectId} className="block text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -48,7 +48,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({
         )) : children}
       </select>
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      {!error && helperText && <p className="text-xs text-slate-500 dark:text-slate-400">{helperText}</p>}
+      {!error && helperText && <p className="text-xs text-slate-500 dark:text-slate-300">{helperText}</p>}
     </div>
   );
 });
