@@ -208,6 +208,21 @@ async function normalizeInput(tx: any, companyId: string, body: any, fallback?: 
     : fallback?.attachmentId;
   await validateAttachment(tx, companyId, subjectType, subjectId, attachmentId);
 
+  if (documentType === 'CRLV') {
+    if (subjectType !== 'VEHICLE' || !attachmentId) {
+      throw new DocumentValidationError('CRLV must originate from Vehicle attachment authority');
+    }
+    const attachment = await tx.getAttachmentRepo().findByIdForCompany(companyId, attachmentId);
+    if (
+      !attachment ||
+      attachment.entityType !== 'Vehicle' ||
+      attachment.entityId !== subjectId ||
+      attachment.documentType !== 'CRLV'
+    ) {
+      throw new DocumentValidationError('CRLV document copy must reference Vehicle CRLV attachment');
+    }
+  }
+
   let documentNumber = body?.documentNumber !== undefined
     ? optionalText(body.documentNumber, 160)
     : fallback?.documentNumber;
