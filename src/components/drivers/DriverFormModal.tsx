@@ -27,7 +27,7 @@ type EarValue = '' | 'YES' | 'NO';
 type FieldName =
   | 'fullName' | 'cpf' | 'birthDate' | 'phone' | 'whatsapp' | 'email'
   | 'zipCode' | 'street' | 'number' | 'complement' | 'neighborhood' | 'city' | 'state'
-  | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'unit'
+  | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'blockTower' | 'tower' | 'unit' | 'floor'
   | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration' | 'cnhEar';
 type FieldErrors = Partial<Record<FieldName, string>>;
 const STANDARD_PLATFORMS = ['Uber', '99', 'InDrive', 'Particular', 'Lalamove'] as const;
@@ -87,6 +87,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
   const [residenceTypeOther, setResidenceTypeOther] = useState('');
   const [condominiumName, setCondominiumName] = useState('');
   const [blockTower, setBlockTower] = useState('');
+  const [tower, setTower] = useState('');
   const [unit, setUnit] = useState('');
   const [floor, setFloor] = useState('');
   const [addressReference, setAddressReference] = useState('');
@@ -111,12 +112,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
     if (driverToEdit) {
       setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || '');
       setZipCode(driverToEdit.address?.zipCode || ''); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
-      setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
+      setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setTower(driverToEdit.address?.tower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
       setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setNotes(driverToEdit.notes || '');
       setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
     } else {
       setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail('');
-      setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
+      setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setTower(''); setUnit(''); setFloor(''); setAddressReference('');
       setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setNotes('');
     }
   }, [driverToEdit, initialCnhDraft, isOpen]);
@@ -176,7 +177,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       if (!/^[A-Za-z]{2}$/.test(state.trim())) errors.state = 'Informe a UF com 2 letras.';
       if (residenceType === 'APARTMENT') {
         if (!condominiumName.trim()) errors.condominiumName = 'Informe o nome do condomínio.';
+        if (!blockTower.trim()) errors.blockTower = 'Informe o bloco.';
+        if (!tower.trim()) errors.tower = 'Informe a torre.';
         if (!unit.trim()) errors.unit = 'Informe o apartamento/unidade.';
+        if (!floor.trim()) errors.floor = 'Informe o andar.';
       }
       if (residenceType === 'OTHER' && !residenceTypeOther.trim()) errors.residenceTypeOther = 'Descreva o tipo de residência.';
     }
@@ -191,7 +195,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
     setLoading(true);
     try {
       const normalizedCpf = digits(cpf); const normalizedCnh = digits(cnhNumber); const normalizedPhone = digits(phone); const normalizedWhatsapp = digits(whatsapp); const normalizedZipCode = digits(zipCode);
-      const addressHasData = !!(normalizedZipCode || street.trim() || number.trim() || complement.trim() || neighborhood.trim() || city.trim() || state.trim() || residenceType || residenceTypeOther.trim() || condominiumName.trim() || blockTower.trim() || unit.trim() || floor.trim() || addressReference.trim());
+      const addressHasData = !!(normalizedZipCode || street.trim() || number.trim() || complement.trim() || neighborhood.trim() || city.trim() || state.trim() || residenceType || residenceTypeOther.trim() || condominiumName.trim() || blockTower.trim() || tower.trim() || unit.trim() || floor.trim() || addressReference.trim());
       const input: DriverCreateInput = {
         fullName: fullName.trim(), cpf: normalizedCpf, rg: rg.trim() || undefined, birthDate,
         phone: normalizedPhone, whatsapp: normalizedWhatsapp || normalizedPhone, email: email.trim() || undefined,
@@ -202,6 +206,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           residenceTypeOther: residenceType === 'OTHER' ? residenceTypeOther.trim() || undefined : undefined,
           condominiumName: residenceType === 'APARTMENT' ? condominiumName.trim() || undefined : undefined,
           blockTower: residenceType === 'APARTMENT' ? blockTower.trim() || undefined : undefined,
+          tower: residenceType === 'APARTMENT' ? tower.trim() || undefined : undefined,
           unit: residenceType === 'APARTMENT' ? unit.trim() || undefined : undefined,
           floor: residenceType === 'APARTMENT' ? floor.trim() || undefined : undefined,
           reference: addressReference.trim() || undefined,
@@ -275,9 +280,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <Input id="driver-state" label="Estado (UF)" value={state} onChange={(e) => { setState(e.target.value.toUpperCase()); clearFieldError('state'); }} maxLength={2} required={requiresCompleteProfile} error={fieldErrors.state} />
           {residenceType === 'APARTMENT' && <>
             <Input id="driver-condominiumName" label="Nome do condomínio" value={condominiumName} onChange={(e) => { setCondominiumName(e.target.value); clearFieldError('condominiumName'); }} required={requiresCompleteProfile} error={fieldErrors.condominiumName} />
-            <Input label="Bloco / Torre" value={blockTower} onChange={(e) => setBlockTower(e.target.value)} />
+            <Input id="driver-blockTower" label="Bloco" value={blockTower} onChange={(e) => { setBlockTower(e.target.value); clearFieldError('blockTower'); }} required={requiresCompleteProfile} error={fieldErrors.blockTower} />
+            <Input id="driver-tower" label="Torre" value={tower} onChange={(e) => { setTower(e.target.value); clearFieldError('tower'); }} required={requiresCompleteProfile} error={fieldErrors.tower} />
             <Input id="driver-unit" label="Apartamento / Unidade" value={unit} onChange={(e) => { setUnit(e.target.value); clearFieldError('unit'); }} required={requiresCompleteProfile} error={fieldErrors.unit} />
-            <Input label="Andar" value={floor} onChange={(e) => setFloor(e.target.value)} />
+            <Input id="driver-floor" label="Andar" value={floor} onChange={(e) => { setFloor(e.target.value); clearFieldError('floor'); }} required={requiresCompleteProfile} error={fieldErrors.floor} />
           </>}
           <div className="sm:col-span-2"><Input label="Referência / observação do endereço" value={addressReference} onChange={(e) => setAddressReference(e.target.value)} /></div>
         </div></div>
