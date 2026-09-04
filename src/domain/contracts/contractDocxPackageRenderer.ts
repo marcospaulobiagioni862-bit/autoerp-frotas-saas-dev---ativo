@@ -156,6 +156,42 @@ function isRenderableWordPart(name: string): boolean {
     name === 'word/endnotes.xml';
 }
 
+
+function decodeWordXmlText(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#([0-9]+);/g, (_match, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+export function extractContractDocxPlainText(docx: Buffer): string {
+  const entries = readZip(docx);
+  const document = entries.find((entry) => entry.name === 'word/document.xml');
+  if (!document) throw new ContractDocxTemplateError('DOCX required parts are missing');
+  const xml = document.content.toString('utf8');
+  const token = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>|<w:tab\b[^>]*\/>|<w:br\b[^>]*\/>|<\/w:p>/g;
+  let text = '';
+  let match: RegExpExecArray | null;
+  while ((match = token.exec(xml))) {
+    if (match[1] !== undefined) text += decodeWordXmlText(match[1]);
+    else if (match[0].startsWith('</w:p')) text += '\n';
+    else if (match[0].startsWith('<w:tab')) text += '\t';
+    else text += '\n';
+  }
+  const normalized = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!normalized) throw new ContractDocxTemplateError('Rendered DOCX has no readable text');
+  return normalized;
+}
+
 export function renderContractDocxPackage(
   docx: Buffer,
   values: Readonly<Record<string, string>>
