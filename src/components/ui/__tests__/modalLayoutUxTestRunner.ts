@@ -10,11 +10,12 @@ const archivedVehicle = readFileSync(new URL('../../fleet/ArchivedVehicleHistory
 assert.match(modal, /overflow-hidden bg-slate-900\/60/, 'modal overlay must not create a second vertical scrollbar');
 assert.match(modal, /document\.querySelector\('main'\)/, 'modal must lock the app scroll root behind it');
 assert.match(modal, /'max-w-5xl': 'max-w-5xl'/, 'legacy max-width values must resolve instead of falling back to lg');
+assert.match(modal, /max-h-\[96vh\]/, 'modal should use nearly all available viewport height before scrolling');
 
-assert.match(contractForm, /size="2xl"/, 'contract form should use a larger workspace');
+assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
 assert.doesNotMatch(contractForm, /max-h-\[80vh\][^"]*overflow-y-auto/, 'contract form must not create nested vertical scroll');
 
-assert.match(contractDetails, /size="4xl"/, 'contract details should use a larger workspace');
+assert.match(contractDetails, /size="6xl"/, 'contract details should use a near-full desktop workspace');
 assert.doesNotMatch(contractDetails, /max-h-\[65vh\][^"]*overflow-y-auto/, 'contract details must not create nested vertical scroll');
 assert.match(contractDetails, /grid grid-cols-2 gap-2/, 'contract detail tabs must use a responsive grid');
 
