@@ -184,7 +184,6 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
     residenceTypeOther: optionalText(input.residenceTypeOther) ?? fallback?.residenceTypeOther,
     condominiumName: optionalText(input.condominiumName) ?? fallback?.condominiumName,
     blockTower: optionalText(input.blockTower) ?? fallback?.blockTower,
-    tower: optionalText(input.tower) ?? fallback?.tower,
     unit: optionalText(input.unit) ?? fallback?.unit,
     floor: optionalText(input.floor) ?? fallback?.floor,
     reference: optionalText(input.reference) ?? fallback?.reference,
@@ -199,7 +198,7 @@ function requireCompletedProfile(driver: Driver): void {
   if (!address.zipCode || !address.street || !address.number || !address.neighborhood || !address.city || !address.state) {
     throw new DriverValidationError('Incomplete address');
   }
-  if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.blockTower || !address.tower || !address.unit || !address.floor)) {
+  if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.blockTower || !address.unit || !address.floor)) {
     throw new DriverValidationError('Incomplete apartment address');
   }
   if (address.residenceType === 'OTHER' && !address.residenceTypeOther) {
