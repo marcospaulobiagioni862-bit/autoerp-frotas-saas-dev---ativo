@@ -50,14 +50,14 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   ];
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Financeiro"
         description="Contas, movimentações, períodos contábeis, fluxo de caixa e visão financeira consolidada"
         breadcrumb="Gestão Financeira & Motor de Pagamentos"
       />
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto shadow-xs">
+      <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
         {subTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -80,7 +80,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
 
       <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
-          <div className="mt-6">
+          <div className="mt-6 min-w-0">
         {activeSubTab === 'overview' && (
           <FinanceOverviewView onSelectSubTab={(tab) => setActiveSubTab(tab)} />
         )}
