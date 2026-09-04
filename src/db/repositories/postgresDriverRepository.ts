@@ -46,6 +46,10 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
       phone: String(row.phone || ''),
       whatsapp: String(row.whatsapp || row.phone || ''),
       email: row.email || undefined,
+      maritalStatus: row.marital_status || undefined,
+      profession: row.profession || undefined,
+      motherName: row.mother_name || undefined,
+      pixKey: row.pix_key || undefined,
       address: {
         street: String(row.address_street || ''),
         number: String(row.address_number || ''),
@@ -216,7 +220,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
 
     await this.tx.execute(sql`
       INSERT INTO drivers (
-        id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email,
+        id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email, marital_status, profession, mother_name, pix_key,
         address_street, address_number, address_complement, address_neighborhood,
         address_city, address_state, address_zip_code, address_residence_type,
         address_residence_type_other, address_condominium_name, address_block_tower,
@@ -225,7 +229,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.fullName}, ${item.cpf}, ${item.cnhNumber},
         ${activeFor(item)}, ${item.rg || null}, ${item.birthDate}, ${item.phone},
-        ${item.whatsapp}, ${item.email || null}, ${item.address.street}, ${item.address.number},
+        ${item.whatsapp}, ${item.email || null}, ${item.maritalStatus || null}, ${item.profession || null}, ${item.motherName || null}, ${item.pixKey || null}, ${item.address.street}, ${item.address.number},
         ${item.address.complement || null}, ${item.address.neighborhood}, ${item.address.city},
         ${item.address.state}, ${item.address.zipCode}, ${item.address.residenceType || null},
         ${item.address.residenceTypeOther || null}, ${item.address.condominiumName || null},
@@ -252,6 +256,10 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         phone = ${item.phone},
         whatsapp = ${item.whatsapp},
         email = ${item.email || null},
+        marital_status = ${item.maritalStatus || null},
+        profession = ${item.profession || null},
+        mother_name = ${item.motherName || null},
+        pix_key = ${item.pixKey || null},
         address_street = ${item.address.street},
         address_number = ${item.address.number},
         address_complement = ${item.address.complement || null},
