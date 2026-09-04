@@ -19,20 +19,21 @@ const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIA
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const CONTRACT_TEMPLATE_WRITE_ROLES=new Set(['ADMIN','MANAGER']);
 const DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp',DOCX_MIME]);
+const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp','video/mp4',DOCX_MIME]);
 function canonicalMimeType(value:string):string{return value==='image/jpg'?'image/jpeg':value;}
 function detectedMimeType(bytes:Buffer):string|undefined{
   if(bytes.length>=4&&bytes[0]===0x25&&bytes[1]===0x50&&bytes[2]===0x44&&bytes[3]===0x46)return'application/pdf';
   if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return'image/jpeg';
   if(bytes.length>=8&&bytes[0]===0x89&&bytes[1]===0x50&&bytes[2]===0x4e&&bytes[3]===0x47&&bytes[4]===0x0d&&bytes[5]===0x0a&&bytes[6]===0x1a&&bytes[7]===0x0a)return'image/png';
   if(bytes.length>=12&&bytes.subarray(0,4).toString('ascii')==='RIFF'&&bytes.subarray(8,12).toString('ascii')==='WEBP')return'image/webp';
+  if(bytes.length>=12&&bytes.subarray(4,8).toString('ascii')==='ftyp')return'video/mp4';
   if(bytes.length>=4&&bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===0x03&&bytes[3]===0x04){
     const archiveText=bytes.toString('latin1');
     if(archiveText.includes('[Content_Types].xml')&&archiveText.includes('word/document.xml'))return DOCX_MIME;
   }
   return undefined;
 }
-const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDocumentIntake','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
+const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDocumentIntake','VehicleInspection','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
@@ -63,6 +64,16 @@ function healthContext(principal:AuthenticatedPrincipal){return{userId:principal
 async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType:string,entityId:string,write:boolean):Promise<void>{
   if(!ENTITY_TYPES.has(entityType))throw new AttachmentValidationError('Invalid entity type');if(!entityId||entityId.length>120)throw new AttachmentValidationError('Invalid entity id');
   if(entityType==='Vehicle'){const item=await tx.getVehicleRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
+  if(entityType==='VehicleInspection'){
+    const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+    const result:any=await raw.execute(sql`
+      SELECT id FROM vehicle_inspections
+      WHERE company_id=${principal.companyId} AND id=${entityId}
+      LIMIT 1
+    `);
+    if(!result.rows?.[0])throw new AttachmentNotFoundError();
+    return;
+  }
   if(entityType==='Contract'){const item=await tx.getContractRepo().findByIdForCompany(principal.companyId,entityId);if(!item||item.isArchived)throw new AttachmentNotFoundError();return;}
   if(entityType==='ContractTemplate'){
     if(write&&!CONTRACT_TEMPLATE_WRITE_ROLES.has(String(principal.role||'').toUpperCase()))throw new AttachmentForbiddenError();
