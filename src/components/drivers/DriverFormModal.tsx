@@ -27,7 +27,7 @@ type EarValue = '' | 'YES' | 'NO';
 type FieldName =
   | 'fullName' | 'cpf' | 'birthDate' | 'phone' | 'whatsapp' | 'email'
   | 'zipCode' | 'street' | 'number' | 'complement' | 'neighborhood' | 'city' | 'state'
-  | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'unit'
+  | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'blockTower' | 'unit' | 'floor'
   | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration' | 'cnhEar';
 type FieldErrors = Partial<Record<FieldName, string>>;
 const STANDARD_PLATFORMS = ['Uber', '99', 'InDrive', 'Particular', 'Lalamove'] as const;
@@ -176,7 +176,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       if (!/^[A-Za-z]{2}$/.test(state.trim())) errors.state = 'Informe a UF com 2 letras.';
       if (residenceType === 'APARTMENT') {
         if (!condominiumName.trim()) errors.condominiumName = 'Informe o nome do condomínio.';
+        if (!blockTower.trim()) errors.blockTower = 'Informe o bloco/torre.';
         if (!unit.trim()) errors.unit = 'Informe o apartamento/unidade.';
+        if (!floor.trim()) errors.floor = 'Informe o andar.';
       }
       if (residenceType === 'OTHER' && !residenceTypeOther.trim()) errors.residenceTypeOther = 'Descreva o tipo de residência.';
     }
@@ -275,9 +277,9 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <Input id="driver-state" label="Estado (UF)" value={state} onChange={(e) => { setState(e.target.value.toUpperCase()); clearFieldError('state'); }} maxLength={2} required={requiresCompleteProfile} error={fieldErrors.state} />
           {residenceType === 'APARTMENT' && <>
             <Input id="driver-condominiumName" label="Nome do condomínio" value={condominiumName} onChange={(e) => { setCondominiumName(e.target.value); clearFieldError('condominiumName'); }} required={requiresCompleteProfile} error={fieldErrors.condominiumName} />
-            <Input label="Bloco / Torre" value={blockTower} onChange={(e) => setBlockTower(e.target.value)} />
+            <Input id="driver-blockTower" label="Bloco / Torre" value={blockTower} onChange={(e) => { setBlockTower(e.target.value); clearFieldError('blockTower'); }} required={requiresCompleteProfile} error={fieldErrors.blockTower} />
             <Input id="driver-unit" label="Apartamento / Unidade" value={unit} onChange={(e) => { setUnit(e.target.value); clearFieldError('unit'); }} required={requiresCompleteProfile} error={fieldErrors.unit} />
-            <Input label="Andar" value={floor} onChange={(e) => setFloor(e.target.value)} />
+            <Input id="driver-floor" label="Andar" value={floor} onChange={(e) => { setFloor(e.target.value); clearFieldError('floor'); }} required={requiresCompleteProfile} error={fieldErrors.floor} />
           </>}
           <div className="sm:col-span-2"><Input label="Referência / observação do endereço" value={addressReference} onChange={(e) => setAddressReference(e.target.value)} /></div>
         </div></div>

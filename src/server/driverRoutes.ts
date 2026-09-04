@@ -198,7 +198,7 @@ function requireCompletedProfile(driver: Driver): void {
   if (!address.zipCode || !address.street || !address.number || !address.neighborhood || !address.city || !address.state) {
     throw new DriverValidationError('Incomplete address');
   }
-  if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.unit)) {
+  if (address.residenceType === 'APARTMENT' && (!address.condominiumName || !address.blockTower || !address.unit || !address.floor)) {
     throw new DriverValidationError('Incomplete apartment address');
   }
   if (address.residenceType === 'OTHER' && !address.residenceTypeOther) {

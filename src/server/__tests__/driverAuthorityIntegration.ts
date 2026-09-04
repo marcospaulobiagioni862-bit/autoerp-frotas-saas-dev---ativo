@@ -127,8 +127,10 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'zipCode', body: { ...baseDriver, address: { ...baseDriver.address, zipCode: '123' } } },
         { label: 'address-number', body: { ...baseDriver, address: { ...baseDriver.address, number: '' } } },
         { label: 'residence-type', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: undefined } } },
-        { label: 'apartment-condominium', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: '', unit: '12' } } },
-        { label: 'apartment-unit', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', unit: '' } } },
+        { label: 'apartment-condominium', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: '', blockTower: 'A', unit: '12', floor: '3' } } },
+        { label: 'apartment-block-tower', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', blockTower: '', unit: '12', floor: '3' } } },
+        { label: 'apartment-unit', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', blockTower: 'A', unit: '', floor: '3' } } },
+        { label: 'apartment-floor', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', blockTower: 'A', unit: '12', floor: '' } } },
         { label: 'other-description', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'OTHER', residenceTypeOther: '' } } },
       ];
       for (const invalid of invalidCases) {
