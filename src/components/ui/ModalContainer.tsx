@@ -21,19 +21,27 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
   size,
 }) => {
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    if (!isOpen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const appMain = document.querySelector('main') as HTMLElement | null;
+    const previousMainOverflow = appMain?.style.overflow || '';
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    if (appMain) appMain.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = 'unset';
-      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      if (appMain) appMain.style.overflow = previousMainOverflow;
     };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -47,6 +55,14 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
     '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
+    'max-w-sm': 'max-w-sm',
+    'max-w-md': 'max-w-md',
+    'max-w-lg': 'max-w-lg',
+    'max-w-xl': 'max-w-xl',
+    'max-w-2xl': 'max-w-2xl',
+    'max-w-4xl': 'max-w-4xl',
+    'max-w-5xl': 'max-w-5xl',
   };
 
   const widthClass = maxWidthStyles[resolvedWidth as string] || maxWidthStyles.lg;
@@ -56,7 +72,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       aria-modal="true"
       role="dialog"
       aria-labelledby="modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/60 backdrop-blur-xs transition-opacity"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden bg-slate-900/60 backdrop-blur-xs transition-opacity"
     >
       <div
         className="fixed inset-0"
