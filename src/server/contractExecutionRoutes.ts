@@ -73,7 +73,11 @@ function formatMoney(value: number): string {
 }
 
 interface ContractSnapshot {
-  company: { id: string; name: string; document: string };
+  company: {
+    id: string; name: string; tradeName: string; document: string; email: string; phone: string; whatsapp: string;
+    address: { street: string; number: string; complement: string; neighborhood: string; city: string; state: string; zipCode: string; full: string };
+    legalRepresentative: { name: string; cpf: string };
+  };
   contract: {
     id: string; number: string; startDate: string; endDate: string; rentalAmount: number;
     billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
@@ -101,14 +105,18 @@ function fullDriverAddress(driver: Driver): string {
 }
 
 function makeSnapshot(
-  company: { id: string; name: string; document: string },
+  company: {
+    id: string; name: string; tradeName: string; document: string; email: string; phone: string; whatsapp: string;
+    address: { street: string; number: string; complement: string; neighborhood: string; city: string; state: string; zipCode: string; full: string };
+    legalRepresentative: { name: string; cpf: string };
+  },
   contract: Contract,
   driver: Driver,
   vehicle: Vehicle,
   template: ContractTemplate
 ): ContractSnapshot {
   return {
-    company: { id: company.id, name: company.name, document: company.document },
+    company,
     contract: {
       id: contract.id,
       number: contract.contractNumber,
@@ -170,7 +178,21 @@ function makeSnapshot(
 function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> {
   return {
     'company.name': snapshot.company.name,
+    'company.tradeName': snapshot.company.tradeName,
     'company.document': snapshot.company.document,
+    'company.email': snapshot.company.email,
+    'company.phone': snapshot.company.phone,
+    'company.whatsapp': snapshot.company.whatsapp,
+    'company.address.street': snapshot.company.address.street,
+    'company.address.number': snapshot.company.address.number,
+    'company.address.complement': snapshot.company.address.complement,
+    'company.address.neighborhood': snapshot.company.address.neighborhood,
+    'company.address.city': snapshot.company.address.city,
+    'company.address.state': snapshot.company.address.state,
+    'company.address.zipCode': snapshot.company.address.zipCode,
+    'company.address.full': snapshot.company.address.full,
+    'company.legalRepresentative.name': snapshot.company.legalRepresentative.name,
+    'company.legalRepresentative.cpf': snapshot.company.legalRepresentative.cpf,
     'contract.number': snapshot.contract.number,
     'contract.startDate': snapshot.contract.startDate,
     'contract.endDate': snapshot.contract.endDate || 'Prazo indeterminado',
@@ -282,14 +304,40 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   return buffer;
 }
 
-async function getCompany(companyId: string): Promise<{ id: string; name: string; document: string }> {
-  const rows = await db.select({ id: companies.id, name: companies.name, document: companies.document })
-    .from(companies)
-    .where(eq(companies.id, companyId))
-    .limit(1);
+async function getCompany(companyId: string): Promise<ContractSnapshot['company']> {
+  const rows = await db.select().from(companies).where(eq(companies.id, companyId)).limit(1);
   const company = rows[0];
   if (!company) throw new ExecutionNotFoundError();
-  return { id: company.id, name: company.name, document: company.document || '' };
+  const address = {
+    street: company.addressStreet || '',
+    number: company.addressNumber || '',
+    complement: company.addressComplement || '',
+    neighborhood: company.addressNeighborhood || '',
+    city: company.addressCity || '',
+    state: company.addressState || '',
+    zipCode: company.addressZipCode || '',
+    full: [
+      [company.addressStreet || '', company.addressNumber || ''].filter(Boolean).join(', '),
+      company.addressComplement || '',
+      company.addressNeighborhood || '',
+      [company.addressCity || '', company.addressState || ''].filter(Boolean).join(' - '),
+      company.addressZipCode ? `CEP ${company.addressZipCode}` : '',
+    ].filter(Boolean).join(', '),
+  };
+  return {
+    id: company.id,
+    name: company.name,
+    tradeName: company.tradeName || '',
+    document: company.document || '',
+    email: company.email || '',
+    phone: company.phone || '',
+    whatsapp: company.whatsapp || '',
+    address,
+    legalRepresentative: {
+      name: company.legalRepresentativeName || '',
+      cpf: company.legalRepresentativeCpf || '',
+    },
+  };
 }
 
 function sameSnapshotTerms(snapshot: ContractSnapshot, contract: Contract, driver: Driver, vehicle: Vehicle, template: ContractTemplate): boolean {
