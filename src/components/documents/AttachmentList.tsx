@@ -17,6 +17,7 @@ interface AttachmentListProps {
   attachmentStatuses?: Record<string, DocumentAiAttachmentStatus>;
   attachmentStatusesUnavailable?: boolean;
   showPdfActions?: boolean;
+  protectLatestDriverCnh?: boolean;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -40,6 +41,7 @@ export function AttachmentList({
   attachmentStatuses = {},
   attachmentStatusesUnavailable = false,
   showPdfActions = false,
+  protectLatestDriverCnh = false,
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -97,6 +99,13 @@ export function AttachmentList({
 
   const getAvailableAttachment = (id: string): FileAttachment | undefined =>
     attachments.find((item) => item.id === id && hasAvailableContent(item));
+
+  const latestDriverCnhId = protectLatestDriverCnh && entityType === 'Driver'
+    ? attachments
+        .filter((item) => !item.isArchived && String(item.documentType || '').toUpperCase() === 'CNH' && hasAvailableContent(item))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.id
+    : undefined;
+
 
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
@@ -324,7 +333,14 @@ export function AttachmentList({
                       <Button variant="ghost" size="sm" onClick={() => void handleSharePdf(att.id)} disabled={!contentAvailable} title="Enviar PDF"><Send className="h-4 w-4" /></Button>
                     </>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar"><Trash2 className="h-4 w-4" /></Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteId(att.id)}
+                    disabled={att.id === latestDriverCnhId}
+                    className="text-red-500 hover:text-red-700 disabled:text-slate-400"
+                    title={att.id === latestDriverCnhId ? 'CNH vigente: substitua pelo fluxo Nova CNH / Renovar CNH' : 'Arquivar'}
+                  ><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </li>
             );

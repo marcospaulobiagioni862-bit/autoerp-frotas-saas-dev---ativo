@@ -7,6 +7,7 @@ const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', imp
 const formSource = readFileSync(new URL('../DriverFormModal.tsx', import.meta.url), 'utf8');
 const cnhIntakeSource = readFileSync(new URL('../DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
 const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
+const attachmentListSource = readFileSync(new URL('../../documents/AttachmentList.tsx', import.meta.url), 'utf8');
 
 for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
   assert.equal(
@@ -111,6 +112,10 @@ assert.match(cnhIntakeSource, /const clearSelectedFile = \(\) => \{[\s\S]*setFil
 assert.match(cnhIntakeSource, /\{file \? 'Trocar arquivo' : 'Selecionar CNH'\}/, 'CNH intake must expose selection and replacement states');
 assert.match(cnhIntakeSource, />\s*Remover arquivo\s*</, 'CNH intake must expose explicit removal');
 assert.match(cnhIntakeSource, /disabled=\{!file \|\| busy\}/, 'CNH analysis action must remain disabled without a file');
+assert.match(detailsSource, /<AttachmentList entityType="Driver" entityId=\{driver\.id\} showPdfActions protectLatestDriverCnh \/>/, 'driver CNH file list must protect the latest CNH');
+assert.match(attachmentListSource, /const latestDriverCnhId = protectLatestDriverCnh[\s\S]*documentType \|\| ''\)\.toUpperCase\(\) === 'CNH'/, 'attachment list must identify the latest available driver CNH');
+assert.match(attachmentListSource, /disabled=\{att\.id === latestDriverCnhId\}/, 'archive action must be disabled for the current CNH');
+assert.match(attachmentListSource, /CNH vigente: substitua pelo fluxo Nova CNH \/ Renovar CNH/, 'current CNH archive guard must explain the renewal flow');
 assert.match(detailsSource, /Nova CNH \/ Renovar CNH/, 'driver details must expose the explicit CNH renewal action');
 assert.match(detailsSource, /onRenewCnh\(driver\.id\)/, 'CNH renewal action must keep the selected driver id');
 assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, 'CNH intake must receive the selected renewal driver');
