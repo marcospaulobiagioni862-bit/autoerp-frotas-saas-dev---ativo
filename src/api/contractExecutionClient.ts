@@ -84,6 +84,20 @@ export class ContractExecutionClient {
     };
   }
 
+  static async generatePdfFromDocx(contractId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-pdf-from-docx`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return {
+      artifact: validateArtifact(payload.artifact),
+      attachment: validateAttachment(payload.attachment),
+      contract: validateContract(payload.contract),
+    };
+  }
+
   static async generateDocx(contractId: string, templateId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-docx`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },

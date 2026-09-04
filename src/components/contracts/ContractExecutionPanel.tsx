@@ -97,10 +97,14 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     }
     const docxBacked = !selected.contentMarkdown.trim();
     void run(async () => {
-      if (docxBacked) await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
-      else await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
+      if (docxBacked) {
+        await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
+        await ContractExecutionClient.generatePdfFromDocx(contract.id);
+      } else {
+        await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
+      }
     }, docxBacked
-      ? 'DOCX preenchido no servidor e preservado para revisão humana.'
+      ? 'DOCX preenchido e PDF oficial gerados no servidor.'
       : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
   };
 
@@ -197,9 +201,18 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
                 <b>Snapshot SHA-256</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{generated.snapshotHash}</div>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => void openAttachment(generated.attachmentId)}>
-                <Download className="w-4 h-4" />Abrir {generatedDocx ? 'DOCX preenchido' : 'PDF gerado'}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {generatedDocx && (
+                  <Button size="sm" variant="secondary" onClick={() => void openAttachment(generatedDocx.attachmentId)}>
+                    <Download className="w-4 h-4" />Abrir DOCX preenchido
+                  </Button>
+                )}
+                {generatedPdf && (
+                  <Button size="sm" variant="secondary" onClick={() => void openAttachment(generatedPdf.attachmentId)}>
+                    <Download className="w-4 h-4" />Abrir PDF gerado
+                  </Button>
+                )}
+              </div>
             </div>
           ) : (
             <p className="text-xs text-slate-500">Nenhum documento oficial foi gerado para este contrato.</p>
