@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
@@ -13,9 +13,11 @@ interface ContractExecutionPanelProps {
   contract: Contract;
   incomeCategoryId: string;
   onChanged: () => Promise<void> | void;
+  focusOnOpen?: boolean;
 }
 
-export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged }) => {
+export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState(contract.templateId || '');
@@ -68,6 +70,14 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     setSuccess(null);
     void load();
   }, [contract.id, contract.templateId]);
+
+  useEffect(() => {
+    if (!focusOnOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusOnOpen, contract.id]);
 
   const run = async (task: () => Promise<void>, successMessage: string) => {
     setLoading(true);
@@ -165,7 +175,8 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     && (contract.signatureRequired === false || Boolean(signed));
 
   return (
-    <Card padding="sm">
+    <div ref={panelRef} data-contract-section="pdf-signature">
+      <Card padding="sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
@@ -296,6 +307,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       {!signed && generated && canGenerate && (
         <div className="mt-3 text-[11px] text-slate-500 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" />Os termos ficam bloqueados após a geração do PDF para evitar divergência entre banco e documento.</div>
       )}
-    </Card>
+      </Card>
+    </div>
   );
 };
