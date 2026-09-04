@@ -170,9 +170,9 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
       onClose={onClose}
       title={vehicleToEdit ? `Editar Veículo — ${vehicleToEdit.plate}` : 'Cadastrar Novo Veículo'}
       subtitle="Insira os dados cadastrais, operacionais e financeiros do veículo."
-      maxWidth="2xl"
+      maxWidth="5xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {errorMessage && (
           <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-xs text-red-700 dark:text-red-300">
             <AlertCircle className="w-4 h-4 shrink-0" />

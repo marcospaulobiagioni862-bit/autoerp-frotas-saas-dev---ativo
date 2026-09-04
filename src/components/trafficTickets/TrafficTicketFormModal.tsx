@@ -29,16 +29,16 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
     await TrafficTicketClient.create({vehicleId,driverId:responsibility===TicketResponsibility.DRIVER?driverId||undefined:undefined,autoNumber:autoNumber.trim(),organName:organName.trim()||'DETRAN',infractionCode:infractionCode.trim(),description:description.trim(),infractionDate,infractionTime:infractionTime||undefined,dueDate,discountDueDate:discountDueDate||undefined,originalAmount:original,discountedAmount:discountedAmount?number(discountedAmount):undefined,nicAmount:nicAmount?number(nicAmount):undefined,points:Number(points)||0,responsibility,notes:notes.trim()||undefined,baseExpenseCategoryId:baseCategory,driverIncomeCategoryId:responsibility===TicketResponsibility.DRIVER?incomeCategory:undefined,nicExpenseCategoryId:responsibility===TicketResponsibility.UNIDENTIFIED?(nicCategory||baseCategory):undefined});
     onSuccess();onClose();
   }catch(err){setError(err instanceof Error?err.message:'Erro ao salvar multa.');}finally{setSubmitting(false);}};
-  return <ModalContainer isOpen={isOpen} onClose={onClose} title="Cadastrar Multa" size="lg"><form onSubmit={submit} className="space-y-4 text-xs">
+  return <ModalContainer isOpen={isOpen} onClose={onClose} title="Cadastrar Multa" size="5xl"><form onSubmit={submit} className="space-y-3 text-xs">
     {error&&<div className="p-3 rounded-xl bg-rose-50 text-rose-700 flex gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>}
-    {loading?<div className="p-8 text-center">Carregando...</div>:<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    {loading?<div className="p-8 text-center">Carregando...</div>:<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
       <label>Veículo *<Select value={vehicleId} onChange={e=>setVehicleId(e.target.value)}><option value="">Selecione</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}</Select></label>
       <label>Responsabilidade *<Select value={responsibility} onChange={e=>setResponsibility(e.target.value as TicketResponsibility)}>{Object.values(TicketResponsibility).map(v=><option key={v} value={v}>{v}</option>)}</Select></label>
       {responsibility===TicketResponsibility.DRIVER&&<label>Motorista *<Select value={driverId} onChange={e=>setDriverId(e.target.value)}><option value="">Selecione</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.fullName}</option>)}</Select></label>}
       <label>Auto de infração *<Input value={autoNumber} onChange={e=>setAutoNumber(e.target.value.toUpperCase())}/></label>
       <label>Órgão *<Input value={organName} onChange={e=>setOrganName(e.target.value)}/></label>
       <label>Código *<Input value={infractionCode} onChange={e=>setInfractionCode(e.target.value)}/></label>
-      <label className="md:col-span-2">Descrição *<Input value={description} onChange={e=>setDescription(e.target.value)}/></label>
+      <label className="md:col-span-2 xl:col-span-2">Descrição *<Input value={description} onChange={e=>setDescription(e.target.value)}/></label>
       <label>Data infração *<Input type="date" value={infractionDate} onChange={e=>setInfractionDate(e.target.value)}/></label>
       <label>Horário da infração<Input type="time" value={infractionTime} onChange={e=>setInfractionTime(e.target.value)}/></label>
       <label>Vencimento *<Input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label>

@@ -197,13 +197,13 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
         <div><h2 className="font-bold">Modelos de Contrato</h2><p className="mt-1 text-xs text-slate-500">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
-      <div className="grid gap-5 p-5 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-4 p-3 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <div className="flex items-center justify-between"><h3 className="text-sm font-bold">Modelos atuais</h3><Button size="sm" variant="ghost" onClick={resetForm}><FilePlus2 className="w-4 h-4" />Novo</Button></div>
           {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500">Nenhum modelo cadastrado.</div> : templates.map((item) => {

@@ -164,14 +164,14 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
         <h2 className="flex items-center gap-2 font-bold"><FileText className="w-5 h-5 text-emerald-600" />{contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}</h2>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
-      <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto p-5 space-y-4">
+      <form onSubmit={submit} className="p-3 space-y-3">
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
           <Field label="Modelo de contrato"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}</select></Field>
           <Field label="Data inicial"><Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
