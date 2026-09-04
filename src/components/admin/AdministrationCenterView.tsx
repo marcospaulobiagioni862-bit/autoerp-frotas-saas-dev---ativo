@@ -33,6 +33,7 @@ import { SecurityAdministrationService } from '../../domain/admin/SecurityAdmini
 import { BackupService } from '../../domain/resilience/BackupService';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 import { UserRole } from '../../types/enums';
+import { CompanyProfileClient } from '../../api/companyProfileClient';
 
 type AdminTab = 
   | 'overview' 
@@ -75,11 +76,25 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
   const [documentInput, setDocumentInput] = useState<string>('');
   const [timezoneInput, setTimezoneInput] = useState<string>('');
   const [maxVehiclesInput, setMaxVehiclesInput] = useState<number>(5000);
+  const [tradeNameInput, setTradeNameInput] = useState<string>('');
+  const [companyEmailInput, setCompanyEmailInput] = useState<string>('');
+  const [companyPhoneInput, setCompanyPhoneInput] = useState<string>('');
+  const [companyWhatsappInput, setCompanyWhatsappInput] = useState<string>('');
+  const [addressStreetInput, setAddressStreetInput] = useState<string>('');
+  const [addressNumberInput, setAddressNumberInput] = useState<string>('');
+  const [addressComplementInput, setAddressComplementInput] = useState<string>('');
+  const [addressNeighborhoodInput, setAddressNeighborhoodInput] = useState<string>('');
+  const [addressCityInput, setAddressCityInput] = useState<string>('');
+  const [addressStateInput, setAddressStateInput] = useState<string>('');
+  const [addressZipCodeInput, setAddressZipCodeInput] = useState<string>('');
+  const [legalRepresentativeNameInput, setLegalRepresentativeNameInput] = useState<string>('');
+  const [legalRepresentativeCpfInput, setLegalRepresentativeCpfInput] = useState<string>('');
 
   const loadData = async () => {
     setLoading(true);
     const prodSummary = ProductionAdministrationService.getProductionSummary(companyId, userRole);
     const cfg = TenantConfigurationService.getConfig(companyId);
+    const companyProfile = await CompanyProfileClient.get();
     const usrList = SecurityAdministrationService.listUsers(companyId);
     const sessList = SecurityAdministrationService.listActiveSessions(companyId);
 
@@ -89,8 +104,21 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
 
     setSummary(prodSummary);
     setTenantConfig(cfg);
-    setCompanyNameInput(cfg.companyName);
-    setDocumentInput(cfg.document);
+    setCompanyNameInput(companyProfile.name);
+    setDocumentInput(companyProfile.document);
+    setTradeNameInput(companyProfile.tradeName);
+    setCompanyEmailInput(companyProfile.email);
+    setCompanyPhoneInput(companyProfile.phone);
+    setCompanyWhatsappInput(companyProfile.whatsapp);
+    setAddressStreetInput(companyProfile.address.street);
+    setAddressNumberInput(companyProfile.address.number);
+    setAddressComplementInput(companyProfile.address.complement);
+    setAddressNeighborhoodInput(companyProfile.address.neighborhood);
+    setAddressCityInput(companyProfile.address.city);
+    setAddressStateInput(companyProfile.address.state);
+    setAddressZipCodeInput(companyProfile.address.zipCode);
+    setLegalRepresentativeNameInput(companyProfile.legalRepresentative.name);
+    setLegalRepresentativeCpfInput(companyProfile.legalRepresentative.cpf);
     setTimezoneInput(cfg.timezone);
     setMaxVehiclesInput(cfg.maxVehiclesLimit);
 
@@ -103,6 +131,37 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
   useEffect(() => {
     loadData();
   }, [companyId]);
+
+  const handleSaveCompanyProfile = async () => {
+    setActionMsg('Salvando dados oficiais da empresa...');
+    try {
+      await CompanyProfileClient.update({
+        name: companyNameInput,
+        tradeName: tradeNameInput,
+        document: documentInput,
+        email: companyEmailInput,
+        phone: companyPhoneInput,
+        whatsapp: companyWhatsappInput,
+        address: {
+          street: addressStreetInput,
+          number: addressNumberInput,
+          complement: addressComplementInput,
+          neighborhood: addressNeighborhoodInput,
+          city: addressCityInput,
+          state: addressStateInput,
+          zipCode: addressZipCodeInput,
+        },
+        legalRepresentative: {
+          name: legalRepresentativeNameInput,
+          cpf: legalRepresentativeCpfInput,
+        },
+      });
+      setActionMsg('Dados oficiais da empresa salvos no servidor.');
+      await loadData();
+    } catch (caught) {
+      setActionMsg(caught instanceof Error ? caught.message : 'Falha ao salvar dados oficiais da empresa.');
+    }
+  };
 
   const handleSaveConfig = async () => {
     setActionMsg('Salvando configurações do tenant...');
@@ -261,34 +320,44 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
 
       {/* TAB CONTENT: 3. TENANT */}
       {activeTab === 'tenant' && (
-        <Card className="p-6 space-y-6 max-w-2xl">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Configuração do Tenant Atual</h3>
-          <div className="space-y-4">
+        <div className="space-y-4 max-w-4xl">
+          <Card className="p-6 space-y-5">
             <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Nome da Empresa / Razão Social</label>
-              <Input value={companyNameInput} onChange={(e) => setCompanyNameInput(e.target.value)} />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Dados oficiais da empresa</h3>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Fonte server-side usada em contratos e documentos oficiais.</p>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">CNPJ / Documento Oficial</label>
-              <Input value={documentInput} onChange={(e) => setDocumentInput(e.target.value)} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Razão Social *</label><Input value={companyNameInput} onChange={(e) => setCompanyNameInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Nome Fantasia</label><Input value={tradeNameInput} onChange={(e) => setTradeNameInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">CNPJ / Documento Oficial</label><Input value={documentInput} onChange={(e) => setDocumentInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">E-mail</label><Input value={companyEmailInput} onChange={(e) => setCompanyEmailInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Telefone</label><Input value={companyPhoneInput} onChange={(e) => setCompanyPhoneInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">WhatsApp</label><Input value={companyWhatsappInput} onChange={(e) => setCompanyWhatsappInput(e.target.value)} /></div>
             </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="md:col-span-2"><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Logradouro</label><Input value={addressStreetInput} onChange={(e) => setAddressStreetInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Número</label><Input value={addressNumberInput} onChange={(e) => setAddressNumberInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Complemento</label><Input value={addressComplementInput} onChange={(e) => setAddressComplementInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Bairro</label><Input value={addressNeighborhoodInput} onChange={(e) => setAddressNeighborhoodInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Cidade</label><Input value={addressCityInput} onChange={(e) => setAddressCityInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">UF</label><Input value={addressStateInput} onChange={(e) => setAddressStateInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">CEP</label><Input value={addressZipCodeInput} onChange={(e) => setAddressZipCodeInput(e.target.value)} /></div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Representante Legal</label><Input value={legalRepresentativeNameInput} onChange={(e) => setLegalRepresentativeNameInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">CPF do Representante</label><Input value={legalRepresentativeCpfInput} onChange={(e) => setLegalRepresentativeCpfInput(e.target.value)} /></div>
+            </div>
+            <div className="pt-2"><Button onClick={() => void handleSaveCompanyProfile()} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"><Save className="w-4 h-4" />Salvar dados oficiais</Button></div>
+          </Card>
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Configuração operacional do Tenant</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Fuso Horário (Timezone)</label>
-                <Input value={timezoneInput} onChange={(e) => setTimezoneInput(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Limite Máximo de Veículos</label>
-                <Input type="number" value={maxVehiclesInput} onChange={(e) => setMaxVehiclesInput(Number(e.target.value))} />
-              </div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Fuso Horário (Timezone)</label><Input value={timezoneInput} onChange={(e) => setTimezoneInput(e.target.value)} /></div>
+              <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Limite Máximo de Veículos</label><Input type="number" value={maxVehiclesInput} onChange={(e) => setMaxVehiclesInput(Number(e.target.value))} /></div>
             </div>
-            <div className="pt-2">
-              <Button onClick={handleSaveConfig} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
-                <Save className="w-4 h-4" /> Salvar Alterações
-              </Button>
-            </div>
-          </div>
-        </Card>
+            <div className="pt-2"><Button onClick={handleSaveConfig} variant="secondary"><Save className="w-4 h-4" />Salvar configuração operacional</Button></div>
+          </Card>
+        </div>
       )}
 
       {/* TAB CONTENT: 4. USERS */}
