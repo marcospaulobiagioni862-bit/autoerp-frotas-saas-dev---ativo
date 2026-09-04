@@ -58,6 +58,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         residenceTypeOther: row.address_residence_type_other || undefined,
         condominiumName: row.address_condominium_name || undefined,
         blockTower: row.address_block_tower || undefined,
+        tower: row.address_tower || undefined,
         unit: row.address_unit || undefined,
         floor: row.address_floor || undefined,
         reference: row.address_reference || undefined,
@@ -197,6 +198,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
           residenceTypeOther: item.address.residenceTypeOther ?? previous.address.residenceTypeOther,
           condominiumName: item.address.condominiumName ?? previous.address.condominiumName,
           blockTower: item.address.blockTower ?? previous.address.blockTower,
+          tower: item.address.tower ?? previous.address.tower,
           unit: item.address.unit ?? previous.address.unit,
           floor: item.address.floor ?? previous.address.floor,
           reference: item.address.reference ?? previous.address.reference,
@@ -219,7 +221,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         id, company_id, name, cpf, cnh, active, rg, birth_date, phone, whatsapp, email,
         address_street, address_number, address_complement, address_neighborhood,
         address_city, address_state, address_zip_code, address_residence_type,
-        address_residence_type_other, address_condominium_name, address_block_tower,
+        address_residence_type_other, address_condominium_name, address_block_tower, address_tower,
         address_unit, address_floor, address_reference, cnh_category, cnh_expiration, cnh_ear,
         app_platforms, status, photo_url, notes, is_archived, created_at, updated_at
       ) VALUES (
@@ -229,7 +231,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         ${item.address.complement || null}, ${item.address.neighborhood}, ${item.address.city},
         ${item.address.state}, ${item.address.zipCode}, ${item.address.residenceType || null},
         ${item.address.residenceTypeOther || null}, ${item.address.condominiumName || null},
-        ${item.address.blockTower || null}, ${item.address.unit || null}, ${item.address.floor || null},
+        ${item.address.blockTower || null}, ${item.address.tower || null}, ${item.address.unit || null}, ${item.address.floor || null},
         ${item.address.reference || null}, ${item.cnhCategory}, ${item.cnhExpiration}, ${item.cnhEar ?? null},
         ${platformArraySql(item.appPlatforms)}, ${item.status}, ${item.photoUrl || null}, ${item.notes || null},
         ${item.isArchived}, ${item.createdAt}, ${item.updatedAt}
@@ -263,6 +265,7 @@ export class PostgresDriverRepository implements ITransactionDriverRepository {
         address_residence_type_other = ${item.address.residenceTypeOther || null},
         address_condominium_name = ${item.address.condominiumName || null},
         address_block_tower = ${item.address.blockTower || null},
+        address_tower = ${item.address.tower || null},
         address_unit = ${item.address.unit || null},
         address_floor = ${item.address.floor || null},
         address_reference = ${item.address.reference || null},
