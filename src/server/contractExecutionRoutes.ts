@@ -8,7 +8,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction, ContractStatus } from '../types/enums';
 import type { Contract, ContractArtifact, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
-import { renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
+import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
 import { ContractDocxTemplateError } from '../domain/contracts/contractDocxTemplateRenderer';
 import type { AuthenticatedPrincipal } from './auth';
 import {
@@ -639,6 +639,145 @@ export function registerContractExecutionRoutes(app: Express): void {
       storedKey = undefined;
       const { replayed: _replayed, ...payload } = result;
       res.status(201).json(payload);
+    } catch (error) {
+      if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/contracts/:id/generate-pdf-from-docx', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'GENERATE_CONTRACT_PDF');
+    if (!principal) return;
+    let storedKey: string | undefined;
+    try {
+      rejectAuthorityFields(bodyOf(req), []);
+
+      const prepared = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ExecutionNotFoundError();
+        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
+        const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, contract.id, 'GENERATED_DOCX'
+        );
+        if (!generatedDocx) throw new ExecutionConflictError();
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, generatedDocx.attachmentId);
+        if (
+          !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
+          attachment.entityId !== contract.id || attachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
+          attachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          attachment.contentState !== 'AVAILABLE' || attachment.storageProvider !== storage.provider ||
+          !attachment.storageKey || !attachment.checksum
+        ) throw new ExecutionConflictError();
+        return { contract, generatedDocx, attachment };
+      });
+
+      const docxBytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const docxChecksum = createHash('sha256').update(docxBytes).digest('hex');
+      if (
+        docxBytes.length !== prepared.attachment.fileSize ||
+        docxChecksum !== prepared.attachment.checksum
+      ) throw new ExecutionValidationError('Invalid generated DOCX content');
+
+      const plainText = extractContractDocxPlainText(docxBytes);
+      const pdf = await createPdf(`Contrato - ${prepared.contract.contractNumber}`, plainText);
+      const attachmentId = randomUUID();
+      const stored = await storage.write(principal.companyId, attachmentId, pdf);
+      storedKey = stored.storageKey;
+      const now = new Date().toISOString();
+
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, req.params.id, 'GENERATED_DOCX', true
+        );
+        const sourceAttachment = generatedDocx
+          ? await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, generatedDocx.attachmentId)
+          : null;
+        if (
+          !contract || !generatedDocx || generatedDocx.id !== prepared.generatedDocx.id ||
+          generatedDocx.snapshotHash !== prepared.generatedDocx.snapshotHash ||
+          generatedDocx.snapshotJson !== prepared.generatedDocx.snapshotJson ||
+          !sourceAttachment || sourceAttachment.isArchived ||
+          sourceAttachment.checksum !== docxChecksum
+        ) throw new ExecutionConflictError();
+
+        const currentPdf = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, contract.id, 'GENERATED_PDF', true
+        );
+        if (currentPdf) {
+          const archived = await tx.getContractArtifactRepo().updateForCompany(principal.companyId, currentPdf.id, {
+            isCurrent: false, isArchived: true, updatedAt: now,
+          });
+          if (!archived) throw new ExecutionConflictError();
+        }
+        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(
+          principal.companyId, contract.id, 'REVIEWED_FINAL_PDF', true
+        );
+        if (reviewed) {
+          const archived = await tx.getContractArtifactRepo().updateForCompany(principal.companyId, reviewed.id, {
+            isCurrent: false, isArchived: true, updatedAt: now,
+          });
+          if (!archived) throw new ExecutionConflictError();
+        }
+
+        const attachment = await tx.getAttachmentRepo().create({
+          id: attachmentId,
+          companyId: principal.companyId,
+          entityName: 'Contract',
+          entityType: 'Contract',
+          entityId: contract.id,
+          documentType: 'CONTRACT_GENERATED_PDF',
+          fileName: `${contract.contractNumber}.pdf`,
+          fileSize: stored.fileSize,
+          mimeType: 'application/pdf',
+          uploadedBy: principal.name,
+          storageProvider: storage.provider,
+          storageKey: stored.storageKey,
+          checksum: stored.checksum,
+          createdBy: principal.userId,
+          contentState: 'AVAILABLE',
+          description: 'PDF oficial gerado a partir do DOCX preenchido',
+          isArchived: false,
+          createdAt: now,
+        });
+        const artifact = await tx.getContractArtifactRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          contractId: contract.id,
+          artifactType: 'GENERATED_PDF',
+          attachmentId: attachment.id,
+          templateId: generatedDocx.templateId,
+          sourceArtifactId: generatedDocx.id,
+          snapshotJson: generatedDocx.snapshotJson,
+          snapshotHash: generatedDocx.snapshotHash,
+          isCurrent: true,
+          isArchived: false,
+          createdBy: principal.userId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        const updatedContract = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
+          generatedPdfUrl: attachment.storageKey,
+          updatedAt: now,
+        });
+        if (!updatedContract) throw new ExecutionConflictError();
+
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
+          action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
+          newState: JSON.stringify({
+            event: 'GENERATE_PDF_FROM_DOCX',
+            sourceArtifactId: generatedDocx.id,
+            snapshotHash: generatedDocx.snapshotHash,
+          }),
+          timestamp: now,
+        });
+
+        return { artifact, attachment, contract: updatedContract };
+      });
+
+      storedKey = undefined;
+      res.status(201).json(result);
     } catch (error) {
       if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
       sendError(res, error);
