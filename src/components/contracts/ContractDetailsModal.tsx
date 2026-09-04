@@ -160,7 +160,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const depositRemaining = contract ? Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)) : 0;
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="xl">
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
         <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-600" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contract.status}</Badge>}</div><p className="mt-1 text-xs text-slate-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
@@ -189,7 +189,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
       </div>
 
-      <div className="mt-2 flex gap-4 overflow-x-auto border-b border-slate-200 px-5 text-xs font-semibold dark:border-slate-800">
+      <div className="mt-2 grid grid-cols-2 gap-2 border-b border-slate-200 px-5 pb-3 text-xs font-semibold sm:grid-cols-3 lg:grid-cols-5 dark:border-slate-800">
         <TabButton active={tab === 'OVERVIEW'} onClick={() => setTab('OVERVIEW')} icon={<FileText className="w-4 h-4" />} label="Visão Geral" />
         <TabButton active={tab === 'FINANCIAL'} onClick={() => setTab('FINANCIAL')} icon={<DollarSign className="w-4 h-4" />} label={`Cobranças (${receivables.length})`} />
         <TabButton active={tab === 'DEPOSIT'} onClick={() => setTab('DEPOSIT')} icon={<ShieldCheck className="w-4 h-4" />} label="Caução" />
@@ -197,7 +197,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         <TabButton active={tab === 'AUDIT'} onClick={() => setTab('AUDIT')} icon={<History className="w-4 h-4" />} label={`Auditoria (${history.length})`} />
       </div>
 
-      <div className="max-h-[65vh] overflow-y-auto p-5">
+      <div className="p-5">
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
             <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} onChanged={async () => { await load(); onRefresh(); }} />
