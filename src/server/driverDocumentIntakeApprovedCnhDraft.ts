@@ -10,7 +10,7 @@ export interface ApprovedCnhDriverDraft {
   cnhEar?: boolean;
 }
 
-const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'AD', 'E']);
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -58,7 +58,7 @@ function isoDate(value: unknown): string | undefined {
 
 function category(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
-  const normalized = value.trim().toUpperCase().replace(/\s+/g, '');
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z]/g, '');
   return CNH_CATEGORIES.has(normalized) ? normalized : undefined;
 }
 

@@ -69,7 +69,7 @@ const STATUSES = new Set<DriverDocumentIntakeStatus>([
 ]);
 
 const DRAFT_KEYS = new Set(['fullName', 'cpf', 'rg', 'birthDate', 'cnhNumber', 'cnhCategory', 'cnhIssueDate', 'cnhExpiration', 'cnhEar']);
-const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'AD', 'E']);
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid driver document intake payload');

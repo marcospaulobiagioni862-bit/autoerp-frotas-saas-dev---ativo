@@ -11,7 +11,7 @@ type DriverAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'EDIT_DRIVER' | 'CHANGE_DR
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const STATUS_VALUES = new Set(Object.values(DriverStatus));
-const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'AD', 'E']);
 const RESIDENCE_TYPES = new Set(['HOUSE', 'APARTMENT', 'OTHER']);
 const MUTABLE_STATUS_VALUES = new Set([
   DriverStatus.ACTIVE,
@@ -73,7 +73,7 @@ function normalizeEmail(value: unknown): string | undefined {
 }
 
 function normalizeCnhCategory(value: unknown, fallback = ''): string {
-  const category = optionalText(value)?.toUpperCase() || fallback;
+  const category = optionalText(value)?.toUpperCase().replace(/[^A-Z]/g, '') || fallback;
   if (!CNH_CATEGORIES.has(category)) throw new DriverValidationError('Invalid cnhCategory');
   return category;
 }
