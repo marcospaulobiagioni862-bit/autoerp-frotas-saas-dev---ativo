@@ -892,10 +892,8 @@ async function startServer() {
         if (!accountRepo.findAll || !paymentMethodRepo) {
           throw new Error('Settlement repositories unavailable');
         }
-        const [accounts, paymentMethods] = await Promise.all([
-          accountRepo.findAll(),
-          paymentMethodRepo.findAll(),
-        ]);
+        const accounts = await accountRepo.findAll();
+        const paymentMethods = await paymentMethodRepo.findAll();
         return {
           accounts: accounts.filter((item: any) => item.status === 'ACTIVE'),
           paymentMethods: paymentMethods.filter((item: any) => item.active !== false),
