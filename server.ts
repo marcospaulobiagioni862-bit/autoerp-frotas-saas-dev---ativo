@@ -401,11 +401,9 @@ async function startServer() {
           throw new Error('Financial account listing is unavailable');
         }
 
-        const [receivables, payables, accounts] = await Promise.all([
-          txContext.getReceivableRepo().findAll(),
-          txContext.getPayableRepo().findAll(),
-          accountRepo.findAll(),
-        ]);
+        const receivables = await txContext.getReceivableRepo().findAll();
+        const payables = await txContext.getPayableRepo().findAll();
+        const accounts = await accountRepo.findAll();
 
         const totalReceivable = receivables
           .filter((item) => item.status === 'PENDING' || item.status === 'PARTIALLY_PAID')
