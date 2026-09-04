@@ -310,6 +310,10 @@ export function registerDriverRoutes(app: Express): void {
           phone,
           whatsapp: normalizePhone(req.body?.whatsapp, 'whatsapp', false) || phone,
           email,
+          maritalStatus: optionalText(req.body?.maritalStatus),
+          profession: optionalText(req.body?.profession),
+          motherName: optionalText(req.body?.motherName),
+          pixKey: optionalText(req.body?.pixKey),
           address,
           cnhNumber,
           cnhCategory: normalizeCnhCategory(req.body?.cnhCategory),
@@ -348,7 +352,7 @@ export function registerDriverRoutes(app: Express): void {
       res.status(400).json({ error: 'Invalid driver authority surface' });
       return;
     }
-    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','address','cnhNumber','cnhCategory','cnhExpiration','cnhEar','appPlatforms','photoUrl','notes'];
+    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','maritalStatus','profession','motherName','pixKey','address','cnhNumber','cnhCategory','cnhExpiration','cnhEar','appPlatforms','photoUrl','notes'];
     if (!editable.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
       res.status(400).json({ error: 'Invalid driver request' });
       return;
@@ -370,6 +374,10 @@ export function registerDriverRoutes(app: Express): void {
           phone: body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!,
           whatsapp: body.whatsapp === undefined ? existing.whatsapp : (normalizePhone(body.whatsapp, 'whatsapp', false) || (body.phone === undefined ? existing.phone : normalizePhone(body.phone, 'phone')!)),
           email: body.email === undefined ? existing.email : normalizeEmail(body.email),
+          maritalStatus: body.maritalStatus === undefined ? existing.maritalStatus : optionalText(body.maritalStatus),
+          profession: body.profession === undefined ? existing.profession : optionalText(body.profession),
+          motherName: body.motherName === undefined ? existing.motherName : optionalText(body.motherName),
+          pixKey: body.pixKey === undefined ? existing.pixKey : optionalText(body.pixKey),
           address: body.address === undefined ? existing.address : addressFrom(body.address, existing.address),
           cnhNumber: body.cnhNumber === undefined ? existing.cnhNumber : normalizeCnh(body.cnhNumber),
           cnhCategory: body.cnhCategory === undefined ? existing.cnhCategory : normalizeCnhCategory(body.cnhCategory),

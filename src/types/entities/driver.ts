@@ -42,6 +42,10 @@ export interface Driver {
   phone: string;
   whatsapp: string;
   email?: string;
+  maritalStatus?: string;
+  profession?: string;
+  motherName?: string;
+  pixKey?: string;
   address: DriverAddress;
   cnhNumber: string;
   cnhCategory: string;

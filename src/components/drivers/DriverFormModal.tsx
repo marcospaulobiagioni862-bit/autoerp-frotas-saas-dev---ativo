@@ -76,6 +76,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
+  const [maritalStatus, setMaritalStatus] = useState('');
+  const [profession, setProfession] = useState('');
+  const [motherName, setMotherName] = useState('');
+  const [pixKey, setPixKey] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [street, setStreet] = useState('');
   const [number, setNumber] = useState('');
@@ -109,13 +113,13 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
     setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
     if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
     if (driverToEdit) {
-      setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || '');
+      setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || ''); setMaritalStatus(driverToEdit.maritalStatus || ''); setProfession(driverToEdit.profession || ''); setMotherName(driverToEdit.motherName || ''); setPixKey(driverToEdit.pixKey || '');
       setZipCode(driverToEdit.address?.zipCode || ''); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
       setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
       setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setNotes(driverToEdit.notes || '');
       setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
     } else {
-      setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail('');
+      setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail(''); setMaritalStatus(''); setProfession(''); setMotherName(''); setPixKey('');
       setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
       setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setNotes('');
     }
@@ -197,6 +201,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       const input: DriverCreateInput = {
         fullName: fullName.trim(), cpf: normalizedCpf, rg: rg.trim() || undefined, birthDate,
         phone: normalizedPhone, whatsapp: normalizedWhatsapp || normalizedPhone, email: email.trim() || undefined,
+        maritalStatus: maritalStatus.trim() || undefined, profession: profession.trim() || undefined, motherName: motherName.trim() || undefined, pixKey: pixKey.trim() || undefined,
         address: addressHasData ? {
           zipCode: normalizedZipCode, street: street.trim(), number: number.trim(), complement: complement.trim() || undefined,
           neighborhood: neighborhood.trim(), city: city.trim(), state: state.trim().toUpperCase(),
@@ -215,7 +220,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
         await DriverClient.update(driverToEdit.id, input);
         if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) await DriverClient.changeStatus(driverToEdit.id, status as Exclude<DriverStatus, DriverStatus.ARCHIVED>);
       } else if (isCnhCompletion && cnhDriverId) {
-        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address };
+        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, maritalStatus: input.maritalStatus, profession: input.profession, motherName: input.motherName, pixKey: input.pixKey, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address };
         if (normalizedPhone) update.phone = normalizedPhone; if (normalizedWhatsapp) update.whatsapp = normalizedWhatsapp; else if (normalizedPhone) update.whatsapp = normalizedPhone;
         await DriverClient.update(cnhDriverId, update);
       } else {
@@ -253,6 +258,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <Input id="driver-phone" label="Telefone Principal" value={phone} onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }} placeholder="(11) 90000-0000" required={!isCnhCompletion} error={fieldErrors.phone} helperText={isCnhCompletion ? 'Pode ser completado nesta etapa.' : 'Pode digitar com ou sem pontuação.'} />
           <Input id="driver-whatsapp" label="WhatsApp" value={whatsapp} onChange={(e) => { setWhatsapp(e.target.value); clearFieldError('whatsapp'); }} error={fieldErrors.whatsapp} />
           <div className="lg:col-span-2"><Input id="driver-email" label="E-mail" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }} required={requiresCompleteProfile} error={fieldErrors.email} /></div>
+          <Input label="Estado Civil" value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} />
+          <Input label="Profissão" value={profession} onChange={(e) => setProfession(e.target.value)} />
+          <Input label="Nome da Mãe" value={motherName} onChange={(e) => setMotherName(e.target.value)} />
+          <div className="lg:col-span-2"><Input label="Chave PIX para devolução de caução" value={pixKey} onChange={(e) => setPixKey(e.target.value)} /></div>
         </div></div>
 
         {!driverToEdit && <div className="space-y-3"><div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800"><Camera className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Foto do motorista (opcional)</h3></div><div className="flex flex-wrap items-center gap-3"><div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">{profilePhotoPreviewUrl ? <img src={profilePhotoPreviewUrl} alt="Prévia da foto do motorista" className="h-full w-full object-cover" /> : <User className="h-8 w-8 text-slate-400" />}</div><div className="flex flex-col gap-2"><div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => profilePhotoInputRef.current?.click()} disabled={loading}><Camera className="mr-1 h-4 w-4" />{profilePhoto ? 'Trocar foto' : 'Selecionar foto'}</Button>{profilePhoto && <Button type="button" size="sm" variant="ghost" onClick={clearProfilePhoto} disabled={loading}><Trash2 className="mr-1 h-4 w-4 text-rose-600" />Remover foto</Button>}</div><span className="text-xs text-slate-500 dark:text-slate-400">JPEG, PNG ou WEBP, até 10 MB. Você pode adicionar a foto depois.</span></div><input ref={profilePhotoInputRef} type="file" className="hidden" accept={PROFILE_PHOTO_MIME_TYPES.join(',')} onChange={(event) => selectProfilePhoto(event.target.files?.[0])} /></div></div>}

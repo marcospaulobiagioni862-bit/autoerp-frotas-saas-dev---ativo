@@ -76,6 +76,10 @@ export class DriverAuthorityIntegrationRunner {
       phone: '11999999999',
       whatsapp: '11999999999',
       email: 'a@example.test',
+      maritalStatus: 'Casado',
+      profession: 'Motorista de aplicativo',
+      motherName: 'Maria da Silva',
+      pixKey: '52998224725',
       address: {
         street: 'Rua A',
         number: '10',
@@ -165,6 +169,10 @@ export class DriverAuthorityIntegrationRunner {
       assert(driverA.address.residenceType === 'HOUSE', 'residence type was not persisted');
       assert(!driverA.address.complement, 'optional address complement should remain absent when omitted');
       assert(driverA.cnhEar === true, 'CNH EAR was not persisted');
+      assert(driverA.maritalStatus === 'Casado', 'marital status was not persisted');
+      assert(driverA.profession === 'Motorista de aplicativo', 'profession was not persisted');
+      assert(driverA.motherName === 'Maria da Silva', 'mother name was not persisted');
+      assert(driverA.pixKey === '52998224725', 'PIX key was not persisted');
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
         method: 'PATCH', body: JSON.stringify({ phone: '(15) 99742-4411', whatsapp: '+55 (15) 99742-4411' }),
