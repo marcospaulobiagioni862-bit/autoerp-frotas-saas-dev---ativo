@@ -22,3 +22,6 @@ assert(detailsSource.includes('<VehicleCrlvImportPanel vehicleId={vehicle.id}/>'
 assert(detailsSource.includes('documentType="VEHICLE_DOCUMENT"'), 'generic vehicle document upload must remain available');
 
 console.log('Vehicle CRLV import/review panel PASS');
+assert(panelSource.includes('Copiar todos os dados aprovados'), 'approved CRLV must expose one-click copy into vehicle');
+assert(panelSource.includes('Copiar selecionados'), 'approved CRLV must preserve selective copy');
+assert(panelSource.includes('selectableApprovedFields'), 'one-click copy must derive only server-applicable approved fields');

@@ -108,8 +108,18 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
     });
   };
 
-  const applySelected = async () => {
-    if (!approvedExtraction || selectedFields.size === 0 || applying) return;
+  const selectableApprovedFields = useMemo(
+    () => REVIEW_FIELDS
+      .filter((field) =>
+        Boolean(field.vehicleKey) &&
+        (typeof reviewedValues[field.extractionKey] === 'string' || typeof reviewedValues[field.extractionKey] === 'number'),
+      )
+      .map((field) => field.extractionKey),
+    [reviewedValues],
+  );
+
+  const applyFields = async (fields: string[]) => {
+    if (!approvedExtraction || fields.length === 0 || applying) return;
     setApplying(true);
     setReviewError(null);
     setApplyNotice(null);
@@ -117,16 +127,25 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
       const result = await VehicleClient.applyApprovedCrlv(
         vehicleId,
         approvedExtraction.id,
-        Array.from(selectedFields),
+        fields,
       );
       setVehicle(result.item);
       setSelectedFields(new Set());
-      setApplyNotice(`${result.appliedFields.length} campo(s) aplicado(s) a partir do CRLV aprovado.`);
+      setApplyNotice(`${result.appliedFields.length} campo(s) copiado(s) do CRLV aprovado para o cadastro do veículo.`);
     } catch (error) {
-      setReviewError(error instanceof Error ? error.message : 'Não foi possível aplicar os campos selecionados do CRLV.');
+      setReviewError(error instanceof Error ? error.message : 'Não foi possível copiar os dados aprovados do CRLV.');
     } finally {
       setApplying(false);
     }
+  };
+
+  const applySelected = async () => {
+    if (!approvedExtraction || selectedFields.size === 0 || applying) return;
+    await applyFields(Array.from(selectedFields));
+  };
+
+  const applyAllApproved = async () => {
+    await applyFields(selectableApprovedFields);
   };
 
   return (
@@ -200,15 +219,25 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 </tbody>
               </table>
             </div>
-            <button
-              type="button"
-              disabled={applying || selectedFields.size === 0}
-              onClick={applySelected}
-              className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-            >
-              {applying ? 'Aplicando...' : `Aplicar selecionados (${selectedFields.size})`}
-            </button>
-            <p className="text-[11px] text-slate-500">O servidor relê o CRLV aprovado e aplica somente os campos selecionados; os valores não são enviados pelo navegador.</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={applying || selectableApprovedFields.length === 0}
+                onClick={applyAllApproved}
+                className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {applying ? 'Copiando...' : `Copiar todos os dados aprovados (${selectableApprovedFields.length})`}
+              </button>
+              <button
+                type="button"
+                disabled={applying || selectedFields.size === 0}
+                onClick={applySelected}
+                className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {applying ? 'Copiando...' : `Copiar selecionados (${selectedFields.size})`}
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500">Como na CNH, os dados aprovados podem ser copiados para o cadastro. O servidor relê o CRLV aprovado e aplica somente os campos autorizados; os valores não são enviados pelo navegador.</p>
             {applyNotice && <p className="text-xs font-medium text-emerald-700">{applyNotice}</p>}
           </>
         )}
