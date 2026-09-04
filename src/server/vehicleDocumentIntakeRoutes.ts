@@ -4,8 +4,17 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import {
+  VehicleDocumentIntakeAiConflictError,
+  VehicleDocumentIntakeAiNotFoundError,
+  enqueueVehicleDocumentIntake,
+} from './vehicleDocumentIntakeAiQueue';
+import {
+  dispatchDocumentAiExtractionFromEnvironment,
+  isDocumentAiRuntimeAvailableFromEnvironment,
+} from './documentAiRuntime';
 
-type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE';
+type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const WRITE_ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const DOCUMENT_TYPES = new Set(['CRLV','CRV','ATPV_E']);
@@ -46,10 +55,32 @@ function map(row: any) {
     createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(),
   };
 }
+
+function requireEmptyBody(body: unknown): void {
+  if (body === undefined || body === null) return;
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body as Record<string, unknown>).length !== 0) throw new ValidationError();
+}
+function sanitizeExtraction(item: any) {
+  return {
+    id:String(item.id),
+    attachmentId:String(item.attachmentId),
+    attachmentChecksum:String(item.attachmentChecksum),
+    status:String(item.status),
+    createdAt:new Date(item.createdAt).toISOString(),
+    updatedAt:new Date(item.updatedAt).toISOString(),
+  };
+}
+function scheduleDocumentAiExtraction(companyId:string,extractionId:string):void {
+  setImmediate(()=>{
+    void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`vehicle-intake-${extractionId}`).catch(()=>{
+      console.error('AUTOERP_VEHICLE_DOCUMENT_AI_DISPATCH_FAILURE');
+    });
+  });
+}
 function sendError(res: Response, error: unknown): void {
   if (error instanceof ValidationError) { res.status(400).json({ error: 'Invalid vehicle document intake request' }); return; }
-  if (error instanceof NotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
-  if (error instanceof ConflictError) { res.status(409).json({ error: 'Vehicle document intake conflict' }); return; }
+  if (error instanceof NotFoundError || error instanceof VehicleDocumentIntakeAiNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
+  if (error instanceof ConflictError || error instanceof VehicleDocumentIntakeAiConflictError) { res.status(409).json({ error: 'Vehicle document intake conflict' }); return; }
   console.error('AUTOERP_VEHICLE_DOCUMENT_INTAKE_FAILURE', error);
   res.status(500).json({ error: 'Vehicle document intake operation failed' });
 }
@@ -94,6 +125,22 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
       });
       res.status(result.created ? 201 : 200).json({ item: result.item });
     } catch (error) { sendError(res, error); }
+  });
+
+  app.post('/api/vehicle-document-intakes/:id/document-ai', async (req: Request, res: Response) => {
+    const principal=requirePrincipal(req,res,'PROCESS_DOCUMENT_AI'); if(!principal) return;
+    try{
+      requireEmptyBody(req.body);
+      if(!isDocumentAiRuntimeAvailableFromEnvironment()){
+        res.status(503).json({error:'Análise automática de documento veicular indisponível neste ambiente.',code:'DOCUMENT_AI_RUNTIME_UNAVAILABLE'});
+        return;
+      }
+      const intakeId=String(req.params.id||'').trim();
+      if(!intakeId) throw new ValidationError();
+      const result=await UnitOfWork.run(principal.companyId,async context=>enqueueVehicleDocumentIntake(context,principal,intakeId));
+      scheduleDocumentAiExtraction(principal.companyId,String(result.item.id));
+      res.status(result.created?201:200).json({item:sanitizeExtraction(result.item),created:result.created});
+    }catch(error){sendError(res,error);}
   });
 
   app.get('/api/vehicle-document-intakes/:id', async (req: Request, res: Response) => {
