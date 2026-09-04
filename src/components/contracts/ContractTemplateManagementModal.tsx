@@ -199,18 +199,18 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <div><h2 className="font-bold">Modelos de Contrato</h2><p className="mt-1 text-xs text-slate-500">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
+        <div><h2 className="font-bold">Modelos de Contrato</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
       <div className="grid gap-4 p-3 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <div className="flex items-center justify-between"><h3 className="text-sm font-bold">Modelos atuais</h3><Button size="sm" variant="ghost" onClick={resetForm}><FilePlus2 className="w-4 h-4" />Novo</Button></div>
-          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500">Nenhum modelo cadastrado.</div> : templates.map((item) => {
+          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300">Nenhum modelo cadastrado.</div> : templates.map((item) => {
             const fileBacked = !item.contentMarkdown.trim();
             return (
               <div key={item.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.title}</b><p className="mt-1 font-mono text-[10px] text-slate-500">{item.templateKey}</p>{fileBacked && <p className="mt-1 text-[10px] text-slate-500">Fonte: arquivo PDF/DOCX</p>}</div><Badge variant={item.isActive ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
+                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.title}</b><p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.templateKey}</p>{fileBacked && <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Fonte: arquivo PDF/DOCX</p>}</div><Badge variant={item.isActive ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={() => startVersion(item)}><History className="w-4 h-4" />Nova versão</Button>
                   {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir arquivo</Button>}
@@ -223,11 +223,11 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
         </div>
 
         <div className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-          <div><h3 className="text-sm font-bold">{editing ? `Criar nova versão de ${editing.title}` : 'Novo modelo'}</h3>{editing && <p className="mt-1 text-xs text-slate-500">A versão atual só será substituída após o arquivo da nova versão ser salvo com sucesso.</p>}</div>
+          <div><h3 className="text-sm font-bold">{editing ? `Criar nova versão de ${editing.title}` : 'Novo modelo'}</h3>{editing && <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">A versão atual só será substituída após o arquivo da nova versão ser salvo com sucesso.</p>}</div>
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
           {success && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
-          <label className="block text-xs font-semibold text-slate-600">Chave do modelo<Input value={templateKey} disabled={Boolean(editing)} onChange={(event) => setTemplateKey(event.target.value)} placeholder="locacao-padrao" /></label>
-          <label className="block text-xs font-semibold text-slate-600">Título<Input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Chave do modelo<Input value={templateKey} disabled={Boolean(editing)} onChange={(event) => setTemplateKey(event.target.value)} placeholder="locacao-padrao" /></label>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Título<Input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
 
           <div className="flex gap-2">
             <Button size="sm" variant={sourceMode === 'MARKDOWN' ? 'primary' : 'secondary'} onClick={() => { setSourceMode('MARKDOWN'); setSourceFile(null); }}>Conteúdo Markdown</Button>
@@ -236,14 +236,14 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
 
           {sourceMode === 'MARKDOWN' ? (
             <>
-              <label className="block text-xs font-semibold text-slate-600">Conteúdo Markdown<textarea className="mt-1 min-h-72 w-full rounded-lg border border-slate-200 bg-transparent p-3 font-mono text-xs dark:border-slate-700" value={content} onChange={(event) => setContent(event.target.value)} placeholder="# Contrato {{contract.number}}..." /></label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Conteúdo Markdown<textarea className="mt-1 min-h-72 w-full rounded-lg border border-slate-200 bg-transparent p-3 font-mono text-xs dark:border-slate-700" value={content} onChange={(event) => setContent(event.target.value)} placeholder="# Contrato {{contract.number}}..." /></label>
               <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/50"><b className="text-[11px]">Placeholders permitidos</b><div className="mt-2 flex flex-wrap gap-1.5">{PLACEHOLDERS.map((item) => <code key={item} className="rounded bg-white px-1.5 py-1 text-[9px] dark:bg-slate-800">{item}</code>)}</div></div>
             </>
           ) : (
             <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-              <label className="block text-xs font-semibold text-slate-600">Arquivo-fonte PDF ou DOCX<input className="mt-2 block w-full text-xs" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setSourceFile(event.target.files?.[0] || null)} /></label>
-              {sourceFile && <p className="text-xs text-slate-500">Selecionado: {sourceFile.name}</p>}
-              <p className="text-[11px] text-slate-500">O original ficará preservado nesta versão. PDF permanece como referência estática; DOCX com placeholders canônicos será ativado após validação para gerar um arquivo preenchido e revisável.</p>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Arquivo-fonte PDF ou DOCX<input className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setSourceFile(event.target.files?.[0] || null)} /></label>
+              {sourceFile && <p className="text-xs text-slate-500 dark:text-slate-300">Selecionado: {sourceFile.name}</p>}
+              <p className="text-[11px] text-slate-500 dark:text-slate-300">O original ficará preservado nesta versão. PDF permanece como referência estática; DOCX com placeholders canônicos será ativado após validação para gerar um arquivo preenchido e revisável.</p>
             </div>
           )}
 

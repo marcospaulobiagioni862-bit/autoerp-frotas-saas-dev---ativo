@@ -171,10 +171,12 @@ export function registerContractTemplateRoutes(app: Express): void {
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const existing = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, key);
         if (existing) throw new TemplateConflictError();
+        const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, key);
+        const nextVersionNumber = Math.max(...versions.map((version) => version.versionNumber), 0) + 1;
         const now = new Date().toISOString();
         const created = await tx.getContractTemplateRepo().create({
           id: randomUUID(), companyId: principal.companyId, templateKey: key, title, contentMarkdown,
-          versionNumber: 1, isCurrent: true,
+          versionNumber: nextVersionNumber, isCurrent: true,
           isActive: mode === 'FILE' ? false : body.isActive === false ? false : true,
           isArchived: false, createdBy: principal.userId, createdAt: now, updatedAt: now,
         });
