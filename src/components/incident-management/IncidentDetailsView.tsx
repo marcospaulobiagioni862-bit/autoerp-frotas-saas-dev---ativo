@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ProductionIncident,
   IncidentStatus,
@@ -37,6 +37,18 @@ export const IncidentDetailsView: React.FC<IncidentDetailsViewProps> = ({
   onClose,
   onUpdate,
 }) => {
+  useEffect(() => {
+    const appMain = document.querySelector('main') as HTMLElement | null;
+    const previousMainOverflow = appMain?.style.overflow || '';
+    const previousBodyOverflow = document.body.style.overflow;
+    if (appMain) appMain.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (appMain) appMain.style.overflow = previousMainOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, []);
+
   const [activeSubTab, setActiveSubTab] = useState<'timeline' | 'commander' | 'postmortem'>('timeline');
   const [rootCauseInput, setRootCauseInput] = useState(incident.rootCause || '');
   const [resolutionInput, setResolutionInput] = useState(incident.resolutionSummary || '');
@@ -210,8 +222,8 @@ export const IncidentDetailsView: React.FC<IncidentDetailsViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between bg-slate-50 dark:bg-slate-900/50">
           <div>
