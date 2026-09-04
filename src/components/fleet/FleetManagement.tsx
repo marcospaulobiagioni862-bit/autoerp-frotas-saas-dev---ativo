@@ -236,7 +236,10 @@ export const FleetManagement: React.FC = () => {
           {isFormOpen&&<VehicleFormModal isOpen onClose={() => { setIsFormOpen(false); setVehicleToEdit(null); }} onSuccess={loadVehicles} vehicleToEdit={vehicleToEdit}/>} 
           {selectedVehicleIdForDetails&&<VehicleDetailsModal isOpen onClose={() => setSelectedVehicleIdForDetails(null)} vehicleId={selectedVehicleIdForDetails}
             onEditRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleToEdit(v); setIsFormOpen(true); } }}
-            onRecordKmRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForKmRecord(v); } }}/>} 
+            onRecordKmRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForKmRecord(v); } }}
+            onStatusChangeRequest={(status) => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); handleStatusChangeClick(v,status); } }}
+            onSaleRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForSale(v); } }}
+            onArchiveRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForArchive(v); } }}/>} 
           {vehicleForKmRecord&&<RecordKmModal isOpen onClose={() => setVehicleForKmRecord(null)} onSuccess={loadVehicles} vehicle={vehicleForKmRecord}/>} 
         </Suspense>
       </LazyModuleErrorBoundary>
