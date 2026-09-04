@@ -135,11 +135,9 @@ export class FinanceMasterDataAuthority {
     return UnitOfWork.run(actor.companyId, async (txContext: any) => {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'VIEW_FINANCIAL', txContext);
       const tx = txContext.getRawTransaction();
-      const [accounts, methods, categories] = await Promise.all([
-        tx.select().from(financialAccounts).where(eq(financialAccounts.companyId, actor.companyId)),
-        tx.select().from(paymentMethods).where(eq(paymentMethods.companyId, actor.companyId)),
-        tx.select().from(financialCategories).where(eq(financialCategories.companyId, actor.companyId)),
-      ]);
+      const accounts = await tx.select().from(financialAccounts).where(eq(financialAccounts.companyId, actor.companyId));
+      const methods = await tx.select().from(paymentMethods).where(eq(paymentMethods.companyId, actor.companyId));
+      const categories = await tx.select().from(financialCategories).where(eq(financialCategories.companyId, actor.companyId));
       return {
         accounts: accounts.map(accountRow),
         paymentMethods: methods.map(paymentMethodRow),
