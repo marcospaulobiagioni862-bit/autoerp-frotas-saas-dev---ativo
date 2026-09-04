@@ -12,12 +12,10 @@ export class CreditCardStatementDetailAuthority {
       const statement = await repo.findStatement(actor.companyId, statementId);
       if (!statement) throw new Error('Fatura de cartão não encontrada');
 
-      const [items, payments, adjustments, credits] = await Promise.all([
-        repo.listItems(actor.companyId, statementId),
-        repo.listPayments(actor.companyId, statementId),
-        repo.listAdjustments(actor.companyId, statementId),
-        repo.listCredits(actor.companyId, statementId),
-      ]);
+      const items = await repo.listItems(actor.companyId, statementId);
+      const payments = await repo.listPayments(actor.companyId, statementId);
+      const adjustments = await repo.listAdjustments(actor.companyId, statementId);
+      const credits = await repo.listCredits(actor.companyId, statementId);
 
       const asOf = new Date().toISOString().slice(0, 10);
       return {
