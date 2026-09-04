@@ -15,6 +15,10 @@ const vehicleIntakeRoutesSource = readFileSync(new URL('../../../server/vehicleD
 const attachmentRoutesSource = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
 const vehicleIntakeClientSource = readFileSync(new URL('../../../api/vehicleDocumentIntakeClient.ts', import.meta.url), 'utf8');
 const vehicleIntakeMigrationSource = readFileSync(new URL('../../../../drizzle/0056_vehicle_document_intake_authority.sql', import.meta.url), 'utf8');
+const inspectionPanelSource = readFileSync(new URL('../VehicleInspectionPanel.tsx', import.meta.url), 'utf8');
+const inspectionRoutesSource = readFileSync(new URL('../../../server/vehicleInspectionRoutes.ts', import.meta.url), 'utf8');
+const inspectionMigrationSource = readFileSync(new URL('../../../../drizzle/0059_vehicle_inspections.sql', import.meta.url), 'utf8');
+const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
 const vehicleIntakeAiQueueSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiQueue.ts', import.meta.url), 'utf8');
 const vehicleIntakeWorkerSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiWorkerSync.ts', import.meta.url), 'utf8');
 const vehicleIntakeReviewSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiReviewSync.ts', import.meta.url), 'utf8');
@@ -121,6 +125,22 @@ assert.ok(attachmentRoutesSource.includes("status='DOCUMENT_UPLOADED'"), 'vehicl
 assert.ok(attachmentRoutesSource.includes("['CRLV','CRV','ATPV_E']"), 'pre-vehicle intake must only accept approved vehicle document classes');
 assert.ok(vehicleIntakeClientSource.includes("VehicleIntakeDocumentType = 'CRLV' | 'CRV' | 'ATPV_E'"), 'client must expose only approved initial vehicle document classes');
 assert.ok(!vehicleIntakeRoutesSource.includes('getVehicleRepo().create'), 'intake foundation must never create a Vehicle automatically');
+assert.ok(source.includes("{id:'inspections',label:'Vistorias'"), 'vehicle details must expose a dedicated inspections tab');
+assert.ok(source.includes("<VehicleInspectionPanel vehicleId={vehicle.id} currentKm={vehicle.currentKm}/>"), 'vehicle inspection tab must be linked to the current vehicle');
+assert.ok(inspectionPanelSource.includes("setType('ENTRY')") && inspectionPanelSource.includes("setType('EXIT')"), 'inspection UI must distinguish only entry versus exit type');
+assert.equal((inspectionPanelSource.match(/const ITEMS=/g) ?? []).length, 1, 'entry and exit inspections must share one checklist definition');
+for (const key of ['keyMain','keySpare','crlvPrinted','phoneHolder','jack','triangle','wheelWrench','spareTire','seatCover','ownerManual','floorMats','multimedia']) {
+  assert.ok(inspectionPanelSource.includes(`'${key}'`), `inspection checklist item missing: ${key}`);
+}
+assert.ok(inspectionPanelSource.includes("entityType=\"VehicleInspection\""), 'inspection media must attach to the inspection itself');
+assert.ok(inspectionPanelSource.includes("'video/mp4'"), 'inspection UI must permit MP4 video evidence');
+assert.ok(fileUploadSource.includes("'VehicleInspection'"), 'shared uploader must recognize inspection authority');
+assert.ok(inspectionRoutesSource.includes("inspectionType:type"), 'server must persist the explicit inspection type');
+assert.ok(inspectionRoutesSource.includes("readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT'"), 'inspection KM must integrate with odometer history');
+assert.ok(inspectionRoutesSource.includes("if(odometer<vehicle.currentKm)"), 'inspection must reject KM regression');
+assert.ok(inspectionMigrationSource.includes("inspection_type IN ('ENTRY','EXIT')"), 'database must restrict inspections to entry or exit');
+assert.ok(inspectionMigrationSource.includes('ENABLE ROW LEVEL SECURITY') && inspectionMigrationSource.includes('FORCE ROW LEVEL SECURITY'), 'inspection table must remain tenant isolated');
+
 assert.ok(vehicleIntakeRoutesSource.includes("/api/vehicle-document-intakes/:id/document-ai"), 'vehicle intake must expose a dedicated Document AI queue action');
 assert.ok(vehicleIntakeRoutesSource.includes('enqueueVehicleDocumentIntake'), 'vehicle intake route must queue through server authority');
 assert.ok(vehicleIntakeRoutesSource.includes('dispatchDocumentAiExtractionFromEnvironment'), 'vehicle intake must dispatch through the configured Document AI runtime');
