@@ -23,13 +23,14 @@ interface ContractDetailsModalProps {
   companyId: string;
   onRefresh: () => void;
   onOpenReceiptModal?: (receivableId: string) => void;
+  initialFocus?: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL';
 }
 
 type Tab = 'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT';
 const bridge = new ContractLegacyDetailsBridge();
 const EMPTY_SETTLEMENT_OPTIONS: SettlementOptions = { accounts: [], paymentMethods: [] };
 
-export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal }) => {
+export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal, initialFocus = 'OVERVIEW' }) => {
   const versionRef = useRef(0);
   const [tab, setTab] = useState<Tab>('OVERVIEW');
   const [contract, setContract] = useState<Contract | null>(null);
@@ -92,7 +93,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   };
 
   useEffect(() => {
-    setTab('OVERVIEW');
+    setTab(initialFocus === 'FINANCIAL' ? 'FINANCIAL' : 'OVERVIEW');
     setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
     setIncomeCategories([]); setIncomeCategoryId('');
     setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');
@@ -100,7 +101,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     setError(null); setSuccess(null);
     if (isOpen && contractId) void load();
     return () => { versionRef.current += 1; };
-  }, [isOpen, contractId, companyId]);
+  }, [isOpen, contractId, companyId, initialFocus]);
 
   const action = async (task: () => Promise<unknown>, message: string) => {
     setActionLoading(true); setError(null); setSuccess(null);
@@ -200,7 +201,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       <div className="p-3">
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
-            <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} onChanged={async () => { await load(); onRefresh(); }} />
+            <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} focusOnOpen={initialFocus === 'PDF_SIGNATURE'} onChanged={async () => { await load(); onRefresh(); }} />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado" value={formatCurrencyBRL(totalBilled)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
             <div className="grid gap-4 md:grid-cols-2">
               <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
