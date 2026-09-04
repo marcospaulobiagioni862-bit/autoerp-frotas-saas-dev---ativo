@@ -10,7 +10,7 @@ export interface ApprovedCnhDriverDraft {
   cnhEar?: boolean;
 }
 
-const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'E']);
+const CNH_CATEGORIES = new Set(['A', 'B', 'AB', 'C', 'D', 'AD', 'E']);
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
