@@ -3,7 +3,7 @@ import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
-import { Bot, Download, Eye, File, History, RotateCcw, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Bot, Download, Eye, File, History, Printer, RotateCcw, Send, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
@@ -16,6 +16,7 @@ interface AttachmentListProps {
   onDocumentAiRequested?: () => void;
   attachmentStatuses?: Record<string, DocumentAiAttachmentStatus>;
   attachmentStatusesUnavailable?: boolean;
+  showPdfActions?: boolean;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -38,6 +39,7 @@ export function AttachmentList({
   onDocumentAiRequested,
   attachmentStatuses = {},
   attachmentStatusesUnavailable = false,
+  showPdfActions = false,
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -134,6 +136,53 @@ export function AttachmentList({
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao baixar arquivo.');
+    }
+  };
+
+  const handlePrintPdf = async (id: string) => {
+    const item = getAvailableAttachment(id);
+    if (!item || item.mimeType !== 'application/pdf') return;
+    try {
+      const blob = await AttachmentClient.content(id);
+      const url = URL.createObjectURL(blob);
+      const frame = document.createElement('iframe');
+      frame.style.position = 'fixed';
+      frame.style.right = '0';
+      frame.style.bottom = '0';
+      frame.style.width = '0';
+      frame.style.height = '0';
+      frame.style.border = '0';
+      frame.src = url;
+      document.body.appendChild(frame);
+      frame.onload = () => {
+        frame.contentWindow?.focus();
+        frame.contentWindow?.print();
+        window.setTimeout(() => {
+          frame.remove();
+          URL.revokeObjectURL(url);
+        }, 60_000);
+      };
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao imprimir PDF.');
+    }
+  };
+
+  const handleSharePdf = async (id: string) => {
+    const item = getAvailableAttachment(id);
+    if (!item || item.mimeType !== 'application/pdf') return;
+    try {
+      const blob = await AttachmentClient.content(id);
+      const file = new File([blob], item.fileName, { type: 'application/pdf' });
+      const shareData = { files: [file], title: item.fileName };
+      if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+        await navigator.share(shareData);
+        return;
+      }
+      await handleDownload(id);
+      alert('O navegador não oferece envio direto de arquivos. O PDF foi baixado para você anexar no canal desejado.');
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      alert(err instanceof Error ? err.message : 'Erro ao enviar PDF.');
     }
   };
 
@@ -269,6 +318,12 @@ export function AttachmentList({
                   )}
                   <Button variant="ghost" size="sm" onClick={() => void handlePreview(att.id)} disabled={!contentAvailable} title="Visualizar"><Eye className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => void handleDownload(att.id)} disabled={!contentAvailable} title="Baixar"><Download className="h-4 w-4" /></Button>
+                  {showPdfActions && att.mimeType === 'application/pdf' && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => void handlePrintPdf(att.id)} disabled={!contentAvailable} title="Imprimir PDF"><Printer className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleSharePdf(att.id)} disabled={!contentAvailable} title="Enviar PDF"><Send className="h-4 w-4" /></Button>
+                    </>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => setDeleteId(att.id)} className="text-red-500 hover:text-red-700" title="Arquivar"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </li>

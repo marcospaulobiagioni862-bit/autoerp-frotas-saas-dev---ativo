@@ -408,7 +408,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={driver ? `Motorista — ${driver.fullName}` : 'Detalhes do Motorista'}
-      maxWidth="max-w-5xl"
+      maxWidth="4xl"
     >
       {loading ? (
         <div className="space-y-4 p-4">
@@ -453,14 +453,14 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
             </div>
           )}
 
-          <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto gap-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 ${activeTab === tab.id ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500'}`}
+                  className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-xs font-semibold ${activeTab === tab.id ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30' : 'border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50'}`}
                 >
                   <Icon className="w-4 h-4" />{tab.label}
                 </button>
@@ -520,7 +520,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               </div>
               <Card className="p-4 space-y-3">
                 <h4 className="text-xs font-bold uppercase text-slate-400">Arquivos do Motorista — authority do servidor</h4>
-                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList entityType="Driver" entityId={driver.id} /></div>
+                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList entityType="Driver" entityId={driver.id} showPdfActions /></div>
               </Card>
             </div>
           )}
