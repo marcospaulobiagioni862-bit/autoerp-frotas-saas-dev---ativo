@@ -51,7 +51,7 @@ function validateDriver(value: unknown): Driver {
     if (item[key] !== undefined && typeof item[key] !== 'string') throw new Error('Invalid Driver payload');
   }
   if (item.cnhEar !== undefined && typeof item.cnhEar !== 'boolean') throw new Error('Invalid Driver payload');
-  for (const key of ['complement', 'residenceTypeOther', 'condominiumName', 'blockTower', 'unit', 'floor', 'reference'] as const) {
+  for (const key of ['complement', 'residenceTypeOther', 'condominiumName', 'blockTower', 'tower', 'unit', 'floor', 'reference'] as const) {
     if (address[key] !== undefined && typeof address[key] !== 'string') throw new Error('Invalid Driver payload');
   }
   if (address.residenceType !== undefined && (typeof address.residenceType !== 'string' || !RESIDENCE_TYPES.has(address.residenceType))) {
@@ -83,6 +83,7 @@ export interface DriverAddressInput {
   residenceTypeOther?: string;
   condominiumName?: string;
   blockTower?: string;
+  tower?: string;
   unit?: string;
   floor?: string;
   reference?: string;
