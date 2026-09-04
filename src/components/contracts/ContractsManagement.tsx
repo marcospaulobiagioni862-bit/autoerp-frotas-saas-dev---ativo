@@ -33,6 +33,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
   const [templateManagerOpen, setTemplateManagerOpen] = useState(false);
   const [contractToEdit, setContractToEdit] = useState<Contract | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [detailsFocus, setDetailsFocus] = useState<'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL'>('OVERVIEW');
 
   const loadData = async () => {
     const version = ++requestVersionRef.current;
@@ -94,8 +95,9 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     }
   };
 
-  const openFinancialDetails = (id: string) => {
+  const openContractDetails = (id: string, focus: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL' = 'OVERVIEW') => {
     setSelectedContractId(id);
+    setDetailsFocus(focus);
     setDetailsOpen(true);
   };
   const handleClose = (id: string) => {
@@ -215,11 +217,11 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                       <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{item.status}</Badge></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5 flex-wrap">
-                          <Button size="sm" variant="ghost" onClick={() => openFinancialDetails(item.id)}><Eye className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="ghost" title="Visualizar contrato" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4" /></Button>
                           {item.status === ContractStatus.DRAFT && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" onClick={() => openFinancialDetails(item.id)}>Ativar / Categoria</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => openFinancialDetails(item.id)}>PDF / Assinatura</Button>}
-                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" onClick={() => openFinancialDetails(item.id)}>Faturar / Categoria</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'OVERVIEW')}>Ativar / Categoria</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>PDF / Assinatura</Button>}
+                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" onClick={() => openContractDetails(item.id, 'FINANCIAL')}>Faturar / Categoria</Button>}
                           {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
                           {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
                         </div>
@@ -249,6 +251,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
             contractId={selectedContractId}
             companyId={companyId}
             onRefresh={() => void loadData()}
+            initialFocus={detailsFocus}
           />}
         </Suspense>
       </LazyModuleErrorBoundary>
