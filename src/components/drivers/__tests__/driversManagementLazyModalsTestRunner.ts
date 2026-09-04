@@ -117,4 +117,25 @@ assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, '
 assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must be wired to the renewal intake');
 assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
 
-console.log('Deferred driver modals, profile photo and document upload UX regression: PASS');
+assert.match(
+  source,
+  /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/,
+  'driver list and optional vehicle enrichment must settle independently',
+);
+assert.match(
+  source,
+  /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/,
+  'driver authority failure must fail the primary list closed',
+);
+assert.match(
+  source,
+  /setDrivers\(driversResult\.value\);[\s\S]*if \(vehiclesResult\.status === 'fulfilled'\)[\s\S]*setVehiclesMap\(vMap\);[\s\S]*else[\s\S]*setVehiclesMap\(\{\}\);/,
+  'vehicle enrichment failure must preserve the already loaded driver list',
+);
+assert.doesNotMatch(
+  source,
+  /Promise\.all\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\)/,
+  'vehicle enrichment must not be able to reject the primary driver load',
+);
+
+console.log('Deferred driver modals, profile photo, document upload UX and driver list resilience regression: PASS');

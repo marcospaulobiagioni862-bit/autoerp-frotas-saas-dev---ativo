@@ -65,20 +65,30 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const loadData = async () => {
     setLoading(true);
     try {
-      const [allDrivers, allVehicles] = await Promise.all([
+      const [driversResult, vehiclesResult] = await Promise.allSettled([
         DriverClient.list(),
         VehicleClient.list(),
       ]);
-      const vMap: Record<string, string> = {};
-      allVehicles.forEach((vehicle) => {
-        vMap[vehicle.id] = `${vehicle.brand} ${vehicle.model} (${vehicle.plate})`;
-      });
-      setDrivers(allDrivers);
-      setVehiclesMap(vMap);
-    } catch (err) {
-      console.error('Erro ao carregar lista server-authoritative de motoristas:', err);
-      setDrivers([]);
-      setVehiclesMap({});
+
+      if (driversResult.status === 'rejected') {
+        console.error('Erro ao carregar lista server-authoritative de motoristas:', driversResult.reason);
+        setDrivers([]);
+        setVehiclesMap({});
+        return;
+      }
+
+      setDrivers(driversResult.value);
+
+      if (vehiclesResult.status === 'fulfilled') {
+        const vMap: Record<string, string> = {};
+        vehiclesResult.value.forEach((vehicle) => {
+          vMap[vehicle.id] = `${vehicle.brand} ${vehicle.model} (${vehicle.plate})`;
+        });
+        setVehiclesMap(vMap);
+      } else {
+        console.warn('Falha ao carregar enriquecimento de veículos para motoristas:', vehiclesResult.reason);
+        setVehiclesMap({});
+      }
     } finally {
       setLoading(false);
     }
