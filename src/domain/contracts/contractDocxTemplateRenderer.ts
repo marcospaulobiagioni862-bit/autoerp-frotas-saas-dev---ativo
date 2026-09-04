@@ -1,6 +1,6 @@
 export class ContractDocxTemplateError extends Error {}
 
-const OPTIONAL_EMPTY_PLACEHOLDER_KEYS = new Set(['driver.address.complement', 'driver.rg', 'driver.email', 'vehicle.version', 'company.tradeName', 'company.email', 'company.phone', 'company.whatsapp', 'company.address.street', 'company.address.number', 'company.address.complement', 'company.address.neighborhood', 'company.address.city', 'company.address.state', 'company.address.zipCode', 'company.address.full', 'company.legalRepresentative.name', 'company.legalRepresentative.cpf']);
+const OPTIONAL_EMPTY_PLACEHOLDER_KEYS = new Set(['driver.address.complement', 'driver.rg', 'driver.email', 'driver.maritalStatus', 'driver.profession', 'driver.motherName', 'driver.pixKey', 'vehicle.version', 'company.tradeName', 'company.email', 'company.phone', 'company.whatsapp', 'company.address.street', 'company.address.number', 'company.address.complement', 'company.address.neighborhood', 'company.address.city', 'company.address.state', 'company.address.zipCode', 'company.address.full', 'company.legalRepresentative.name', 'company.legalRepresentative.cpf']);
 
 interface TextNode {
   open: string;
