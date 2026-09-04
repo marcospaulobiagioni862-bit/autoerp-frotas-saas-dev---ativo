@@ -17,6 +17,7 @@ import { registerContractExecutionRoutes } from './contractExecutionRoutes';
 import { registerRecurringRoutes } from './recurringRoutes';
 import { registerVehicleCrlvApplyRoutes } from './vehicleCrlvApplyRoutes';
 import { registerVehicleLifecycleRoutes } from './vehicleLifecycleRoutes';
+import { registerVehicleInspectionRoutes } from './vehicleInspectionRoutes';
 import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
@@ -120,6 +121,7 @@ function appendStatusReason(existing: Vehicle, reason?: string): string | undefi
 
 export function registerVehicleRoutes(app: Express): void {
   registerCompanyProfileRoutes(app);
+  registerVehicleInspectionRoutes(app);
   registerDriverRoutes(app);
   registerContractRoutes(app);
   registerAttachmentRoutes(app);
