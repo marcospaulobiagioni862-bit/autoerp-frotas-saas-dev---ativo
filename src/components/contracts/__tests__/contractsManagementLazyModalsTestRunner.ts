@@ -7,6 +7,8 @@ const templateModal = readFileSync(new URL('../ContractTemplateManagementModal.t
 const templateRoutes = readFileSync(new URL('../../../server/contractTemplateRoutes.ts', import.meta.url), 'utf8');
 const detailsModal = readFileSync(new URL('../ContractDetailsModal.tsx', import.meta.url), 'utf8');
 const executionPanel = readFileSync(new URL('../ContractExecutionPanel.tsx', import.meta.url), 'utf8');
+const templatePolicy = readFileSync(new URL('../../../domain/contracts/contractTemplatePolicy.ts', import.meta.url), 'utf8');
+const executionRoutes = readFileSync(new URL('../../../server/contractExecutionRoutes.ts', import.meta.url), 'utf8');
 
 const modals = ['ContractFormModal', 'ContractDetailsModal', 'ContractTemplateManagementModal'] as const;
 
@@ -62,6 +64,20 @@ assert.match(detailsModal, /initialFocus === 'FINANCIAL' \? 'FINANCIAL' : 'OVERV
 assert.match(detailsModal, /focusOnOpen=\{initialFocus === 'PDF_SIGNATURE'\}/, 'details modal must focus the execution panel for PDF/signature');
 assert.match(executionPanel, /data-contract-section="pdf-signature"/, 'execution panel must expose a stable PDF/signature anchor');
 assert.match(executionPanel, /scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/, 'PDF/signature action must visibly navigate to its section');
+for (const placeholder of [
+  'driver.rg','driver.birthDate','driver.phone','driver.whatsapp','driver.email','driver.cnhCategory',
+  'vehicle.version','vehicle.brandModel','vehicle.yearFabrication','vehicle.yearModel','vehicle.yearDisplay',
+  'vehicle.color','vehicle.chassis','vehicle.currentKm',
+]) {
+  assert.ok(templatePolicy.includes(`'${placeholder}'`), `MoveFlex placeholder missing: ${placeholder}`);
+}
+assert.match(executionRoutes, /rg: driver\.rg \|\| ''/, 'contract snapshot must source driver RG from the server-authoritative driver');
+assert.match(executionRoutes, /cnhCategory: driver\.cnhCategory/, 'contract snapshot must source CNH category');
+assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
+assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
+assert.match(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must prefer the active standard rental template');
+assert.match(executionPanel, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'contract execution must prefer the standard rental template');
+
 
 
 assert.match(

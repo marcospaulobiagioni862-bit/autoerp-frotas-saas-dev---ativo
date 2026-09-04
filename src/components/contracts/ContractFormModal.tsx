@@ -73,7 +73,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             contractNumber: '', vehicleId: validVehicles[0]?.id || '', driverId: validDrivers[0]?.id || '',
             startDate: new Date().toISOString().slice(0, 10), endDate: '', rentalAmount: '700',
             billingPeriodicity: RecurringFrequency.WEEKLY, billingDueDayOfWeek: '1', billingDueDayOfMonth: '1',
-            securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', templateId: templateList[0]?.id || '', notes: '',
+            securityDepositAmount: '1000', franchiseKm: '1500', excessKmRate: '0.5', paymentMethodId: '', templateId: templateList.find((item) => item.templateKey === 'locacao-padrao')?.id || templateList[0]?.id || '', notes: '',
           });
         }
       })

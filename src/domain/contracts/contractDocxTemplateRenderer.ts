@@ -1,6 +1,6 @@
 export class ContractDocxTemplateError extends Error {}
 
-const OPTIONAL_EMPTY_PLACEHOLDER_KEYS = new Set(['driver.address.complement']);
+const OPTIONAL_EMPTY_PLACEHOLDER_KEYS = new Set(['driver.address.complement', 'driver.rg', 'driver.email', 'vehicle.version']);
 
 interface TextNode {
   open: string;
