@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../ContractsManagement.tsx', import.meta.url), 'utf8');
+const contractForm = readFileSync(new URL('../ContractFormModal.tsx', import.meta.url), 'utf8');
+const templateModal = readFileSync(new URL('../ContractTemplateManagementModal.tsx', import.meta.url), 'utf8');
+const templateRoutes = readFileSync(new URL('../../../server/contractTemplateRoutes.ts', import.meta.url), 'utf8');
 
 const modals = ['ContractFormModal', 'ContractDetailsModal', 'ContractTemplateManagementModal'] as const;
 
@@ -48,6 +51,32 @@ assert.doesNotMatch(
   source,
   /error\.(?:message|stack)|String\(error\)/,
   'contract modal fallback must not expose raw errors',
+);
+
+assert.match(
+  templateRoutes,
+  /findVersions\(principal\.companyId, key\)[\s\S]*Math\.max\(\.\.\.versions\.map\(\(version\) => version\.versionNumber\), 0\) \+ 1/,
+  'recreating a template key with historical versions must allocate the next version instead of colliding with v1',
+);
+assert.match(
+  contractForm,
+  /dark:text-slate-200/,
+  'contract form labels must remain readable in dark mode',
+);
+assert.match(
+  contractForm,
+  /dark:text-slate-300/,
+  'contract attachment helper text must remain readable in dark mode',
+);
+assert.match(
+  templateModal,
+  /Anexar PDF\/DOCX/,
+  'template modal must expose the file-source action explicitly',
+);
+assert.match(
+  templateModal,
+  /dark:bg-slate-950\/50 dark:text-slate-200/,
+  'template file input must have an explicit readable dark-mode surface',
 );
 
 console.log('Deferred contract modals regression: PASS');
