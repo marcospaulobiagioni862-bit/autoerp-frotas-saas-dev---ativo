@@ -7,8 +7,8 @@ export interface ModalContainerProps {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | string;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | string;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | string;
 }
 
 export const ModalContainer: React.FC<ModalContainerProps> = ({
@@ -56,6 +56,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
     '2xl': 'max-w-2xl',
     '4xl': 'max-w-4xl',
     '5xl': 'max-w-5xl',
+    '6xl': 'max-w-6xl',
     'max-w-sm': 'max-w-sm',
     'max-w-md': 'max-w-md',
     'max-w-lg': 'max-w-lg',
@@ -63,6 +64,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
     'max-w-2xl': 'max-w-2xl',
     'max-w-4xl': 'max-w-4xl',
     'max-w-5xl': 'max-w-5xl',
+    'max-w-6xl': 'max-w-6xl',
   };
 
   const widthClass = maxWidthStyles[resolvedWidth as string] || maxWidthStyles.lg;
@@ -72,7 +74,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       aria-modal="true"
       role="dialog"
       aria-labelledby="modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden bg-slate-900/60 backdrop-blur-xs transition-opacity"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 overflow-hidden bg-slate-900/60 backdrop-blur-xs transition-opacity"
     >
       <div
         className="fixed inset-0"
@@ -81,9 +83,9 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       />
 
       <div
-        className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative w-full ${widthClass} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
       >
-        <div className="flex items-start justify-between p-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex items-start justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
           <div>
             <h2 id="modal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">
               {title}
@@ -103,7 +105,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="p-4 overflow-y-auto space-y-3">
           {children}
         </div>
       </div>
