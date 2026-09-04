@@ -27,7 +27,6 @@ export interface DriverAddress {
   residenceTypeOther?: string;
   condominiumName?: string;
   blockTower?: string;
-  tower?: string;
   unit?: string;
   floor?: string;
   reference?: string;
