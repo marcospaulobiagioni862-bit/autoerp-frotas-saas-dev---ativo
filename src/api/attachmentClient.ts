@@ -56,6 +56,7 @@ export interface AttachmentUploadInput {
     | 'Vehicle'
     | 'Driver'
     | 'DriverDocumentIntake'
+    | 'VehicleDocumentIntake'
     | 'Contract'
     | 'ContractTemplate'
     | 'HealthAndEmergency'

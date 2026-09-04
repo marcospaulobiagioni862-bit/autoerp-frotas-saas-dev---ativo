@@ -12,6 +12,7 @@ import {
 } from './attachmentStorage';
 import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
 import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
+import {registerVehicleDocumentIntakeRoutes} from './vehicleDocumentIntakeRoutes';
 
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -31,7 +32,7 @@ function detectedMimeType(bytes:Buffer):string|undefined{
   }
   return undefined;
 }
-const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
+const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDocumentIntake','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
@@ -71,6 +72,21 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
   if(entityType==='MaintenanceWorkOrder'){const item=await tx.getWorkOrderRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='Insurance'){const item=await tx.getInsuranceRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
   if(entityType==='Tracker'){const item=await tx.getTrackerRepo().findByIdForCompany(principal.companyId,entityId);if(!item)throw new AttachmentNotFoundError();return;}
+  if(entityType==='VehicleDocumentIntake'){
+    const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+    const result:any=await raw.execute(sql`
+      SELECT created_by,status,expires_at,attachment_id,document_type
+      FROM vehicle_document_intakes
+      WHERE company_id=${principal.companyId} AND id=${entityId}
+      LIMIT 1
+    `);
+    const item=result.rows?.[0];
+    if(!item||String(item.created_by)!==principal.userId)throw new AttachmentNotFoundError();
+    const status=String(item.status),expiresAt=new Date(item.expires_at).getTime();
+    if(status==='ARCHIVED'||status==='CONSUMED'||!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw new AttachmentNotFoundError();
+    if(write&&(status!=='DRAFT'||item.attachment_id))throw new AttachmentForbiddenError();
+    return;
+  }
   if(entityType==='DriverDocumentIntake'){
     const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
     const result:any=await raw.execute(sql`
@@ -100,6 +116,7 @@ function auditState(item:FileAttachment):string{return JSON.stringify({entityTyp
 
 export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStorage=createAttachmentStorageFromEnvironment()):void{
   registerDriverDocumentIntakeRoutes(app);
+  registerVehicleDocumentIntakeRoutes(app);
   app.get('/api/attachments/storage/status',(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
     const status=storage.getConfiguration();
@@ -108,7 +125,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
   app.get('/api/attachments',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
     const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'',entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';
-    try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake');});res.json({items});}catch(error){sendAttachmentError(res,error);}
+    try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');});res.json({items});}catch(error){sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});res.json({item});}catch(error){sendAttachmentError(res,error);}});
   app.post('/api/attachments',express.raw({type:()=>true,limit:MAX_ATTACHMENT_BYTES}),async(req:Request,res:Response)=>{
@@ -116,6 +133,10 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     try{
       const entityType=header(req,'x-autoerp-entity-type',true)!,entityId=header(req,'x-autoerp-entity-id',true)!,documentType=header(req,'x-autoerp-document-type'),fileName=validateFilename(header(req,'x-autoerp-file-name',true)!);
       if(entityType==='DriverDocumentIntake'&&documentType?.trim().toUpperCase()!=='CNH')throw new AttachmentValidationError('Driver intake requires CNH');
+      if(entityType==='VehicleDocumentIntake'){
+        const normalizedDocumentType=String(documentType||'').trim().toUpperCase().replace(/[-/ ]/g,'_');
+        if(!['CRLV','CRV','ATPV_E'].includes(normalizedDocumentType))throw new AttachmentValidationError('Vehicle intake requires CRLV, CRV or ATPV_E');
+      }
       if(entityType==='ContractTemplate'&&documentType?.trim().toUpperCase()!=='CONTRACT_TEMPLATE_SOURCE')throw new AttachmentValidationError('Contract template requires source document type');
       const description=header(req,'x-autoerp-description'),issueDate=optionalIsoDate(header(req,'x-autoerp-issue-date'),'issueDate'),expirationDate=optionalIsoDate(header(req,'x-autoerp-expiration-date'),'expirationDate');
       const mimeType=String(req.get('content-type')||'').split(';',1)[0].trim().toLowerCase();if(!ALLOWED_MIME_TYPES.has(mimeType))throw new AttachmentValidationError('Invalid mime type');
@@ -131,6 +152,22 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
           if(existing.some((candidate:FileAttachment)=>!candidate.isArchived&&candidate.documentType==='CONTRACT_TEMPLATE_SOURCE'))throw new AttachmentForbiddenError();
         }
         const created=await tx.getAttachmentRepo().create({id,companyId:principal.companyId,entityName:entityType,entityType,entityId,documentType,fileName,fileSize:stored.fileSize,mimeType,uploadedBy:principal.name,storageProvider:storage.provider,storageKey:stored.storageKey,checksum:stored.checksum,createdBy:principal.userId,isArchived:false,contentState:'AVAILABLE',description,issueDate,expirationDate,createdAt:now});
+        if(entityType==='VehicleDocumentIntake'){
+          const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+          const linked:any=await raw.execute(sql`
+            UPDATE vehicle_document_intakes
+            SET attachment_id=${created.id},status='DOCUMENT_UPLOADED',updated_at=${now}
+            WHERE company_id=${principal.companyId}
+              AND id=${entityId}
+              AND created_by=${principal.userId}
+              AND status='DRAFT'
+              AND attachment_id IS NULL
+              AND expires_at>NOW()
+            RETURNING id
+          `);
+          if(!linked.rows?.[0])throw new AttachmentForbiddenError();
+          await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'VehicleDocumentIntake',entityId,action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,newState:JSON.stringify({event:'ATTACH_DOCUMENT',attachmentId:created.id,status:'DOCUMENT_UPLOADED'}),timestamp:now});
+        }
         if(entityType==='DriverDocumentIntake'){
           const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
           const linked:any=await raw.execute(sql`
