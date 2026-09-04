@@ -10,5 +10,8 @@ assert.match(driverDetails, /showPdfActions/, 'driver document attachments must 
 assert.match(attachmentList, /Imprimir PDF/, 'attachment list must expose print action for PDFs');
 assert.match(attachmentList, /Enviar PDF/, 'attachment list must expose send/share action for PDFs');
 assert.match(attachmentList, /showPdfActions && att\.mimeType === 'application\/pdf'/, 'PDF actions must remain opt-in and PDF-only');
+assert.match(attachmentList, /flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between/, 'document rows must stack safely on narrow layouts');
+assert.match(attachmentList, /flex flex-wrap items-center justify-end gap-1/, 'document action controls must wrap instead of forcing horizontal overflow');
+
 
 console.log('Driver details document UX regression PASS');
