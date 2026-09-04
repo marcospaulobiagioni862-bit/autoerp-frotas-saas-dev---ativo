@@ -279,7 +279,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none h-full">
+    <aside className="w-64 h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
       <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">
           AutoERP Fleet Manager
@@ -295,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <nav className="flex-1 p-3 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="flex-1 min-h-0 p-3 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
             <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
@@ -401,7 +401,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop sidebar */}
-      <div className="hidden md:block h-full">
+      <div className="hidden md:block h-full min-h-0">
         {sidebarContent}
       </div>
 
