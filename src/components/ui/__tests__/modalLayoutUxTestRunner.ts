@@ -23,3 +23,17 @@ assert.match(vehicleDetails, /grid grid-cols-2 gap-2 border-b pb-3/, 'vehicle de
 assert.match(archivedVehicle, /grid grid-cols-2 gap-2 border-b pb-3/, 'archived vehicle tabs must use a responsive grid');
 
 console.log('Modal layout UX regression PASS');
+
+const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
+const productionSidebar = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
+
+assert.match(
+  app,
+  /overflow-y-auto overflow-x-hidden \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
+  'root content scrollbar must remain functional but visually hidden',
+);
+assert.match(
+  productionSidebar,
+  /overflow-y-auto overflow-x-hidden overscroll-contain \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
+  'production sidebar scrollbar must remain functional but visually hidden',
+);
