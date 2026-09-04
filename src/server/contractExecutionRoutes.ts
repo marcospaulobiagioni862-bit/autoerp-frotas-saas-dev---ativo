@@ -79,13 +79,13 @@ interface ContractSnapshot {
     billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
   };
   driver: {
-    id: string; name: string; cpf: string; cnh: string; cnhExpiration: string;
+    id: string; name: string; cpf: string; rg: string; birthDate: string; phone: string; whatsapp: string; email: string; cnh: string; cnhCategory: string; cnhExpiration: string;
     address: {
       street: string; number: string; complement: string; neighborhood: string;
       city: string; state: string; zipCode: string; full: string;
     };
   };
-  vehicle: { id: string; plate: string; brand: string; model: string; renavam: string };
+  vehicle: { id: string; plate: string; brand: string; model: string; version: string; brandModel: string; yearFabrication: number; yearModel: number; yearDisplay: string; color: string; renavam: string; chassis: string; currentKm: number };
   template: { id: string; templateKey: string; versionNumber: number; title: string };
 }
 
@@ -124,7 +124,13 @@ function makeSnapshot(
       id: driver.id,
       name: driver.fullName,
       cpf: driver.cpf,
+      rg: driver.rg || '',
+      birthDate: driver.birthDate,
+      phone: driver.phone,
+      whatsapp: driver.whatsapp,
+      email: driver.email || '',
       cnh: driver.cnhNumber,
+      cnhCategory: driver.cnhCategory,
       cnhExpiration: driver.cnhExpiration,
       address: {
         street: driver.address.street,
@@ -142,7 +148,15 @@ function makeSnapshot(
       plate: vehicle.plate,
       brand: vehicle.brand,
       model: vehicle.model,
+      version: vehicle.version || '',
+      brandModel: [vehicle.brand, vehicle.model, vehicle.version].filter(Boolean).join(' '),
+      yearFabrication: vehicle.yearFabrication,
+      yearModel: vehicle.yearModel,
+      yearDisplay: `${vehicle.yearFabrication}/${vehicle.yearModel}`,
+      color: vehicle.color,
       renavam: vehicle.renavam,
+      chassis: vehicle.chassis,
+      currentKm: vehicle.currentKm,
     },
     template: {
       id: template.id,
@@ -167,7 +181,13 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'contract.excessKmRate': formatMoney(snapshot.contract.excessKmRate),
     'driver.name': snapshot.driver.name,
     'driver.cpf': snapshot.driver.cpf,
+    'driver.rg': snapshot.driver.rg,
+    'driver.birthDate': snapshot.driver.birthDate,
+    'driver.phone': snapshot.driver.phone,
+    'driver.whatsapp': snapshot.driver.whatsapp,
+    'driver.email': snapshot.driver.email,
     'driver.cnh': snapshot.driver.cnh,
+    'driver.cnhCategory': snapshot.driver.cnhCategory,
     'driver.cnhExpiration': snapshot.driver.cnhExpiration,
     'driver.address.street': snapshot.driver.address.street,
     'driver.address.number': snapshot.driver.address.number,
@@ -180,7 +200,15 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'vehicle.plate': snapshot.vehicle.plate,
     'vehicle.brand': snapshot.vehicle.brand,
     'vehicle.model': snapshot.vehicle.model,
+    'vehicle.version': snapshot.vehicle.version,
+    'vehicle.brandModel': snapshot.vehicle.brandModel,
+    'vehicle.yearFabrication': String(snapshot.vehicle.yearFabrication),
+    'vehicle.yearModel': String(snapshot.vehicle.yearModel),
+    'vehicle.yearDisplay': snapshot.vehicle.yearDisplay,
+    'vehicle.color': snapshot.vehicle.color,
     'vehicle.renavam': snapshot.vehicle.renavam,
+    'vehicle.chassis': snapshot.vehicle.chassis,
+    'vehicle.currentKm': String(snapshot.vehicle.currentKm),
   };
 }
 
