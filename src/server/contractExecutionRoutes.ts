@@ -83,7 +83,7 @@ interface ContractSnapshot {
     billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
   };
   driver: {
-    id: string; name: string; cpf: string; rg: string; birthDate: string; phone: string; whatsapp: string; email: string; cnh: string; cnhCategory: string; cnhExpiration: string;
+    id: string; name: string; cpf: string; rg: string; birthDate: string; phone: string; whatsapp: string; email: string; maritalStatus: string; profession: string; motherName: string; pixKey: string; cnh: string; cnhCategory: string; cnhExpiration: string;
     address: {
       street: string; number: string; complement: string; neighborhood: string;
       city: string; state: string; zipCode: string; full: string;
@@ -137,6 +137,10 @@ function makeSnapshot(
       phone: driver.phone,
       whatsapp: driver.whatsapp,
       email: driver.email || '',
+      maritalStatus: driver.maritalStatus || '',
+      profession: driver.profession || '',
+      motherName: driver.motherName || '',
+      pixKey: driver.pixKey || '',
       cnh: driver.cnhNumber,
       cnhCategory: driver.cnhCategory,
       cnhExpiration: driver.cnhExpiration,
@@ -208,6 +212,10 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'driver.phone': snapshot.driver.phone,
     'driver.whatsapp': snapshot.driver.whatsapp,
     'driver.email': snapshot.driver.email,
+    'driver.maritalStatus': snapshot.driver.maritalStatus,
+    'driver.profession': snapshot.driver.profession,
+    'driver.motherName': snapshot.driver.motherName,
+    'driver.pixKey': snapshot.driver.pixKey,
     'driver.cnh': snapshot.driver.cnh,
     'driver.cnhCategory': snapshot.driver.cnhCategory,
     'driver.cnhExpiration': snapshot.driver.cnhExpiration,
