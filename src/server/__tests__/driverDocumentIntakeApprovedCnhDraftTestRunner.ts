@@ -61,6 +61,13 @@ const distinctDates = projectApprovedCnhDriverDraft({
     expirationDate: '13/01/2036',
   },
 });
+const combinedCategory = projectApprovedCnhDriverDraft({
+  status: 'APPROVED',
+  detectedDocumentType: 'CNH',
+  proposedFields: { ...proposed, category: 'A/D' },
+});
+assert.equal(combinedCategory.cnhCategory, 'AD', 'Gemini A/D must normalize to the canonical AD category');
+
 assert.equal(distinctDates.cnhIssueDate, '2026-01-15', 'data de emissão deve permanecer separada');
 assert.equal(distinctDates.cnhExpiration, '2036-01-13', 'validade deve vir exclusivamente de expirationDate');
 assert.notEqual(distinctDates.cnhIssueDate, distinctDates.cnhExpiration, 'emissão nunca deve substituir a validade');
@@ -128,6 +135,9 @@ assert.deepEqual(projectApprovedCnhDriverDraft({
   cnhExpiration: '2032-02-02',
   cnhEar: false,
 });
+
+const driverFormSource = readFileSync(new URL('../../components/drivers/DriverFormModal.tsx', import.meta.url), 'utf8');
+assert.match(driverFormSource, /<option value="AD">A\/D \(Moto \+ Ônibus\/Vans\)<\/option>/, 'driver form must expose A/D while storing canonical AD');
 
 const modalSource = readFileSync(new URL('../../components/drivers/DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
 const approvedDraftRead = modalSource.indexOf('const approved = await DriverDocumentIntakeClient.getApprovedCnhDraft(intakeId);');
