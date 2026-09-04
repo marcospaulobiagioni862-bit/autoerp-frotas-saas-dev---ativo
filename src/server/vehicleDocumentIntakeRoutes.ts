@@ -19,6 +19,9 @@ const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPER
 const WRITE_ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const DOCUMENT_TYPES = new Set(['CRLV','CRV','ATPV_E']);
 const TTL_MS = 24 * 60 * 60 * 1000;
+const APPROVED_DRAFT_FIELDS = new Set([
+  'plate','renavam','chassis','brand','model','manufactureYear','modelYear','fuel','ownerName',
+]);
 
 class ValidationError extends Error {}
 class NotFoundError extends Error {}
@@ -69,6 +72,61 @@ function sanitizeExtraction(item: any) {
     createdAt:new Date(item.createdAt).toISOString(),
     updatedAt:new Date(item.updatedAt).toISOString(),
   };
+}
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function projectApprovedVehicleDraft(proposedFields: unknown, corrections: unknown): Record<string, string | number> {
+  const merged = { ...record(proposedFields), ...record(corrections) };
+  const projected: Record<string, string | number> = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (!APPROVED_DRAFT_FIELDS.has(key)) continue;
+    if (typeof value === 'string') {
+      const clean = value.trim();
+      if (clean) projected[key] = clean;
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      projected[key] = value;
+    }
+  }
+  return projected;
+}
+async function loadApprovedVehicleDraft(context: any, principal: AuthenticatedPrincipal, intakeId: string) {
+  const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Raw tenant transaction unavailable');
+  const result: any = await tx.execute(sql`
+    SELECT
+      intake.status AS intake_status,
+      intake.document_type,
+      intake.attachment_id,
+      intake.approved_extraction_id,
+      extraction.id AS extraction_id,
+      extraction.attachment_id AS extraction_attachment_id,
+      extraction.status AS extraction_status,
+      extraction.detected_document_type,
+      extraction.proposed_fields,
+      extraction.corrections
+    FROM vehicle_document_intakes intake
+    JOIN document_ai_extractions extraction
+      ON extraction.company_id = intake.company_id
+     AND extraction.id = intake.approved_extraction_id
+    WHERE intake.company_id = ${principal.companyId}
+      AND intake.id = ${intakeId}
+      AND intake.created_by = ${principal.userId}
+    LIMIT 1
+  `);
+  const row = result.rows?.[0];
+  if (!row) throw new NotFoundError();
+  const expectedType = String(row.document_type || '').toUpperCase();
+  if (
+    String(row.intake_status) !== 'APPROVED' ||
+    !row.attachment_id || !row.approved_extraction_id ||
+    String(row.approved_extraction_id) !== String(row.extraction_id) ||
+    String(row.attachment_id) !== String(row.extraction_attachment_id) ||
+    String(row.extraction_status) !== 'APPROVED' ||
+    String(row.detected_document_type || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType
+  ) throw new ConflictError();
+  const fields = projectApprovedVehicleDraft(row.proposed_fields, row.corrections);
+  if (Object.keys(fields).length === 0) throw new ConflictError();
+  return { documentType: expectedType, fields };
 }
 function scheduleDocumentAiExtraction(companyId:string,extractionId:string):void {
   setImmediate(()=>{
@@ -141,6 +199,16 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
       scheduleDocumentAiExtraction(principal.companyId,String(result.item.id));
       res.status(result.created?201:200).json({item:sanitizeExtraction(result.item),created:result.created});
     }catch(error){sendError(res,error);}
+  });
+
+  app.get('/api/vehicle-document-intakes/:id/approved-draft', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'VIEW_VEHICLE'); if (!principal) return;
+    try {
+      const intakeId = String(req.params.id || '').trim();
+      if (!intakeId) throw new ValidationError();
+      const draft = await UnitOfWork.run(principal.companyId, async (context) => loadApprovedVehicleDraft(context, principal, intakeId));
+      res.json({ draft });
+    } catch (error) { sendError(res, error); }
   });
 
   app.get('/api/vehicle-document-intakes/:id', async (req: Request, res: Response) => {
