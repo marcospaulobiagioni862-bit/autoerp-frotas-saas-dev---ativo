@@ -87,6 +87,20 @@ export const OperationalWorkflowCenterView: React.FC = () => {
   const [newAssignee, setNewAssignee] = useState<string>('');
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  useEffect(() => {
+    if (!selectedTask && !showCreateTaskModal) return;
+    const appMain = document.querySelector('main') as HTMLElement | null;
+    const previousMainOverflow = appMain?.style.overflow || '';
+    const previousBodyOverflow = document.body.style.overflow;
+    if (appMain) appMain.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (appMain) appMain.style.overflow = previousMainOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [selectedTask, showCreateTaskModal]);
+
+
   const [blockReasonInput, setBlockReasonInput] = useState<string>('');
   const [resolutionInput, setResolutionInput] = useState<string>('');
   const [evidenceContentInput, setEvidenceContentInput] = useState<string>('');
@@ -891,8 +905,8 @@ export const OperationalWorkflowCenterView: React.FC = () => {
           {/* Selected Task Detail Drawer / Modal */}
           {selectedTask && (
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col">
+                <div className="flex justify-between items-start border-b border-slate-100 p-6 pb-3 shrink-0">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getPriorityBadgeClass(selectedTask.priority)}`}>
@@ -905,6 +919,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                   <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600">✕</button>
                 </div>
 
+                <div className="flex-1 overflow-y-auto p-6 pt-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-3 rounded-lg">
                   <div><span className="font-semibold text-slate-500">Categoria:</span> {selectedTask.category}</div>
                   <div><span className="font-semibold text-slate-500">Status:</span> {selectedTask.status}</div>
@@ -966,6 +981,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                   >
                     Fechar
                   </button>
+                </div>
                 </div>
               </div>
             </div>
