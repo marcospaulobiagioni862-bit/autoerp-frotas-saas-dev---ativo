@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { AuditAction } from '../types/enums';
+import { evaluateDocumentCompliance } from '../domain/documents/documentPolicy';
 import type { AuthenticatedPrincipal } from './auth';
 import { projectApprovedCnhDriverDraft } from './driverDocumentIntakeApprovedCnhDraft';
 
@@ -51,6 +52,92 @@ async function auditAttachmentRelink(
     action: AuditAction.UPDATE,
     previousState: JSON.stringify({ entityType: 'DriverDocumentIntake', entityId: intakeId }),
     newState: JSON.stringify({ event, entityType: 'Driver', entityId: driverId }),
+    userId: principal.userId,
+    userName: principal.name,
+    timestamp: now,
+  });
+}
+
+async function ensureDriverCnhDocumentRecord(
+  context: any,
+  principal: AuthenticatedPrincipal,
+  driver: any,
+  attachmentId: string,
+  now: string,
+): Promise<void> {
+  const documentRepo = context.getDocumentRepo?.();
+  if (!documentRepo) {
+    throw new DriverDocumentIntakePromotionConflictError('DOCUMENT_REPOSITORY_UNAVAILABLE');
+  }
+
+  const current = await documentRepo.findCurrentWithLock(
+    principal.companyId,
+    'DRIVER',
+    driver.id,
+    'CNH',
+    undefined,
+  );
+  if (current?.attachmentId === attachmentId && !current.isArchived) return;
+
+  let previous = current;
+  if (current) {
+    previous = await documentRepo.updateForCompany(principal.companyId, current.id, {
+      isCurrent: false,
+      updatedAt: now,
+    });
+    if (!previous) {
+      throw new DriverDocumentIntakePromotionConflictError('CNH_DOCUMENT_VERSION_UPDATE_FAILED');
+    }
+    await context.getAuditLogRepo().create({
+      id: randomUUID(),
+      companyId: principal.companyId,
+      entityName: 'Document',
+      entityId: current.id,
+      action: AuditAction.UPDATE,
+      previousState: JSON.stringify({ isCurrent: current.isCurrent, attachmentId: current.attachmentId ?? null }),
+      newState: JSON.stringify({ event: 'SUPERSEDE_WITH_PROMOTED_CNH', isCurrent: false, attachmentId: current.attachmentId ?? null }),
+      userId: principal.userId,
+      userName: principal.name,
+      timestamp: now,
+    });
+  }
+
+  const expirationDate = dateOnly(driver.cnhExpiration) || undefined;
+  const derived = evaluateDocumentCompliance(expirationDate, true, new Date(now));
+  const created = await documentRepo.create({
+    id: randomUUID(),
+    companyId: principal.companyId,
+    subjectType: 'DRIVER',
+    subjectId: driver.id,
+    documentType: 'CNH',
+    documentNumber: driver.cnhNumber,
+    expirationDate,
+    attachmentId,
+    versionNumber: current ? current.versionNumber + 1 : 1,
+    supersedesDocumentId: current?.id,
+    isCurrent: true,
+    isArchived: false,
+    cost: 0,
+    createdBy: principal.userId,
+    createdAt: now,
+    updatedAt: now,
+    ...derived,
+  });
+  if (!created) {
+    throw new DriverDocumentIntakePromotionConflictError('CNH_DOCUMENT_CREATE_FAILED');
+  }
+  await context.getAuditLogRepo().create({
+    id: randomUUID(),
+    companyId: principal.companyId,
+    entityName: 'Document',
+    entityId: created.id,
+    action: AuditAction.CREATE,
+    newState: JSON.stringify({
+      event: current ? 'VERSION_FROM_PROMOTED_CNH' : 'CREATE_FROM_PROMOTED_CNH',
+      attachmentId,
+      versionNumber: created.versionNumber,
+      supersedesDocumentId: created.supersedesDocumentId ?? null,
+    }),
     userId: principal.userId,
     userName: principal.name,
     timestamp: now,
@@ -128,6 +215,7 @@ export async function promoteApprovedDriverDocumentIntake(
       throw new DriverDocumentIntakePromotionConflictError('CONSUMED_BY_DIFFERENT_DRIVER');
     }
     if (attachmentOnDriver) {
+      await ensureDriverCnhDocumentRecord(context, principal, driver, attachmentId, new Date().toISOString());
       return { driverId: driver.id, attachmentId, promoted: false };
     }
     if (!attachmentOnIntake || !attachmentIsUsable) {
@@ -153,6 +241,7 @@ export async function promoteApprovedDriverDocumentIntake(
       throw new DriverDocumentIntakePromotionConflictError('CONSUMED_ATTACHMENT_RECOVERY_FAILED');
     }
     await auditAttachmentRelink(context, principal, attachmentId, intakeId, driver.id, recoveredAt, 'RECOVER_CONSUMED_DRIVER_CNH');
+    await ensureDriverCnhDocumentRecord(context, principal, driver, attachmentId, recoveredAt);
     return { driverId: driver.id, attachmentId, promoted: false };
   }
 
@@ -222,6 +311,8 @@ export async function promoteApprovedDriverDocumentIntake(
     }
     await auditAttachmentRelink(context, principal, attachmentId, intakeId, driver.id, now);
   }
+
+  await ensureDriverCnhDocumentRecord(context, principal, driver, attachmentId, now);
 
   const intakeUpdate = await tx.execute(sql`
     UPDATE driver_document_intakes
