@@ -28,7 +28,8 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
     const daysRaw=window.prompt('Intervalo em dias (vazio = sem regra por tempo):',t.intervalDays===undefined?'':String(t.intervalDays));if(daysRaw===null)return;
     const intervalKm=kmRaw.trim()===''?null:Number(kmRaw),intervalDays=daysRaw.trim()===''?null:Number(daysRaw);
     if((intervalKm!==null&&(!Number.isInteger(intervalKm)||intervalKm<=0))||(intervalDays!==null&&(!Number.isInteger(intervalDays)||intervalDays<=0))){setError('Informe intervalos positivos em KM/dias.');return;}
-    const active=window.confirm('Ativar este item do plano padrão para toda a frota?\nOK = Ativar / Cancelar = Manter desativado');
+    const statusRaw=window.prompt('Status do item (ATIVO ou INATIVO):',t.active?'ATIVO':'INATIVO');if(statusRaw===null)return;
+    const normalized=statusRaw.trim().toUpperCase();if(!['ATIVO','INATIVO'].includes(normalized)){setError('Informe ATIVO ou INATIVO.');return;}const active=normalized==='ATIVO';
     if(active&&intervalKm===null&&intervalDays===null){setError('Para ativar o item, defina intervalo por KM ou tempo.');return;}
     await run(async()=>{await MaintenancePreventiveClient.updateTemplate(t.id,{intervalKm,intervalDays,active});if(active)await MaintenancePreventiveClient.applyTemplatesToFleet();});
   };
