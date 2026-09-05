@@ -118,6 +118,7 @@ function mapWorkOrderBase(row: any): WorkOrder {
     supplierId: optionalText(row.supplier_id),
     status: String(row.status) as WorkOrderStatus,
     openedAt: iso(row.opened_at),
+    serviceDate: String(row.service_date || '').slice(0,10),
     startedAt: optionalIso(row.started_at),
     completedAt: optionalIso(row.completed_at),
     cancelledAt: optionalIso(row.cancelled_at),
@@ -351,13 +352,13 @@ export class PostgresWorkOrderRepository {
   async create(item: WorkOrder): Promise<WorkOrder> {
     await this.tx.execute(sql`
       INSERT INTO work_orders (
-        id, company_id, number, vehicle_id, supplier_id, status, opened_at, started_at,
+        id, company_id, number, vehicle_id, supplier_id, status, opened_at, service_date, started_at,
         completed_at, cancelled_at, entry_km, exit_km, description, diagnosis, notes,
         subtotal_parts, subtotal_services, subtotal_labor, discount, total,
         account_payable_id, created_by, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.number}, ${item.vehicleId}, ${item.supplierId || null},
-        ${item.status}, ${item.openedAt}, ${item.startedAt || null}, ${item.completedAt || null},
+        ${item.status}, ${item.openedAt}, ${item.serviceDate}, ${item.startedAt || null}, ${item.completedAt || null},
         ${item.cancelledAt || null}, ${item.entryKm}, ${item.exitKm ?? null}, ${item.description},
         ${item.diagnosis || null}, ${item.notes || null}, ${String(item.subtotalParts)},
         ${String(item.subtotalServices)}, ${String(item.subtotalLabor)}, ${String(item.discount)},
