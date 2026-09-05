@@ -96,9 +96,9 @@ assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must
 assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
 
 assert.match(cnhCardSource, /setAttachments\(cnh\)/, 'CNH card must retain all available driver CNH attachments');
-assert.match(cnhCardSource, /const history = useMemo\(\(\) => attachments\.slice\(1\)/, 'CNH card must reserve older files as history');
-assert.match(cnhCardSource, /Histórico de CNHs anteriores/, 'CNH card must expose the previous CNH history');
-assert.match(cnhCardSource, /history\.map\(\(item, index\)/, 'CNH card must render every prior CNH version');
+assert.match(cnhCardSource, /const history = useMemo\(\(\) => attachments\.slice\(1, 2\)/, 'CNH card must expose only the immediately previous CNH in the profile');
+assert.match(cnhCardSource, /Última CNH anterior/, 'CNH card must label only the latest previous CNH');
+assert.match(cnhCardSource, /history\.map\(\(item\)/, 'CNH card must render the single immediately previous CNH');
 assert.match(cnhCardSource, /onClick=\{\(\) => openPreview\(item\)\}/, 'historical CNH must remain previewable through authenticated content');
 assert.match(cnhCardSource, /onClick=\{\(\) => downloadOriginal\(item\)\}/, 'historical CNH must remain downloadable through authenticated content');
 assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'CNH history UI must not consume storage or tenant authority fields');
