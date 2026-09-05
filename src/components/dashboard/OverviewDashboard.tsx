@@ -452,7 +452,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
 
         <div className="p-4 bg-slate-50 dark:bg-slate-900/60 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between">
+          <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
             <div>
               <span className="text-[11px] font-semibold text-slate-500 uppercase">Total Pendente</span>
               <p className="text-xl font-black text-slate-900 dark:text-slate-100 font-mono mt-0.5">{pendings.length}</p>
@@ -460,9 +460,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div className="p-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg">
               <AlertTriangle className="w-4 h-4" />
             </div>
-          </div>
+          </button>
 
-          <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between">
+          <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
             <div>
               <span className="text-[11px] font-semibold text-rose-600 uppercase">Críticas & Bloqueadores</span>
               <p className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono mt-0.5">
@@ -472,9 +472,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div className="p-2 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-lg">
               <ShieldAlert className="w-4 h-4" />
             </div>
-          </div>
+          </button>
 
-          <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between">
+          <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
             <div>
               <span className="text-[11px] font-semibold text-amber-600 uppercase">Próximos Vencimentos</span>
               <p className="text-xl font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
@@ -484,8 +484,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-lg">
               <CheckCircle2 className="w-4 h-4" />
             </div>
-          </div>
+          </button>
         </div>
+        {pendings.length>0&&<div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          {pendings.slice(0,3).map(item=><div key={item.id} className="p-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="min-w-0"><div className="flex items-center gap-2">{item.priority==='P0'||item.priority==='P1'?<ShieldAlert className="w-4 h-4 text-rose-500 shrink-0"/>:<AlertTriangle className="w-4 h-4 text-amber-500 shrink-0"/>}<strong className="text-xs text-slate-900 dark:text-slate-100 truncate">{item.title}</strong></div><p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{item.description}</p></div>
+            <Button size="sm" variant="outline" onClick={()=>onNavigate(item.destinationTab)} icon={<ArrowRight className="w-3.5 h-3.5"/>}>Resolver</Button>
+          </div>)}
+        </div>}
       </Card>
 
       {/* Relatórios & Indicadores Gerenciais Quick Access */}
