@@ -167,6 +167,26 @@ assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.create"
 assert.ok(vehicleIntakeModalSource.includes('VehicleDocumentIntakeClient.analyze'), 'AI vehicle flow must request Gemini analysis');
 assert.ok(vehicleIntakeModalSource.includes("DocumentAiClient.review"), 'AI vehicle flow must require explicit human review');
 assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.materialize"), 'AI vehicle flow must create the Vehicle only after approval');
+assert.ok(vehicleIntakeModalSource.includes('Completar cadastro do veículo'), 'approved document must require post-CRLV completion before creation');
+for (const requiredLabel of ['Cor *','Categoria *','KM Atual *','Valor de Compra (R$) *','Valor Comercial Atual (R$) *','Aluguel Semanal (R$) *']) {
+  assert.ok(vehicleIntakeModalSource.includes(requiredLabel), `post-CRLV completion field missing: ${requiredLabel}`);
+}
+assert.ok(vehicleIntakeModalSource.includes('Nenhum valor financeiro é preenchido automaticamente pela IA.'), 'AI flow must not imply synthetic financial defaults');
+assert.ok(vehicleIntakeClientSource.includes('body:JSON.stringify(input)'), 'materialization client must submit reviewed human completion data');
+for (const invariant of [
+  "materializationInput(req.body)",
+  "color:text('color',true",
+  "category:text('category',true",
+  "currentKm=number('currentKm',true)",
+  "acquisitionValue:number('acquisitionValue',true,true)",
+  "currentValue:number('currentValue',true,true)",
+  "rentalValueBase:number('rentalValueBase',true,true)",
+  "kmValue: completion.currentKm",
+]) {
+  assert.ok(vehicleIntakeRoutesSource.includes(invariant), `post-CRLV server invariant missing: ${invariant}`);
+}
+assert.ok(!vehicleIntakeRoutesSource.includes('acquisitionValue: 0, currentValue: 0, rentalValueBase: 0'), 'materialization must not persist zero financial defaults');
+assert.ok(!vehicleIntakeRoutesSource.includes("category: DEFAULT_VEHICLE_CATEGORY"), 'materialization must not invent a generic vehicle category');
 assert.ok(vehicleIntakeModalSource.includes('a IA apenas propõe os dados'), 'UI must explain that AI does not create the vehicle automatically');
 assert.ok(vehicleIntakeModalSource.includes('Progresso estimado da análise documental'), 'vehicle AI flow must expose an accessible estimated progress bar');
 assert.ok(vehicleIntakeModalSource.includes('Percentual estimado por etapa'), 'vehicle AI flow must label progress as estimated rather than provider telemetry');
