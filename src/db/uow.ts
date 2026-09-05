@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ITransactionContext, TrustedSystemActor } from '../domain/finance/ITransactionContext';
 import {
   PostgresAccountReceivableRepository,
@@ -37,16 +38,30 @@ import { and, eq, sql } from 'drizzle-orm';
 export interface UnitOfWorkOptions {
   financialPeriodLock?: 'SHARED' | 'EXCLUSIVE';
   trustedSystemActor?: TrustedSystemActor;
+  allowNestedReuse?: boolean;
+}
+
+type ActiveUnitOfWork={companyId:string;txContext:any};
+const activeUnitOfWork=new AsyncLocalStorage<ActiveUnitOfWork>();
+
+async function applyFinancialPeriodLock(tx:any,companyId:string,mode:'SHARED'|'EXCLUSIVE'|undefined):Promise<void>{
+  if(!mode)return;
+  if(mode==='SHARED')await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(abs(hashtext(${companyId})))`);
+  else await tx.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${companyId})))`);
 }
 
 export class UnitOfWork {
   static async run<T>(companyId:string,callback:(tx:any|ITransactionContext)=>Promise<T>,options?:UnitOfWorkOptions):Promise<T>{
+    const active=activeUnitOfWork.getStore();
+    if(active&&active.companyId===companyId){
+      const raw=active.txContext.getRawTransaction?.();
+      if(!raw)throw new Error('Nested unit of work transaction unavailable');
+      await applyFinancialPeriodLock(raw,companyId,options?.financialPeriodLock);
+      return await callback(active.txContext);
+    }
     return await db.transaction(async(tx)=>{
       await tx.execute(sql`SELECT set_config('app.current_tenant', ${companyId}, true)`);
-      if(options?.financialPeriodLock){
-        if(options.financialPeriodLock==='SHARED')await tx.execute(sql`SELECT pg_advisory_xact_lock_shared(abs(hashtext(${companyId})))`);
-        else await tx.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${companyId})))`);
-      }
+      await applyFinancialPeriodLock(tx,companyId,options?.financialPeriodLock);
       const txContext:any={
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
@@ -177,6 +192,9 @@ export class UnitOfWork {
         getRawTransaction:()=>tx,
         trustedSystemActor:options?.trustedSystemActor,
       };
+      if(options?.allowNestedReuse){
+        return await activeUnitOfWork.run({companyId,txContext},async()=>await callback(txContext));
+      }
       return await callback(txContext);
     });
   }
