@@ -33,6 +33,24 @@ export interface ApprovedVehicleDocumentDraft {
   fields: Partial<Record<'plate'|'renavam'|'chassis'|'brand'|'model'|'manufactureYear'|'modelYear'|'fuel'|'ownerName', string | number>>;
 }
 
+export interface VehicleDocumentIntakeMaterializationInput {
+  color: string;
+  category: string;
+  currentKm: number;
+  nextMaintenanceKm?: number;
+  acquisitionValue: number;
+  currentValue: number;
+  rentalValueBase: number;
+  version?: string;
+  notes?: string;
+}
+
+export interface VehicleDocumentIntakeMaterializationResult {
+  vehicleId: string;
+  attachmentId: string;
+  created: boolean;
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid vehicle document intake payload');
   return value as Record<string, unknown>;
@@ -58,6 +76,16 @@ function validateApprovedDraft(value: unknown): ApprovedVehicleDocumentDraft {
   }
   return { documentType: draft.documentType as VehicleIntakeDocumentType, fields: fields as ApprovedVehicleDocumentDraft['fields'] };
 }
+function validateMaterialization(value: unknown): VehicleDocumentIntakeMaterializationResult {
+  const item = record(value);
+  if (
+    typeof item.vehicleId !== 'string' || !item.vehicleId ||
+    typeof item.attachmentId !== 'string' || !item.attachmentId ||
+    typeof item.created !== 'boolean' ||
+    !Object.keys(item).every((key) => ['vehicleId','attachmentId','created'].includes(key))
+  ) throw new Error('Invalid vehicle document intake materialization payload');
+  return item as unknown as VehicleDocumentIntakeMaterializationResult;
+}
 async function errorMessage(response: Response): Promise<string> {
   try { const payload = record(await response.json()); if (typeof payload.error === 'string') return payload.error; } catch {}
   return `Vehicle document intake request failed (${response.status})`;
@@ -80,6 +108,16 @@ export class VehicleDocumentIntakeClient {
     const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/approved-draft`, { credentials: 'include' });
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateApprovedDraft(record(await response.json()).draft);
+  }
+  static async materializeApprovedVehicle(
+    id: string,
+    input: VehicleDocumentIntakeMaterializationInput,
+  ): Promise<VehicleDocumentIntakeMaterializationResult> {
+    const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/materialize-vehicle`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    return validateMaterialization(record(await response.json()).item);
   }
   static async analyze(id: string): Promise<VehicleDocumentAiExtraction> {
     const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/document-ai`, {
