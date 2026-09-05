@@ -291,6 +291,8 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: completion.currentKm,
           recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado e complementação humana', createdAt: now });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(context, principal, created);
+        const available = await vehicleRepo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
+        if (!available) throw new NotFoundError();
         const consumed: any = await tx.execute(sql`
           UPDATE vehicle_document_intakes SET vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
           WHERE company_id=${principal.companyId} AND id=${intakeId} AND status='APPROVED' AND consumed_at IS NULL AND vehicle_id IS NULL
@@ -298,7 +300,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         `);
         if (!consumed.rows?.[0]) throw new ConflictError();
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: created.id,
-          action: AuditAction.CREATE, newState: JSON.stringify({ ...created, source: 'VEHICLE_DOCUMENT_INTAKE', intakeId, attachmentId: promoted.id }),
+          action: AuditAction.CREATE, newState: JSON.stringify({ ...available, source: 'VEHICLE_DOCUMENT_INTAKE', intakeId, attachmentId: promoted.id }),
           userId: principal.userId, userName: principal.name, timestamp: now });
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'FileAttachment', entityId: promoted.id,
           action: AuditAction.CREATE, newState: JSON.stringify({ event: 'VEHICLE_INTAKE_PROMOTION', intakeId, vehicleId: created.id, sourceAttachmentId: source.id }),
@@ -306,7 +308,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'VehicleDocumentIntake', entityId: intakeId,
           action: AuditAction.UPDATE, newState: JSON.stringify({ event: 'MATERIALIZED', vehicleId: created.id, consumedAt: now }),
           userId: principal.userId, userName: principal.name, timestamp: now });
-        return { item: created, reused: false };
+        return { item: available, reused: false };
       });
       res.status(result.reused ? 200 : 201).json(result);
     } catch (error) { sendError(res, error); }
