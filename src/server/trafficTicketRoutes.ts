@@ -9,6 +9,7 @@ import {
 import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
 import { TrafficTicketWhatsappAuthorityService,TrafficTicketWhatsappConsentRequiredError } from './trafficTicketWhatsappAuthority';
 import { TrafficTicketVehicleOperationalAuthorityService } from './trafficTicketVehicleOperationalAuthority';
+import { registerTrafficTicketDocumentIntakeRoutes } from './trafficTicketDocumentIntakeRoutes';
 
 const PROTECTED_KEYS=new Set([
   'companyId','userId','createdBy','status','payableId','basePayableId','receivableId','nicPayableId',
@@ -37,6 +38,7 @@ function sendError(res:Response,error:unknown):void{
 }
 
 export function registerTrafficTicketRoutes(app:Express):void{
+  registerTrafficTicketDocumentIntakeRoutes(app);
   app.get('/api/traffic-tickets/financial-categories',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{res.json({items:await TrafficTicketAuthorityService.listFinancialCategories(actor.companyId)});}catch(error){sendError(res,error);}});
   app.get('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     const filters={vehicleId:optionalText(req.query.vehicleId,200),driverId:optionalText(req.query.driverId,200),status:status(req.query.status),responsibility:req.query.responsibility?responsibility(req.query.responsibility):undefined};
