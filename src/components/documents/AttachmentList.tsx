@@ -106,6 +106,9 @@ export function AttachmentList({
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.id
     : undefined;
 
+  const visibleAttachments = protectLatestDriverCnh && entityType === 'Driver'
+    ? attachments.filter((item) => String(item.documentType || '').toUpperCase() !== 'CNH')
+    : attachments;
 
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
@@ -279,14 +282,14 @@ export function AttachmentList({
           {documentAiMessage.text}
         </div>
       )}
-      {attachments.length === 0 ? (
+      {visibleAttachments.length === 0 ? (
         <div className="text-center p-6 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <File className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum documento anexado.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{protectLatestDriverCnh && entityType === 'Driver' ? 'Nenhum outro documento anexado.' : 'Nenhum documento anexado.'}</p>
         </div>
       ) : (
         <ul className="divide-y divide-gray-200 dark:divide-gray-700 border rounded-lg overflow-hidden">
-          {attachments.map((att) => {
+          {visibleAttachments.map((att) => {
             const contentAvailable = hasAvailableContent(att);
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             const extractionStatus = attachmentStatuses[att.id];
