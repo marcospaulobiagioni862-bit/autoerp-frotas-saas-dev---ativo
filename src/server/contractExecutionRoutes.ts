@@ -805,7 +805,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       const { replayed: _replayed, ...payload } = result;
       res.status(201).json(payload);
     } catch (error) {
-      if (storedKey) await storage.remove(principal.companyId, stored.storageKey).catch(() => undefined);
+      if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
       sendError(res, error);
     }
   });
