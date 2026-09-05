@@ -28,7 +28,8 @@ export async function syncVehicleDocumentIntakeHumanReview(
   const attachment=rows(attachmentResult)[0];
   if(!attachment) throw new VehicleDocumentIntakeReviewSyncError('ATTACHMENT_NOT_FOUND');
   if(String(attachment.entity_type)!=='VehicleDocumentIntake') {
-    return await syncTrafficTicketDocumentIntakeHumanReview(context,principal,extraction,now);
+    try{return await syncTrafficTicketDocumentIntakeHumanReview(context,principal,extraction,now);}
+    catch(error){throw new VehicleDocumentIntakeReviewSyncError(error instanceof Error?error.message:'TRAFFIC_TICKET_INTAKE_REVIEW_SYNC_FAILED');}
   }
 
   const intakeId=String(attachment.entity_id||'');
