@@ -53,7 +53,8 @@ export class VehicleLegacyDetailsBridge {
     const maintenances=workOrders.map(item=>({
       id:item.id,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'WORK_ORDER',description:item.description,
       kmAtMaintenance:item.exitKm??item.entryKm,partsCost:item.subtotalParts,laborCost:item.subtotalLabor+item.subtotalServices,totalCost:item.total,
-      status:item.status,startDate:item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,
+      status:item.status,startDate:item.serviceDate||item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,
+      parts:item.parts,services:item.services,laborItems:item.laborItems,workOrderNumber:item.number,
       createdAt:item.createdAt,updatedAt:item.updatedAt,
     }));
 
