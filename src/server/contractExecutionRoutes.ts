@@ -6,7 +6,7 @@ import { db } from '../db/index';
 import { companies } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction, ContractStatus } from '../types/enums';
-import type { Contract, ContractArtifact, ContractTemplate, Driver, Vehicle } from '../types/entities';
+import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
 import { ContractDocxTemplateError } from '../domain/contracts/contractDocxTemplateRenderer';
@@ -32,6 +32,7 @@ import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTe
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR']);
 
 class ExecutionValidationError extends Error {}
 class ExecutionNotFoundError extends Error {}
@@ -78,6 +79,14 @@ function rejectAuthorityFields(body: Record<string, unknown>, allowed: string[])
   const allowedSet = new Set(allowed);
   const forbidden = Object.keys(body).filter((key) => !allowedSet.has(key));
   if (forbidden.length) throw new ExecutionValidationError('Invalid contract execution authority surface');
+}
+
+function parseSignatureMethod(value: unknown): ContractSignatureMethod {
+  if (value === undefined || value === null || value === '') return 'SIGNED_PDF_UPLOAD';
+  if (typeof value !== 'string' || !SIGNATURE_METHODS.has(value as ContractSignatureMethod)) {
+    throw new ExecutionValidationError('Invalid signatureMethod');
+  }
+  return value as ContractSignatureMethod;
 }
 
 function formatMoney(value: number): string {
@@ -796,7 +805,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       const { replayed: _replayed, ...payload } = result;
       res.status(201).json(payload);
     } catch (error) {
-      if (storedKey) await storage.remove(principal.companyId, storedKey).catch(() => undefined);
+      if (storedKey) await storage.remove(principal.companyId, stored.storageKey).catch(() => undefined);
       sendError(res, error);
     }
   });
@@ -1035,10 +1044,11 @@ export function registerContractExecutionRoutes(app: Express): void {
     if (!principal) return;
     const body = bodyOf(req);
     try {
-      rejectAuthorityFields(body, ['attachmentId', 'signedByName', 'signedAt']);
+      rejectAuthorityFields(body, ['attachmentId', 'signedByName', 'signedAt', 'signatureMethod']);
       const attachmentId = text(body.attachmentId, 'attachmentId', 1, 120);
       const signedByName = text(body.signedByName, 'signedByName', 1, 180);
       const signedAt = parseSignedAt(body.signedAt);
+      const signatureMethod = parseSignatureMethod(body.signatureMethod);
 
       const prepared = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
@@ -1100,7 +1110,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           sourceArtifactId: source.id,
           snapshotJson: source.snapshotJson,
           snapshotHash: source.snapshotHash,
-          signatureMethod: 'SIGNED_PDF_UPLOAD',
+          signatureMethod,
           signedByName,
           signedAt,
           isCurrent: true,
@@ -1117,7 +1127,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractArtifact', entityId: artifact.id,
           action: AuditAction.CREATE, userId: principal.userId, userName: principal.name,
-          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: source.id, checksum }),
+          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: source.id, checksum, signatureMethod }),
           timestamp: now,
         });
         return { artifact, attachment, contract: updatedContract };
