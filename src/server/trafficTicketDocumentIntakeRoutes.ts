@@ -2,8 +2,16 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction } from '../types/enums';
+import { AuditAction, TicketResponsibility } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import {
+  TrafficTicketAuthorityService,
+  TrafficTicketConflictError,
+  TrafficTicketForbiddenError,
+  TrafficTicketNotFoundError,
+  TrafficTicketValidationError,
+  type CreateTrafficTicketAuthorityInput,
+} from './trafficTicketAuthority';
 import {
   TrafficTicketDocumentIntakeAiConflictError,
   TrafficTicketDocumentIntakeAiNotFoundError,
@@ -14,12 +22,15 @@ import {
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
 
-const ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
-const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
+const ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
+const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL']);
 const TTL_MS=24*60*60*1000;
 const DRAFT_FIELDS=new Set([
   'plate','noticeNumber','organName','infractionCode','description','infractionDate','infractionTime','infractionLocation',
   'dueDate','discountDueDate','amount','discountAmount','points',
+]);
+const MATERIALIZE_KEYS=new Set([
+  'vehicleId','driverId','contractId','responsibility','baseExpenseCategoryId','driverIncomeCategoryId','nicExpenseCategoryId','nicAmount','notes',
 ]);
 
 class ValidationError extends Error {}
@@ -45,6 +56,11 @@ function requireEmptyBody(body:unknown):void {
 }
 function record(value:unknown):Record<string,unknown>{
   return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
+}
+function exactMaterializeBody(value:unknown):Record<string,unknown>{
+  const body=record(value);
+  if(Object.keys(body).some(key=>!MATERIALIZE_KEYS.has(key)))throw new ValidationError();
+  return body;
 }
 function map(row:any){
   return {
@@ -74,6 +90,42 @@ function normalizedPlate(value:unknown):string|undefined{
   if(typeof value!=='string'||!value.trim())return undefined;
   const plate=value.toUpperCase().replace(/[^A-Z0-9]/g,'');
   return /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate)?plate:undefined;
+}
+function requiredText(fields:Record<string,string|number>,key:string,max:number):string{
+  const value=fields[key],clean=typeof value==='string'?value.trim():'';
+  if(!clean||clean.length>max)throw new ConflictError();
+  return clean;
+}
+function optionalText(fields:Record<string,string|number>,key:string,max:number):string|undefined{
+  const value=fields[key];if(value===undefined)return undefined;
+  const clean=typeof value==='string'?value.trim():'';if(!clean||clean.length>max)throw new ConflictError();return clean;
+}
+function requiredDate(fields:Record<string,string|number>,key:string):string{
+  const value=requiredText(fields,key,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new ConflictError();return value;
+}
+function optionalDate(fields:Record<string,string|number>,key:string):string|undefined{
+  if(fields[key]===undefined)return undefined;const value=requiredText(fields,key,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new ConflictError();return value;
+}
+function requiredAmount(fields:Record<string,string|number>,key:string):number{
+  const value=Number(fields[key]);if(!Number.isFinite(value)||value<=0||value>999999999.99)throw new ConflictError();return Math.round(value*100)/100;
+}
+function optionalAmount(fields:Record<string,string|number>,key:string):number|undefined{
+  if(fields[key]===undefined)return undefined;return requiredAmount(fields,key);
+}
+function requiredPoints(fields:Record<string,string|number>):number{
+  const value=Number(fields.points??0);if(!Number.isInteger(value)||value<0||value>99)throw new ConflictError();return value;
+}
+function bodyText(body:Record<string,unknown>,key:string,required=false,max=200):string|undefined{
+  const raw=body[key];if(raw===undefined||raw===null||raw===''){if(required)throw new ValidationError();return undefined;}
+  if(typeof raw!=='string')throw new ValidationError();const clean=raw.trim();if(!clean||clean.length>max)throw new ValidationError();return clean;
+}
+function bodyAmount(body:Record<string,unknown>,key:string):number|undefined{
+  const raw=body[key];if(raw===undefined||raw===null||raw==='')return undefined;
+  const value=Number(raw);if(!Number.isFinite(value)||value<=0||value>999999999.99)throw new ValidationError();return Math.round(value*100)/100;
+}
+function bodyResponsibility(body:Record<string,unknown>):TicketResponsibility{
+  const value=String(body.responsibility||'') as TicketResponsibility;
+  if(!Object.values(TicketResponsibility).includes(value))throw new ValidationError();return value;
 }
 async function approvedDraft(context:any,principal:AuthenticatedPrincipal,intakeId:string){
   const tx=context.getRawTransaction?.();if(!tx)throw new Error('Raw tenant transaction unavailable');
@@ -123,9 +175,10 @@ function schedule(companyId:string,extractionId:string):void{
   setImmediate(()=>{void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`).catch(()=>console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE'));});
 }
 function sendError(res:Response,error:unknown):void{
-  if(error instanceof ValidationError){res.status(400).json({error:'Invalid traffic ticket document intake request'});return;}
-  if(error instanceof NotFoundError||error instanceof TrafficTicketDocumentIntakeAiNotFoundError){res.status(404).json({error:'Not found'});return;}
-  if(error instanceof ConflictError||error instanceof TrafficTicketDocumentIntakeAiConflictError){res.status(409).json({error:'Traffic ticket document intake conflict'});return;}
+  if(error instanceof ValidationError||error instanceof TrafficTicketValidationError){res.status(400).json({error:'Invalid traffic ticket document intake request'});return;}
+  if(error instanceof TrafficTicketForbiddenError){res.status(403).json({error:'Forbidden'});return;}
+  if(error instanceof NotFoundError||error instanceof TrafficTicketDocumentIntakeAiNotFoundError||error instanceof TrafficTicketNotFoundError){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof ConflictError||error instanceof TrafficTicketDocumentIntakeAiConflictError||error instanceof TrafficTicketConflictError){res.status(409).json({error:'Traffic ticket document intake conflict'});return;}
   console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_INTAKE_FAILURE',error);res.status(500).json({error:'Traffic ticket document intake operation failed'});
 }
 
@@ -178,5 +231,69 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
     const principal=requirePrincipal(req,res,false);if(!principal)return;
     try{const intakeId=String(req.params.id||'').trim();if(!intakeId)throw new ValidationError();const item=await UnitOfWork.run(principal.companyId,async context=>suggestions(context,principal,intakeId));res.json({item});}
     catch(error){sendError(res,error);}
+  });
+
+  app.post('/api/traffic-ticket-document-intakes/:id/materialize',async(req:Request,res:Response)=>{
+    const principal=requirePrincipal(req,res,true);if(!principal)return;
+    try{
+      const intakeId=String(req.params.id||'').trim();if(!intakeId)throw new ValidationError();
+      const body=exactMaterializeBody(req.body),vehicleId=bodyText(body,'vehicleId',true,200)!,responsibility=bodyResponsibility(body);
+      const result=await UnitOfWork.run(principal.companyId,async context=>{
+        const tx=context.getRawTransaction?.();if(!tx)throw new Error('Raw tenant transaction unavailable');
+        const locked:any=await tx.execute(sql`
+          SELECT intake.*,extraction.id AS extraction_id,extraction.attachment_id AS extraction_attachment_id,
+            extraction.status AS extraction_status,extraction.detected_document_type,extraction.proposed_fields,extraction.corrections,
+            attachment.entity_type AS attachment_entity_type,attachment.entity_id AS attachment_entity_id,attachment.is_archived AS attachment_archived
+          FROM traffic_ticket_document_intakes intake
+          LEFT JOIN document_ai_extractions extraction ON extraction.company_id=intake.company_id AND extraction.id=intake.approved_extraction_id
+          LEFT JOIN file_attachments attachment ON attachment.company_id=intake.company_id AND attachment.id=intake.attachment_id
+          WHERE intake.company_id=${principal.companyId} AND intake.id=${intakeId} AND intake.created_by=${principal.userId}
+          LIMIT 1 FOR UPDATE OF intake,attachment
+        `);
+        const row=locked.rows?.[0];if(!row)throw new NotFoundError();
+        if(row.consumed_at||row.traffic_ticket_id){
+          if(!row.consumed_at||!row.traffic_ticket_id||String(row.status)!=='CONSUMED')throw new ConflictError();
+          const details=await TrafficTicketAuthorityService.getDetails(principal.companyId,String(row.traffic_ticket_id));if(!details)throw new ConflictError();
+          return {...details,reused:true};
+        }
+        if(String(row.status)!=='APPROVED'||!row.attachment_id||!row.approved_extraction_id||String(row.approved_extraction_id)!==String(row.extraction_id)||
+          String(row.attachment_id)!==String(row.extraction_attachment_id)||String(row.extraction_status)!=='APPROVED'||String(row.detected_document_type||'').toUpperCase()!=='TRAFFIC_TICKET'||
+          String(row.attachment_entity_type)!=='TrafficTicketDocumentIntake'||String(row.attachment_entity_id)!==intakeId||Boolean(row.attachment_archived))throw new ConflictError();
+        const fields=projectDraft(row.proposed_fields,row.corrections),plate=normalizedPlate(fields.plate);if(!plate)throw new ConflictError();
+        const vehicleCheck:any=await tx.execute(sql`SELECT id,plate FROM vehicles WHERE company_id=${principal.companyId} AND id=${vehicleId} AND is_archived=false LIMIT 1 FOR UPDATE`);
+        const vehicle=vehicleCheck.rows?.[0];if(!vehicle||normalizedPlate(String(vehicle.plate||''))!==plate)throw new ConflictError();
+        const input:CreateTrafficTicketAuthorityInput={
+          vehicleId,driverId:bodyText(body,'driverId',false,200),contractId:bodyText(body,'contractId',false,200),
+          autoNumber:requiredText(fields,'noticeNumber',160),organName:requiredText(fields,'organName',200),infractionCode:requiredText(fields,'infractionCode',120),
+          description:requiredText(fields,'description',2000),infractionDate:requiredDate(fields,'infractionDate'),infractionTime:optionalText(fields,'infractionTime',5),
+          infractionLocation:optionalText(fields,'infractionLocation',500),dueDate:requiredDate(fields,'dueDate'),discountDueDate:optionalDate(fields,'discountDueDate'),
+          originalAmount:requiredAmount(fields,'amount'),discountedAmount:optionalAmount(fields,'discountAmount'),points:requiredPoints(fields),responsibility,
+          notes:bodyText(body,'notes',false,4000),baseExpenseCategoryId:bodyText(body,'baseExpenseCategoryId',true,200)!,
+          driverIncomeCategoryId:bodyText(body,'driverIncomeCategoryId',false,200),nicExpenseCategoryId:bodyText(body,'nicExpenseCategoryId',false,200),
+          nicAmount:bodyAmount(body,'nicAmount'),
+        };
+        const details=await TrafficTicketAuthorityService.create(principal,input),ticketId=details.item.id,now=new Date().toISOString();
+        const promoted:any=await tx.execute(sql`
+          UPDATE file_attachments
+          SET entity_name='TrafficTicket',entity_type='TrafficTicket',entity_id=${ticketId},document_type='TRAFFIC_TICKET_NOTICE'
+          WHERE company_id=${principal.companyId} AND id=${String(row.attachment_id)}
+            AND entity_type='TrafficTicketDocumentIntake' AND entity_id=${intakeId} AND is_archived=false
+          RETURNING id
+        `);
+        if(!promoted.rows?.[0])throw new ConflictError();
+        const consumed:any=await tx.execute(sql`
+          UPDATE traffic_ticket_document_intakes
+          SET status='CONSUMED',traffic_ticket_id=${ticketId},consumed_at=${now},updated_at=${now}
+          WHERE company_id=${principal.companyId} AND id=${intakeId} AND created_by=${principal.userId} AND status='APPROVED'
+            AND traffic_ticket_id IS NULL AND consumed_at IS NULL
+          RETURNING id
+        `);
+        if(!consumed.rows?.[0])throw new ConflictError();
+        await context.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:String(row.attachment_id),action:AuditAction.UPDATE,previousState:JSON.stringify({entityType:'TrafficTicketDocumentIntake',entityId:intakeId}),newState:JSON.stringify({event:'PROMOTE_TO_TRAFFIC_TICKET',entityType:'TrafficTicket',entityId:ticketId,documentType:'TRAFFIC_TICKET_NOTICE'}),userId:principal.userId,userName:principal.name,timestamp:now});
+        await context.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'TrafficTicketDocumentIntake',entityId:intakeId,action:AuditAction.UPDATE,previousState:JSON.stringify({status:'APPROVED',businessMutationApplied:false}),newState:JSON.stringify({event:'MATERIALIZE',status:'CONSUMED',trafficTicketId:ticketId,attachmentId:String(row.attachment_id),businessMutationApplied:true}),userId:principal.userId,userName:principal.name,timestamp:now});
+        return {...details,reused:false};
+      },{allowNestedReuse:true,financialPeriodLock:'SHARED'});
+      res.status(result.reused?200:201).json(result);
+    }catch(error){sendError(res,error);}
   });
 }
