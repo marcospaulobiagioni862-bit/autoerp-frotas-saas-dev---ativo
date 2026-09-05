@@ -88,7 +88,7 @@ export class MaintenancePlanTemplateAuthority {
         const baseDate=plan.last_execution_date?dateOnly(plan.last_execution_date):next.updatedAt.slice(0,10);
         const nextKm=next.intervalKm===undefined?null:baseKm+next.intervalKm;
         const nextDate=next.intervalDays===undefined?null:new Date(Date.parse(baseDate+'T00:00:00Z')+next.intervalDays*86400000).toISOString().slice(0,10);
-        await tx.execute(sql`UPDATE maintenance_plans SET name=${next.name},maintenance_type=${next.maintenanceType},interval_km=${next.intervalKm??null},interval_days=${next.intervalDays??null},next_due_km=${nextKm},next_due_date=${nextDate},priority=${next.priority},estimated_cost=${next.estimatedCost??null},notes=${next.notes??null},updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND id=${String(plan.id)}`);
+        await tx.execute(sql`UPDATE maintenance_plans SET name=${next.name},maintenance_type=${next.maintenanceType},interval_km=${next.intervalKm??null},interval_days=${next.intervalDays??null},next_due_km=${nextKm},next_due_date=${nextDate},priority=${next.priority},estimated_cost=${next.estimatedCost??null},status='ACTIVE',notes=${next.notes??null},updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND id=${String(plan.id)}`);
       }
     }else{
       await tx.execute(sql`UPDATE maintenance_plans SET status='PAUSED',updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND template_id=${id} AND status='ACTIVE'`);
