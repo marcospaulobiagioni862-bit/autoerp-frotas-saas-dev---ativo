@@ -14,6 +14,13 @@ const FIELD_LABELS:Record<string,string>={
 };
 const FIELD_KEYS=Object.keys(FIELD_LABELS);
 
+function analysisProgress(status:DocumentAiExtraction['status']|null):number{
+  if(status==='PENDING')return 50;
+  if(status==='PROCESSING')return 70;
+  if(status==='REVIEW_REQUIRED'||status==='APPROVED'||status==='REJECTED'||status==='FAILED')return 100;
+  return 45;
+}
+
 export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void}){
   const[documentType,setDocumentType]=useState<VehicleIntakeDocumentType>('CRLV');
   const[intakeId,setIntakeId]=useState<string|null>(null);
@@ -58,7 +65,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
     setBusy(true);setError(null);setMessage('Documento enviado. Solicitando leitura pela IA...');
     try{
       await VehicleDocumentIntakeClient.analyze(intakeId);
-      setMessage('Leitura solicitada. Clique em Atualizar análise até a revisão ficar disponível.');
+      setMessage('Leitura solicitada. Acompanhe o progresso estimado e use Atualizar análise para consultar o estado mais recente.');
       await refresh();
     }catch(e){setError(e instanceof Error?e.message:'Falha ao solicitar análise.');}
     finally{setBusy(false);}
@@ -91,6 +98,8 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
 
   const canEdit=extraction?.status==='REVIEW_REQUIRED';
   const approved=extraction?.status==='APPROVED';
+  const progress=analysisProgress(extraction?.status||null);
+  const analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
 
   return <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl" title="Cadastrar veículo por documento com IA">
     <div className="space-y-4">
@@ -116,7 +125,26 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
       {attachmentId&&<div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><strong className="text-sm">Análise documental</strong><p className="text-xs text-slate-500">Status: {extraction?.status||'PROCESSANDO'}</p></div>
-          <Button variant="outline" size="sm" onClick={()=>void refresh()} disabled={busy} className="gap-2"><RefreshCw className="h-4 w-4"/>Atualizar análise</Button>
+          <Button variant="outline" size="sm" onClick={()=>void refresh()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${analysisInProgress?'animate-spin':''}`}/>Atualizar análise</Button>
+        </div>
+
+        <div className="space-y-1.5" aria-label="Progresso estimado da análise documental">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="font-medium text-slate-700 dark:text-slate-200">{analysisInProgress?'Analisando documento':'Etapa concluída'}</span>
+            <span className="font-semibold tabular-nums">{progress}% <span className="font-normal text-slate-500">estimado</span></span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div
+              className={`h-full rounded-full bg-blue-600 transition-[width] duration-500 ${analysisInProgress?'animate-pulse':''}`}
+              style={{width:`${progress}%`}}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress}
+              aria-valuetext={`${progress}% estimado`}
+            />
+          </div>
+          <p className="text-[11px] text-slate-500">Percentual estimado por etapa. A IA não fornece progresso contínuo em tempo real.</p>
         </div>
 
         {canEdit&&<div className="space-y-3">

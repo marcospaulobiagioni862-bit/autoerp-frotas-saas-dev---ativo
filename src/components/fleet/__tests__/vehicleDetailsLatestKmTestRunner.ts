@@ -165,6 +165,10 @@ assert.ok(vehicleIntakeModalSource.includes('VehicleDocumentIntakeClient.analyze
 assert.ok(vehicleIntakeModalSource.includes("DocumentAiClient.review"), 'AI vehicle flow must require explicit human review');
 assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.materialize"), 'AI vehicle flow must create the Vehicle only after approval');
 assert.ok(vehicleIntakeModalSource.includes('a IA apenas propõe os dados'), 'UI must explain that AI does not create the vehicle automatically');
+assert.ok(vehicleIntakeModalSource.includes('Progresso estimado da análise documental'), 'vehicle AI flow must expose an accessible estimated progress bar');
+assert.ok(vehicleIntakeModalSource.includes('Percentual estimado por etapa'), 'vehicle AI flow must label progress as estimated rather than provider telemetry');
+assert.ok(vehicleIntakeModalSource.includes("status==='PROCESSING')return 70"), 'PROCESSING must map to a deterministic estimated percentage');
+assert.ok(vehicleIntakeModalSource.includes('role="progressbar"'), 'vehicle AI progress must use progressbar semantics');
 assert.ok(vehicleIntakeModalSource.includes("CRLV") && vehicleIntakeModalSource.includes("CRV") && vehicleIntakeModalSource.includes("ATPV-e"), 'AI vehicle flow must expose all approved initial document classes');
 
 
