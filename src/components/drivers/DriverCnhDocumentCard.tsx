@@ -41,7 +41,7 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const attachment = attachments[0] || null;
-  const history = useMemo(() => attachments.slice(1), [attachments]);
+  const history = useMemo(() => attachments.slice(1, 2), [attachments]);
 
   const openPreview = async (target: FileAttachment) => {
     setError(null);
@@ -92,10 +92,10 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
       </div>
 
       {history.length > 0 && <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><FileClock className="h-4 w-4" />Histórico de CNHs anteriores</div>
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><FileClock className="h-4 w-4" />Última CNH anterior</div>
         <div className="space-y-2">
-          {history.map((item, index) => <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-100 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0"><div className="truncate text-xs font-medium">{item.fileName}</div><div className="text-[11px] text-slate-500">Versão anterior {history.length - index} · preservada em {new Date(item.createdAt).toLocaleDateString('pt-BR')}</div></div>
+          {history.map((item) => <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-100 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0"><div className="truncate text-xs font-medium">{item.fileName}</div><div className="text-[11px] text-slate-500">Última versão anterior · preservada em {new Date(item.createdAt).toLocaleDateString('pt-BR')}</div></div>
             <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => openPreview(item)}><Eye className="mr-1 h-4 w-4" />Visualizar</Button><Button type="button" size="sm" variant="outline" onClick={() => downloadOriginal(item)}><Download className="mr-1 h-4 w-4" />Baixar</Button></div>
           </div>)}
         </div>
