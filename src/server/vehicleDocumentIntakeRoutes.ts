@@ -13,6 +13,7 @@ import {
   dispatchDocumentAiExtractionFromEnvironment,
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
+import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
 
 type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -289,6 +290,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         });
         await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: completion.currentKm,
           recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado e complementação humana', createdAt: now });
+        await MaintenancePlanTemplateAuthority.applyToVehicleContext(context, principal, created);
         const consumed: any = await tx.execute(sql`
           UPDATE vehicle_document_intakes SET vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
           WHERE company_id=${principal.companyId} AND id=${intakeId} AND status='APPROVED' AND consumed_at IS NULL AND vehicle_id IS NULL
