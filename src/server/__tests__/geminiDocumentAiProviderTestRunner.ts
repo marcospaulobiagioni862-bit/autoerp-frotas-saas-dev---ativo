@@ -62,7 +62,7 @@ assert.equal('tools' in (captured ?? {}), false);
 
 const schema = responseFormat.schema as Record<string, unknown>;
 const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
-assert.ok(Array.isArray(variants) && variants.length === 11, 'schema must contain one variant per document type');
+assert.ok(Array.isArray(variants) && variants.length === 12, 'schema must contain one variant per document type');
 const cnhVariant = variants.find((variant) => {
   const properties = variant.properties as Record<string, unknown> | undefined;
   const documentType = properties?.documentType as Record<string, unknown> | undefined;
@@ -95,6 +95,20 @@ const trafficVariant = variants.find((variant) => {
   const values = documentType?.enum as unknown[] | undefined;
   return Array.isArray(values) && values.length === 1 && values[0] === 'TRAFFIC_TICKET';
 });
+const trackerVariant = variants.find((variant) => {
+  const properties = variant.properties as Record<string, unknown> | undefined;
+  const documentType = properties?.documentType as Record<string, unknown> | undefined;
+  const values = documentType?.enum as unknown[] | undefined;
+  return Array.isArray(values) && values.length === 1 && values[0] === 'TRACKER';
+});
+assert.ok(trackerVariant, 'TRACKER schema variant missing');
+const trackerProperties = trackerVariant.properties as Record<string, unknown>;
+const trackerFields = trackerProperties.fields as Record<string, unknown>;
+const trackerFieldProperties = trackerFields.properties as Record<string, unknown>;
+for (const field of ['providerName','equipmentModel','imei','serialNumber','chipCarrier','chipNumber','installationDate','monthlyCost','supplierName','plate']) {
+  assert.equal(field in trackerFieldProperties, true, `TRACKER schema field missing: ${field}`);
+}
+
 assert.ok(trafficVariant, 'TRAFFIC_TICKET schema variant missing');
 const trafficProperties = trafficVariant.properties as Record<string, unknown>;
 const trafficFields = trafficProperties.fields as Record<string, unknown>;
