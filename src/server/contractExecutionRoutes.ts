@@ -21,6 +21,13 @@ import {
   sameContractVehicleInsuranceSnapshot,
   type ContractVehicleInsuranceSnapshot,
 } from './contractVehicleInsuranceSnapshot';
+import { contractVehicleInsuranceTemplateValues } from './contractVehicleInsuranceTemplateValues';
+import {
+  loadContractVehicleTrackerSnapshot,
+  sameContractVehicleTrackerSnapshot,
+  type ContractVehicleTrackerSnapshot,
+} from './contractVehicleTrackerSnapshot';
+import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTemplateValues';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -96,6 +103,7 @@ interface ContractSnapshot {
   };
   vehicle: { id: string; plate: string; brand: string; model: string; version: string; brandModel: string; yearFabrication: number; yearModel: number; yearDisplay: string; color: string; renavam: string; chassis: string; currentKm: number };
   vehicleInsurance: ContractVehicleInsuranceSnapshot | null;
+  vehicleTracker: ContractVehicleTrackerSnapshot | null;
   template: { id: string; templateKey: string; versionNumber: number; title: string };
 }
 
@@ -120,6 +128,7 @@ function makeSnapshot(
   driver: Driver,
   vehicle: Vehicle,
   vehicleInsurance: ContractVehicleInsuranceSnapshot | null,
+  vehicleTracker: ContractVehicleTrackerSnapshot | null,
   template: ContractTemplate
 ): ContractSnapshot {
   return {
@@ -178,6 +187,7 @@ function makeSnapshot(
       currentKm: vehicle.currentKm,
     },
     vehicleInsurance,
+    vehicleTracker,
     template: {
       id: template.id,
       templateKey: template.templateKey,
@@ -247,6 +257,8 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'vehicle.renavam': snapshot.vehicle.renavam,
     'vehicle.chassis': snapshot.vehicle.chassis,
     'vehicle.currentKm': String(snapshot.vehicle.currentKm),
+    ...contractVehicleInsuranceTemplateValues(snapshot.vehicleInsurance),
+    ...contractVehicleTrackerTemplateValues(snapshot.vehicleTracker),
   };
 }
 
@@ -362,12 +374,15 @@ function sameSnapshotTerms(
   driver: Driver,
   vehicle: Vehicle,
   vehicleInsurance: ContractVehicleInsuranceSnapshot | null,
+  vehicleTracker: ContractVehicleTrackerSnapshot | null,
   template: ContractTemplate,
 ): boolean {
   return JSON.stringify({ ...snapshot, company: undefined }) === JSON.stringify({
-    ...makeSnapshot(snapshot.company, contract, driver, vehicle, vehicleInsurance, template),
+    ...makeSnapshot(snapshot.company, contract, driver, vehicle, vehicleInsurance, vehicleTracker, template),
     company: undefined,
-  }) && sameContractVehicleInsuranceSnapshot(snapshot.vehicleInsurance, vehicleInsurance);
+  }) &&
+    sameContractVehicleInsuranceSnapshot(snapshot.vehicleInsurance, vehicleInsurance) &&
+    sameContractVehicleTrackerSnapshot(snapshot.vehicleTracker, vehicleTracker);
 }
 
 function parseSignedAt(value: unknown): string {
@@ -443,7 +458,10 @@ export function registerContractExecutionRoutes(app: Express): void {
         const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
           tx, principal.companyId, vehicle.id, contract.startDate
         );
-        return { contract, template, driver, vehicle, vehicleInsurance };
+        const vehicleTracker = await loadContractVehicleTrackerSnapshot(
+          tx, principal.companyId, vehicle.id
+        );
+        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker };
       });
 
       const snapshot = makeSnapshot(
@@ -452,6 +470,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         prepared.driver,
         prepared.vehicle,
         prepared.vehicleInsurance,
+        prepared.vehicleTracker,
         prepared.template,
       );
       const snapshotJson = JSON.stringify(snapshot);
@@ -477,7 +496,10 @@ export function registerContractExecutionRoutes(app: Express): void {
         const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
           tx, principal.companyId, vehicle.id, contract.startDate
         );
-        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, template)) throw new ExecutionConflictError();
+        const vehicleTracker = await loadContractVehicleTrackerSnapshot(
+          tx, principal.companyId, vehicle.id
+        );
+        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, vehicleTracker, template)) throw new ExecutionConflictError();
 
         const attachment = await tx.getAttachmentRepo().create({
           id: attachmentId,
@@ -583,6 +605,9 @@ export function registerContractExecutionRoutes(app: Express): void {
         const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
           tx, principal.companyId, vehicle.id, contract.startDate
         );
+        const vehicleTracker = await loadContractVehicleTrackerSnapshot(
+          tx, principal.companyId, vehicle.id
+        );
         const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
         const sources = attachments.filter((item) =>
           !item.isArchived &&
@@ -593,7 +618,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           Boolean(item.storageKey)
         );
         if (sources.length !== 1) throw new ExecutionConflictError();
-        return { contract, template, driver, vehicle, vehicleInsurance, source: sources[0] };
+        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0] };
       });
 
       const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!);
@@ -609,6 +634,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         prepared.driver,
         prepared.vehicle,
         prepared.vehicleInsurance,
+        prepared.vehicleTracker,
         prepared.template,
       );
       const snapshotJson = JSON.stringify(snapshot);
@@ -657,7 +683,10 @@ export function registerContractExecutionRoutes(app: Express): void {
         const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
           tx, principal.companyId, vehicle.id, contract.startDate
         );
-        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, template)) throw new ExecutionConflictError();
+        const vehicleTracker = await loadContractVehicleTrackerSnapshot(
+          tx, principal.companyId, vehicle.id
+        );
+        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, vehicleTracker, template)) throw new ExecutionConflictError();
         const source = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, prepared.source.id);
         if (
           !source || source.isArchived || source.entityType !== 'ContractTemplate' || source.entityId !== template.id ||
