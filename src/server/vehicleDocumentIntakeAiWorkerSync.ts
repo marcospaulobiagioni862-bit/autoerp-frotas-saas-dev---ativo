@@ -25,7 +25,8 @@ export async function syncVehicleDocumentIntakeWorkerResult(
   const attachment=rows(attachmentResult)[0];
   if(!attachment) throw new VehicleDocumentIntakeWorkerSyncError('ATTACHMENT_NOT_FOUND');
   if(String(attachment.entity_type)!=='VehicleDocumentIntake') {
-    return await syncTrafficTicketDocumentIntakeWorkerResult(context,input);
+    try{return await syncTrafficTicketDocumentIntakeWorkerResult(context,input);}
+    catch(error){throw new VehicleDocumentIntakeWorkerSyncError(error instanceof Error?error.message:'TRAFFIC_TICKET_INTAKE_SYNC_FAILED');}
   }
   const intakeId=String(attachment.entity_id||'');
   if(!intakeId) throw new VehicleDocumentIntakeWorkerSyncError('INTAKE_ENTITY_ID_MISSING');
