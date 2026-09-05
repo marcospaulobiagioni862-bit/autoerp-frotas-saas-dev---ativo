@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import type { Insurance } from '../../types/entities';
-import { selectContractVehicleInsuranceSnapshot } from '../contractVehicleInsuranceSnapshot';
+import {
+  loadContractVehicleInsuranceSnapshot,
+  sameContractVehicleInsuranceSnapshot,
+  selectContractVehicleInsuranceSnapshot,
+} from '../contractVehicleInsuranceSnapshot';
 
 function insurance(overrides: Partial<Insurance> = {}): Insurance {
   return {
@@ -47,5 +51,28 @@ assert.equal(selected?.policyNumber, 'NEW');
 assert.equal(selected?.insuranceCompany, 'Seguradora Exemplo');
 assert.equal(selected?.deductibleAmount, 2500);
 assert.ok(!('totalPremiumAmount' in (selected ?? {})), 'financial premium must not leak into the contract snapshot slice');
+
+let capturedCompanyId = '';
+let capturedVehicleId = '';
+const loaded = await loadContractVehicleInsuranceSnapshot({
+  getInsuranceRepo: () => ({
+    findAllByCompany: async (companyId: string, filters: { vehicleId?: string }) => {
+      capturedCompanyId = companyId;
+      capturedVehicleId = filters.vehicleId || '';
+      return [insurance({ id: 'loaded', policyNumber: 'LOAD-001' })];
+    },
+  }),
+}, 'company-1', 'vehicle-1', '2026-09-05');
+
+assert.equal(capturedCompanyId, 'company-1', 'loader must stay tenant-scoped');
+assert.equal(capturedVehicleId, 'vehicle-1', 'loader must stay vehicle-scoped');
+assert.equal(loaded?.policyNumber, 'LOAD-001', 'loader must project the server-authoritative policy');
+assert.equal(sameContractVehicleInsuranceSnapshot(loaded, loaded), true, 'unchanged policy snapshot must revalidate');
+assert.equal(
+  sameContractVehicleInsuranceSnapshot(loaded, loaded ? { ...loaded, policyNumber: 'CHANGED' } : null),
+  false,
+  'policy changes between preparation and persistence must invalidate the snapshot',
+);
+assert.equal(sameContractVehicleInsuranceSnapshot(null, null), true, 'absence must also revalidate deterministically');
 
 console.log('Contract vehicle insurance snapshot regression: PASS');
