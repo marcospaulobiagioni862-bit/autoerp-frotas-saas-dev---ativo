@@ -13,6 +13,9 @@ export interface MaintenancePlanTemplate {
   id:string;companyId:string;code:string;name:string;maintenanceType:string;intervalKm?:number;intervalDays?:number;
   priority:MaintenancePlanPriority;estimatedCost?:number;active:boolean;notes?:string;createdBy:string;createdAt:string;updatedAt:string;
 }
+export interface CreateMaintenancePlanTemplateInput {
+  name:string;intervalKm?:number;intervalDays?:number;priority?:MaintenancePlanPriority;estimatedCost?:number;active?:boolean;notes?:string;
+}
 export interface UpdateMaintenancePlanTemplateInput {
   name?:string;intervalKm?:number|null;intervalDays?:number|null;priority?:MaintenancePlanPriority;estimatedCost?:number|null;active?:boolean;notes?:string|null;
 }
@@ -37,6 +40,7 @@ function cleanText(v:string|undefined,current:string,max=300):string{if(v===unde
 function interval(v:number|null|undefined,current:number|undefined):number|undefined{if(v===undefined)return current;if(v===null)return undefined;if(!Number.isInteger(v)||v<=0)throw new MaintenanceTemplateValidationError('Intervalo inválido');return v;}
 function cost(v:number|null|undefined,current:number|undefined):number|undefined{if(v===undefined)return current;if(v===null)return undefined;if(!Number.isFinite(v)||v<0)throw new MaintenanceTemplateValidationError('Custo estimado inválido');return Math.round((v+Number.EPSILON)*100)/100;}
 function priority(v:MaintenancePlanPriority|undefined,current:MaintenancePlanPriority):MaintenancePlanPriority{if(v===undefined)return current;if(!['LOW','MEDIUM','HIGH','CRITICAL'].includes(v))throw new MaintenanceTemplateValidationError('Prioridade inválida');return v;}
+function codeFromName(name:string):string{const normalized=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80);if(!normalized)throw new MaintenanceTemplateValidationError('Nome inválido');return normalized;}
 
 async function ensureCatalog(context:any,p:AuthenticatedPrincipal):Promise<void>{
   const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
@@ -72,6 +76,18 @@ async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehi
 }
 
 export class MaintenancePlanTemplateAuthority {
+  static async create(p:AuthenticatedPrincipal,input:CreateMaintenancePlanTemplateInput):Promise<MaintenancePlanTemplate>{return UnitOfWork.run(p.companyId,async context=>{
+    await ensureCatalog(context,p);const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
+    const name=cleanText(input.name,'',200),code=codeFromName(name),intervalKm=interval(input.intervalKm,undefined),intervalDays=interval(input.intervalDays,undefined),active=Boolean(input.active);
+    if(active&&intervalKm===undefined&&intervalDays===undefined)throw new MaintenanceTemplateValidationError('Plano ativo exige intervalo por KM ou tempo');
+    const now=new Date().toISOString(),id=randomUUID(),priorityValue=priority(input.priority,'MEDIUM'),estimatedCost=cost(input.estimatedCost,undefined),notes=input.notes?.trim()||undefined;
+    const exists=rows(await tx.execute(sql`SELECT id FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND code=${code} LIMIT 1`))[0];
+    if(exists)throw new MaintenanceTemplateConflictError('Já existe item com este nome');
+    const row=rows(await tx.execute(sql`INSERT INTO maintenance_plan_templates(id,company_id,code,name,maintenance_type,interval_km,interval_days,priority,estimated_cost,active,notes,created_by,created_at,updated_at)
+      VALUES(${id},${p.companyId},${code},${name},${code},${intervalKm??null},${intervalDays??null},${priorityValue},${estimatedCost??null},${active},${notes??null},${p.userId},${now},${now}) RETURNING *`))[0];
+    const saved=mapTemplate(row);await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlanTemplate',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify(saved),userId:p.userId,userName:p.name,timestamp:now});
+    return saved;
+  });}
   static async list(p:AuthenticatedPrincipal):Promise<MaintenancePlanTemplate[]>{return UnitOfWork.run(p.companyId,context=>listInContext(context,p));}
   static async update(p:AuthenticatedPrincipal,id:string,input:UpdateMaintenancePlanTemplateInput):Promise<MaintenancePlanTemplate>{return UnitOfWork.run(p.companyId,async context=>{
     await ensureCatalog(context,p);const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
