@@ -295,7 +295,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <nav className="flex-1 min-h-0 p-3 space-y-4 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="flex-1 min-h-0 p-3 space-y-4 overflow-y-auto">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
             <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
