@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
+import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
 import { FileUpload } from '../documents/FileUpload';
 import { ModalContainer } from '../ui/ModalContainer';
@@ -27,11 +28,15 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
   const[attachmentId,setAttachmentId]=useState<string|null>(null);
   const[extraction,setExtraction]=useState<DocumentAiExtraction|null>(null);
   const[corrections,setCorrections]=useState<Record<string,string>>({});
+  const[completion,setCompletion]=useState({
+    color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',
+    version:'',nextMaintenanceKm:'',notes:'',
+  });
   const[busy,setBusy]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setBusy(false);setError(null);setMessage(null);};
+  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
 
   const start=async()=>{
@@ -78,16 +83,27 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
       const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
       setExtraction(reviewed);
       if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
-      setMessage('Dados aprovados. Revise o resumo e confirme a criação do veículo.');
+      setMessage('Dados do documento aprovados. Complete agora os dados operacionais e financeiros obrigatórios antes de criar o veículo.');
     }catch(e){setError(e instanceof Error?e.message:'Falha na revisão.');}
     finally{setBusy(false);}
   };
 
   const createVehicle=async()=>{
     if(!intakeId)return;
+    const currentKm=Number(completion.currentKm),acquisitionValue=Number(completion.acquisitionValue),currentValue=Number(completion.currentValue),rentalValueBase=Number(completion.rentalValueBase);
+    if(!completion.color.trim()||!completion.category||!completion.currentKm||!completion.acquisitionValue||!completion.currentValue||!completion.rentalValueBase||
+      !Number.isFinite(currentKm)||currentKm<0||!Number.isFinite(acquisitionValue)||acquisitionValue<=0||
+      !Number.isFinite(currentValue)||currentValue<=0||!Number.isFinite(rentalValueBase)||rentalValueBase<=0){
+      setError('Preencha cor, categoria, KM atual, valor de compra, valor comercial e aluguel semanal com valores válidos.');return;
+    }
+    const nextMaintenanceKm=completion.nextMaintenanceKm?Number(completion.nextMaintenanceKm):undefined;
+    if(nextMaintenanceKm!==undefined&&(!Number.isFinite(nextMaintenanceKm)||nextMaintenanceKm<currentKm)){setError('A próxima manutenção em KM não pode ser menor que o KM atual.');return;}
     setBusy(true);setError(null);
     try{
-      const result=await VehicleDocumentIntakeClient.materialize(intakeId);
+      const result=await VehicleDocumentIntakeClient.materialize(intakeId,{
+        color:completion.color.trim(),category:completion.category,currentKm,acquisitionValue,currentValue,rentalValueBase,
+        version:completion.version.trim()||undefined,nextMaintenanceKm,notes:completion.notes.trim()||undefined,
+      });
       setMessage(result.reused?'Veículo já havia sido criado por este documento.':'Veículo criado e documento original vinculado à ficha.');
       onCreated(result.vehicleId);
       reset();
@@ -158,12 +174,33 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
           </div>
         </div>}
 
-        {approved&&<div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/><strong>Dados aprovados</strong></div>
+        {approved&&<div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/><strong>Dados do documento aprovados</strong></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
             {FIELD_KEYS.map(key=><div key={key}><span className="text-slate-500">{FIELD_LABELS[key]}</span><div className="font-semibold">{corrections[key]||'—'}</div></div>)}
           </div>
-          <Button onClick={()=>void createVehicle()} disabled={busy}>{busy?'Criando veículo...':'Confirmar e criar veículo'}</Button>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div><strong className="text-sm">Completar cadastro do veículo</strong><p className="text-xs text-slate-500">Os campos abaixo não são definidos pelo CRLV e devem ser informados antes da criação.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Input label="Cor *" required value={completion.color} onChange={e=>setCompletion(v=>({...v,color:e.target.value}))}/>
+              <Select label="Categoria *" value={completion.category} onChange={e=>setCompletion(v=>({...v,category:e.target.value}))} options={[{value:'',label:'Selecione...'},...VEHICLE_CATEGORIES.map(category=>({value:category,label:category}))]}/>
+              <Input label="KM Atual *" type="number" min="0" required value={completion.currentKm} onChange={e=>setCompletion(v=>({...v,currentKm:e.target.value}))}/>
+              <Input label="Versão" value={completion.version} onChange={e=>setCompletion(v=>({...v,version:e.target.value}))} placeholder="Ex.: LT Turbo Flex"/>
+              <Input label="Próx. Manutenção (KM)" type="number" min="0" value={completion.nextMaintenanceKm} onChange={e=>setCompletion(v=>({...v,nextMaintenanceKm:e.target.value}))}/>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Valores obrigatórios</h4>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input label="Valor de Compra (R$) *" type="number" min="0.01" step="0.01" required value={completion.acquisitionValue} onChange={e=>setCompletion(v=>({...v,acquisitionValue:e.target.value}))}/>
+                <Input label="Valor Comercial Atual (R$) *" type="number" min="0.01" step="0.01" required value={completion.currentValue} onChange={e=>setCompletion(v=>({...v,currentValue:e.target.value}))}/>
+                <Input label="Aluguel Semanal (R$) *" type="number" min="0.01" step="0.01" required value={completion.rentalValueBase} onChange={e=>setCompletion(v=>({...v,rentalValueBase:e.target.value}))}/>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
+            </div>
+            <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
+          </div>
+          <Button onClick={()=>void createVehicle()} disabled={busy}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 
