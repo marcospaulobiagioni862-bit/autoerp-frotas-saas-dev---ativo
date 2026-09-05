@@ -4,7 +4,7 @@ export interface InsuranceExpenseCategory{id:string;name:string;type:string;}
 export interface CreateInsuranceRequest{
   vehicleId:string;insuranceCompany:string;policyNumber:string;coverageDetails:string;
   deductibleAmount:number;totalPremiumAmount:number;installmentsCount:number;startDate:string;endDate:string;
-  brokerName?:string;brokerPhone?:string;categoryId?:string;
+  brokerName?:string;brokerPhone?:string;categoryId?:string;sourceAttachmentId?:string;
 }
 
 async function request(path:string,init?:RequestInit):Promise<any>{
