@@ -17,6 +17,20 @@ interface ContractsManagementProps {
   companyId: string;
 }
 
+const contractStatusLabel=(status:ContractStatus):string=>{
+  switch(status){
+    case ContractStatus.DRAFT:return 'Rascunho';
+    case ContractStatus.AWAITING_SIGNATURE:return 'Aguardando assinatura';
+    case ContractStatus.ACTIVE:return 'Ativo';
+    case ContractStatus.SUSPENDED:return 'Suspenso';
+    case ContractStatus.FINISHED:return 'Finalizado';
+    case ContractStatus.CLOSED:return 'Encerrado';
+    case ContractStatus.CANCELLED:return 'Cancelado';
+    case ContractStatus.ARCHIVED:return 'Arquivado';
+    default:return status;
+  }
+};
+
 export const ContractsManagement: React.FC<ContractsManagementProps> = ({ companyId }) => {
   const requestVersionRef = useRef(0);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -178,7 +192,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
           </div>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
             <option value="ALL">Todos os status</option>
-            {Object.values(ContractStatus).filter((value) => value !== ContractStatus.ARCHIVED).map((value) => <option key={value} value={value}>{value}</option>)}
+            {Object.values(ContractStatus).filter((value) => value !== ContractStatus.ARCHIVED).map((value) => <option key={value} value={value}>{contractStatusLabel(value)}</option>)}
           </select>
         </div>
       </Card>
@@ -214,7 +228,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /><span>{driver?.fullName || '—'}</span></div></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.startDate}{item.endDate ? ` → ${item.endDate}` : ''}</span></div></td>
                       <td className="px-4 py-3 text-right font-mono">{item.rentalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{item.status}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status)}</Badge></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5 flex-wrap">
                           <Button size="sm" variant="ghost" title="Visualizar contrato" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4" /></Button>
