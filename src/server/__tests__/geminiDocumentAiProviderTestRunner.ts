@@ -89,6 +89,22 @@ assert.equal('plate' in cnhFieldProperties, false, 'CNH schema must not expose C
 assert.equal('renavam' in cnhFieldProperties, false, 'CNH schema must not expose CRLV fields');
 assert.deepEqual(cnhVariant.required, ['documentType', 'fields', 'confidence', 'raw']);
 
+const trafficVariant = variants.find((variant) => {
+  const properties = variant.properties as Record<string, unknown> | undefined;
+  const documentType = properties?.documentType as Record<string, unknown> | undefined;
+  const values = documentType?.enum as unknown[] | undefined;
+  return Array.isArray(values) && values.length === 1 && values[0] === 'TRAFFIC_TICKET';
+});
+assert.ok(trafficVariant, 'TRAFFIC_TICKET schema variant missing');
+const trafficProperties = trafficVariant.properties as Record<string, unknown>;
+const trafficFields = trafficProperties.fields as Record<string, unknown>;
+const trafficFieldProperties = trafficFields.properties as Record<string, unknown>;
+for (const field of ['plate','noticeNumber','organName','infractionCode','description','infractionDate','infractionTime','infractionLocation','dueDate','discountDueDate','amount','discountAmount','points']) {
+  assert.equal(field in trafficFieldProperties, true, `TRAFFIC_TICKET schema field missing: ${field}`);
+}
+assert.equal('driverName' in trafficFieldProperties, false, 'traffic ticket AI must not infer driver identity in the document schema');
+assert.equal('contractNumber' in trafficFieldProperties, false, 'traffic ticket AI must not infer contract authority');
+
 const input = captured?.input as Array<Record<string, unknown>> | undefined;
 assert.ok(input && input.length === 2, 'Gemini multimodal input was not captured');
 assert.equal(input[0]?.type, 'text');

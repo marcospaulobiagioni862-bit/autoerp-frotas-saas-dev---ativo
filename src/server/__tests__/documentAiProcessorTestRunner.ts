@@ -120,6 +120,41 @@ async function run(): Promise<void> {
   assert(crlvWithNull.proposedFields.plate === 'ABC1D23', 'CRLV valid field must remain');
   assert(!('renavam' in crlvWithNull.proposedFields), 'CRLV null field must be discarded consistently');
 
+  const trafficTicket = await processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'TRAFFIC_TICKET',
+        fields: {
+          plate: 'ABC1D23',
+          noticeNumber: 'AIT-123',
+          organName: 'DETRAN-SP',
+          infractionCode: '745-50',
+          description: 'Transitar em velocidade superior à permitida',
+          infractionDate: '2026-09-01',
+          infractionTime: '14:35',
+          infractionLocation: 'Av. Teste, 100',
+          dueDate: '2026-10-01',
+          discountDueDate: '2026-09-20',
+          amount: 195.23,
+          discountAmount: 156.18,
+          points: 4,
+        },
+        confidence: {
+          plate: 0.99, noticeNumber: 0.99, organName: 0.98, infractionCode: 0.98, description: 0.95,
+          infractionDate: 0.99, infractionTime: 0.97, infractionLocation: 0.92, dueDate: 0.98,
+          discountDueDate: 0.94, amount: 0.99, discountAmount: 0.96, points: 0.95,
+        },
+        raw: { text: 'fixture traffic ticket', pages: 1 },
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+  assert(trafficTicket.detectedDocumentType === 'TRAFFIC_TICKET', 'traffic ticket type must be accepted');
+  assert(trafficTicket.proposedFields.organName === 'DETRAN-SP', 'ticket organ must be preserved');
+  assert(trafficTicket.proposedFields.infractionTime === '14:35', 'ticket time must be preserved');
+  assert(trafficTicket.proposedFields.infractionLocation === 'Av. Teste, 100', 'ticket location must be preserved');
+  assert(trafficTicket.proposedFields.points === 4, 'ticket points must be preserved');
+
   await expectFailure(() => processDocumentAiBytes({
     ...validProvider,
     async extract() {
