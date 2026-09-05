@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { AuditAction } from '../types/enums';
+import { syncTrafficTicketDocumentIntakeWorkerResult } from './trafficTicketDocumentIntakeAiWorkerSync';
 
 export type VehicleDocumentIntakeWorkerTarget='REVIEW_REQUIRED'|'FAILED';
 export class VehicleDocumentIntakeWorkerSyncError extends Error {}
@@ -23,7 +24,9 @@ export async function syncVehicleDocumentIntakeWorkerResult(
   `);
   const attachment=rows(attachmentResult)[0];
   if(!attachment) throw new VehicleDocumentIntakeWorkerSyncError('ATTACHMENT_NOT_FOUND');
-  if(String(attachment.entity_type)!=='VehicleDocumentIntake') return false;
+  if(String(attachment.entity_type)!=='VehicleDocumentIntake') {
+    return await syncTrafficTicketDocumentIntakeWorkerResult(context,input);
+  }
   const intakeId=String(attachment.entity_id||'');
   if(!intakeId) throw new VehicleDocumentIntakeWorkerSyncError('INTAKE_ENTITY_ID_MISSING');
 
