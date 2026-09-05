@@ -101,6 +101,9 @@ assert.match(cnhCardSource, /Última CNH anterior/, 'CNH card must label only th
 assert.match(cnhCardSource, /history\.map\(\(item\)/, 'CNH card must render the single immediately previous CNH');
 assert.match(cnhCardSource, /onClick=\{\(\) => openPreview\(item\)\}/, 'historical CNH must remain previewable through authenticated content');
 assert.match(cnhCardSource, /onClick=\{\(\) => downloadOriginal\(item\)\}/, 'historical CNH must remain downloadable through authenticated content');
+assert.match(cnhCardSource, /AttachmentClient\.archive\(target\.id\)/, 'previous CNH removal must use audited attachment archive authority');
+assert.match(cnhCardSource, />Excluir<\//, 'previous CNH must expose an explicit removal action');
+
 assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'CNH history UI must not consume storage or tenant authority fields');
 
 assert.match(source, /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/, 'driver list and optional vehicle enrichment must settle independently');
