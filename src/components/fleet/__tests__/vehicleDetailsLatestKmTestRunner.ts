@@ -157,6 +157,9 @@ assert.ok(documentAiQueueSource.includes('syncVehicleDocumentIntakeWorkerResult'
 assert.ok(documentAiRoutesSource.includes('syncVehicleDocumentIntakeHumanReview'), 'shared Document AI review must synchronize vehicle intake state');
 assert.ok(vehicleIntakeClientSource.includes('static async analyze'), 'vehicle intake client must expose the Document AI action');
 assert.ok(vehicleIntakeClientSource.includes('static async materialize'), 'vehicle intake client must expose approved materialization');
+assert.ok(vehicleIntakeRoutesSource.includes('LEFT JOIN document_ai_extractions extraction'), 'materialization must keep the approved extraction join');
+assert.ok(vehicleIntakeRoutesSource.includes('FOR UPDATE OF intake'), 'materialization must lock only the intake row when using an outer join');
+assert.ok(!vehicleIntakeRoutesSource.includes('LIMIT 1 FOR UPDATE\n'), 'materialization must not use unqualified FOR UPDATE with the outer join');
 assert.ok(fileUploadSource.includes("'VehicleDocumentIntake'"), 'shared uploader must accept pre-vehicle intake authority');
 assert.ok(fleetManagementSource.includes('Cadastrar por documento com IA'), 'fleet page must expose the AI vehicle intake action');
 assert.ok(fleetManagementSource.includes('<VehicleDocumentIntakeModal'), 'fleet page must render the AI intake modal');

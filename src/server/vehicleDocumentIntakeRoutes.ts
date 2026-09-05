@@ -207,7 +207,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           FROM vehicle_document_intakes intake
           LEFT JOIN document_ai_extractions extraction ON extraction.company_id=intake.company_id AND extraction.id=intake.approved_extraction_id
           WHERE intake.company_id=${principal.companyId} AND intake.id=${intakeId} AND intake.created_by=${principal.userId}
-          LIMIT 1 FOR UPDATE
+          LIMIT 1 FOR UPDATE OF intake
         `);
         const row = locked.rows?.[0]; if (!row) throw new NotFoundError();
         const vehicleRepo = context.getVehicleRepo();
