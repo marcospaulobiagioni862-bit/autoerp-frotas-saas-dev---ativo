@@ -176,7 +176,8 @@ assert.ok(vehicleIntakeClientSource.includes('body:JSON.stringify(input)'), 'mat
 for (const invariant of [
   "materializationInput(req.body)",
   "color:text('color',true",
-  "category:text('category',true",
+  "const category=text('category',true,120)!",
+  "VEHICLE_CATEGORY_VALUES.has(category)",
   "currentKm=number('currentKm',true)",
   "acquisitionValue:number('acquisitionValue',true,true)",
   "currentValue:number('currentValue',true,true)",
@@ -185,6 +186,7 @@ for (const invariant of [
 ]) {
   assert.ok(vehicleIntakeRoutesSource.includes(invariant), `post-CRLV server invariant missing: ${invariant}`);
 }
+assert.ok(vehicleIntakeRoutesSource.includes('new Set<string>(VEHICLE_CATEGORIES)'), 'post-CRLV category validation must reuse the canonical vehicle category catalog');
 assert.ok(!vehicleIntakeRoutesSource.includes('acquisitionValue: 0, currentValue: 0, rentalValueBase: 0'), 'materialization must not persist zero financial defaults');
 assert.ok(!vehicleIntakeRoutesSource.includes("category: DEFAULT_VEHICLE_CATEGORY"), 'materialization must not invent a generic vehicle category');
 assert.ok(vehicleIntakeModalSource.includes('a IA apenas propõe os dados'), 'UI must explain that AI does not create the vehicle automatically');
