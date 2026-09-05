@@ -81,6 +81,17 @@ export class VehicleDocumentIntakeClient {
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateApprovedDraft(record(await response.json()).draft);
   }
+  static async materialize(id: string): Promise<{ vehicleId: string; reused: boolean }> {
+    const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/materialize`, {
+      method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}',
+    });
+    if(!response.ok) throw new Error(await errorMessage(response));
+    const payload=record(await response.json());
+    const item=record(payload.item);
+    if(typeof item.id!=='string' || typeof payload.reused!=='boolean') throw new Error('Invalid vehicle materialization payload');
+    return {vehicleId:item.id,reused:payload.reused};
+  }
+
   static async analyze(id: string): Promise<VehicleDocumentAiExtraction> {
     const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/document-ai`, {
       method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}',

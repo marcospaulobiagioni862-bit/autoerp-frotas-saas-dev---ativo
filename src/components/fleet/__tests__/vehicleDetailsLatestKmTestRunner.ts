@@ -19,6 +19,8 @@ const inspectionPanelSource = readFileSync(new URL('../VehicleInspectionPanel.ts
 const inspectionRoutesSource = readFileSync(new URL('../../../server/vehicleInspectionRoutes.ts', import.meta.url), 'utf8');
 const inspectionMigrationSource = readFileSync(new URL('../../../../drizzle/0059_vehicle_inspections.sql', import.meta.url), 'utf8');
 const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
+const fleetManagementSource = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
+const vehicleIntakeModalSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
 const vehicleIntakeAiQueueSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiQueue.ts', import.meta.url), 'utf8');
 const vehicleIntakeWorkerSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiWorkerSync.ts', import.meta.url), 'utf8');
 const vehicleIntakeReviewSyncSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeAiReviewSync.ts', import.meta.url), 'utf8');
@@ -154,6 +156,17 @@ assert.ok(geminiSource.includes("CRV: ['plate'") && geminiSource.includes("ATPV_
 assert.ok(documentAiQueueSource.includes('syncVehicleDocumentIntakeWorkerResult'), 'shared Document AI worker must synchronize vehicle intake state');
 assert.ok(documentAiRoutesSource.includes('syncVehicleDocumentIntakeHumanReview'), 'shared Document AI review must synchronize vehicle intake state');
 assert.ok(vehicleIntakeClientSource.includes('static async analyze'), 'vehicle intake client must expose the Document AI action');
+assert.ok(vehicleIntakeClientSource.includes('static async materialize'), 'vehicle intake client must expose approved materialization');
+assert.ok(fileUploadSource.includes("'VehicleDocumentIntake'"), 'shared uploader must accept pre-vehicle intake authority');
+assert.ok(fleetManagementSource.includes('Cadastrar por documento com IA'), 'fleet page must expose the AI vehicle intake action');
+assert.ok(fleetManagementSource.includes('<VehicleDocumentIntakeModal'), 'fleet page must render the AI intake modal');
+assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.create"), 'AI vehicle flow must create a server-authoritative intake first');
+assert.ok(vehicleIntakeModalSource.includes('VehicleDocumentIntakeClient.analyze'), 'AI vehicle flow must request Gemini analysis');
+assert.ok(vehicleIntakeModalSource.includes("DocumentAiClient.review"), 'AI vehicle flow must require explicit human review');
+assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.materialize"), 'AI vehicle flow must create the Vehicle only after approval');
+assert.ok(vehicleIntakeModalSource.includes('a IA apenas propõe os dados'), 'UI must explain that AI does not create the vehicle automatically');
+assert.ok(vehicleIntakeModalSource.includes("CRLV") && vehicleIntakeModalSource.includes("CRV") && vehicleIntakeModalSource.includes("ATPV-e"), 'AI vehicle flow must expose all approved initial document classes');
+
 
 
 console.log('Vehicle latest KM, authoritative CRLV, pre-create intake and maintenance handoff regressions: PASS');
