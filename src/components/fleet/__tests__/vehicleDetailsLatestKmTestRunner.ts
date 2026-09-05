@@ -11,6 +11,7 @@ const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRo
 const vehicleClientSource = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const attachmentModalSource = readFileSync(new URL('../../documents/AttachmentModal.tsx', import.meta.url), 'utf8');
 const maintenanceHandoffSource = readFileSync(new URL('../../maintenance/MaintenanceCrlvHandoffPanel.tsx', import.meta.url), 'utf8');
+const vehicleRoutesSource = readFileSync(new URL('../../../server/vehicleRoutes.ts', import.meta.url), 'utf8');
 const vehicleIntakeRoutesSource = readFileSync(new URL('../../../server/vehicleDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
 const attachmentRoutesSource = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
 const vehicleIntakeClientSource = readFileSync(new URL('../../../api/vehicleDocumentIntakeClient.ts', import.meta.url), 'utf8');
@@ -187,6 +188,8 @@ for (const invariant of [
   assert.ok(vehicleIntakeRoutesSource.includes(invariant), `post-CRLV server invariant missing: ${invariant}`);
 }
 assert.ok(vehicleIntakeRoutesSource.includes('new Set<string>(VEHICLE_CATEGORIES)'), 'post-CRLV category validation must reuse the canonical vehicle category catalog');
+assert.match(vehicleRoutesSource, /applyToVehicleContext[\s\S]*updateForCompany\(principal\.companyId, created\.id, \{ status: VehicleStatus\.AVAILABLE/, 'manual vehicle creation must finish as AVAILABLE after post-create integrations');
+assert.match(vehicleIntakeRoutesSource, /applyToVehicleContext[\s\S]*updateForCompany\(principal\.companyId, created\.id, \{ status: VehicleStatus\.AVAILABLE/, 'vehicle AI materialization must finish as AVAILABLE after post-create integrations');
 assert.ok(!vehicleIntakeRoutesSource.includes('acquisitionValue: 0, currentValue: 0, rentalValueBase: 0'), 'materialization must not persist zero financial defaults');
 assert.ok(!vehicleIntakeRoutesSource.includes("category: DEFAULT_VEHICLE_CATEGORY"), 'materialization must not invent a generic vehicle category');
 assert.ok(vehicleIntakeModalSource.includes('a IA apenas propõe os dados'), 'UI must explain that AI does not create the vehicle automatically');
