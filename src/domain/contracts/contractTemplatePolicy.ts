@@ -59,6 +59,12 @@ export const CONTRACT_TEMPLATE_PLACEHOLDERS = new Set([
   'vehicle.renavam',
   'vehicle.chassis',
   'vehicle.currentKm',
+  'vehicle.insurance.insuranceCompany',
+  'vehicle.insurance.policyNumber',
+  'vehicle.insurance.coverageDetails',
+  'vehicle.insurance.deductibleAmount',
+  'vehicle.insurance.startDate',
+  'vehicle.insurance.endDate',
 ]);
 
 export class ContractTemplatePolicyError extends Error {}
