@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction, VehicleStatus } from '../types/enums';
+import { AuditAction, VEHICLE_CATEGORIES, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import {
   VehicleDocumentIntakeAiConflictError,
@@ -18,10 +18,13 @@ type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const WRITE_ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const DOCUMENT_TYPES = new Set(['CRLV','CRV','ATPV_E']);
+const VEHICLE_CATEGORY_VALUES = new Set<string>(VEHICLE_CATEGORIES);
 const TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_VEHICLE_CATEGORY = 'Hatch / Sedan Compacto';
 const APPROVED_DRAFT_FIELDS = new Set([
   'plate','renavam','chassis','brand','model','manufactureYear','modelYear','fuel','ownerName',
+]);
+const MATERIALIZATION_FIELDS = new Set([
+  'color','category','currentKm','nextMaintenanceKm','acquisitionValue','currentValue','rentalValueBase','version','notes',
 ]);
 
 class ValidationError extends Error {}
@@ -72,6 +75,9 @@ function sanitizeExtraction(item: any) {
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
 function projectApprovedVehicleDraft(proposedFields: unknown, corrections: unknown): Record<string, string | number> {
   const merged = { ...record(proposedFields), ...record(corrections) };
   const projected: Record<string, string | number> = {};
@@ -101,6 +107,39 @@ function draftYear(fields: Record<string, string | number>, key: string): number
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1900 || value > 2200) throw new ConflictError();
   return value;
+}
+function requiredNonNegative(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new ValidationError();
+  return parsed;
+}
+function requiredNonNegativeInteger(value: unknown): number {
+  const parsed = requiredNonNegative(value);
+  if (!Number.isInteger(parsed)) throw new ValidationError();
+  return parsed;
+}
+function optionalNonNegativeInteger(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return requiredNonNegativeInteger(value);
+}
+function parseMaterialization(body: unknown) {
+  const input = record(body);
+  const keys = Object.keys(input);
+  if (keys.some((key) => !MATERIALIZATION_FIELDS.has(key))) throw new ValidationError();
+  const color = text(input.color);
+  const category = text(input.category);
+  if (!color || !VEHICLE_CATEGORY_VALUES.has(category)) throw new ValidationError();
+  return {
+    color,
+    category,
+    currentKm: requiredNonNegativeInteger(input.currentKm),
+    nextMaintenanceKm: optionalNonNegativeInteger(input.nextMaintenanceKm),
+    acquisitionValue: requiredNonNegative(input.acquisitionValue),
+    currentValue: requiredNonNegative(input.currentValue),
+    rentalValueBase: requiredNonNegative(input.rentalValueBase),
+    version: text(input.version) || undefined,
+    notes: text(input.notes) || undefined,
+  };
 }
 async function loadApprovedVehicleDraft(context: any, principal: AuthenticatedPrincipal, intakeId: string) {
   const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Raw tenant transaction unavailable');
@@ -196,7 +235,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
   app.post('/api/vehicle-document-intakes/:id/materialize', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'CREATE_VEHICLE'); if (!principal) return;
     try {
-      requireEmptyBody(req.body);
+      const input = parseMaterialization(req.body);
       const intakeId = String(req.params.id || '').trim(); if (!intakeId) throw new ValidationError();
       const result = await UnitOfWork.run(principal.companyId, async (context) => {
         const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Raw tenant transaction unavailable');
@@ -236,39 +275,51 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         const source = await attachmentRepo.findByIdForCompany(principal.companyId, String(row.attachment_id));
         if (!source || source.isArchived || source.entityType !== 'VehicleDocumentIntake' || source.entityId !== intakeId ||
           source.contentState !== 'AVAILABLE' || !source.storageKey || !source.checksum ||
-          (source.storageProvider !== 'SERVER_FS' && source.storageProvider !== 'R2')) throw new ConflictError();
+          (source.storageProvider !== 'SERVER_FS' && source.storageProvider !== 'R2') ||
+          String(source.documentType || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType) throw new ConflictError();
         const now = new Date().toISOString();
+        const ownerNote = typeof fields.ownerName === 'string' && fields.ownerName.trim() ? `Titular no documento: ${fields.ownerName.trim()}` : '';
+        const notes = [ownerNote,input.notes].filter(Boolean).join('\n') || undefined;
         const created = await vehicleRepo.create({
-          id: randomUUID(), companyId: principal.companyId, plate, brand, model, yearFabrication: draftYear(fields, 'manufactureYear'),
-          yearModel: draftYear(fields, 'modelYear'), color: '', renavam, chassis, currentKm: 0,
-          fuelType: typeof fields.fuel === 'string' && fields.fuel.trim() ? fields.fuel.trim() : 'Flex', category: DEFAULT_VEHICLE_CATEGORY,
-          acquisitionValue: 0, currentValue: 0, rentalValueBase: 0, status: VehicleStatus.AVAILABLE,
-          notes: typeof fields.ownerName === 'string' && fields.ownerName.trim() ? `Titular no documento: ${fields.ownerName.trim()}` : undefined,
-          isArchived: false, createdAt: now, updatedAt: now,
+          id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: input.version,
+          yearFabrication: draftYear(fields, 'manufactureYear'), yearModel: draftYear(fields, 'modelYear'), color: input.color,
+          renavam, chassis, currentKm: input.currentKm, nextMaintenanceKm: input.nextMaintenanceKm,
+          fuelType: typeof fields.fuel === 'string' && fields.fuel.trim() ? fields.fuel.trim() : 'Flex', category: input.category,
+          acquisitionValue: input.acquisitionValue, currentValue: input.currentValue, rentalValueBase: input.rentalValueBase,
+          status: VehicleStatus.AVAILABLE, notes, isArchived: false, createdAt: now, updatedAt: now,
         });
-        const promoted = await attachmentRepo.create({
-          id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityType: 'Vehicle', entityId: created.id,
-          documentType: expectedType, fileName: source.fileName, fileSize: source.fileSize, mimeType: source.mimeType,
-          uploadedBy: principal.name, storageProvider: source.storageProvider, storageKey: source.storageKey, checksum: source.checksum,
-          createdBy: principal.userId, isArchived: false, contentState: 'AVAILABLE', description: `Documento promovido do intake ${intakeId}; sourceAttachmentId=${source.id}`,
-          issueDate: source.issueDate, expirationDate: source.expirationDate, createdAt: now,
-        });
-        await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: 0,
+        await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: input.currentKm,
           recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado', createdAt: now });
+
+        const promoted: any = await tx.execute(sql`
+          UPDATE file_attachments
+          SET entity_name='Vehicle', entity_type='Vehicle', entity_id=${created.id}
+          WHERE company_id=${principal.companyId} AND id=${source.id}
+            AND entity_type='VehicleDocumentIntake' AND entity_id=${intakeId}
+            AND content_state='AVAILABLE' AND is_archived=false
+          RETURNING id
+        `);
+        if (!promoted.rows?.[0]) throw new ConflictError();
+
         const consumed: any = await tx.execute(sql`
-          UPDATE vehicle_document_intakes SET vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
-          WHERE company_id=${principal.companyId} AND id=${intakeId} AND status='APPROVED' AND consumed_at IS NULL AND vehicle_id IS NULL
+          UPDATE vehicle_document_intakes SET status='CONSUMED', vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
+          WHERE company_id=${principal.companyId} AND id=${intakeId} AND created_by=${principal.userId}
+            AND status='APPROVED' AND attachment_id=${source.id} AND approved_extraction_id=${row.approved_extraction_id}
+            AND consumed_at IS NULL AND vehicle_id IS NULL
           RETURNING id
         `);
         if (!consumed.rows?.[0]) throw new ConflictError();
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: created.id,
-          action: AuditAction.CREATE, newState: JSON.stringify({ ...created, source: 'VEHICLE_DOCUMENT_INTAKE', intakeId, attachmentId: promoted.id }),
+          action: AuditAction.CREATE, newState: JSON.stringify({ ...created, source: 'VEHICLE_DOCUMENT_INTAKE', intakeId, attachmentId: source.id }),
           userId: principal.userId, userName: principal.name, timestamp: now });
-        await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'FileAttachment', entityId: promoted.id,
-          action: AuditAction.CREATE, newState: JSON.stringify({ event: 'VEHICLE_INTAKE_PROMOTION', intakeId, vehicleId: created.id, sourceAttachmentId: source.id }),
+        await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'FileAttachment', entityId: source.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify({ entityType: 'VehicleDocumentIntake', entityId: intakeId }),
+          newState: JSON.stringify({ event: 'VEHICLE_INTAKE_PROMOTION', entityType: 'Vehicle', entityId: created.id }),
           userId: principal.userId, userName: principal.name, timestamp: now });
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'VehicleDocumentIntake', entityId: intakeId,
-          action: AuditAction.UPDATE, newState: JSON.stringify({ event: 'MATERIALIZED', vehicleId: created.id, consumedAt: now }),
+          action: AuditAction.UPDATE, previousState: JSON.stringify({ status: 'APPROVED' }),
+          newState: JSON.stringify({ event: 'MATERIALIZED', status: 'CONSUMED', vehicleId: created.id, consumedAt: now }),
           userId: principal.userId, userName: principal.name, timestamp: now });
         return { item: created, reused: false };
       });
