@@ -62,3 +62,28 @@
   }
 }
 
+/* The sidebar is an independent scroll region. Keep its scrollbar visible so
+   opening longer modules never makes navigation look stuck or unscrollable. */
+aside > nav {
+  scrollbar-width: thin !important;
+  scrollbar-gutter: stable;
+  scrollbar-color: #475569 transparent;
+}
+
+aside > nav::-webkit-scrollbar {
+  display: block !important;
+  width: 6px;
+}
+
+aside > nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+aside > nav::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 9999px;
+}
+
+aside > nav::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
