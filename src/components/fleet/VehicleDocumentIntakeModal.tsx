@@ -1,7 +1,8 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
+import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { FileUpload } from '../documents/FileUpload';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Button } from '../ui/Button';
@@ -13,6 +14,22 @@ const FIELD_LABELS:Record<string,string>={
   manufactureYear:'Ano fabricação',modelYear:'Ano modelo',fuel:'Combustível',ownerName:'Titular do documento',
 };
 const FIELD_KEYS=Object.keys(FIELD_LABELS);
+const INITIAL_COMPLEMENT={
+  color:'',category:'Hatch / Sedan Compacto',currentKm:'',nextMaintenanceKm:'',
+  acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',notes:'',
+};
+
+function requiredNonNegative(value:string,label:string):number{
+  if(!value.trim())throw new Error(`${label} é obrigatório.`);
+  const parsed=Number(value);
+  if(!Number.isFinite(parsed)||parsed<0)throw new Error(`${label} deve ser um valor válido e não negativo.`);
+  return parsed;
+}
+function requiredNonNegativeInteger(value:string,label:string):number{
+  const parsed=requiredNonNegative(value,label);
+  if(!Number.isInteger(parsed))throw new Error(`${label} deve ser um número inteiro.`);
+  return parsed;
+}
 
 export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void}){
   const[documentType,setDocumentType]=useState<VehicleIntakeDocumentType>('CRLV');
@@ -20,11 +37,12 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
   const[attachmentId,setAttachmentId]=useState<string|null>(null);
   const[extraction,setExtraction]=useState<DocumentAiExtraction|null>(null);
   const[corrections,setCorrections]=useState<Record<string,string>>({});
+  const[complement,setComplement]=useState(INITIAL_COMPLEMENT);
   const[busy,setBusy]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setBusy(false);setError(null);setMessage(null);};
+  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setComplement(INITIAL_COMPLEMENT);setBusy(false);setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
 
   const start=async()=>{
@@ -71,7 +89,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
       const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
       setExtraction(reviewed);
       if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
-      setMessage('Dados aprovados. Revise o resumo e confirme a criação do veículo.');
+      setMessage('Dados aprovados. Preencha os dados complementares e confirme a criação do veículo.');
     }catch(e){setError(e instanceof Error?e.message:'Falha na revisão.');}
     finally{setBusy(false);}
   };
@@ -80,7 +98,18 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
     if(!intakeId)return;
     setBusy(true);setError(null);
     try{
-      const result=await VehicleDocumentIntakeClient.materialize(intakeId);
+      if(!complement.color.trim())throw new Error('Cor é obrigatória.');
+      if(!complement.category.trim())throw new Error('Categoria é obrigatória.');
+      const currentKm=requiredNonNegativeInteger(complement.currentKm,'KM atual');
+      const nextMaintenanceKm=complement.nextMaintenanceKm.trim()?requiredNonNegativeInteger(complement.nextMaintenanceKm,'Próxima manutenção (KM)'):undefined;
+      const acquisitionValue=requiredNonNegative(complement.acquisitionValue,'Valor de aquisição');
+      const currentValue=requiredNonNegative(complement.currentValue,'Valor atual');
+      const rentalValueBase=requiredNonNegative(complement.rentalValueBase,'Valor base de locação');
+      const result=await VehicleDocumentIntakeClient.materialize(intakeId,{
+        color:complement.color.trim(),category:complement.category,currentKm,nextMaintenanceKm,
+        acquisitionValue,currentValue,rentalValueBase,
+        version:complement.version.trim()||undefined,notes:complement.notes.trim()||undefined,
+      });
       setMessage(result.reused?'Veículo já havia sido criado por este documento.':'Veículo criado e documento original vinculado à ficha.');
       onCreated(result.vehicleId);
       reset();
@@ -130,11 +159,28 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
           </div>
         </div>}
 
-        {approved&&<div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+        {approved&&<div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
           <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/><strong>Dados aprovados</strong></div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
             {FIELD_KEYS.map(key=><div key={key}><span className="text-slate-500">{FIELD_LABELS[key]}</span><div className="font-semibold">{corrections[key]||'—'}</div></div>)}
           </div>
+
+          <div className="border-t border-emerald-200 pt-4 dark:border-emerald-900">
+            <h4 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">Dados complementares do cadastro</h4>
+            <p className="mb-3 text-xs text-slate-600 dark:text-slate-300">Estes campos não são definidos automaticamente pelo documento e precisam ser conferidos antes da criação.</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Input label="Cor *" value={complement.color} onChange={e=>setComplement(v=>({...v,color:e.target.value}))}/>
+              <Select label="Categoria *" value={complement.category} onChange={e=>setComplement(v=>({...v,category:e.target.value}))} options={VEHICLE_CATEGORIES.map(value=>({value,label:value}))}/>
+              <Input label="KM atual *" type="number" min="0" value={complement.currentKm} onChange={e=>setComplement(v=>({...v,currentKm:e.target.value}))}/>
+              <Input label="Próxima manutenção (KM)" type="number" min="0" value={complement.nextMaintenanceKm} onChange={e=>setComplement(v=>({...v,nextMaintenanceKm:e.target.value}))}/>
+              <Input label="Valor de aquisição *" type="number" min="0" step="0.01" value={complement.acquisitionValue} onChange={e=>setComplement(v=>({...v,acquisitionValue:e.target.value}))}/>
+              <Input label="Valor atual *" type="number" min="0" step="0.01" value={complement.currentValue} onChange={e=>setComplement(v=>({...v,currentValue:e.target.value}))}/>
+              <Input label="Valor base de locação *" type="number" min="0" step="0.01" value={complement.rentalValueBase} onChange={e=>setComplement(v=>({...v,rentalValueBase:e.target.value}))}/>
+              <Input label="Versão" value={complement.version} onChange={e=>setComplement(v=>({...v,version:e.target.value}))}/>
+              <Input label="Observações" value={complement.notes} onChange={e=>setComplement(v=>({...v,notes:e.target.value}))}/>
+            </div>
+          </div>
+
           <Button onClick={()=>void createVehicle()} disabled={busy}>{busy?'Criando veículo...':'Confirmar e criar veículo'}</Button>
         </div>}
       </div>}
