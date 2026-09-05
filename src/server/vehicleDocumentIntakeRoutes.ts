@@ -19,7 +19,6 @@ const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPER
 const WRITE_ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const DOCUMENT_TYPES = new Set(['CRLV','CRV','ATPV_E']);
 const TTL_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_VEHICLE_CATEGORY = 'Hatch / Sedan Compacto';
 const APPROVED_DRAFT_FIELDS = new Set([
   'plate','renavam','chassis','brand','model','manufactureYear','modelYear','fuel','ownerName',
 ]);
@@ -63,6 +62,36 @@ function requireEmptyBody(body: unknown): void {
   if (body === undefined || body === null) return;
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body as Record<string, unknown>).length !== 0) throw new ValidationError();
 }
+type VehicleMaterializationInput = {
+  color:string; category:string; currentKm:number; acquisitionValue:number; currentValue:number; rentalValueBase:number;
+  version?:string; nextMaintenanceKm?:number; notes?:string;
+};
+function materializationInput(body: unknown): VehicleMaterializationInput {
+  const input=record(body);
+  const allowed=new Set(['color','category','currentKm','acquisitionValue','currentValue','rentalValueBase','version','nextMaintenanceKm','notes']);
+  if(!Object.keys(input).every(key=>allowed.has(key))) throw new ValidationError();
+  const text=(key:string,required=false,max=500):string|undefined=>{
+    const value=input[key];
+    if(value===undefined||value===null||value===''){if(required)throw new ValidationError();return undefined;}
+    if(typeof value!=='string')throw new ValidationError();
+    const clean=value.trim(); if((required&&!clean)||clean.length>max)throw new ValidationError(); return clean||undefined;
+  };
+  const number=(key:string,required=false,positive=false):number|undefined=>{
+    const raw=input[key];
+    if(raw===undefined||raw===null||raw===''){if(required)throw new ValidationError();return undefined;}
+    if(typeof raw!=='number'||!Number.isFinite(raw)||raw<0||(positive&&raw<=0))throw new ValidationError();
+    return raw;
+  };
+  const currentKm=number('currentKm',true)!;
+  const nextMaintenanceKm=number('nextMaintenanceKm');
+  if(nextMaintenanceKm!==undefined&&nextMaintenanceKm<currentKm)throw new ValidationError();
+  return {
+    color:text('color',true,80)!, category:text('category',true,120)!,
+    currentKm, acquisitionValue:number('acquisitionValue',true,true)!, currentValue:number('currentValue',true,true)!,
+    rentalValueBase:number('rentalValueBase',true,true)!, version:text('version',false,200),
+    nextMaintenanceKm, notes:text('notes',false,2000),
+  };
+}
 function sanitizeExtraction(item: any) {
   return {
     id:String(item.id), attachmentId:String(item.attachmentId), attachmentChecksum:String(item.attachmentChecksum),
@@ -97,7 +126,7 @@ function normalizedDraftPlate(fields: Record<string, string | number>): string {
 }
 function draftYear(fields: Record<string, string | number>, key: string): number {
   const raw = fields[key];
-  if (raw === undefined) return 0;
+  if (raw === undefined) throw new ConflictError();
   const value = Number(raw);
   if (!Number.isInteger(value) || value < 1900 || value > 2200) throw new ConflictError();
   return value;
@@ -196,7 +225,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
   app.post('/api/vehicle-document-intakes/:id/materialize', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'CREATE_VEHICLE'); if (!principal) return;
     try {
-      requireEmptyBody(req.body);
+      const completion=materializationInput(req.body);
       const intakeId = String(req.params.id || '').trim(); if (!intakeId) throw new ValidationError();
       const result = await UnitOfWork.run(principal.companyId, async (context) => {
         const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Raw tenant transaction unavailable');
@@ -226,7 +255,8 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         const renavam = requiredDraftText(fields, 'renavam');
         const brand = requiredDraftText(fields, 'brand');
         const model = requiredDraftText(fields, 'model');
-        const chassis = typeof fields.chassis === 'string' ? fields.chassis.trim().toUpperCase() : '';
+        const chassis = requiredDraftText(fields, 'chassis').toUpperCase();
+        const fuelType = requiredDraftText(fields, 'fuel');
         if (await vehicleRepo.findByPlate(principal.companyId, plate) || await vehicleRepo.findByRenavam(principal.companyId, renavam)) throw new ConflictError();
         if (chassis) {
           const duplicateChassis: any = await tx.execute(sql`SELECT id FROM vehicles WHERE company_id=${principal.companyId} AND chassis=${chassis} AND is_archived=false LIMIT 1`);
@@ -239,11 +269,12 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           (source.storageProvider !== 'SERVER_FS' && source.storageProvider !== 'R2')) throw new ConflictError();
         const now = new Date().toISOString();
         const created = await vehicleRepo.create({
-          id: randomUUID(), companyId: principal.companyId, plate, brand, model, yearFabrication: draftYear(fields, 'manufactureYear'),
-          yearModel: draftYear(fields, 'modelYear'), color: '', renavam, chassis, currentKm: 0,
-          fuelType: typeof fields.fuel === 'string' && fields.fuel.trim() ? fields.fuel.trim() : 'Flex', category: DEFAULT_VEHICLE_CATEGORY,
-          acquisitionValue: 0, currentValue: 0, rentalValueBase: 0, status: VehicleStatus.AVAILABLE,
-          notes: typeof fields.ownerName === 'string' && fields.ownerName.trim() ? `Titular no documento: ${fields.ownerName.trim()}` : undefined,
+          id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: completion.version,
+          yearFabrication: draftYear(fields, 'manufactureYear'), yearModel: draftYear(fields, 'modelYear'),
+          color: completion.color, renavam, chassis, currentKm: completion.currentKm, nextMaintenanceKm: completion.nextMaintenanceKm,
+          fuelType, category: completion.category, acquisitionValue: completion.acquisitionValue, currentValue: completion.currentValue,
+          rentalValueBase: completion.rentalValueBase, status: VehicleStatus.AVAILABLE,
+          notes: [typeof fields.ownerName === 'string' && fields.ownerName.trim() ? `Titular no documento: ${fields.ownerName.trim()}` : '', completion.notes||''].filter(Boolean).join(' | ')||undefined,
           isArchived: false, createdAt: now, updatedAt: now,
         });
         const promoted = await attachmentRepo.create({
@@ -253,8 +284,8 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           createdBy: principal.userId, isArchived: false, contentState: 'AVAILABLE', description: `Documento promovido do intake ${intakeId}; sourceAttachmentId=${source.id}`,
           issueDate: source.issueDate, expirationDate: source.expirationDate, createdAt: now,
         });
-        await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: 0,
-          recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado', createdAt: now });
+        await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: completion.currentKm,
+          recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado e complementação humana', createdAt: now });
         const consumed: any = await tx.execute(sql`
           UPDATE vehicle_document_intakes SET vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
           WHERE company_id=${principal.companyId} AND id=${intakeId} AND status='APPROVED' AND consumed_at IS NULL AND vehicle_id IS NULL
