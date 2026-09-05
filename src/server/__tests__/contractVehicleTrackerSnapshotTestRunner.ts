@@ -5,6 +5,7 @@ import {
   sameContractVehicleTrackerSnapshot,
   selectContractVehicleTrackerSnapshot,
 } from '../contractVehicleTrackerSnapshot';
+import { contractVehicleTrackerTemplateValues } from '../contractVehicleTrackerTemplateValues';
 
 function tracker(overrides: Partial<Tracker> = {}): Tracker {
   return {
@@ -41,6 +42,25 @@ assert.equal(selected?.id, 'newer', 'newest active installation must be selected
 assert.equal(selected?.imei, '222222222222222');
 assert.equal(selected?.equipmentModel, 'Modelo X');
 assert.ok(!('monthlyCost' in (selected ?? {})), 'tracker monthly cost must not leak into contract snapshot');
+assert.deepEqual(contractVehicleTrackerTemplateValues(selected), {
+  'vehicle.tracker.id': 'newer',
+  'vehicle.tracker.equipmentModel': 'Modelo X',
+  'vehicle.tracker.imei': '222222222222222',
+  'vehicle.tracker.serialNumber': 'SER-001',
+  'vehicle.tracker.chipCarrier': 'Operadora',
+  'vehicle.tracker.chipNumber': '5511999999999',
+  'vehicle.tracker.installationDate': '2026-06-20',
+}, 'tracker template values must expose only the approved tracker snapshot slice');
+assert.deepEqual(contractVehicleTrackerTemplateValues(null), {
+  'vehicle.tracker.id': '',
+  'vehicle.tracker.equipmentModel': '',
+  'vehicle.tracker.imei': '',
+  'vehicle.tracker.serialNumber': '',
+  'vehicle.tracker.chipCarrier': '',
+  'vehicle.tracker.chipNumber': '',
+  'vehicle.tracker.installationDate': '',
+}, 'contracts without an active tracker must render tracker placeholders empty');
+
 
 let capturedCompanyId = '';
 let capturedVehicleId = '';
