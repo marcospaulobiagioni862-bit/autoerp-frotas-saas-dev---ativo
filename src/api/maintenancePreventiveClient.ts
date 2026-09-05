@@ -1,6 +1,6 @@
 import type { MaintenancePlan, MaintenancePlanPriority, MaintenancePlanStatus, MaintenanceProjectedStatus, MaintenanceDueStage, OilChangeRecord, TireRecord, TireStatus } from '../types/entities';
 import type { CreateMaintenancePlanInput, CreateOilChangeInput, CreateTireInput, RotateTireInput, UpdateMaintenancePlanInput, UpdateTireInput, RemoveTireInput } from '../server/maintenancePreventiveAuthority';
-import type { MaintenancePlanTemplate, UpdateMaintenancePlanTemplateInput } from '../server/maintenancePlanTemplateAuthority';
+import type { CreateMaintenancePlanTemplateInput, MaintenancePlanTemplate, UpdateMaintenancePlanTemplateInput } from '../server/maintenancePlanTemplateAuthority';
 
 type R=Record<string,unknown>;
 const rec=(v:unknown):R=>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid preventive maintenance API response');return v as R;};
@@ -27,6 +27,7 @@ const q=(vehicleId?:string)=>vehicleId?`?vehicleId=${encodeURIComponent(vehicleI
 
 export class MaintenancePreventiveClient{
   static async listTemplates(){return list(await request('/api/maintenance/templates'),template);}
+  static async createTemplate(input:CreateMaintenancePlanTemplateInput){return template((await request('/api/maintenance/templates',json('POST',input))).item);}
   static async updateTemplate(id:string,input:UpdateMaintenancePlanTemplateInput){return template((await request(`/api/maintenance/templates/${encodeURIComponent(id)}`,json('PATCH',input))).item);}
   static async applyTemplatesToFleet(){const payload=await request('/api/maintenance/templates/apply-all',json('POST',{}));return{vehicles:num(payload.vehicles,'vehicles'),plansCreated:num(payload.plansCreated,'plansCreated')};}
   static async listPlans(vehicleId?:string){return list(await request(`/api/maintenance/plans${q(vehicleId)}`),plan);}
