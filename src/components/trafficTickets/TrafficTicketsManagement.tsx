@@ -57,8 +57,13 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
     </div></div>
     {operationView==='TOLLS'?<LazyModuleErrorBoundary resetKey="toll-passages" onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">Carregando Pedágios / Free Flow...</div>}><TollPassagesManagement/></Suspense></LazyModuleErrorBoundary>:
     <div className="p-4 sm:p-6 pt-1 space-y-6 max-w-7xl mx-auto">
-      <PageHeader title="Multas de Trânsito" description="Autoridade server-side, vínculo financeiro e NIC auditável" breadcrumb="Operação • Gestão de Multas" primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}/>
-      <div className="flex justify-end"><Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button></div>
+      <PageHeader
+        title="Multas de Trânsito"
+        description="Autoridade server-side, vínculo financeiro e NIC auditável"
+        breadcrumb="Operação • Gestão de Multas"
+        secondaryActions={<Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button>}
+        primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}
+      />
       {error&&<Card className="p-4 text-sm text-rose-700 bg-rose-50">{error}</Card>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4"><span className="text-xs text-slate-500">Multas</span><div className="text-2xl font-bold">{tickets.length}</div><AlertTriangle className="w-5 h-5 text-amber-500"/></Card>
