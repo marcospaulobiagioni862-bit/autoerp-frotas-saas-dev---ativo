@@ -33,6 +33,18 @@ export interface ApprovedVehicleDocumentDraft {
   fields: Partial<Record<'plate'|'renavam'|'chassis'|'brand'|'model'|'manufactureYear'|'modelYear'|'fuel'|'ownerName', string | number>>;
 }
 
+export interface VehicleMaterializationInput {
+  color:string;
+  category:string;
+  currentKm:number;
+  nextMaintenanceKm?:number;
+  acquisitionValue:number;
+  currentValue:number;
+  rentalValueBase:number;
+  version?:string;
+  notes?:string;
+}
+
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid vehicle document intake payload');
   return value as Record<string, unknown>;
@@ -81,9 +93,9 @@ export class VehicleDocumentIntakeClient {
     if (!response.ok) throw new Error(await errorMessage(response));
     return validateApprovedDraft(record(await response.json()).draft);
   }
-  static async materialize(id: string): Promise<{ vehicleId: string; reused: boolean }> {
+  static async materialize(id: string,input:VehicleMaterializationInput): Promise<{ vehicleId: string; reused: boolean }> {
     const response = await fetch(`/api/vehicle-document-intakes/${encodeURIComponent(id)}/materialize`, {
-      method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}',
+      method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(input),
     });
     if(!response.ok) throw new Error(await errorMessage(response));
     const payload=record(await response.json());
