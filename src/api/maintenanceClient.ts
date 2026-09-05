@@ -45,7 +45,7 @@ function validateWorkOrder(value: unknown): WorkOrder {
   if (!WORK_ORDER_STATUSES.has(status) || !Array.isArray(item.parts) || !Array.isArray(item.services) || !Array.isArray(item.laborItems)) throw new Error('Invalid work order payload');
   return {
     id:text(item.id,'id'), companyId:text(item.companyId,'companyId'), number:text(item.number,'number'), vehicleId:text(item.vehicleId,'vehicleId'), supplierId:optionalString(item.supplierId),
-    status, openedAt:text(item.openedAt,'openedAt'), serviceDate:text(item.serviceDate,'serviceDate'), startedAt:optionalString(item.startedAt), completedAt:optionalString(item.completedAt), cancelledAt:optionalString(item.cancelledAt),
+    status, openedAt:text(item.openedAt,'openedAt'), serviceDate:optionalString(item.serviceDate), startedAt:optionalString(item.startedAt), completedAt:optionalString(item.completedAt), cancelledAt:optionalString(item.cancelledAt),
     entryKm:finite(item.entryKm,'entryKm'), exitKm:item.exitKm === undefined || item.exitKm === null ? undefined : finite(item.exitKm,'exitKm'),
     description:text(item.description,'description'), diagnosis:optionalString(item.diagnosis), notes:optionalString(item.notes),
     parts:item.parts.map(validatePartItem), services:item.services.map(validateServiceItem), laborItems:item.laborItems.map(validateLaborItem),
@@ -76,7 +76,7 @@ function json(method: string, body: unknown): RequestInit { return { method, hea
 function list<T>(payload: JsonRecord, validator:(value:unknown)=>T):T[]{ if(!Array.isArray(payload.items)) throw new Error('Invalid maintenance list'); return payload.items.map(validator); }
 
 export interface WorkOrderCreateRequest {
-  number:string; vehicleId:string; supplierId?:string; serviceDate:string; entryKm:number; description:string; diagnosis?:string; notes?:string;
+  number:string; vehicleId:string; supplierId?:string; serviceDate?:string; entryKm:number; description:string; diagnosis?:string; notes?:string;
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
