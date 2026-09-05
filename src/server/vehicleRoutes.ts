@@ -179,8 +179,10 @@ export function registerVehicleRoutes(app: Express): void {
         const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color: optionalText(req.body?.color) || '', renavam, chassis: (optionalText(req.body?.chassis) || '').toUpperCase(), currentKm, nextMaintenanceKm, fuelType: optionalText(req.body?.fuelType) || 'Flex', category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
         await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(txContext, principal, created);
-        await txContext.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: created.id, action: AuditAction.CREATE, newState: JSON.stringify(created), userId: principal.userId, userName: principal.name, timestamp: now });
-        return created;
+        const available = await repo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
+        if (!available) throw new VehicleNotFoundError();
+        await txContext.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: created.id, action: AuditAction.CREATE, newState: JSON.stringify(available), userId: principal.userId, userName: principal.name, timestamp: now });
+        return available;
       });
       res.status(201).json({ item });
     } catch (error) { sendVehicleError(res, error); }
