@@ -43,7 +43,7 @@ export function vehicleManualStatusOptions(status: VehicleStatus): VehicleManual
 
   return manuallyAllowedVehicleStatuses(status)
     .filter((target) => target !== VehicleStatus.MAINTENANCE && target !== VehicleStatus.ARCHIVED)
-    .map((target) => ({ value: target, label: vehicleStatusLabel(target) }));
+    .map((target) => ({ value: target, label: `Alterar para: ${vehicleStatusLabel(target)}` }));
 }
 
 export function vehicleStatusBadgeVariant(status: VehicleStatus): VehicleStatusBadgeVariant {
