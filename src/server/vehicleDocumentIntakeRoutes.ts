@@ -120,19 +120,19 @@ function projectApprovedVehicleDraft(proposedFields: unknown, corrections: unkno
 function requiredDraftText(fields: Record<string, string | number>, key: string): string {
   const value = fields[key];
   const clean = typeof value === 'string' ? value.trim() : '';
-  if (!clean) throw new ConflictError();
+  if (!clean) throw new ConflictError(`O campo ${key} não foi reconhecido na leitura aprovada. Revise os dados do documento antes de criar o veículo.`);
   return clean;
 }
 function normalizedDraftPlate(fields: Record<string, string | number>): string {
   const plate = requiredDraftText(fields, 'plate').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate)) throw new ConflictError();
+  if (!/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate)) throw new ConflictError('A placa aprovada está inválida. Corrija a placa na revisão do documento antes de criar o veículo.');
   return plate;
 }
 function draftYear(fields: Record<string, string | number>, key: string): number {
   const raw = fields[key];
-  if (raw === undefined) throw new ConflictError();
+  if (raw === undefined) throw new ConflictError(`O campo ${key} não foi reconhecido. Revise o ano na leitura aprovada.`);
   const value = Number(raw);
-  if (!Number.isInteger(value) || value < 1900 || value > 2200) throw new ConflictError();
+  if (!Number.isInteger(value) || value < 1900 || value > 2200) throw new ConflictError(`O campo ${key} possui um ano inválido. Corrija a leitura antes de criar o veículo.`);
   return value;
 }
 async function loadApprovedVehicleDraft(context: any, principal: AuthenticatedPrincipal, intakeId: string) {
@@ -153,9 +153,9 @@ async function loadApprovedVehicleDraft(context: any, principal: AuthenticatedPr
   if (String(row.intake_status) !== 'APPROVED' || !row.attachment_id || !row.approved_extraction_id ||
     String(row.approved_extraction_id) !== String(row.extraction_id) ||
     String(row.attachment_id) !== String(row.extraction_attachment_id) || String(row.extraction_status) !== 'APPROVED' ||
-    String(row.detected_document_type || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType) throw new ConflictError();
+    String(row.detected_document_type || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType) throw new ConflictError('A leitura do documento não está mais no estado aprovado esperado. Atualize a análise e aprove os dados novamente.');
   const fields = projectApprovedVehicleDraft(row.proposed_fields, row.corrections);
-  if (Object.keys(fields).length === 0) throw new ConflictError();
+  if (Object.keys(fields).length === 0) throw new ConflictError('A leitura aprovada não possui dados suficientes para criar o veículo. Revise o documento ou faça uma nova leitura.');
   return { documentType: expectedType, fields };
 }
 function scheduleDocumentAiExtraction(companyId:string,extractionId:string):void {
@@ -166,7 +166,8 @@ function scheduleDocumentAiExtraction(companyId:string,extractionId:string):void
 function sendError(res: Response, error: unknown): void {
   if (error instanceof ValidationError) { res.status(400).json({ error: 'Invalid vehicle document intake request' }); return; }
   if (error instanceof NotFoundError || error instanceof VehicleDocumentIntakeAiNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
-  if (error instanceof ConflictError || error instanceof VehicleDocumentIntakeAiConflictError) { res.status(409).json({ error: 'Vehicle document intake conflict' }); return; }
+  if (error instanceof ConflictError) { res.status(409).json({ error: error.message || 'O cadastro por documento entrou em conflito. Atualize a análise e tente novamente.' }); return; }
+  if (error instanceof VehicleDocumentIntakeAiConflictError) { res.status(409).json({ error: 'A análise do documento mudou enquanto a operação estava em andamento. Atualize a análise e tente novamente; se persistir, inicie uma nova leitura.' }); return; }
   console.error('AUTOERP_VEHICLE_DOCUMENT_INTAKE_FAILURE', error);
   res.status(500).json({ error: 'Vehicle document intake operation failed' });
 }
@@ -183,7 +184,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         const existingResult: any = await tx.execute(sql`SELECT * FROM vehicle_document_intakes WHERE company_id=${principal.companyId} AND idempotency_key=${key} LIMIT 1`);
         const existing = existingResult.rows?.[0];
         if (existing) {
-          if (String(existing.created_by) !== principal.userId || String(existing.document_type) !== type) throw new ConflictError();
+          if (String(existing.created_by) !== principal.userId || String(existing.document_type) !== type) throw new ConflictError('Já existe uma leitura com esta chave em outro contexto. Feche este cadastro e inicie uma nova leitura do documento.');
           return { item: map(existing), created: false };
         }
         const id = randomUUID(), now = new Date(), expiresAt = new Date(now.getTime() + TTL_MS);
@@ -192,7 +193,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           VALUES (${id},${principal.companyId},${principal.userId},'DRAFT',${key},${type},${expiresAt.toISOString()},${now.toISOString()},${now.toISOString()})
           ON CONFLICT (company_id,idempotency_key) DO NOTHING RETURNING *
         `);
-        const row = insertedResult.rows?.[0]; if (!row) throw new ConflictError();
+        const row = insertedResult.rows?.[0]; if (!row) throw new ConflictError('Já existe uma análise concorrente para este documento. Atualize a tela antes de tentar novamente.');
         const item = map(row);
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'VehicleDocumentIntake', entityId: item.id,
           action: AuditAction.CREATE, newState: JSON.stringify({ event: 'CREATE', status: item.status, documentType: item.documentType }),
