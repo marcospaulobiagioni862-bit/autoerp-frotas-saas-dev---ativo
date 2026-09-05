@@ -6,6 +6,7 @@ const detailsSource = readFileSync(new URL('../DriverDetailsModal.tsx', import.m
 const profilePhotoSource = readFileSync(new URL('../DriverProfilePhoto.tsx', import.meta.url), 'utf8');
 const formSource = readFileSync(new URL('../DriverFormModal.tsx', import.meta.url), 'utf8');
 const cnhIntakeSource = readFileSync(new URL('../DriverCnhIntakeModal.tsx', import.meta.url), 'utf8');
+const cnhCardSource = readFileSync(new URL('../DriverCnhDocumentCard.tsx', import.meta.url), 'utf8');
 const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
 const attachmentListSource = readFileSync(new URL('../../documents/AttachmentList.tsx', import.meta.url), 'utf8');
 
@@ -27,36 +28,12 @@ assert.equal(
   3,
   'DriversManagement must define exactly three lazy modal loaders',
 );
-assert.match(
-  source,
-  /\{isFormOpen\s*&&\s*<DriverFormModal/,
-  'driver form must only render after an explicit open action',
-);
-assert.match(
-  source,
-  /\{isDetailsOpen\s*&&\s*selectedDriverId\s*&&\s*<DriverDetailsModal/,
-  'driver details must only render when open with a selected server id',
-);
-assert.match(
-  source,
-  /\{isCnhIntakeOpen\s*&&\s*<DriverCnhIntakeModal/,
-  'CNH intake must only render after an explicit open action',
-);
-assert.match(
-  source,
-  /<LazyModuleErrorBoundary resetKey=\{driverModalResetKey\} onRetry=\{\(\)\s*=>\s*window\.location\.reload\(\)\}>/,
-  'driver modal recovery must reset between modal targets',
-);
-assert.match(
-  source,
-  /<Suspense fallback=\{<div role="status"[^>]*>.*Carregando dados do motorista\.\.\./,
-  'driver modals must expose a neutral loading state',
-);
-assert.doesNotMatch(
-  source,
-  /error\.(?:message|stack)|String\(error\)/,
-  'driver modal fallback must not expose raw errors',
-);
+assert.match(source, /\{isFormOpen\s*&&\s*<DriverFormModal/, 'driver form must only render after an explicit open action');
+assert.match(source, /\{isDetailsOpen\s*&&\s*selectedDriverId\s*&&\s*<DriverDetailsModal/, 'driver details must only render when open with a selected server id');
+assert.match(source, /\{isCnhIntakeOpen\s*&&\s*<DriverCnhIntakeModal/, 'CNH intake must only render after an explicit open action');
+assert.match(source, /<LazyModuleErrorBoundary resetKey=\{driverModalResetKey\} onRetry=\{\(\)\s*=>\s*window\.location\.reload\(\)\}>/, 'driver modal recovery must reset between modal targets');
+assert.match(source, /<Suspense fallback=\{<div role="status"[^>]*>.*Carregando dados do motorista\.\.\./, 'driver modals must expose a neutral loading state');
+assert.doesNotMatch(source, /error\.(?:message|stack)|String\(error\)/, 'driver modal fallback must not expose raw errors');
 
 assert.match(detailsSource, /import\s+\{\s*DriverProfilePhoto\s*\}\s+from\s+'\.\/DriverProfilePhoto'/, 'driver details must import the approved profile photo component');
 assert.match(detailsSource, /<DriverProfilePhoto\s+driverId=\{driver\.id\}\s+driverName=\{driver\.fullName\}\s*\/>/, 'driver header must render the approved profile photo component');
@@ -92,11 +69,7 @@ const vehicleDocumentCatalog = [
   ['VEHICLE_DOCUMENT', 'Outro documento'],
 ] as const;
 for (const [value, label] of vehicleDocumentCatalog) {
-  assert.equal(
-    fileUploadSource.includes(`['${value}', '${label}']`),
-    true,
-    `vehicle document catalog must preserve ${value}`,
-  );
+  assert.equal(fileUploadSource.includes(`['${value}', '${label}']`), true, `vehicle document catalog must preserve ${value}`);
 }
 assert.match(fileUploadSource, /useState\('CRLV'\)/, 'vehicle document type must default to CRLV');
 assert.match(fileUploadSource, /effectiveDocumentType\s*=\s*isVehicleDocument\s*\?\s*selectedVehicleDocumentType\s*:\s*documentType/, 'selected vehicle type must be sent as documentType');
@@ -122,25 +95,17 @@ assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, '
 assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must be wired to the renewal intake');
 assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
 
-assert.match(
-  source,
-  /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/,
-  'driver list and optional vehicle enrichment must settle independently',
-);
-assert.match(
-  source,
-  /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/,
-  'driver authority failure must fail the primary list closed',
-);
-assert.match(
-  source,
-  /setDrivers\(driversResult\.value\);[\s\S]*if \(vehiclesResult\.status === 'fulfilled'\)[\s\S]*setVehiclesMap\(vMap\);[\s\S]*else[\s\S]*setVehiclesMap\(\{\}\);/,
-  'vehicle enrichment failure must preserve the already loaded driver list',
-);
-assert.doesNotMatch(
-  source,
-  /Promise\.all\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\)/,
-  'vehicle enrichment must not be able to reject the primary driver load',
-);
+assert.match(cnhCardSource, /setAttachments\(cnh\)/, 'CNH card must retain all available driver CNH attachments');
+assert.match(cnhCardSource, /const history = useMemo\(\(\) => attachments\.slice\(1\)/, 'CNH card must reserve older files as history');
+assert.match(cnhCardSource, /Histórico de CNHs anteriores/, 'CNH card must expose the previous CNH history');
+assert.match(cnhCardSource, /history\.map\(\(item, index\)/, 'CNH card must render every prior CNH version');
+assert.match(cnhCardSource, /onClick=\{\(\) => openPreview\(item\)\}/, 'historical CNH must remain previewable through authenticated content');
+assert.match(cnhCardSource, /onClick=\{\(\) => downloadOriginal\(item\)\}/, 'historical CNH must remain downloadable through authenticated content');
+assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'CNH history UI must not consume storage or tenant authority fields');
 
-console.log('Deferred driver modals, profile photo, document upload UX and driver list resilience regression: PASS');
+assert.match(source, /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/, 'driver list and optional vehicle enrichment must settle independently');
+assert.match(source, /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/, 'driver authority failure must fail the primary list closed');
+assert.match(source, /setDrivers\(driversResult\.value\);[\s\S]*if \(vehiclesResult\.status === 'fulfilled'\)[\s\S]*setVehiclesMap\(vMap\);[\s\S]*else[\s\S]*setVehiclesMap\(\{\}\);/, 'vehicle enrichment failure must preserve the already loaded driver list');
+assert.doesNotMatch(source, /Promise\.all\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(/, 'vehicle enrichment must not be able to reject the primary driver load');
+
+console.log('Deferred driver modals, profile photo, CNH history, document upload UX and driver list resilience regression: PASS');
