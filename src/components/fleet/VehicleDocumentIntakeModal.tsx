@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
@@ -14,6 +14,9 @@ const FIELD_LABELS:Record<string,string>={
   manufactureYear:'Ano fabricação',modelYear:'Ano modelo',fuel:'Combustível',ownerName:'Titular do documento',
 };
 const FIELD_KEYS=Object.keys(FIELD_LABELS);
+
+type CompletionField='color'|'category'|'currentKm'|'acquisitionValue'|'currentValue'|'rentalValueBase'|'nextMaintenanceKm';
+type CompletionErrors=Partial<Record<CompletionField,string>>;
 
 function analysisProgress(status:DocumentAiExtraction['status']|null):number{
   if(status==='PENDING')return 50;
@@ -32,12 +35,19 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
     color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',
     version:'',nextMaintenanceKm:'',notes:'',
   });
+  const[fieldErrors,setFieldErrors]=useState<CompletionErrors>({});
   const[busy,setBusy]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
+  const materializingRef=useRef(false);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setError(null);setMessage(null);};
+  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setFieldErrors({});materializingRef.current=false;setBusy(false);setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
+
+  const clearFieldError=(field:CompletionField)=>setFieldErrors(current=>{
+    if(!current[field])return current;
+    const next={...current};delete next[field];return next;
+  });
 
   const start=async()=>{
     setBusy(true);setError(null);
@@ -89,15 +99,21 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
   };
 
   const createVehicle=async()=>{
-    if(!intakeId)return;
+    if(!intakeId||materializingRef.current)return;
     const currentKm=Number(completion.currentKm),acquisitionValue=Number(completion.acquisitionValue),currentValue=Number(completion.currentValue),rentalValueBase=Number(completion.rentalValueBase);
-    if(!completion.color.trim()||!completion.category||!completion.currentKm||!completion.acquisitionValue||!completion.currentValue||!completion.rentalValueBase||
-      !Number.isFinite(currentKm)||currentKm<0||!Number.isFinite(acquisitionValue)||acquisitionValue<=0||
-      !Number.isFinite(currentValue)||currentValue<=0||!Number.isFinite(rentalValueBase)||rentalValueBase<=0){
-      setError('Preencha cor, categoria, KM atual, valor de compra, valor comercial e aluguel semanal com valores válidos.');return;
-    }
     const nextMaintenanceKm=completion.nextMaintenanceKm?Number(completion.nextMaintenanceKm):undefined;
-    if(nextMaintenanceKm!==undefined&&(!Number.isFinite(nextMaintenanceKm)||nextMaintenanceKm<currentKm)){setError('A próxima manutenção em KM não pode ser menor que o KM atual.');return;}
+    const validation:CompletionErrors={};
+    if(!completion.color.trim())validation.color='Informe a cor do veículo.';
+    if(!completion.category)validation.category='Selecione a categoria do veículo.';
+    if(!completion.currentKm||!Number.isFinite(currentKm)||currentKm<0)validation.currentKm='Informe um KM atual válido (zero ou maior).';
+    if(!completion.acquisitionValue||!Number.isFinite(acquisitionValue)||acquisitionValue<=0)validation.acquisitionValue='Informe um valor de compra maior que zero.';
+    if(!completion.currentValue||!Number.isFinite(currentValue)||currentValue<=0)validation.currentValue='Informe um valor comercial maior que zero.';
+    if(!completion.rentalValueBase||!Number.isFinite(rentalValueBase)||rentalValueBase<=0)validation.rentalValueBase='Informe um aluguel semanal maior que zero.';
+    if(nextMaintenanceKm!==undefined&&(!Number.isFinite(nextMaintenanceKm)||nextMaintenanceKm<currentKm))validation.nextMaintenanceKm='A próxima manutenção não pode ser menor que o KM atual.';
+    setFieldErrors(validation);
+    if(Object.keys(validation).length>0){setError('Corrija os campos destacados em vermelho antes de criar o veículo.');return;}
+
+    materializingRef.current=true;
     setBusy(true);setError(null);
     try{
       const result=await VehicleDocumentIntakeClient.materialize(intakeId,{
@@ -108,8 +124,12 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
       onCreated(result.vehicleId);
       reset();
       onClose();
-    }catch(e){setError(e instanceof Error?e.message:'Falha ao criar veículo a partir do documento aprovado.');}
-    finally{setBusy(false);}
+    }catch(e){
+      const detail=e instanceof Error?e.message:'Falha ao criar veículo a partir do documento aprovado.';
+      setError(detail==='Vehicle document intake conflict'
+        ?'Não foi possível concluir: o documento já foi consumido ou já existe veículo com a mesma placa, RENAVAM ou chassi. Verifique o cadastro existente.'
+        :detail);
+    }finally{materializingRef.current=false;setBusy(false);}
   };
 
   const canEdit=extraction?.status==='REVIEW_REQUIRED';
@@ -183,24 +203,24 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
             <div><strong className="text-sm">Completar cadastro do veículo</strong><p className="text-xs text-slate-500">Os campos abaixo não são definidos pelo CRLV e devem ser informados antes da criação.</p></div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Input label="Cor *" required value={completion.color} onChange={e=>setCompletion(v=>({...v,color:e.target.value}))}/>
-              <Select label="Categoria *" value={completion.category} onChange={e=>setCompletion(v=>({...v,category:e.target.value}))} options={[{value:'',label:'Selecione...'},...VEHICLE_CATEGORIES.map(category=>({value:category,label:category}))]}/>
-              <Input label="KM Atual *" type="number" min="0" required value={completion.currentKm} onChange={e=>setCompletion(v=>({...v,currentKm:e.target.value}))}/>
+              <Input label="Cor *" required error={fieldErrors.color} value={completion.color} onChange={e=>{clearFieldError('color');setCompletion(v=>({...v,color:e.target.value}));}}/>
+              <Select label="Categoria *" required error={fieldErrors.category} value={completion.category} onChange={e=>{clearFieldError('category');setCompletion(v=>({...v,category:e.target.value}));}} options={[{value:'',label:'Selecione...'},...VEHICLE_CATEGORIES.map(category=>({value:category,label:category}))]}/>
+              <Input label="KM Atual *" type="number" min="0" required error={fieldErrors.currentKm} value={completion.currentKm} onChange={e=>{clearFieldError('currentKm');setCompletion(v=>({...v,currentKm:e.target.value}));}}/>
               <Input label="Versão" value={completion.version} onChange={e=>setCompletion(v=>({...v,version:e.target.value}))} placeholder="Ex.: LT Turbo Flex"/>
-              <Input label="Próx. Manutenção (KM)" type="number" min="0" value={completion.nextMaintenanceKm} onChange={e=>setCompletion(v=>({...v,nextMaintenanceKm:e.target.value}))}/>
+              <Input label="Próx. Manutenção (KM)" type="number" min="0" error={fieldErrors.nextMaintenanceKm} value={completion.nextMaintenanceKm} onChange={e=>{clearFieldError('nextMaintenanceKm');setCompletion(v=>({...v,nextMaintenanceKm:e.target.value}));}}/>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
               <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Valores obrigatórios</h4>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Input label="Valor de Compra (R$) *" type="number" min="0.01" step="0.01" required value={completion.acquisitionValue} onChange={e=>setCompletion(v=>({...v,acquisitionValue:e.target.value}))}/>
-                <Input label="Valor Comercial Atual (R$) *" type="number" min="0.01" step="0.01" required value={completion.currentValue} onChange={e=>setCompletion(v=>({...v,currentValue:e.target.value}))}/>
-                <Input label="Aluguel Semanal (R$) *" type="number" min="0.01" step="0.01" required value={completion.rentalValueBase} onChange={e=>setCompletion(v=>({...v,rentalValueBase:e.target.value}))}/>
+                <Input label="Valor de Compra (R$) *" type="number" min="0.01" step="0.01" required error={fieldErrors.acquisitionValue} value={completion.acquisitionValue} onChange={e=>{clearFieldError('acquisitionValue');setCompletion(v=>({...v,acquisitionValue:e.target.value}));}}/>
+                <Input label="Valor Comercial Atual (R$) *" type="number" min="0.01" step="0.01" required error={fieldErrors.currentValue} value={completion.currentValue} onChange={e=>{clearFieldError('currentValue');setCompletion(v=>({...v,currentValue:e.target.value}));}}/>
+                <Input label="Aluguel Semanal (R$) *" type="number" min="0.01" step="0.01" required error={fieldErrors.rentalValueBase} value={completion.rentalValueBase} onChange={e=>{clearFieldError('rentalValueBase');setCompletion(v=>({...v,rentalValueBase:e.target.value}));}}/>
               </div>
               <p className="mt-2 text-[11px] text-slate-500">Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
             </div>
             <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
           </div>
-          <Button onClick={()=>void createVehicle()} disabled={busy}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
+          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 
