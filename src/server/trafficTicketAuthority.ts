@@ -12,7 +12,7 @@ export interface CreateTrafficTicketAuthorityInput {
   vehicleId:string;driverId?:string;contractId?:string;autoNumber:string;organName:string;infractionCode:string;
   description:string;infractionDate:string;infractionTime?:string;infractionLocation?:string;dueDate:string;discountDueDate?:string;originalAmount:number;
   discountedAmount?:number;nicAmount?:number;points:number;responsibility:TicketResponsibility;notes?:string;
-  baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;
+  baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;sourceDocumentIntakeId?:string;
 }
 export interface UpdateTrafficTicketAuthorityInput { organName?:string;infractionCode?:string;description?:string;infractionTime?:string;infractionLocation?:string;notes?:string; }
 export interface ChangeTicketResponsibilityInput {
@@ -38,6 +38,13 @@ const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function round(value:number):number{return Math.round((value+Number.EPSILON)*100)/100;}
 function normalizeAuto(value:string):string{return value.trim().toUpperCase().replace(/\s+/g,' ');}
+function plainRecord(value:unknown):Record<string,unknown>{return value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};}
+function normalizePlate(value:string):string{return value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function documentNumber(value:unknown):number|undefined{
+  if(value===undefined||value===null||value==='')return undefined;
+  const parsed=typeof value==='number'?value:Number(String(value).replace(',','.'));
+  return Number.isFinite(parsed)?round(parsed):undefined;
+}
 function assertWrite(principal:AuthenticatedPrincipal):void{
   const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
   if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
@@ -189,7 +196,57 @@ export class TrafficTicketAuthorityService {
     if(input.responsibility===TicketResponsibility.DRIVER&&!input.driverIncomeCategoryId)throw new TrafficTicketValidationError('Categoria de receita obrigatória');
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');
+      let documentIntake:undefined|{id:string;attachment:any;extractionId:string;fields:Record<string,unknown>};
+      if(input.sourceDocumentIntakeId){
+        const intakeId=input.sourceDocumentIntakeId.trim();
+        if(!intakeId||intakeId.length>120)throw new TrafficTicketValidationError('Intake documental inválido');
+        const intakeRows=rows(await rawTx.execute(sql`
+          SELECT * FROM traffic_ticket_document_intakes
+          WHERE company_id=${principal.companyId} AND id=${intakeId} AND created_by=${principal.userId}
+          LIMIT 1 FOR UPDATE
+        `));
+        const intake=intakeRows[0];
+        if(!intake||String(intake.status)!=='DOCUMENT_UPLOADED'||!intake.attachment_id||intake.traffic_ticket_id||intake.consumed_at||new Date(intake.expires_at).getTime()<=Date.now())throw new TrafficTicketConflictError('Intake documental indisponível');
+        const extractionRows=rows(await rawTx.execute(sql`
+          SELECT id,status,detected_document_type,attachment_id,proposed_fields,corrections
+          FROM document_ai_extractions
+          WHERE company_id=${principal.companyId}
+            AND attachment_id=${String(intake.attachment_id)}
+            AND status='APPROVED'
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `));
+        const extraction=extractionRows[0];
+        if(!extraction||String(extraction.detected_document_type||'').toUpperCase()!=='TRAFFIC_TICKET')throw new TrafficTicketConflictError('Extração aprovada de multa não encontrada');
+        const attachment=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,String(intake.attachment_id));
+        if(!attachment||attachment.isArchived||attachment.entityType!=='TrafficTicketDocumentIntake'||attachment.entityId!==intakeId||attachment.documentType!=='TRAFFIC_TICKET'||attachment.contentState!=='AVAILABLE'||!attachment.storageKey||!attachment.checksum||(attachment.storageProvider!=='SERVER_FS'&&attachment.storageProvider!=='R2'))throw new TrafficTicketConflictError('Documento de origem inválido');
+        documentIntake={id:intakeId,attachment,extractionId:String(extraction.id),fields:{...plainRecord(extraction.proposed_fields),...plainRecord(extraction.corrections)}};
+      }
       const repo=tx.getTrafficTicketRepo();const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,input.vehicleId);if(!vehicle||vehicle.isArchived)throw new TrafficTicketNotFoundError('Veículo não encontrado');
+      if(documentIntake){
+        const fields=documentIntake.fields;
+        const compareText=(key:string,actual:string|undefined,normalize:(value:string)=>string=(value)=>value.trim())=>{
+          if(fields[key]===undefined||fields[key]===null||fields[key]==='')return;
+          if(normalize(String(fields[key]))!==normalize(actual||''))throw new TrafficTicketConflictError(`Campo documental divergente: ${key}`);
+        };
+        const compareNumber=(key:string,actual:number|undefined)=>{
+          const expected=documentNumber(fields[key]);if(expected===undefined)return;
+          if(actual===undefined||round(actual)!==expected)throw new TrafficTicketConflictError(`Campo documental divergente: ${key}`);
+        };
+        compareText('plate',vehicle.plate,normalizePlate);
+        compareText('noticeNumber',autoNumber,normalizeAuto);
+        compareText('organName',organName,(value)=>value.trim().toUpperCase());
+        compareText('infractionCode',infractionCode,(value)=>value.trim().toUpperCase());
+        compareText('description',description);
+        compareText('infractionDate',input.infractionDate);
+        compareText('infractionTime',infractionTime);
+        compareText('infractionLocation',infractionLocation);
+        compareText('dueDate',input.dueDate);
+        compareText('discountDueDate',input.discountDueDate);
+        compareNumber('amount',original);
+        compareNumber('discountAmount',discounted);
+        compareNumber('points',input.points);
+      }
       if(await repo.findByAutoNumber(principal.companyId,autoNumber))throw new TrafficTicketConflictError('Auto de infração já cadastrado');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
       const resolved=await resolveContract(rawTx,principal.companyId,input.vehicleId,input.infractionDate,input.contractId,input.driverId);
@@ -232,6 +289,28 @@ export class TrafficTicketAuthorityService {
       }
       ticket.updatedAt=new Date().toISOString();ticket=await repo.save(ticket);await audit(tx,principal,AuditAction.CREATE,null,ticket);
       await createOperationalAlert(tx,principal,ticket);
+      if(documentIntake){
+        const source=documentIntake.attachment,attachmentRepo=tx.getAttachmentRepo(),promoted=await attachmentRepo.create({
+          id:randomUUID(),companyId:principal.companyId,entityName:'TrafficTicket',entityType:'TrafficTicket',entityId:ticket.id,
+          documentType:'TRAFFIC_TICKET_NOTICE',fileName:source.fileName,fileSize:source.fileSize,mimeType:source.mimeType,
+          uploadedBy:principal.name,storageProvider:source.storageProvider,storageKey:source.storageKey,checksum:source.checksum,
+          createdBy:principal.userId,isArchived:false,contentState:'AVAILABLE',
+          description:`Documento promovido do intake ${documentIntake.id}; sourceAttachmentId=${source.id}`,
+          issueDate:source.issueDate,expirationDate:source.expirationDate,createdAt:ticket.updatedAt,
+        });
+        const consumed=rows(await rawTx.execute(sql`
+          UPDATE traffic_ticket_document_intakes
+          SET status='CONSUMED',approved_extraction_id=${documentIntake.extractionId},traffic_ticket_id=${ticket.id},
+              consumed_at=${ticket.updatedAt},updated_at=${ticket.updatedAt}
+          WHERE company_id=${principal.companyId} AND id=${documentIntake.id}
+            AND created_by=${principal.userId} AND status='DOCUMENT_UPLOADED'
+            AND traffic_ticket_id IS NULL AND consumed_at IS NULL
+          RETURNING id
+        `));
+        if(!consumed[0])throw new TrafficTicketConflictError('Intake documental já consumido');
+        await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:promoted.id,action:AuditAction.CREATE,newState:JSON.stringify({event:'TRAFFIC_TICKET_INTAKE_PROMOTION',intakeId:documentIntake.id,trafficTicketId:ticket.id,sourceAttachmentId:source.id}),userId:principal.userId,userName:principal.name,timestamp:ticket.updatedAt});
+        await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'TrafficTicketDocumentIntake',entityId:documentIntake.id,action:AuditAction.UPDATE,newState:JSON.stringify({event:'CONSUMED',trafficTicketId:ticket.id,approvedExtractionId:documentIntake.extractionId}),userId:principal.userId,userName:principal.name,timestamp:ticket.updatedAt});
+      }
       const financial=await currentFinancial(tx,ticket);return {item:projected(ticket,financial),financial};
     },{financialPeriodLock:'SHARED'});
   }
