@@ -17,7 +17,7 @@ export interface WorkOrderPartItem { id:string; partId?:string; description:stri
 export interface WorkOrderServiceItem { id:string; serviceId?:string; description:string; quantity:number; unitCost:number; totalCost:number; }
 export interface WorkOrderLaborItem { id:string; description:string; hours:number; hourlyRate:number; totalCost:number; }
 export interface WorkOrder {
-  id:string; companyId:string; number:string; vehicleId:string; supplierId?:string; status:WorkOrderStatus; openedAt:string; serviceDate:string; startedAt?:string; completedAt?:string;
+  id:string; companyId:string; number:string; vehicleId:string; supplierId?:string; status:WorkOrderStatus; openedAt:string; serviceDate?:string; startedAt?:string; completedAt?:string;
   cancelledAt?:string; entryKm:number; exitKm?:number; description:string; diagnosis?:string; notes?:string; parts:WorkOrderPartItem[]; services:WorkOrderServiceItem[];
   laborItems:WorkOrderLaborItem[]; subtotalParts:number; subtotalServices:number; subtotalLabor:number; discount:number; total:number; accountPayableId?:string;
   receiptUrls?:string[]; createdBy?:string; createdAt:string; updatedAt:string;
