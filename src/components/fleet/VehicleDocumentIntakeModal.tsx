@@ -39,6 +39,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
 
   const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
+  useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
 
   const start=async()=>{
     setBusy(true);setError(null);
@@ -71,7 +72,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
     setBusy(true);setError(null);setMessage('Documento enviado. Solicitando leitura pela IA...');
     try{
       await VehicleDocumentIntakeClient.analyze(intakeId);
-      setMessage('Leitura solicitada. Acompanhe o progresso estimado e use Atualizar análise para consultar o estado mais recente.');
+      setMessage('Leitura solicitada. O status será atualizado automaticamente; use Atualizar análise apenas se quiser consultar manualmente agora.');
       await refresh();
     }catch(e){setError(e instanceof Error?e.message:'Falha ao solicitar análise.');}
     finally{setBusy(false);}
@@ -166,7 +167,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
               aria-valuetext={`${progress}% estimado`}
             />
           </div>
-          <p className="text-[11px] text-slate-500">Percentual estimado por etapa. A IA não fornece progresso contínuo em tempo real.</p>
+          <p className="text-[11px] text-slate-500">Percentual estimado por etapa. Enquanto a análise estiver em processamento, o ERP consulta o estado automaticamente.</p>
         </div>
 
         {canEdit&&<div className="space-y-3">
