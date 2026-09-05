@@ -16,6 +16,11 @@ import {
   AttachmentStorageValidationError,
   ServerAttachmentStorage,
 } from './attachmentStorage';
+import {
+  loadContractVehicleInsuranceSnapshot,
+  sameContractVehicleInsuranceSnapshot,
+  type ContractVehicleInsuranceSnapshot,
+} from './contractVehicleInsuranceSnapshot';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -90,6 +95,7 @@ interface ContractSnapshot {
     };
   };
   vehicle: { id: string; plate: string; brand: string; model: string; version: string; brandModel: string; yearFabrication: number; yearModel: number; yearDisplay: string; color: string; renavam: string; chassis: string; currentKm: number };
+  vehicleInsurance: ContractVehicleInsuranceSnapshot | null;
   template: { id: string; templateKey: string; versionNumber: number; title: string };
 }
 
@@ -113,6 +119,7 @@ function makeSnapshot(
   contract: Contract,
   driver: Driver,
   vehicle: Vehicle,
+  vehicleInsurance: ContractVehicleInsuranceSnapshot | null,
   template: ContractTemplate
 ): ContractSnapshot {
   return {
@@ -170,6 +177,7 @@ function makeSnapshot(
       chassis: vehicle.chassis,
       currentKm: vehicle.currentKm,
     },
+    vehicleInsurance,
     template: {
       id: template.id,
       templateKey: template.templateKey,
@@ -348,11 +356,18 @@ async function getCompany(companyId: string): Promise<ContractSnapshot['company'
   };
 }
 
-function sameSnapshotTerms(snapshot: ContractSnapshot, contract: Contract, driver: Driver, vehicle: Vehicle, template: ContractTemplate): boolean {
+function sameSnapshotTerms(
+  snapshot: ContractSnapshot,
+  contract: Contract,
+  driver: Driver,
+  vehicle: Vehicle,
+  vehicleInsurance: ContractVehicleInsuranceSnapshot | null,
+  template: ContractTemplate,
+): boolean {
   return JSON.stringify({ ...snapshot, company: undefined }) === JSON.stringify({
-    ...makeSnapshot(snapshot.company, contract, driver, vehicle, template),
+    ...makeSnapshot(snapshot.company, contract, driver, vehicle, vehicleInsurance, template),
     company: undefined,
-  });
+  }) && sameContractVehicleInsuranceSnapshot(snapshot.vehicleInsurance, vehicleInsurance);
 }
 
 function parseSignedAt(value: unknown): string {
@@ -425,10 +440,20 @@ export function registerContractExecutionRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
         if (!driver || driver.isArchived || !vehicle || vehicle.isArchived) throw new ExecutionNotFoundError();
-        return { contract, template, driver, vehicle };
+        const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
+          tx, principal.companyId, vehicle.id, contract.startDate
+        );
+        return { contract, template, driver, vehicle, vehicleInsurance };
       });
 
-      const snapshot = makeSnapshot(company, prepared.contract, prepared.driver, prepared.vehicle, prepared.template);
+      const snapshot = makeSnapshot(
+        company,
+        prepared.contract,
+        prepared.driver,
+        prepared.vehicle,
+        prepared.vehicleInsurance,
+        prepared.template,
+      );
       const snapshotJson = JSON.stringify(snapshot);
       const snapshotHash = createHash('sha256').update(snapshotJson).digest('hex');
       const rendered = renderContractTemplate(prepared.template.contentMarkdown, valuesFromSnapshot(snapshot));
@@ -448,7 +473,11 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
-        if (!driver || !vehicle || !sameSnapshotTerms(snapshot, contract, driver, vehicle, template)) throw new ExecutionConflictError();
+        if (!driver || !vehicle) throw new ExecutionConflictError();
+        const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
+          tx, principal.companyId, vehicle.id, contract.startDate
+        );
+        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, template)) throw new ExecutionConflictError();
 
         const attachment = await tx.getAttachmentRepo().create({
           id: attachmentId,
@@ -551,6 +580,9 @@ export function registerContractExecutionRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
         if (!driver || driver.isArchived || !vehicle || vehicle.isArchived) throw new ExecutionNotFoundError();
+        const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
+          tx, principal.companyId, vehicle.id, contract.startDate
+        );
         const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
         const sources = attachments.filter((item) =>
           !item.isArchived &&
@@ -561,7 +593,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           Boolean(item.storageKey)
         );
         if (sources.length !== 1) throw new ExecutionConflictError();
-        return { contract, template, driver, vehicle, source: sources[0] };
+        return { contract, template, driver, vehicle, vehicleInsurance, source: sources[0] };
       });
 
       const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!);
@@ -571,7 +603,14 @@ export function registerContractExecutionRoutes(app: Express): void {
         sourceBytes.length !== prepared.source.fileSize
       ) throw new ExecutionValidationError('Invalid DOCX template source');
 
-      const snapshot = makeSnapshot(company, prepared.contract, prepared.driver, prepared.vehicle, prepared.template);
+      const snapshot = makeSnapshot(
+        company,
+        prepared.contract,
+        prepared.driver,
+        prepared.vehicle,
+        prepared.vehicleInsurance,
+        prepared.template,
+      );
       const snapshotJson = JSON.stringify(snapshot);
       const snapshotHash = createHash('sha256').update(snapshotJson).digest('hex');
 
@@ -614,7 +653,11 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
-        if (!driver || !vehicle || !sameSnapshotTerms(snapshot, contract, driver, vehicle, template)) throw new ExecutionConflictError();
+        if (!driver || !vehicle) throw new ExecutionConflictError();
+        const vehicleInsurance = await loadContractVehicleInsuranceSnapshot(
+          tx, principal.companyId, vehicle.id, contract.startDate
+        );
+        if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, template)) throw new ExecutionConflictError();
         const source = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, prepared.source.id);
         if (
           !source || source.isArchived || source.entityType !== 'ContractTemplate' || source.entityId !== template.id ||
