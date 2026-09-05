@@ -281,9 +281,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <aside className="w-64 h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
       <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">
-          AutoERP Fleet Manager
-        </span>
+        <div>
+          <span className="text-sm font-black tracking-wide text-white block">MoveFlex</span>
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 block">Gestão de Frotas</span>
+        </div>
         {onCloseMobile && (
           <button
             onClick={onCloseMobile}
