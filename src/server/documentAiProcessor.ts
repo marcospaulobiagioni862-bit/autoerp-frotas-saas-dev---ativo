@@ -23,7 +23,7 @@ const DOCUMENT_FIELDS: Record<string, ReadonlySet<string>> = {
   CRV: new Set(['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName']),
   ATPV_E: new Set(['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName']),
   IPVA: new Set(['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber']),
-  TRAFFIC_TICKET: new Set(['plate', 'noticeNumber', 'infractionCode', 'infractionDate', 'dueDate', 'amount', 'discountAmount']),
+  TRAFFIC_TICKET: new Set(['plate', 'noticeNumber', 'organName', 'infractionCode', 'description', 'infractionDate', 'infractionTime', 'infractionLocation', 'dueDate', 'discountDueDate', 'amount', 'discountAmount', 'points']),
   INVOICE: new Set(['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount']),
   RECEIPT: new Set(['issuerName', 'issuerDocument', 'issueDate', 'amount', 'paymentMethod']),
   CONTRACT: new Set(['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount']),
