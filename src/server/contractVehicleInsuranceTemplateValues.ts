@@ -8,7 +8,7 @@ export function contractVehicleInsuranceTemplateValues(
   insurance: ContractVehicleInsuranceSnapshot | null,
 ): Record<string, string> {
   return {
-    'vehicle.insurance.company': insurance?.insuranceCompany || '',
+    'vehicle.insurance.insuranceCompany': insurance?.insuranceCompany || '',
     'vehicle.insurance.policyNumber': insurance?.policyNumber || '',
     'vehicle.insurance.coverageDetails': insurance?.coverageDetails || '',
     'vehicle.insurance.deductibleAmount': insurance ? formatMoney(insurance.deductibleAmount) : '',

@@ -21,6 +21,7 @@ import {
   sameContractVehicleInsuranceSnapshot,
   type ContractVehicleInsuranceSnapshot,
 } from './contractVehicleInsuranceSnapshot';
+import { contractVehicleInsuranceTemplateValues } from './contractVehicleInsuranceTemplateValues';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -247,6 +248,7 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'vehicle.renavam': snapshot.vehicle.renavam,
     'vehicle.chassis': snapshot.vehicle.chassis,
     'vehicle.currentKm': String(snapshot.vehicle.currentKm),
+    ...contractVehicleInsuranceTemplateValues(snapshot.vehicleInsurance),
   };
 }
 

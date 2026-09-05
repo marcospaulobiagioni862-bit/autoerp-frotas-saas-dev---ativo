@@ -52,10 +52,11 @@ assert.equal(selected?.policyNumber, 'NEW');
 assert.equal(selected?.insuranceCompany, 'Seguradora Exemplo');
 assert.equal(selected?.deductibleAmount, 2500);
 assert.ok(!('totalPremiumAmount' in (selected ?? {})), 'financial premium must not leak into the contract snapshot slice');
+assert.ok(!('installmentsCount' in (selected ?? {})), 'insurance installments must not leak into the contract snapshot slice');
 
 const templateValues = contractVehicleInsuranceTemplateValues(selected);
 assert.deepEqual(templateValues, {
-  'vehicle.insurance.company': 'Seguradora Exemplo',
+  'vehicle.insurance.insuranceCompany': 'Seguradora Exemplo',
   'vehicle.insurance.policyNumber': 'NEW',
   'vehicle.insurance.coverageDetails': 'Cobertura total',
   'vehicle.insurance.deductibleAmount': new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(2500),
@@ -63,13 +64,15 @@ assert.deepEqual(templateValues, {
   'vehicle.insurance.endDate': '2027-05-31',
 }, 'template mapping must expose only the approved insurance snapshot slice');
 assert.deepEqual(contractVehicleInsuranceTemplateValues(null), {
-  'vehicle.insurance.company': '',
+  'vehicle.insurance.insuranceCompany': '',
   'vehicle.insurance.policyNumber': '',
   'vehicle.insurance.coverageDetails': '',
   'vehicle.insurance.deductibleAmount': '',
   'vehicle.insurance.startDate': '',
   'vehicle.insurance.endDate': '',
 }, 'contracts without an eligible policy must render insurance placeholders as empty values');
+assert.equal('vehicle.insurance.totalPremiumAmount' in templateValues, false, 'premium must not be exposed as a contract placeholder');
+assert.equal('vehicle.insurance.installmentsCount' in templateValues, false, 'installments must not be exposed as a contract placeholder');
 
 let capturedCompanyId = '';
 let capturedVehicleId = '';
