@@ -97,6 +97,20 @@ for (const placeholder of [
 assert.match(executionRoutes, /tradeName: company\.tradeName \|\| ''/, 'contract generator must source company trade name server-side');
 assert.match(executionRoutes, /legalRepresentativeName/, 'contract generator must source the legal representative from the company profile');
 assert.match(executionRoutes, /'company\.address\.full': snapshot\.company\.address\.full/, 'company full address must be exposed to the template renderer');
+for (const placeholder of [
+  'vehicle.insurance.company','vehicle.insurance.policyNumber','vehicle.insurance.coverageDetails',
+  'vehicle.insurance.deductibleAmount','vehicle.insurance.startDate','vehicle.insurance.endDate',
+  'vehicle.tracker.id','vehicle.tracker.equipmentModel','vehicle.tracker.imei',
+  'vehicle.tracker.serialNumber','vehicle.tracker.chipCarrier','vehicle.tracker.chipNumber',
+  'vehicle.tracker.installationDate',
+]) {
+  assert.ok(templatePolicy.includes(`'${placeholder}'`), `vehicle contract placeholder missing: ${placeholder}`);
+}
+assert.match(executionRoutes, /contractVehicleInsuranceTemplateValues\(snapshot\.vehicleInsurance\)/, 'contract execution must expose insurance values to templates');
+assert.match(executionRoutes, /contractVehicleTrackerTemplateValues\(snapshot\.vehicleTracker\)/, 'contract execution must expose tracker values to templates');
+assert.match(executionRoutes, /loadContractVehicleTrackerSnapshot/, 'contract execution must load the server-authoritative tracker');
+assert.match(executionRoutes, /sameContractVehicleTrackerSnapshot/, 'tracker changes must invalidate a prepared contract snapshot');
+
 
 
 
