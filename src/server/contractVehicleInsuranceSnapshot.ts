@@ -43,3 +43,20 @@ export function selectContractVehicleInsuranceSnapshot(
     endDate: selected.endDate,
   };
 }
+
+export async function loadContractVehicleInsuranceSnapshot(
+  tx: any,
+  companyId: string,
+  vehicleId: string,
+  contractStartDate: string,
+): Promise<ContractVehicleInsuranceSnapshot | null> {
+  const insurances = await tx.getInsuranceRepo().findAllByCompany(companyId, { vehicleId });
+  return selectContractVehicleInsuranceSnapshot(insurances, contractStartDate);
+}
+
+export function sameContractVehicleInsuranceSnapshot(
+  expected: ContractVehicleInsuranceSnapshot | null,
+  current: ContractVehicleInsuranceSnapshot | null,
+): boolean {
+  return JSON.stringify(expected) === JSON.stringify(current);
+}
