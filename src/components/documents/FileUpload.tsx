@@ -15,6 +15,7 @@ interface FileUploadProps {
 const SERVER_ENTITY_TYPES = new Set([
   'Vehicle',
   'Driver',
+  'VehicleDocumentIntake',
   'Contract',
   'HealthAndEmergency',
   'TrafficTicket',
