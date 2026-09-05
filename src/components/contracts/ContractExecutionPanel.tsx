@@ -4,7 +4,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
-import type { Contract, ContractArtifact, ContractTemplate, FileAttachment } from '../../types/entities';
+import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, FileAttachment } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { Badge, Button, Card, Input } from '../ui';
 import { FileUpload } from '../documents/FileUpload';
@@ -16,6 +16,9 @@ interface ContractExecutionPanelProps {
   focusOnOpen?: boolean;
 }
 
+const signatureMethodLabel = (method?: ContractSignatureMethod): string =>
+  method === 'GOV_BR' ? 'GOV.br' : 'Upload de PDF assinado';
+
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
@@ -25,6 +28,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   const [signedAttachment, setSignedAttachment] = useState<FileAttachment | null>(null);
   const [signedByName, setSignedByName] = useState('');
   const [signedAt, setSignedAt] = useState('');
+  const [signatureMethod, setSignatureMethod] = useState<ContractSignatureMethod>('GOV_BR');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -66,6 +70,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     setSignedAttachment(null);
     setSignedByName('');
     setSignedAt('');
+    setSignatureMethod('GOV_BR');
     setError(null);
     setSuccess(null);
     void load();
@@ -155,9 +160,10 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         attachmentId: signedAttachment.id,
         signedByName: signedByName.trim(),
         signedAt: signedAt ? new Date(`${signedAt}T12:00:00`).toISOString() : undefined,
+        signatureMethod,
       });
       setSignedAttachment(null);
-    }, 'Evidência do PDF assinado registrada e vinculada ao PDF gerado.');
+    }, `Evidência do PDF assinado registrada com método ${signatureMethodLabel(signatureMethod)}.`);
   };
 
   const activate = () => {
@@ -181,7 +187,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            PDF ou DOCX preenchido no servidor. O PDF assinado é registrado como evidência; esta tela não declara certificação ICP-Brasil.
+            PDF ou DOCX preenchido no servidor. O PDF assinado é registrado como evidência; selecionar GOV.br registra o método informado, sem validar criptograficamente a assinatura junto ao GOV.br.
           </p>
         </div>
         <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
@@ -269,6 +275,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
           {signed ? (
             <div className="space-y-2 text-xs">
               <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>Evidência registrada</b></div>
+              <p>Método: <b>{signatureMethodLabel(signed.signatureMethod)}</b></p>
               <p>Assinado por: <b>{signed.signedByName || '—'}</b></p>
               <p>Data/hora: {signed.signedAt ? new Date(signed.signedAt).toLocaleString('pt-BR') : '—'}</p>
               <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50"><b>Checksum do PDF assinado</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{signed.snapshotHash}</div></div>
@@ -285,6 +292,17 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                 onUploadComplete={(attachment) => setSignedAttachment(attachment as FileAttachment)}
               />
               {signedAttachment && <div className="rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-900/50">Arquivo pronto: <b>{signedAttachment.fileName}</b></div>}
+              <label className="block text-xs font-semibold text-slate-600">
+                Método de assinatura
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
+                  value={signatureMethod}
+                  onChange={(event) => setSignatureMethod(event.target.value as ContractSignatureMethod)}
+                >
+                  <option value="GOV_BR">GOV.br</option>
+                  <option value="SIGNED_PDF_UPLOAD">Outro PDF assinado</option>
+                </select>
+              </label>
               <Input value={signedByName} onChange={(event) => setSignedByName(event.target.value)} placeholder="Nome de quem assinou" />
               <Input type="date" value={signedAt} onChange={(event) => setSignedAt(event.target.value)} />
               <Button size="sm" variant="primary" isLoading={loading} onClick={registerEvidence} disabled={!signedAttachment || !signedByName.trim()}>
