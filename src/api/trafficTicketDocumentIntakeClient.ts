@@ -1,4 +1,5 @@
 import type { FileAttachment } from '../types/entities';
+import type { TicketResponsibility } from '../types/enums';
 
 export type TrafficTicketDocumentIntakeStatus=
   |'DRAFT'|'DOCUMENT_UPLOADED'|'EXTRACTING'|'REVIEW_REQUIRED'|'APPROVED'|'CONSUMED'|'FAILED'|'ARCHIVED';
@@ -16,6 +17,11 @@ export interface ApprovedTrafficTicketDraft {documentType:'TRAFFIC_TICKET';field
 export interface TrafficTicketIntakeSuggestions {
   plate?:string;vehicle?:{id:string;plate:string;brand:string;model:string};contract?:{id:string;number:string};driver?:{id:string;name:string};ambiguous:boolean;
 }
+export interface MaterializeTrafficTicketIntakeInput {
+  vehicleId:string;driverId?:string;contractId?:string;responsibility:TicketResponsibility;
+  baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;nicAmount?:number;notes?:string;
+}
+export interface MaterializedTrafficTicketIntake {ticketId:string;reused:boolean;}
 
 function record(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid traffic ticket intake payload');return value as Record<string,unknown>;}
 async function errorMessage(response:Response):Promise<string>{try{const payload=record(await response.json());if(typeof payload.error==='string')return payload.error;}catch{}return `Traffic ticket intake request failed (${response.status})`;}
@@ -60,5 +66,11 @@ export class TrafficTicketDocumentIntakeClient {
     const response=await fetch(`/api/traffic-ticket-document-intakes/${encodeURIComponent(id)}/suggestions`,{credentials:'include'});if(!response.ok)throw new Error(await errorMessage(response));
     const item=record(record(await response.json()).item);if(typeof item.ambiguous!=='boolean')throw new Error('Invalid traffic ticket suggestion payload');
     return item as unknown as TrafficTicketIntakeSuggestions;
+  }
+  static async materialize(id:string,input:MaterializeTrafficTicketIntakeInput):Promise<MaterializedTrafficTicketIntake>{
+    const response=await fetch(`/api/traffic-ticket-document-intakes/${encodeURIComponent(id)}/materialize`,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+    if(!response.ok)throw new Error(await errorMessage(response));const payload=record(await response.json()),item=record(payload.item);
+    if(typeof item.id!=='string'||typeof payload.reused!=='boolean')throw new Error('Invalid traffic ticket materialization payload');
+    return {ticketId:item.id,reused:payload.reused};
   }
 }
