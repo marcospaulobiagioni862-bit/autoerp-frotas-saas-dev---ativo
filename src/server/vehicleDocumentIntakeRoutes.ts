@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction, VehicleStatus } from '../types/enums';
+import { AuditAction, VEHICLE_CATEGORIES, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import {
   VehicleDocumentIntakeAiConflictError,
@@ -18,6 +18,7 @@ type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const WRITE_ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const DOCUMENT_TYPES = new Set(['CRLV','CRV','ATPV_E']);
+const VEHICLE_CATEGORY_VALUES = new Set<string>(VEHICLE_CATEGORIES);
 const TTL_MS = 24 * 60 * 60 * 1000;
 const APPROVED_DRAFT_FIELDS = new Set([
   'plate','renavam','chassis','brand','model','manufactureYear','modelYear','fuel','ownerName',
@@ -85,8 +86,10 @@ function materializationInput(body: unknown): VehicleMaterializationInput {
   const currentKm=number('currentKm',true)!;
   const nextMaintenanceKm=number('nextMaintenanceKm');
   if(nextMaintenanceKm!==undefined&&nextMaintenanceKm<currentKm)throw new ValidationError();
+  const category=text('category',true,120)!;
+  if(!VEHICLE_CATEGORY_VALUES.has(category))throw new ValidationError();
   return {
-    color:text('color',true,80)!, category:text('category',true,120)!,
+    color:text('color',true,80)!, category,
     currentKm, acquisitionValue:number('acquisitionValue',true,true)!, currentValue:number('currentValue',true,true)!,
     rentalValueBase:number('rentalValueBase',true,true)!, version:text('version',false,200),
     nextMaintenanceKm, notes:text('notes',false,2000),
