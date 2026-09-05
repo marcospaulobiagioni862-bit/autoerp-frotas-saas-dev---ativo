@@ -128,7 +128,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
       typeof init?.body === 'string'
     ) {
       const body = JSON.parse(init.body) as Record<string, unknown>;
-      if (body.signedAt === '2026-08-19T17:00:00.000Z') {
+      if (body.signatureMethod === 'GOV_BR') {
         const contractId = decodeURIComponent(requestUrl.match(/\/api\/contracts\/([^/]+)\/signature-evidence$/)?.[1] || '');
         assert(contractId, 'signature time regression could not resolve contract id');
 
@@ -143,7 +143,10 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
           WHERE entity_type='ContractArtifact'
         `);
 
-        const rejected = await originalFetch(input, init);
+        const rejected = await originalFetch(input, {
+          ...init,
+          body: JSON.stringify({ ...body, signedAt: '2026-08-19T17:00:00.000Z' }),
+        });
         assert(rejected.status === 409, `historical signedAt expected 409, got ${rejected.status}`);
 
         const afterArtifact = await scalar(sql`
@@ -160,10 +163,7 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
         assert(Number(afterAudit?.count) === Number(beforeAudit?.count), 'historical signedAt created audit mutation');
         rejectedHistoricalSignature = true;
 
-        return await originalFetch(input, {
-          ...init,
-          body: JSON.stringify({ ...body, signedAt: new Date().toISOString() }),
-        });
+        return await originalFetch(input, init);
       }
     }
 

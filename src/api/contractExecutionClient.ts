@@ -1,4 +1,4 @@
-import type { Contract, ContractArtifact, FileAttachment } from '../types/entities';
+import type { Contract, ContractArtifact, ContractSignatureMethod, FileAttachment } from '../types/entities';
 
 export class ContractExecutionApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -22,8 +22,11 @@ function validateArtifact(value: unknown): ContractArtifact {
     typeof item.isCurrent !== 'boolean' || typeof item.isArchived !== 'boolean' ||
     typeof item.createdBy !== 'string' || typeof item.createdAt !== 'string' || typeof item.updatedAt !== 'string'
   ) throw new Error('Invalid contract artifact payload');
-  for (const key of ['templateId','sourceArtifactId','snapshotJson','signatureMethod','signedByName','signedAt'] as const) {
+  for (const key of ['templateId','sourceArtifactId','snapshotJson','signedByName','signedAt'] as const) {
     if (item[key] !== undefined && typeof item[key] !== 'string') throw new Error('Invalid contract artifact payload');
+  }
+  if (item.signatureMethod !== undefined && item.signatureMethod !== 'SIGNED_PDF_UPLOAD' && item.signatureMethod !== 'GOV_BR') {
+    throw new Error('Invalid contract artifact payload');
   }
   return item as unknown as ContractArtifact;
 }
@@ -126,7 +129,7 @@ export class ContractExecutionClient {
 
   static async registerSignatureEvidence(
     contractId: string,
-    input: { attachmentId: string; signedByName: string; signedAt?: string }
+    input: { attachmentId: string; signedByName: string; signedAt?: string; signatureMethod?: ContractSignatureMethod }
   ): Promise<ContractArtifact> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/signature-evidence`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },

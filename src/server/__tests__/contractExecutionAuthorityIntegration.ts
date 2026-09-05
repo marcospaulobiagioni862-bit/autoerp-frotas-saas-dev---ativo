@@ -198,9 +198,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       assert(template.companyId === companyA && template.versionNumber === 1 && template.isCurrent, 'template authority mismatch');
 
       response = await request('/api/contract-templates', {
-        method: 'POST', body: JSON.stringify({
-          templateKey: 'version-test', title: 'Version test', contentMarkdown: 'Versão 1 do contrato {{contract.number}} para {{driver.name}}.',
-        }),
+        method: 'POST', body: JSON.stringify({ templateKey: 'version-test', title: 'Version test', contentMarkdown: 'Versão 1 do contrato {{contract.number}} para {{driver.name}}.' }),
       }, adminA);
       assert(response.status === 201, `version template create expected 201, got ${response.status}`);
       const versionOne = (await json(response)).item;
@@ -371,11 +369,29 @@ export class ContractExecutionAuthorityIntegrationRunner {
       assert(signedAttachment.id !== generated.attachment.id, 'signed evidence reused generated attachment id');
 
       response = await request(`/api/contracts/${contract.id}/signature-evidence`, {
-        method: 'POST', body: JSON.stringify({ attachmentId: signedAttachment.id, signedByName: 'Motorista Teste', signedAt: '2026-08-19T17:00:00.000Z' }),
+        method: 'POST', body: JSON.stringify({
+          attachmentId: signedAttachment.id,
+          signedByName: 'Motorista Teste',
+          signatureMethod: 'INVALID_METHOD',
+        }),
+      }, adminA);
+      assert(response.status === 400, `invalid signatureMethod expected 400, got ${response.status}`);
+
+      response = await request(`/api/contracts/${contract.id}/signature-evidence`, {
+        method: 'POST', body: JSON.stringify({
+          attachmentId: signedAttachment.id,
+          signedByName: 'Motorista Teste',
+          signatureMethod: 'GOV_BR',
+        }),
       }, adminA);
       assert(response.status === 201, `signature evidence expected 201, got ${response.status}`);
       const signedArtifact = (await json(response)).artifact;
-      assert(signedArtifact.artifactType === 'SIGNED_EVIDENCE' && signedArtifact.sourceArtifactId === reviewedArtifact.id, 'signed artifact link mismatch');
+      assert(
+        signedArtifact.artifactType === 'SIGNED_EVIDENCE' &&
+        signedArtifact.sourceArtifactId === reviewedArtifact.id &&
+        signedArtifact.signatureMethod === 'GOV_BR',
+        'signed GOV.br artifact link/method mismatch'
+      );
 
       response = await request(`/api/contracts/${contract.id}/generate-pdf`, {
         method: 'POST', body: JSON.stringify({ templateId: template.id }),
