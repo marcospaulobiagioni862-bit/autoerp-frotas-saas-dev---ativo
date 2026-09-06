@@ -37,6 +37,7 @@ import {
 import { Card, Button, Badge, Skeleton } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { downloadManagementReportCsv } from './managementReportCsv';
+import { downloadManagementReportXlsx } from './managementReportXlsx';
 
 interface ManagementReportsViewProps {
   companyId?: string;
@@ -269,6 +270,14 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             icon={<Download className="w-4 h-4" />}
           >
             Exportar CSV
+          </Button>
+          <Button
+            onClick={() => downloadManagementReportXlsx(reportData)}
+            variant="primary"
+            size="sm"
+            icon={<Download className="w-4 h-4" />}
+          >
+            Exportar XLSX
           </Button>
           <Button
             onClick={() => window.print()}
