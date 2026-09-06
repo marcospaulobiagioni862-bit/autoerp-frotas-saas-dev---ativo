@@ -89,6 +89,18 @@ jobs:
           grep -F "setRg(initialCnhDraft?.rg || '')" src/components/drivers/DriverFormModal.tsx
           echo "DOC-AI-CNH progress and RG regressions: PASS"
 
+      - name: DOC-AI vehicle failed-state recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "const failed=extraction?.status==='FAILED';" src/components/fleet/VehicleDocumentIntakeModal.tsx
+          grep -F "Análise falhou" src/components/fleet/VehicleDocumentIntakeModal.tsx
+          grep -F "Tentar análise novamente" src/components/fleet/VehicleDocumentIntakeModal.tsx
+          grep -F "DocumentAiClient.retry(extraction.id)" src/components/fleet/VehicleDocumentIntakeModal.tsx
+          grep -F "Cadastrar veículo manualmente" src/components/fleet/VehicleDocumentIntakeModal.tsx
+          grep -F "onManualRequested={() => { setIsVehicleAiOpen(false); setVehicleToEdit(null); setIsFormOpen(true); }}" src/components/fleet/FleetManagement.tsx
+          echo "DOC-AI vehicle failed-state recovery: PASS"
+
       - name: FINANCE-R12 source invariants
         shell: bash
         run: |
