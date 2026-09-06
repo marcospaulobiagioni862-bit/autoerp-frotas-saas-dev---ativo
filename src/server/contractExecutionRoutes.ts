@@ -14,8 +14,8 @@ import type { AuthenticatedPrincipal } from './auth';
 import {
   AttachmentStorageUnavailableError,
   AttachmentStorageValidationError,
-  ServerAttachmentStorage,
 } from './attachmentStorage';
+import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
 import {
   loadContractVehicleInsuranceSnapshot,
   sameContractVehicleInsuranceSnapshot,
@@ -441,7 +441,7 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerContractExecutionRoutes(app: Express): void {
-  const storage = new ServerAttachmentStorage();
+  const storage = createAttachmentStorageFromEnvironment(process.env);
 
   app.get('/api/contracts/:id/artifacts', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_ARTIFACT');
