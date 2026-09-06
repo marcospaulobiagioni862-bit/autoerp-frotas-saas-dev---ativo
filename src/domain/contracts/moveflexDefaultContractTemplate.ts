@@ -52,12 +52,12 @@ CLÁUSULA 3 – REQUISITOS E OBRIGAÇÕES DE CONDUÇÃO
 CLÁUSULA 4 – PRAZO
 4.1. O contrato tem início em {{contract.startDate}}.
 4.2. Data final informada: {{contract.endDate}}.
-4.3. Eventual rescisão antecipada observará as condições comerciais e legais previstas neste instrumento e nas políticas vigentes da LOCADORA.
+4.3. Eventual rescisão antecipada observará as condições comerciais e legais previstas neste instrumento e nas políticas vigentes da LOCADORA.\n4.4. Quando houver data final definida, a renovação deverá ser tratada preferencialmente com antecedência mínima de 10 (dez) dias, conforme alerta operacional do sistema.
 
 CLÁUSULA 5 – VALOR E PERIODICIDADE
 5.1. Valor da locação: {{contract.rentalAmount}}.
 5.2. Periodicidade da cobrança: {{contract.billingPeriodicity}}.
-5.3. O pagamento deverá respeitar os vencimentos registrados no sistema e eventuais encargos previstos nas condições comerciais vigentes.
+5.3. O pagamento deverá respeitar os vencimentos registrados no sistema e eventuais encargos previstos nas condições comerciais vigentes.\n5.4. Na cobrança semanal, o(s) dia(s) de vencimento seguirá(ão) a configuração do contrato. Na cobrança mensal, será considerado o dia do mês definido no cadastro do contrato.
 
 CLÁUSULA 6 – LIMITE DE QUILOMETRAGEM
 6.1. Franquia de quilometragem contratada: {{contract.franchiseKm}} km.
