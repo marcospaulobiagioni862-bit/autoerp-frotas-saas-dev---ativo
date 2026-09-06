@@ -68,6 +68,54 @@ interface DriverDetailsModalProps {
   onRenewCnh?: (driverId: string) => void;
 }
 
+const DRIVER_AUDIT_FIELD_LABELS: Record<string, string> = {
+  fullName: 'Nome',
+  cpf: 'CPF',
+  rg: 'RG',
+  birthDate: 'Nascimento',
+  phone: 'Telefone',
+  whatsapp: 'WhatsApp',
+  email: 'E-mail',
+  address: 'Endereço',
+  cnhNumber: 'CNH',
+  cnhCategory: 'Categoria CNH',
+  cnhExpiration: 'Validade CNH',
+  cnhEar: 'EAR',
+  appPlatforms: 'Plataformas',
+  status: 'Status',
+  currentVehicleId: 'Veículo atual',
+  currentContractId: 'Contrato atual',
+  notes: 'Observações',
+};
+
+function parseAuditState(value?: string): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function auditChangeSummary(previousState?: string, newState?: string): { fields: string[]; statusTransition?: string } {
+  const previous = parseAuditState(previousState);
+  const next = parseAuditState(newState);
+  if (!previous && !next) return { fields: [] };
+  const keys = Array.from(new Set([...Object.keys(previous || {}), ...Object.keys(next || {})]));
+  const changed = keys.filter((key) => JSON.stringify(previous?.[key]) !== JSON.stringify(next?.[key]));
+  const fields = changed.map((key) => DRIVER_AUDIT_FIELD_LABELS[key] || key);
+  const previousStatus = previous?.status;
+  const nextStatus = next?.status;
+  const statusTransition =
+    changed.includes('status') &&
+    typeof previousStatus === 'string' &&
+    typeof nextStatus === 'string'
+      ? `${previousStatus} → ${nextStatus}`
+      : undefined;
+  return { fields, statusTransition };
+}
+
 type DriverTab =
   | 'overview'
   | 'cnh'
@@ -762,11 +810,25 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           )}
 
           {activeTab === 'history' && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold">Histórico legado disponível</h3>
-              {summary.historyLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhum evento legado registrado.</p> : summary.historyLogs.map((log) => (
-                <Card key={log.id} className="p-2 text-xs"><strong className="text-emerald-600">{log.action}</strong><span className="float-right text-slate-400">{new Date(log.timestamp || log.createdAt).toLocaleString('pt-BR')}</span></Card>
-              ))}
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Histórico e auditoria do motorista</h3>
+                <p className="text-[11px] text-slate-500">Eventos registrados pela autoridade do servidor. Valores brutos não são exibidos nesta visão.</p>
+              </div>
+              {summary.historyLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhum evento de auditoria registrado.</p> : summary.historyLogs.map((log) => {
+                const change = auditChangeSummary(log.previousState, log.newState);
+                return (
+                  <Card key={log.id} className="p-3 text-xs space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <strong className="text-emerald-600">{log.action}</strong>
+                      <span className="text-slate-400">{new Date(log.timestamp || log.createdAt).toLocaleString('pt-BR')}</span>
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-300">Responsável: <strong>{log.userName || 'Usuário não identificado'}</strong></p>
+                    {change.fields.length > 0 && <p className="text-slate-500">Campos alterados: {change.fields.join(', ')}</p>}
+                    {change.statusTransition && <p className="text-slate-500">Transição de status: <strong>{change.statusTransition}</strong></p>}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
