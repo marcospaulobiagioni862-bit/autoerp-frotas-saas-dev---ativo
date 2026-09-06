@@ -134,6 +134,16 @@ assert.match(
 );
 assert.match(
   templateModal,
+  /buildMoveFlexBaseContractPdf/,
+  'MoveFlex base PDF must be prepared before the user download click',
+);
+assert.match(
+  templateModal,
+  /onClick=\{downloadBasePdf\}/,
+  'MoveFlex base PDF download must use the prepared synchronous click handler',
+);
+assert.match(
+  templateModal,
   /Baixar arquivo selecionado/,
   'selected PDF or DOCX must be downloadable before save',
 );
