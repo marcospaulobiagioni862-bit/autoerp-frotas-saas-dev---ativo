@@ -6,6 +6,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
+import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
@@ -14,7 +15,7 @@ interface ContractFormModalProps {
   onClose: () => void;
   contractToEdit?: Contract | null;
   companyId: string;
-  onSuccess: () => void;
+  onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
 }
 
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -44,7 +45,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setFieldErrors({});
     setContractFile(null);
     setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.list()])
+    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
       .then(([vehicleList, driverList, templateList]) => {
         if (!active) return;
         const validVehicles = vehicleList.filter((item) => !item.isArchived && (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId));
@@ -71,11 +72,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             notes: contractToEdit.notes || '',
           });
         } else {
+          const defaultTemplate = templateList.find((item) => item.templateKey === 'locacao-padrao') || templateList[0];
           setForm({
             contractNumber: '', vehicleId: '', driverId: '',
             startDate: '', endDate: '', rentalAmount: '',
             billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
-            securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
+            securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: defaultTemplate?.id || '', notes: '',
           });
         }
       })
@@ -141,6 +143,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         ? await ContractClient.update(contractToEdit.id, input)
         : await ContractClient.create(input);
 
+      const warnings: string[] = [];
       if (contractFile) {
         try {
           await AttachmentClient.upload({
@@ -150,18 +153,36 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             fileName: contractFile.name,
             mimeType: contractFile.type,
             content: contractFile,
-            description: 'Contrato de locação anexado no cadastro do contrato',
+            description: 'Documento externo anexado ao contrato',
           });
         } catch (uploadError) {
-          onSuccess();
-          onClose();
-          window.alert(`Contrato salvo, mas o arquivo não foi enviado: ${uploadError instanceof Error ? uploadError.message : 'falha no upload'}. O contrato foi preservado e o arquivo pode ser reenviado nos detalhes.`);
-          return;
+          warnings.push(`O contrato foi salvo, mas o anexo externo não foi enviado: ${uploadError instanceof Error ? uploadError.message : 'falha no upload'}.`);
         }
       }
 
-      onSuccess();
+      let completedContract = savedContract;
+      if (!contractToEdit) {
+        const selectedTemplate = templates.find((item) => item.id === form.templateId);
+        if (selectedTemplate) {
+          try {
+            if (selectedTemplate.contentMarkdown.trim()) {
+              completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
+            } else {
+              await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id);
+              completedContract = (await ContractExecutionClient.generatePdfFromDocx(savedContract.id)).contract;
+            }
+          } catch (generationError) {
+            warnings.push(`Contrato salvo, mas o PDF automático não foi gerado: ${generationError instanceof Error ? generationError.message : 'falha na geração'}.`);
+          }
+        }
+      }
+
       onClose();
+      onSuccess({
+        contract: completedContract,
+        openPdfSignature: !contractToEdit,
+        warning: warnings.length ? warnings.join(' ') : undefined,
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao salvar contrato.');
     } finally {
@@ -180,7 +201,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
-          <Field label="Modelo de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}</select></Field>
+          <Field label="Modelo padrão de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}{item.templateKey === 'locacao-padrao' ? ' • Padrão MoveFlex' : ''}</option>)}</select></Field>
           <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
           <Field label="Veículo *" error={fieldErrors.vehicleId}><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
           <Field label="Motorista *" error={fieldErrors.driverId}><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.driverId?'border-red-500':''}`}><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
@@ -195,7 +216,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
         </div>
         <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
-        <Field label="Arquivo do contrato de locação (opcional)">
+        <Field label="Anexo externo do contrato (opcional)">
           <input
             type="file"
             accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
@@ -203,7 +224,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             className="control border-slate-300 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100"
           />
           <span className="block text-[11px] font-normal text-slate-600 dark:text-slate-300">
-            {contractFile ? `Selecionado: ${contractFile.name}` : 'PDF, JPG, PNG ou WebP, até 10 MB. O arquivo será vinculado automaticamente após o contrato ser salvo.'}
+            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. O modelo MoveFlex acima é preenchido e gera o PDF automaticamente após salvar.'}
           </span>
         </Field>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
