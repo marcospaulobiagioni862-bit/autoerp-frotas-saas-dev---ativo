@@ -67,23 +67,35 @@
 aside > nav {
   scrollbar-width: thin !important;
   scrollbar-gutter: stable;
-  scrollbar-color: #475569 transparent;
+  scrollbar-color: #94a3b8 #0f172a;
 }
 
 aside > nav::-webkit-scrollbar {
   display: block !important;
-  width: 6px;
+  width: 10px;
 }
 
 aside > nav::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0f172a;
 }
 
 aside > nav::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #94a3b8;
   border-radius: 9999px;
 }
 
 aside > nav::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #cbd5e1;
+}
+
+
+/* Native date controls need explicit contrast in dark mode, especially Chrome/Edge. */
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  filter: brightness(1.8) contrast(1.2);
 }
