@@ -8,6 +8,9 @@ import { FileUpload } from '../documents/FileUpload';
 export interface VehicleDocumentAiDraft{vehicleId:string;attachmentId:string;documentType:'IPVA';referenceYear:string;expirationDate:string;cost:string;notes:string;}
 interface Props{isOpen:boolean;vehicles:Vehicle[];onClose:()=>void;onUseDraft:(draft:VehicleDocumentAiDraft)=>void;}
 const value=(v:unknown)=>v===undefined||v===null?'':String(v);
+const fieldLabel=(key:string):string=>({
+  plate:'Placa',renavam:'RENAVAM',taxYear:'Ano de referência',amount:'Valor',dueDate:'Vencimento',installmentNumber:'Parcela'
+} as Record<string,string>)[key]||key;
 export const VehicleDocumentAiAssistModal:React.FC<Props>=({isOpen,vehicles,onClose,onUseDraft})=>{
  const[vehicleId,setVehicleId]=useState(''),[attachmentId,setAttachmentId]=useState(''),[extraction,setExtraction]=useState<DocumentAiExtraction|null>(null),[draft,setDraft]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const reset=()=>{setVehicleId('');setAttachmentId('');setExtraction(null);setDraft({});setBusy(false);setError('');};
@@ -26,7 +29,7 @@ export const VehicleDocumentAiAssistModal:React.FC<Props>=({isOpen,vehicles,onCl
   {attachmentId&&<div className="rounded-lg border p-3 text-xs"><strong>IPVA original anexado</strong><p className="mt-1 text-slate-500">{selectedVehicle?.plate} · anexo {attachmentId}</p></div>}
   {extraction&&['PENDING','PROCESSING'].includes(extraction.status)&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Analisando IPVA… atualização automática.</div>}
   {extraction?.status==='FAILED'&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">A leitura falhou. Tente novamente com um documento mais legível.</div>}
-  {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(([key,original])=><Input key={key} label={key} value={draft[key]??value(original)} onChange={e=>setDraft(cur=>({...cur,[key]:e.target.value}))}/>)}</div></div>}
+  {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(([key,original])=><Input key={key} label={fieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(cur=>({...cur,[key]:e.target.value}))}/>)}</div></div>}
   {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
   <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Documento</Button>}</div>
  </div></ModalContainer>;
