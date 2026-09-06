@@ -61,6 +61,16 @@ assert.match(
 assert.match(source, />\s*Fora de uso\s*</, 'out-of-use action must be visible without the generic status selector');
 assert.match(
   source,
+  /nextValue === '__SELL__'[\s\S]*setVehicleForSale\(vehicle\)/,
+  'sold option in status selector must open the dedicated sale flow',
+);
+assert.match(
+  source,
+  /value: '__SELL__', label: 'Vender veículo\.\.\.'/,
+  'eligible vehicle cards must expose Vender veículo in the status selector',
+);
+assert.match(
+  source,
   /targetStatus === VehicleStatus\.INACTIVE[\s\S]*O histórico não será apagado\./,
   'out-of-use confirmation must preserve the explicit history warning',
 );
