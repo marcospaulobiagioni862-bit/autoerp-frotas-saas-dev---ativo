@@ -269,8 +269,6 @@ export const FleetManagement: React.FC = () => {
         message={targetStatus === VehicleStatus.INACTIVE ? `Deseja colocar o veículo ${vehicleForStatusChange?.plate} fora de uso? O histórico não será apagado.` : `Deseja alterar o status do veículo ${vehicleForStatusChange?.plate} para ${targetStatus ? vehicleStatusLabel(targetStatus) : ''}?`}
         confirmLabel="Confirmar Alteração"
         variant="warning"
-        requireReason
-        reasonPlaceholder="Informe a justificativa da alteração..."
       />
     </div>
   );
