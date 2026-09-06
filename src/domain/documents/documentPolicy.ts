@@ -55,6 +55,7 @@ export function alertStageForDays(days?: number): DocumentAlertStage {
   if (days === undefined) return 'NONE';
   if (days < 0) return 'POST_DUE';
   if (days === 0) return 'DUE_TODAY';
+  if (days === 1) return 'D1';
   if (days <= 7) return 'D7';
   if (days <= 15) return 'D15';
   if (days <= 30) return 'D30';
