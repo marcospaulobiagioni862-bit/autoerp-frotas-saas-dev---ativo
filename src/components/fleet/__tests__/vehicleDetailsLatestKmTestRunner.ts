@@ -38,6 +38,14 @@ assert.equal((source.match(/VehicleClient\.listKm\(/g) ?? []).length, 1, 'summar
 assert.ok(source.includes("activeTab==='km'"), 'complete odometer tab must remain available');
 assert.ok(source.includes('summary.kmRecords.map'), 'complete odometer tab must keep the full authorized history');
 
+assert.ok(source.includes("Histórico / Auditoria"), 'vehicle details must expose a dedicated audit tab');
+assert.ok(source.includes("Histórico e auditoria do veículo"), 'vehicle audit tab must explain the server-authoritative history');
+assert.ok(source.includes("Responsável: {log.userName}"), 'vehicle audit must show the responsible user');
+assert.ok(source.includes("Campos alterados:"), 'vehicle audit must summarize changed fields');
+assert.ok(source.includes("Transição de status:"), 'vehicle audit must expose status transitions when present');
+assert.ok(source.includes("Valores brutos não são exibidos nesta visão."), 'vehicle audit must not expose raw state payloads');
+assert.ok(source.includes("Nenhum evento de auditoria registrado."), 'vehicle audit must preserve an explicit empty state');
+
 assert.ok(crlvSource.includes("DocumentAiClient.list('APPROVED')"), 'CRLV comparison must use approved extractions only');
 assert.ok(crlvSource.includes("attachment.documentType === 'CRLV'"), 'CRLV comparison must be restricted to vehicle CRLV attachments');
 assert.ok(crlvSource.includes("extraction.detectedDocumentType === 'CRLV'"), 'CRLV comparison must reject another detected document type');
