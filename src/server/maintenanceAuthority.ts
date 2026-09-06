@@ -12,7 +12,7 @@ export class MaintenanceConflictError extends Error {}
 export class MaintenanceNotFoundError extends Error {}
 
 export interface CreateWorkOrderInput {
-  number:string; vehicleId:string; supplierId?:string; serviceDate?:string; entryKm:number; description:string; diagnosis?:string; notes?:string;
+  number:string; vehicleId:string; supplierId?:string; serviceDate?:string; entryKm:number; description:string; diagnosis?:string; notes?:string; sourceAttachmentId?:string;
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
@@ -89,15 +89,29 @@ export class MaintenanceAuthorityService {
   }); }
 
   static createWorkOrder(p:AuthenticatedPrincipal,input:CreateWorkOrderInput):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
+    const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Maintenance persistence unavailable');
     const number=osNumber(reqText(input.number,'number',80));if(await tx.getWorkOrderRepo().findByNumber(p.companyId,number))throw new MaintenanceConflictError('Número de OS já cadastrado');
     const vehicle=await tx.getVehicleRepo().findByIdForCompany(p.companyId,reqText(input.vehicleId,'vehicleId',120));if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');if([VehicleStatus.SOLD,VehicleStatus.INACTIVE,VehicleStatus.ARCHIVED].includes(vehicle.status))throw new MaintenanceConflictError('Veículo não está elegível para manutenção');
     const serviceDate=input.serviceDate?reqText(input.serviceDate,'serviceDate',10):new Date().toISOString().slice(0,10);isoDate(serviceDate);const entryKm=nn(input.entryKm,'entryKm');if(!Number.isInteger(entryKm)||entryKm<vehicle.currentKm)throw new MaintenanceValidationError('KM de entrada não pode regredir');const supplierId=optText(input.supplierId,120);if(supplierId){const s=await tx.getSupplierRepo().findByIdForCompany(p.companyId,supplierId);if(!s||s.status!=='ACTIVE')throw new MaintenanceNotFoundError('Fornecedor não encontrado');}
+    let sourceAttachment:any;
+    if(input.sourceAttachmentId){
+      sourceAttachment=rows(await rawTx.execute(sql`SELECT * FROM file_attachments WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} FOR UPDATE`))[0];
+      if(!sourceAttachment||sourceAttachment.is_archived||String(sourceAttachment.content_state)!=='AVAILABLE'||String(sourceAttachment.entity_type)!=='Vehicle'||String(sourceAttachment.entity_id)!==vehicle.id||String(sourceAttachment.document_type||'').toUpperCase()!=='MAINTENANCE_EVIDENCE'){
+        throw new MaintenanceConflictError('Documento de manutenção inválido para este veículo');
+      }
+    }
     const parts:WorkOrderPartItem[]=[];for(const raw of input.parts||[]){const quantity=pos(raw.quantity,'part quantity');if(raw.partId){const c=await tx.getPartRepo().findByIdForCompany(p.companyId,raw.partId);if(!c||c.status!=='ACTIVE')throw new MaintenanceNotFoundError('Peça não encontrada');parts.push({id:randomUUID(),partId:c.id,description:c.name,quantity,unitCost:roundCurrency(c.currentCost),totalCost:roundCurrency(quantity*c.currentCost)});}else{const unitCost=roundCurrency(nn(raw.unitCost,'part unitCost'));parts.push({id:randomUUID(),description:reqText(raw.description,'part description',300),quantity,unitCost,totalCost:roundCurrency(quantity*unitCost)});}}
     const services:WorkOrderServiceItem[]=(input.services||[]).map(raw=>{const quantity=pos(raw.quantity,'service quantity'),unitCost=roundCurrency(nn(raw.unitCost,'service unitCost'));return{id:randomUUID(),serviceId:optText(raw.serviceId,120),description:reqText(raw.description,'service description',300),quantity,unitCost,totalCost:roundCurrency(quantity*unitCost)};});
     const laborItems:WorkOrderLaborItem[]=(input.laborItems||[]).map(raw=>{const hours=pos(raw.hours,'labor hours'),hourlyRate=roundCurrency(nn(raw.hourlyRate,'hourlyRate'));return{id:randomUUID(),description:reqText(raw.description,'labor description',300),hours,hourlyRate,totalCost:roundCurrency(hours*hourlyRate)};});
     const subtotalParts=roundCurrency(parts.reduce((s,i)=>s+i.totalCost,0)),subtotalServices=roundCurrency(services.reduce((s,i)=>s+i.totalCost,0)),subtotalLabor=roundCurrency(laborItems.reduce((s,i)=>s+i.totalCost,0)),gross=roundCurrency(subtotalParts+subtotalServices+subtotalLabor),discount=roundCurrency(nn(input.discount??0,'discount'));if(discount>gross)throw new MaintenanceValidationError('Desconto excede o total da OS');const now=new Date().toISOString();
     const item:WorkOrder={id:randomUUID(),companyId:p.companyId,number,vehicleId:vehicle.id,supplierId,status:'OPEN',openedAt:now,serviceDate,entryKm,description:reqText(input.description,'description',1000),diagnosis:optText(input.diagnosis,1000),notes:optText(input.notes,2000),parts,services,laborItems,subtotalParts,subtotalServices,subtotalLabor,discount,total:roundCurrency(gross-discount),createdBy:p.userId,createdAt:now,updatedAt:now};
-    const created=await tx.getWorkOrderRepo().create(item);await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,created,now);return created;
+    const created=await tx.getWorkOrderRepo().create(item);await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,created,now);
+    if(sourceAttachment){
+      const relinked=await rawTx.execute(sql`UPDATE file_attachments SET entity_name='MaintenanceWorkOrder',entity_type='MaintenanceWorkOrder',entity_id=${created.id} WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} AND entity_type='Vehicle' AND entity_id=${vehicle.id} AND is_archived=false RETURNING id`);
+      if(rows(relinked).length!==1)throw new MaintenanceConflictError('Falha ao vincular documento original à ordem de serviço');
+      await audit(tx,p,'FileAttachment',input.sourceAttachmentId!,AuditAction.UPDATE,{entityType:'Vehicle',entityId:vehicle.id},{event:'PROMOTE_MAINTENANCE_EVIDENCE',entityType:'MaintenanceWorkOrder',entityId:created.id},now);
+    }
+    return created;
   }); }
 
   static startWorkOrder(p:AuthenticatedPrincipal,id:string):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
