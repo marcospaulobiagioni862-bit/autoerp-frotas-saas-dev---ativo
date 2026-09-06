@@ -63,6 +63,7 @@ interface ClaimedExtraction {
   attachmentChecksum: string;
   storageKey: string;
   mimeType: string;
+  documentType: string | null;
 }
 
 export interface DocumentAiAttachmentReader {
@@ -214,7 +215,8 @@ async function claim(
                 extraction.attachment_id,
                 extraction.attachment_checksum,
                 attachment.storage_key,
-                attachment.mime_type
+                attachment.mime_type,
+                attachment.document_type
     `);
     const item = rows(result)[0];
     if (!item) return null;
@@ -224,6 +226,7 @@ async function claim(
       attachmentChecksum: requiredString(item.attachment_checksum, 'attachment checksum'),
       storageKey: requiredString(item.storage_key, 'storage key'),
       mimeType: requiredString(item.mime_type, 'mime type'),
+      documentType: typeof item.document_type === 'string' && item.document_type.trim() ? item.document_type.trim().toUpperCase() : null,
     };
   });
 }
@@ -355,6 +358,7 @@ export class DocumentAiQueueService {
         content,
         mimeType: item.mimeType,
         expectedChecksum: item.attachmentChecksum,
+        expectedDocumentType: item.documentType && ['CNH','CRLV','CRV','ATPV_E','IPVA','LICENCIAMENTO','VISTORIA','LAUDO','TRAFFIC_TICKET','INVOICE','RECEIPT','CONTRACT','INSURANCE','MAINTENANCE','TRACKER'].includes(item.documentType) ? item.documentType as any : undefined,
       });
       await complete(companyId, claimedBy, item, proposal);
       return { id: item.id, status: 'REVIEW_REQUIRED' };
