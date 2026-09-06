@@ -13,6 +13,7 @@ const DOCUMENT_FIELD_NAMES = {
   CRV: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
   ATPV_E: ['plate', 'renavam', 'chassis', 'brand', 'model', 'manufactureYear', 'modelYear', 'fuel', 'ownerName'],
   IPVA: ['plate', 'renavam', 'taxYear', 'amount', 'dueDate', 'installmentNumber'],
+  LICENCIAMENTO: ['plate', 'renavam', 'referenceYear', 'amount', 'dueDate', 'documentNumber'],
   TRAFFIC_TICKET: ['plate', 'noticeNumber', 'organName', 'infractionCode', 'description', 'infractionDate', 'infractionTime', 'infractionLocation', 'dueDate', 'discountDueDate', 'amount', 'discountAmount', 'points'],
   INVOICE: ['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount'],
   RECEIPT: ['issuerName', 'issuerDocument', 'issueDate', 'amount', 'paymentMethod'],
