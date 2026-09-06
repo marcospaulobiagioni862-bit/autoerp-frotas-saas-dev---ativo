@@ -162,6 +162,8 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
     let saleValue: number;
     let finalKm: number;
     let notes: string;
+    let buyerName: string;
+    let buyerDocument: string;
     try {
       saleDate = requiredDate(req.body?.saleDate, 'saleDate');
       reason = requiredText(req.body?.reason, 'reason');
@@ -169,6 +171,8 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
       saleValue = requiredMoney(req.body?.saleValue);
       finalKm = requiredKm(req.body?.finalKm);
       notes = requiredText(req.body?.notes, 'notes');
+      buyerName = requiredText(req.body?.buyerName, 'buyerName');
+      buyerDocument = requiredText(req.body?.buyerDocument, 'buyerDocument');
     } catch (error) {
       sendError(res, error);
       return;
@@ -206,8 +210,6 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
 
         const lifecycleId = randomUUID();
         const action: VehicleLifecycleAction = 'SOLD';
-        const buyerName = optionalText(req.body?.buyerName);
-        const buyerDocument = optionalText(req.body?.buyerDocument);
         const raw = txContext.getRawTransaction();
         await raw.execute(sql`
           INSERT INTO vehicle_lifecycle_events (
@@ -215,7 +217,7 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
             sale_value, buyer_name, buyer_document, final_km, notes, created_by, created_at
           ) VALUES (
             ${lifecycleId}, ${principal.companyId}, ${existing.id}, ${action}, ${saleDate}, ${reason}, ${disposalType},
-            ${String(saleValue)}, ${buyerName ?? null}, ${buyerDocument ?? null}, ${finalKm}, ${notes}, ${principal.userId}, ${now}
+            ${String(saleValue)}, ${buyerName}, ${buyerDocument}, ${finalKm}, ${notes}, ${principal.userId}, ${now}
           )
         `);
 

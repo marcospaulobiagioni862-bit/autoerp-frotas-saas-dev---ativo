@@ -107,8 +107,8 @@ export interface VehicleSaleInput {
   saleValue: number;
   finalKm: number;
   notes: string;
-  buyerName?: string;
-  buyerDocument?: string;
+  buyerName: string;
+  buyerDocument: string;
 }
 
 export interface VehicleArchiveInput {
@@ -157,7 +157,7 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
   ) throw new Error('Invalid vehicle lifecycle payload');
 
   if (item.action === 'SOLD') {
-    if (typeof item.disposalType !== 'string' || !Number.isFinite(item.saleValue) || !Number.isInteger(item.finalKm) || typeof item.notes !== 'string') {
+    if (typeof item.disposalType !== 'string' || !Number.isFinite(item.saleValue) || !Number.isInteger(item.finalKm) || typeof item.notes !== 'string' || typeof item.buyerName !== 'string' || !item.buyerName.trim() || typeof item.buyerDocument !== 'string' || !item.buyerDocument.trim()) {
       throw new Error('Invalid vehicle sale lifecycle payload');
     }
   }

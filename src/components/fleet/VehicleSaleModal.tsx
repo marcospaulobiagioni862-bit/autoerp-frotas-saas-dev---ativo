@@ -32,6 +32,14 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    if (!buyerName.trim()) {
+      setError('Informe o comprador.');
+      return;
+    }
+    if (!buyerDocument.trim()) {
+      setError('Informe o documento do comprador.');
+      return;
+    }
     if (finalKm < vehicle.currentKm) {
       setError(`O KM final não pode ser menor que ${vehicle.currentKm.toLocaleString('pt-BR')} KM.`);
       return;
@@ -45,8 +53,8 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
         saleValue: Number(saleValue),
         finalKm: Number(finalKm),
         notes: notes.trim(),
-        buyerName: buyerName.trim() || undefined,
-        buyerDocument: buyerDocument.trim() || undefined,
+        buyerName: buyerName.trim(),
+        buyerDocument: buyerDocument.trim(),
       });
       await onSuccess();
       onClose();
@@ -79,8 +87,8 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
           <Input label="KM final *" type="number" min={vehicle.currentKm} required value={finalKm} onChange={(e) => setFinalKm(Number(e.target.value))} />
           <Input label="Tipo de baixa/alienação *" required value={disposalType} onChange={(e) => setDisposalType(e.target.value)} />
           <Input label="Motivo *" required value={reason} onChange={(e) => setReason(e.target.value)} />
-          <Input label="Comprador" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
-          <Input label="Documento do comprador" value={buyerDocument} onChange={(e) => setBuyerDocument(e.target.value)} />
+          <Input label="Comprador *" required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
+          <Input label="Documento do comprador *" required value={buyerDocument} onChange={(e) => setBuyerDocument(e.target.value)} />
         </div>
 
         <div>
