@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { db } from '../db/index';
 import { companies } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
@@ -317,8 +317,19 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const fontSize = 10.5;
   const lineHeight = 15;
   let page = document.addPage([pageWidth, pageHeight]);
-  let y = pageHeight - margin;
+  let y = 0;
 
+  const preparePage = () => {
+    page.drawCircle({ x: margin + 13, y: pageHeight - 44, size: 13, color: rgb(0.43, 0.16, 0.85) });
+    page.drawLine({ start: { x: margin + 6, y: pageHeight - 44 }, end: { x: margin + 11, y: pageHeight - 50 }, thickness: 2.2, color: rgb(1, 1, 1) });
+    page.drawLine({ start: { x: margin + 11, y: pageHeight - 50 }, end: { x: margin + 20, y: pageHeight - 37 }, thickness: 2.2, color: rgb(1, 1, 1) });
+    page.drawText('MoveFlex', { x: margin + 34, y: pageHeight - 49, size: 17, font: bold, color: rgb(0.12, 0.14, 0.2) });
+    page.drawText('Locação de Veículos', { x: margin + 34, y: pageHeight - 62, size: 7.5, font, color: rgb(0.35, 0.38, 0.45) });
+    page.drawLine({ start: { x: margin, y: pageHeight - 76 }, end: { x: pageWidth - margin, y: pageHeight - 76 }, thickness: 1, color: rgb(0.43, 0.16, 0.85) });
+    y = pageHeight - 102;
+  };
+
+  preparePage();
   page.drawText(pdfSafe(title), { x: margin, y, size: 14, font: bold });
   y -= 28;
 
@@ -327,13 +338,18 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
     for (const line of lines) {
       if (y < margin + lineHeight) {
         page = document.addPage([pageWidth, pageHeight]);
-        y = pageHeight - margin;
+        preparePage();
       }
       page.drawText(line, { x: margin, y, size: fontSize, font });
       y -= lineHeight;
     }
     y -= 5;
   }
+
+  const pages = document.getPages();
+  pages.forEach((item, index) => item.drawText(`${index + 1} / ${pages.length}`, {
+    x: pageWidth - 78, y: 24, size: 8, font, color: rgb(0.45, 0.45, 0.5),
+  }));
 
   const bytes = await document.save({ useObjectStreams: false });
   const buffer = Buffer.from(bytes);
