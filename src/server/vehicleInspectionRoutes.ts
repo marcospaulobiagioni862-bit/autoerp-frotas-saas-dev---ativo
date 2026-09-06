@@ -3,7 +3,7 @@ import type { Express, Request, Response } from 'express';
 import { and, desc, eq } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { vehicleInspections } from '../db/schema';
-import { AuditAction } from '../types/enums';
+import { AuditAction, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 
 const ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -13,6 +13,13 @@ const CHECKLIST_KEYS=[
   'keyMain','keySpare','crlvPrinted','phoneHolder','jack','triangle',
   'wheelWrench','spareTire','seatCover','ownerManual','floorMats','multimedia',
 ] as const;
+const TECHNICAL_KEYS=[
+  'tires','glassMirrors','bodyPaint','interior','dashboard','lighting',
+  'brakes','suspension','steering','engine','transmission','safety',
+] as const;
+const TECHNICAL_STATUSES=new Set(['OK','ATTENTION','FAILED','NOT_APPLICABLE']);
+const INSPECTION_RESULTS=new Set(['APPROVED','APPROVED_WITH_RESERVATIONS','FAILED','BLOCKED_FOR_RENTAL']);
+const CRITICAL_TECHNICAL_KEYS=new Set(['tires','brakes','steering','safety']);
 
 class ValidationError extends Error{}
 class NotFoundError extends Error{}
@@ -37,17 +44,42 @@ function checklist(value:unknown):Record<string,boolean>{
   if(!Object.keys(item).every(k=>(CHECKLIST_KEYS as readonly string[]).includes(k))) throw new ValidationError();
   return Object.fromEntries(CHECKLIST_KEYS.map(k=>[k,item[k]===true]));
 }
+function technicalChecklist(value:unknown):Record<string,string>{
+  if(!value||typeof value!=='object'||Array.isArray(value)) throw new ValidationError();
+  const item=value as Record<string,unknown>;
+  if(!Object.keys(item).every(k=>(TECHNICAL_KEYS as readonly string[]).includes(k))) throw new ValidationError();
+  if(!TECHNICAL_KEYS.every(k=>TECHNICAL_STATUSES.has(String(item[k]||'')))) throw new ValidationError();
+  return Object.fromEntries(TECHNICAL_KEYS.map(k=>[k,String(item[k])]));
+}
+function deriveInspectionResult(items:Record<string,string>):string{
+  for(const key of TECHNICAL_KEYS){
+    if(items[key]==='FAILED'&&CRITICAL_TECHNICAL_KEYS.has(key)) return 'BLOCKED_FOR_RENTAL';
+  }
+  if(TECHNICAL_KEYS.some(key=>items[key]==='FAILED')) return 'FAILED';
+  if(TECHNICAL_KEYS.some(key=>items[key]==='ATTENTION')) return 'APPROVED_WITH_RESERVATIONS';
+  return 'APPROVED';
+}
+function inspectionChecklistPayload(legacy:Record<string,boolean>,technical:Record<string,string>,result:string):Record<string,unknown>{
+  return {...legacy,technical,result};
+}
 function optionalText(value:unknown,max=2000):string|undefined{
   if(value===undefined||value===null||value==='') return undefined;
   const v=String(value).trim(); if(v.length>max) throw new ValidationError(); return v||undefined;
 }
 function item(row:any){
+  const stored=(row.checklist&&typeof row.checklist==='object'&&!Array.isArray(row.checklist))?row.checklist as Record<string,unknown>:{};
+  const legacy=Object.fromEntries(CHECKLIST_KEYS.map(k=>[k,stored[k]===true]));
+  const technicalRaw=stored.technical;
+  const technical=(technicalRaw&&typeof technicalRaw==='object'&&!Array.isArray(technicalRaw))
+    ? Object.fromEntries(TECHNICAL_KEYS.map(k=>[k,TECHNICAL_STATUSES.has(String((technicalRaw as Record<string,unknown>)[k]||''))?String((technicalRaw as Record<string,unknown>)[k]):'NOT_APPLICABLE']))
+    : undefined;
+  const result=INSPECTION_RESULTS.has(String(stored.result||''))?String(stored.result):undefined;
   return {
     id:String(row.id),companyId:String(row.companyId),vehicleId:String(row.vehicleId),
     driverId:row.driverId||undefined,contractId:row.contractId||undefined,
     inspectionType:String(row.inspectionType),inspectionDate:String(row.inspectionDate),
     odometer:Number(row.odometer),fuelLevel:Number(row.fuelLevel),
-    checklist:row.checklist||{},notes:row.notes||undefined,
+    checklist:legacy,technicalChecklist:technical,result,notes:row.notes||undefined,
     createdBy:String(row.createdBy),createdAt:String(row.createdAt),updatedAt:String(row.updatedAt),
   };
 }
@@ -87,6 +119,7 @@ export function registerVehicleInspectionRoutes(app:Express):void{
       const created=await UnitOfWork.run(principal.companyId,async context=>{
         const vehicle=await context.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,req.params.id);
         if(!vehicle||vehicle.isArchived) throw new NotFoundError();
+        if(vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED) throw new ValidationError();
         if(odometer<vehicle.currentKm) throw new ValidationError();
         const driverId=optionalText(req.body?.driverId,120)||vehicle.currentDriverId||undefined;
         const contractId=optionalText(req.body?.contractId,120)||vehicle.currentContractId||undefined;
@@ -98,11 +131,14 @@ export function registerVehicleInspectionRoutes(app:Express):void{
           const contract=await context.getContractRepo().findByIdForCompany(principal.companyId,contractId);
           if(!contract||contract.vehicleId!==vehicle.id) throw new ValidationError();
         }
+        const technical=technicalChecklist(req.body?.technicalChecklist);
+        const result=deriveInspectionResult(technical);
         const now=new Date().toISOString();
         const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
         const rows=await tx.insert(vehicleInspections).values({
           id:randomUUID(),companyId:principal.companyId,vehicleId:vehicle.id,driverId,contractId,
-          inspectionType:type,inspectionDate:now,odometer,fuelLevel,checklist:checklist(req.body?.checklist),
+          inspectionType:type,inspectionDate:now,odometer,fuelLevel,
+          checklist:inspectionChecklistPayload(checklist(req.body?.checklist),technical,result),
           notes:optionalText(req.body?.notes),createdBy:principal.userId,createdAt:now,updatedAt:now,
         }).returning();
         const created=rows[0];if(!created) throw new Error('Inspection create failed');
@@ -116,10 +152,20 @@ export function registerVehicleInspectionRoutes(app:Express):void{
           await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{currentKm:odometer,updatedAt:now});
         }
 
+        if(result==='BLOCKED_FOR_RENTAL'&&vehicle.status!==VehicleStatus.BLOCKED){
+          await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{status:VehicleStatus.BLOCKED,updatedAt:now});
+          await context.getAuditLogRepo().create({
+            id:randomUUID(),companyId:principal.companyId,entityName:'Vehicle',entityId:vehicle.id,
+            action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,timestamp:now,
+            oldState:JSON.stringify({status:vehicle.status}),
+            newState:JSON.stringify({status:VehicleStatus.BLOCKED,reason:'INSPECTION_CRITICAL_FAILURE',inspectionId:created.id}),
+          });
+        }
+
         await context.getAuditLogRepo().create({
           id:randomUUID(),companyId:principal.companyId,entityName:'VehicleInspection',entityId:created.id,
           action:AuditAction.CREATE,userId:principal.userId,userName:principal.name,timestamp:now,
-          newState:JSON.stringify({event:'CREATE',vehicleId:vehicle.id,inspectionType:type,odometer,fuelLevel,driverId,contractId}),
+          newState:JSON.stringify({event:'CREATE',vehicleId:vehicle.id,inspectionType:type,odometer,fuelLevel,driverId,contractId,result}),
         });
         return created;
       });

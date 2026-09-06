@@ -143,6 +143,20 @@ assert.ok(inspectionRoutesSource.includes("readingType:type==='ENTRY'?'CHECK_IN'
 assert.ok(inspectionRoutesSource.includes("if(odometer<vehicle.currentKm)"), 'inspection must reject KM regression');
 assert.ok(inspectionMigrationSource.includes("inspection_type IN ('ENTRY','EXIT')"), 'database must restrict inspections to entry or exit');
 assert.ok(inspectionMigrationSource.includes('ENABLE ROW LEVEL SECURITY') && inspectionMigrationSource.includes('FORCE ROW LEVEL SECURITY'), 'inspection table must remain tenant isolated');
+for (const key of ['tires','glassMirrors','bodyPaint','interior','dashboard','lighting','brakes','suspension','steering','engine','transmission','safety']) {
+  assert.ok(inspectionPanelSource.includes(`'${key}'`), `technical inspection item missing: ${key}`);
+}
+for (const status of ['OK','ATTENTION','FAILED','NOT_APPLICABLE']) {
+  assert.ok(inspectionPanelSource.includes(`'${status}'`), `technical inspection status missing: ${status}`);
+}
+assert.ok(inspectionPanelSource.includes('Bloqueado para locação'), 'inspection UI must expose the terminal operational result');
+assert.ok(inspectionPanelSource.includes('Avalie todos os itens da vistoria técnica antes de salvar.'), 'technical inspection must be complete before submit');
+assert.ok(inspectionRoutesSource.includes("CRITICAL_TECHNICAL_KEYS=new Set(['tires','brakes','steering','safety'])"), 'critical technical systems must be explicit server-side');
+assert.ok(inspectionRoutesSource.includes("return 'BLOCKED_FOR_RENTAL'"), 'critical failure must derive blocked-for-rental result server-side');
+assert.ok(inspectionRoutesSource.includes("status:VehicleStatus.BLOCKED"), 'blocked-for-rental result must block the vehicle server-side');
+assert.ok(inspectionRoutesSource.includes("vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED"), 'terminal vehicles must reject new inspections');
+assert.ok(inspectionRoutesSource.includes("reason:'INSPECTION_CRITICAL_FAILURE'"), 'automatic block must be auditable');
+assert.ok(!inspectionRoutesSource.includes("status:VehicleStatus.AVAILABLE"), 'inspection flow must never auto-unblock a vehicle');
 
 assert.ok(vehicleIntakeRoutesSource.includes("/api/vehicle-document-intakes/:id/document-ai"), 'vehicle intake must expose a dedicated Document AI queue action');
 assert.ok(vehicleIntakeRoutesSource.includes('enqueueVehicleDocumentIntake'), 'vehicle intake route must queue through server authority');

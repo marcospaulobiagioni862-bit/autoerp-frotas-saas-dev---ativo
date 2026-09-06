@@ -1,4 +1,10 @@
 export type VehicleInspectionType='ENTRY'|'EXIT';
+export type VehicleInspectionItemStatus='OK'|'ATTENTION'|'FAILED'|'NOT_APPLICABLE';
+export type VehicleInspectionResult='APPROVED'|'APPROVED_WITH_RESERVATIONS'|'FAILED'|'BLOCKED_FOR_RENTAL';
+export type VehicleInspectionTechnicalKey=
+  'tires'|'glassMirrors'|'bodyPaint'|'interior'|'dashboard'|'lighting'|
+  'brakes'|'suspension'|'steering'|'engine'|'transmission'|'safety';
+export type VehicleInspectionTechnicalChecklist=Record<VehicleInspectionTechnicalKey,VehicleInspectionItemStatus>;
 
 export interface VehicleInspectionChecklist{
   keyMain:boolean;keySpare:boolean;crlvPrinted:boolean;phoneHolder:boolean;jack:boolean;triangle:boolean;
@@ -7,11 +13,12 @@ export interface VehicleInspectionChecklist{
 export interface VehicleInspection{
   id:string;companyId:string;vehicleId:string;driverId?:string;contractId?:string;
   inspectionType:VehicleInspectionType;inspectionDate:string;odometer:number;fuelLevel:number;
-  checklist:VehicleInspectionChecklist;notes?:string;createdBy:string;createdAt:string;updatedAt:string;
+  checklist:VehicleInspectionChecklist;technicalChecklist?:VehicleInspectionTechnicalChecklist;result?:VehicleInspectionResult;
+  notes?:string;createdBy:string;createdAt:string;updatedAt:string;
 }
 export interface VehicleInspectionCreateInput{
-  inspectionType:VehicleInspectionType;odometer:number;fuelLevel:number;checklist:VehicleInspectionChecklist;notes?:string;
-  driverId?:string;contractId?:string;
+  inspectionType:VehicleInspectionType;odometer:number;fuelLevel:number;checklist:VehicleInspectionChecklist;
+  technicalChecklist:VehicleInspectionTechnicalChecklist;notes?:string;driverId?:string;contractId?:string;
 }
 
 function record(value:unknown):Record<string,unknown>{
