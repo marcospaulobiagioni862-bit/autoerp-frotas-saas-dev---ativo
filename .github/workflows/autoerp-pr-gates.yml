@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validate:
+  validate-fast:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     services:
@@ -54,6 +54,14 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
@@ -714,138 +722,6 @@ jobs:
       - name: Deferred report AI client regression
         run: npx tsx src/components/reports/__tests__/managementReportsAiClientLazyLoadingTestRunner.ts
 
-      - name: Apply migrations once
-        run: node migrate_test_db.cjs
-
-      - name: Core authority regressions
-        run: |
-          npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
-          npx tsx src/server/__tests__/productionTrustBoundary.ts
-          npx tsx src/server/__tests__/tenantProfileAuthorityIntegration.ts
-          npx tsx src/server/__tests__/tenantScopedBaseRepositoryIntegration.ts
-          npx tsx src/server/__tests__/detailAuthorityIntegration.ts
-          npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
-
-      - name: Evidence and attachment regressions
-        run: |
-          npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
-          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
-          npx tsx src/server/__tests__/r2AttachmentStorageTestRunner.ts
-          npx tsx src/server/__tests__/economicStorageCapacityTestRunner.ts
-          npx tsx src/server/__tests__/documentAiAuthorityIntegration.ts
-          npx tsx src/server/__tests__/documentAiProcessorTestRunner.ts
-          npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts
-          npx tsx src/server/__tests__/documentAiRuntimeTestRunner.ts
-          npx tsx src/server/__tests__/documentAiObservabilityTestRunner.ts
-          npx tsx src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
-          npx tsx src/server/__tests__/documentAiQueueIntegration.ts
-
-      - name: Fleet domain regressions
-        run: |
-          npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
-          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
-          npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
-          npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
-          npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
-          npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
-          npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
-          npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
-          npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
-          npx tsx src/server/__tests__/telemetryWebhookAuthIntegration.ts
-          npx tsx src/server/__tests__/telemetryObservabilityIntegration.ts
-          npx tsx src/server/__tests__/telemetryMaintenanceAdvisoryTestRunner.ts
-          npx tsx src/server/__tests__/sanitizedTelemetryLocationTestRunner.ts
-          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
-          npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
-          npx tsx src/server/__tests__/documentAuthorityIntegration.ts
-          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
-          npx tsx src/server/__tests__/contractSignatureTimeGateRegression.ts
-
-      - name: Finance authority regressions
-        run: |
-          npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
-          npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financialPeriodAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeDepositIdempotencyIntegration.ts
-          npx tsx src/server/__tests__/financeDepositLifecycleAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
-          npx tsx src/server/__tests__/financeCancellationMetadataIntegration.ts
-          npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
-          npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
-          npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
-          npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
-          npx tsx src/server/__tests__/financeCashFlowAuthorityIntegration.ts
-
-      - name: Finance domain regressions
-        run: |
-          npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
-          npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
-          npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
-          npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
-          npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
-          npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
-          npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
-
-      - name: Finance client regressions
-        run: |
-          npx tsx src/api/__tests__/financePeriodClientTestRunner.ts
-          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
-          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
-          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
-          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
-          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
-          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
-          npx tsx src/api/__tests__/financeOverdueClientTestRunner.ts
-
-      - name: Administration client regressions
-        run: npx tsx src/api/__tests__/adminUserClientTestRunner.ts
-
-      - name: Document review client regression
-        run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
-
-      - name: Report AI client regression
-        run: npx tsx src/api/__tests__/reportAiClientTestRunner.ts
-
-      - name: WhatsApp client authority regression
-        run: npx tsx src/api/__tests__/whatsappClientTestRunner.ts
-
-      - name: Telemetry client authority and human review regression
-        run: npx tsx src/api/__tests__/telemetryClientTestRunner.ts
-
-      - name: Report AI suggestion regression
-        run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
-
-      - name: Report AI review authority regression
-        run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
-
-      - name: WhatsApp dispatch policy regression
-        run: npx tsx src/server/__tests__/whatsappDispatchPolicyTestRunner.ts
-
-      - name: WhatsApp webhook authentication regression
-        run: npx tsx src/server/__tests__/whatsappWebhookAuthIntegration.ts
-
-      - name: WhatsApp inbound task proposal regression
-        run: npx tsx src/server/__tests__/whatsappInboundTaskProposalIntegration.ts
-
-      - name: WhatsApp observability regression
-        run: npx tsx src/server/__tests__/whatsappObservabilityIntegration.ts
-
-      - name: WhatsApp consent and outbox authority regression
-        run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
-
-      - name: Authentication regressions
-        run: |
-          npx tsx src/server/__tests__/requestCorrelationTestRunner.ts
-          npx tsx src/server/__tests__/opsHealthRoutesTestRunner.ts
-          npx tsx src/server/__tests__/authTestRunner.ts
-          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
-
       - name: Production build gate
         run: npm run build
 
@@ -888,3 +764,194 @@ jobs:
           for (const [marker, label] of required) if (!bundle.includes(marker)) { console.error(`FAIL: ${label} missing from production frontend bundle (${marker})`); process.exit(1); }
           console.log('PASS: AutoERP consolidated production trust boundary');
           NODE
+
+  integration:
+    name: integration-${{ matrix.suite }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, storage, fleet, finance, communications]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: autoerp_phase1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d autoerp_phase1_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      USE_PGLITE: "false"
+      SQL_USER: postgres
+      SQL_PASSWORD: postgres
+      SQL_HOST: 127.0.0.1
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/autoerp_phase1_test
+      RECURRING_SCHEDULER_ENABLED: "false"
+      JWT_SECRET: autoerp-pr-gates-test-jwt-secret-that-is-long-enough
+      JWT_ISSUER: autoerp-pr-gates-test
+      JWT_AUDIENCE: autoerp-pr-gates-test-client
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Cache npm downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+
+      - name: Apply migrations
+        run: node migrate_test_db.cjs
+
+      - name: Core authority regressions
+        if: matrix.suite == 'core'
+        run: |
+          npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
+          npx tsx src/server/__tests__/productionTrustBoundary.ts
+          npx tsx src/server/__tests__/tenantProfileAuthorityIntegration.ts
+          npx tsx src/server/__tests__/tenantScopedBaseRepositoryIntegration.ts
+          npx tsx src/server/__tests__/detailAuthorityIntegration.ts
+          npx tsx src/server/__tests__/operationalAuthorityIntegration.ts
+      - name: Evidence and attachment regressions
+        if: matrix.suite == 'storage'
+        run: |
+          npx tsx src/server/__tests__/evidence1AttachmentExpansion.ts
+          npx tsx src/server/__tests__/attachmentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/r2AttachmentStorageTestRunner.ts
+          npx tsx src/server/__tests__/economicStorageCapacityTestRunner.ts
+          npx tsx src/server/__tests__/documentAiAuthorityIntegration.ts
+          npx tsx src/server/__tests__/documentAiProcessorTestRunner.ts
+          npx tsx src/server/__tests__/geminiDocumentAiProviderTestRunner.ts
+          npx tsx src/server/__tests__/documentAiRuntimeTestRunner.ts
+          npx tsx src/server/__tests__/documentAiObservabilityTestRunner.ts
+          npx tsx src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
+          npx tsx src/server/__tests__/documentAiQueueIntegration.ts
+      - name: Fleet domain regressions
+        if: matrix.suite == 'fleet'
+        run: |
+          npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
+          npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
+          npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
+          npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
+          npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
+          npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts
+          npx tsx src/server/__tests__/insuranceAuthorityIntegration.ts
+          npx tsx src/server/__tests__/trackerAuthorityIntegration.ts
+          npx tsx src/server/__tests__/telemetryAuthorityIntegration.ts
+          npx tsx src/server/__tests__/telemetryWebhookAuthIntegration.ts
+          npx tsx src/server/__tests__/telemetryObservabilityIntegration.ts
+          npx tsx src/server/__tests__/telemetryMaintenanceAdvisoryTestRunner.ts
+          npx tsx src/server/__tests__/sanitizedTelemetryLocationTestRunner.ts
+          npx tsx src/server/__tests__/driverAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
+          npx tsx src/server/__tests__/documentAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractSignatureTimeGateRegression.ts
+      - name: Finance authority regressions
+        if: matrix.suite == 'finance'
+        run: |
+          npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
+          npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financialPeriodAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeDepositIdempotencyIntegration.ts
+          npx tsx src/server/__tests__/financeDepositLifecycleAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeSettlementConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeCancellationMetadataIntegration.ts
+          npx tsx src/server/__tests__/financeTransferConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeReversalConcurrencyIntegration.ts
+          npx tsx src/server/__tests__/financeTrafficTicketDiscountIntegration.ts
+          npx tsx src/server/__tests__/financeTrafficTicketDiscountAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeOverdueAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeCashFlowAuthorityIntegration.ts
+      - name: Finance domain regressions
+        if: matrix.suite == 'finance'
+        run: |
+          npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
+          npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
+          npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
+          npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
+          npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
+          npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
+          npx tsx src/domain/finance/__tests__/renegotiationFrequencyTestRunner.ts
+      - name: Finance client regressions
+        if: matrix.suite == 'finance'
+        run: |
+          npx tsx src/api/__tests__/financePeriodClientTestRunner.ts
+          npx tsx src/api/__tests__/financeDepositClientTestRunner.ts
+          npx tsx src/api/__tests__/financeSettlementClientTestRunner.ts
+          npx tsx src/api/__tests__/financeTransactionClientTestRunner.ts
+          npx tsx src/api/__tests__/financeObligationClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverviewClientTestRunner.ts
+          npx tsx src/api/__tests__/financeReportingClientTestRunner.ts
+          npx tsx src/api/__tests__/financeOverdueClientTestRunner.ts
+      - name: Administration client regressions
+        if: matrix.suite == 'core'
+        run: npx tsx src/api/__tests__/adminUserClientTestRunner.ts
+      - name: Document review client regression
+        if: matrix.suite == 'storage'
+        run: npx tsx src/api/__tests__/documentAiClientTestRunner.ts
+      - name: Report AI client regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/api/__tests__/reportAiClientTestRunner.ts
+      - name: WhatsApp client authority regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/api/__tests__/whatsappClientTestRunner.ts
+      - name: Telemetry client authority and human review regression
+        if: matrix.suite == 'fleet'
+        run: npx tsx src/api/__tests__/telemetryClientTestRunner.ts
+      - name: Report AI suggestion regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/reportAiSuggestionTestRunner.ts
+      - name: Report AI review authority regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/reportAiSuggestionAuthorityIntegration.ts
+      - name: WhatsApp dispatch policy regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/whatsappDispatchPolicyTestRunner.ts
+      - name: WhatsApp webhook authentication regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/whatsappWebhookAuthIntegration.ts
+      - name: WhatsApp inbound task proposal regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/whatsappInboundTaskProposalIntegration.ts
+      - name: WhatsApp observability regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/whatsappObservabilityIntegration.ts
+      - name: WhatsApp consent and outbox authority regression
+        if: matrix.suite == 'communications'
+        run: npx tsx src/server/__tests__/whatsappAuthorityIntegration.ts
+      - name: Authentication regressions
+        if: matrix.suite == 'core'
+        run: |
+          npx tsx src/server/__tests__/requestCorrelationTestRunner.ts
+          npx tsx src/server/__tests__/opsHealthRoutesTestRunner.ts
+          npx tsx src/server/__tests__/authTestRunner.ts
+          npx tsx src/server/__tests__/sessionLoginTestRunner.ts
+
+
