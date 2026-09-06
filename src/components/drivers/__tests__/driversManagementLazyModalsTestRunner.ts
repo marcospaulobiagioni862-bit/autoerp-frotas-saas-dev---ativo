@@ -85,7 +85,7 @@ assert.match(cnhIntakeSource, /const clearSelectedFile = \(\) => \{[\s\S]*setFil
 assert.match(cnhIntakeSource, /\{file \? 'Trocar arquivo' : 'Selecionar CNH'\}/, 'CNH intake must expose selection and replacement states');
 assert.match(cnhIntakeSource, />\s*Remover arquivo\s*</, 'CNH intake must expose explicit removal');
 assert.match(cnhIntakeSource, /disabled=\{!file \|\| busy\}/, 'CNH analysis action must remain disabled without a file');
-assert.match(detailsSource, /<AttachmentList entityType="Driver" entityId=\{driver\.id\} showPdfActions protectLatestDriverCnh \/>/, 'driver CNH file list must protect the latest CNH');
+assert.match(detailsSource, /<AttachmentList[\s\S]*entityType="Driver"[\s\S]*entityId=\{driver\.id\}[\s\S]*showPdfActions[\s\S]*protectLatestDriverCnh[\s\S]*\/>/, 'driver CNH file list must protect the latest CNH');
 assert.match(attachmentListSource, /const latestDriverCnhId = protectLatestDriverCnh[\s\S]*documentType \|\| ''\)\.toUpperCase\(\) === 'CNH'/, 'attachment list must identify the latest available driver CNH');
 assert.match(attachmentListSource, /disabled=\{att\.id === latestDriverCnhId\}/, 'archive action must be disabled for the current CNH');
 assert.match(attachmentListSource, /CNH vigente: substitua pelo fluxo Nova CNH \/ Renovar CNH/, 'current CNH archive guard must explain the renewal flow');

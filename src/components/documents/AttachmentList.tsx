@@ -18,6 +18,7 @@ interface AttachmentListProps {
   attachmentStatusesUnavailable?: boolean;
   showPdfActions?: boolean;
   protectLatestDriverCnh?: boolean;
+  excludeAttachmentIds?: string[];
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -42,6 +43,7 @@ export function AttachmentList({
   attachmentStatusesUnavailable = false,
   showPdfActions = false,
   protectLatestDriverCnh = false,
+  excludeAttachmentIds = [],
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -106,9 +108,11 @@ export function AttachmentList({
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.id
     : undefined;
 
-  const visibleAttachments = protectLatestDriverCnh && entityType === 'Driver'
+  const excludedAttachmentIds = new Set(excludeAttachmentIds);
+  const visibleAttachments = (protectLatestDriverCnh && entityType === 'Driver'
     ? attachments.filter((item) => String(item.documentType || '').toUpperCase() !== 'CNH')
-    : attachments;
+    : attachments
+  ).filter((item) => !excludedAttachmentIds.has(item.id));
 
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
