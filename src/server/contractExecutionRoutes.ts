@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { eq } from 'drizzle-orm';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { MOVEFLEX_LOGO_JPEG_BASE64 } from '../domain/contracts/moveflexBrand';
 import { db } from '../db/index';
 import { companies } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
@@ -310,6 +311,7 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const document = await PDFDocument.create();
   const font = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const logo = await document.embedJpg(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64'));
   const pageWidth = 595.28;
   const pageHeight = 841.89;
   const margin = 48;
@@ -320,13 +322,12 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   let y = 0;
 
   const preparePage = () => {
-    page.drawCircle({ x: margin + 13, y: pageHeight - 44, size: 13, color: rgb(0.43, 0.16, 0.85) });
-    page.drawLine({ start: { x: margin + 6, y: pageHeight - 44 }, end: { x: margin + 11, y: pageHeight - 50 }, thickness: 2.2, color: rgb(1, 1, 1) });
-    page.drawLine({ start: { x: margin + 11, y: pageHeight - 50 }, end: { x: margin + 20, y: pageHeight - 37 }, thickness: 2.2, color: rgb(1, 1, 1) });
-    page.drawText('MoveFlex', { x: margin + 34, y: pageHeight - 49, size: 17, font: bold, color: rgb(0.12, 0.14, 0.2) });
-    page.drawText('Locação de Veículos', { x: margin + 34, y: pageHeight - 62, size: 7.5, font, color: rgb(0.35, 0.38, 0.45) });
-    page.drawLine({ start: { x: margin, y: pageHeight - 76 }, end: { x: pageWidth - margin, y: pageHeight - 76 }, thickness: 1, color: rgb(0.43, 0.16, 0.85) });
-    y = pageHeight - 102;
+    page.drawImage(logo, { x: margin, y: pageHeight - 113, width: 176, height: 99 });
+    page.drawText('CONTRATO DE LOCAÇÃO DE VEÍCULO', { x: pageWidth - 312, y: pageHeight - 49, size: 12, font: bold, color: rgb(0.30, 0.10, 0.55) });
+    page.drawText('Documento oficial MoveFlex', { x: pageWidth - 312, y: pageHeight - 66, size: 8, font, color: rgb(0.38, 0.41, 0.48) });
+    page.drawLine({ start: { x: margin, y: pageHeight - 122 }, end: { x: pageWidth - margin, y: pageHeight - 122 }, thickness: 1.4, color: rgb(0.42, 0.16, 0.75) });
+    page.drawText('MOVEFLEX', { x: 185, y: pageHeight / 2, size: 58, font: bold, color: rgb(0.43, 0.16, 0.85), opacity: 0.035 });
+    y = pageHeight - 145;
   };
 
   preparePage();
@@ -347,9 +348,11 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   }
 
   const pages = document.getPages();
-  pages.forEach((item, index) => item.drawText(`${index + 1} / ${pages.length}`, {
-    x: pageWidth - 78, y: 24, size: 8, font, color: rgb(0.45, 0.45, 0.5),
-  }));
+  pages.forEach((item, index) => {
+    item.drawLine({ start: { x: margin, y: 38 }, end: { x: pageWidth - margin, y: 38 }, thickness: 0.7, color: rgb(0.76, 0.70, 0.86) });
+    item.drawText('MoveFlex • Locação de Veículos', { x: margin, y: 22, size: 7.5, font, color: rgb(0.38, 0.41, 0.48) });
+    item.drawText(`Página ${index + 1} de ${pages.length}`, { x: pageWidth - 96, y: 22, size: 7.5, font, color: rgb(0.45, 0.45, 0.5) });
+  });
 
   const bytes = await document.save({ useObjectStreams: false });
   const buffer = Buffer.from(bytes);
