@@ -124,6 +124,25 @@ assert.match(
 );
 assert.match(
   templateModal,
+  /Modelos de Contrato MoveFlex/,
+  'contract template manager must expose MoveFlex branding',
+);
+assert.match(
+  templateModal,
+  /Baixar modelo-base MoveFlex \(PDF\)/,
+  'empty template state must provide a downloadable MoveFlex base model',
+);
+assert.match(
+  templateModal,
+  /Baixar arquivo selecionado/,
+  'selected PDF or DOCX must be downloadable before save',
+);
+const moveflexBasePdf = readFileSync(new URL('../moveflexBaseContractPdf.ts', import.meta.url), 'utf8');
+assert.match(moveflexBasePdf, /MOVEFLEX_LOGO_DATA_URL/, 'MoveFlex contract base must embed the brand mark');
+assert.match(moveflexBasePdf, /Contrato_MoveFlex_Modelo_Base\.pdf/, 'MoveFlex base download must use a stable PDF filename');
+assert.match(moveflexBasePdf, /CLÁUSULA 16/, 'MoveFlex base PDF must retain the supplied contract structure through clause 16');
+assert.match(
+  templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,
   'template file input must have an explicit readable dark-mode surface',
 );
