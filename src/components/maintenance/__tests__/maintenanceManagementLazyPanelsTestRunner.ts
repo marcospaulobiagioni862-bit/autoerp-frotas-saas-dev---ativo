@@ -39,4 +39,9 @@ assert.doesNotMatch(
   'lazy maintenance fallbacks must not expose raw errors',
 );
 
+assert.doesNotMatch(source, /window\.prompt\(/, 'maintenance cancellation must not depend on native browser prompt');
+assert.match(source, /Cancelar \{cancelTarget\.number\}/, 'maintenance cancellation must use an in-app modal');
+assert.match(source, /Informe o motivo do cancelamento da OS\./, 'maintenance cancellation must require a reason');
+assert.match(source, /Confirmar cancelamento/, 'maintenance cancellation modal must expose an explicit confirmation action');
+
 console.log('Deferred maintenance panels regression: PASS');
