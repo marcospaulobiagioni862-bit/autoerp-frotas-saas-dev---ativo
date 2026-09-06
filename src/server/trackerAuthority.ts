@@ -13,7 +13,7 @@ export class TrackerNotFoundError extends Error {}
 export interface TrackerExpenseCategory { id:string; name:string; type:string; }
 export interface CreateTrackerInput {
   vehicleId:string; equipmentModel:string; imei:string; serialNumber?:string; chipCarrier?:string; chipNumber?:string;
-  monthlyCost:number; installationDate:string; supplierId?:string; notes?:string; categoryId?:string;
+  monthlyCost:number; installationDate:string; supplierId?:string; notes?:string; categoryId?:string; sourceAttachmentId?:string;
 }
 export interface UpdateTrackerInput {
   equipmentModel?:string; imei?:string; serialNumber?:string|null; chipCarrier?:string|null; chipNumber?:string|null;
@@ -110,11 +110,19 @@ export class TrackerAuthorityService {
   }); }
 
   static create(p:AuthenticatedPrincipal,input:CreateTrackerInput):Promise<Tracker>{ return UnitOfWork.run(p.companyId,async tx=>{
+    const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Tracker persistence unavailable');
     const vehicleId=reqText(input.vehicleId,'vehicleId',160); const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,vehicleId);
     if(!vehicle||vehicle.isArchived)throw new TrackerNotFoundError('Veículo não encontrado');
     if([VehicleStatus.SOLD,VehicleStatus.ARCHIVED].includes(vehicle.status))throw new TrackerConflictError('Veículo não está elegível para rastreador');
     const normalizedImei=imei(input.imei),model=reqText(input.equipmentModel,'equipmentModel',200),cost=money(input.monthlyCost),installationDate=isoDate(input.installationDate),supplierId=optText(input.supplierId,160);
     await validSupplier(tx,p.companyId,supplierId);
+    let sourceAttachment:any;
+    if(input.sourceAttachmentId){
+      sourceAttachment=rows(await raw.execute(sql`SELECT * FROM file_attachments WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} FOR UPDATE`))[0];
+      if(!sourceAttachment||sourceAttachment.is_archived||String(sourceAttachment.content_state)!=='AVAILABLE'||String(sourceAttachment.entity_type)!=='Vehicle'||String(sourceAttachment.entity_id)!==vehicleId||String(sourceAttachment.document_type||'').toUpperCase()!=='TRACKER_EVIDENCE'){
+        throw new TrackerConflictError('Documento de rastreador inválido para este veículo');
+      }
+    }
     const duplicate=await tx.getTrackerRepo().findByImei(p.companyId,normalizedImei);
     if(duplicate){
       const same=duplicate.vehicleId===vehicleId&&duplicate.status==='ACTIVE'&&duplicate.equipmentModel===model&&Number(duplicate.monthlyCost||0)===cost;
@@ -128,6 +136,11 @@ export class TrackerAuthorityService {
       notes:optText(input.notes,1000),createdBy:p.userId,createdAt:now,updatedAt:now,
     };
     const created=await tx.getTrackerRepo().create(item); await audit(tx,p,'Tracker',created.id,AuditAction.CREATE,undefined,created,now);
+    if(sourceAttachment){
+      const relinked=await raw.execute(sql`UPDATE file_attachments SET entity_name='Tracker',entity_type='Tracker',entity_id=${created.id} WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} AND entity_type='Vehicle' AND entity_id=${vehicleId} AND is_archived=false RETURNING id`);
+      if(rows(relinked).length!==1)throw new TrackerConflictError('Falha ao vincular documento original ao rastreador');
+      await audit(tx,p,'FileAttachment',input.sourceAttachmentId!,AuditAction.UPDATE,{entityType:'Vehicle',entityId:vehicleId},{event:'PROMOTE_TRACKER_DOCUMENT',entityType:'Tracker',entityId:created.id},now);
+    }
     if(afterTrackerCreatedForTests)await afterTrackerCreatedForTests();
     await syncRecurringRule(tx,p,created,input.categoryId); return created;
   }); }
