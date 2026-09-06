@@ -146,13 +146,13 @@ export const FleetManagement: React.FC = () => {
           <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl"><span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl"><span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl"><span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Inativos / Vendidos</span><strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Inativos</span><strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong></div>
         </div>
       )}
 
       {showArchived && (
         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">
-          {totalCount} veículo(s) arquivado(s). Esta área é somente leitura; o histórico não foi apagado.
+          {totalCount} veículo(s) vendido(s) ou arquivado(s). Esta área é somente leitura; o histórico não foi apagado.
         </div>
       )}
 
@@ -162,7 +162,7 @@ export const FleetManagement: React.FC = () => {
             <Input type="text" placeholder="Buscar por placa, modelo, marca, RENAVAM ou chassi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />}/>
           </div>
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-            <Button variant="outline" size="sm" onClick={toggleArchivedView}>{showArchived ? 'Voltar à frota ativa' : 'Ver arquivados'}</Button>
+            <Button variant="outline" size="sm" onClick={toggleArchivedView}>{showArchived ? 'Voltar à frota ativa' : 'Ver vendidos / arquivados'}</Button>
             {!showArchived && <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />}
             {!showArchived && VEHICLE_STATUS_FILTERS.map((st) => (
               <button key={st.id} onClick={() => setStatusFilter(st.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusFilter === st.id ? 'bg-blue-600 text-white font-semibold shadow-2xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>{st.label}</button>
@@ -179,8 +179,8 @@ export const FleetManagement: React.FC = () => {
       ) : filteredVehicles.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <Car className="w-12 h-12 text-slate-300 mx-auto mb-3"/>
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{showArchived ? 'Nenhum veículo arquivado' : 'Nenhum veículo encontrado'}</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">{showArchived ? 'Os veículos arquivados aparecerão aqui sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
+          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{showArchived ? 'Nenhum veículo vendido ou arquivado' : 'Nenhum veículo encontrado'}</h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">{showArchived ? 'Veículos vendidos ou arquivados aparecem aqui somente para consulta, sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
