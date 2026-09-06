@@ -62,7 +62,7 @@ assert.equal('tools' in (captured ?? {}), false);
 
 const schema = responseFormat.schema as Record<string, unknown>;
 const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
-assert.ok(Array.isArray(variants) && variants.length === 12, 'schema must contain one variant per document type');
+assert.ok(Array.isArray(variants) && variants.length === 15, 'schema must contain one variant per document type');
 const cnhVariant = variants.find((variant) => {
   const properties = variant.properties as Record<string, unknown> | undefined;
   const documentType = properties?.documentType as Record<string, unknown> | undefined;
@@ -107,6 +107,24 @@ const trackerFields = trackerProperties.fields as Record<string, unknown>;
 const trackerFieldProperties = trackerFields.properties as Record<string, unknown>;
 for (const field of ['providerName','equipmentModel','imei','serialNumber','chipCarrier','chipNumber','installationDate','monthlyCost','supplierName','plate']) {
   assert.equal(field in trackerFieldProperties, true, `TRACKER schema field missing: ${field}`);
+}
+
+for (const [documentType, expectedFields] of [
+  ['LICENCIAMENTO', ['plate','renavam','referenceYear','documentNumber','issueDate','expirationDate','amount']],
+  ['VISTORIA', ['plate','documentNumber','issueDate','expirationDate','odometer','issuerName','result']],
+  ['LAUDO', ['plate','documentNumber','issueDate','expirationDate','odometer','issuerName','result']],
+] as const) {
+  const variant = variants.find((item) => {
+    const properties = item.properties as Record<string, unknown> | undefined;
+    const type = properties?.documentType as Record<string, unknown> | undefined;
+    const values = type?.enum as unknown[] | undefined;
+    return Array.isArray(values) && values.length === 1 && values[0] === documentType;
+  });
+  assert.ok(variant, `${documentType} schema variant missing`);
+  const properties = variant.properties as Record<string, unknown>;
+  const fields = properties.fields as Record<string, unknown>;
+  const fieldProperties = fields.properties as Record<string, unknown>;
+  for (const field of expectedFields) assert.equal(field in fieldProperties, true, `${documentType} schema field missing: ${field}`);
 }
 
 assert.ok(trafficVariant, 'TRAFFIC_TICKET schema variant missing');
