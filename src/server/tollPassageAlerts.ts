@@ -3,12 +3,12 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { alertStageForDays, daysUntilExpiration } from '../domain/documents/documentPolicy';
 
-const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','DUE_TODAY','POST_DUE']);
+const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','D1','DUE_TODAY','POST_DUE']);
 const ALERTABLE_STATUSES = new Set(['PENDING','OVERDUE']);
 
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function dateOnly(value:unknown):string{return value instanceof Date?value.toISOString().slice(0,10):String(value||'').slice(0,10);}
-function severity(stage:string):'INFO'|'WARNING'|'DANGER'{if(stage==='POST_DUE')return'DANGER';if(stage==='DUE_TODAY'||stage==='D7')return'WARNING';return'INFO';}
+function severity(stage:string):'INFO'|'WARNING'|'DANGER'{if(stage==='POST_DUE')return'DANGER';if(stage==='DUE_TODAY'||stage==='D1'||stage==='D7')return'WARNING';return'INFO';}
 function message(plate:string,concessionaire:string,days:number):string{
   if(days<0)return `Pedágio ${plate} — ${concessionaire} está vencido há ${Math.abs(days)} dia(s).`;
   if(days===0)return `Pedágio ${plate} — ${concessionaire} vence hoje.`;
