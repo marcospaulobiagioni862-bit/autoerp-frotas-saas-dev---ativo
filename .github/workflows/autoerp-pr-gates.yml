@@ -693,7 +693,9 @@ jobs:
         run: npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
 
       - name: Deferred traffic-ticket modals regression
-        run: npx tsx src/components/trafficTickets/__tests__/trafficTicketsLazyModalsTestRunner.ts
+        run: |
+          npx tsx src/components/trafficTickets/__tests__/trafficTicketsLazyModalsTestRunner.ts
+          npx tsx src/components/trafficTickets/__tests__/trafficTicketDocumentAiFailedUxTestRunner.ts
 
       - name: Deferred management report fleet tab regression
         run: npx tsx src/components/reports/__tests__/managementReportsFleetLazyTabTestRunner.ts
