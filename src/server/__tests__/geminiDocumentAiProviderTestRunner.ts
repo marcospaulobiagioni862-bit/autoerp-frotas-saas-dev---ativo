@@ -62,7 +62,7 @@ assert.equal('tools' in (captured ?? {}), false);
 
 const schema = responseFormat.schema as Record<string, unknown>;
 const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
-assert.ok(Array.isArray(variants) && variants.length === 12, 'schema must contain one variant per document type');
+assert.ok(Array.isArray(variants) && variants.length === 13, 'schema must contain one variant per document type');
 const cnhVariant = variants.find((variant) => {
   const properties = variant.properties as Record<string, unknown> | undefined;
   const documentType = properties?.documentType as Record<string, unknown> | undefined;
@@ -101,6 +101,20 @@ const trackerVariant = variants.find((variant) => {
   const values = documentType?.enum as unknown[] | undefined;
   return Array.isArray(values) && values.length === 1 && values[0] === 'TRACKER';
 });
+const licensingVariant = variants.find((variant) => {
+  const properties = variant.properties as Record<string, unknown> | undefined;
+  const documentType = properties?.documentType as Record<string, unknown> | undefined;
+  const values = documentType?.enum as unknown[] | undefined;
+  return Array.isArray(values) && values.length === 1 && values[0] === 'LICENCIAMENTO';
+});
+assert.ok(licensingVariant, 'LICENCIAMENTO schema variant missing');
+const licensingProperties = licensingVariant.properties as Record<string, unknown>;
+const licensingFields = licensingProperties.fields as Record<string, unknown>;
+const licensingFieldProperties = licensingFields.properties as Record<string, unknown>;
+for (const field of ['plate','renavam','referenceYear','amount','dueDate','documentNumber']) {
+  assert.equal(field in licensingFieldProperties, true, `LICENCIAMENTO schema field missing: ${field}`);
+}
+
 assert.ok(trackerVariant, 'TRACKER schema variant missing');
 const trackerProperties = trackerVariant.properties as Record<string, unknown>;
 const trackerFields = trackerProperties.fields as Record<string, unknown>;
