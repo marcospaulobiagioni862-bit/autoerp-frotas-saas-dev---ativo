@@ -7,6 +7,7 @@ import { syncVehicleDocumentIntakeWorkerResult } from './vehicleDocumentIntakeAi
 import {
   DocumentAiProcessingError,
   processDocumentAiBytes,
+  type DocumentAiDocumentType,
   type DocumentAiProvider,
   type DocumentAiProposal,
 } from './documentAiProcessor';
@@ -16,6 +17,17 @@ export const DOCUMENT_AI_STALE_PROCESSING_MS = 180_000;
 
 const SYSTEM_USER_ID = 'SYSTEM_DOC_AI';
 const SYSTEM_USER_NAME = 'AutoERP Document AI Worker';
+
+const DOCUMENT_AI_TYPES = new Set<DocumentAiDocumentType>([
+  'CNH','CRLV','CRV','ATPV_E','IPVA','LICENCIAMENTO','VISTORIA','LAUDO',
+  'TRAFFIC_TICKET','INVOICE','RECEIPT','CONTRACT','INSURANCE','MAINTENANCE','TRACKER',
+]);
+
+function expectedDocumentType(value: string | null): DocumentAiDocumentType | undefined {
+  return value && DOCUMENT_AI_TYPES.has(value as DocumentAiDocumentType)
+    ? value as DocumentAiDocumentType
+    : undefined;
+}
 
 type QueryResult = { rows?: unknown[] } | unknown[];
 
@@ -358,7 +370,7 @@ export class DocumentAiQueueService {
         content,
         mimeType: item.mimeType,
         expectedChecksum: item.attachmentChecksum,
-        expectedDocumentType: item.documentType && ['CNH','CRLV','CRV','ATPV_E','IPVA','LICENCIAMENTO','VISTORIA','LAUDO','TRAFFIC_TICKET','INVOICE','RECEIPT','CONTRACT','INSURANCE','MAINTENANCE','TRACKER'].includes(item.documentType) ? item.documentType as any : undefined,
+        expectedDocumentType: expectedDocumentType(item.documentType),
       });
       await complete(companyId, claimedBy, item, proposal);
       return { id: item.id, status: 'REVIEW_REQUIRED' };
