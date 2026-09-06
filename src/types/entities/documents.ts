@@ -19,7 +19,7 @@ export interface VehicleDocument {
 }
 
 export type DocumentSubjectType = 'VEHICLE' | 'DRIVER';
-export type DocumentAlertStage = 'POST_DUE' | 'DUE_TODAY' | 'D7' | 'D15' | 'D30' | 'D60' | 'D90' | 'NONE';
+export type DocumentAlertStage = 'POST_DUE' | 'DUE_TODAY' | 'D1' | 'D7' | 'D15' | 'D30' | 'D60' | 'D90' | 'NONE';
 
 export interface DocumentRecord {
   id: string;
