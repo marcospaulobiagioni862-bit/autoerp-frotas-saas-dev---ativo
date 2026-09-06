@@ -1,8 +1,8 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { moveFlexBlankContractText } from '../../domain/contracts/moveflexDefaultContractTemplate';
+import { MOVEFLEX_LOGO_DATA_URL, MOVEFLEX_LOGO_JPEG_BASE64 } from '../../domain/contracts/moveflexBrand';
 
-const MOVEFLEX_LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="72" viewBox="0 0 220 72"><rect width="220" height="72" rx="12" fill="#ffffff"/><circle cx="34" cy="36" r="22" fill="#6d28d9"/><path d="M22 38l8 8 17-20" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><text x="66" y="43" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#111827">MoveFlex</text></svg>';
-export const MOVEFLEX_LOGO_DATA_URL = `data:image/svg+xml,${encodeURIComponent(MOVEFLEX_LOGO_SVG)}`;
+export { MOVEFLEX_LOGO_DATA_URL };
 
 const BASE_CONTRACT_TEXT = moveFlexBlankContractText();
 
@@ -26,16 +26,18 @@ export async function buildMoveFlexBaseContractPdf():Promise<Uint8Array> {
   const pdf=await PDFDocument.create();
   const regular=await pdf.embedFont(StandardFonts.Helvetica);
   const bold=await pdf.embedFont(StandardFonts.HelveticaBold);
+  const logo=await pdf.embedJpg(Uint8Array.from(atob(MOVEFLEX_LOGO_JPEG_BASE64), (char) => char.charCodeAt(0)));
   const pageWidth=595.28,pageHeight=841.89,margin=44,maxWidth=pageWidth-margin*2;
   let page:PDFPage;let y=0;
 
   const addPage=()=>{
     page=pdf.addPage([pageWidth,pageHeight]);
-    page.drawText('MoveFlex',{x:margin,y:pageHeight-56,size:18,font:bold,color:rgb(0.43,0.16,0.85)});
-    page.drawText('Locação de Veículos',{x:margin,y:pageHeight-72,size:8.5,font:regular,color:rgb(0.32,0.35,0.42)});
-    page.drawText('MoveFlex - Locação de Veículos',{x:pageWidth-250,y:pageHeight-52,size:10,font:bold,color:rgb(0.23,0.12,0.45)});
-    page.drawLine({start:{x:margin,y:pageHeight-86},end:{x:pageWidth-margin,y:pageHeight-86},thickness:1,color:rgb(0.42,0.3,0.7)});
-    y=pageHeight-108;
+    page.drawImage(logo,{x:margin,y:pageHeight-113,width:176,height:99});
+    page.drawText('CONTRATO DE LOCAÇÃO DE VEÍCULO',{x:pageWidth-312,y:pageHeight-49,size:12,font:bold,color:rgb(0.30,0.10,0.55)});
+    page.drawText('Modelo profissional • sujeito a versionamento',{x:pageWidth-312,y:pageHeight-66,size:8,font:regular,color:rgb(0.38,0.41,0.48)});
+    page.drawLine({start:{x:margin,y:pageHeight-122},end:{x:pageWidth-margin,y:pageHeight-122},thickness:1.4,color:rgb(0.42,0.16,0.75)});
+    page.drawText('MOVEFLEX',{x:185,y:pageHeight/2,size:58,font:bold,color:rgb(0.43,0.16,0.85),opacity:0.035});
+    y=pageHeight-145;
   };
   addPage();
 
@@ -56,7 +58,7 @@ export async function buildMoveFlexBaseContractPdf():Promise<Uint8Array> {
   }
 
   const pages=pdf.getPages();
-  pages.forEach((p,index)=>p.drawText(`${index+1} / ${pages.length}`,{x:pageWidth-72,y:24,size:8,font:regular,color:rgb(0.45,0.45,0.5)}));
+  pages.forEach((p,index)=>{p.drawLine({start:{x:margin,y:38},end:{x:pageWidth-margin,y:38},thickness:0.7,color:rgb(0.76,0.70,0.86)});p.drawText('MoveFlex • Locação de Veículos',{x:margin,y:22,size:7.5,font:regular,color:rgb(0.38,0.41,0.48)});p.drawText(`Página ${index+1} de ${pages.length}`,{x:pageWidth-96,y:22,size:7.5,font:regular,color:rgb(0.45,0.45,0.5)});});
   return await pdf.save();
 }
 
