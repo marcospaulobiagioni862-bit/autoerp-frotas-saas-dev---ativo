@@ -4,6 +4,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
 import { Badge, Button, Input, ModalContainer } from '../ui';
+import { MOVEFLEX_LOGO_DATA_URL, downloadMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
 
 interface ContractTemplateManagementModalProps {
   isOpen: boolean;
@@ -176,6 +177,19 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     }
   };
 
+  const downloadSelectedSource = () => {
+    if (!sourceFile) {
+      setError('Selecione um arquivo PDF ou DOCX para baixar.');
+      return;
+    }
+    const url = URL.createObjectURL(sourceFile);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = sourceFile.name;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   const openSource = async (item: ContractTemplate, download = false) => {
     setError(null);
     try {
@@ -199,14 +213,17 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <div><h2 className="font-bold">Modelos de Contrato</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
+        <div className="flex items-center gap-3">
+          <img src={MOVEFLEX_LOGO_DATA_URL} alt="MoveFlex" className="h-10 w-auto rounded-md object-contain" />
+          <div><h2 className="font-bold">Modelos de Contrato MoveFlex</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
+        </div>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
       <div className="grid gap-4 p-3 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <div className="flex items-center justify-between"><h3 className="text-sm font-bold">Modelos atuais</h3><Button size="sm" variant="ghost" onClick={resetForm}><FilePlus2 className="w-4 h-4" />Novo</Button></div>
-          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300">Nenhum modelo cadastrado.</div> : templates.map((item) => {
+          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><Button size="sm" variant="secondary" className="mt-3" onClick={() => void downloadMoveFlexBaseContractPdf()}><Download className="w-4 h-4" />Baixar modelo-base MoveFlex (PDF)</Button><p className="mt-2 text-[10px]">Você pode editar o modelo-base ou anexar seu próprio PDF/DOCX. Após salvar, o arquivo escolhido continuará disponível pelo botão Baixar.</p></div> : templates.map((item) => {
             const fileBacked = !item.contentMarkdown.trim();
             return (
               <div key={item.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
@@ -242,7 +259,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
           ) : (
             <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Arquivo-fonte PDF ou DOCX<input className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setSourceFile(event.target.files?.[0] || null)} /></label>
-              {sourceFile && <p className="text-xs text-slate-500 dark:text-slate-300">Selecionado: {sourceFile.name}</p>}
+              {sourceFile && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50"><p className="text-xs text-slate-500 dark:text-slate-300">Selecionado: {sourceFile.name}</p><Button size="sm" variant="ghost" onClick={downloadSelectedSource}><Download className="w-4 h-4" />Baixar arquivo selecionado</Button></div>}
               <p className="text-[11px] text-slate-500 dark:text-slate-300">O original ficará preservado nesta versão. PDF permanece como referência estática; DOCX com placeholders canônicos será ativado após validação para gerar um arquivo preenchido e revisável.</p>
             </div>
           )}
