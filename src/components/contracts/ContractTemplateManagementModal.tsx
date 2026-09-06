@@ -4,7 +4,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
 import { Badge, Button, Input, ModalContainer } from '../ui';
-import { MOVEFLEX_LOGO_DATA_URL, downloadMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
+import { MOVEFLEX_BASE_CONTRACT_PDF_FILENAME, MOVEFLEX_LOGO_DATA_URL, buildMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
 
 interface ContractTemplateManagementModalProps {
   isOpen: boolean;
@@ -45,6 +45,8 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [basePdfUrl, setBasePdfUrl] = useState<string | null>(null);
+  const [basePdfLoading, setBasePdfLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -62,6 +64,32 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     setSourceMode('MARKDOWN');
     setSourceFile(null);
     void load();
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    let preparedUrl: string | null = null;
+    setBasePdfLoading(true);
+    setBasePdfUrl(null);
+
+    void buildMoveFlexBaseContractPdf()
+      .then((bytes) => {
+        if (cancelled) return;
+        preparedUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        setBasePdfUrl(preparedUrl);
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? `Falha ao preparar modelo-base: ${caught.message}` : 'Falha ao preparar modelo-base MoveFlex.');
+      })
+      .finally(() => {
+        if (!cancelled) setBasePdfLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      if (preparedUrl) URL.revokeObjectURL(preparedUrl);
+    };
   }, [isOpen]);
 
   const resetForm = () => {
@@ -177,6 +205,20 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     }
   };
 
+  const downloadBasePdf = () => {
+    setError(null);
+    if (!basePdfUrl) {
+      setError(basePdfLoading ? 'O modelo-base ainda está sendo preparado. Aguarde alguns segundos e tente novamente.' : 'O modelo-base MoveFlex não pôde ser preparado.');
+      return;
+    }
+    const anchor = document.createElement('a');
+    anchor.href = basePdfUrl;
+    anchor.download = MOVEFLEX_BASE_CONTRACT_PDF_FILENAME;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
   const downloadSelectedSource = () => {
     if (!sourceFile) {
       setError('Selecione um arquivo PDF ou DOCX para baixar.');
@@ -223,7 +265,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       <div className="grid gap-4 p-3 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <div className="flex items-center justify-between"><h3 className="text-sm font-bold">Modelos atuais</h3><Button size="sm" variant="ghost" onClick={resetForm}><FilePlus2 className="w-4 h-4" />Novo</Button></div>
-          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><Button size="sm" variant="secondary" className="mt-3" onClick={() => void downloadMoveFlexBaseContractPdf()}><Download className="w-4 h-4" />Baixar modelo-base MoveFlex (PDF)</Button><p className="mt-2 text-[10px]">Você pode editar o modelo-base ou anexar seu próprio PDF/DOCX. Após salvar, o arquivo escolhido continuará disponível pelo botão Baixar.</p></div> : templates.map((item) => {
+          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><Button size="sm" variant="secondary" className="mt-3" onClick={downloadBasePdf} disabled={basePdfLoading || !basePdfUrl}><Download className="w-4 h-4" />{basePdfLoading ? 'Preparando modelo-base...' : 'Baixar modelo-base MoveFlex (PDF)'}</Button><p className="mt-2 text-[10px]">Você pode editar o modelo-base ou anexar seu próprio PDF/DOCX. Após salvar, o arquivo escolhido continuará disponível pelo botão Baixar.</p></div> : templates.map((item) => {
             const fileBacked = !item.contentMarkdown.trim();
             return (
               <div key={item.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
