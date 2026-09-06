@@ -35,8 +35,15 @@ function value(environment: R2Environment, key: keyof R2Environment): string {
   return String(environment[key] || '').trim();
 }
 
+function normalizedAccountId(environment: R2Environment): string {
+  const raw = value(environment, 'R2_ACCOUNT_ID').replace(/^['"]|['"]$/g, '').trim();
+  if (/^[A-Za-z0-9_-]{8,64}$/.test(raw)) return raw;
+  const endpointMatch = raw.match(/^(?:https?:\/\/)?([A-Za-z0-9_-]{8,64})\.r2\.cloudflarestorage\.com(?:\/.*)?$/i);
+  return endpointMatch?.[1] || raw;
+}
+
 function publicConfiguration(environment: R2Environment): AttachmentStorageConfiguration {
-  const accountId = value(environment, 'R2_ACCOUNT_ID');
+  const accountId = normalizedAccountId(environment);
   const accessKeyId = value(environment, 'R2_ACCESS_KEY_ID');
   const secretAccessKey = value(environment, 'R2_SECRET_ACCESS_KEY');
   const bucket = value(environment, 'R2_BUCKET');
@@ -56,12 +63,13 @@ function publicConfiguration(environment: R2Environment): AttachmentStorageConfi
 function requiredConfiguration(environment: R2Environment): R2RuntimeConfiguration {
   const status = publicConfiguration(environment);
   if (!status.configured) {
-    const accountId = value(environment, 'R2_ACCOUNT_ID');
+    const rawAccountId = value(environment, 'R2_ACCOUNT_ID');
+    const accountId = normalizedAccountId(environment);
     const accessKeyId = value(environment, 'R2_ACCESS_KEY_ID');
     const secretAccessKey = value(environment, 'R2_SECRET_ACCESS_KEY');
     const bucket = value(environment, 'R2_BUCKET');
     const diagnostics = {
-      accountIdPresent: Boolean(accountId),
+      accountIdPresent: Boolean(rawAccountId),
       accountIdValid: /^[A-Za-z0-9_-]{8,64}$/.test(accountId),
       accessKeyIdPresent: Boolean(accessKeyId),
       secretAccessKeyPresent: Boolean(secretAccessKey),
@@ -72,7 +80,7 @@ function requiredConfiguration(environment: R2Environment): R2RuntimeConfigurati
       `R2 attachment storage is not completely configured: ${JSON.stringify(diagnostics)}`,
     );
   }
-  const accountId = value(environment, 'R2_ACCOUNT_ID');
+  const accountId = normalizedAccountId(environment);
   return {
     accountId,
     accessKeyId: value(environment, 'R2_ACCESS_KEY_ID'),
