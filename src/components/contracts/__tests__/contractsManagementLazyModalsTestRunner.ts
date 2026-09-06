@@ -9,6 +9,8 @@ const detailsModal = readFileSync(new URL('../ContractDetailsModal.tsx', import.
 const executionPanel = readFileSync(new URL('../ContractExecutionPanel.tsx', import.meta.url), 'utf8');
 const templatePolicy = readFileSync(new URL('../../../domain/contracts/contractTemplatePolicy.ts', import.meta.url), 'utf8');
 const executionRoutes = readFileSync(new URL('../../../server/contractExecutionRoutes.ts', import.meta.url), 'utf8');
+const moveflexDefaultTemplate = readFileSync(new URL('../../../domain/contracts/moveflexDefaultContractTemplate.ts', import.meta.url), 'utf8');
+const templateClient = readFileSync(new URL('../../../api/contractTemplateClient.ts', import.meta.url), 'utf8');
 
 const modals = ['ContractFormModal', 'ContractDetailsModal', 'ContractTemplateManagementModal'] as const;
 
@@ -84,9 +86,13 @@ assert.match(executionRoutes, /'driver\.pixKey': snapshot\.driver\.pixKey/, 'PIX
 
 assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
-assert.doesNotMatch(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must not preselect a template');
-assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\S]*startDate: '', endDate: '', rentalAmount: '',[\s\S]*billingPeriodicity: '',[\s\S]*securityDepositAmount: '', franchiseKm: '', excessKmRate: '',[\s\S]*templateId: ''/, 'new contract must open without automatic operational or financial values');
+assert.match(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must preselect the standard MoveFlex template');
+assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\S]*startDate: '', endDate: '', rentalAmount: '',[\s\S]*billingPeriodicity: '',[\s\S]*securityDepositAmount: '', franchiseKm: '', excessKmRate: '',[\s\S]*templateId: defaultTemplate\?\.id \|\| ''/, 'new contract must keep operational and financial values blank while preselecting only the template');
 assert.match(executionPanel, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'contract execution must prefer the standard rental template');
+assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure the persisted MoveFlex default before listing templates');
+assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
+assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'new markdown-backed contract must generate its official PDF automatically after save');
+assert.match(source, /handleContractSaved[\s\S]*openContractDetails\(result\.contract\.id, 'PDF_SIGNATURE'\)/, 'new contract save must open the PDF/signature flow automatically');
 for (const placeholder of [
   'company.tradeName','company.email','company.phone','company.whatsapp',
   'company.address.street','company.address.number','company.address.complement','company.address.neighborhood',
@@ -150,7 +156,12 @@ assert.match(
 const moveflexBasePdf = readFileSync(new URL('../moveflexBaseContractPdf.ts', import.meta.url), 'utf8');
 assert.match(moveflexBasePdf, /MOVEFLEX_LOGO_DATA_URL/, 'MoveFlex contract base must embed the brand mark');
 assert.match(moveflexBasePdf, /Contrato_MoveFlex_Modelo_Base\.pdf/, 'MoveFlex base download must use a stable PDF filename');
-assert.match(moveflexBasePdf, /CLÁUSULA 16/, 'MoveFlex base PDF must retain the supplied contract structure through clause 16');
+assert.match(moveflexBasePdf, /moveFlexBlankContractText/, 'MoveFlex base PDF must reuse the persisted default contract source');
+assert.match(moveflexDefaultTemplate, /CLÁUSULA 16/, 'MoveFlex default contract must retain the contract structure through clause 16');
+assert.match(moveflexDefaultTemplate, /{{driver\.name}}/, 'MoveFlex default contract must fill the driver from server snapshot data');
+assert.match(moveflexDefaultTemplate, /{{vehicle\.plate}}/, 'MoveFlex default contract must fill the vehicle from server snapshot data');
+assert.match(templateRoutes, /ensure-moveflex-default/, 'server must expose the idempotent MoveFlex default bootstrap route');
+assert.match(executionRoutes, /page\.drawText\('MoveFlex'/, 'official generated PDF must carry MoveFlex branding');
 assert.match(
   templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,
