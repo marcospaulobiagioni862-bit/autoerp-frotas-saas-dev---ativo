@@ -10,7 +10,7 @@ export interface InsuranceExpenseCategory { id:string; name:string; type:string;
 export interface CreateInsuranceAuthorityInput {
   vehicleId:string;insuranceCompany:string;policyNumber:string;coverageDetails:string;
   deductibleAmount:number;totalPremiumAmount:number;installmentsCount:number;
-  startDate:string;endDate:string;brokerName?:string;brokerPhone?:string;categoryId?:string;
+  startDate:string;endDate:string;brokerName?:string;brokerPhone?:string;categoryId?:string;sourceAttachmentId?:string;
 }
 
 type InsuranceHooks={afterPayablesCreated?:()=>void|Promise<void>};
@@ -73,6 +73,14 @@ export class InsuranceAuthorityService {
       if(!vehicle||vehicle.isArchived)throw new InsuranceNotFoundError('Veículo não encontrado');
       if(await repo.findByPolicyNumber(principal.companyId,policyNumber))throw new InsuranceConflictError('Apólice já cadastrada');
       if(input.totalPremiumAmount>0)await validateCategory(rawTx,principal.companyId,input.categoryId!);
+      let sourceAttachment:any;
+      if(input.sourceAttachmentId){
+        const result=await rawTx.execute(sql`SELECT * FROM file_attachments WHERE company_id=${principal.companyId} AND id=${input.sourceAttachmentId} FOR UPDATE`);
+        sourceAttachment=rows(result)[0];
+        if(!sourceAttachment||sourceAttachment.is_archived||String(sourceAttachment.content_state)!=='AVAILABLE'||String(sourceAttachment.entity_type)!=='Vehicle'||String(sourceAttachment.entity_id)!==input.vehicleId||String(sourceAttachment.document_type||'').toUpperCase()!=='INSURANCE_POLICY'){
+          throw new InsuranceConflictError('Documento de apólice inválido para este veículo');
+        }
+      }
 
       const now=new Date().toISOString();const id=randomUUID();
       let insurance:Insurance=await repo.create({
@@ -91,6 +99,11 @@ export class InsuranceAuthorityService {
           installmentsCount:input.installmentsCount,userId:principal.userId,userName:principal.name,
         },txContext);
         insurance=await repo.setPayableIds(principal.companyId,id,payables.map((item:any)=>String(item.id)),new Date().toISOString());
+      }
+      if(sourceAttachment){
+        const relinked=await rawTx.execute(sql`UPDATE file_attachments SET entity_name='Insurance',entity_type='Insurance',entity_id=${id} WHERE company_id=${principal.companyId} AND id=${input.sourceAttachmentId} AND entity_type='Vehicle' AND entity_id=${input.vehicleId} AND is_archived=false RETURNING id`);
+        if(rows(relinked).length!==1)throw new InsuranceConflictError('Falha ao vincular apólice original ao seguro');
+        await txContext.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:input.sourceAttachmentId!,action:AuditAction.UPDATE,previousState:JSON.stringify({entityType:'Vehicle',entityId:input.vehicleId}),newState:JSON.stringify({event:'PROMOTE_INSURANCE_POLICY',entityType:'Insurance',entityId:id}),userId:principal.userId,userName:principal.name,timestamp:now});
       }
       await testHooks.afterPayablesCreated?.();
       await txContext.getAuditLogRepo().create({

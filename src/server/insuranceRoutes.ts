@@ -34,7 +34,7 @@ export function registerInsuranceRoutes(app:Express):void{
       vehicleId:text(req.body?.vehicleId,200),insuranceCompany:text(req.body?.insuranceCompany,200),policyNumber:text(req.body?.policyNumber,120),
       coverageDetails:text(req.body?.coverageDetails,2000),deductibleAmount:amount(req.body?.deductibleAmount),totalPremiumAmount:amount(req.body?.totalPremiumAmount),
       installmentsCount:installments(req.body?.installmentsCount),startDate:date(req.body?.startDate),endDate:date(req.body?.endDate),
-      brokerName:optionalText(req.body?.brokerName,200),brokerPhone:optionalText(req.body?.brokerPhone,80),categoryId:optionalText(req.body?.categoryId,200),
+      brokerName:optionalText(req.body?.brokerName,200),brokerPhone:optionalText(req.body?.brokerPhone,80),categoryId:optionalText(req.body?.categoryId,200),sourceAttachmentId:optionalText(req.body?.sourceAttachmentId,200),
     };
     res.status(201).json({item:await InsuranceAuthorityService.create(actor,input)});
   }catch(error){sendError(res,error);}});
