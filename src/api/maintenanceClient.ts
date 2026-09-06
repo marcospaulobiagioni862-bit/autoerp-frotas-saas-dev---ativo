@@ -76,7 +76,7 @@ function json(method: string, body: unknown): RequestInit { return { method, hea
 function list<T>(payload: JsonRecord, validator:(value:unknown)=>T):T[]{ if(!Array.isArray(payload.items)) throw new Error('Invalid maintenance list'); return payload.items.map(validator); }
 
 export interface WorkOrderCreateRequest {
-  number:string; vehicleId:string; supplierId?:string; serviceDate?:string; entryKm:number; description:string; diagnosis?:string; notes?:string;
+  number:string; vehicleId:string; supplierId?:string; serviceDate?:string; entryKm:number; description:string; diagnosis?:string; notes?:string; sourceAttachmentId?:string;
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
