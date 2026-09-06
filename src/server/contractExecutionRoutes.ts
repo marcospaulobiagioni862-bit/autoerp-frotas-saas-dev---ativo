@@ -433,6 +433,10 @@ function sendError(res: Response, error: unknown): void {
     return;
   }
   if (error instanceof AttachmentStorageUnavailableError) {
+    console.error('AUTOERP_ATTACHMENT_STORAGE_UNAVAILABLE', {
+      name: error.name,
+      message: error.message,
+    });
     res.status(503).json({ error: 'Attachment storage unavailable' });
     return;
   }
