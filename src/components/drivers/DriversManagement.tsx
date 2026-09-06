@@ -50,6 +50,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehiclesMap, setVehiclesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -64,6 +65,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [driversResult, vehiclesResult] = await Promise.allSettled([
         DriverClient.list(),
@@ -74,6 +76,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         console.error('Erro ao carregar lista server-authoritative de motoristas:', driversResult.reason);
         setDrivers([]);
         setVehiclesMap({});
+        setLoadError(driversResult.reason instanceof Error ? driversResult.reason.message : 'Falha ao carregar motoristas.');
         return;
       }
 
@@ -121,14 +124,17 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   }, [drivers]);
 
   const filteredDrivers = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    const searchDigits = searchTerm.replace(/\D/g, '');
     return drivers.filter((driver) => {
-      const search = searchTerm.toLowerCase();
+      const normalizedName = driver.fullName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+      const cpfDigits = driver.cpf.replace(/\D/g, '');
+      const cnhDigits = driver.cnhNumber.replace(/\D/g, '');
+      const phoneDigits = driver.phone.replace(/\D/g, '');
       const matchSearch =
-        !search ||
-        driver.fullName.toLowerCase().includes(search) ||
-        driver.cpf.includes(search) ||
-        driver.cnhNumber.includes(search) ||
-        driver.phone.includes(search);
+        !normalizedSearch ||
+        normalizedName.includes(normalizedSearch) ||
+        (Boolean(searchDigits) && (cpfDigits.includes(searchDigits) || cnhDigits.includes(searchDigits) || phoneDigits.includes(searchDigits)));
       if (!matchSearch) return false;
       if (statusFilter === 'ALL') return true;
       if (statusFilter === 'ACTIVE') return driver.status === DriverStatus.ACTIVE;
@@ -321,6 +327,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
           <Skeleton className="h-16 w-full rounded-xl" />
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>
+      ) : loadError ? (
+        <Card className="p-8 text-center space-y-3 border-rose-200 dark:border-rose-900">
+          <Users className="w-10 h-10 mx-auto text-rose-400" />
+          <p className="font-semibold text-sm text-rose-700 dark:text-rose-300">Não foi possível carregar os motoristas.</p>
+          <p className="text-xs text-slate-500">{loadError}</p>
+          <Button size="sm" variant="outline" onClick={()=>void loadData()}><RefreshCw className="w-4 h-4 mr-1.5"/>Tentar novamente</Button>
+        </Card>
       ) : filteredDrivers.length === 0 ? (
         <Card className="p-12 text-center text-slate-400 space-y-2">
           <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
