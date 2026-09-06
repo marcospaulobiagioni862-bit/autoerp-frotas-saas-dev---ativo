@@ -106,7 +106,7 @@ export interface UpdateRecurringRuleInput {
 const SYSTEM_USER_ID = 'system-recurring';
 const SYSTEM_USER_NAME = 'Motor de Recorrência';
 const MAX_GENERATIONS_PER_RULE_PER_CYCLE = 52;
-const ALLOWED_ALERT_STAGES = new Set(['D90', 'D60', 'D30', 'D15', 'D7', 'DUE_TODAY', 'POST_DUE']);
+const ALLOWED_ALERT_STAGES = new Set(['D90', 'D60', 'D30', 'D15', 'D7', 'D1', 'DUE_TODAY', 'POST_DUE']);
 
 function rows(result: any): any[] { return Array.isArray(result?.rows) ? result.rows : []; }
 function dateOnly(value: unknown): string | undefined { if (value === null || value === undefined || value === '') return undefined; if (typeof value === 'string') return value.slice(0, 10); if (value instanceof Date) return value.toISOString().slice(0, 10); return String(value).slice(0, 10); }
@@ -122,7 +122,7 @@ function mapRule(row: any): ServerRecurringRule {
 function mapRun(row:any):ServerRecurringRun{return{id:String(row.id),companyId:String(row.company_id),ruleId:String(row.rule_id),scheduledFor:dateOnly(row.scheduled_for)||'',periodRef:String(row.period_ref),status:String(row.status) as RecurringRunStatus,attemptCount:Number(row.attempt_count||0),startedAt:iso(row.started_at),finishedAt:row.finished_at?iso(row.finished_at):undefined,resultEntityType:optionalString(row.result_entity_type),resultEntityId:optionalString(row.result_entity_id),errorCode:optionalString(row.error_code),errorMessage:optionalString(row.error_message),workerId:optionalString(row.worker_id)};}
 function mapNotification(row:any):ServerNotification{return{id:String(row.id),companyId:String(row.company_id),userId:String(row.user_id),eventType:String(row.event_type),dedupKey:String(row.dedup_key),title:String(row.title),message:String(row.message),severity:String(row.severity) as NotificationSeverity,entityType:optionalString(row.entity_type),entityId:optionalString(row.entity_id),alertStage:optionalString(row.alert_stage),createdAt:iso(row.created_at),readAt:row.read_at?iso(row.read_at):undefined,createdBy:String(row.created_by||'SYSTEM')};}
 function sanitizeFailure(error:unknown):{code:string;message:string}{const raw=error instanceof Error?error.message:'Recurring processing failed';const message=raw.replace(/[\r\n\t]+/g,' ').slice(0,400);if(message.includes('período financeiro')||message.includes('período'))return{code:'FINANCIAL_PERIOD_CLOSED',message};if(message.startsWith('Acesso negado:'))return{code:'AUTHORIZATION_DENIED',message};if(message.includes('não encontrado')||message.includes('não encontrada'))return{code:'ORIGIN_NOT_FOUND',message};return{code:'RECURRING_PROCESSING_ERROR',message};}
-function severityForStage(stage:string):NotificationSeverity{if(stage==='POST_DUE')return'DANGER';if(stage==='DUE_TODAY'||stage==='D7')return'WARNING';return'INFO';}
+function severityForStage(stage:string):NotificationSeverity{if(stage==='POST_DUE')return'DANGER';if(stage==='DUE_TODAY'||stage==='D1'||stage==='D7')return'WARNING';return'INFO';}
 function notificationMessage(document:any):string{const stage=String(document.alertStage||'');const subject=document.documentType||'Documento';if(stage==='POST_DUE')return`${subject} está vencido e requer regularização.`;if(stage==='DUE_TODAY')return`${subject} vence hoje.`;const days=typeof document.daysToExpiration==='number'?document.daysToExpiration:undefined;return days!==undefined?`${subject} vence em ${days} dia(s).`:`${subject} possui vencimento próximo.`;}
 
 async function validateRuleReferences(txContext:any,rawTx:any,companyId:string,input:CreateRecurringRuleInput|ServerRecurringRule):Promise<void>{

@@ -15,7 +15,7 @@ function asRecord(value: unknown): JsonRecord {
 }
 
 const SUBJECT_TYPES = new Set(['VEHICLE', 'DRIVER']);
-const ALERT_STAGES = new Set(['POST_DUE', 'DUE_TODAY', 'D7', 'D15', 'D30', 'D60', 'D90', 'NONE']);
+const ALERT_STAGES = new Set(['POST_DUE', 'DUE_TODAY', 'D1', 'D7', 'D15', 'D30', 'D60', 'D90', 'NONE']);
 const STATUSES = new Set(Object.values(DocumentStatus));
 
 function validateDocument(value: unknown): DocumentRecord {

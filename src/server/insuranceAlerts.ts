@@ -5,10 +5,10 @@ import { alertStageForDays, daysUntilExpiration } from '../domain/documents/docu
 import { materializeMaintenanceAlerts } from './maintenancePreventiveAlerts';
 import { materializeTollPassageAlerts } from './tollPassageAlerts';
 
-const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','DUE_TODAY','POST_DUE']);
+const ALLOWED_STAGES = new Set(['D90','D60','D30','D15','D7','D1','DUE_TODAY','POST_DUE']);
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function dateOnly(value:unknown):string{return value instanceof Date?value.toISOString().slice(0,10):String(value||'').slice(0,10);}
-function severity(stage:string):'INFO'|'WARNING'|'DANGER'{if(stage==='POST_DUE')return 'DANGER';if(stage==='DUE_TODAY'||stage==='D7')return 'WARNING';return 'INFO';}
+function severity(stage:string):'INFO'|'WARNING'|'DANGER'{if(stage==='POST_DUE')return 'DANGER';if(stage==='DUE_TODAY'||stage==='D1'||stage==='D7')return 'WARNING';return 'INFO';}
 function message(company:string,policy:string,days:number):string{if(days<0)return `Seguro ${company} — apólice ${policy} está vencido e requer renovação.`;if(days===0)return `Seguro ${company} — apólice ${policy} vence hoje.`;return `Seguro ${company} — apólice ${policy} vence em ${days} dia(s).`;}
 
 export async function materializeInsuranceAlerts(companyId:string,today:string):Promise<number>{
