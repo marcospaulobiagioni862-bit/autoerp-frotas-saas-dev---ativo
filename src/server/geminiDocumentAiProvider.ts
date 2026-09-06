@@ -17,7 +17,7 @@ const DOCUMENT_FIELD_NAMES = {
   INVOICE: ['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount'],
   RECEIPT: ['issuerName', 'issuerDocument', 'issueDate', 'amount', 'paymentMethod'],
   CONTRACT: ['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount'],
-  INSURANCE: ['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount'],
+  INSURANCE: ['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount', 'premiumAmount', 'installmentCount', 'coverageDetails', 'brokerName', 'brokerContact', 'plate'],
   MAINTENANCE: ['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount'],
 } as const;
 

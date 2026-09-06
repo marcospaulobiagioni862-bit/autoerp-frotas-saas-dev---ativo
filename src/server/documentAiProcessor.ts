@@ -27,7 +27,7 @@ const DOCUMENT_FIELDS: Record<string, ReadonlySet<string>> = {
   INVOICE: new Set(['issuerName', 'issuerDocument', 'invoiceNumber', 'issueDate', 'amount']),
   RECEIPT: new Set(['issuerName', 'issuerDocument', 'issueDate', 'amount', 'paymentMethod']),
   CONTRACT: new Set(['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount']),
-  INSURANCE: new Set(['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount']),
+  INSURANCE: new Set(['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount', 'premiumAmount', 'installmentCount', 'coverageDetails', 'brokerName', 'brokerContact', 'plate']),
   MAINTENANCE: new Set(['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount']),
 };
 
