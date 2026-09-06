@@ -1,22 +1,27 @@
 import type { ManagementReportData } from '../../domain/reports/ManagementReportsService';
 
-type CsvRow = [string, string, string, string];
+export type ManagementReportRow = [string, string, string, string];
 
-function safeCell(value: unknown): string {
+export function sanitizeSpreadsheetText(value: unknown): string {
   let text = value === null || value === undefined ? '' : String(value);
   if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return text;
+}
+
+function safeCell(value: unknown): string {
+  const text = sanitizeSpreadsheetText(value);
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function addObjectRows(rows: CsvRow[], section: string, record: string, value: Record<string, unknown>): void {
+function addObjectRows(rows: ManagementReportRow[], section: string, record: string, value: Record<string, unknown>): void {
   for (const [field, fieldValue] of Object.entries(value)) {
     if (fieldValue !== null && typeof fieldValue === 'object') continue;
     rows.push([section, record, field, fieldValue === undefined ? '' : String(fieldValue)]);
   }
 }
 
-export function buildManagementReportCsv(data: ManagementReportData): string {
-  const rows: CsvRow[] = [['secao', 'registro', 'campo', 'valor']];
+export function buildManagementReportRows(data: ManagementReportData): ManagementReportRow[] {
+  const rows: ManagementReportRow[] = [['secao', 'registro', 'campo', 'valor']];
 
   rows.push(['metadados', 'relatorio', 'geradoEm', data.generatedAt]);
   rows.push(['metadados', 'relatorio', 'empresaId', data.companyId]);
@@ -48,7 +53,11 @@ export function buildManagementReportCsv(data: ManagementReportData): string {
     addObjectRows(rows, 'pendencias', record, item as unknown as Record<string, unknown>);
   }
 
-  return '\uFEFF' + rows.map((row) => row.map(safeCell).join(';')).join('\r\n');
+  return rows;
+}
+
+export function buildManagementReportCsv(data: ManagementReportData): string {
+  return '\uFEFF' + buildManagementReportRows(data).map((row) => row.map(safeCell).join(';')).join('\r\n');
 }
 
 export function managementReportCsvFilename(generatedAt: string): string {
