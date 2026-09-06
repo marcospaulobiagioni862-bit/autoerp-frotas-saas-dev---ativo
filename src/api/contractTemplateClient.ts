@@ -63,6 +63,14 @@ export interface ContractTemplateCreateInput {
 }
 
 export class ContractTemplateClient {
+  static async ensureMoveFlexDefault(): Promise<ContractTemplate> {
+    return itemRequest('/api/contract-templates/ensure-moveflex-default', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+  }
+
   static async list(filters?: { currentOnly?: boolean; activeOnly?: boolean; includeArchived?: boolean }): Promise<ContractTemplate[]> {
     const params = new URLSearchParams();
     if (filters?.currentOnly === false) params.set('currentOnly', 'false');
