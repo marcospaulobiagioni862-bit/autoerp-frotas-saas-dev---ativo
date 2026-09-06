@@ -261,7 +261,12 @@ export const FleetManagement: React.FC = () => {
 
       <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
-          {isVehicleAiOpen&&<VehicleDocumentIntakeModal isOpen onClose={() => setIsVehicleAiOpen(false)} onCreated={async (vehicleId) => { await loadVehicles(); setSelectedVehicleIdForDetails(vehicleId); }}/>}
+          {isVehicleAiOpen&&<VehicleDocumentIntakeModal
+            isOpen
+            onClose={() => setIsVehicleAiOpen(false)}
+            onCreated={async (vehicleId) => { await loadVehicles(); setSelectedVehicleIdForDetails(vehicleId); }}
+            onManualRequested={() => { setIsVehicleAiOpen(false); setVehicleToEdit(null); setIsFormOpen(true); }}
+          />}
           {isFormOpen&&<VehicleFormModal isOpen onClose={() => { setIsFormOpen(false); setVehicleToEdit(null); }} onSuccess={loadVehicles} vehicleToEdit={vehicleToEdit}/>} 
           {selectedVehicleIdForDetails&&<VehicleDetailsModal isOpen onClose={() => setSelectedVehicleIdForDetails(null)} vehicleId={selectedVehicleIdForDetails}
             onEditRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleToEdit(v); setIsFormOpen(true); } }}
