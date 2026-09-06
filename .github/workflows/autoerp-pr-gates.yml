@@ -687,7 +687,9 @@ jobs:
         run: npx tsx src/components/admin/__tests__/companyProfileContractAuthorityTestRunner.ts
 
       - name: Deferred fleet modals regression
-        run: npx tsx src/components/fleet/__tests__/fleetManagementLazyModalsTestRunner.ts
+        run: |
+          npx tsx src/components/fleet/__tests__/fleetManagementLazyModalsTestRunner.ts
+          npx tsx src/components/fleet/__tests__/vehicleSaleBuyerRequiredTestRunner.ts
 
       - name: Deferred maintenance panels regression
         run: npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
