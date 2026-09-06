@@ -10,7 +10,8 @@ export class DocumentPolicyTestRunner {
     const boundaries: Array<[number, string]> = [
       [-1, 'POST_DUE'],
       [0, 'DUE_TODAY'],
-      [1, 'D7'],
+      [1, 'D1'],
+      [2, 'D7'],
       [7, 'D7'],
       [8, 'D15'],
       [15, 'D15'],
