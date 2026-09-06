@@ -56,7 +56,21 @@ function publicConfiguration(environment: R2Environment): AttachmentStorageConfi
 function requiredConfiguration(environment: R2Environment): R2RuntimeConfiguration {
   const status = publicConfiguration(environment);
   if (!status.configured) {
-    throw new AttachmentStorageUnavailableError('R2 attachment storage is not completely configured');
+    const accountId = value(environment, 'R2_ACCOUNT_ID');
+    const accessKeyId = value(environment, 'R2_ACCESS_KEY_ID');
+    const secretAccessKey = value(environment, 'R2_SECRET_ACCESS_KEY');
+    const bucket = value(environment, 'R2_BUCKET');
+    const diagnostics = {
+      accountIdPresent: Boolean(accountId),
+      accountIdValid: /^[A-Za-z0-9_-]{8,64}$/.test(accountId),
+      accessKeyIdPresent: Boolean(accessKeyId),
+      secretAccessKeyPresent: Boolean(secretAccessKey),
+      bucketPresent: Boolean(bucket),
+      bucketValid: /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket),
+    };
+    throw new AttachmentStorageUnavailableError(
+      `R2 attachment storage is not completely configured: ${JSON.stringify(diagnostics)}`,
+    );
   }
   const accountId = value(environment, 'R2_ACCOUNT_ID');
   return {
