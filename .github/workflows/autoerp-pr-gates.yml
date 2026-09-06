@@ -692,7 +692,9 @@ jobs:
           npx tsx src/components/fleet/__tests__/vehicleSaleBuyerRequiredTestRunner.ts
 
       - name: Deferred maintenance panels regression
-        run: npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
+        run: |
+          npx tsx src/components/maintenance/__tests__/maintenanceManagementLazyPanelsTestRunner.ts
+          npx tsx src/components/maintenance/__tests__/maintenanceWorkOrderEligibleVehiclesTestRunner.ts
 
       - name: Deferred traffic-ticket modals regression
         run: |
