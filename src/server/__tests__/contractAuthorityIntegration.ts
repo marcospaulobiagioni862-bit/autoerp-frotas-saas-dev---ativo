@@ -187,6 +187,23 @@ export class ContractAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 400, `forged authority surface expected 400, got ${response.status}`);
 
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, billingDueDayOfWeek: undefined }),
+      }, adminA);
+      assert(response.status === 400, `weekly contract without weekday expected 400, got ${response.status}`);
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...baseContract,
+          billingPeriodicity: RecurringFrequency.MONTHLY,
+          billingDueDayOfWeek: undefined,
+          billingDueDayOfMonth: undefined,
+        }),
+      }, adminA);
+      assert(response.status === 400, `monthly contract without day-of-month expected 400, got ${response.status}`);
+
       response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, adminA);
       assert(response.status === 201, `tenant A create expected 201, got ${response.status}`);
       const created = (await json(response)).item;
