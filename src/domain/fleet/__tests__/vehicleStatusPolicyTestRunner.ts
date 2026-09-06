@@ -96,6 +96,18 @@ assert.match(lifecycleRoute, /app\.get\('\/api\/fleet\/vehicles\/archived'/, 'ar
 assert.match(lifecycleRoute, /app\.get\('\/api\/fleet\/vehicles\/:id\/lifecycle'/, 'lifecycle history must be tenant-scoped and readable');
 assert.match(lifecycleRoute, /status: VehicleStatus\.ARCHIVED,[\s\S]*isArchived: true/, 'archive must soft-delete through canonical archived state');
 assert.doesNotMatch(lifecycleRoute, /DELETE\s+FROM\s+vehicles/i, 'archive must never hard-delete a vehicle');
+assert.match(
+  vehicleRoutes,
+  /items\.filter\(\(item\) => !item\.isArchived && item\.status !== VehicleStatus\.SOLD\)/,
+  'active fleet collection must exclude sold vehicles',
+);
+assert.match(
+  lifecycleRoute,
+  /item\.isArchived \|\| item\.status === VehicleStatus\.SOLD/,
+  'historical collection must retain sold vehicles for read-only access',
+);
+assert.match(fleetManagement, /Ver vendidos \/ arquivados/, 'fleet UI must expose sold vehicles only through historical access');
+assert.match(fleetManagement, />Inativos</, 'active fleet summary must not count sold vehicles as active inventory');
 assert.match(vehicleClient, /static async listArchived\(/, 'client must expose archived collection');
 assert.match(vehicleClient, /static async lifecycle\(/, 'client must expose lifecycle history');
 assert.match(vehicleClient, /static async archive\(/, 'client must expose dedicated archive action');
