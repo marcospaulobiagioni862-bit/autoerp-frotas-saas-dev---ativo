@@ -129,7 +129,7 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
     if (!principal) return;
     try {
       const items = await UnitOfWork.run(principal.companyId, async (txContext) =>
-        (await txContext.getVehicleRepo().findAllByCompany(principal.companyId)).filter((item: any) => item.isArchived)
+        (await txContext.getVehicleRepo().findAllByCompany(principal.companyId)).filter((item: any) => item.isArchived || item.status === VehicleStatus.SOLD)
       );
       res.json({ items });
     } catch (error) {
