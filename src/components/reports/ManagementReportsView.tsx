@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
+import { downloadManagementReportCsv } from './managementReportCsv';
 
 interface ManagementReportsViewProps {
   companyId?: string;
@@ -262,12 +263,19 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             Atualizar Dados
           </Button>
           <Button
-            onClick={() => window.print()}
+            onClick={() => downloadManagementReportCsv(reportData)}
             variant="primary"
             size="sm"
             icon={<Download className="w-4 h-4" />}
           >
-            Exportar / Imprimir
+            Exportar CSV
+          </Button>
+          <Button
+            onClick={() => window.print()}
+            variant="secondary"
+            size="sm"
+          >
+            Imprimir
           </Button>
         </div>
       </div>

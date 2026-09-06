@@ -702,7 +702,9 @@ jobs:
           npx tsx src/components/trafficTickets/__tests__/trafficTicketDocumentAiFailedUxTestRunner.ts
 
       - name: Deferred management report fleet tab regression
-        run: npx tsx src/components/reports/__tests__/managementReportsFleetLazyTabTestRunner.ts
+        run: |
+          npx tsx src/components/reports/__tests__/managementReportsFleetLazyTabTestRunner.ts
+          npx tsx src/components/reports/__tests__/managementReportCsvTestRunner.ts
 
       - name: Vehicle latest KM summary regression
         run: npx tsx src/components/fleet/__tests__/vehicleDetailsLatestKmTestRunner.ts
