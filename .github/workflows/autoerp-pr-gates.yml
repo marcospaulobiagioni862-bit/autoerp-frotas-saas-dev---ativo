@@ -681,7 +681,9 @@ jobs:
         run: npx tsx src/components/drivers/__tests__/driversManagementLazyModalsTestRunner.ts
 
       - name: Deferred contract modals regression
-        run: npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
+        run: |
+          npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
+          npx tsx src/components/contracts/__tests__/moveflexBaseContractPdfTestRunner.ts
 
       - name: Company profile contract authority regression
         run: npx tsx src/components/admin/__tests__/companyProfileContractAuthorityTestRunner.ts
