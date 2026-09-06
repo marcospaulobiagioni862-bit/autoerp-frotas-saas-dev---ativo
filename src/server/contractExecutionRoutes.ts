@@ -32,7 +32,7 @@ import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTe
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
-const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR']);
+const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR', 'NOTARY']);
 
 class ExecutionValidationError extends Error {}
 class ExecutionNotFoundError extends Error {}
