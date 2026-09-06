@@ -29,6 +29,7 @@ const DOCUMENT_FIELDS: Record<string, ReadonlySet<string>> = {
   CONTRACT: new Set(['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount']),
   INSURANCE: new Set(['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount', 'premiumAmount', 'installmentCount', 'coverageDetails', 'brokerName', 'brokerContact', 'plate']),
   MAINTENANCE: new Set(['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount']),
+  TRACKER: new Set(['providerName', 'equipmentModel', 'imei', 'serialNumber', 'chipCarrier', 'chipNumber', 'installationDate', 'monthlyCost', 'supplierName', 'plate']),
 };
 
 const ALL_DOCUMENT_FIELDS = new Set(

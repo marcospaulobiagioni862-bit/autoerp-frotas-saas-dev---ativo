@@ -19,6 +19,7 @@ const DOCUMENT_FIELD_NAMES = {
   CONTRACT: ['contractNumber', 'startDate', 'endDate', 'driverName', 'driverDocument', 'plate', 'amount'],
   INSURANCE: ['insurer', 'policyNumber', 'startDate', 'endDate', 'insuredAmount', 'deductibleAmount', 'premiumAmount', 'installmentCount', 'coverageDetails', 'brokerName', 'brokerContact', 'plate'],
   MAINTENANCE: ['supplierName', 'supplierDocument', 'serviceDate', 'plate', 'odometer', 'description', 'amount'],
+  TRACKER: ['providerName', 'equipmentModel', 'imei', 'serialNumber', 'chipCarrier', 'chipNumber', 'installationDate', 'monthlyCost', 'supplierName', 'plate'],
 } as const;
 
 const DOCUMENT_TYPES = Object.keys(DOCUMENT_FIELD_NAMES) as Array<keyof typeof DOCUMENT_FIELD_NAMES>;
