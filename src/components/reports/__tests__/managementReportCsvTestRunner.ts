@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { buildManagementReportCsv, managementReportCsvFilename } from '../managementReportCsv';
+import { buildManagementReportXlsx, managementReportXlsxFilename } from '../managementReportXlsx';
 
 const report:any = {
   companyId: 'company-1',
@@ -24,4 +25,14 @@ assert.match(csv, /"motoristas";"João ""Teste""";"fullName";"João ""Teste"""/,
 assert.match(csv, /"'=HYPERLINK\(""x""\)"/, 'spreadsheet formula injection must be neutralized');
 assert.equal(managementReportCsvFilename(report.generatedAt), 'autoerp-relatorio-gerencial-2026-09-06.csv');
 
-console.log('Management report CSV export PASS');
+const xlsx = buildManagementReportXlsx(report);
+assert.equal(String.fromCharCode(...xlsx.slice(0, 4)), 'PK\x03\x04', 'XLSX must be a ZIP/OOXML package');
+const xlsxText = Buffer.from(xlsx).toString('utf8');
+assert.match(xlsxText, /\[Content_Types\]\.xml/, 'XLSX must include OOXML content types');
+assert.match(xlsxText, /xl\/workbook\.xml/, 'XLSX must include workbook metadata');
+assert.match(xlsxText, /xl\/worksheets\/sheet1\.xml/, 'XLSX must include the report worksheet');
+assert.match(xlsxText, /ABC1D23/, 'XLSX must include vehicle data');
+assert.match(xlsxText, /&apos;=HYPERLINK/, 'XLSX must neutralize spreadsheet formulas');
+assert.equal(managementReportXlsxFilename(report.generatedAt), 'autoerp-relatorio-gerencial-2026-09-06.xlsx');
+
+console.log('Management report CSV/XLSX export PASS');
