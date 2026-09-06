@@ -23,7 +23,9 @@ function wrap(font:PDFFont,text:string,size:number,maxWidth:number):string[] {
   return lines;
 }
 
-export async function downloadMoveFlexBaseContractPdf():Promise<void> {
+export const MOVEFLEX_BASE_CONTRACT_PDF_FILENAME = 'Contrato_MoveFlex_Modelo_Base.pdf';
+
+export async function buildMoveFlexBaseContractPdf():Promise<Uint8Array> {
   const pdf=await PDFDocument.create();
   const regular=await pdf.embedFont(StandardFonts.Helvetica);
   const bold=await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -58,10 +60,21 @@ export async function downloadMoveFlexBaseContractPdf():Promise<void> {
 
   const pages=pdf.getPages();
   pages.forEach((p,index)=>p.drawText(`${index+1} / ${pages.length}`,{x:pageWidth-72,y:24,size:8,font:regular,color:rgb(0.45,0.45,0.5)}));
-  const bytes=await pdf.save();
+  return await pdf.save();
+}
+
+export function downloadPreparedMoveFlexBaseContractPdf(bytes:Uint8Array):void {
   const blob=new Blob([bytes],{type:'application/pdf'});
   const url=URL.createObjectURL(blob);
   const anchor=document.createElement('a');
-  anchor.href=url;anchor.download='Contrato_MoveFlex_Modelo_Base.pdf';anchor.click();
+  anchor.href=url;
+  anchor.download=MOVEFLEX_BASE_CONTRACT_PDF_FILENAME;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
   window.setTimeout(()=>URL.revokeObjectURL(url),60_000);
+}
+
+export async function downloadMoveFlexBaseContractPdf():Promise<void> {
+  downloadPreparedMoveFlexBaseContractPdf(await buildMoveFlexBaseContractPdf());
 }
