@@ -4,6 +4,7 @@ import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAi
 import type { Vehicle } from '../../types/entities';
 import { Button,Input,ModalContainer } from '../ui';
 import { FileUpload } from '../documents/FileUpload';
+import { documentAiFieldLabel } from '../documents/documentAiFieldLabels';
 
 export interface InsuranceAiDraft{
   vehicleId:string;
@@ -119,7 +120,7 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
       {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3">
         <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {fields.map(([key,original])=><Input key={key} label={key} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
+          {fields.map(([key,original])=><Input key={key} label={documentAiFieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
         </div>
         <p className="text-[11px] text-slate-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
       </div>}
