@@ -27,6 +27,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({});
   const [contractFile, setContractFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '',
@@ -34,12 +35,13 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
   });
 
-  const set = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key: keyof typeof form, value: string) => { setForm((current) => ({ ...current, [key]: value })); setFieldErrors((current)=>{if(!current[key])return current;const next={...current};delete next[key];return next;}); };
 
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
     setError(null);
+    setFieldErrors({});
     setContractFile(null);
     setLoadingOptions(true);
     Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.list()])
@@ -104,22 +106,18 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
-    if (!form.templateId || !form.vehicleId || !form.driverId || !form.startDate || !form.billingPeriodicity || Number(form.rentalAmount) <= 0) {
-      setError('Preencha modelo, veículo, motorista, data inicial, aluguel e periodicidade.');
-      return;
-    }
-    if (form.billingPeriodicity === RecurringFrequency.WEEKLY && (!form.billingDueDayOfWeek || Number(form.billingDueDayOfWeek) < 1 || Number(form.billingDueDayOfWeek) > 7)) {
-      setError('Informe o dia semanal de vencimento entre 1 e 7.');
-      return;
-    }
-    if (form.billingPeriodicity === RecurringFrequency.MONTHLY && (!form.billingDueDayOfMonth || Number(form.billingDueDayOfMonth) < 1 || Number(form.billingDueDayOfMonth) > 31)) {
-      setError('Informe o dia mensal de vencimento entre 1 e 31.');
-      return;
-    }
-    if (form.endDate && form.startDate > form.endDate) {
-      setError('A data final não pode ser anterior à data inicial.');
-      return;
-    }
+    const nextErrors:Record<string,string>={};
+    if(!form.templateId)nextErrors.templateId='Selecione o modelo de contrato.';
+    if(!form.vehicleId)nextErrors.vehicleId='Selecione o veículo.';
+    if(!form.driverId)nextErrors.driverId='Selecione o motorista.';
+    if(!form.startDate)nextErrors.startDate='Informe a data inicial.';
+    if(!form.billingPeriodicity)nextErrors.billingPeriodicity='Selecione a periodicidade.';
+    if(!Number.isFinite(Number(form.rentalAmount))||Number(form.rentalAmount)<=0)nextErrors.rentalAmount='Informe um aluguel maior que zero.';
+    if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
+    if(form.billingPeriodicity===RecurringFrequency.MONTHLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia mensal entre 1 e 31.';
+    if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
+    setFieldErrors(nextErrors);
+    if(Object.keys(nextErrors).length){setError('Corrija os campos destacados em vermelho antes de salvar o contrato.');return;}
     setLoading(true);
     try {
       const input = {
@@ -182,15 +180,15 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
-          <Field label="Modelo de contrato *"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}</select></Field>
-          <Field label="Data inicial *"><Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
-          <Field label="Veículo *"><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
-          <Field label="Motorista *"><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
-          <Field label="Data final"><Input type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
-          <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
-          <Field label="Periodicidade *"><select value={form.billingPeriodicity} onChange={(e) => set('billingPeriodicity', e.target.value)} className="control"><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
-          <Field label={`Dia semanal${form.billingPeriodicity === RecurringFrequency.WEEKLY ? ' *' : ''}`}><Input type="number" min="1" max="7" value={form.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} disabled={form.billingPeriodicity !== RecurringFrequency.WEEKLY} /></Field>
-          <Field label={`Dia mensal${form.billingPeriodicity === RecurringFrequency.MONTHLY ? ' *' : ''}`}><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} disabled={form.billingPeriodicity !== RecurringFrequency.MONTHLY} /></Field>
+          <Field label="Modelo de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}</option>)}</select></Field>
+          <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
+          <Field label="Veículo *" error={fieldErrors.vehicleId}><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
+          <Field label="Motorista *" error={fieldErrors.driverId}><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.driverId?'border-red-500':''}`}><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
+          <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
+          <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
+          <Field label="Periodicidade *" error={fieldErrors.billingPeriodicity}><select value={form.billingPeriodicity} onChange={(e) => set('billingPeriodicity', e.target.value)} className={`control ${fieldErrors.billingPeriodicity?'border-red-500':''}`}><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
+          <Field label={`Dia semanal${form.billingPeriodicity === RecurringFrequency.WEEKLY ? ' *' : ''}`}><Input type="number" min="1" max="7" value={form.billingDueDayOfWeek} error={fieldErrors.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} disabled={form.billingPeriodicity !== RecurringFrequency.WEEKLY} /></Field>
+          <Field label={`Dia mensal${form.billingPeriodicity === RecurringFrequency.MONTHLY ? ' *' : ''}`}><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} error={fieldErrors.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} disabled={form.billingPeriodicity !== RecurringFrequency.MONTHLY} /></Field>
           <Field label="Caução"><Input type="number" min="0" step="0.01" value={form.securityDepositAmount} onChange={(e) => set('securityDepositAmount', e.target.value)} /></Field>
           <Field label="Franquia KM"><Input type="number" min="0" value={form.franchiseKm} onChange={(e) => set('franchiseKm', e.target.value)} /></Field>
           <Field label="KM excedente"><Input type="number" min="0" step="0.01" value={form.excessKmRate} onChange={(e) => set('excessKmRate', e.target.value)} /></Field>
@@ -218,4 +216,4 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   );
 };
 
-const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => <label className="block space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200"><span>{label}</span>{children}</label>;
+const Field: React.FC<{ label: string; children: React.ReactNode; error?:string }> = ({ label, children, error }) => <label className="block space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200"><span>{label}</span>{children}{error&&<span className="block text-[11px] font-normal text-red-600 dark:text-red-400">{error}</span>}</label>;
