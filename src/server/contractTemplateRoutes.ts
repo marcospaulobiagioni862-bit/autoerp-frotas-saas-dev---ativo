@@ -4,6 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
+import { MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN, MOVEFLEX_DEFAULT_TEMPLATE_KEY, MOVEFLEX_DEFAULT_TEMPLATE_TITLE } from '../domain/contracts/moveflexDefaultContractTemplate';
 
 type TemplateAction = 'VIEW_CONTRACT_TEMPLATE' | 'MANAGE_CONTRACT_TEMPLATE';
 type TemplateSourceMode = 'MARKDOWN' | 'FILE';
@@ -107,6 +108,50 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerContractTemplateRoutes(app: Express): void {
+  app.post('/api/contract-templates/ensure-moveflex-default', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
+    if (!principal) return;
+    try {
+      validateContractTemplateContent(MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN);
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, MOVEFLEX_DEFAULT_TEMPLATE_KEY);
+        if (current && !current.isArchived) return { item: current, created: false };
+
+        const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, MOVEFLEX_DEFAULT_TEMPLATE_KEY);
+        const now = new Date().toISOString();
+        const created = await tx.getContractTemplateRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          templateKey: MOVEFLEX_DEFAULT_TEMPLATE_KEY,
+          title: MOVEFLEX_DEFAULT_TEMPLATE_TITLE,
+          contentMarkdown: MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN,
+          versionNumber: Math.max(...versions.map((version) => version.versionNumber), 0) + 1,
+          isCurrent: true,
+          isActive: true,
+          isArchived: false,
+          createdBy: principal.userId,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'ContractTemplate',
+          entityId: created.id,
+          action: AuditAction.CREATE,
+          newState: JSON.stringify({ event: 'ENSURE_MOVEFLEX_DEFAULT', templateKey: created.templateKey, versionNumber: created.versionNumber }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+        return { item: created, created: true };
+      });
+      res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.get('/api/contract-templates', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
     if (!principal) return;

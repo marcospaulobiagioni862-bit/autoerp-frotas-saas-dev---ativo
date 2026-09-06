@@ -114,6 +114,13 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     setDetailsFocus(focus);
     setDetailsOpen(true);
   };
+  const handleContractSaved = async (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => {
+    setFormOpen(false);
+    setContractToEdit(null);
+    await loadData();
+    if (result.warning) setError(result.warning);
+    if (result.openPdfSignature) openContractDetails(result.contract.id, 'PDF_SIGNATURE');
+  };
   const handleClose = (id: string) => {
     if (!confirm('Deseja encerrar este contrato? O vínculo do veículo será liberado de forma atômica.')) return;
     return runAction(id, () => ContractClient.close(id, { reason: 'Encerrado via gestão de contratos' }));
@@ -256,7 +263,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
             onClose={() => setFormOpen(false)}
             contractToEdit={contractToEdit}
             companyId={companyId}
-            onSuccess={() => void loadData()}
+            onSuccess={(result) => { void handleContractSaved(result); }}
           />}
           {templateManagerOpen&&<ContractTemplateManagementModal isOpen onClose={() => setTemplateManagerOpen(false)} />}
           {detailsOpen&&selectedContractId&&<ContractDetailsModal
