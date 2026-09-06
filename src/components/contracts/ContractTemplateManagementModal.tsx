@@ -4,7 +4,8 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
 import { Badge, Button, Input, ModalContainer } from '../ui';
-import { MOVEFLEX_BASE_CONTRACT_PDF_FILENAME, MOVEFLEX_LOGO_DATA_URL, buildMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
+import { MOVEFLEX_BASE_CONTRACT_PDF_FILENAME, buildMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
+import { MOVEFLEX_LOGO_DATA_URL } from '../../domain/contracts/moveflexBrand';
 
 interface ContractTemplateManagementModalProps {
   isOpen: boolean;
