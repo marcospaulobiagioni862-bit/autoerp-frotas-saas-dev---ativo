@@ -830,6 +830,7 @@ jobs:
 
       - name: Authentication regressions
         run: |
+          npx tsx src/server/__tests__/requestCorrelationTestRunner.ts
           npx tsx src/server/__tests__/authTestRunner.ts
           npx tsx src/server/__tests__/sessionLoginTestRunner.ts
 
