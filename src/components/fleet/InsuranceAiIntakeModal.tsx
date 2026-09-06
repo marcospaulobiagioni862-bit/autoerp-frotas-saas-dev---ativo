@@ -28,6 +28,9 @@ interface Props{
 }
 
 const value=(input:unknown):string=>input===undefined||input===null?'':String(input);
+const fieldLabel=(key:string):string=>({
+  insurer:'Seguradora',policyNumber:'Número da apólice',startDate:'Início da vigência',endDate:'Fim da vigência',insuredAmount:'Valor segurado',deductibleAmount:'Franquia',premiumAmount:'Prêmio do seguro',installmentCount:'Quantidade de parcelas',coverageDetails:'Coberturas',brokerName:'Corretor',brokerContact:'Contato do corretor',plate:'Placa'
+} as Record<string,string>)[key]||key;
 const mapDraft=(fields:Record<string,unknown>,vehicleId:string,attachmentId:string):InsuranceAiDraft=>({
   vehicleId,
   sourceAttachmentId:attachmentId,
@@ -119,7 +122,7 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
       {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3">
         <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {fields.map(([key,original])=><Input key={key} label={key} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
+          {fields.map(([key,original])=><Input key={key} label={fieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
         </div>
         <p className="text-[11px] text-slate-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
       </div>}
