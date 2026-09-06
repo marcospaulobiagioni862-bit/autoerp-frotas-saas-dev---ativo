@@ -27,6 +27,55 @@ interface ContractDetailsModalProps {
 }
 
 type Tab = 'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT';
+
+const CONTRACT_AUDIT_FIELD_LABELS: Record<string, string> = {
+  contractNumber: 'Número do contrato',
+  vehicleId: 'Veículo',
+  driverId: 'Motorista',
+  startDate: 'Data inicial',
+  endDate: 'Data final',
+  rentalAmount: 'Valor do aluguel',
+  billingPeriodicity: 'Periodicidade',
+  billingDueDayOfWeek: 'Dia semanal de vencimento',
+  billingDueDayOfMonth: 'Dia mensal de vencimento',
+  securityDepositAmount: 'Caução',
+  franchiseKm: 'Franquia de KM',
+  excessKmRate: 'Valor do KM excedente',
+  paymentMethodId: 'Forma de pagamento',
+  templateId: 'Modelo de contrato',
+  signatureRequired: 'Assinatura obrigatória',
+  status: 'Status',
+  notes: 'Observações',
+};
+
+function parseContractAuditState(value?: string): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function contractAuditChangeSummary(previousState?: string, newState?: string): { fields: string[]; statusTransition?: string } {
+  const previous = parseContractAuditState(previousState);
+  const next = parseContractAuditState(newState);
+  if (!previous && !next) return { fields: [] };
+  const keys = Array.from(new Set([...Object.keys(previous || {}), ...Object.keys(next || {})]));
+  const changed = keys.filter((key) => JSON.stringify(previous?.[key]) !== JSON.stringify(next?.[key]));
+  const fields = changed.map((key) => CONTRACT_AUDIT_FIELD_LABELS[key] || key);
+  const previousStatus = previous?.status;
+  const nextStatus = next?.status;
+  const statusTransition =
+    changed.includes('status') &&
+    typeof previousStatus === 'string' &&
+    typeof nextStatus === 'string'
+      ? `${previousStatus} → ${nextStatus}`
+      : undefined;
+  return { fields, statusTransition };
+}
+
 const bridge = new ContractLegacyDetailsBridge();
 const EMPTY_SETTLEMENT_OPTIONS: SettlementOptions = { accounts: [], paymentMethods: [] };
 
@@ -227,7 +276,26 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
 
           {tab === 'TICKETS' && <div className="space-y-2">{tickets.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma multa vinculada.</p></Card> : tickets.map((item) => <Card key={item.id} padding="sm"><div className="flex justify-between gap-3 text-xs"><div><b>Auto {item.autoNumber}</b><p className="mt-1 text-slate-500">{item.description}</p></div><span className="font-mono font-bold">{formatCurrencyBRL(item.originalAmount)}</span></div></Card>)}</div>}
 
-          {tab === 'AUDIT' && <div className="space-y-2">{history.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhum log suplementar encontrado.</p></Card> : history.map((item) => <Card key={item.id} padding="sm"><div className="text-xs"><b>{item.action}</b><p className="text-slate-500">{item.userName} • {new Date(item.timestamp).toLocaleString('pt-BR')}</p></div></Card>)}</div>}
+          {tab === 'AUDIT' && <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold">Histórico e auditoria do contrato</h3>
+              <p className="text-[11px] text-slate-500">Eventos registrados pela autoridade do servidor. Valores brutos não são exibidos nesta visão.</p>
+            </div>
+            {history.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhum evento de auditoria registrado.</p></Card> : history.map((item) => {
+              const change = contractAuditChangeSummary(item.previousState, item.newState);
+              return <Card key={item.id} padding="sm">
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <b className="text-emerald-600">{item.action}</b>
+                    <span className="text-slate-400">{new Date(item.timestamp).toLocaleString('pt-BR')}</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300">Responsável: <strong>{item.userName || 'Usuário não identificado'}</strong></p>
+                  {change.fields.length > 0 && <p className="text-slate-500">Campos alterados: {change.fields.join(', ')}</p>}
+                  {change.statusTransition && <p className="text-slate-500">Transição de status: <strong>{change.statusTransition}</strong></p>}
+                </div>
+              </Card>;
+            })}
+          </div>}
 
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/30"><h4 className="mb-3 flex items-center gap-2 text-xs font-bold"><ShieldCheck className="w-4 h-4 text-emerald-600" />Arquivos e anexos do contrato</h4><FileUpload entityType="Contract" entityId={contract.id} documentType="CONTRACT_DOCUMENT" onUploadComplete={() => setUploadCount((value) => value + 1)} multiple={true} /><div className="mt-4" key={uploadCount}><AttachmentList entityType="Contract" entityId={contract.id} /></div></div>
         </>}
