@@ -93,6 +93,16 @@ assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
 assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'new markdown-backed contract must generate its official PDF automatically after save');
 assert.match(source, /handleContractSaved[\s\S]*openContractDetails\(result\.contract\.id, 'PDF_SIGNATURE'\)/, 'new contract save must open the PDF/signature flow automatically');
+assert.match(contractForm, /Segunda-feira/, 'weekly billing must offer Monday');
+assert.match(contractForm, /Terça-feira/, 'weekly billing must offer Tuesday');
+assert.match(contractForm, /Quarta-feira/, 'weekly billing must offer Wednesday');
+assert.match(contractForm, /Quinta-feira/, 'weekly billing must offer Thursday');
+assert.match(contractForm, /Sexta-feira/, 'weekly billing must offer Friday');
+assert.match(contractForm, /Sábado/, 'weekly billing must offer Saturday');
+assert.match(contractForm, /Domingo/, 'weekly billing must offer Sunday');
+assert.match(contractForm, /Dia da semana para vencimento \*/, 'weekly billing must use a weekday selector');
+assert.match(contractForm, /Dia do vencimento no mês \*/, 'non-weekly billing must use a day-of-month field');
+assert.match(contractForm, /form\.billingPeriodicity !== RecurringFrequency\.WEEKLY/, 'monthly-or-longer billing must share day-of-month semantics');
 for (const placeholder of [
   'company.tradeName','company.email','company.phone','company.whatsapp',
   'company.address.street','company.address.number','company.address.complement','company.address.neighborhood',
