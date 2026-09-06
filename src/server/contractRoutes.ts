@@ -141,6 +141,11 @@ function dueDay(value: unknown, field: string, min: number, max: number, fallbac
   return parsed;
 }
 
+function requiredDueDay(value: unknown, field: string, min: number, max: number): number {
+  if (value === undefined || value === null || value === '') throw new ContractValidationError(`Invalid ${field}`);
+  return dueDay(value, field, min, max);
+}
+
 function billingDueDays(
   billingPeriodicity: RecurringFrequency,
   billingDueDayOfWeekInput: unknown,
@@ -148,13 +153,13 @@ function billingDueDays(
 ): { billingDueDayOfWeek: number; billingDueDayOfMonth: number } {
   if (billingPeriodicity === RecurringFrequency.WEEKLY) {
     return {
-      billingDueDayOfWeek: dueDay(billingDueDayOfWeekInput, 'billingDueDayOfWeek', 1, 7, Number.NaN),
+      billingDueDayOfWeek: requiredDueDay(billingDueDayOfWeekInput, 'billingDueDayOfWeek', 1, 7),
       billingDueDayOfMonth: 1,
     };
   }
   return {
     billingDueDayOfWeek: 1,
-    billingDueDayOfMonth: dueDay(billingDueDayOfMonthInput, 'billingDueDayOfMonth', 1, 31, Number.NaN),
+    billingDueDayOfMonth: requiredDueDay(billingDueDayOfMonthInput, 'billingDueDayOfMonth', 1, 31),
   };
 }
 
