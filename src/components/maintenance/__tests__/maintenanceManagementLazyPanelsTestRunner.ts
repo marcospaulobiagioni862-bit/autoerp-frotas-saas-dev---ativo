@@ -33,6 +33,11 @@ assert.match(
 );
 assert.match(source, /Carregando manutenção preventiva\.\.\./, 'preventive loading must remain neutral');
 assert.match(source, /Carregando anexos da manutenção\.\.\./, 'attachment loading must remain neutral');
+assert.match(source, /Ler nota\/OS com IA/, 'maintenance page must expose assisted document intake beside work-order creation');
+assert.match(source, /sourceAttachmentId:woSourceAttachmentId\|\|undefined/, 'assisted work-order creation must promote the reviewed original attachment');
+assert.match(source, /setWoServiceAmount\(draft\.amount\)/, 'AI extracted amount must prefill the service amount only after human review');
+assert.match(source, /services:Number\(woServiceAmount\)>0/, 'reviewed service amount must contribute to work-order total without creating payable before completion');
+
 assert.doesNotMatch(
   source,
   /error\.(?:message|stack)|String\(error\)/,
