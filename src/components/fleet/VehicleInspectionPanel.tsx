@@ -152,7 +152,7 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
         {expanded===item.id&&<div className="space-y-3 border-t pt-3">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{item.checklist[key]?'OK':'Não'}</strong></div>)}</div>
           {item.technicalChecklist&&<div className="space-y-2"><p className="text-xs font-semibold">Resultado técnico: {resultLabel(item.result)}</p><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{TECHNICAL_ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{TECHNICAL_OPTIONS.find(option=>option.value===item.technicalChecklist?.[key])?.label||'—'}</strong></div>)}</div></div>}
-          {item.notes&&<p className="text-xs text-slate-600 dark:text-slate-300">{item.notes}</p>
+          {item.notes&&<p className="text-xs text-slate-600 dark:text-slate-300">{item.notes}</p>}
           <div className="rounded-lg border p-3 space-y-3">
             <p className="text-xs font-semibold">Fotos e vídeos desta vistoria</p>
             <FileUpload entityType="VehicleInspection" entityId={item.id} documentType="INSPECTION_MEDIA" multiple allowedTypes={['image/jpeg','image/jpg','image/png','image/webp','video/mp4']} maxSizeMB={20} onUploadComplete={()=>void load()}/>
