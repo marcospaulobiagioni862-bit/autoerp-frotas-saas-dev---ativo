@@ -17,7 +17,7 @@ interface ContractExecutionPanelProps {
 }
 
 const signatureMethodLabel = (method?: ContractSignatureMethod): string =>
-  method === 'GOV_BR' ? 'GOV.br' : 'Upload de PDF assinado';
+  method === 'GOV_BR' ? 'GOV.br' : method === 'NOTARY' ? 'Cartório' : 'Upload de PDF assinado';
 
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -300,6 +300,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                   onChange={(event) => setSignatureMethod(event.target.value as ContractSignatureMethod)}
                 >
                   <option value="GOV_BR">GOV.br</option>
+                  <option value="NOTARY">Cartório</option>
                   <option value="SIGNED_PDF_UPLOAD">Outro PDF assinado</option>
                 </select>
               </label>
