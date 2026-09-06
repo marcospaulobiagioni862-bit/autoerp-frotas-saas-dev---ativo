@@ -25,7 +25,7 @@ function validateArtifact(value: unknown): ContractArtifact {
   for (const key of ['templateId','sourceArtifactId','snapshotJson','signedByName','signedAt'] as const) {
     if (item[key] !== undefined && typeof item[key] !== 'string') throw new Error('Invalid contract artifact payload');
   }
-  if (item.signatureMethod !== undefined && item.signatureMethod !== 'SIGNED_PDF_UPLOAD' && item.signatureMethod !== 'GOV_BR') {
+  if (item.signatureMethod !== undefined && item.signatureMethod !== 'SIGNED_PDF_UPLOAD' && item.signatureMethod !== 'GOV_BR' && item.signatureMethod !== 'NOTARY') {
     throw new Error('Invalid contract artifact payload');
   }
   return item as unknown as ContractArtifact;
