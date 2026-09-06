@@ -15,6 +15,10 @@ assert.match(attachmentList, /flex flex-wrap items-center justify-end gap-1/, 'd
 assert.match(attachmentList, /excludeAttachmentIds\?: string\[\]/, 'attachment list must expose opt-in visual deduplication');
 assert.match(attachmentList, /excludedAttachmentIds\.has\(item\.id\)/, 'excluded attachment ids must be removed from the visible list only');
 assert.match(driverDetails, /excludeAttachmentIds=\{summary\.documents\.map/, 'driver details must hide attachments already represented by document records');
+assert.match(driverDetails, /Histórico e auditoria do motorista/, 'driver history must identify the server audit view');
+assert.match(driverDetails, /Responsável:/, 'driver history must expose the responsible user');
+assert.match(driverDetails, /Campos alterados:/, 'driver history must summarize changed fields');
+assert.match(driverDetails, /Valores brutos não são exibidos/, 'driver history must avoid exposing raw audit payload values');
 
 
 console.log('Driver details document UX regression PASS');
