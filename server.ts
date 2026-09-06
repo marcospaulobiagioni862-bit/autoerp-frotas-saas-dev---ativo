@@ -15,6 +15,7 @@ import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime, AuditAction } from './src/types/enums';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
 import { registerVehicleRoutes } from './src/server/vehicleRoutes';
+import { requestCorrelationMiddleware } from './src/server/requestCorrelation';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
@@ -52,6 +53,7 @@ declare global {
   namespace Express {
     interface Request {
       principal?: AuthenticatedPrincipal;
+      requestId?: string;
     }
   }
 }
@@ -116,6 +118,7 @@ async function startServer() {
   FinanceEngine.uowRunner = UnitOfWork.run;
 
   const app = express();
+  app.use(requestCorrelationMiddleware);
   app.use(express.json());
   const PORT = Number(process.env.PORT || 3000);
 
