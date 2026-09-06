@@ -220,8 +220,24 @@ export const FleetManagement: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                      {manualStatusOptions.length > 0 && (
-                        <Select aria-label={`Alterar status do veículo ${vehicle.plate}`} value="" onChange={(event) => { const nextStatus = event.target.value as VehicleStatus; if (nextStatus) handleStatusChangeClick(vehicle, nextStatus); }} options={[{ value: '', label: 'Alterar status...', disabled: true }, ...manualStatusOptions]}/>
+                      {(manualStatusOptions.length > 0 || canMarkSold) && (
+                        <Select
+                          aria-label={`Alterar status do veículo ${vehicle.plate}`}
+                          value=""
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            if (nextValue === '__SELL__') {
+                              setVehicleForSale(vehicle);
+                              return;
+                            }
+                            if (nextValue) handleStatusChangeClick(vehicle, nextValue as VehicleStatus);
+                          }}
+                          options={[
+                            { value: '', label: 'Alterar status...', disabled: true },
+                            ...manualStatusOptions,
+                            ...(canMarkSold ? [{ value: '__SELL__', label: 'Vender veículo...' }] : []),
+                          ]}
+                        />
                       )}
                       <div className="flex items-center justify-between gap-2">
                         <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"><Eye className="w-3.5 h-3.5"/> Detalhes →</button>
