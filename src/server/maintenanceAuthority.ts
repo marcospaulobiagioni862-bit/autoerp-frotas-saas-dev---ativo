@@ -117,14 +117,15 @@ export class MaintenanceAuthorityService {
     const laborItems:WorkOrderLaborItem[]=(input.laborItems||[]).map(raw=>{const hours=pos(raw.hours,'labor hours'),hourlyRate=roundCurrency(nn(raw.hourlyRate,'hourlyRate'));return{id:randomUUID(),description:reqText(raw.description,'labor description',300),hours,hourlyRate,totalCost:roundCurrency(hours*hourlyRate)};});
     const subtotalParts=roundCurrency(parts.reduce((s,i)=>s+i.totalCost,0)),subtotalServices=roundCurrency(services.reduce((s,i)=>s+i.totalCost,0)),subtotalLabor=roundCurrency(laborItems.reduce((s,i)=>s+i.totalCost,0)),gross=roundCurrency(subtotalParts+subtotalServices+subtotalLabor);const now=new Date().toISOString();
     const financialComponents:WorkOrderFinancialComponent[]=[];
+    const paymentLabels=new Map<string,string>();
     if(input.financialComponents!==undefined){
-      if(!Array.isArray(input.financialComponents)||input.financialComponents.length>2)throw new MaintenanceValidationError('Configuração financeira inválida');
+      if(!Array.isArray(input.financialComponents)||input.financialComponents.length>3)throw new MaintenanceValidationError('Configuração financeira inválida');
       const seen=new Set<string>();
       for(const raw of input.financialComponents){
-        const kind=raw.kind;if(kind!=='PARTS'&&kind!=='SERVICES')throw new MaintenanceValidationError('Componente financeiro inválido');if(seen.has(kind))throw new MaintenanceValidationError('Componente financeiro duplicado');seen.add(kind);
-        const grossAmount=kind==='PARTS'?subtotalParts:roundCurrency(subtotalServices+subtotalLabor);if(grossAmount<=0)throw new MaintenanceValidationError('Componente financeiro sem valor');
+        const kind=raw.kind;if(kind!=='PARTS'&&kind!=='SERVICES'&&kind!=='LABOR')throw new MaintenanceValidationError('Componente financeiro inválido');if(seen.has(kind))throw new MaintenanceValidationError('Componente financeiro duplicado');seen.add(kind);
+        const grossAmount=kind==='PARTS'?subtotalParts:kind==='SERVICES'?subtotalServices:subtotalLabor;if(grossAmount<=0)throw new MaintenanceValidationError('Componente financeiro sem valor');
         const categoryId=reqText(raw.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);
-        const paymentMethodId=reqText(raw.paymentMethodId,'paymentMethodId',120);await activePaymentMethod(tx,p.companyId,paymentMethodId);
+        const paymentMethodId=reqText(raw.paymentMethodId,'paymentMethodId',120);const paymentMethod=await activePaymentMethod(tx,p.companyId,paymentMethodId);paymentLabels.set(paymentMethodId,paymentMethod.name);
         const componentSupplierId=optText(raw.supplierId,120)||supplierId;if(!componentSupplierId)throw new MaintenanceValidationError('Fornecedor do pagamento é obrigatório');await activeSupplier(tx,p.companyId,componentSupplierId);
         const paymentCondition=raw.paymentCondition;if(paymentCondition!=='CASH'&&paymentCondition!=='INSTALLMENTS')throw new MaintenanceValidationError('Condição de pagamento inválida');
         const installmentsCount=Number(raw.installmentsCount);if(!Number.isInteger(installmentsCount)||installmentsCount<1||installmentsCount>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');if(paymentCondition==='CASH'&&installmentsCount!==1)throw new MaintenanceValidationError('Pagamento à vista deve ter uma parcela');if(paymentCondition==='INSTALLMENTS'&&installmentsCount<2)throw new MaintenanceValidationError('Pagamento parcelado exige ao menos duas parcelas');
@@ -133,7 +134,8 @@ export class MaintenanceAuthorityService {
         financialComponents.push({id:randomUUID(),kind,supplierId:componentSupplierId,categoryId,paymentMethodId,paymentCondition,installmentsCount,firstDueDate,grossAmount,discountAmount,netAmount:roundCurrency(grossAmount-discountAmount),hasInvoice,invoiceNumber,createdAt:now,updatedAt:now});
       }
       if(subtotalParts>0&&!seen.has('PARTS'))throw new MaintenanceValidationError('Informe o pagamento das peças');
-      if(roundCurrency(subtotalServices+subtotalLabor)>0&&!seen.has('SERVICES'))throw new MaintenanceValidationError('Informe o pagamento dos serviços');
+      if(subtotalServices>0&&!seen.has('SERVICES'))throw new MaintenanceValidationError('Informe o pagamento dos serviços');
+      if(subtotalLabor>0&&!seen.has('LABOR'))throw new MaintenanceValidationError('Informe o pagamento da mão de obra');
     }
     const discount=financialComponents.length>0?roundCurrency(financialComponents.reduce((sum,item)=>sum+item.discountAmount,0)):roundCurrency(nn(input.discount??0,'discount'));if(discount>gross)throw new MaintenanceValidationError('Desconto excede o total da OS');
     const item:WorkOrder={id:randomUUID(),companyId:p.companyId,number,vehicleId:vehicle.id,supplierId,status:'OPEN',openedAt:now,serviceDate,entryKm,description:reqText(input.description,'description',1000),diagnosis:optText(input.diagnosis,1000),notes:optText(input.notes,2000),parts,services,laborItems,financialComponents,subtotalParts,subtotalServices,subtotalLabor,discount,total:roundCurrency(gross-discount),createdBy:p.userId,createdAt:now,updatedAt:now};
@@ -141,7 +143,10 @@ export class MaintenanceAuthorityService {
     const payableIds:string[]=[];
     for(const component of financialComponents){
       if(component.netAmount<=0)continue;
-      const createdPayables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:`${created.id}:${component.kind}`,vehicleId:created.vehicleId,supplierId:component.supplierId,categoryId:component.categoryId,description:`Manutenção OS #${created.number} - ${component.kind==='PARTS'?'Peças':'Serviços / mão de obra'}`,totalAmount:component.netAmount,dueDate:component.firstDueDate,installmentsCount:component.installmentsCount,userId:p.userId,userName:p.name},tx);
+      const componentLabel=component.kind==='PARTS'?'Peças':component.kind==='SERVICES'?'Serviços':'Mão de obra';
+      const methodLabel=paymentLabels.get(component.paymentMethodId)||component.paymentMethodId;
+      const conditionLabel=component.paymentCondition==='CASH'?'À vista':`Parcelado ${component.installmentsCount}x`;
+      const createdPayables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:`${created.id}:${component.kind}`,vehicleId:created.vehicleId,supplierId:component.supplierId,categoryId:component.categoryId,description:`Manutenção OS #${created.number} - ${componentLabel} - ${methodLabel} - ${conditionLabel}`,totalAmount:component.netAmount,dueDate:component.firstDueDate,installmentsCount:component.installmentsCount,userId:p.userId,userName:p.name},tx);
       payableIds.push(...createdPayables.map((item:any)=>item.id));
     }
     if(payableIds.length>0){const linked=await tx.getWorkOrderRepo().updateLifecycle(p.companyId,created.id,{status:'OPEN',accountPayableId:payableIds[0],updatedAt:now});if(!linked)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');created=linked;}
