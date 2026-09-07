@@ -100,12 +100,12 @@ assert.match(intakeSource, /Cadastrar veículo manualmente/, 'failed analysis mu
 assert.match(source, /onManualRequested=\{\(\) => \{ setIsVehicleAiOpen\(false\); setVehicleToEdit\(null\); setIsFormOpen\(true\); \}\}/, 'manual fallback must close the intake and open a blank vehicle form');
 
 assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use a synchronous duplicate-submit lock');
-assert.match(intakeSource, /VehicleClient\.list\(\)/, 'vehicle intake must pre-check authoritative fleet identifiers');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.plate\)===plate/, 'vehicle intake must detect duplicate plates');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.renavam\)===renavam/, 'vehicle intake must detect duplicate RENAVAM');
+assert.match(intakeSource, /VehicleClient\.checkIdentityConflict\(plate,renavam\)/, 'vehicle intake must pre-check authoritative fleet identifiers');
+assert.match(intakeSource, /conflict\?\.plateMatch/, 'vehicle intake must detect duplicate plates');
+assert.match(intakeSource, /conflict\?\.renavamMatch/, 'vehicle intake must detect duplicate RENAVAM');
 assert.match(intakeSource, /Este veículo já possui cadastro no sistema\./, 'vehicle intake must explain the duplicate vehicle conflict');
 assert.match(intakeSource, /Abrir cadastro existente/, 'duplicate vehicle warning must offer direct access to the existing record');
-assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|Boolean\(duplicateVehicle\)\}/, 'vehicle materialization button must remain locked for duplicate or concurrent submission');
+assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|duplicateCheckPending\|\|Boolean\(duplicateVehicle\)\}/, 'vehicle materialization button must remain locked while duplicate check is pending, conflicted, or submitting');
 
 assert.equal(parseCurrencyInput('1.250,56'), 1250.56, 'BRL input must parse dot thousands and comma decimals');
 assert.equal(parseCurrencyInput('1250.56'), 1250.56, 'canonical decimal values must remain compatible');
