@@ -61,7 +61,7 @@ export async function findVehicleIdentityConflict(
 
 export function vehicleIdentityConflictMessage(conflict:VehicleIdentityConflict):string {
   const matches=[
-    conflict.plateMatch ? `Placa ${normalizeVehicleIdentity(conflict.plate)}` : '',
+    conflict.plateMatch ? `placa ${normalizeVehicleIdentity(conflict.plate)}` : '',
     conflict.renavamMatch ? `RENAVAM ${normalizeVehicleIdentity(conflict.renavam)}` : '',
   ].filter(Boolean).join(' e ');
   const terminal=conflict.isArchived||conflict.status==='SOLD'||conflict.status==='ARCHIVED'?' (registro histórico/arquivado)':'';
