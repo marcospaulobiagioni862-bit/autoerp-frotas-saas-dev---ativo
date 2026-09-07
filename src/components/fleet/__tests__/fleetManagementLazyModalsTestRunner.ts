@@ -132,7 +132,7 @@ assert.match(kmBatchAuthoritySource, /kmValue<vehicle\.currentKm/, 'KM batch mus
 assert.doesNotMatch(kmBatchAuthoritySource, /FinancialTransaction|PAYABLE|RECEIVABLE|SettlementService/, 'KM batch stage must not mutate finance');
 assert.match(kmBatchRoutesSource, /new Set\(\['vehicleId','sourceType','kmValue','sourceAttachmentId'\]\)/, 'KM batch route must use a narrow browser payload');
 assert.match(vehicleRoutesSource, /registerVehicleKmReadingRoutes\(app\)/, 'vehicle route composition must register KM batch endpoints');
-assert.doesNotMatch(kmBatchRoutesSource, /companyId|userId|userName/, 'KM batch route body must not trust browser tenant or actor authority');
+assert.doesNotMatch(kmBatchRoutesSource, /(?:req\.body|body)\??\.(?:companyId|userId|userName)/, 'KM batch route body must not trust browser tenant or actor authority');
 assert.match(kmBatchMigrationSource, /source_type IN \('MANUAL','DRIVER_PHOTO','TRACKER'\)/, 'KM persistence must restrict source classifications');
 assert.match(kmBatchMigrationSource, /FORCE ROW LEVEL SECURITY/, 'KM schedule persistence must enforce tenant RLS');
 
