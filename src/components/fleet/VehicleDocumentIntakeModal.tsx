@@ -1,8 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
-import { VehicleClient } from '../../api/vehicleClient';
-import type { Vehicle } from '../../types/entities';
+import { VehicleClient,type VehicleIdentityConflictPreview } from '../../api/vehicleClient';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
 import { FileUpload } from '../documents/FileUpload';
@@ -44,12 +43,15 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   const[busy,setBusy]=useState(false);
   const[completionErrors,setCompletionErrors]=useState<Record<string,string>>({});
   const[identifierErrors,setIdentifierErrors]=useState<IdentifierErrors>({});
-  const[duplicateVehicle,setDuplicateVehicle]=useState<Vehicle|null>(null);
+  const[duplicateVehicle,setDuplicateVehicle]=useState<VehicleIdentityConflictPreview|null>(null);
+  const[duplicateMessage,setDuplicateMessage]=useState<string|null>(null);
+  const[duplicateCheckPending,setDuplicateCheckPending]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
   const materializingRef=useRef(false);
+  const duplicateCheckVersionRef=useRef(0);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setDuplicateVehicle(null);materializingRef.current=false;setError(null);setMessage(null);};
+  const reset=()=>{duplicateCheckVersionRef.current+=1;setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setDuplicateVehicle(null);setDuplicateMessage(null);setDuplicateCheckPending(false);materializingRef.current=false;setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
   useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
 
@@ -67,7 +69,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     const all=await DocumentAiClient.list();
     const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;
     setExtraction(current);
-    if(current?.status==='REVIEW_REQUIRED'){
+    if(current?.status==='REVIEW_REQUIRED'||current?.status==='APPROVED'){
       const initial:Record<string,string>={};
       for(const key of FIELD_KEYS){
         const value=current.proposedFields[key];
@@ -90,34 +92,53 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     finally{setBusy(false);}
   };
 
-  const checkExistingVehicle=async():Promise<Vehicle|null>=>{
-    const vehicles=await VehicleClient.list();
+  const applyDuplicateConflict=(conflict:VehicleIdentityConflictPreview|null):VehicleIdentityConflictPreview|null=>{
+    const identifierValidation:IdentifierErrors={};
+    if(conflict?.plateMatch)identifierValidation.plate=`Placa ${conflict.plate} já cadastrada.`;
+    if(conflict?.renavamMatch)identifierValidation.renavam=`RENAVAM ${conflict.renavam} já cadastrado.`;
+    setIdentifierErrors(identifierValidation);
+    setDuplicateVehicle(conflict);
+    if(conflict){
+      const matches=[
+        conflict.plateMatch?`Placa ${conflict.plate}`:null,
+        conflict.renavamMatch?`RENAVAM ${conflict.renavam}`:null,
+      ].filter(Boolean).join(' e ');
+      setDuplicateMessage(`Este veículo já possui cadastro no sistema. ${matches} correspondem a ${conflict.plate} — ${conflict.brand} ${conflict.model}. Abra o cadastro existente em vez de criar outro.`);
+    }else{
+      setDuplicateMessage(null);
+    }
+    return conflict;
+  };
+
+  const checkExistingVehicle=async():Promise<VehicleIdentityConflictPreview|null>=>{
     const plate=normalizedIdentifier(corrections.plate);
     const renavam=normalizedIdentifier(corrections.renavam);
-    const duplicatePlate=plate?vehicles.find(vehicle=>normalizedIdentifier(vehicle.plate)===plate):undefined;
-    const duplicateRenavam=renavam?vehicles.find(vehicle=>normalizedIdentifier(vehicle.renavam)===renavam):undefined;
-    const identifierValidation:IdentifierErrors={};
-    if(duplicatePlate)identifierValidation.plate=`Placa ${duplicatePlate.plate} já cadastrada.`;
-    if(duplicateRenavam)identifierValidation.renavam=`RENAVAM ${duplicateRenavam.renavam} já cadastrado.`;
-    setIdentifierErrors(identifierValidation);
-
-    if(duplicatePlate&&duplicateRenavam&&duplicatePlate.id!==duplicateRenavam.id){
-      setDuplicateVehicle(null);
-      setError('Cadastro bloqueado: a Placa e o RENAVAM informados já pertencem a veículos diferentes no sistema. Revise o documento antes de continuar.');
-      return duplicatePlate;
-    }
-
-    const duplicate=duplicatePlate||duplicateRenavam||null;
-    setDuplicateVehicle(duplicate);
-    if(duplicate){
-      const matches=[
-        duplicatePlate?.id===duplicate.id?`Placa ${duplicate.plate}`:null,
-        duplicateRenavam?.id===duplicate.id?`RENAVAM ${duplicate.renavam}`:null,
-      ].filter(Boolean).join(' e ');
-      setError(`Este veículo já possui cadastro no sistema. ${matches} correspondem a ${duplicate.plate} — ${duplicate.brand} ${duplicate.model}. Abra o cadastro existente em vez de criar outro.`);
-    }
-    return duplicate;
+    if(!plate||!renavam)return applyDuplicateConflict(null);
+    return applyDuplicateConflict(await VehicleClient.checkIdentityConflict(plate,renavam));
   };
+
+  useEffect(()=>{
+    if(!isOpen||extraction?.status!=='APPROVED'){
+      setDuplicateCheckPending(false);
+      return;
+    }
+    const plate=normalizedIdentifier(corrections.plate);
+    const renavam=normalizedIdentifier(corrections.renavam);
+    if(!plate||!renavam){
+      applyDuplicateConflict(null);
+      setDuplicateCheckPending(false);
+      return;
+    }
+    const version=++duplicateCheckVersionRef.current;
+    setDuplicateCheckPending(true);
+    const timer=window.setTimeout(()=>{
+      void VehicleClient.checkIdentityConflict(plate,renavam)
+        .then(conflict=>{if(version===duplicateCheckVersionRef.current)applyDuplicateConflict(conflict);})
+        .catch(error=>{if(version===duplicateCheckVersionRef.current)setError(error instanceof Error?error.message:'Falha ao verificar duplicidade do veículo.');})
+        .finally(()=>{if(version===duplicateCheckVersionRef.current)setDuplicateCheckPending(false);});
+    },150);
+    return()=>window.clearTimeout(timer);
+  },[isOpen,extraction?.status,corrections.plate,corrections.renavam]);
 
   const review=async(decision:'APPROVE'|'REJECT')=>{
     if(!extraction)return;
@@ -125,7 +146,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     try{
       const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
       setExtraction(reviewed);
-      if(decision==='REJECT'){setDuplicateVehicle(null);setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
+      if(decision==='REJECT'){setDuplicateVehicle(null);setDuplicateMessage(null);setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
       const duplicate=await checkExistingVehicle();
       if(duplicate){setMessage(null);return;}
       setMessage('Dados do documento aprovados. Complete agora os dados operacionais e financeiros obrigatórios antes de criar o veículo.');
@@ -272,8 +293,9 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             {FIELD_KEYS.map(key=>{const identifierError=identifierErrors[key as IdentifierField];return <div key={key} className={identifierError?'rounded-lg border border-red-500 bg-red-50 p-2 text-red-700 dark:bg-red-950/30 dark:text-red-300':'p-2'}><span className={identifierError?'font-semibold':'text-slate-500'}>{FIELD_LABELS[key]}</span><div className="font-semibold">{corrections[key]||'—'}</div>{identifierError&&<div className="mt-1 text-[11px]">{identifierError}</div>}</div>;})}
           </div>
 
+          {duplicateCheckPending&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><strong>Verificando Placa e RENAVAM antes do cadastro...</strong></div>}
           {duplicateVehicle&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
-            <div><strong className="block">Veículo já cadastrado — novo cadastro bloqueado</strong><span>{duplicateVehicle.plate} • RENAVAM {duplicateVehicle.renavam} • {duplicateVehicle.brand} {duplicateVehicle.model}</span></div>
+            <div><strong className="block">Veículo já cadastrado — novo cadastro bloqueado</strong><span>{duplicateMessage||`${duplicateVehicle.plate} • RENAVAM ${duplicateVehicle.renavam} • ${duplicateVehicle.brand} ${duplicateVehicle.model}`}</span></div>
             <Button variant="outline" size="sm" onClick={()=>{const id=duplicateVehicle.id;reset();onClose();onCreated(id);}}>Abrir cadastro existente</Button>
           </div>}
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
@@ -296,7 +318,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             </div>
             <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
           </div>
-          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current||Boolean(duplicateVehicle)}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
+          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current||duplicateCheckPending||Boolean(duplicateVehicle)}>{duplicateCheckPending?'Verificando duplicidade...':busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 
