@@ -41,6 +41,7 @@ import {
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
 import { PerformanceMetricsWidget } from './PerformanceMetricsWidget';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
+import { VehicleKmReadingClient, type KmReadingAlert } from '../../api/vehicleKmReadingClient';
 
 interface OverviewDashboardProps {
   onNavigate: (tab: any) => void;
@@ -67,6 +68,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const [drivers, setDrivers] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [pendings, setPendings] = useState<OperationalPendingItem[]>([]);
+  const [kmReadingAlerts, setKmReadingAlerts] = useState<KmReadingAlert[]>([]);
+  const [kmWhatsappBusyId, setKmWhatsappBusyId] = useState<string | null>(null);
+  const [kmWhatsappFeedback, setKmWhatsappFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const dashboardRequestVersionRef = useRef(0);
@@ -82,6 +86,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     setDrivers([]);
     setContracts([]);
     setPendings([]);
+    setKmReadingAlerts([]);
+    setKmWhatsappFeedback(null);
   };
 
   useEffect(() => {
@@ -140,6 +146,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         tickets,
         insurances,
         trackers,
+        kmAlerts,
       ] = await Promise.all([
         recRepo.findAllForCompany(companyIdSnapshot),
         payRepo.findAllForCompany(companyIdSnapshot),
@@ -155,6 +162,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         ticketRepo.findAllForCompany(companyIdSnapshot),
         insRepo.findAllForCompany(companyIdSnapshot),
         trackRepo.findAllForCompany(companyIdSnapshot),
+        VehicleKmReadingClient.listAlerts(),
       ]);
 
       if (
@@ -171,6 +179,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       setVehicles(vehs);
       setDrivers(drvs);
       setContracts(conts);
+      setKmReadingAlerts(kmAlerts);
       
       const opPendings = generateOperationalPendings({
         companyId: companyIdSnapshot,
@@ -183,6 +192,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         drivers: drvs,
         insurances,
         trackers,
+        kmReadingAlerts: kmAlerts,
       });
 
       setPendings(opPendings);
@@ -203,6 +213,31 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       }
     }
   };
+  const prepareDashboardKmWhatsapp = async (alert: KmReadingAlert) => {
+    setKmWhatsappBusyId(alert.vehicleId);
+    setKmWhatsappFeedback(null);
+    try {
+      const result = (await VehicleKmReadingClient.prepareWhatsapp([alert.vehicleId]))[0];
+      if (!result) {
+        setKmWhatsappFeedback('Não foi possível preparar a solicitação de KM.');
+      } else if (result.status === 'SKIPPED') {
+        setKmWhatsappFeedback(`${result.plate}: ${result.reason || 'Solicitação não elegível.'}`);
+      } else {
+        setKmWhatsappFeedback(
+          result.created
+            ? `${result.plate}: solicitação de KM preparada. O provedor do WhatsApp continua desabilitado; nenhum envio externo foi realizado.`
+            : `${result.plate}: a solicitação deste ciclo já estava preparada; nenhuma duplicidade foi criada.`,
+        );
+      }
+      const refreshed = await VehicleKmReadingClient.listAlerts();
+      setKmReadingAlerts(refreshed);
+    } catch (error) {
+      setKmWhatsappFeedback(error instanceof Error ? error.message : 'Falha ao preparar solicitação de KM.');
+    } finally {
+      setKmWhatsappBusyId(null);
+    }
+  };
+
   const totalAccountBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
 
   const pendingReceivables = receivables.filter(
@@ -450,6 +485,41 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             Abrir Central Completa ({pendings.length})
           </Button>
         </div>
+
+        {kmReadingAlerts.length > 0 && (
+          <div className="border-b border-indigo-200/70 bg-blue-50/70 p-4 dark:border-indigo-900/50 dark:bg-blue-950/20">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-xs text-blue-900 dark:text-blue-100">Leituras de KM aguardando atualização: {kmReadingAlerts.length}</strong>
+                  <Badge variant={kmReadingAlerts[0].stage === 'DUE_SOON' ? 'warning' : 'danger'}>
+                    {kmReadingAlerts[0].stage === 'OVERDUE' ? 'Vencida' : kmReadingAlerts[0].stage === 'DUE_TODAY' ? 'Para hoje' : 'Próxima'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-[11px] text-blue-800 dark:text-blue-200">
+                  Mais urgente: {kmReadingAlerts[0].plate} • {kmReadingAlerts[0].currentKm.toLocaleString('pt-BR')} KM • leitura prevista {kmReadingAlerts[0].dueDate}.
+                  {kmReadingAlerts[0].trackerFresh ? ' Rastreador possui leitura recente; WhatsApp não é necessário.' : ''}
+                </p>
+                {kmWhatsappFeedback && <p className="mt-2 text-[11px] font-medium text-blue-900 dark:text-blue-100">{kmWhatsappFeedback}</p>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {kmReadingAlerts[0].whatsappEligible && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void prepareDashboardKmWhatsapp(kmReadingAlerts[0])}
+                    disabled={kmWhatsappBusyId === kmReadingAlerts[0].vehicleId}
+                  >
+                    {kmWhatsappBusyId === kmReadingAlerts[0].vehicleId ? 'Preparando...' : 'Preparar WhatsApp'}
+                  </Button>
+                )}
+                <Button size="sm" variant="primary" onClick={() => onNavigate('fleet')}>
+                  Abrir Quilometragem
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="p-4 bg-slate-50 dark:bg-slate-900/60 grid grid-cols-1 md:grid-cols-3 gap-4">
           <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
