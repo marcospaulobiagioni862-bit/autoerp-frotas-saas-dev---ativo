@@ -1,5 +1,5 @@
 import { isNotNull } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -133,7 +133,7 @@ export const vehicleKmReadingSchedules = pgTable('vehicle_km_reading_schedules',
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
-  unqCompanyVehicle: unique('vehicle_km_reading_schedules_pk').on(t.companyId, t.vehicleId),
+  pkCompanyVehicle: primaryKey({ columns: [t.companyId, t.vehicleId], name: 'vehicle_km_reading_schedules_pk' }),
   idxCompanyDue: index('idx_vehicle_km_schedule_due').on(t.companyId, t.nextDueDate, t.vehicleId),
 }));
 
