@@ -95,6 +95,10 @@ assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
 assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'new markdown-backed contract must generate its official PDF automatically after save');
+assert.match(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id, selectedTemplate\.id\)/, 'new DOCX-backed contract must generate the filled DOCX from the official file source');
+assert.doesNotMatch(contractForm, /generatePdfFromDocx/, 'new DOCX-backed contract must not reflow the official Word layout into the legacy server PDF');
+assert.match(executionPanel, /ContractExecutionClient\.generateDocx\(contract\.id, selectedTemplateId\)/, 'contract execution must regenerate the official filled DOCX on demand');
+assert.doesNotMatch(executionPanel, /generatePdfFromDocx/, 'contract execution UI must not use the layout-losing DOCX-to-text PDF path');
 assert.match(source, /handleContractSaved[\s\S]*openContractDetails\(result\.contract\.id, 'PDF_SIGNATURE'\)/, 'new contract save must open the PDF/signature flow automatically');
 assert.match(contractForm, /Segunda-feira/, 'weekly billing must offer Monday');
 assert.match(contractForm, /Domingo/, 'weekly billing must offer Sunday');
@@ -180,6 +184,8 @@ assert.match(moveflexContract02Template, /{{driver\.name}}/, 'MoveFlex Contract 
 assert.match(moveflexContract02Template, /{{vehicle\.plate}}/, 'MoveFlex Contract 02 must fill the vehicle from server snapshot data');
 assert.match(templateRoutes, /MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES/, 'server bootstrap must ensure both official MoveFlex models');
 assert.match(templateRoutes, /ensure-moveflex-default/, 'server must expose the idempotent MoveFlex default bootstrap route');
+assert.match(templateRoutes, /hasActiveDocxFileSource/, 'MoveFlex bootstrap must detect a promoted active DOCX source');
+assert.match(templateRoutes, /if \(await hasActiveDocxFileSource\(tx, principal\.companyId, current\)\)/, 'MoveFlex bootstrap must preserve FILE authority once the official DOCX is promoted');
 assert.match(executionRoutes, /MOVEFLEX_LOGO_JPEG_BASE64/, 'official generated PDF must embed the official MoveFlex logo');
 assert.match(executionRoutes, /Documento oficial MoveFlex/, 'official generated PDF must identify the MoveFlex document');
 assert.match(executionRoutes, /MoveFlex • Locação de Veículos/, 'official generated PDF must carry the MoveFlex footer');
