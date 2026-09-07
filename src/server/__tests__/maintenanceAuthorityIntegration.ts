@@ -22,6 +22,7 @@ const readonlyA='security-2j1-readonly-a';
 const vehicleA='security-2j1-vehicle-a';
 const vehicleB='security-2j1-vehicle-b';
 const categoryA='security-2j1-maint-category-a';
+const paymentMethodA='security-2j1-payment-method-a';
 const roleName='security_2j1_rls_user';
 const rolePassword='security-j1-test-password';
 
@@ -41,6 +42,7 @@ async function seed():Promise<void>{
     (${vehicleA},${companyA},'J1A1A01','J1RENAVAM-A','AVAILABLE',10000,NOW(),NOW()),
     (${vehicleB},${companyB},'J1B1B01','J1RENAVAM-B','AVAILABLE',20000,NOW(),NOW()) ON CONFLICT (id) DO NOTHING`);
   await db.execute(sql`INSERT INTO financial_categories (id,company_id,name,type,active,created_at,updated_at) VALUES (${categoryA},${companyA},'Manutenção','EXPENSE',true,NOW(),NOW()) ON CONFLICT (id) DO NOTHING`);
+  await db.execute(sql`INSERT INTO payment_methods (id,company_id,name,type,active) VALUES (${paymentMethodA},${companyA},'Cartão de crédito','CREDIT_CARD',true) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,type=EXCLUDED.type,active=true`);
 }
 
 async function testHttpSecurity():Promise<void>{
