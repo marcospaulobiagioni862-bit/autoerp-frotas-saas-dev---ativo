@@ -261,6 +261,16 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await upload(adminA, { mimeType: 'application/pdf', fileName: 'forged.pdf', bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00]) });
       assert(response.status === 400, `forged PDF signature expected 400, got ${response.status}`);
 
+      response = await upload(adminA, {
+        entityType: 'Contract',
+        entityId: 'i4a-contract-a1',
+        documentType: 'SIGNED_CONTRACT',
+        mimeType: 'application/pdf',
+        fileName: 'contrato-assinado-separado.pdf',
+        bytes: new Uint8Array([0xef, 0xbb, 0xbf, 0x0a, 0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]),
+      });
+      assert(response.status === 201, `split signed PDF with leading bytes expected 201, got ${response.status}`);
+
       response = await upload(adminA, { mimeType: 'image/png', fileName: 'forged.png', bytes: new Uint8Array([37, 80, 68, 70]) });
       assert(response.status === 400, `mismatched PNG signature expected 400, got ${response.status}`);
 
