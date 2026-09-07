@@ -68,7 +68,7 @@ assert.match(overviewSource, /domain\/operations\/serverOperationalPendingProjec
 assert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');
 const pendingSource = read('src/components/operations/PendingCenterView.tsx');
 assert.match(pendingSource, /domain\/operations\/serverOperationalPendingProjection/, 'Pending center must import the tenant-safe pending projection explicitly');
-assert.match(pendingSource, /WhatsappClient\.createCnhReminder\(item\.entityId\)/, 'Driver CNH alerts must expose the existing predefined WhatsApp reminder action');
+assert.doesNotMatch(pendingSource, /WhatsappClient\.createCnhReminder\(item\.entityId\)/, 'Inactive WhatsApp provider must not expose a misleading send action in Central alerts');
 assert.match(pendingSource, /id: 'FINANCE', label: 'Financeiro'/, 'Central alerts must expose the consolidated Financeiro filter');
 
 const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
