@@ -8,7 +8,6 @@ export interface VehicleStatusTransitionContext {
 const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   [VehicleStatus.AVAILABLE]: new Set([
     VehicleStatus.RESERVED,
-    VehicleStatus.WAITING_MAINTENANCE,
     VehicleStatus.MAINTENANCE,
     VehicleStatus.BLOCKED,
     VehicleStatus.DAMAGED,
@@ -21,7 +20,6 @@ const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   [VehicleStatus.RESERVED]: new Set([
     VehicleStatus.AVAILABLE,
     VehicleStatus.BLOCKED,
-    VehicleStatus.WAITING_MAINTENANCE,
     VehicleStatus.DOCUMENTATION_PENDING,
     VehicleStatus.INACTIVE,
     VehicleStatus.ARCHIVED,
@@ -43,7 +41,6 @@ const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   ]),
   [VehicleStatus.BLOCKED]: new Set([
     VehicleStatus.AVAILABLE,
-    VehicleStatus.WAITING_MAINTENANCE,
     VehicleStatus.DAMAGED,
     VehicleStatus.INSPECTION,
     VehicleStatus.DOCUMENTATION_PENDING,
@@ -51,7 +48,6 @@ const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
     VehicleStatus.ARCHIVED,
   ]),
   [VehicleStatus.DAMAGED]: new Set([
-    VehicleStatus.WAITING_MAINTENANCE,
     VehicleStatus.MAINTENANCE,
     VehicleStatus.BLOCKED,
     VehicleStatus.INACTIVE,
@@ -61,7 +57,6 @@ const MANUAL_TRANSITIONS: Record<VehicleStatus, ReadonlySet<VehicleStatus>> = {
   [VehicleStatus.INSPECTION]: new Set([
     VehicleStatus.AVAILABLE,
     VehicleStatus.BLOCKED,
-    VehicleStatus.WAITING_MAINTENANCE,
     VehicleStatus.DOCUMENTATION_PENDING,
     VehicleStatus.INACTIVE,
     VehicleStatus.ARCHIVED,
@@ -104,7 +99,7 @@ export function vehicleStatusLabel(status: VehicleStatus): string {
     case VehicleStatus.AVAILABLE: return 'Disponível';
     case VehicleStatus.RESERVED: return 'Reservado';
     case VehicleStatus.RENTED: return 'Locado';
-    case VehicleStatus.WAITING_MAINTENANCE: return 'Aguardando manutenção';
+    case VehicleStatus.WAITING_MAINTENANCE: return 'Em manutenção';
     case VehicleStatus.MAINTENANCE: return 'Em manutenção';
     case VehicleStatus.BLOCKED: return 'Bloqueado';
     case VehicleStatus.DAMAGED: return 'Sinistrado';
