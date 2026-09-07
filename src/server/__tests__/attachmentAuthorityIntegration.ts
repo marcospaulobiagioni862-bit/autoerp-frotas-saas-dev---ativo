@@ -326,6 +326,48 @@ export class AttachmentAuthorityIntegrationRunner {
       assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM document_ai_extractions WHERE company_id=${companyA} AND attachment_id=${deleteCandidate.id}`))?.count || 0) === 0, 'permanent delete left disposable failed extraction');
       assert(await fileCount(storageRoot, companyA) === filesBeforePermanentDelete - 1, 'permanent delete did not remove stored bytes');
 
+      await db.execute(sql`
+        INSERT INTO driver_document_intakes (
+          id, company_id, created_by, status, idempotency_key, expires_at, created_at, updated_at
+        ) VALUES (
+          'i4a-disposable-driver-intake', ${companyA}, ${adminAId}, 'DRAFT',
+          'i4a-disposable-driver-intake-key', NOW() + INTERVAL '1 day', NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          created_by=EXCLUDED.created_by,status='DRAFT',attachment_id=NULL,approved_extraction_id=NULL,
+          driver_id=NULL,consumed_at=NULL,archived_at=NULL,expires_at=EXCLUDED.expires_at,updated_at=NOW()
+      `);
+      const intakeUploadResponse = await upload(adminA, {
+        entityType: 'DriverDocumentIntake',
+        entityId: 'i4a-disposable-driver-intake',
+        documentType: 'CNH',
+        fileName: 'failed-unused-cnh.pdf',
+      });
+      assert(intakeUploadResponse.status === 201, `driver intake upload expected 201, got ${intakeUploadResponse.status}`);
+      const intakeAttachment = (await json(intakeUploadResponse)).item;
+      await db.execute(sql`
+        UPDATE driver_document_intakes
+        SET status='FAILED',updated_at=NOW()
+        WHERE company_id=${companyA} AND id='i4a-disposable-driver-intake'
+      `);
+      await db.execute(sql`
+        INSERT INTO document_ai_extractions (
+          id, company_id, attachment_id, attachment_checksum, idempotency_key, status,
+          requested_by, attempt_count, proposed_fields, corrections, created_at, updated_at
+        ) VALUES (
+          'i4a-disposable-driver-extraction', ${companyA}, ${intakeAttachment.id}, ${intakeAttachment.checksum},
+          'i4a-disposable-driver-extraction-key', 'FAILED', ${adminAId}, 1, '{}'::jsonb, '{}'::jsonb, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          attachment_id=EXCLUDED.attachment_id,attachment_checksum=EXCLUDED.attachment_checksum,status='FAILED',
+          proposed_fields='{}'::jsonb,corrections='{}'::jsonb,approved_at=NULL,updated_at=NOW()
+      `);
+      response = await request(`/api/attachments/${encodeURIComponent(intakeAttachment.id)}`, { method: 'DELETE' }, adminA);
+      assert(response.status === 200, `unused failed intake permanent delete expected 200, got ${response.status}`);
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM driver_document_intakes WHERE company_id=${companyA} AND id='i4a-disposable-driver-intake'`))?.count || 0) === 0, 'unused failed driver intake survived permanent delete');
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM document_ai_extractions WHERE company_id=${companyA} AND id='i4a-disposable-driver-extraction'`))?.count || 0) === 0, 'unused failed extraction survived permanent delete');
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM file_attachments WHERE company_id=${companyA} AND id=${intakeAttachment.id}`))?.count || 0) === 0, 'unused failed intake attachment survived permanent delete');
+
       const linkedUploadResponse = await upload(adminA, { fileName: 'linked-document.pdf' });
       assert(linkedUploadResponse.status === 201, 'linked delete fixture upload failed');
       const linkedAttachment = (await json(linkedUploadResponse)).item;

@@ -130,6 +130,11 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     user.permissions.includes('*') ||
     user.permissions.includes('PROCESS_DOCUMENT_AI');
 
+  const canDeletePermanently =
+    user.role.toUpperCase() === 'ADMIN' ||
+    user.permissions.includes('*') ||
+    user.permissions.includes('DELETE_ATTACHMENT');
+
   const visibleItems = useMemo(() => items.filter((item) => {
     if (cleanupFilter === 'FAILED') return item.status === 'FAILED';
     const classification = cleanupClassification(item);
@@ -279,6 +284,42 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     }
   };
 
+  const deleteUnusedFailed = async (extractionIds: string[]) => {
+    if (!canDeletePermanently || extractionIds.length === 0) return;
+    const selectedItems = items.filter((item) => extractionIds.includes(item.id) && cleanupClassification(item).category === 'UNUSED');
+    const uniqueAttachments: DocumentAiExtraction[] = Array.from(new Map<string, DocumentAiExtraction>(selectedItems.map((item): [string, DocumentAiExtraction] => [item.attachmentId, item])).values());
+    if (uniqueAttachments.length === 0) {
+      setError('Selecione apenas falhas classificadas como não utilizadas.');
+      return;
+    }
+    if (!window.confirm(`Excluir definitivamente ${uniqueAttachments.length} documento(s) não utilizado(s)? Esta ação remove o registro e o arquivo físico quando o servidor confirmar que não existe vínculo ativo.`)) return;
+    setSubmitting('DISCARD');
+    setError(null);
+    setNotice(null);
+    const deleted: string[] = [];
+    const blocked: string[] = [];
+    try {
+      for (const item of uniqueAttachments) {
+        try {
+          await AttachmentClient.deletePermanently(item.attachmentId);
+          deleted.push(item.attachmentId);
+        } catch (err: unknown) {
+          blocked.push(err instanceof Error ? err.message : `Falha ao excluir ${item.attachmentId}`);
+        }
+      }
+      setSelectedFailedIds(new Set());
+      await load();
+      if (deleted.length > 0) {
+        setNotice(`${deleted.length} documento(s) não utilizado(s) excluído(s) definitivamente.${blocked.length ? ` ${blocked.length} item(ns) permaneceram protegidos pelo servidor.` : ''}`);
+      }
+      if (blocked.length > 0) {
+        setError(blocked[0]);
+      }
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
   const openSource = async () => {
     if (!selected) return;
     setOpeningSource(true);
@@ -371,15 +412,19 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         </div>
         {canReview && items.some((item) => item.status === 'FAILED') && (
           <Button
-            variant="outline"
+            variant={cleanupFilter === 'UNUSED' && canDeletePermanently ? 'danger' : 'outline'}
             size="sm"
             className="w-full"
             disabled={selectedFailedIds.size === 0}
             isLoading={submitting === 'DISCARD'}
-            onClick={() => void discardFailed([...selectedFailedIds])}
+            onClick={() => void (cleanupFilter === 'UNUSED' && canDeletePermanently
+              ? deleteUnusedFailed([...selectedFailedIds])
+              : discardFailed([...selectedFailedIds]))}
             icon={<Trash2 className="h-4 w-4" />}
           >
-            Limpar selecionados ({selectedFailedIds.size})
+            {cleanupFilter === 'UNUSED' && canDeletePermanently
+              ? `Excluir definitivamente (${selectedFailedIds.size})`
+              : `Arquivar selecionados (${selectedFailedIds.size})`}
           </Button>
         )}
         {visibleItems.map((item) => (
@@ -418,6 +463,17 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             </p>
             <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
             </button>
+            {item.status === 'FAILED' && canDeletePermanently && cleanupClassification(item).category === 'UNUSED' && (
+              <button
+                type="button"
+                onClick={() => void deleteUnusedFailed([item.id])}
+                className="mt-3 rounded-md p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                title="Excluir definitivamente documento não utilizado"
+                aria-label={`Excluir definitivamente falha não utilizada do anexo ${item.attachmentId}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         ))}
       </aside>
@@ -532,15 +588,27 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           {selected.status === 'FAILED' ? (
             <>
-              <Button
-                variant="outline"
-                disabled={!canReview}
-                isLoading={submitting === 'DISCARD'}
-                onClick={() => void discardFailed([selected.id])}
-                icon={<Trash2 className="h-4 w-4" />}
-              >
-                Arquivar esta falha
-              </Button>
+              {cleanupClassification(selected).category === 'UNUSED' && canDeletePermanently ? (
+                <Button
+                  variant="danger"
+                  disabled={!canReview}
+                  isLoading={submitting === 'DISCARD'}
+                  onClick={() => void deleteUnusedFailed([selected.id])}
+                  icon={<Trash2 className="h-4 w-4" />}
+                >
+                  Excluir definitivamente
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  disabled={!canReview}
+                  isLoading={submitting === 'DISCARD'}
+                  onClick={() => void discardFailed([selected.id])}
+                  icon={<Trash2 className="h-4 w-4" />}
+                >
+                  Arquivar esta falha
+                </Button>
+              )}
               <Button
                 disabled={!canReview || selected.attemptCount >= 3}
                 isLoading={submitting === 'RETRY'}
