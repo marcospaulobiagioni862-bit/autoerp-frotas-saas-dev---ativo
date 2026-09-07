@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { TelemetryAuthorityService } from '../telemetryAuthority';
+import { VehicleKmReadingAuthority } from '../vehicleKmReadingAuthority';
 import { TelemetryKmDivergenceAuthority,deriveTelemetryKmDivergence } from '../telemetryKmDivergenceAuthority';
 import type { AuthenticatedPrincipal } from '../auth';
 
@@ -31,10 +32,10 @@ async function main():Promise<void>{
   assert(quarantined.item.status==='QUARANTINED','regressive odometer was not quarantined');
   const afterQuarantine=await TelemetryKmDivergenceAuthority.get(companyA,trackerA);
   assert(afterQuarantine.telemetryOdometerKm===1012.5&&afterQuarantine.direction==='TELEMETRY_ABOVE','quarantined odometer became authoritative reference');
-  await db.execute(sql`UPDATE vehicles SET current_km=1010 WHERE company_id=${companyA} AND id=${vehicleA}`);
+  await VehicleKmReadingAuthority.recordBatch(adminA,[{vehicleId:vehicleA,sourceType:'MANUAL',kmValue:1010}]);
   const aligned=await TelemetryKmDivergenceAuthority.get(companyA,trackerA);
   assert(aligned.differenceKm===2.5&&aligned.direction==='ALIGNED','threshold alignment is incorrect');
-  await db.execute(sql`UPDATE vehicles SET current_km=1025 WHERE company_id=${companyA} AND id=${vehicleA}`);
+  await VehicleKmReadingAuthority.recordBatch(adminA,[{vehicleId:vehicleA,sourceType:'MANUAL',kmValue:1025}]);
   const below=await TelemetryKmDivergenceAuthority.get(companyA,trackerA);
   assert(below.differenceKm===12.5&&below.direction==='TELEMETRY_BELOW','telemetry-below direction is incorrect');
   let crossTenant=false;try{await TelemetryKmDivergenceAuthority.get(companyA,trackerB);}catch{crossTenant=true;}assert(crossTenant,'cross-tenant tracker divergence was exposed');
