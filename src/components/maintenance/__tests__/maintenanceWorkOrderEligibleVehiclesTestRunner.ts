@@ -40,8 +40,10 @@ assert.match(
   'work-order form must preview its operational cost before creation',
 );
 assert.match(source, /WorkOrderFinanceFields/, 'new work orders must expose financial payment details before save');
+assert.match(source, /laborAmount=\{woLaborGross\}/, 'labor payment must be configured separately from service payment');
 assert.match(source, /Salvar OS/, 'new work-order footer must use an explicit save action');
 assert.match(source, /Contas a Pagar na criação da OS/, 'completed flow must recognize finance generated at creation');
+assert.match(source, /<span>Serviços<\/span>[\s\S]*<span>Mão de obra<\/span>/, 'work-order cost summary must separate service and labor values');
 
 assert.match(
   source,
