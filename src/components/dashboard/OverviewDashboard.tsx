@@ -183,6 +183,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         drivers: drvs,
         insurances,
         trackers,
+        receivables: recs,
+        payables: pays,
       });
 
       setPendings(opPendings);
