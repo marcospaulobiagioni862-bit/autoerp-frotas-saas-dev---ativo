@@ -4,7 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
-import { MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN, MOVEFLEX_DEFAULT_TEMPLATE_KEY, MOVEFLEX_DEFAULT_TEMPLATE_TITLE } from '../domain/contracts/moveflexDefaultContractTemplate';
+import { MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES, MOVEFLEX_DEFAULT_TEMPLATE_KEY } from '../domain/contracts/moveflexDefaultContractTemplate';
 
 type TemplateAction = 'VIEW_CONTRACT_TEMPLATE' | 'MANAGE_CONTRACT_TEMPLATE';
 type TemplateSourceMode = 'MARKDOWN' | 'FILE';
@@ -112,39 +112,84 @@ export function registerContractTemplateRoutes(app: Express): void {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
     if (!principal) return;
     try {
-      validateContractTemplateContent(MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN);
+      for (const model of MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES) {
+        validateContractTemplateContent(model.contentMarkdown);
+      }
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
-        const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, MOVEFLEX_DEFAULT_TEMPLATE_KEY);
-        if (current && !current.isArchived) return { item: current, created: false };
+        const ensured = [];
+        let createdCount = 0;
 
-        const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, MOVEFLEX_DEFAULT_TEMPLATE_KEY);
-        const now = new Date().toISOString();
-        const created = await tx.getContractTemplateRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          templateKey: MOVEFLEX_DEFAULT_TEMPLATE_KEY,
-          title: MOVEFLEX_DEFAULT_TEMPLATE_TITLE,
-          contentMarkdown: MOVEFLEX_DEFAULT_CONTRACT_TEMPLATE_MARKDOWN,
-          versionNumber: Math.max(...versions.map((version) => version.versionNumber), 0) + 1,
-          isCurrent: true,
-          isActive: true,
-          isArchived: false,
-          createdBy: principal.userId,
-          createdAt: now,
-          updatedAt: now,
-        });
-        await tx.getAuditLogRepo().create({
-          id: randomUUID(),
-          companyId: principal.companyId,
-          entityName: 'ContractTemplate',
-          entityId: created.id,
-          action: AuditAction.CREATE,
-          newState: JSON.stringify({ event: 'ENSURE_MOVEFLEX_DEFAULT', templateKey: created.templateKey, versionNumber: created.versionNumber }),
-          userId: principal.userId,
-          userName: principal.name,
-          timestamp: now,
-        });
-        return { item: created, created: true };
+        for (const model of MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES) {
+          const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, model.templateKey);
+          const matchesOfficialModel = current &&
+            !current.isArchived &&
+            current.title === model.title &&
+            current.contentMarkdown === model.contentMarkdown;
+
+          if (matchesOfficialModel) {
+            if (current.isActive) {
+              ensured.push(current);
+            } else {
+              const now = new Date().toISOString();
+              const activated = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
+                isActive: true,
+                updatedAt: now,
+              });
+              if (!activated) throw new TemplateConflictError();
+              ensured.push(activated);
+            }
+            continue;
+          }
+
+          const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, model.templateKey);
+          const now = new Date().toISOString();
+          if (current) {
+            const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
+              isCurrent: false,
+              isActive: false,
+              updatedAt: now,
+            });
+            if (!demoted) throw new TemplateConflictError();
+          }
+
+          const created = await tx.getContractTemplateRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            templateKey: model.templateKey,
+            title: model.title,
+            contentMarkdown: model.contentMarkdown,
+            versionNumber: Math.max(...versions.map((version) => version.versionNumber), 0) + 1,
+            supersedesTemplateId: current?.id,
+            isCurrent: true,
+            isActive: true,
+            isArchived: false,
+            createdBy: principal.userId,
+            createdAt: now,
+            updatedAt: now,
+          });
+          await tx.getAuditLogRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            entityName: 'ContractTemplate',
+            entityId: created.id,
+            action: AuditAction.CREATE,
+            previousState: current ? JSON.stringify(current) : undefined,
+            newState: JSON.stringify({
+              event: 'ENSURE_MOVEFLEX_BUILT_IN',
+              templateKey: created.templateKey,
+              versionNumber: created.versionNumber,
+            }),
+            userId: principal.userId,
+            userName: principal.name,
+            timestamp: now,
+          });
+          ensured.push(created);
+          createdCount += 1;
+        }
+
+        const item = ensured.find((template) => template.templateKey === MOVEFLEX_DEFAULT_TEMPLATE_KEY) || ensured[0];
+        if (!item) throw new TemplateConflictError();
+        return { item, items: ensured, created: createdCount > 0 };
       });
       res.status(result.created ? 201 : 200).json(result);
     } catch (error) {
