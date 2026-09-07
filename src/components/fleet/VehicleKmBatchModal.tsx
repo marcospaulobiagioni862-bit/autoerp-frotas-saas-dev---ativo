@@ -72,6 +72,8 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
   const [rows, setRows] = useState<Record<string, RowDraft>>({});
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [whatsappBusy, setWhatsappBusy] = useState(false);
+  const [whatsappMessage, setWhatsappMessage] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalMessage, setGlobalMessage] = useState<string | null>(null);
 
@@ -86,6 +88,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
     setLoading(true);
     setGlobalError(null);
     setGlobalMessage(null);
+    setWhatsappMessage(null);
     void VehicleKmReadingClient.listSchedules()
       .then((schedules) => {
         if (!active) return;
@@ -157,6 +160,32 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
         scheduleSaving: false,
         error: error instanceof Error ? error.message : 'Falha ao salvar a programação de KM.',
       });
+    }
+  };
+
+  const prepareWhatsappSelected = async () => {
+    const vehicleIds = sortedVehicles.filter((vehicle) => rows[vehicle.id]?.selected).map((vehicle) => vehicle.id);
+    if (vehicleIds.length === 0) {
+      setWhatsappMessage('Selecione ao menos um veículo para preparar a solicitação de KM.');
+      return;
+    }
+    setWhatsappBusy(true);
+    setWhatsappMessage(null);
+    try {
+      const results = await VehicleKmReadingClient.prepareWhatsapp(vehicleIds);
+      const prepared = results.filter((item) => item.status === 'HELD_PROVIDER_DISABLED' && item.created).length;
+      const reused = results.filter((item) => item.status === 'HELD_PROVIDER_DISABLED' && !item.created).length;
+      const skipped = results.filter((item) => item.status === 'SKIPPED');
+      const skippedText = skipped.length
+        ? ` ${skipped.length} veículo(s) não elegível(is): ${skipped.slice(0, 3).map((item) => `${item.plate} — ${item.reason || 'não elegível'}`).join(' | ')}${skipped.length > 3 ? '...' : ''}`
+        : '';
+      setWhatsappMessage(
+        `${prepared} solicitação(ões) preparada(s); ${reused} já existente(s).${skippedText} O provedor continua desabilitado; nenhum envio externo foi realizado.`,
+      );
+    } catch (error) {
+      setWhatsappMessage(error instanceof Error ? error.message : 'Falha ao preparar solicitações de KM.');
+    } finally {
+      setWhatsappBusy(false);
     }
   };
 
@@ -282,6 +311,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
 
         {globalError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{globalError}</div>}
         {globalMessage && <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/>{globalMessage}</div>}
+        {whatsappMessage && <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">{whatsappMessage}</div>}
 
         {loading ? (
           <div role="status" className="rounded-xl border p-6 text-center text-sm text-slate-500">Carregando veículos e programações de KM...</div>
@@ -441,9 +471,17 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
 
         <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white pt-3 dark:border-slate-800 dark:bg-slate-900">
           <p className="text-xs text-slate-500">KM regressivo, foto incompatível ou rastreador sem odômetro aceito bloqueiam o lote inteiro.</p>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Fechar</Button>
-            <Button type="button" onClick={() => void submitBatch()} disabled={submitting || loading || selectedCount === 0}>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting || whatsappBusy}>Fechar</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void prepareWhatsappSelected()}
+              disabled={submitting || whatsappBusy || loading || selectedCount === 0}
+            >
+              {whatsappBusy ? 'Preparando WhatsApp...' : `Preparar WhatsApp (${selectedCount})`}
+            </Button>
+            <Button type="button" onClick={() => void submitBatch()} disabled={submitting || whatsappBusy || loading || selectedCount === 0}>
               {submitting ? 'Salvando lote...' : `Salvar lote (${selectedCount})`}
             </Button>
           </div>
