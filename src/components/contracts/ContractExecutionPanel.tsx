@@ -112,12 +112,11 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     void run(async () => {
       if (docxBacked) {
         await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
-        await ContractExecutionClient.generatePdfFromDocx(contract.id);
       } else {
         await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
       }
     }, docxBacked
-      ? 'DOCX preenchido e PDF oficial gerados no servidor.'
+      ? 'DOCX oficial preenchido preservando o layout do modelo. Revise e assine externamente em PDF.'
       : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
   };
 
@@ -174,7 +173,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            Gere o contrato oficial, assine externamente e envie apenas o PDF assinado como evidência final. GOV.br registra o método informado, sem validar criptograficamente a assinatura junto ao GOV.br.
+            Gere o documento oficial. Modelos DOCX preservam o layout do Word: abra o DOCX preenchido, revise/converta e assine externamente em PDF; depois envie o PDF assinado como evidência. GOV.br registra o método informado, sem validação criptográfica automática pelo ERP.
           </p>
         </div>
         <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
@@ -282,7 +281,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       )}
 
       {!signed && generated && canGenerate && (
-        <div className="mt-3 text-[11px] text-slate-500 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" />Os termos ficam bloqueados após a geração do PDF para evitar divergência entre banco e documento.</div>
+        <div className="mt-3 text-[11px] text-slate-500 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" />Os termos ficam bloqueados após a geração do documento oficial para evitar divergência entre banco e documento.</div>
       )}
       </Card>
     </div>
