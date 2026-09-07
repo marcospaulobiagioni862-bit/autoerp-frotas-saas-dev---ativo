@@ -35,6 +35,7 @@ assert.ok(source.includes('Últimas 5 leituras de KM'), 'overview must label the
 assert.ok(source.includes('summary.kmRecords.slice(0,5).map'), 'overview must render no more than five authorized readings');
 assert.ok(source.includes("setActiveTab('km')"), 'overview must link to the complete odometer history');
 assert.ok(source.includes('Nenhuma leitura de KM registrada.'), 'overview must preserve an explicit empty state');
+assert.ok(source.includes('Foto do motorista') && source.includes('Rastreador') && source.includes('Origem'), 'KM history must expose source provenance');
 assert.equal((source.match(/VehicleClient\.listKm\(/g) ?? []).length, 1, 'summary must reuse the existing server request');
 assert.ok(source.includes("activeTab==='km'"), 'complete odometer tab must remain available');
 assert.ok(source.includes('summary.kmRecords.map'), 'complete odometer tab must keep the full authorized history');

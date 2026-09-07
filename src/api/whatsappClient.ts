@@ -39,15 +39,33 @@ export interface WhatsappTaskProposal {
   businessMutationApplied: false;
 }
 
+export type WhatsappOutboxTemplateKey = 'DRIVER_CNH_EXPIRY' | 'TRAFFIC_TICKET_NOTICE' | 'KM_READING_REQUEST';
+export type WhatsappOutboxReferenceType = 'DRIVER' | 'TRAFFIC_TICKET' | 'VEHICLE_KM_READING';
+
+export interface WhatsappOutboxTemplateParameters {
+  driverName: string;
+  cnhExpiration?: string;
+  plate?: string;
+  vehicleDescription?: string;
+  dueDate?: string;
+  autoNumber?: string;
+  infractionDate?: string;
+  infractionLocation?: string;
+  organName?: string;
+  infractionCode?: string;
+  description?: string;
+  points?: string;
+  amount?: string;
+  indicationDeadline?: string;
+}
+
 export interface WhatsappOutboxItem {
   id: string;
   driverId: string;
-  templateKey: 'DRIVER_CNH_EXPIRY';
-  templateParameters: {
-    driverName: string;
-    cnhExpiration: string;
-  };
-  referenceType: 'DRIVER';
+  templateKey: WhatsappOutboxTemplateKey;
+  templateVersion?: number;
+  templateParameters: WhatsappOutboxTemplateParameters;
+  referenceType: WhatsappOutboxReferenceType;
   referenceId: string;
   status: WhatsappOutboxStatus;
   cancellationReason: string | null;
@@ -111,35 +129,89 @@ export function parseWhatsappConsent(value: unknown): WhatsappConsent {
 
 export function parseWhatsappOutboxItem(value: unknown): WhatsappOutboxItem {
   const item = exactRecord(value, [
-    'id', 'driverId', 'templateKey', 'templateParameters', 'referenceType',
+    'id', 'driverId', 'templateKey', 'templateVersion', 'templateParameters', 'referenceType',
     'referenceId', 'status', 'cancellationReason', 'createdAt', 'updatedAt',
     'cancelledAt', 'providerCallApplied',
   ]);
-  const parameters = exactRecord(item.templateParameters, ['driverName', 'cnhExpiration']);
   if (
     typeof item.id !== 'string' || !OUTBOX_ID.test(item.id) ||
-    typeof item.driverId !== 'string' ||
-    item.templateKey !== 'DRIVER_CNH_EXPIRY' ||
-    typeof parameters.driverName !== 'string' ||
-    typeof parameters.cnhExpiration !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(parameters.cnhExpiration) ||
-    item.referenceType !== 'DRIVER' ||
-    item.referenceId !== item.driverId ||
+    typeof item.driverId !== 'string' || !item.driverId ||
+    !new Set(['DRIVER_CNH_EXPIRY', 'TRAFFIC_TICKET_NOTICE', 'KM_READING_REQUEST']).has(String(item.templateKey)) ||
+    (item.templateVersion !== undefined && (!Number.isInteger(item.templateVersion) || Number(item.templateVersion) < 1)) ||
+    !new Set(['DRIVER', 'TRAFFIC_TICKET', 'VEHICLE_KM_READING']).has(String(item.referenceType)) ||
+    typeof item.referenceId !== 'string' || !item.referenceId ||
     (item.status !== 'HELD_PROVIDER_DISABLED' && item.status !== 'CANCELLED') ||
     (item.cancellationReason !== null && typeof item.cancellationReason !== 'string') ||
     item.providerCallApplied !== false
   ) invalid();
+
+  const templateKey = item.templateKey as WhatsappOutboxTemplateKey;
+  const referenceType = item.referenceType as WhatsappOutboxReferenceType;
+  let parameters: WhatsappOutboxTemplateParameters;
+
+  if (templateKey === 'DRIVER_CNH_EXPIRY') {
+    const parsed = exactRecord(item.templateParameters, ['driverName', 'cnhExpiration']);
+    if (
+      typeof parsed.driverName !== 'string' ||
+      typeof parsed.cnhExpiration !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(parsed.cnhExpiration) ||
+      referenceType !== 'DRIVER' ||
+      item.referenceId !== item.driverId
+    ) invalid();
+    parameters = { driverName: parsed.driverName, cnhExpiration: parsed.cnhExpiration };
+  } else if (templateKey === 'KM_READING_REQUEST') {
+    const parsed = exactRecord(item.templateParameters, ['driverName', 'plate', 'vehicleDescription', 'dueDate']);
+    if (
+      typeof parsed.driverName !== 'string' ||
+      typeof parsed.plate !== 'string' ||
+      typeof parsed.vehicleDescription !== 'string' ||
+      typeof parsed.dueDate !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(parsed.dueDate) ||
+      referenceType !== 'VEHICLE_KM_READING' ||
+      !item.referenceId.endsWith(`:${parsed.dueDate}`)
+    ) invalid();
+    parameters = {
+      driverName: parsed.driverName,
+      plate: parsed.plate,
+      vehicleDescription: parsed.vehicleDescription,
+      dueDate: parsed.dueDate,
+    };
+  } else {
+    const parsed = exactRecord(item.templateParameters, [
+      'driverName', 'autoNumber', 'plate', 'infractionDate', 'infractionLocation', 'organName',
+      'infractionCode', 'description', 'points', 'amount', 'dueDate', 'indicationDeadline',
+    ]);
+    const required = [
+      parsed.driverName, parsed.autoNumber, parsed.plate, parsed.infractionDate, parsed.infractionLocation,
+      parsed.organName, parsed.infractionCode, parsed.description, parsed.points, parsed.amount,
+      parsed.dueDate, parsed.indicationDeadline,
+    ];
+    if (required.some((field) => typeof field !== 'string') || referenceType !== 'TRAFFIC_TICKET') invalid();
+    parameters = {
+      driverName: parsed.driverName as string,
+      autoNumber: parsed.autoNumber as string,
+      plate: parsed.plate as string,
+      infractionDate: parsed.infractionDate as string,
+      infractionLocation: parsed.infractionLocation as string,
+      organName: parsed.organName as string,
+      infractionCode: parsed.infractionCode as string,
+      description: parsed.description as string,
+      points: parsed.points as string,
+      amount: parsed.amount as string,
+      dueDate: parsed.dueDate as string,
+      indicationDeadline: parsed.indicationDeadline as string,
+    };
+  }
+
   return {
     id: item.id,
     driverId: item.driverId,
-    templateKey: item.templateKey,
-    templateParameters: {
-      driverName: parameters.driverName,
-      cnhExpiration: parameters.cnhExpiration,
-    },
-    referenceType: item.referenceType,
+    templateKey,
+    templateVersion: item.templateVersion === undefined ? undefined : Number(item.templateVersion),
+    templateParameters: parameters,
+    referenceType,
     referenceId: item.referenceId,
-    status: item.status,
+    status: item.status as WhatsappOutboxStatus,
     cancellationReason: item.cancellationReason as string | null,
     createdAt: requiredIso(item.createdAt),
     updatedAt: requiredIso(item.updatedAt),

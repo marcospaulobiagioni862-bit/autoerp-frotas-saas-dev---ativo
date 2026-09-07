@@ -23,7 +23,6 @@ export const VEHICLE_STATUS_FILTERS: VehicleStatusFilterOption[] = [
   { id: VehicleStatus.AVAILABLE, label: vehicleStatusLabel(VehicleStatus.AVAILABLE) },
   { id: VehicleStatus.RESERVED, label: vehicleStatusLabel(VehicleStatus.RESERVED) },
   { id: VehicleStatus.RENTED, label: vehicleStatusLabel(VehicleStatus.RENTED) },
-  { id: VehicleStatus.WAITING_MAINTENANCE, label: vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE) },
   { id: VehicleStatus.MAINTENANCE, label: vehicleStatusLabel(VehicleStatus.MAINTENANCE) },
   { id: VehicleStatus.BLOCKED, label: vehicleStatusLabel(VehicleStatus.BLOCKED) },
   { id: VehicleStatus.DAMAGED, label: vehicleStatusLabel(VehicleStatus.DAMAGED) },
@@ -42,7 +41,7 @@ export function vehicleManualStatusOptions(status: VehicleStatus): VehicleManual
   }
 
   return manuallyAllowedVehicleStatuses(status)
-    .filter((target) => target !== VehicleStatus.MAINTENANCE && target !== VehicleStatus.ARCHIVED)
+    .filter((target) => target !== VehicleStatus.WAITING_MAINTENANCE && target !== VehicleStatus.MAINTENANCE && target !== VehicleStatus.ARCHIVED)
     .map((target) => ({ value: target, label: vehicleStatusLabel(target) }));
 }
 
