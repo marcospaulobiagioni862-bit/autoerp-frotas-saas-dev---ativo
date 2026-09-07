@@ -851,6 +851,7 @@ jobs:
         if: matrix.suite == 'fleet'
         run: |
           npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
+          npx tsx src/shared/utils/__tests__/kmReadingScheduleTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
           npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
           npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
@@ -866,6 +867,8 @@ jobs:
           npx tsx src/server/__tests__/driverAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleIdentityGuardIntegration.ts
+          npx tsx src/server/__tests__/vehicleKmBatchAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleKmAlertsWhatsappIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractSignatureTimeGateRegression.ts
