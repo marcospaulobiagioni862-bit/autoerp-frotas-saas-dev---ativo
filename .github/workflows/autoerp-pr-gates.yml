@@ -868,6 +868,7 @@ jobs:
           npx tsx src/server/__tests__/vehicleCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleIdentityGuardIntegration.ts
           npx tsx src/server/__tests__/vehicleKmBatchAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleKmSingleAuthorityIntegration.ts
           npx tsx src/server/__tests__/vehicleKmAlertsWhatsappIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractAuthorityIntegration.ts
