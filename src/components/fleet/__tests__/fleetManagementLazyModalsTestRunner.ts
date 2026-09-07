@@ -14,6 +14,11 @@ const vehicleRoutesSource = readFileSync(new URL('../../../server/vehicleRoutes.
 const vehicleIdentityGuardSource = readFileSync(new URL('../../../server/vehicleIdentityGuard.ts', import.meta.url), 'utf8');
 const vehicleIdentityMigrationSource = readFileSync(new URL('../../../../drizzle/0065_vehicle_normalized_identity_guard.sql', import.meta.url), 'utf8');
 const kmBatchMigrationSource = readFileSync(new URL('../../../../drizzle/0064_vehicle_km_batch_schedule.sql', import.meta.url), 'utf8');
+const kmAlertAuthoritySource = readFileSync(new URL('../../../server/vehicleKmAlertAuthority.ts', import.meta.url), 'utf8');
+const kmAlertMigrationSource = readFileSync(new URL('../../../../drizzle/0066_vehicle_km_whatsapp_alerts.sql', import.meta.url), 'utf8');
+const pendingCenterSource = readFileSync(new URL('../../operations/PendingCenterView.tsx', import.meta.url), 'utf8');
+const overviewDashboardSource = readFileSync(new URL('../../dashboard/OverviewDashboard.tsx', import.meta.url), 'utf8');
+const operationalPendingSource = readFileSync(new URL('../../../domain/operations/serverOperationalPendingProjection.ts', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
 
@@ -145,5 +150,23 @@ assert.match(vehicleRoutesSource, /findVehicleIdentityConflict\(txContext, princ
 assert.match(vehicleIdentityGuardSource, /regexp_replace\(upper\(trim\(coalesce\(plate,''\)\)\), '\[\^A-Z0-9\]'/, 'server identity lookup must normalize legacy plate formatting');
 assert.match(vehicleIdentityMigrationSource, /pg_advisory_xact_lock/, 'database must serialize competing vehicle identity writes');
 assert.match(vehicleIdentityMigrationSource, /vehicles_normalized_identity_unique/, 'database must guard normalized vehicle identities');
+
+assert.match(kmBatchSource, /VehicleKmReadingClient\.prepareWhatsapp\(vehicleIds\)/, 'KM WhatsApp batch action must reuse selected vehicle rows');
+assert.match(kmBatchSource, /O provedor continua desabilitado; nenhum envio externo foi realizado\./, 'KM WhatsApp batch UI must explain provider-disabled behavior');
+assert.match(kmAlertAuthoritySource, /const ALERT_LEAD_DAYS=2;/, 'KM alerts must use the explicit near-due threshold');
+assert.match(kmAlertAuthoritySource, /const TRACKER_FRESH_MS=24\*60\*60\*1000;/, 'KM alerts must define tracker freshness explicitly');
+assert.match(kmAlertAuthoritySource, /if\(fresh\)return 'Rastreador possui leitura recente e confiável/, 'fresh tracker reading must suppress WhatsApp');
+assert.match(kmAlertAuthoritySource, /referenceId=\`\$\{vehicleId\}:\$\{alert\.dueDate\}\`/, 'KM WhatsApp idempotency must bind to vehicle and reading cycle');
+assert.match(kmAlertAuthoritySource, /'HELD_PROVIDER_DISABLED'/, 'KM WhatsApp must remain provider-disabled');
+assert.doesNotMatch(kmAlertAuthoritySource, /axios|fetch\(|twilio|meta\.com|graph\.facebook|provider\.send/, 'KM WhatsApp authority must not call an external provider');
+assert.match(kmAlertMigrationSource, /KM_READING_REQUEST/, 'KM WhatsApp template must be persisted in the catalog');
+assert.match(kmAlertMigrationSource, /VEHICLE_KM_READING/, 'KM WhatsApp outbox must use a dedicated reference type');
+assert.match(operationalPendingSource, /category: 'Quilometragem'/, 'operational projection must include KM reading alerts');
+assert.match(operationalPendingSource, /actionKind: alert\.whatsappEligible \? 'REQUEST_KM_WHATSAPP'/, 'KM alert projection must expose WhatsApp action only when eligible');
+assert.match(pendingCenterSource, /VehicleKmReadingClient\.listAlerts\(\)/, 'central alerts must load KM reading alerts');
+assert.match(pendingCenterSource, /Preparar WhatsApp/, 'central alerts must expose KM WhatsApp action');
+assert.match(pendingCenterSource, /\{ id: 'KM', label: 'Quilometragem' \}/, 'central alerts must expose a KM filter');
+assert.match(overviewDashboardSource, /Leituras de KM aguardando atualização:/, 'dashboard must visibly expose KM reading alerts');
+assert.match(overviewDashboardSource, /VehicleKmReadingClient\.prepareWhatsapp\(\[alert\.vehicleId\]\)/, 'dashboard must prepare KM WhatsApp from the alert');
 
 console.log('Deferred fleet modals regression: PASS');
