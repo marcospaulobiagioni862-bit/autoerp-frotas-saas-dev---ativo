@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   DocumentAiProviderRateLimitError,
+  type DocumentAiDocumentType,
   type DocumentAiProvider,
   type DocumentAiProviderRequest,
 } from './documentAiProcessor';
@@ -102,6 +103,13 @@ function documentResponseSchema(documentType: keyof typeof DOCUMENT_FIELD_NAMES)
 const RESPONSE_SCHEMA = {
   anyOf: DOCUMENT_TYPES.map((documentType) => documentResponseSchema(documentType)),
 } as const;
+
+function responseSchemaFor(expectedDocumentType?: DocumentAiDocumentType): Record<string, unknown> {
+  if (expectedDocumentType && expectedDocumentType in DOCUMENT_FIELD_NAMES) {
+    return documentResponseSchema(expectedDocumentType as keyof typeof DOCUMENT_FIELD_NAMES);
+  }
+  return RESPONSE_SCHEMA as unknown as Record<string, unknown>;
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
@@ -284,7 +292,7 @@ export class GeminiDocumentAiProvider implements DocumentAiProvider {
           response_format: {
             type: 'text',
             mime_type: 'application/json',
-            schema: RESPONSE_SCHEMA,
+            schema: responseSchemaFor(request.expectedDocumentType),
           },
           store: false,
         }, signal);
