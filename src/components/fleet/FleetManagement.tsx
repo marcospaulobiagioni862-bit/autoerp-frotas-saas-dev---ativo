@@ -1,8 +1,8 @@
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
-import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive } from 'lucide-react';
+import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive, ListChecks } from 'lucide-react';
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -20,6 +20,9 @@ const VehicleFormModal=lazy(()=>import('./VehicleFormModal').then(module=>({defa
 const VehicleDetailsModal=lazy(()=>import('./VehicleDetailsModal').then(module=>({default:module.VehicleDetailsModal})));
 const RecordKmModal=lazy(()=>import('./RecordKmModal').then(module=>({default:module.RecordKmModal})));
 const VehicleDocumentIntakeModal=lazy(()=>import('./VehicleDocumentIntakeModal').then(module=>({default:module.VehicleDocumentIntakeModal})));
+const VehicleKmBatchModal=lazy(()=>import('./VehicleKmBatchModal').then(module=>({default:module.VehicleKmBatchModal})));
+
+const normalizedVehicleIdentifier=(value:string)=>String(value||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
 
 export const FleetManagement: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -31,6 +34,7 @@ export const FleetManagement: React.FC = () => {
 
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [isVehicleAiOpen, setIsVehicleAiOpen] = useState<boolean>(false);
+  const [isKmBatchOpen, setIsKmBatchOpen] = useState<boolean>(false);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
   const [selectedVehicleIdForDetails, setSelectedVehicleIdForDetails] = useState<string | null>(null);
   const [readOnlyVehicleIdForHistory, setReadOnlyVehicleIdForHistory] = useState<string | null>(null);
@@ -73,7 +77,10 @@ export const FleetManagement: React.FC = () => {
       v.model.toLowerCase().includes(s) ||
       v.renavam.toLowerCase().includes(s) ||
       v.chassis.toLowerCase().includes(s);
-    const matchesStatus = statusFilter === 'ALL' || v.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      v.status === statusFilter ||
+      (statusFilter === VehicleStatus.MAINTENANCE && v.status === VehicleStatus.WAITING_MAINTENANCE);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
@@ -81,8 +88,21 @@ export const FleetManagement: React.FC = () => {
   const totalCount = vehicles.length;
   const rentedCount = vehicles.filter((v) => v.status === VehicleStatus.RENTED).length;
   const availableCount = vehicles.filter((v) => v.status === VehicleStatus.AVAILABLE).length;
-  const maintenanceCount = vehicles.filter((v) => v.status === VehicleStatus.MAINTENANCE).length;
+  const maintenanceCount = vehicles.filter((v) => v.status === VehicleStatus.MAINTENANCE || v.status === VehicleStatus.WAITING_MAINTENANCE).length;
   const inactiveCount = vehicles.filter((v) => v.status === VehicleStatus.INACTIVE || v.status === VehicleStatus.SOLD).length;
+
+  const duplicateVehicleIdentity=useMemo(()=>{
+    const plates=new Map<string,string>(),renavams=new Map<string,string>(),ids=new Set<string>(),labels=new Set<string>();
+    for(const vehicle of vehicles){
+      const plate=normalizedVehicleIdentifier(vehicle.plate),renavam=normalizedVehicleIdentifier(vehicle.renavam);
+      const samePlate=plate?plates.get(plate):undefined,sameRenavam=renavam?renavams.get(renavam):undefined;
+      if(samePlate&&samePlate!==vehicle.id){ids.add(samePlate);ids.add(vehicle.id);labels.add(`Placa ${plate}`);}
+      else if(plate)plates.set(plate,vehicle.id);
+      if(sameRenavam&&sameRenavam!==vehicle.id){ids.add(sameRenavam);ids.add(vehicle.id);labels.add(`RENAVAM ${renavam}`);}
+      else if(renavam)renavams.set(renavam,vehicle.id);
+    }
+    return{ids,labels:[...labels]};
+  },[vehicles]);
 
   const handleStatusChangeClick = (vehicle: Vehicle, newStatus: VehicleStatus) => {
     setVehicleForStatusChange(vehicle);
@@ -106,6 +126,8 @@ export const FleetManagement: React.FC = () => {
 
   const fleetModalResetKey = isVehicleAiOpen
     ? 'vehicle-ai-intake'
+    : isKmBatchOpen
+      ? 'vehicle-km-batch'
     : isFormOpen
     ? `form:${vehicleToEdit?.id ?? 'new'}`
     : selectedVehicleIdForDetails
@@ -133,7 +155,10 @@ export const FleetManagement: React.FC = () => {
       />
 
       {!showArchived && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => setIsKmBatchOpen(true)} className="gap-2">
+            <ListChecks className="w-4 h-4" /> Quilometragem em lote
+          </Button>
           <Button variant="outline" onClick={() => setIsVehicleAiOpen(true)} className="gap-2">
             <Sparkles className="w-4 h-4" /> Cadastrar por documento com IA
           </Button>
@@ -153,6 +178,13 @@ export const FleetManagement: React.FC = () => {
       {showArchived && (
         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">
           {totalCount} veículo(s) vendido(s) ou arquivado(s). Esta área é somente leitura; o histórico não foi apagado.
+        </div>
+      )}
+
+      {!showArchived&&duplicateVehicleIdentity.ids.size>0&&(
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+          <strong className="block">Duplicidade cadastral detectada</strong>
+          <span>{duplicateVehicleIdentity.ids.size} registro(s) precisam de revisão. Comparativo: {duplicateVehicleIdentity.labels.join(' • ')}. Nenhum histórico foi apagado automaticamente.</span>
         </div>
       )}
 
@@ -197,6 +229,7 @@ export const FleetManagement: React.FC = () => {
               <Card key={vehicle.id} padding="md" hoverEffect className="flex flex-col justify-between border-slate-200 dark:border-slate-800">
                 <div>
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">{vehicle.plate}</span><Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge></div>
+                  {duplicateVehicleIdentity.ids.has(vehicle.id)&&<p className="mt-2 text-[11px] font-semibold text-red-600 dark:text-red-300">Duplicidade cadastral — revisar Placa/RENAVAM</p>}
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
                   <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
@@ -261,6 +294,12 @@ export const FleetManagement: React.FC = () => {
 
       <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
+          {isKmBatchOpen&&<VehicleKmBatchModal
+            isOpen
+            vehicles={vehicles}
+            onClose={() => setIsKmBatchOpen(false)}
+            onSuccess={loadVehicles}
+          />}
           {isVehicleAiOpen&&<VehicleDocumentIntakeModal
             isOpen
             onClose={() => setIsVehicleAiOpen(false)}

@@ -39,6 +39,10 @@ export interface KmRecord {
   kmValue: number;
   recordDate: string;
   readingType: 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE';
+  sourceType?: 'MANUAL' | 'DRIVER_PHOTO' | 'TRACKER';
+  sourceAttachmentId?: string;
+  sourceTrackerId?: string;
+  sourceObservedAt?: string;
   photoUrl?: string;
   notes?: string;
   createdAt: string;
