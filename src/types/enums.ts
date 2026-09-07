@@ -20,6 +20,7 @@ export const VEHICLE_CATEGORIES = [
   'Sedan Médio',
   'SUV',
   'Pickup / Caminhonete',
+  'Moto / Motocicleta',
   'Utilitário / VUC',
   'Executivo',
 ] as const;

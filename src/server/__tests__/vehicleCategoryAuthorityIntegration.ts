@@ -18,6 +18,7 @@ async function json(response: globalThis.Response): Promise<any> {
 export class VehicleCategoryAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
     assert(VEHICLE_CATEGORIES.includes('Pickup / Caminhonete'), 'Pickup / Caminhonete is missing from the canonical categories');
+    assert(VEHICLE_CATEGORIES.includes('Moto / Motocicleta'), 'Moto / Motocicleta is missing from the canonical categories');
     assert(VEHICLE_CATEGORIES.includes('Utilitário / VUC'), 'legacy Utilitário / VUC category was removed');
 
     const app = express();
@@ -97,6 +98,13 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       });
       assert(response.status === 200, `legacy category edit expected 200, got ${response.status}`);
       assert((await json(response)).item.category === 'Utilitário / VUC', 'legacy category compatibility failed');
+
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ category: 'Moto / Motocicleta' }),
+      });
+      assert(response.status === 200, `Motorcycle edit expected 200, got ${response.status}`);
+      assert((await json(response)).item.category === 'Moto / Motocicleta', 'Motorcycle category was not persisted on edit');
 
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`, {
         method: 'PATCH',
