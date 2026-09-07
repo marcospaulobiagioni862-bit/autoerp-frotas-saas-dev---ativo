@@ -13,7 +13,6 @@ import {
   AccountPayableRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
-import { WhatsappClient } from '../../api/whatsappClient';
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -31,8 +30,7 @@ import {
   Filter,
   RefreshCw,
   Lock,
-  DollarSign,
-  MessageCircle
+  DollarSign
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton } from '../ui';
 
@@ -65,8 +63,6 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   const [pendings, setPendings] = useState<OperationalPendingItem[]>([]);
   const [filter, setFilter] = useState<FilterCategory>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [whatsappSendingId, setWhatsappSendingId] = useState<string | null>(null);
-  const [whatsappMessage, setWhatsappMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadPendings();
@@ -188,28 +184,6 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
     }
   };
 
-  const sendWhatsapp = async (item: OperationalPendingItem) => {
-    if (item.whatsappTemplateKey !== 'DRIVER_CNH_EXPIRY' || item.entity !== 'Driver' || whatsappSendingId) return;
-    setWhatsappSendingId(item.id);
-    setWhatsappMessage(null);
-    try {
-      const result = await WhatsappClient.createCnhReminder(item.entityId);
-      setWhatsappMessage({
-        kind: 'success',
-        text: result.created
-          ? 'Lembrete de CNH registrado no canal de WhatsApp. O envio efetivo depende do provedor configurado para o ambiente.'
-          : 'Esse lembrete de CNH já estava registrado no canal de WhatsApp.',
-      });
-    } catch (error) {
-      setWhatsappMessage({
-        kind: 'error',
-        text: error instanceof Error ? error.message : 'Não foi possível registrar o lembrete de WhatsApp.',
-      });
-    } finally {
-      setWhatsappSendingId(null);
-    }
-  };
-
   if (loading) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -255,16 +229,6 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
           </Button>
         </div>
       </div>
-
-      {whatsappMessage && (
-        <div className={`rounded-xl border p-3 text-sm ${
-          whatsappMessage.kind === 'success'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
-            : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200'
-        }`}>
-          {whatsappMessage.text}
-        </div>
-      )}
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -444,18 +408,6 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0">
-                  {item.whatsappTemplateKey === 'DRIVER_CNH_EXPIRY' && item.entity === 'Driver' && (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void sendWhatsapp(item)}
-                      disabled={whatsappSendingId !== null}
-                      isLoading={whatsappSendingId === item.id}
-                      icon={<MessageCircle className="w-3.5 h-3.5" />}
-                    >
-                      WhatsApp
-                    </Button>
-                  )}
                   <Button
                     size="sm"
                     variant="primary"
