@@ -287,7 +287,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
   const deleteUnusedFailed = async (extractionIds: string[]) => {
     if (!canDeletePermanently || extractionIds.length === 0) return;
     const selectedItems = items.filter((item) => extractionIds.includes(item.id) && cleanupClassification(item).category === 'UNUSED');
-    const uniqueAttachments = Array.from(new Map(selectedItems.map((item) => [item.attachmentId, item])).values());
+    const uniqueAttachments: DocumentAiExtraction[] = Array.from(new Map<string, DocumentAiExtraction>(selectedItems.map((item): [string, DocumentAiExtraction] => [item.attachmentId, item])).values());
     if (uniqueAttachments.length === 0) {
       setError('Selecione apenas falhas classificadas como não utilizadas.');
       return;
