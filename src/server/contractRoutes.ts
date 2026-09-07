@@ -141,6 +141,28 @@ function dueDay(value: unknown, field: string, min: number, max: number, fallbac
   return parsed;
 }
 
+function requiredDueDay(value: unknown, field: string, min: number, max: number): number {
+  if (value === undefined || value === null || value === '') throw new ContractValidationError(`Invalid ${field}`);
+  return dueDay(value, field, min, max);
+}
+
+function billingDueDays(
+  billingPeriodicity: RecurringFrequency,
+  billingDueDayOfWeekInput: unknown,
+  billingDueDayOfMonthInput: unknown,
+): { billingDueDayOfWeek: number; billingDueDayOfMonth: number } {
+  if (billingPeriodicity === RecurringFrequency.WEEKLY) {
+    return {
+      billingDueDayOfWeek: requiredDueDay(billingDueDayOfWeekInput, 'billingDueDayOfWeek', 1, 7),
+      billingDueDayOfMonth: 1,
+    };
+  }
+  return {
+    billingDueDayOfWeek: 1,
+    billingDueDayOfMonth: requiredDueDay(billingDueDayOfMonthInput, 'billingDueDayOfMonth', 1, 31),
+  };
+}
+
 function validateDateRange(startDate: string, endDate?: string): void {
   if (endDate && startDate > endDate) throw new ContractValidationError('Invalid contract date range');
 }
@@ -283,8 +305,11 @@ export function registerContractRoutes(app: Express): void {
       validateDateRange(startDate, endDate);
       const rentalAmount = positive(body.rentalAmount, 'rentalAmount');
       const billingPeriodicity = periodicity(body.billingPeriodicity);
-      const billingDueDayOfWeek = dueDay(body.billingDueDayOfWeek, 'billingDueDayOfWeek', 1, 7);
-      const billingDueDayOfMonth = dueDay(body.billingDueDayOfMonth, 'billingDueDayOfMonth', 1, 31);
+      const { billingDueDayOfWeek, billingDueDayOfMonth } = billingDueDays(
+        billingPeriodicity,
+        body.billingDueDayOfWeek,
+        body.billingDueDayOfMonth,
+      );
       const securityDepositAmount = nonNegative(body.securityDepositAmount, 'securityDepositAmount', 0);
       const franchiseKm = nonNegativeInteger(body.franchiseKm, 'franchiseKm', 0);
       const excessKmRate = nonNegative(body.excessKmRate, 'excessKmRate', 0);
@@ -393,6 +418,12 @@ export function registerContractRoutes(app: Express): void {
         const startDate = body.startDate === undefined ? existing.startDate : normalizeDate(body.startDate, 'startDate');
         const endDate = body.endDate === undefined ? existing.endDate : optionalDate(body.endDate, 'endDate');
         validateDateRange(startDate, endDate);
+        const billingPeriodicity = body.billingPeriodicity === undefined ? existing.billingPeriodicity : periodicity(body.billingPeriodicity);
+        const dueDays = billingDueDays(
+          billingPeriodicity,
+          body.billingDueDayOfWeek === undefined && billingPeriodicity === existing.billingPeriodicity ? existing.billingDueDayOfWeek : body.billingDueDayOfWeek,
+          body.billingDueDayOfMonth === undefined && billingPeriodicity === existing.billingPeriodicity ? existing.billingDueDayOfMonth : body.billingDueDayOfMonth,
+        );
         const now = new Date().toISOString();
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, existing.id, {
           contractNumber,
@@ -401,9 +432,9 @@ export function registerContractRoutes(app: Express): void {
           startDate,
           endDate,
           rentalAmount: body.rentalAmount === undefined ? existing.rentalAmount : positive(body.rentalAmount, 'rentalAmount'),
-          billingPeriodicity: body.billingPeriodicity === undefined ? existing.billingPeriodicity : periodicity(body.billingPeriodicity),
-          billingDueDayOfWeek: body.billingDueDayOfWeek === undefined ? existing.billingDueDayOfWeek : dueDay(body.billingDueDayOfWeek, 'billingDueDayOfWeek', 1, 7),
-          billingDueDayOfMonth: body.billingDueDayOfMonth === undefined ? existing.billingDueDayOfMonth : dueDay(body.billingDueDayOfMonth, 'billingDueDayOfMonth', 1, 31),
+          billingPeriodicity,
+          billingDueDayOfWeek: dueDays.billingDueDayOfWeek,
+          billingDueDayOfMonth: dueDays.billingDueDayOfMonth,
           securityDepositAmount: body.securityDepositAmount === undefined ? existing.securityDepositAmount : nonNegative(body.securityDepositAmount, 'securityDepositAmount'),
           franchiseKm: body.franchiseKm === undefined ? existing.franchiseKm : nonNegativeInteger(body.franchiseKm, 'franchiseKm'),
           excessKmRate: body.excessKmRate === undefined ? existing.excessKmRate : nonNegative(body.excessKmRate, 'excessKmRate'),
