@@ -99,6 +99,25 @@ function optionalNonNegativeInteger(value: unknown, field: string): number | und
   return parsed;
 }
 
+function requiredNonNegativeInteger(value: unknown, field: string): number {
+  const parsed = optionalNonNegativeInteger(value, field);
+  if (parsed === undefined) throw new VehicleValidationError(`Missing ${field}`);
+  return parsed;
+}
+
+function requiredPositive(value: unknown, field: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new VehicleValidationError(`Invalid ${field}`);
+  return parsed;
+}
+
+function requiredVehicleYear(value: unknown, field: string): number {
+  const year = requiredNonNegativeInteger(value, field);
+  const maxYear = new Date().getFullYear() + 1;
+  if (year < 1900 || year > maxYear) throw new VehicleValidationError(`Invalid ${field}`);
+  return year;
+}
+
 function isUniqueViolation(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
@@ -166,20 +185,26 @@ export function registerVehicleRoutes(app: Express): void {
       if (!renavam) throw new VehicleValidationError('Invalid renavam');
       const brand = requiredText(req.body?.brand, 'brand');
       const model = requiredText(req.body?.model, 'model');
-      const currentKm = requiredNonNegative(req.body?.currentKm, 'currentKm');
-      const acquisitionValue = requiredNonNegative(req.body?.acquisitionValue, 'acquisitionValue');
-      const currentValue = requiredNonNegative(req.body?.currentValue, 'currentValue');
-      const rentalValueBase = requiredNonNegative(req.body?.rentalValueBase, 'rentalValueBase');
-      const nextMaintenanceKm = optionalNonNegative(req.body?.nextMaintenanceKm, 'nextMaintenanceKm');
-      const yearFabrication = optionalNonNegativeInteger(req.body?.yearFabrication, 'yearFabrication') ?? 0;
-      const yearModel = optionalNonNegativeInteger(req.body?.yearModel, 'yearModel') ?? 0;
-      const category = normalizeVehicleCategory(req.body?.category);
+      const color = requiredText(req.body?.color, 'color');
+      const chassis = requiredText(req.body?.chassis, 'chassis').toUpperCase();
+      const fuelType = requiredText(req.body?.fuelType, 'fuelType');
+      const currentKm = requiredNonNegativeInteger(req.body?.currentKm, 'currentKm');
+      const acquisitionValue = requiredPositive(req.body?.acquisitionValue, 'acquisitionValue');
+      const currentValue = requiredPositive(req.body?.currentValue, 'currentValue');
+      const rentalValueBase = requiredPositive(req.body?.rentalValueBase, 'rentalValueBase');
+      const nextMaintenanceKm = optionalNonNegativeInteger(req.body?.nextMaintenanceKm, 'nextMaintenanceKm');
+      if (nextMaintenanceKm !== undefined && nextMaintenanceKm < currentKm) {
+        throw new VehicleValidationError('Próxima manutenção não pode ser menor que o KM atual');
+      }
+      const yearFabrication = requiredVehicleYear(req.body?.yearFabrication, 'yearFabrication');
+      const yearModel = requiredVehicleYear(req.body?.yearModel, 'yearModel');
+      const category = normalizeVehicleCategory(requiredText(req.body?.category, 'category'));
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
         const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam);
         if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
-        const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color: optionalText(req.body?.color) || '', renavam, chassis: (optionalText(req.body?.chassis) || '').toUpperCase(), currentKm, nextMaintenanceKm, fuelType: optionalText(req.body?.fuelType) || 'Flex', category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
+        const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color, renavam, chassis, currentKm, nextMaintenanceKm, fuelType, category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
         await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(txContext, principal, created);
         const available = await repo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
@@ -207,17 +232,21 @@ export function registerVehicleRoutes(app: Express): void {
         if (req.body?.brand !== undefined) changes.brand = requiredText(req.body.brand, 'brand');
         if (req.body?.model !== undefined) changes.model = requiredText(req.body.model, 'model');
         if (req.body?.version !== undefined) changes.version = optionalText(req.body.version) || '';
-        if (req.body?.color !== undefined) changes.color = optionalText(req.body.color) || '';
-        if (req.body?.chassis !== undefined) changes.chassis = (optionalText(req.body.chassis) || '').toUpperCase();
+        if (req.body?.color !== undefined) changes.color = requiredText(req.body.color, 'color');
+        if (req.body?.chassis !== undefined) changes.chassis = requiredText(req.body.chassis, 'chassis').toUpperCase();
         if (req.body?.fuelType !== undefined) changes.fuelType = requiredText(req.body.fuelType, 'fuelType');
-        if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(req.body.category);
+        if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(requiredText(req.body.category, 'category'));
         if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
-        if (req.body?.yearFabrication !== undefined) changes.yearFabrication = optionalNonNegativeInteger(req.body.yearFabrication, 'yearFabrication')!;
-        if (req.body?.yearModel !== undefined) changes.yearModel = optionalNonNegativeInteger(req.body.yearModel, 'yearModel')!;
-        if (req.body?.nextMaintenanceKm !== undefined) changes.nextMaintenanceKm = requiredNonNegative(req.body.nextMaintenanceKm, 'nextMaintenanceKm');
-        if (req.body?.acquisitionValue !== undefined) changes.acquisitionValue = requiredNonNegative(req.body.acquisitionValue, 'acquisitionValue');
-        if (req.body?.currentValue !== undefined) changes.currentValue = requiredNonNegative(req.body.currentValue, 'currentValue');
-        if (req.body?.rentalValueBase !== undefined) changes.rentalValueBase = requiredNonNegative(req.body.rentalValueBase, 'rentalValueBase');
+        if (req.body?.yearFabrication !== undefined) changes.yearFabrication = requiredVehicleYear(req.body.yearFabrication, 'yearFabrication');
+        if (req.body?.yearModel !== undefined) changes.yearModel = requiredVehicleYear(req.body.yearModel, 'yearModel');
+        if (req.body?.nextMaintenanceKm !== undefined) {
+          const nextMaintenanceKm = requiredNonNegativeInteger(req.body.nextMaintenanceKm, 'nextMaintenanceKm');
+          if (nextMaintenanceKm < existing.currentKm) throw new VehicleValidationError('Próxima manutenção não pode ser menor que o KM atual');
+          changes.nextMaintenanceKm = nextMaintenanceKm;
+        }
+        if (req.body?.acquisitionValue !== undefined) changes.acquisitionValue = requiredPositive(req.body.acquisitionValue, 'acquisitionValue');
+        if (req.body?.currentValue !== undefined) changes.currentValue = requiredPositive(req.body.currentValue, 'currentValue');
+        if (req.body?.rentalValueBase !== undefined) changes.rentalValueBase = requiredPositive(req.body.rentalValueBase, 'rentalValueBase');
         if (Object.keys(changes).length === 1) throw new VehicleValidationError('No editable fields');
         const updated = await repo.updateForCompany(principal.companyId, existing.id, changes);
         if (!updated) throw new VehicleNotFoundError();
