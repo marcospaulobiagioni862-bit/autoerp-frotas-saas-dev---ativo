@@ -102,13 +102,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user } = useAuth();
   const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(false);
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px) and (pointer: coarse)').matches : false
   );
   const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
   const compactDesktop = isCollapsed && !isCompactViewport;
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px) and (pointer: coarse)');
     const syncViewport = () => setIsCompactViewport(media.matches);
     syncViewport();
     media.addEventListener?.('change', syncViewport);
