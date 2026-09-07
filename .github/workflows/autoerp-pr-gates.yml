@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration/stabilization-2026-09-07-v2
   push:
     branches:
       - main
