@@ -47,7 +47,7 @@ assert.match(source, /Salvar OS/, 'new work-order footer must use an explicit sa
 assert.match(source, /Contas a Pagar na criação da OS/, 'completed flow must recognize finance generated at creation');
 assert.match(financeFields, /Nenhuma categoria financeira de despesa está ativa/, 'empty maintenance category selector must explain how to resolve missing master data');
 assert.match(financeFields, /Nenhuma forma de pagamento está ativa/, 'empty maintenance payment-method selector must explain how to resolve missing master data');
-assert.match(financeDefaultsMigration, /'Manutenção'[\\s\\S]*'EXPENSE'/, 'operational defaults must seed the maintenance expense category');
+assert.match(financeDefaultsMigration, /'Manutenção'[\s\S]*'EXPENSE'/, 'operational defaults must seed the maintenance expense category');
 for (const paymentName of ['PIX','Transferência','Dinheiro','Boleto','Cartão']) {
   assert.match(financeDefaultsMigration, new RegExp(`'${paymentName}'`), `operational defaults must seed payment method ${paymentName}`);
 }
