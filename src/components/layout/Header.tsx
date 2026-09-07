@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Building2, Sun, Moon, Menu } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
@@ -46,6 +46,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [isDark, setIsDark] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark');
   });
+  const [isNavigationDrawerViewport, setIsNavigationDrawerViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px) and (pointer: coarse)').matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1023px) and (pointer: coarse)');
+    const syncViewport = () => setIsNavigationDrawerViewport(media.matches);
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
 
   const toggleDarkMode = () => {
     if (document.documentElement.classList.contains('dark')) {
@@ -66,11 +77,11 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
       <div className="flex items-center gap-3 sm:gap-4">
-        {onToggleMobileSidebar && (
+        {isNavigationDrawerViewport && onToggleMobileSidebar && (
           <button
             onClick={onToggleMobileSidebar}
             aria-label="Abrir menu de navegação"
-            className="p-2 md:hidden text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <Menu className="w-5 h-5" />
           </button>
