@@ -141,6 +141,7 @@ export async function runContractSuspendRegression(): Promise<void> {
         startDate: today,
         rentalAmount: 500,
         billingPeriodicity: RecurringFrequency.WEEKLY,
+        billingDueDayOfWeek: 1,
       }),
     }, adminA);
     assert(response.status === 201, `suspend DRAFT fixture create expected 201, got ${response.status}`);
@@ -162,6 +163,7 @@ export async function runContractSuspendRegression(): Promise<void> {
         startDate: today,
         rentalAmount: 750,
         billingPeriodicity: RecurringFrequency.WEEKLY,
+        billingDueDayOfWeek: 1,
       }),
     }, adminA);
     assert(response.status === 201, `suspend ACTIVE fixture create expected 201, got ${response.status}`);
