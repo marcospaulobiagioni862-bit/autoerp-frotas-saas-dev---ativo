@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
+const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
 
@@ -74,5 +75,12 @@ assert.match(
   /targetStatus === VehicleStatus\.INACTIVE[\s\S]*O histórico não será apagado\./,
   'out-of-use confirmation must preserve the explicit history warning',
 );
+
+assert.match(intakeSource, /const failed=extraction\?\.status==='FAILED';/, 'vehicle document intake must expose a failed analysis state');
+assert.match(intakeSource, /Análise falhou/, 'failed analysis must have a visible status');
+assert.match(intakeSource, /DocumentAiClient\.retry\(extraction\.id\)/, 'failed analysis must reuse the authoritative retry endpoint');
+assert.match(intakeSource, /Tentar análise novamente/, 'failed analysis must expose an explicit retry action');
+assert.match(intakeSource, /Cadastrar veículo manualmente/, 'failed analysis must allow a safe manual fallback');
+assert.match(source, /onManualRequested=\{\(\) => \{ setIsVehicleAiOpen\(false\); setVehicleToEdit\(null\); setIsFormOpen\(true\); \}\}/, 'manual fallback must close the intake and open a blank vehicle form');
 
 console.log('Deferred fleet modals regression: PASS');

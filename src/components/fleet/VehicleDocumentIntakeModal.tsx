@@ -22,7 +22,7 @@ function analysisProgress(status:DocumentAiExtraction['status']|null):number{
   return 45;
 }
 
-export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void}){
+export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualRequested}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void;onManualRequested?:()=>void}){
   const[documentType,setDocumentType]=useState<VehicleIntakeDocumentType>('CRLV');
   const[intakeId,setIntakeId]=useState<string|null>(null);
   const[attachmentId,setAttachmentId]=useState<string|null>(null);
@@ -121,8 +121,30 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
 
   const canEdit=extraction?.status==='REVIEW_REQUIRED';
   const approved=extraction?.status==='APPROVED';
+  const failed=extraction?.status==='FAILED';
   const progress=analysisProgress(extraction?.status||null);
   const analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
+
+  const retryAnalysis=async()=>{
+    if(!extraction)return;
+    setBusy(true);setError(null);setMessage(null);
+    try{
+      const retried=await DocumentAiClient.retry(extraction.id);
+      setExtraction(retried);
+      setMessage('Nova tentativa solicitada. O status será atualizado automaticamente.');
+    }catch(e){setError(e instanceof Error?e.message:'Falha ao solicitar nova tentativa da análise.');}
+    finally{setBusy(false);}
+  };
+
+  const failureMessage=(code:string|null):string=>{
+    switch(code){
+      case 'PROVIDER_TIMEOUT':return 'O provedor de IA não respondeu dentro do tempo esperado.';
+      case 'PROVIDER_RATE_LIMIT':return 'O provedor de IA limitou temporariamente as solicitações.';
+      case 'PROVIDER_BAD_REQUEST':return 'O provedor de IA recusou a solicitação do documento.';
+      case 'PROVIDER_UNAVAILABLE':return 'O provedor de IA está indisponível no momento.';
+      default:return 'A leitura automática do documento falhou.';
+    }
+  };
 
   return <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl" title="Cadastrar veículo por documento com IA">
     <div className="space-y-4">
@@ -153,7 +175,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
 
         <div className="space-y-1.5" aria-label="Progresso estimado da análise documental">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className="font-medium text-slate-700 dark:text-slate-200">{analysisInProgress?'Analisando documento':'Etapa concluída'}</span>
+            <span className={`font-medium ${failed?'text-red-700 dark:text-red-300':'text-slate-700 dark:text-slate-200'}`}>{analysisInProgress?'Analisando documento':failed?'Análise falhou':'Etapa concluída'}</span>
             <span className="font-semibold tabular-nums">{progress}% <span className="font-normal text-slate-500">estimado</span></span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
@@ -169,6 +191,22 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated}:{isOpen:bo
           </div>
           <p className="text-[11px] text-slate-500">Percentual estimado por etapa. Enquanto a análise estiver em processamento, o ERP consulta o estado automaticamente.</p>
         </div>
+
+        {failed&&<div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
+          <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
+            <div>
+              <strong className="block text-sm">Não foi possível ler o documento com IA</strong>
+              <p className="mt-1 text-xs">{failureMessage(extraction?.failureCode||null)}</p>
+              {extraction?.failureCode&&<p className="mt-1 font-mono text-[10px] text-red-600/80 dark:text-red-300/80">Código: {extraction.failureCode}</p>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={()=>void retryAnalysis()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${busy?'animate-spin':''}`}/>{busy?'Tentando novamente...':'Tentar análise novamente'}</Button>
+            {onManualRequested&&<Button variant="outline" onClick={onManualRequested} disabled={busy}>Cadastrar veículo manualmente</Button>}
+          </div>
+          <p className="text-[11px] text-red-700/80 dark:text-red-300/80">Nenhum veículo foi criado automaticamente. O documento enviado permanece preservado neste fluxo.</p>
+        </div>}
 
         {canEdit&&<div className="space-y-3">
           <p className="text-xs text-slate-500">Confira e corrija os campos abaixo antes de aprovar.</p>
