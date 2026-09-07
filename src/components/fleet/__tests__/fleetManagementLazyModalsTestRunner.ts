@@ -10,6 +10,7 @@ const productionSidebarSource = readFileSync(new URL('../../layout/ProductionSid
 const kmBatchSource = readFileSync(new URL('../VehicleKmBatchModal.tsx', import.meta.url), 'utf8');
 const kmBatchAuthoritySource = readFileSync(new URL('../../../server/vehicleKmReadingAuthority.ts', import.meta.url), 'utf8');
 const kmBatchRoutesSource = readFileSync(new URL('../../../server/vehicleKmReadingRoutes.ts', import.meta.url), 'utf8');
+const vehicleRoutesSource = readFileSync(new URL('../../../server/vehicleRoutes.ts', import.meta.url), 'utf8');
 const kmBatchMigrationSource = readFileSync(new URL('../../../../drizzle/0064_vehicle_km_batch_schedule.sql', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
@@ -130,6 +131,7 @@ assert.match(kmBatchAuthoritySource, /sourceType==='DRIVER_PHOTO'[\s\S]*KM_ODOME
 assert.match(kmBatchAuthoritySource, /kmValue<vehicle\.currentKm/, 'KM batch must reject odometer regression');
 assert.doesNotMatch(kmBatchAuthoritySource, /FinancialTransaction|PAYABLE|RECEIVABLE|SettlementService/, 'KM batch stage must not mutate finance');
 assert.match(kmBatchRoutesSource, /new Set\(\['vehicleId','sourceType','kmValue','sourceAttachmentId'\]\)/, 'KM batch route must use a narrow browser payload');
+assert.match(vehicleRoutesSource, /registerVehicleKmReadingRoutes\(app\)/, 'vehicle route composition must register KM batch endpoints');
 assert.doesNotMatch(kmBatchRoutesSource, /companyId|userId|userName/, 'KM batch route body must not trust browser tenant or actor authority');
 assert.match(kmBatchMigrationSource, /source_type IN \('MANUAL','DRIVER_PHOTO','TRACKER'\)/, 'KM persistence must restrict source classifications');
 assert.match(kmBatchMigrationSource, /FORCE ROW LEVEL SECURITY/, 'KM schedule persistence must enforce tenant RLS');
