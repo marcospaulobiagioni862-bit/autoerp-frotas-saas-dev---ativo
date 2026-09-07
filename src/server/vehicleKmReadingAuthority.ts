@@ -100,9 +100,9 @@ function integerKm(value:unknown):number{
 function today():string{return new Date().toISOString().slice(0,10);}
 function recordDate(value:unknown):string{
   const result=value===undefined?today():String(value);
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(result)||Number.isNaN(Date.parse(`${result}T00:00:00Z`))){
-    throw new VehicleKmReadingValidationError('Data da leitura de KM inválida');
-  }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(result))throw new VehicleKmReadingValidationError('Data da leitura de KM inválida');
+  const parsed=new Date(`${result}T00:00:00Z`);
+  if(Number.isNaN(parsed.getTime())||parsed.toISOString().slice(0,10)!==result)throw new VehicleKmReadingValidationError('Data da leitura de KM inválida');
   return result;
 }
 function readingType(value:unknown):KmRecord['readingType']{
@@ -237,7 +237,7 @@ export async function advanceVehicleKmInContext(
   if(vehicle.isArchived||vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED){
     throw new VehicleKmReadingConflictError('Veículo não aceita nova leitura de KM');
   }
-  if(kmValue<vehicle.currentKm)throw new VehicleKmReadingConflictError(`KM não pode regredir: atual ${vehicle.currentKm}, informado ${kmValue}`);
+  if(kmValue<vehicle.currentKm)throw new VehicleKmReadingValidationError(`KM não pode regredir: atual ${vehicle.currentKm}, informado ${kmValue}`);
   await validateSourceEvidence(tx,p,vehicleId,sourceType,input);
 
   const existing=await sameDayKmRecord(raw,p.companyId,vehicleId,kmValue,date);
@@ -346,7 +346,6 @@ export class VehicleKmReadingAuthority {
     if(new Set(ids).size!==ids.length)throw new VehicleKmReadingValidationError('Veículo duplicado no lote de KM');
 
     return UnitOfWork.run(p.companyId,async tx=>{
-      const raw=tx.getRawTransaction?.();if(!raw)throw new Error('KM batch persistence unavailable');
       const byId=new Map(normalizedEntries.map(item=>[item.vehicleId,item]));
       const result:BatchKmReadingResultItem[]=[];
       const recordDate=today();
