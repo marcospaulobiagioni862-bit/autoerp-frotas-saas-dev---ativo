@@ -56,7 +56,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     renavam: '',
     chassis: '',
     currentKm: 0,
-    nextMaintenanceKm: 10000,
+    nextMaintenanceKm: undefined,
     fuelType: 'Flex',
     category: 'Hatch / Sedan Compacto',
     acquisitionValue: 70000,
@@ -101,7 +101,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         renavam: '',
         chassis: '',
         currentKm: 0,
-        nextMaintenanceKm: 10000,
+        nextMaintenanceKm: undefined,
         fuelType: 'Flex',
         category: 'Hatch / Sedan Compacto',
         acquisitionValue: 70000,
@@ -144,9 +144,27 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMessage(null);
 
+    const maxYear = new Date().getFullYear() + 1;
+    if (!Number.isInteger(formData.currentKm) || formData.currentKm < 0) {
+      setErrorMessage('Informe um KM atual inteiro e igual ou maior que zero.');
+      return;
+    }
+    if (formData.nextMaintenanceKm !== undefined && (!Number.isInteger(formData.nextMaintenanceKm) || formData.nextMaintenanceKm < formData.currentKm)) {
+      setErrorMessage('A próxima manutenção deve ser um KM inteiro e igual ou maior que o KM atual.');
+      return;
+    }
+    if (formData.yearFabrication < 1900 || formData.yearFabrication > maxYear || formData.yearModel < 1900 || formData.yearModel > maxYear) {
+      setErrorMessage('Confira o ano de fabricação e o ano do modelo.');
+      return;
+    }
+    if (formData.acquisitionValue <= 0 || formData.currentValue <= 0 || formData.rentalValueBase <= 0) {
+      setErrorMessage('Os valores de aquisição, comercial e aluguel semanal devem ser maiores que zero.');
+      return;
+    }
+
+    setLoading(true);
     try {
       if (vehicleToEdit) {
         const changedFields = buildChangedFields(vehicleToEdit);
@@ -194,8 +212,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Input label="Ano Fab. *" type="number" required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
-          <Input label="Ano Modelo *" type="number" required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
+          <Input label="Ano Fab. *" type="number" min="1900" max={new Date().getFullYear()+1} required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
+          <Input label="Ano Modelo *" type="number" min="1900" max={new Date().getFullYear()+1} required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
           <Input label="Cor *" placeholder="Branco" required value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
           <Select
             label="Combustível *"
@@ -217,13 +235,15 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           <Input
             label="KM Atual *"
             type="number"
+            min="0"
+            step="1"
             required
             disabled={!!vehicleToEdit}
             value={formData.currentKm}
             onChange={(e) => handleChange('currentKm', Number(e.target.value))}
             helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
-          <Input label="Próx. Manutenção (KM)" type="number" value={formData.nextMaintenanceKm || ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
+          <Input label="Próx. Manutenção (KM)" type="number" min={formData.currentKm} step="1" value={formData.nextMaintenanceKm ?? ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
           <Select label="Categoria *" value={formData.category} onChange={(e) => handleChange('category', e.target.value)} options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))} />
         </div>
 
