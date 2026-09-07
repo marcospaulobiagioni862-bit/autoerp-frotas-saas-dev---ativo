@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
-import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive } from 'lucide-react';
+import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive, ListChecks } from 'lucide-react';
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -20,6 +20,7 @@ const VehicleFormModal=lazy(()=>import('./VehicleFormModal').then(module=>({defa
 const VehicleDetailsModal=lazy(()=>import('./VehicleDetailsModal').then(module=>({default:module.VehicleDetailsModal})));
 const RecordKmModal=lazy(()=>import('./RecordKmModal').then(module=>({default:module.RecordKmModal})));
 const VehicleDocumentIntakeModal=lazy(()=>import('./VehicleDocumentIntakeModal').then(module=>({default:module.VehicleDocumentIntakeModal})));
+const VehicleKmBatchModal=lazy(()=>import('./VehicleKmBatchModal').then(module=>({default:module.VehicleKmBatchModal})));
 
 export const FleetManagement: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -31,6 +32,7 @@ export const FleetManagement: React.FC = () => {
 
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
   const [isVehicleAiOpen, setIsVehicleAiOpen] = useState<boolean>(false);
+  const [isKmBatchOpen, setIsKmBatchOpen] = useState<boolean>(false);
   const [vehicleToEdit, setVehicleToEdit] = useState<Vehicle | null>(null);
   const [selectedVehicleIdForDetails, setSelectedVehicleIdForDetails] = useState<string | null>(null);
   const [readOnlyVehicleIdForHistory, setReadOnlyVehicleIdForHistory] = useState<string | null>(null);
@@ -109,6 +111,8 @@ export const FleetManagement: React.FC = () => {
 
   const fleetModalResetKey = isVehicleAiOpen
     ? 'vehicle-ai-intake'
+    : isKmBatchOpen
+      ? 'vehicle-km-batch'
     : isFormOpen
     ? `form:${vehicleToEdit?.id ?? 'new'}`
     : selectedVehicleIdForDetails
@@ -136,7 +140,10 @@ export const FleetManagement: React.FC = () => {
       />
 
       {!showArchived && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => setIsKmBatchOpen(true)} className="gap-2">
+            <ListChecks className="w-4 h-4" /> Quilometragem em lote
+          </Button>
           <Button variant="outline" onClick={() => setIsVehicleAiOpen(true)} className="gap-2">
             <Sparkles className="w-4 h-4" /> Cadastrar por documento com IA
           </Button>
@@ -264,6 +271,12 @@ export const FleetManagement: React.FC = () => {
 
       <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
+          {isKmBatchOpen&&<VehicleKmBatchModal
+            isOpen
+            vehicles={vehicles}
+            onClose={() => setIsKmBatchOpen(false)}
+            onSuccess={loadVehicles}
+          />}
           {isVehicleAiOpen&&<VehicleDocumentIntakeModal
             isOpen
             onClose={() => setIsVehicleAiOpen(false)}
