@@ -11,6 +11,8 @@ const kmBatchSource = readFileSync(new URL('../VehicleKmBatchModal.tsx', import.
 const kmBatchAuthoritySource = readFileSync(new URL('../../../server/vehicleKmReadingAuthority.ts', import.meta.url), 'utf8');
 const kmBatchRoutesSource = readFileSync(new URL('../../../server/vehicleKmReadingRoutes.ts', import.meta.url), 'utf8');
 const vehicleRoutesSource = readFileSync(new URL('../../../server/vehicleRoutes.ts', import.meta.url), 'utf8');
+const vehicleIdentityGuardSource = readFileSync(new URL('../../../server/vehicleIdentityGuard.ts', import.meta.url), 'utf8');
+const vehicleIdentityMigrationSource = readFileSync(new URL('../../../../drizzle/0065_vehicle_normalized_identity_guard.sql', import.meta.url), 'utf8');
 const kmBatchMigrationSource = readFileSync(new URL('../../../../drizzle/0064_vehicle_km_batch_schedule.sql', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
@@ -107,6 +109,10 @@ assert.match(vehicleFormSource, /CurrencyInput label="Valor de Aquisição \(R\$
 assert.doesNotMatch(vehicleFormSource, /nextMaintenanceKm: 10000/, 'new vehicle form must not invent a 10,000 KM maintenance target');
 assert.match(vehicleFormSource, /formData\.nextMaintenanceKm < formData\.currentKm/, 'manual form must reject maintenance KM below current KM');
 assert.match(vehicleFormSource, /formData\.acquisitionValue <= 0/, 'manual form must reject non-positive financial values');
+assert.match(vehicleFormSource, /VehicleClient\.list\(\)/, 'manual vehicle form must pre-check normalized identity');
+assert.match(vehicleFormSource, /Este veículo já possui cadastro no sistema:/, 'manual vehicle form must explain duplicate identity');
+assert.match(source, /Duplicidade cadastral detectada/, 'fleet must surface already-existing duplicate records');
+assert.match(source, /normalizedVehicleIdentifier/, 'fleet duplicate warning must normalize Plate and RENAVAM');
 assert.match(intakeSource, /CurrencyInput label="Valor de Compra \(R\$\) \*"/, 'AI vehicle monetary inputs must use BRL formatting');
 
 assert.doesNotMatch(statusPresentationSource, /\{ id: VehicleStatus\.WAITING_MAINTENANCE,/, 'legacy waiting-maintenance status must not appear as a separate filter');
@@ -135,5 +141,9 @@ assert.match(vehicleRoutesSource, /registerVehicleKmReadingRoutes\(app\)/, 'vehi
 assert.doesNotMatch(kmBatchRoutesSource, /(?:req\.body|body)\??\.(?:companyId|userId|userName)/, 'KM batch route body must not trust browser tenant or actor authority');
 assert.match(kmBatchMigrationSource, /source_type IN \('MANUAL','DRIVER_PHOTO','TRACKER'\)/, 'KM persistence must restrict source classifications');
 assert.match(kmBatchMigrationSource, /FORCE ROW LEVEL SECURITY/, 'KM schedule persistence must enforce tenant RLS');
+assert.match(vehicleRoutesSource, /findVehicleIdentityConflict\(txContext, principal\.companyId, plate, renavam\)/, 'manual create must compare normalized Plate and RENAVAM');
+assert.match(vehicleIdentityGuardSource, /regexp_replace\(upper\(trim\(coalesce\(plate,''\)\)\)/, 'server identity lookup must normalize legacy plate formatting');
+assert.match(vehicleIdentityMigrationSource, /pg_advisory_xact_lock/, 'database must serialize competing vehicle identity writes');
+assert.match(vehicleIdentityMigrationSource, /vehicles_normalized_identity_unique/, 'database must guard normalized vehicle identities');
 
 console.log('Deferred fleet modals regression: PASS');
