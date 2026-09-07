@@ -55,11 +55,30 @@ export function FileUpload({
   const isVehicleDocument = entityType === 'Vehicle' && documentType === 'VEHICLE_DOCUMENT';
   const effectiveDocumentType = isVehicleDocument ? selectedVehicleDocumentType : documentType;
 
-  const validateFile = (file: File): void => {
+  const resolvedMimeType = (file: File): string => {
+    const browserType = file.type.trim().toLowerCase();
+    if (allowedTypes.includes(browserType)) return browserType;
+
+    const lowerName = file.name.trim().toLowerCase();
+    const browserReportedGenericPdf = browserType === '' || browserType === 'application/octet-stream'
+      || browserType === 'application/x-pdf' || browserType === 'application/acrobat';
+    if (allowedTypes.includes('application/pdf') && browserReportedGenericPdf && lowerName.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
+
+    return browserType;
+  };
+
+  const validateFile = (file: File, mimeType: string): void => {
     if (!SERVER_ENTITY_TYPES.has(entityType)) {
       throw new Error(`Anexos para ${entityType} ainda não foram migrados para o servidor.`);
     }
-    if (!allowedTypes.includes(file.type)) throw new Error(`Tipo não permitido: ${file.name}`);
+    if (!allowedTypes.includes(mimeType)) {
+      if (allowedTypes.length === 1 && allowedTypes[0] === 'application/pdf') {
+        throw new Error(`O arquivo selecionado não foi reconhecido como PDF: ${file.name}`);
+      }
+      throw new Error(`Tipo não permitido: ${file.name}`);
+    }
     if (file.size <= 0) throw new Error(`Arquivo vazio: ${file.name}`);
     if (file.size > maxSizeMB * 1024 * 1024) throw new Error(`Arquivo excede ${maxSizeMB}MB: ${file.name}`);
   };
@@ -72,13 +91,14 @@ export function FileUpload({
       const filesArray = Array.from(files);
       const toProcess = multiple ? filesArray : [filesArray[0]];
       for (const file of toProcess) {
-        validateFile(file);
+        const mimeType = resolvedMimeType(file);
+        validateFile(file, mimeType);
         const attachment = await AttachmentClient.upload({
           entityType: entityType as AttachmentUploadInput['entityType'],
           entityId,
           documentType: effectiveDocumentType,
           fileName: file.name,
-          mimeType: file.type,
+          mimeType,
           content: file,
           description: isVehicleDocument
             ? `Documento do veículo: ${VEHICLE_DOCUMENT_TYPES.find(([value]) => value === effectiveDocumentType)?.[1] || effectiveDocumentType}`
