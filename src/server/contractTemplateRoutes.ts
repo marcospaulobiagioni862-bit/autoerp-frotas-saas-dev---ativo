@@ -4,7 +4,12 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
-import { MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES, MOVEFLEX_DEFAULT_TEMPLATE_KEY } from '../domain/contracts/moveflexDefaultContractTemplate';
+import {
+  MOVEFLEX_APPROVED_CONTRACT_MASTERS,
+  MOVEFLEX_DEFAULT_TEMPLATE_KEY,
+  getMoveFlexApprovedContractMaster,
+  type MoveFlexApprovedContractMaster,
+} from '../domain/contracts/moveflexApprovedContractMaster';
 
 type TemplateAction = 'VIEW_CONTRACT_TEMPLATE' | 'MANAGE_CONTRACT_TEMPLATE';
 type TemplateSourceMode = 'MARKDOWN' | 'FILE';
@@ -16,6 +21,8 @@ const WRITE_ROLES = new Set(['ADMIN', 'MANAGER']);
 class TemplateValidationError extends Error {}
 class TemplateNotFoundError extends Error {}
 class TemplateConflictError extends Error {}
+class ApprovedMasterLockedError extends Error {}
+class ApprovedMasterMismatchError extends Error {}
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
@@ -81,15 +88,13 @@ function contentForMode(body: Record<string, unknown>, mode: TemplateSourceMode,
   return contentMarkdown;
 }
 
-async function hasActiveDocxFileSource(tx: any, companyId: string, template: any): Promise<boolean> {
-  if (
-    !template ||
-    template.isArchived ||
-    !template.isCurrent ||
-    !template.isActive ||
-    template.contentMarkdown.trim()
-  ) return false;
-
+async function approvedMasterSource(
+  tx: any,
+  companyId: string,
+  template: any,
+  master: MoveFlexApprovedContractMaster,
+): Promise<any | undefined> {
+  if (!template || template.isArchived || template.contentMarkdown.trim()) return undefined;
   const attachments = await tx.getAttachmentRepo().findByEntity(companyId, 'ContractTemplate', template.id);
   const sources = attachments.filter((attachment: any) =>
     !attachment.isArchived &&
@@ -97,7 +102,19 @@ async function hasActiveDocxFileSource(tx: any, companyId: string, template: any
     attachment.mimeType === DOCX_MIME &&
     attachment.contentState === 'AVAILABLE'
   );
-  return sources.length === 1;
+  if (sources.length !== 1) return undefined;
+  const source = sources[0];
+  return source.checksum === master.sha256 && source.fileSize === master.fileSize ? source : undefined;
+}
+
+async function hasNoActiveTemplateSource(tx: any, companyId: string, template: any): Promise<boolean> {
+  if (!template || template.isArchived || template.contentMarkdown.trim()) return false;
+  const attachments = await tx.getAttachmentRepo().findByEntity(companyId, 'ContractTemplate', template.id);
+  return !attachments.some((attachment: any) =>
+    !attachment.isArchived &&
+    attachment.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+    attachment.contentState === 'AVAILABLE'
+  );
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -110,6 +127,14 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof ApprovedMasterMismatchError) {
+    res.status(400).json({ error: 'O arquivo não corresponde ao arquivo mestre aprovado da MoveFlex.' });
+    return;
+  }
+  if (error instanceof ApprovedMasterLockedError) {
+    res.status(409).json({ error: 'O modelo padrão MoveFlex é imutável e só aceita o arquivo mestre aprovado.' });
+    return;
+  }
   if (error instanceof TemplateValidationError || error instanceof ContractTemplatePolicyError) {
     res.status(400).json({ error: 'Invalid contract template request' });
     return;
@@ -131,35 +156,23 @@ export function registerContractTemplateRoutes(app: Express): void {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
     if (!principal) return;
     try {
-      for (const model of MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES) {
-        validateContractTemplateContent(model.contentMarkdown);
-      }
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
         const ensured = [];
         let createdCount = 0;
 
-        for (const model of MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES) {
-          const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, model.templateKey);
+        for (const master of MOVEFLEX_APPROVED_CONTRACT_MASTERS) {
+          const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, master.templateKey);
+          const exactSource = current
+            ? await approvedMasterSource(tx, principal.companyId, current, master)
+            : undefined;
 
-          // CONTRACT-001: once an official MoveFlex key is backed by an active
-          // DOCX source, FILE is authoritative. The legacy Markdown bootstrap
-          // remains only as a fallback for tenants that have not migrated yet.
-          if (await hasActiveDocxFileSource(tx, principal.companyId, current)) {
-            ensured.push(current);
-            continue;
-          }
-
-          const matchesOfficialModel = current &&
-            !current.isArchived &&
-            current.title === model.title &&
-            current.contentMarkdown === model.contentMarkdown;
-
-          if (matchesOfficialModel) {
-            if (current.isActive) {
+          if (current && !current.isArchived && !current.contentMarkdown.trim() && exactSource) {
+            if (current.isActive && current.title === master.title) {
               ensured.push(current);
             } else {
               const now = new Date().toISOString();
               const activated = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
+                title: master.title,
                 isActive: true,
                 updatedAt: now,
               });
@@ -169,7 +182,20 @@ export function registerContractTemplateRoutes(app: Express): void {
             continue;
           }
 
-          const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, model.templateKey);
+          if (
+            current &&
+            !current.isArchived &&
+            current.isCurrent &&
+            !current.isActive &&
+            !current.contentMarkdown.trim() &&
+            current.title === master.title &&
+            await hasNoActiveTemplateSource(tx, principal.companyId, current)
+          ) {
+            ensured.push(current);
+            continue;
+          }
+
+          const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, master.templateKey);
           const now = new Date().toISOString();
           if (current) {
             const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
@@ -183,13 +209,13 @@ export function registerContractTemplateRoutes(app: Express): void {
           const created = await tx.getContractTemplateRepo().create({
             id: randomUUID(),
             companyId: principal.companyId,
-            templateKey: model.templateKey,
-            title: model.title,
-            contentMarkdown: model.contentMarkdown,
+            templateKey: master.templateKey,
+            title: master.title,
+            contentMarkdown: '',
             versionNumber: Math.max(...versions.map((version) => version.versionNumber), 0) + 1,
             supersedesTemplateId: current?.id,
             isCurrent: true,
-            isActive: true,
+            isActive: false,
             isArchived: false,
             createdBy: principal.userId,
             createdAt: now,
@@ -203,9 +229,11 @@ export function registerContractTemplateRoutes(app: Express): void {
             action: AuditAction.CREATE,
             previousState: current ? JSON.stringify(current) : undefined,
             newState: JSON.stringify({
-              event: 'ENSURE_MOVEFLEX_BUILT_IN',
+              event: 'ENSURE_MOVEFLEX_APPROVED_MASTER_PENDING',
               templateKey: created.templateKey,
               versionNumber: created.versionNumber,
+              approvedFileName: master.fileName,
+              approvedSha256: master.sha256,
             }),
             userId: principal.userId,
             userName: principal.name,
@@ -283,6 +311,7 @@ export function registerContractTemplateRoutes(app: Express): void {
     try {
       rejectAuthorityFields(body);
       const key = templateKey(body.templateKey);
+      if (getMoveFlexApprovedContractMaster(key)) throw new ApprovedMasterLockedError();
       const title = text(body.title, 'title', 2, 160);
       const mode = sourceMode(body.sourceMode);
       const contentMarkdown = contentForMode(body, mode);
@@ -320,6 +349,7 @@ export function registerContractTemplateRoutes(app: Express): void {
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const source = await tx.getContractTemplateRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!source || source.isArchived) throw new TemplateNotFoundError();
+        if (getMoveFlexApprovedContractMaster(source.templateKey)) throw new ApprovedMasterLockedError();
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, source.templateKey);
         if (!current || current.id !== source.id) throw new TemplateConflictError();
         const title = body.title === undefined ? source.title : text(body.title, 'title', 2, 160);
@@ -372,14 +402,24 @@ export function registerContractTemplateRoutes(app: Express): void {
           attachment.contentState === 'AVAILABLE'
         );
         if (sources.length !== 1) throw new TemplateConflictError();
-        if (!['application/pdf', DOCX_MIME].includes(sources[0].mimeType)) {
+        const approvedMaster = getMoveFlexApprovedContractMaster(candidate.templateKey);
+        if (approvedMaster) {
+          const source = sources[0];
+          if (
+            source.mimeType !== DOCX_MIME ||
+            source.checksum !== approvedMaster.sha256 ||
+            source.fileSize !== approvedMaster.fileSize
+          ) throw new ApprovedMasterMismatchError();
+        } else if (!['application/pdf', DOCX_MIME].includes(sources[0].mimeType)) {
           throw new TemplateConflictError();
         }
-        const shouldActivate = sources[0].mimeType === DOCX_MIME;
+        const shouldActivate = approvedMaster ? true : sources[0].mimeType === DOCX_MIME;
         if (candidate.isCurrent && candidate.isActive === shouldActivate) return candidate;
 
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
-        if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
+        if (approvedMaster) {
+          if (!current || current.id !== candidate.id || !candidate.isCurrent) throw new TemplateConflictError();
+        } else if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
           throw new TemplateConflictError();
         }
         const now = new Date().toISOString();
@@ -398,7 +438,13 @@ export function registerContractTemplateRoutes(app: Express): void {
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractTemplate', entityId: promoted.id,
           action: AuditAction.UPDATE, previousState: JSON.stringify(candidate),
-          newState: JSON.stringify({ ...promoted, event: 'PROMOTE_FILE_SOURCE', attachmentId: sources[0].id }),
+          newState: JSON.stringify({
+            ...promoted,
+            event: approvedMaster ? 'PROMOTE_APPROVED_MASTER_SOURCE' : 'PROMOTE_FILE_SOURCE',
+            attachmentId: sources[0].id,
+            approvedFileName: approvedMaster?.fileName,
+            approvedSha256: approvedMaster?.sha256,
+          }),
           userId: principal.userId, userName: principal.name, timestamp: now,
         });
         return promoted;
@@ -420,6 +466,7 @@ export function registerContractTemplateRoutes(app: Express): void {
         const item = await UnitOfWork.run(principal.companyId, async (tx) => {
           const existing = await tx.getContractTemplateRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
           if (!existing) throw new TemplateNotFoundError();
+          if (getMoveFlexApprovedContractMaster(existing.templateKey)) throw new ApprovedMasterLockedError();
           if (existing.isArchived === lifecycle.archived) return existing;
           if (!lifecycle.archived && existing.isCurrent) {
             const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, existing.templateKey);
