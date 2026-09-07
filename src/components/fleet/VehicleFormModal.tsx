@@ -37,7 +37,8 @@ interface VehicleFormData {
 }
 
 const cleanText = (value: string | undefined) => (value || '').trim();
-const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizeIdentifier = (value: string) => value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizePlate = (value: string) => normalizeIdentifier(value);
 
 export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   isOpen,
@@ -172,7 +173,22 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           await VehicleClient.update(vehicleToEdit.id, changedFields);
         }
       } else {
-        await VehicleClient.create({ ...formData, plate: normalizePlate(formData.plate) });
+        const plate = normalizePlate(formData.plate);
+        const renavam = normalizeIdentifier(formData.renavam);
+        const existingVehicles = await VehicleClient.list();
+        const duplicate = existingVehicles.find((vehicle) =>
+          normalizeIdentifier(vehicle.plate) === plate ||
+          normalizeIdentifier(vehicle.renavam) === renavam
+        );
+        if (duplicate) {
+          const matches = [
+            normalizeIdentifier(duplicate.plate) === plate ? `Placa ${plate}` : '',
+            normalizeIdentifier(duplicate.renavam) === renavam ? `RENAVAM ${renavam}` : '',
+          ].filter(Boolean).join(' e ');
+          setErrorMessage(`Este veículo já possui cadastro no sistema: ${matches}. Cadastro existente ${duplicate.plate} — ${duplicate.brand} ${duplicate.model}.`);
+          return;
+        }
+        await VehicleClient.create({ ...formData, plate, renavam });
       }
       onSuccess();
       onClose();
