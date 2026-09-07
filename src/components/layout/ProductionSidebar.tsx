@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarContent = (
-    <aside className="w-64 h-dvh max-h-dvh min-h-0 overflow-hidden bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
+    <aside className="w-64 h-full max-h-full min-h-0 overflow-hidden bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
       <div className="shrink-0 p-4 border-b border-slate-800/80 flex items-center justify-between">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">AutoERP Fleet Manager</span>
@@ -256,11 +256,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className="hidden md:block h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
+      <div className="hidden md:block h-full max-h-full min-h-0 overflow-hidden">{sidebarContent}</div>
       {isMobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden flex">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={onCloseMobile} aria-hidden="true" />
-          <div className="relative z-50 h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
+          <div className="relative z-50 h-full max-h-full min-h-0 overflow-hidden">{sidebarContent}</div>
         </div>
       )}
     </>
