@@ -20,6 +20,7 @@ import { registerVehicleLifecycleRoutes } from './vehicleLifecycleRoutes';
 import { registerVehicleInspectionRoutes } from './vehicleInspectionRoutes';
 import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
@@ -108,8 +109,9 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function sendVehicleError(res: Response, error: unknown): void {
-  if (error instanceof VehicleValidationError) { res.status(400).json({ error: 'Invalid vehicle request' }); return; }
-  if (error instanceof VehicleConflictError || isUniqueViolation(error)) { res.status(409).json({ error: 'Vehicle conflict' }); return; }
+  if (error instanceof VehicleValidationError) { res.status(400).json({ error: error.message || 'Invalid vehicle request' }); return; }
+  if (error instanceof VehicleConflictError) { res.status(409).json({ error: error.message || 'Vehicle conflict' }); return; }
+  if (isUniqueViolation(error)) { res.status(409).json({ error: 'Já existe um veículo com a mesma Placa ou RENAVAM.' }); return; }
   if (error instanceof VehicleNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
   console.error('AUTOERP_VEHICLE_AUTHORITY_FAILURE', error);
   res.status(500).json({ error: 'Vehicle operation failed' });
@@ -160,7 +162,8 @@ export function registerVehicleRoutes(app: Express): void {
     if (!principal) return;
     try {
       const plate = normalizePlate(req.body?.plate);
-      const renavam = requiredText(req.body?.renavam, 'renavam');
+      const renavam = normalizeVehicleIdentity(requiredText(req.body?.renavam, 'renavam'));
+      if (!renavam) throw new VehicleValidationError('Invalid renavam');
       const brand = requiredText(req.body?.brand, 'brand');
       const model = requiredText(req.body?.model, 'model');
       const currentKm = requiredNonNegative(req.body?.currentKm, 'currentKm');
@@ -173,8 +176,8 @@ export function registerVehicleRoutes(app: Express): void {
       const category = normalizeVehicleCategory(req.body?.category);
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
-        if (await repo.findByPlate(principal.companyId, plate)) throw new VehicleConflictError();
-        if (await repo.findByRenavam(principal.companyId, renavam)) throw new VehicleConflictError();
+        const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam);
+        if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
         const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color: optionalText(req.body?.color) || '', renavam, chassis: (optionalText(req.body?.chassis) || '').toUpperCase(), currentKm, nextMaintenanceKm, fuelType: optionalText(req.body?.fuelType) || 'Flex', category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
         await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
@@ -199,8 +202,8 @@ export function registerVehicleRoutes(app: Express): void {
         if (!existing) throw new VehicleNotFoundError();
         if (existing.isArchived || existing.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
         const changes: Partial<Vehicle> = { updatedAt: new Date().toISOString() };
-        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await repo.findByPlate(principal.companyId, plate); if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError(); changes.plate = plate; }
-        if (req.body?.renavam !== undefined) { const renavam = requiredText(req.body.renavam, 'renavam'); const duplicate = await repo.findByRenavam(principal.companyId, renavam); if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError(); changes.renavam = renavam; }
+        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, plate, existing.renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.plate = plate; }
+        if (req.body?.renavam !== undefined) { const renavam = normalizeVehicleIdentity(requiredText(req.body.renavam, 'renavam')); if (!renavam) throw new VehicleValidationError('Invalid renavam'); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, existing.plate, renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.renavam = renavam; }
         if (req.body?.brand !== undefined) changes.brand = requiredText(req.body.brand, 'brand');
         if (req.body?.model !== undefined) changes.model = requiredText(req.body.model, 'model');
         if (req.body?.version !== undefined) changes.version = optionalText(req.body.version) || '';
