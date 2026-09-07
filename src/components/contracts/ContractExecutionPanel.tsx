@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
-import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
