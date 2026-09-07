@@ -80,6 +80,42 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       });
       assert(response.status === 400, `invalid category expected 400, got ${response.status}`);
 
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'CLR1A23', renavam: '26500000002', color: '' }),
+      });
+      assert(response.status === 400, `missing color expected 400, got ${response.status}`);
+
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'CHS1A23', renavam: '26500000003', chassis: '' }),
+      });
+      assert(response.status === 400, `missing chassis expected 400, got ${response.status}`);
+
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'YER1A23', renavam: '26500000004', yearFabrication: 0 }),
+      });
+      assert(response.status === 400, `invalid fabrication year expected 400, got ${response.status}`);
+
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'KMN1A23', renavam: '26500000005', currentKm: 100.5 }),
+      });
+      assert(response.status === 400, `fractional KM expected 400, got ${response.status}`);
+
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'MNT1A23', renavam: '26500000006', currentKm: 12000, nextMaintenanceKm: 10000 }),
+      });
+      assert(response.status === 400, `maintenance KM regression expected 400, got ${response.status}`);
+
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseVehicle, plate: 'VAL1A23', renavam: '26500000007', acquisitionValue: 0 }),
+      });
+      assert(response.status === 400, `zero acquisition expected 400, got ${response.status}`);
+
       response = await request('/api/fleet/vehicles', { method: 'POST', body: JSON.stringify(baseVehicle) });
       assert(response.status === 201, `Pickup create expected 201, got ${response.status}`);
       const created = (await json(response)).item;
