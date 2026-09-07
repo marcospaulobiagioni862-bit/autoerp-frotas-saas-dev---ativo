@@ -142,7 +142,7 @@ assert.doesNotMatch(kmBatchRoutesSource, /(?:req\.body|body)\??\.(?:companyId|us
 assert.match(kmBatchMigrationSource, /source_type IN \('MANUAL','DRIVER_PHOTO','TRACKER'\)/, 'KM persistence must restrict source classifications');
 assert.match(kmBatchMigrationSource, /FORCE ROW LEVEL SECURITY/, 'KM schedule persistence must enforce tenant RLS');
 assert.match(vehicleRoutesSource, /findVehicleIdentityConflict\(txContext, principal\.companyId, plate, renavam\)/, 'manual create must compare normalized Plate and RENAVAM');
-assert.match(vehicleIdentityGuardSource, /regexp_replace\(upper\(trim\(coalesce\(plate,''\)\)\)/, 'server identity lookup must normalize legacy plate formatting');
+assert.match(vehicleIdentityGuardSource, /regexp_replace\(upper\(trim\(coalesce\(plate,''\)\)\), '\[\^A-Z0-9\]'/, 'server identity lookup must normalize legacy plate formatting');
 assert.match(vehicleIdentityMigrationSource, /pg_advisory_xact_lock/, 'database must serialize competing vehicle identity writes');
 assert.match(vehicleIdentityMigrationSource, /vehicles_normalized_identity_unique/, 'database must guard normalized vehicle identities');
 
