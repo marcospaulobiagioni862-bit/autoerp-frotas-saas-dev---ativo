@@ -42,11 +42,16 @@ const productionSidebar = readFileSync(new URL('../../layout/ProductionSidebar.t
 
 assert.match(
   app,
-  /overflow-y-auto overflow-x-hidden \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
-  'root content scrollbar must remain functional but visually hidden',
+  /app-content-scrollbar flex-1 min-h-0 overflow-y-scroll overflow-x-hidden/,
+  'root content must expose one visible global vertical scrollbar',
+);
+assert.doesNotMatch(
+  app,
+  /scrollbar-width:none|\[&::-webkit-scrollbar\]:hidden/,
+  'root content scrollbar must never be visually hidden',
 );
 assert.match(
   productionSidebar,
-  /overflow-y-auto overflow-x-hidden overscroll-contain \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
-  'production sidebar scrollbar must remain functional but visually hidden',
+  /overflow-y-auto overflow-x-hidden overscroll-contain/,
+  'production sidebar must remain independently scrollable',
 );
