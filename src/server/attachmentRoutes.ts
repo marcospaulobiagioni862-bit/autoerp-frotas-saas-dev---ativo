@@ -13,6 +13,7 @@ import {
 import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
 import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
 import {registerVehicleDocumentIntakeRoutes} from './vehicleDocumentIntakeRoutes';
+import {getMoveFlexApprovedContractMaster} from '../domain/contracts/moveflexApprovedContractMaster';
 
 type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT'|'DELETE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -40,6 +41,7 @@ class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
 class AttachmentConflictError extends Error{}
+class ApprovedContractMasterAttachmentError extends Error{}
 
 function principalFrom(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function hasAttachmentPermission(principal:AuthenticatedPrincipal,action:AttachmentAction):boolean{
@@ -122,6 +124,7 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
   if(entityType==='HealthAndEmergency'){const action=write?'EDIT_DRIVER_HEALTH':'VIEW_DRIVER_HEALTH';if(!hasDriverHealthPermission(action,healthContext(principal)))throw new AttachmentForbiddenError();}
 }
 function sendAttachmentError(res:Response,error:unknown):void{
+  if(error instanceof ApprovedContractMasterAttachmentError){res.status(400).json({error:'O arquivo não corresponde ao arquivo mestre aprovado da MoveFlex.'});return;}
   if(error instanceof AttachmentForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof AttachmentConflictError){res.status(409).json({error:error.message||'Attachment is linked and cannot be deleted'});return;}
   if(error instanceof AttachmentNotFoundError||error instanceof AttachmentStorageNotFoundError){res.status(404).json({error:'Not found'});return;}
@@ -184,7 +187,24 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       if(mimeType===DOCX_MIME&&entityType!=='ContractTemplate')throw new AttachmentValidationError('DOCX is only allowed for contract template source');
       if(entityType==='ContractTemplate'&&mimeType!=='application/pdf'&&mimeType!==DOCX_MIME)throw new AttachmentValidationError('Contract template source must be PDF or DOCX');
       if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
-      await UnitOfWork.run(principal.companyId,async tx=>{await validateEntity(tx,principal,entityType,entityId,true);});
+      await UnitOfWork.run(principal.companyId,async tx=>{
+        await validateEntity(tx,principal,entityType,entityId,true);
+        if(entityType==='ContractTemplate'){
+          const template=await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId,entityId);
+          const master=template?getMoveFlexApprovedContractMaster(template.templateKey):undefined;
+          if(master){
+            const checksum=createHash('sha256').update(req.body).digest('hex');
+            if(
+              mimeType!==DOCX_MIME||
+              req.body.length!==master.fileSize||
+              checksum!==master.sha256||
+              template.contentMarkdown.trim()||
+              !template.isCurrent||
+              template.isArchived
+            )throw new ApprovedContractMasterAttachmentError();
+          }
+        }
+      });
       const id=randomUUID(),stored=await storage.write(principal.companyId,id,req.body);storageKey=stored.storageKey;const now=new Date().toISOString();
       const item=await UnitOfWork.run(principal.companyId,async tx=>{
         await validateEntity(tx,principal,entityType,entityId,true);
@@ -260,7 +280,15 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
   });
   for(const lifecycle of[{path:'archive',action:'ARCHIVE_ATTACHMENT' as const,archived:true},{path:'restore',action:'RESTORE_ATTACHMENT' as const,archived:false}]){
     app.post(`/api/attachments/:id/${lifecycle.path}`,async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,lifecycle.action);if(!principal)return;try{
-      const item=await UnitOfWork.run(principal.companyId,async tx=>{const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!existing)throw new AttachmentNotFoundError();await validateEntity(tx,principal,existing.entityType,existing.entityId,true);if(existing.isArchived===lifecycle.archived)return existing;const saved=await tx.getAttachmentRepo().updateForCompany(principal.companyId,existing.id,{isArchived:lifecycle.archived});if(!saved)throw new AttachmentNotFoundError();await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:existing.id,action:AuditAction.UPDATE,previousState:JSON.stringify({isArchived:existing.isArchived}),newState:JSON.stringify({isArchived:saved.isArchived,event:lifecycle.path.toUpperCase()}),userId:principal.userId,userName:principal.name,timestamp:new Date().toISOString()});return saved;});res.json({item});
+      const item=await UnitOfWork.run(principal.companyId,async tx=>{const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!existing)throw new AttachmentNotFoundError();await validateEntity(tx,principal,existing.entityType,existing.entityId,true);if(existing.isArchived===lifecycle.archived)return existing;
+        if(lifecycle.archived&&existing.entityType==='ContractTemplate'&&existing.documentType==='CONTRACT_TEMPLATE_SOURCE'){
+          const template=await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId,existing.entityId);
+          const master=template?getMoveFlexApprovedContractMaster(template.templateKey):undefined;
+          if(master&&existing.checksum===master.sha256&&existing.fileSize===master.fileSize){
+            throw new AttachmentConflictError('O arquivo mestre aprovado da MoveFlex é imutável e não pode ser arquivado.');
+          }
+        }
+        const saved=await tx.getAttachmentRepo().updateForCompany(principal.companyId,existing.id,{isArchived:lifecycle.archived});if(!saved)throw new AttachmentNotFoundError();await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:existing.id,action:AuditAction.UPDATE,previousState:JSON.stringify({isArchived:existing.isArchived}),newState:JSON.stringify({isArchived:saved.isArchived,event:lifecycle.path.toUpperCase()}),userId:principal.userId,userName:principal.name,timestamp:new Date().toISOString()});return saved;});res.json({item});
     }catch(error){sendAttachmentError(res,error);}});
   }
 }
