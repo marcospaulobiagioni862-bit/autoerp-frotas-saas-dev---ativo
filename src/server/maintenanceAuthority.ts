@@ -6,6 +6,7 @@ import { roundCurrency } from '../shared/utils/currency';
 import { AuditAction, ContractStatus, OriginType, VehicleStatus } from '../types/enums';
 import type { Part, Supplier, WorkOrder, WorkOrderFinancialComponent, WorkOrderLaborItem, WorkOrderPartItem, WorkOrderServiceItem } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
+import { advanceVehicleKmInContext, VehicleKmReadingConflictError, VehicleKmReadingNotFoundError, VehicleKmReadingValidationError } from './vehicleKmReadingAuthority';
 
 export class MaintenanceValidationError extends Error {}
 export class MaintenanceConflictError extends Error {}
@@ -23,6 +24,19 @@ export interface CreateSupplierInput { name:string; tradeName?:string; document:
 export interface UpdateSupplierInput { name?:string; tradeName?:string|null; document?:string; phone?:string|null; email?:string|null; address?:string|null; category?:string; status?:Supplier['status']; notes?:string|null; }
 export interface CreatePartInput { code:string; name:string; description?:string; manufacturer?:string; category:string; unit:string; currentCost:number; minimumStock:number; currentStock:number; }
 export interface UpdatePartInput { code?:string; name?:string; description?:string|null; manufacturer?:string|null; category?:string; unit?:string; currentCost?:number; minimumStock?:number; currentStock?:number; status?:Part['status']; }
+
+async function recordMaintenanceKm(tx:any,p:AuthenticatedPrincipal,vehicle:any,km:number,date:string,notes:string){
+  try{
+    return await advanceVehicleKmInContext(tx,p,{
+      vehicleId:vehicle.id,kmValue:km,recordDate:date,readingType:'MAINTENANCE',sourceType:'MANUAL',notes,advanceSchedule:true,
+    });
+  }catch(error){
+    if(error instanceof VehicleKmReadingNotFoundError)throw new MaintenanceNotFoundError(error.message);
+    if(error instanceof VehicleKmReadingValidationError)throw new MaintenanceValidationError(error.message);
+    if(error instanceof VehicleKmReadingConflictError)throw new MaintenanceConflictError(error.message);
+    throw error;
+  }
+}
 
 let afterPayableCreatedForTests:(()=>void|Promise<void>)|undefined;
 export function setMaintenanceTestHooksForTests(hooks:{afterPayableCreated?:()=>void|Promise<void>}):void {
@@ -165,8 +179,11 @@ export class MaintenanceAuthorityService {
     let payables:any[]=[];
     if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();
     }
-    const now=new Date().toISOString(),updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{currentKm:exitKm,status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
-    await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:vehicle.id,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,kmValue:exitKm,recordDate:now.slice(0,10),readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`,createdAt:now});await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id)},now);return updated;
+    const now=new Date().toISOString(),updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');
+    await recordMaintenanceKm(tx,p,vehicle,exitKm,now.slice(0,10),`Conclusão OS #${before.number}`);
+    const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);
+    if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
+    await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id)},now);return updated;
   },{financialPeriodLock:'SHARED'}); }
 
   static cancelWorkOrder(p:AuthenticatedPrincipal,id:string,reason:string):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
