@@ -133,6 +133,8 @@ async function main(): Promise<void> {
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
   assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
   assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
+  assert(!sidebar.includes('h-dvh max-h-dvh'), 'Production sidebar must not size itself to the full viewport below the fixed header');
+  assert(sidebar.includes('h-full max-h-full min-h-0 overflow-hidden'), 'Production sidebar must inherit the available post-header height so its lower menu remains reachable');
   assert(sidebar.includes('useState(false)'), 'Production authority submenu must start collapsed');
   assert(sidebar.includes("id: 'transactions', label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
   assert(sidebar.includes("id: 'cashflow', label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
