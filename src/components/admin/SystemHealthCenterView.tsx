@@ -82,7 +82,7 @@ export const SystemHealthCenterView: React.FC<{ companyId?: string }> = ({ compa
             <h2 className="text-2xl font-bold tracking-tight">Centro de Saúde e Diagnóstico Técnico</h2>
           </div>
           <p className="text-sm text-slate-300 max-w-2xl">
-            Monitoramento determinístico em tempo real da integridade estrutural, persistência, resiliência, isolamento multi-tenant e segurança do AutoERP.
+            Monitoramento determinístico em tempo real da integridade estrutural, persistência, resiliência, isolamento multi-tenant e segurança do MoveFlex.
           </p>
         </div>
 
