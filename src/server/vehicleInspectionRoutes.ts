@@ -5,6 +5,7 @@ import { UnitOfWork } from '../db/uow';
 import { vehicleInspections } from '../db/schema';
 import { AuditAction, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { advanceVehicleKmInContext, VehicleKmReadingConflictError, VehicleKmReadingNotFoundError, VehicleKmReadingValidationError } from './vehicleKmReadingAuthority';
 
 const ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
@@ -84,9 +85,10 @@ function item(row:any){
   };
 }
 function sendError(res:Response,error:unknown){
-  if(error instanceof ValidationError){res.status(400).json({error:'Invalid vehicle inspection request'});return;}
+  if(error instanceof ValidationError||error instanceof VehicleKmReadingValidationError){res.status(400).json({error:error instanceof Error?error.message:'Invalid vehicle inspection request'});return;}
   if(error instanceof ForbiddenError){res.status(403).json({error:'Forbidden'});return;}
-  if(error instanceof NotFoundError){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof NotFoundError||error instanceof VehicleKmReadingNotFoundError){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof VehicleKmReadingConflictError){res.status(409).json({error:error.message});return;}
   console.error('AUTOERP_VEHICLE_INSPECTION_FAILURE',error);
   res.status(500).json({error:'Vehicle inspection operation failed'});
 }
@@ -143,14 +145,15 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         }).returning();
         const created=rows[0];if(!created) throw new Error('Inspection create failed');
 
-        if(odometer>vehicle.currentKm){
-          await context.getKmRecordRepo().create({
-            id:randomUUID(),companyId:principal.companyId,vehicleId:vehicle.id,driverId,contractId,
-            kmValue:odometer,recordDate:now.slice(0,10),readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT',
-            notes:`Vistoria de ${type==='ENTRY'?'entrada':'saída'}`,createdAt:now,
-          });
-          await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{currentKm:odometer,updatedAt:now});
-        }
+        await advanceVehicleKmInContext(context,principal,{
+          vehicleId:vehicle.id,
+          kmValue:odometer,
+          recordDate:now.slice(0,10),
+          readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT',
+          sourceType:'MANUAL',
+          notes:`Vistoria de ${type==='ENTRY'?'entrada':'saída'}`,
+          advanceSchedule:true,
+        });
 
         if(result==='BLOCKED_FOR_RENTAL'&&vehicle.status!==VehicleStatus.BLOCKED){
           await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{status:VehicleStatus.BLOCKED,updatedAt:now});
