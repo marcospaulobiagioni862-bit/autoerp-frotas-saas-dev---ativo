@@ -201,51 +201,56 @@ export async function runContractTemplateFileSourceRegression(): Promise<void> {
     assert(response.status === 400, `DOCX outside ContractTemplate expected 400, got ${response.status}`);
 
 
-    // CONTRACT-001: once a MoveFlex built-in key is promoted to an active DOCX,
-    // ensure-moveflex-default must preserve FILE authority and keep Markdown only
-    // as historical fallback.
+    // Approved MoveFlex standards are now checksum-pinned file authorities.
     response = await request('/api/contract-templates/ensure-moveflex-default', { method: 'POST', body: '{}' }, adminA);
-    assert([200, 201].includes(response.status), `initial MoveFlex bootstrap expected 200/201, got ${response.status}`);
-    const initialMoveFlex = await json(response);
-    const moveFlexMarkdown = initialMoveFlex.item;
-    assert(moveFlexMarkdown.templateKey === 'locacao-padrao' && moveFlexMarkdown.contentMarkdown.trim(), 'initial MoveFlex fallback must be Markdown before migration');
+    assert([200, 201].includes(response.status), `approved master bootstrap expected 200/201, got ${response.status}`);
+    const firstBootstrap = await json(response);
+    const moveFlexPending = firstBootstrap.item;
+    assert(
+      moveFlexPending.templateKey === 'locacao-padrao' &&
+      moveFlexPending.contentMarkdown === '' &&
+      moveFlexPending.isCurrent === true &&
+      moveFlexPending.isActive === false,
+      'approved MoveFlex standard must be a pending FILE record until the exact master is loaded'
+    );
 
-    response = await request(`/api/contract-templates/${moveFlexMarkdown.id}/versions`, {
+    const firstVersions = await request(`/api/contract-templates/${moveFlexPending.id}/versions`, {}, adminA);
+    assert(firstVersions.status === 200, `approved master versions expected 200, got ${firstVersions.status}`);
+    const versionCount = (await json(firstVersions)).items.length;
+
+    response = await request('/api/contract-templates/ensure-moveflex-default', { method: 'POST', body: '{}' }, adminA);
+    assert(response.status === 200, `approved master bootstrap replay expected 200, got ${response.status}`);
+    const replayed = await json(response);
+    assert(replayed.item.id === moveFlexPending.id, 'approved master bootstrap must reuse the same pending record');
+
+    response = await request(`/api/contract-templates/${moveFlexPending.id}/versions`, {}, adminA);
+    assert(response.status === 200, `approved master versions replay expected 200, got ${response.status}`);
+    assert((await json(response)).items.length === versionCount, 'approved master bootstrap replay must not create extra versions');
+
+    response = await request(`/api/contract-templates/${moveFlexPending.id}/versions`, {
       method: 'POST',
-      body: JSON.stringify({ title: moveFlexMarkdown.title, sourceMode: 'FILE' }),
+      body: JSON.stringify({ title: 'Tentativa de alterar padrão', sourceMode: 'MARKDOWN', contentMarkdown: 'Outro contrato {{driver.name}}' }),
     }, adminA);
-    assert(response.status === 201, `MoveFlex DOCX version expected 201, got ${response.status}`);
-    const moveFlexDocx = (await json(response)).item;
-    assert(moveFlexDocx.contentMarkdown === '' && moveFlexDocx.isCurrent === false && moveFlexDocx.isActive === false, 'MoveFlex DOCX version must wait for source promotion');
+    assert(response.status === 409, `approved master manual version expected 409, got ${response.status}`);
+
+    response = await request(`/api/contract-templates/${moveFlexPending.id}/archive`, { method: 'POST', body: '{}' }, adminA);
+    assert(response.status === 409, `approved master archive expected 409, got ${response.status}`);
 
     response = await request('/api/attachments', {
       method: 'POST',
-      headers: uploadHeaders(moveFlexDocx.id, 'Contrato_01_MoveFlex_ERP_TEMPLATE.docx', DOCX_MIME),
+      headers: uploadHeaders(moveFlexPending.id, 'arquivo-alterado.docx', DOCX_MIME),
       body: docxBytes,
     }, adminA);
-    assert(response.status === 201, `MoveFlex DOCX source upload expected 201, got ${response.status}`);
+    assert(response.status === 400, `altered standard DOCX expected 400, got ${response.status}`);
+    const mismatch = await json(response);
+    assert(
+      String(mismatch?.error || '').includes('arquivo mestre aprovado'),
+      'altered standard DOCX must explain that only the approved master is accepted'
+    );
 
-    response = await request(`/api/contract-templates/${moveFlexDocx.id}/promote-file-source`, { method: 'POST', body: '{}' }, adminA);
-    assert(response.status === 200, `MoveFlex DOCX promotion expected 200, got ${response.status}`);
-    const promotedMoveFlex = (await json(response)).item;
-    assert(promotedMoveFlex.isCurrent === true && promotedMoveFlex.isActive === true, 'promoted MoveFlex DOCX must be active/current');
+    response = await request(`/api/contract-templates/${moveFlexPending.id}/promote-file-source`, { method: 'POST', body: '{}' }, adminA);
+    assert(response.status === 409, `approved master promotion without exact source expected 409, got ${response.status}`);
 
-    response = await request(`/api/contract-templates/${moveFlexDocx.id}/versions`, {}, adminA);
-    assert(response.status === 200, `MoveFlex versions expected 200, got ${response.status}`);
-    const versionsAfterPromotion = (await json(response)).items;
-    const legacyMoveFlex = versionsAfterPromotion.find((item: any) => item.id === moveFlexMarkdown.id);
-    assert(legacyMoveFlex?.isCurrent === false && legacyMoveFlex?.isActive === false, 'legacy MoveFlex Markdown must remain historical and inactive after DOCX promotion');
-
-    const versionCountAfterPromotion = versionsAfterPromotion.length;
-    response = await request('/api/contract-templates/ensure-moveflex-default', { method: 'POST', body: '{}' }, adminA);
-    assert(response.status === 200, `MoveFlex bootstrap replay after DOCX promotion expected 200, got ${response.status}`);
-    const replayedMoveFlex = await json(response);
-    assert(replayedMoveFlex.item.id === moveFlexDocx.id, 'MoveFlex bootstrap replay must preserve the promoted DOCX as authority');
-
-    response = await request(`/api/contract-templates/${moveFlexDocx.id}/versions`, {}, adminA);
-    const versionsAfterReplay = (await json(response)).items;
-    assert(versionsAfterReplay.length === versionCountAfterPromotion, 'MoveFlex bootstrap replay must not create a replacement Markdown version');
-    assert(versionsAfterReplay.find((item: any) => item.id === moveFlexDocx.id)?.isCurrent === true, 'promoted MoveFlex DOCX lost current authority after bootstrap replay');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(storageDir, { recursive: true, force: true });
