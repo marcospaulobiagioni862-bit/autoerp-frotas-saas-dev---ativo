@@ -61,6 +61,7 @@ async function syncRecurringRule(tx:any,p:AuthenticatedPrincipal,tracker:Tracker
     }
     return;
   }
+  if(!tracker.supplierId)throw new TrackerValidationError('supplierId is required for positive monthly cost');
   await FinancialAuthorizationService.authorize(p.userId,p.companyId,'PAYABLE_CREATE',tx);
   const effectiveCategory=categoryId||existing?.category_id;
   if(!effectiveCategory)throw new TrackerValidationError('categoryId is required for positive monthly cost');
