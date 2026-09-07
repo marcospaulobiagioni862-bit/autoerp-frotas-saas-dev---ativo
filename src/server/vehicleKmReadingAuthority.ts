@@ -182,12 +182,12 @@ async function advanceSchedule(raw:any,p:AuthenticatedPrincipal,vehicleId:string
 }
 
 
-async function sameDayKmRecord(raw:any,companyId:string,vehicleId:string,kmValue:number,date:string):Promise<KmRecord|null>{
+async function existingKmRecord(raw:any,companyId:string,vehicleId:string,kmValue:number):Promise<KmRecord|null>{
   const row=rows(await raw.execute(sql`
     SELECT id,company_id,vehicle_id,driver_id,contract_id,km_value,record_date,reading_type,
            source_type,source_attachment_id,source_tracker_id,source_observed_at,photo_url,notes,created_at
     FROM vehicle_km_records
-    WHERE company_id=${companyId} AND vehicle_id=${vehicleId} AND km_value=${kmValue} AND record_date=${date}
+    WHERE company_id=${companyId} AND vehicle_id=${vehicleId} AND km_value=${kmValue}
     ORDER BY created_at DESC,id DESC
     LIMIT 1
   `))[0];
@@ -240,7 +240,7 @@ export async function advanceVehicleKmInContext(
   if(kmValue<vehicle.currentKm)throw new VehicleKmReadingValidationError(`KM não pode regredir: atual ${vehicle.currentKm}, informado ${kmValue}`);
   await validateSourceEvidence(tx,p,vehicleId,sourceType,input);
 
-  const existing=await sameDayKmRecord(raw,p.companyId,vehicleId,kmValue,date);
+  const existing=await existingKmRecord(raw,p.companyId,vehicleId,kmValue);
   const now=new Date().toISOString();
   let record=existing;
   let created=false;
