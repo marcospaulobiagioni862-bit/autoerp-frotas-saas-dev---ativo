@@ -21,6 +21,7 @@ import { registerVehicleInspectionRoutes } from './vehicleInspectionRoutes';
 import { registerVehicleKmReadingRoutes } from './vehicleKmReadingRoutes';
 import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
 
@@ -182,7 +183,8 @@ export function registerVehicleRoutes(app: Express): void {
     if (!principal) return;
     try {
       const plate = normalizePlate(req.body?.plate);
-      const renavam = requiredText(req.body?.renavam, 'renavam');
+      const renavam = normalizeVehicleIdentity(requiredText(req.body?.renavam, 'renavam'));
+      if (!renavam) throw new VehicleValidationError('Invalid renavam');
       const brand = requiredText(req.body?.brand, 'brand');
       const model = requiredText(req.body?.model, 'model');
       const color = requiredText(req.body?.color, 'color');
@@ -201,8 +203,8 @@ export function registerVehicleRoutes(app: Express): void {
       const category = normalizeVehicleCategory(requiredText(req.body?.category, 'category'));
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
-        if (await repo.findByPlate(principal.companyId, plate)) throw new VehicleConflictError(`Já existe um veículo cadastrado com a placa ${plate}.`);
-        if (await repo.findByRenavam(principal.companyId, renavam)) throw new VehicleConflictError(`Já existe um veículo cadastrado com o RENAVAM ${renavam}.`);
+        const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam);
+        if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
         const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color, renavam, chassis, currentKm, nextMaintenanceKm, fuelType, category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
         await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
@@ -227,8 +229,8 @@ export function registerVehicleRoutes(app: Express): void {
         if (!existing) throw new VehicleNotFoundError();
         if (existing.isArchived || existing.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
         const changes: Partial<Vehicle> = { updatedAt: new Date().toISOString() };
-        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await repo.findByPlate(principal.companyId, plate); if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError(`A placa ${plate} já pertence a outro veículo.`); changes.plate = plate; }
-        if (req.body?.renavam !== undefined) { const renavam = requiredText(req.body.renavam, 'renavam'); const duplicate = await repo.findByRenavam(principal.companyId, renavam); if (duplicate && duplicate.id !== existing.id) throw new VehicleConflictError(`O RENAVAM ${renavam} já pertence a outro veículo.`); changes.renavam = renavam; }
+        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, plate, existing.renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.plate = plate; }
+        if (req.body?.renavam !== undefined) { const renavam = normalizeVehicleIdentity(requiredText(req.body.renavam, 'renavam')); if (!renavam) throw new VehicleValidationError('Invalid renavam'); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, existing.plate, renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.renavam = renavam; }
         if (req.body?.brand !== undefined) changes.brand = requiredText(req.body.brand, 'brand');
         if (req.body?.model !== undefined) changes.model = requiredText(req.body.model, 'model');
         if (req.body?.version !== undefined) changes.version = optionalText(req.body.version) || '';
