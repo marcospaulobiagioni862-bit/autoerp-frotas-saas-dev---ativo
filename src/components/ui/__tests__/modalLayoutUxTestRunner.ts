@@ -40,6 +40,7 @@ console.log('Modal layout UX regression PASS');
 const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
 const productionSidebar = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
 const developmentSidebar = readFileSync(new URL('../../layout/Sidebar.tsx', import.meta.url), 'utf8');
+const headerSource = readFileSync(new URL('../../layout/Header.tsx', import.meta.url), 'utf8');
 
 assert.match(
   app,
@@ -78,3 +79,12 @@ for (const [name, sidebar] of [['development', developmentSidebar], ['production
   assert.doesNotMatch(sidebar, /className="hidden md:block h-full/, `${name} desktop sidebar must not depend on Tailwind hidden breakpoint rendering`);
   assert.match(sidebar, /isCompactViewport && isMobileOpen[\s\S]*fixed inset-0 z-40/, `${name} mobile navigation must remain off-canvas`);
 }
+
+
+const touchDrawerQuery = '(max-width: 1023px) and (pointer: coarse)';
+for (const [name, sidebar] of [['development', developmentSidebar], ['production', productionSidebar]] as const) {
+  assert.ok(sidebar.includes(touchDrawerQuery), `${name} sidebar must reserve off-canvas navigation for touch/coarse viewports`);
+  assert.doesNotMatch(sidebar, /window\.matchMedia\('\(max-width: 767px\)'\)/, `${name} desktop navigation must not disappear only because the browser window is narrow`);
+}
+assert.ok(headerSource.includes(touchDrawerQuery), 'header hamburger must use the same touch/coarse navigation rule as both sidebars');
+assert.match(headerSource, /isNavigationDrawerViewport && onToggleMobileSidebar/, 'hamburger must render only when the global drawer viewport rule is active');
