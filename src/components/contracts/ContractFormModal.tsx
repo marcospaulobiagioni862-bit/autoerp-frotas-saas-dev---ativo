@@ -253,4 +253,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   );
 };
 
-const Field: React.FC<{ label: string; children: React.ReactNode; error?:string }> = ({ label, children, error }) => <label className="block space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200"><span>{label}</span>{children}{error&&<span className="block text-[11px] font-normal text-red-600 dark:text-red-400">{error}</span>}</label>;
+const Field: React.FC<{ label: string; children: React.ReactNode; error?:string }> = ({ label, children, error }) => {
+  const required = label.endsWith(' *');
+  const displayLabel = required ? label.slice(0, -2) : label;
+  return <label className="block space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+    <span>{displayLabel}{required && <span className="ml-1 text-red-500" aria-hidden="true">*</span>}</span>
+    {children}
+    {error&&<span className="block text-[11px] font-normal text-red-600 dark:text-red-400">{error}</span>}
+  </label>;
+};
