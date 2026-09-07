@@ -249,6 +249,21 @@ export class SessionLoginTestRunner {
       await expectRejected(() => issueSessionToken(sessionIdentity, JWT_CONFIG, 3601));
     });
 
+    await run('SL13', 'Authenticated API responses must not be cacheable', async () => {
+      const serverSource = await import('node:fs/promises').then(({ readFile }) =>
+        readFile(new URL('../../../server.ts', import.meta.url), 'utf8')
+      );
+      if (!serverSource.includes("app.use('/api'")) {
+        throw new Error('API no-store middleware is missing');
+      }
+      if (!serverSource.includes("res.setHeader('Cache-Control', 'private, no-store')")) {
+        throw new Error('Authenticated API responses are cacheable');
+      }
+      if (!serverSource.includes("res.setHeader('Pragma', 'no-cache')")) {
+        throw new Error('Legacy no-cache header is missing');
+      }
+    });
+
     const passed = tests.filter((test) => test.passed).length;
     return {
       total: tests.length,

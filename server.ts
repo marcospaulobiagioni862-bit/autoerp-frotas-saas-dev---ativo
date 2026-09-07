@@ -120,6 +120,11 @@ async function startServer() {
 
   const app = express();
   app.use(requestCorrelationMiddleware);
+  app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Pragma', 'no-cache');
+    next();
+  });
   app.use(express.json());
   const PORT = Number(process.env.PORT || 3000);
 
