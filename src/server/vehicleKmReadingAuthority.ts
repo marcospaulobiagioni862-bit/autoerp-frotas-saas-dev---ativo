@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction, VehicleStatus } from '../types/enums';
-import type { KmRecord } from '../types/entities';
+import type { KmRecord, Vehicle } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 import {
   calculateNextKmReadingDate,
@@ -55,6 +55,29 @@ export interface BatchKmReadingResultItem {
   nextDueDate?:string;
 }
 
+export interface AdvanceVehicleKmInContextInput {
+  vehicleId:string;
+  kmValue:number;
+  readingType:KmRecord['readingType'];
+  recordDate?:string;
+  notes?:string;
+  sourceType?:KmReadingSourceType;
+  sourceAttachmentId?:string;
+  sourceTrackerId?:string;
+  sourceObservedAt?:string;
+  advanceSchedule?:boolean;
+}
+
+export interface AdvanceVehicleKmInContextResult {
+  vehicle:Vehicle;
+  previousKm:number;
+  currentKm:number;
+  distanceKm:number;
+  record:KmRecord;
+  created:boolean;
+  nextDueDate?:string;
+}
+
 export class VehicleKmReadingValidationError extends Error {}
 export class VehicleKmReadingNotFoundError extends Error {}
 export class VehicleKmReadingConflictError extends Error {}
@@ -75,6 +98,28 @@ function integerKm(value:unknown):number{
   return result;
 }
 function today():string{return new Date().toISOString().slice(0,10);}
+function recordDate(value:unknown):string{
+  const result=value===undefined?today():String(value);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(result)||Number.isNaN(Date.parse(`${result}T00:00:00Z`))){
+    throw new VehicleKmReadingValidationError('Data da leitura de KM inválida');
+  }
+  return result;
+}
+function readingType(value:unknown):KmRecord['readingType']{
+  if(value==='CHECK_IN'||value==='CHECK_OUT'||value==='PERIODIC'||value==='MAINTENANCE')return value;
+  throw new VehicleKmReadingValidationError('Tipo de leitura de KM inválido');
+}
+function mapKmRecordRow(row:any):KmRecord{return{
+  id:String(row.id),companyId:String(row.company_id),vehicleId:String(row.vehicle_id),
+  driverId:row.driver_id?String(row.driver_id):undefined,contractId:row.contract_id?String(row.contract_id):undefined,
+  kmValue:Number(row.km_value),recordDate:String(row.record_date),readingType:String(row.reading_type) as KmRecord['readingType'],
+  sourceType:(row.source_type?String(row.source_type):'MANUAL') as KmReadingSourceType,
+  sourceAttachmentId:row.source_attachment_id?String(row.source_attachment_id):undefined,
+  sourceTrackerId:row.source_tracker_id?String(row.source_tracker_id):undefined,
+  sourceObservedAt:row.source_observed_at?new Date(row.source_observed_at).toISOString():undefined,
+  photoUrl:row.photo_url?String(row.photo_url):undefined,notes:row.notes?String(row.notes):undefined,
+  createdAt:new Date(row.created_at).toISOString(),
+};}
 function mapSchedule(row:any):KmReadingSchedule{return{
   companyId:String(row.company_id),
   vehicleId:String(row.vehicle_id),
@@ -134,6 +179,106 @@ async function advanceSchedule(raw:any,p:AuthenticatedPrincipal,vehicleId:string
     WHERE company_id=${p.companyId} AND vehicle_id=${vehicleId}
   `);
   return nextDueDate;
+}
+
+
+async function sameDayKmRecord(raw:any,companyId:string,vehicleId:string,kmValue:number,date:string):Promise<KmRecord|null>{
+  const row=rows(await raw.execute(sql`
+    SELECT id,company_id,vehicle_id,driver_id,contract_id,km_value,record_date,reading_type,
+           source_type,source_attachment_id,source_tracker_id,source_observed_at,photo_url,notes,created_at
+    FROM vehicle_km_records
+    WHERE company_id=${companyId} AND vehicle_id=${vehicleId} AND km_value=${kmValue} AND record_date=${date}
+    ORDER BY created_at DESC,id DESC
+    LIMIT 1
+  `))[0];
+  return row?mapKmRecordRow(row):null;
+}
+
+async function validateSourceEvidence(tx:any,p:AuthenticatedPrincipal,vehicleId:string,sourceType:KmReadingSourceType,input:AdvanceVehicleKmInContextInput):Promise<void>{
+  if(sourceType==='DRIVER_PHOTO'){
+    const attachmentId=text(input.sourceAttachmentId,'sourceAttachmentId');
+    const attachment=await tx.getAttachmentRepo().findByIdForCompany(p.companyId,attachmentId);
+    if(
+      !attachment||attachment.isArchived||attachment.contentState!=='AVAILABLE'||
+      attachment.entityType!=='Vehicle'||attachment.entityId!==vehicleId||
+      String(attachment.documentType||'').toUpperCase()!=='KM_ODOMETER_PHOTO'||
+      !String(attachment.mimeType||'').startsWith('image/')
+    )throw new VehicleKmReadingConflictError('Foto de odômetro inválida para o veículo');
+    if(input.sourceTrackerId!==undefined||input.sourceObservedAt!==undefined)throw new VehicleKmReadingValidationError('Origem de KM inconsistente');
+    return;
+  }
+  if(sourceType==='TRACKER'){
+    const trackerId=text(input.sourceTrackerId,'sourceTrackerId');
+    const active=await tx.getTrackerRepo().findActiveByVehicle(p.companyId,vehicleId);
+    if(!active||active.id!==trackerId)throw new VehicleKmReadingConflictError('Rastreador não corresponde ao veículo');
+    if(!input.sourceObservedAt||Number.isNaN(Date.parse(input.sourceObservedAt)))throw new VehicleKmReadingValidationError('Data da telemetria inválida');
+    if(input.sourceAttachmentId!==undefined)throw new VehicleKmReadingValidationError('Origem de KM inconsistente');
+    return;
+  }
+  if(input.sourceAttachmentId!==undefined||input.sourceTrackerId!==undefined||input.sourceObservedAt!==undefined){
+    throw new VehicleKmReadingValidationError('Leitura manual não aceita evidência de outra origem');
+  }
+}
+
+export async function advanceVehicleKmInContext(
+  tx:any,
+  p:AuthenticatedPrincipal,
+  input:AdvanceVehicleKmInContextInput,
+):Promise<AdvanceVehicleKmInContextResult>{
+  const vehicleId=text(input.vehicleId,'vehicleId');
+  const kmValue=integerKm(input.kmValue);
+  const type=readingType(input.readingType);
+  const date=recordDate(input.recordDate);
+  const sourceType=source(input.sourceType??'MANUAL');
+  const raw=tx.getRawTransaction?.();if(!raw)throw new Error('KM authority persistence unavailable');
+
+  const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,vehicleId);
+  if(!vehicle)throw new VehicleKmReadingNotFoundError('Veículo não encontrado');
+  if(vehicle.isArchived||vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED){
+    throw new VehicleKmReadingConflictError('Veículo não aceita nova leitura de KM');
+  }
+  if(kmValue<vehicle.currentKm)throw new VehicleKmReadingConflictError(`KM não pode regredir: atual ${vehicle.currentKm}, informado ${kmValue}`);
+  await validateSourceEvidence(tx,p,vehicleId,sourceType,input);
+
+  const existing=await sameDayKmRecord(raw,p.companyId,vehicleId,kmValue,date);
+  const now=new Date().toISOString();
+  let record=existing;
+  let created=false;
+
+  if(!record){
+    record=await tx.getKmRecordRepo().create({
+      id:randomUUID(),companyId:p.companyId,vehicleId,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,
+      kmValue,recordDate:date,readingType:type,sourceType,
+      sourceAttachmentId:input.sourceAttachmentId,sourceTrackerId:input.sourceTrackerId,sourceObservedAt:input.sourceObservedAt,
+      notes:input.notes,createdAt:now,
+    });
+    created=true;
+  }
+
+  let updated=vehicle;
+  if(kmValue>vehicle.currentKm){
+    const persisted=await tx.getVehicleRepo().updateForCompany(p.companyId,vehicleId,{currentKm:kmValue,updatedAt:now});
+    if(!persisted)throw new VehicleKmReadingNotFoundError('Veículo não encontrado');
+    updated=persisted;
+  }
+
+  const nextDueDate=input.advanceSchedule===false?undefined:await advanceSchedule(raw,p,vehicleId,date);
+  if(created||kmValue!==vehicle.currentKm){
+    await tx.getAuditLogRepo().create({
+      id:randomUUID(),companyId:p.companyId,entityName:'KmRecord',entityId:record.id,
+      action:created?AuditAction.CREATE:AuditAction.UPDATE,userId:p.userId,userName:p.name,timestamp:now,
+      previousState:JSON.stringify({vehicleId,currentKm:vehicle.currentKm}),
+      newState:JSON.stringify({
+        vehicleId,currentKm:kmValue,distanceKm:kmValue-vehicle.currentKm,readingType:type,sourceType,
+        sourceAttachmentId:input.sourceAttachmentId,sourceTrackerId:input.sourceTrackerId,
+        sourceObservedAt:input.sourceObservedAt,nextDueDate,reusedExistingRecord:!created,
+      }),
+    });
+  }
+  return{
+    vehicle:updated,previousKm:vehicle.currentKm,currentKm:kmValue,distanceKm:kmValue-vehicle.currentKm,
+    record,created,nextDueDate,
+  };
 }
 
 export class VehicleKmReadingAuthority {
@@ -240,43 +385,17 @@ export class VehicleKmReadingAuthority {
           }
         }
 
-        if(kmValue<vehicle.currentKm)throw new VehicleKmReadingValidationError(`KM de ${vehicle.plate} não pode ser menor que ${vehicle.currentKm}`);
-        const existing=rows(await raw.execute(sql`
-          SELECT id,source_type,source_attachment_id,source_tracker_id
-          FROM vehicle_km_records
-          WHERE company_id=${p.companyId} AND vehicle_id=${vehicleId}
-            AND km_value=${kmValue} AND reading_type='PERIODIC' AND record_date=${recordDate}
-          LIMIT 1
-        `))[0];
-        if(existing){
-          const sameSource=String(existing.source_type||'MANUAL')===sourceType
-            &&String(existing.source_attachment_id||'')===String(sourceAttachmentId||'')
-            &&String(existing.source_tracker_id||'')===String(sourceTrackerId||'');
-          if(!sameSource)throw new VehicleKmReadingConflictError(`Já existe uma leitura de ${vehicle.plate} com este KM hoje`);
-          const records=await tx.getKmRecordRepo().findByVehicleIdForCompany(p.companyId,vehicleId);
-          const record=records.find((item:KmRecord)=>item.id===String(existing.id));
-          if(!record)throw new Error('Persisted KM retry record unavailable');
-          result.push({vehicleId,previousKm:vehicle.currentKm,currentKm:vehicle.currentKm,distanceKm:0,sourceType,record,created:false});
-          continue;
-        }
-
-        const now=new Date().toISOString();
-        const record=await tx.getKmRecordRepo().create({
-          id:randomUUID(),companyId:p.companyId,vehicleId,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,
-          kmValue,recordDate,readingType:'PERIODIC',sourceType,sourceAttachmentId,sourceTrackerId,sourceObservedAt,
+        const advanced=await advanceVehicleKmInContext(tx,p,{
+          vehicleId,kmValue,readingType:'PERIODIC',recordDate,
+          sourceType,sourceAttachmentId,sourceTrackerId,sourceObservedAt,
           notes:sourceType==='TRACKER'?'Leitura de KM derivada do rastreador':sourceType==='DRIVER_PHOTO'?'Leitura de KM informada pelo motorista com foto':'Lançamento de KM em lote',
-          createdAt:now,
+          advanceSchedule:true,
         });
-        const updated=await tx.getVehicleRepo().updateForCompany(p.companyId,vehicleId,{currentKm:kmValue,updatedAt:now});
-        if(!updated)throw new VehicleKmReadingNotFoundError('Veículo não encontrado');
-        const nextDueDate=await advanceSchedule(raw,p,vehicleId,recordDate);
-        await tx.getAuditLogRepo().create({
-          id:randomUUID(),companyId:p.companyId,entityName:'KmRecord',entityId:record.id,action:AuditAction.CREATE,
-          userId:p.userId,userName:p.name,timestamp:now,
-          previousState:JSON.stringify({vehicleId,currentKm:vehicle.currentKm}),
-          newState:JSON.stringify({vehicleId,currentKm:kmValue,distanceKm:kmValue-vehicle.currentKm,sourceType,sourceAttachmentId,sourceTrackerId,sourceObservedAt,nextDueDate}),
+        result.push({
+          vehicleId,previousKm:advanced.previousKm,currentKm:advanced.currentKm,distanceKm:advanced.distanceKm,
+          sourceType:(advanced.record.sourceType||sourceType) as KmReadingSourceType,record:advanced.record,
+          created:advanced.created,nextDueDate:advanced.nextDueDate,
         });
-        result.push({vehicleId,previousKm:vehicle.currentKm,currentKm:kmValue,distanceKm:kmValue-vehicle.currentKm,sourceType,record,created:true,nextDueDate});
       }
       return result;
     });
