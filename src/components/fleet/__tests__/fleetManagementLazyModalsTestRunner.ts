@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { formatCurrencyInputBRL, parseCurrencyInput } from '../../../shared/utils/currency';
 
 const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
 const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
+const vehicleFormSource = readFileSync(new URL('../VehicleFormModal.tsx', import.meta.url), 'utf8');
+const statusPresentationSource = readFileSync(new URL('../vehicleStatusPresentation.ts', import.meta.url), 'utf8');
+const productionSidebarSource = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
 
@@ -87,7 +91,21 @@ assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use 
 assert.match(intakeSource, /VehicleClient\.list\(\)/, 'vehicle intake must pre-check authoritative fleet identifiers');
 assert.match(intakeSource, /normalizedIdentifier\(vehicle\.plate\)===plate/, 'vehicle intake must detect duplicate plates');
 assert.match(intakeSource, /normalizedIdentifier\(vehicle\.renavam\)===renavam/, 'vehicle intake must detect duplicate RENAVAM');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.chassis\)===chassis/, 'vehicle intake must detect duplicate chassis');
-assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\}/, 'vehicle materialization button must remain locked during synchronous submission');
+assert.match(intakeSource, /Este veículo já possui cadastro no sistema\./, 'vehicle intake must explain the duplicate vehicle conflict');
+assert.match(intakeSource, /Abrir cadastro existente/, 'duplicate vehicle warning must offer direct access to the existing record');
+assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|Boolean\(duplicateVehicle\)\}/, 'vehicle materialization button must remain locked for duplicate or concurrent submission');
+
+assert.equal(parseCurrencyInput('1.250,56'), 1250.56, 'BRL input must parse dot thousands and comma decimals');
+assert.equal(parseCurrencyInput('1250.56'), 1250.56, 'canonical decimal values must remain compatible');
+assert.equal(formatCurrencyInputBRL(1250.56), '1.250,56', 'BRL input must render Brazilian separators');
+assert.match(vehicleFormSource, /CurrencyInput label="Valor de Aquisição \(R\$\) \*"/, 'manual vehicle monetary inputs must use BRL formatting');
+assert.match(intakeSource, /CurrencyInput label="Valor de Compra \(R\$\) \*"/, 'AI vehicle monetary inputs must use BRL formatting');
+
+assert.doesNotMatch(statusPresentationSource, /\{ id: VehicleStatus\.WAITING_MAINTENANCE,/, 'legacy waiting-maintenance status must not appear as a separate filter');
+assert.match(source, /v\.status === VehicleStatus\.MAINTENANCE \|\| v\.status === VehicleStatus\.WAITING_MAINTENANCE/, 'legacy waiting-maintenance vehicles must count under Em manutenção');
+
+assert.match(productionSidebarSource, /window\.matchMedia\('\(max-width: 767px\)'\)/, 'production sidebar must decide compact mode at runtime');
+assert.match(productionSidebarSource, /data-testid="desktop-sidebar"/, 'desktop sidebar must have an explicit persistent render path');
+assert.doesNotMatch(productionSidebarSource, /className="hidden md:block h-dvh/, 'desktop sidebar must not rely on a hidden Tailwind breakpoint');
 
 console.log('Deferred fleet modals regression: PASS');
