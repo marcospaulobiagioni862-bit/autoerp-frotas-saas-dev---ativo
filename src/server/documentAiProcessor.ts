@@ -41,10 +41,13 @@ const ALL_DOCUMENT_FIELDS = new Set(
 
 type JsonScalar = string | number | boolean | null;
 
+export type DocumentAiDocumentType = keyof typeof DOCUMENT_FIELDS;
+
 export interface DocumentAiProviderRequest {
   content: Uint8Array;
   mimeType: string;
   policy: string;
+  expectedDocumentType?: DocumentAiDocumentType;
 }
 
 export interface DocumentAiProvider {
@@ -58,6 +61,7 @@ export interface DocumentAiProcessingInput {
   content: Uint8Array;
   mimeType: string;
   expectedChecksum: string;
+  expectedDocumentType?: DocumentAiDocumentType;
   timeoutMs?: number;
 }
 
@@ -267,7 +271,7 @@ export async function processDocumentAiBytes(
     let rawOutput: unknown;
     try {
       rawOutput = await Promise.race([
-        provider.extract({ content: input.content, mimeType: input.mimeType, policy: DOCUMENT_AI_SYSTEM_POLICY }, controller.signal),
+        provider.extract({ content: input.content, mimeType: input.mimeType, policy: DOCUMENT_AI_SYSTEM_POLICY, expectedDocumentType: input.expectedDocumentType }, controller.signal),
         timeout,
       ]);
     } catch (error) {
