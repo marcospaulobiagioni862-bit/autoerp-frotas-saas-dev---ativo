@@ -131,7 +131,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     if (formData.yearModel !== existing.yearModel) changes.yearModel = formData.yearModel;
     if (cleanText(formData.color) !== cleanText(existing.color)) changes.color = cleanText(formData.color);
     if (cleanText(formData.chassis).toUpperCase() !== cleanText(existing.chassis).toUpperCase()) changes.chassis = cleanText(formData.chassis).toUpperCase();
-    if ((formData.nextMaintenanceKm || 0) !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm || 0;
+    if (formData.nextMaintenanceKm !== undefined && formData.nextMaintenanceKm !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm;
     if (cleanText(formData.fuelType) !== cleanText(existing.fuelType)) changes.fuelType = cleanText(formData.fuelType);
     if (cleanText(formData.category) !== cleanText(existing.category)) changes.category = cleanText(formData.category);
     if (formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
@@ -243,7 +243,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             onChange={(e) => handleChange('currentKm', Number(e.target.value))}
             helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
-          <Input label="Próx. Manutenção (KM)" type="number" min={formData.currentKm} step="1" value={formData.nextMaintenanceKm ?? ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
+          <Input label="Próx. Manutenção (KM)" type="number" min={formData.currentKm} step="1" value={formData.nextMaintenanceKm ?? ''} onChange={(e) => handleChange('nextMaintenanceKm', e.target.value === '' ? undefined : Number(e.target.value))} />
           <Select label="Categoria *" value={formData.category} onChange={(e) => handleChange('category', e.target.value)} options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))} />
         </div>
 
