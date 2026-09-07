@@ -7,6 +7,7 @@ import { syncVehicleDocumentIntakeWorkerResult } from './vehicleDocumentIntakeAi
 import {
   DocumentAiProcessingError,
   processDocumentAiBytes,
+  type DocumentAiDocumentType,
   type DocumentAiProvider,
   type DocumentAiProposal,
 } from './documentAiProcessor';
@@ -16,6 +17,17 @@ export const DOCUMENT_AI_STALE_PROCESSING_MS = 180_000;
 
 const SYSTEM_USER_ID = 'SYSTEM_DOC_AI';
 const SYSTEM_USER_NAME = 'AutoERP Document AI Worker';
+
+const DOCUMENT_AI_TYPES = new Set<DocumentAiDocumentType>([
+  'CNH','CRLV','CRV','ATPV_E','IPVA','LICENCIAMENTO','VISTORIA','LAUDO',
+  'TRAFFIC_TICKET','INVOICE','RECEIPT','CONTRACT','INSURANCE','MAINTENANCE','TRACKER',
+]);
+
+function expectedDocumentType(value: string | null): DocumentAiDocumentType | undefined {
+  return value && DOCUMENT_AI_TYPES.has(value as DocumentAiDocumentType)
+    ? value as DocumentAiDocumentType
+    : undefined;
+}
 
 type QueryResult = { rows?: unknown[] } | unknown[];
 
@@ -63,6 +75,7 @@ interface ClaimedExtraction {
   attachmentChecksum: string;
   storageKey: string;
   mimeType: string;
+  documentType: string | null;
 }
 
 export interface DocumentAiAttachmentReader {
@@ -214,7 +227,8 @@ async function claim(
                 extraction.attachment_id,
                 extraction.attachment_checksum,
                 attachment.storage_key,
-                attachment.mime_type
+                attachment.mime_type,
+                attachment.document_type
     `);
     const item = rows(result)[0];
     if (!item) return null;
@@ -224,6 +238,7 @@ async function claim(
       attachmentChecksum: requiredString(item.attachment_checksum, 'attachment checksum'),
       storageKey: requiredString(item.storage_key, 'storage key'),
       mimeType: requiredString(item.mime_type, 'mime type'),
+      documentType: typeof item.document_type === 'string' && item.document_type.trim() ? item.document_type.trim().toUpperCase() : null,
     };
   });
 }
@@ -355,6 +370,7 @@ export class DocumentAiQueueService {
         content,
         mimeType: item.mimeType,
         expectedChecksum: item.attachmentChecksum,
+        expectedDocumentType: expectedDocumentType(item.documentType),
       });
       await complete(companyId, claimedBy, item, proposal);
       return { id: item.id, status: 'REVIEW_REQUIRED' };
