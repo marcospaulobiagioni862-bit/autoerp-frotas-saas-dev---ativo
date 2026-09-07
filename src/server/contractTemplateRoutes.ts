@@ -81,6 +81,25 @@ function contentForMode(body: Record<string, unknown>, mode: TemplateSourceMode,
   return contentMarkdown;
 }
 
+async function hasActiveDocxFileSource(tx: any, companyId: string, template: any): Promise<boolean> {
+  if (
+    !template ||
+    template.isArchived ||
+    !template.isCurrent ||
+    !template.isActive ||
+    template.contentMarkdown.trim()
+  ) return false;
+
+  const attachments = await tx.getAttachmentRepo().findByEntity(companyId, 'ContractTemplate', template.id);
+  const sources = attachments.filter((attachment: any) =>
+    !attachment.isArchived &&
+    attachment.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+    attachment.mimeType === DOCX_MIME &&
+    attachment.contentState === 'AVAILABLE'
+  );
+  return sources.length === 1;
+}
+
 function isUniqueViolation(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; depth < 6 && current && typeof current === 'object'; depth++) {
@@ -121,6 +140,15 @@ export function registerContractTemplateRoutes(app: Express): void {
 
         for (const model of MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES) {
           const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, model.templateKey);
+
+          // CONTRACT-001: once an official MoveFlex key is backed by an active
+          // DOCX source, FILE is authoritative. The legacy Markdown bootstrap
+          // remains only as a fallback for tenants that have not migrated yet.
+          if (await hasActiveDocxFileSource(tx, principal.companyId, current)) {
+            ensured.push(current);
+            continue;
+          }
+
           const matchesOfficialModel = current &&
             !current.isArchived &&
             current.title === model.title &&
@@ -357,7 +385,7 @@ export function registerContractTemplateRoutes(app: Express): void {
         const now = new Date().toISOString();
         if (current && current.id !== candidate.id) {
           const demoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, current.id, {
-            isCurrent: false, updatedAt: now,
+            isCurrent: false, isActive: false, updatedAt: now,
           });
           if (!demoted) throw new TemplateConflictError();
         }
