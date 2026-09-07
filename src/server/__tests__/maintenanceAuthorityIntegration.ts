@@ -114,6 +114,29 @@ async function testAtomicLifecycle():Promise<void>{
   vehicle=await one(sql`SELECT status FROM vehicles WHERE id=${vehicleA}`); assert(vehicle.status==='AVAILABLE','cancel did not restore vehicle consistency');
 }
 
+async function testSplitMaintenancePayables():Promise<void>{
+  const supplier=await MaintenanceAuthorityService.createSupplier(adminPrincipal,{name:'Oficina Split',document:'98.765.432/0001-10',phone:'11988887777',category:'Oficina'});
+  const part=await MaintenanceAuthorityService.createPart(adminPrincipal,{code:'SPLIT-PART',name:'Peça Split',category:'Teste',unit:'UN',currentCost:120,minimumStock:0,currentStock:5});
+  const wo=await MaintenanceAuthorityService.createWorkOrder(adminPrincipal,{
+    number:'OS-J1-SPLIT',vehicleId:vehicleA,supplierId:supplier.id,entryKm:10125,description:'Teste financeiro separado',
+    parts:[{partId:part.id,quantity:1}],
+    services:[{description:'Serviço técnico',quantity:1,unitCost:80}],
+    laborItems:[{description:'Mão de obra',hours:1,hourlyRate:50}],
+    financialComponents:[
+      {kind:'PARTS',supplierId:supplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'INSTALLMENTS',installmentsCount:2,firstDueDate:'2026-09-20',discountAmount:0,hasInvoice:true,invoiceNumber:'NF-PARTS'},
+      {kind:'SERVICES',supplierId:supplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'CASH',installmentsCount:1,firstDueDate:'2026-09-20',discountAmount:0,hasInvoice:false},
+      {kind:'LABOR',supplierId:supplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'CASH',installmentsCount:1,firstDueDate:'2026-09-20',discountAmount:0,hasInvoice:false},
+    ],
+  });
+  const payables=rows(await db.execute(sql`SELECT origin_id,description,original_amount,total_installments FROM account_payables WHERE company_id=${companyA} AND origin_type='MAINTENANCE' AND origin_id LIKE ${wo.id+'%'} ORDER BY origin_id,installment_number`));
+  assert(payables.length===4,`split maintenance expected 4 payable installments, got ${payables.length}`);
+  assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':PARTS')).length===2,'parts payable must remain separate and preserve installments');
+  assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':SERVICES')).length===1,'service payable must be separate');
+  assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':LABOR')).length===1,'labor payable must be separate');
+  assert(payables.every((row:any)=>String(row.description).includes('Cartão de crédito')),'planned payment method must be visible in payable description');
+  assert(payables.some((row:any)=>String(row.description).includes('Parcelado 2x')),'installment condition must be visible in payable description');
+}
+
 async function testRls():Promise<void>{
   await db.execute(sql`INSERT INTO suppliers (id,company_id,name,document,category,status) VALUES ('j1-supplier-b',${companyB},'B Supplier','B-DOC','Oficina','ACTIVE') ON CONFLICT (id) DO NOTHING`);
   await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`));
@@ -142,6 +165,7 @@ async function main():Promise<void>{
   await seed();
   await testHttpSecurity();
   await testAtomicLifecycle();
+  await testSplitMaintenancePayables();
   await testRls();
   await runMaintenanceTimelineIntegration();
   await runMaintenanceSlaIntegration();
