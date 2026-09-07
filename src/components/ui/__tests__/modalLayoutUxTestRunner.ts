@@ -50,3 +50,20 @@ assert.match(
   /overflow-y-auto overflow-x-hidden overscroll-contain \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
   'production sidebar scrollbar must remain functional but visually hidden',
 );
+
+
+assert.match(
+  productionSidebar,
+  /window\.matchMedia\('\(max-width: 767px\)'\)/,
+  'production sidebar visibility must be decided at runtime instead of relying only on a Tailwind breakpoint',
+);
+assert.match(
+  productionSidebar,
+  /data-testid="desktop-sidebar"/,
+  'production desktop sidebar must have an explicit persistent render path',
+);
+assert.doesNotMatch(
+  productionSidebar,
+  /className="hidden md:block h-dvh/,
+  'production desktop sidebar must not be hidden by the responsive build alias',
+);
