@@ -14,6 +14,7 @@ import {
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
 type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -28,6 +29,15 @@ const APPROVED_DRAFT_FIELDS = new Set([
 class ValidationError extends Error {}
 class NotFoundError extends Error {}
 class ConflictError extends Error {}
+
+function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
+    if ('code' in current && (current as { code?: unknown }).code === '23505') return true;
+    current = 'cause' in current ? (current as { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
@@ -167,6 +177,7 @@ function sendError(res: Response, error: unknown): void {
   if (error instanceof ValidationError) { res.status(400).json({ error: 'Invalid vehicle document intake request' }); return; }
   if (error instanceof NotFoundError || error instanceof VehicleDocumentIntakeAiNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
   if (error instanceof ConflictError) { res.status(409).json({ error: error.message || 'O cadastro por documento entrou em conflito. Atualize a análise e tente novamente.' }); return; }
+  if (isUniqueViolation(error)) { res.status(409).json({ error: 'Este veículo já possui cadastro no sistema por Placa ou RENAVAM. Abra o cadastro existente em vez de criar outro.' }); return; }
   if (error instanceof VehicleDocumentIntakeAiConflictError) { res.status(409).json({ error: 'A análise do documento mudou enquanto a operação estava em andamento. Atualize a análise e tente novamente; se persistir, inicie uma nova leitura.' }); return; }
   console.error('AUTOERP_VEHICLE_DOCUMENT_INTAKE_FAILURE', error);
   res.status(500).json({ error: 'Vehicle document intake operation failed' });
@@ -257,17 +268,14 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           String(row.extraction_status) !== 'APPROVED' || String(row.detected_document_type || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType) throw new ConflictError();
         const fields = projectApprovedVehicleDraft(row.proposed_fields, row.corrections);
         const plate = normalizedDraftPlate(fields);
-        const renavam = requiredDraftText(fields, 'renavam');
+        const renavam = normalizeVehicleIdentity(requiredDraftText(fields, 'renavam'));
+        if (!renavam) throw new ConflictError('O RENAVAM aprovado está inválido. Revise os dados antes de criar o veículo.');
         const brand = requiredDraftText(fields, 'brand');
         const model = requiredDraftText(fields, 'model');
         const chassis = requiredDraftText(fields, 'chassis').toUpperCase();
         const fuelType = requiredDraftText(fields, 'fuel');
-        if (await vehicleRepo.findByPlate(principal.companyId, plate)) {
-          throw new ConflictError(`Já existe um veículo cadastrado com a placa ${plate}. Abra o veículo existente em vez de criar outro.`);
-        }
-        if (await vehicleRepo.findByRenavam(principal.companyId, renavam)) {
-          throw new ConflictError(`Já existe um veículo cadastrado com o RENAVAM ${renavam}. Abra o veículo existente em vez de criar outro.`);
-        }
+        const identityConflict = await findVehicleIdentityConflict(context, principal.companyId, plate, renavam);
+        if (identityConflict) throw new ConflictError(vehicleIdentityConflictMessage(identityConflict));
         if (chassis) {
           const duplicateChassis: any = await tx.execute(sql`SELECT id FROM vehicles WHERE company_id=${principal.companyId} AND chassis=${chassis} AND is_archived=false LIMIT 1`);
           if (duplicateChassis.rows?.[0]) {
