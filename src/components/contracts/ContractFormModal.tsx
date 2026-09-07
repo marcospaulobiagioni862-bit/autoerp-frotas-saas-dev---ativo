@@ -8,7 +8,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
-import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -25,6 +25,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+  const [existingContracts, setExistingContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,14 +62,15 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setFieldErrors({});
     setContractFile(null);
     setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
-      .then(([vehicleList, driverList, templateList]) => {
+    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list()), ContractClient.list()])
+      .then(([vehicleList, driverList, templateList, contractList]) => {
         if (!active) return;
         const validVehicles = vehicleList.filter((item) => !item.isArchived && (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId));
         const validDrivers = driverList.filter((item) => !item.isArchived && (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId));
         setVehicles(validVehicles);
         setDrivers(validDrivers);
         setTemplates(templateList);
+        setExistingContracts(contractList);
         if (contractToEdit) {
           setForm({
             contractNumber: contractToEdit.contractNumber,
@@ -121,6 +123,43 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setContractFile(file);
   };
 
+  const overlapsSelectedPeriod = (contract: Contract): boolean => {
+    const selectedStart = form.startDate;
+    const selectedEnd = form.endDate || '9999-12-31';
+    const contractEnd = contract.endDate || '9999-12-31';
+    return Boolean(selectedStart) && contract.startDate <= selectedEnd && contractEnd >= selectedStart;
+  };
+
+  const reservationConflict = (): { field: 'driverId' | 'vehicleId'; message: string } | null => {
+    const blockingStatuses = new Set<ContractStatus>([
+      ContractStatus.DRAFT,
+      ContractStatus.AWAITING_SIGNATURE,
+      ContractStatus.ACTIVE,
+      ContractStatus.SUSPENDED,
+    ]);
+    const candidates = existingContracts.filter((contract) =>
+      !contract.isArchived &&
+      contract.id !== contractToEdit?.id &&
+      blockingStatuses.has(contract.status) &&
+      overlapsSelectedPeriod(contract)
+    );
+    const driverConflict = candidates.find((contract) => contract.driverId === form.driverId);
+    if (driverConflict) {
+      return {
+        field: 'driverId',
+        message: `Este motorista já está reservado no contrato ${driverConflict.contractNumber} para o período informado.`,
+      };
+    }
+    const vehicleConflict = candidates.find((contract) => contract.vehicleId === form.vehicleId);
+    if (vehicleConflict) {
+      return {
+        field: 'vehicleId',
+        message: `Este veículo já está reservado no contrato ${vehicleConflict.contractNumber} para o período informado.`,
+      };
+    }
+    return null;
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
@@ -134,8 +173,16 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
     if(form.billingPeriodicity&&form.billingPeriodicity!==RecurringFrequency.WEEKLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia do vencimento entre 1 e 31.';
     if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
+    if(Object.keys(nextErrors).length===0){
+      const conflict=reservationConflict();
+      if(conflict)nextErrors[conflict.field]=conflict.message;
+    }
     setFieldErrors(nextErrors);
-    if(Object.keys(nextErrors).length){setError('Corrija os campos destacados em vermelho antes de salvar o contrato.');return;}
+    if(Object.keys(nextErrors).length){
+      const conflictMessage=nextErrors.driverId||nextErrors.vehicleId;
+      setError(conflictMessage||'Corrija os campos destacados em vermelho antes de salvar o contrato.');
+      return;
+    }
     setLoading(true);
     try {
       const input = {
