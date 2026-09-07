@@ -8,6 +8,11 @@ import {
   type BatchKmReadingEntryInput,
   type UpsertKmReadingScheduleInput,
 } from './vehicleKmReadingAuthority';
+import {
+  VehicleKmAlertAuthority,
+  VehicleKmAlertForbiddenError,
+  VehicleKmAlertValidationError,
+} from './vehicleKmAlertAuthority';
 
 const READ_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
 const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
@@ -29,9 +34,10 @@ function exact(value:unknown,allowed:Set<string>):Record<string,unknown>{
   return item;
 }
 function send(res:Response,error:unknown):void{
-  if(error instanceof VehicleKmReadingValidationError){res.status(400).json({error:error.message});return;}
+  if(error instanceof VehicleKmReadingValidationError||error instanceof VehicleKmAlertValidationError){res.status(400).json({error:error.message});return;}
   if(error instanceof VehicleKmReadingNotFoundError){res.status(404).json({error:error.message});return;}
   if(error instanceof VehicleKmReadingConflictError){res.status(409).json({error:error.message});return;}
+  if(error instanceof VehicleKmAlertForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   console.error('AUTOERP_VEHICLE_KM_BATCH_FAILURE',error);res.status(500).json({error:'Falha na operação de quilometragem'});
 }
 
@@ -57,6 +63,24 @@ export function registerVehicleKmReadingRoutes(app:Express):void{
   app.get('/api/fleet/vehicles/:id/km-tracker-candidate',async(req,res)=>{
     const p=requireActor(req,res,false);if(!p)return;
     try{res.json({item:await VehicleKmReadingAuthority.trackerCandidate(p.companyId,req.params.id)});}catch(error){send(res,error);}
+  });
+
+  app.get('/api/fleet/km-reading-alerts',async(req,res)=>{
+    const p=requireActor(req,res,false);if(!p)return;
+    try{
+      if(Object.keys(req.query).length>0)throw new VehicleKmAlertValidationError('Consulta de alertas de KM inválida');
+      res.json({items:await VehicleKmAlertAuthority.listAlerts(p.companyId)});
+    }catch(error){send(res,error);}
+  });
+
+  app.post('/api/fleet/km-whatsapp/batch',async(req,res)=>{
+    const p=requireActor(req,res,true);if(!p)return;
+    try{
+      const body=exact(req.body,new Set(['vehicleIds']));
+      if(!Array.isArray(body.vehicleIds))throw new VehicleKmAlertValidationError('Seleção de veículos inválida');
+      const vehicleIds=body.vehicleIds.map(value=>String(value||''));
+      res.json({items:await VehicleKmAlertAuthority.prepareWhatsappBatch(p,vehicleIds),providerCallApplied:false});
+    }catch(error){send(res,error);}
   });
 
   app.post('/api/fleet/km-records/batch',async(req,res)=>{
