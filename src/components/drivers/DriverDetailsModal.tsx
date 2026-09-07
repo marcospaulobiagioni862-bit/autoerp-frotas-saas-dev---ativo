@@ -717,7 +717,13 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 ) : whatsappOutbox.map((item) => (
                   <div key={item.id} className="p-3 border rounded-xl text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
-                      <strong className="block">Vencimento de CNH — {item.templateParameters.cnhExpiration}</strong>
+                      <strong className="block">
+                        {item.templateKey === 'DRIVER_CNH_EXPIRY'
+                          ? `Vencimento de CNH — ${item.templateParameters.cnhExpiration}`
+                          : item.templateKey === 'KM_READING_REQUEST'
+                            ? `Solicitação de KM — ${item.templateParameters.plate} — leitura ${item.templateParameters.dueDate}`
+                            : `Aviso de multa — ${item.templateParameters.autoNumber || item.referenceId}`}
+                      </strong>
                       <span className="text-slate-500">{new Date(item.createdAt).toLocaleString('pt-BR')} • {item.id}</span>
                     </div>
                     <Badge variant={item.status === 'HELD_PROVIDER_DISABLED' ? 'warning' : 'neutral'}>
