@@ -162,6 +162,10 @@ assert.match(modalSource, /alteração adicional/, 'differences beyond validity 
 assert.match(modalSource, /Confirmo as alterações adicionais destacadas além da validade/, 'additional renewal changes must require explicit confirmation');
 assert.match(modalSource, /additionalRenewalDifferences\.length > 0 && !additionalChangesConfirmed/, 'approval must remain disabled until additional changes are confirmed');
 assert.match(modalSource, /DriverClient\.get\(expectedDriverId\)/, 'renewal comparison must load the selected driver through server authority');
+assert.match(modalSource, /const drivers = await DriverClient\.list\(\)/, 'new CNH intake must check existing drivers before approval');
+assert.match(modalSource, /Motorista já cadastrado — esta CNH não deve criar outro cadastro/, 'existing driver match must be visible before approval');
+assert.match(modalSource, /Abrir motorista existente/, 'existing driver match must offer direct navigation to the canonical driver');
+assert.match(modalSource, /!isRenewal && \(!knownDriversLoaded \|\| Boolean\(existingDriverResolution\)\)/, 'approval must remain disabled while duplicate check is unavailable or matched');
 assert.match(modalSource, /PROVIDER_RATE_LIMITED/);
 assert.match(modalSource, /não envie o documento novamente agora/);
 assert.match(modalSource, /const retryRateLimited = async \(\) =>/);
@@ -173,6 +177,9 @@ assert.match(retryBody, /DocumentAiClient\.retry\(extractionId\)/, 'retry must r
 assert.equal(retryBody.includes('AttachmentClient.upload'), false, 'retry must not upload the CNH again');
 assert.equal(retryBody.includes('DriverDocumentIntakeClient.create'), false, 'retry must not create another intake');
 assert.match(modalSource, /Tentar novamente com esta CNH/);
+
+const managementSource = readFileSync(new URL('../../components/drivers/DriversManagement.tsx', import.meta.url), 'utf8');
+assert.match(managementSource, /onExistingDriver=\{handleExistingDriverDetected\}/, 'CNH intake must route an existing match back to the canonical driver details');
 
 const routesSource = readFileSync(new URL('../driverDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
 assert.match(routesSource, /function parseMaterialization\(body: unknown\): \{ expectedDriverId\?: string \}/, 'materialization must parse the optional selected driver');
