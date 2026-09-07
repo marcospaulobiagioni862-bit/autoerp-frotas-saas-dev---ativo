@@ -256,7 +256,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
 
   const discardFailed = async (extractionIds: string[]) => {
     if (!canReview || extractionIds.length === 0) return;
-    if (!window.confirm(`Arquivar ${extractionIds.length} falha(s) selecionada(s)? Itens em uso e arquivos com dados válidos serão preservados.`)) return;
+    if (!window.confirm(`Excluir da fila ${extractionIds.length} falha(s) selecionada(s)? Somente itens sem uso serão removidos; vínculos ativos e arquivos com dados válidos serão preservados.`)) return;
     setSubmitting('DISCARD');
     setError(null);
     setNotice(null);
@@ -267,8 +267,8 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         : '';
       setNotice(
         result.discarded > 0
-          ? `${result.discarded} extração(ões) arquivada(s). ${result.attachmentsArchived} anexo(s) sem uso também foi(ram) arquivado(s).${protectedSummary}`
-          : `Nenhuma extração foi arquivada: os itens selecionados estão em uso ou possuem dados que devem ser preservados.${protectedSummary}`,
+          ? `${result.discarded} extração(ões) removida(s) da fila e arquivada(s). ${result.attachmentsArchived} anexo(s) sem uso também foi(ram) arquivado(s).${protectedSummary}`
+          : `Nenhuma extração foi removida: os itens selecionados estão em uso ou possuem dados que devem ser preservados.${protectedSummary}`,
       );
       setSelectedFailedIds(new Set());
       await load();
@@ -379,7 +379,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             onClick={() => void discardFailed([...selectedFailedIds])}
             icon={<Trash2 className="h-4 w-4" />}
           >
-            Limpar selecionados ({selectedFailedIds.size})
+            Excluir selecionados ({selectedFailedIds.size})
           </Button>
         )}
         {visibleItems.map((item) => (
@@ -418,6 +418,17 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             </p>
             <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
             </button>
+            {item.status === 'FAILED' && canReview && cleanupClassification(item).category === 'UNUSED' && (
+              <button
+                type="button"
+                onClick={() => void discardFailed([item.id])}
+                className="mt-3 rounded-md p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                title="Excluir item não utilizado"
+                aria-label={`Excluir falha não utilizada do anexo ${item.attachmentId}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         ))}
       </aside>
