@@ -5,7 +5,7 @@ import { UnitOfWork } from '../../db/uow';
 import type { AuthenticatedPrincipal } from '../auth';
 import {
   advanceVehicleKmInContext,
-  VehicleKmReadingConflictError,
+  VehicleKmReadingValidationError,
 } from '../vehicleKmReadingAuthority';
 
 function assert(value:unknown,message:string):asserts value{if(!value)throw new Error(message);}
@@ -81,7 +81,7 @@ async function main():Promise<void>{
 
   let regressionBlocked=false;
   try{await advance(11000,'2026-09-08','Tentativa de regressão');}
-  catch(error){regressionBlocked=error instanceof VehicleKmReadingConflictError;}
+  catch(error){regressionBlocked=error instanceof VehicleKmReadingValidationError;}
   assert(regressionBlocked,'regressive KM was accepted by the central authority');
   assert(await currentKm()===12000,'regressive KM changed the vehicle snapshot');
 
