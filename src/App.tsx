@@ -4,6 +4,7 @@ import { LazyModuleErrorBoundary } from './components/common/LazyModuleErrorBoun
 import { Sidebar, NavigationTab } from './components/layout/Sidebar';
 import { AccountReceivable, AccountPayable } from './types/entities';
 import { useAuth } from './hooks/useAuth';
+import type { NotificationItem } from './api/notificationClient';
 
 const OverviewDashboard=lazy(()=>import('./components/dashboard/OverviewDashboard').then(module=>({default:module.OverviewDashboard})));
 const PendingCenterView=lazy(()=>import('./components/operations/PendingCenterView').then(module=>({default:module.PendingCenterView})));
@@ -50,6 +51,7 @@ export default function App(){
   const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);
   const [selectedReceivableForReceipt,setSelectedReceivableForReceipt]=useState<AccountReceivable|null>(null),[selectedPayableForPayment,setSelectedPayableForPayment]=useState<AccountPayable|null>(null),[isTransferModalOpen,setIsTransferModalOpen]=useState(false),[selectedReceivablesForRenegotiation,setSelectedReceivablesForRenegotiation]=useState<AccountReceivable[]>([]);
   const [pendingReceivablesCount,setPendingReceivablesCount]=useState(0),[pendingPayablesCount,setPendingPayablesCount]=useState(0),[pendingPendingsCount,setPendingPendingsCount]=useState(0);
+  const [documentFocusFileName,setDocumentFocusFileName]=useState<string|null>(null);
   const badgesRequestVersionRef=useRef(0),activeCompanyIdRef=useRef<string|undefined>(user?.companyId);activeCompanyIdRef.current=user?.companyId;
   const clearBadgeState=()=>{setPendingReceivablesCount(0);setPendingPayablesCount(0);setPendingPendingsCount(0);};
 
@@ -63,10 +65,36 @@ export default function App(){
     setPendingReceivablesCount(counts.pendingReceivablesCount);setPendingPayablesCount(counts.pendingPayablesCount);setPendingPendingsCount(counts.pendingPendingsCount);
   };
   const handleOperationSuccess=async()=>{const companyIdSnapshot=activeCompanyIdRef.current,requestVersion=++badgesRequestVersionRef.current;if(!companyIdSnapshot){clearBadgeState();return;}await refreshBadges(companyIdSnapshot,requestVersion);};
+  const handleResolveNotification=async(item:NotificationItem)=>{
+    if(item.entityType==='Document'&&item.entityId){
+      try{
+        const [{DocumentClient},{AttachmentClient}]=await Promise.all([
+          import('./api/documentClient'),
+          import('./api/attachmentClient'),
+        ]);
+        const document=await DocumentClient.get(item.entityId);
+        if(document.attachmentId){
+          const attachment=await AttachmentClient.get(document.attachmentId);
+          setDocumentFocusFileName(attachment.fileName);
+        }else{
+          setDocumentFocusFileName(null);
+        }
+      }catch{
+        setDocumentFocusFileName(null);
+      }
+      setActiveTab('documentos');
+      return;
+    }
+    setDocumentFocusFileName(null);
+    if(item.entityType==='Insurance'){setActiveTab('compliance');return;}
+    if(item.entityType==='MaintenancePlan'){setActiveTab('maintenance');return;}
+    setActiveTab('pendencias');
+  };
+
   const financeModalResetKey=selectedReceivableForReceipt?'receipt':selectedPayableForPayment?'payment':isTransferModalOpen?'transfer':selectedReceivablesForRenegotiation.length>0?'renegotiation':'none';
 
   return <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
-    <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)}/>
+    <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)} onResolveNotification={handleResolveNotification}/>
     <div className="flex-1 min-h-0 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
@@ -88,7 +116,7 @@ export default function App(){
         {activeTab==='central-tarefas'&&<div className="p-4 sm:p-6"><OperationalTasksView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/></div>}
         {activeTab==='produtividade'&&<div className="p-4 sm:p-6"><OperationalProductivityView companyId={user.companyId}/></div>}
         {activeTab==='metas'&&<div className="p-4 sm:p-6"><ManagementGoalsView companyId={user.companyId}/></div>}
-        {activeTab==='documentos'&&<DocumentCenter/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/>} 
+        {activeTab==='documentos'&&<DocumentCenter focusFileName={documentFocusFileName||undefined} onFocusConsumed={()=>setDocumentFocusFileName(null)}/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/>} 
         {activeTab==='relatorios'&&<ManagementReportsView companyId={user.companyId} onNavigate={tab=>setActiveTab(tab as any)}/>} 
         {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><TelemetrySanitizedLocationOverview/><FleetComplianceManagement/></>}
         {activeTab==='drivers'&&<div className="p-4 sm:p-6"><DriversManagement companyId={user.companyId} onSelectVehicle={()=>setActiveTab('fleet')}/></div>}

@@ -25,7 +25,12 @@ import {
   type DocumentCenterFilterState,
 } from './documentAiStatusFilter';
 
-export function DocumentCenter() {
+interface DocumentCenterProps {
+  focusFileName?: string;
+  onFocusConsumed?: () => void;
+}
+
+export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCenterProps = {}) {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +79,16 @@ export function DocumentCenter() {
   useEffect(() => {
     void fetchDocuments();
   }, []);
+
+  useEffect(() => {
+    if (!focusFileName) return;
+    setSearchTerm(focusFileName);
+    setEntityTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
+    setDocumentTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
+    setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
+    setExtractionSort(DOCUMENT_CENTER_DEFAULT_FILTERS.sort);
+    onFocusConsumed?.();
+  }, [focusFileName, onFocusConsumed]);
 
   const availableAttachmentCount = attachments.filter((attachment) => !attachment.isArchived).length;
   const baseFilteredAttachments = attachments.filter((att) => {

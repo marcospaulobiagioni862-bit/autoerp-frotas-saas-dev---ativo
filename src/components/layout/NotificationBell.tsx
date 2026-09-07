@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, CheckCheck, Loader2 } from 'lucide-react';
 import { NotificationClient, type NotificationItem, type NotificationSeverity } from '../../api/notificationClient';
+import { DocumentClient } from '../../api/documentClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
@@ -28,17 +30,26 @@ function severityClasses(severity: NotificationSeverity): string {
   }
 }
 
-function entityLabel(item: NotificationItem): string | undefined {
-  if (!item.entityType && !item.entityId) return undefined;
-  if (item.entityType && item.entityId) return `${item.entityType} · ${item.entityId}`;
-  return item.entityType || item.entityId;
+function fallbackEntityLabel(item: NotificationItem): string | undefined {
+  switch (item.entityType) {
+    case 'Document': return 'Documento';
+    case 'Insurance': return 'Seguro';
+    case 'MaintenancePlan': return 'Manutenção preventiva';
+    case 'TollPassage': return 'Pedágio / Free Flow';
+    default: return item.entityType || undefined;
+  }
 }
 
-export const NotificationBell: React.FC = () => {
+interface NotificationBellProps {
+  onResolve?: (item: NotificationItem) => void | Promise<void>;
+}
+
+export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve }) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState(0);
   const [items, setItems] = useState<NotificationItem[]>([]);
+  const [entityLabels, setEntityLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -61,6 +72,25 @@ export const NotificationBell: React.FC = () => {
       setItems(nextItems);
       setUnread(nextUnread);
       setError(false);
+
+      const documentItems = nextItems.filter((item) => item.entityType === 'Document' && item.entityId);
+      if (documentItems.length === 0) {
+        setEntityLabels({});
+      } else {
+        const resolved = await Promise.all(documentItems.map(async (item) => {
+          try {
+            const document = await DocumentClient.get(item.entityId!);
+            if (document.attachmentId) {
+              const attachment = await AttachmentClient.get(document.attachmentId);
+              return [item.id, `Arquivo: ${attachment.fileName}`] as const;
+            }
+            return [item.id, `Documento: ${document.documentType}`] as const;
+          } catch {
+            return [item.id, fallbackEntityLabel(item) || 'Documento'] as const;
+          }
+        }));
+        setEntityLabels(Object.fromEntries(resolved));
+      }
     } catch {
       setError(true);
     } finally {
@@ -95,6 +125,12 @@ export const NotificationBell: React.FC = () => {
     } catch {
       setError(true);
     }
+  };
+
+  const resolveNotification = async (item: NotificationItem) => {
+    await markRead(item);
+    setOpen(false);
+    if (onResolve) await onResolve(item);
   };
 
   const markAllRead = async () => {
@@ -162,12 +198,12 @@ export const NotificationBell: React.FC = () => {
               </div>
             )}
             {!loading && !error && items.map((item) => {
-              const entity = entityLabel(item);
+              const entity = entityLabels[item.id] || fallbackEntityLabel(item);
               return (
                 <button
                   type="button"
                   key={item.id}
-                  onClick={() => { void markRead(item); }}
+                  onClick={() => { void resolveNotification(item); }}
                   className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
                 >
                   <div className="flex gap-2 items-start">
@@ -184,6 +220,7 @@ export const NotificationBell: React.FC = () => {
                         <span>{formatTimestamp(item.createdAt)}</span>
                         {entity && <span className="truncate" title={entity}>{entity}</span>}
                         <span>{item.readAt ? 'Lida' : 'Não lida'}</span>
+                        {onResolve && <span className="font-semibold text-blue-600 dark:text-blue-400">Abrir para resolver →</span>}
                       </div>
                     </div>
                   </div>

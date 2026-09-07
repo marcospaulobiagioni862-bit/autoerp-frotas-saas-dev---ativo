@@ -60,6 +60,9 @@ assert.doesNotMatch(appSource, /StorageAdapter|indexedDB|localStorage/i, 'App mu
 assert.doesNotMatch(appSource, /persistence\/repositories\/(?:localRepositories|serverReadModelRepositories)/, 'App must defer the read-model repository graph');
 assert.doesNotMatch(appSource, /persistence\/seed\/seedData|seedAutoERPTestData|handleResetSeedData/, 'App runtime must not depend on browser seed/reset authority');
 assert.match(appSource, /import\('\.\/app\/navigationBadgeLoader'\)/, 'App must load the authenticated badge read-model boundary explicitly and on demand');
+assert.match(appSource, /handleResolveNotification/, 'App must route notification clicks to the source module');
+assert.match(appSource, /DocumentClient\.get\(item\.entityId\)/, 'Document notifications must resolve their canonical document before navigation');
+assert.match(appSource, /setActiveTab\('documentos'\)/, 'Document notifications must navigate to the document center');
 const badgeLoaderSource = read('src/app/navigationBadgeLoader.ts');
 assert.match(badgeLoaderSource, /persistence\/repositories\/serverReadModelRepositories/, 'Badge loader must import the authenticated server read-model adapter');
 assert.match(badgeLoaderSource, /domain\/operations\/serverOperationalPendingProjection/, 'Badge loader must import the tenant-safe pending projection explicitly');
@@ -68,8 +71,15 @@ assert.match(overviewSource, /domain\/operations\/serverOperationalPendingProjec
 assert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');
 const pendingSource = read('src/components/operations/PendingCenterView.tsx');
 assert.match(pendingSource, /domain\/operations\/serverOperationalPendingProjection/, 'Pending center must import the tenant-safe pending projection explicitly');
-assert.match(pendingSource, /WhatsappClient\.createCnhReminder\(item\.entityId\)/, 'Driver CNH alerts must expose the existing predefined WhatsApp reminder action');
+assert.doesNotMatch(pendingSource, /WhatsappClient\.createCnhReminder\(item\.entityId\)/, 'Inactive WhatsApp provider must not expose a misleading send action in Central alerts');
 assert.match(pendingSource, /id: 'FINANCE', label: 'Financeiro'/, 'Central alerts must expose the consolidated Financeiro filter');
+const notificationBellSource = read('src/components/layout/NotificationBell.tsx');
+assert.match(notificationBellSource, /Arquivo: \$\{attachment\.fileName\}/, 'Notification bell must show the human-readable document file name instead of an entity id');
+assert.doesNotMatch(notificationBellSource, /\$\{item\.entityType\} · \$\{item\.entityId\}/, 'Notification bell must not expose raw entity ids as the primary label');
+assert.match(notificationBellSource, /resolveNotification\(item\)/, 'Notification click must invoke resolution navigation');
+const documentCenterSource = read('src/components/documents/DocumentCenter.tsx');
+assert.match(documentCenterSource, /focusFileName\?: string/, 'Document center must accept a file focus from alerts');
+assert.match(documentCenterSource, /setSearchTerm\(focusFileName\)/, 'Document center must focus the exact file name supplied by the alert navigation');
 
 const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
 assert.doesNotMatch(testPanel, /PersistenceTestRunner|StorageAdapter|seedAutoERPTestData/, 'Production test panel must not pull browser test persistence');

@@ -35,6 +35,7 @@ type Props = {
   onDraftReady: (draft: ApprovedCnhDriverDraft) => void;
   expectedDriverId?: string;
   onRenewed?: (driverId: string) => void;
+  onExistingDriver?: (driverId: string) => void;
 };
 
 function valueText(value: unknown): string {
@@ -68,6 +69,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
   onDraftReady,
   expectedDriverId,
   onRenewed,
+  onExistingDriver,
 }) => {
   const isRenewal = Boolean(expectedDriverId);
   const [file, setFile] = useState<File | null>(null);
@@ -77,6 +79,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
   const [approvedDraft, setApprovedDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [savedDriverId, setSavedDriverId] = useState('');
   const [renewalDriver, setRenewalDriver] = useState<Driver | null>(null);
+  const [knownDrivers, setKnownDrivers] = useState<Driver[]>([]);
+  const [knownDriversLoaded, setKnownDriversLoaded] = useState(false);
   const [additionalChangesConfirmed, setAdditionalChangesConfirmed] = useState(false);
   const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
     name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '',
@@ -117,6 +121,46 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
       normalizedComparisonValue(item.key, item.current) !== normalizedComparisonValue(item.key, item.next)
     ));
   }, [renewalDriver, draft, earReview]);
+
+  const existingDriverResolution = useMemo(() => {
+    if (isRenewal || !knownDriversLoaded) return null;
+    const cpf = draft.cpf.replace(/\D/g, '');
+    const cnh = draft.registrationNumber.replace(/\D/g, '');
+    if (!cpf && !cnh) return null;
+
+    const byCpf = cpf ? knownDrivers.find((driver) => driver.cpf.replace(/\D/g, '') === cpf) : undefined;
+    const byCnh = cnh ? knownDrivers.find((driver) => driver.cnhNumber.replace(/\D/g, '') === cnh) : undefined;
+
+    if (byCpf && byCnh && byCpf.id !== byCnh.id) {
+      return { kind: 'CONFLICT' as const, driver: byCpf, detail: 'CPF e CNH pertencem a motoristas diferentes no cadastro.' };
+    }
+
+    const existing = byCpf || byCnh;
+    if (!existing) return null;
+
+    const sameCpf = !cpf || existing.cpf.replace(/\D/g, '') === cpf;
+    const sameCnh = !cnh || existing.cnhNumber.replace(/\D/g, '') === cnh;
+    if (!sameCpf || !sameCnh) {
+      return {
+        kind: 'CONFLICT' as const,
+        driver: existing,
+        detail: byCpf
+          ? 'O CPF informado já existe com outro número de CNH.'
+          : 'O número da CNH já existe vinculado a outro CPF.',
+      };
+    }
+
+    const currentExpiration = String(existing.cnhExpiration || '').slice(0, 10);
+    const proposedExpiration = draft.expirationDate.trim();
+    const renewalCandidate = Boolean(
+      currentExpiration &&
+      proposedExpiration &&
+      /^\d{4}-\d{2}-\d{2}$/.test(proposedExpiration) &&
+      proposedExpiration > currentExpiration
+    );
+
+    return { kind: 'MATCH' as const, driver: existing, renewalCandidate };
+  }, [draft.cpf, draft.registrationNumber, draft.expirationDate, isRenewal, knownDrivers, knownDriversLoaded]);
 
   const additionalRenewalDifferences = useMemo(
     () => renewalDifferences.filter((item) => item.key !== 'expirationDate'),
@@ -192,6 +236,19 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
         expirationDate: valueText(item.proposedFields.expirationDate),
       });
       setEarReview(item.proposedFields.ear === true ? 'YES' : '');
+      if (!isRenewal) {
+        try {
+          const drivers = await DriverClient.list();
+          setKnownDrivers(drivers);
+          setKnownDriversLoaded(true);
+        } catch (driverLookupError) {
+          setKnownDrivers([]);
+          setKnownDriversLoaded(false);
+          setError(driverLookupError instanceof Error
+            ? `Não foi possível verificar se o motorista já existe: ${driverLookupError.message}`
+            : 'Não foi possível verificar se o motorista já existe.');
+        }
+      }
     }
     return item;
   };
@@ -283,6 +340,16 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
     if (!extraction || extraction.status !== 'REVIEW_REQUIRED' || busy) return;
     if (decision === 'APPROVE' && extraction.detectedDocumentType !== 'CNH') {
       setError('O documento analisado não foi reconhecido como CNH e não pode preencher o motorista.');
+      return;
+    }
+    if (decision === 'APPROVE' && !isRenewal && !knownDriversLoaded) {
+      setError('A verificação de motorista existente ainda não foi concluída. Atualize a análise antes de aprovar.');
+      return;
+    }
+    if (decision === 'APPROVE' && !isRenewal && existingDriverResolution) {
+      setError(existingDriverResolution.kind === 'MATCH'
+        ? 'Este motorista já está cadastrado. Abra o cadastro existente em vez de criar outro.'
+        : existingDriverResolution.detail);
       return;
     }
     if (decision === 'APPROVE' && isRenewal && !renewalDriver) {
@@ -444,6 +511,46 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Revise os dados reconhecidos</p>
               <p className="text-xs text-slate-500">Documento detectado: {extraction.detectedDocumentType || 'não identificado'}</p>
             </div>
+            {!isRenewal && existingDriverResolution && (
+              <div className={`rounded-xl border p-4 text-left ${
+                existingDriverResolution.kind === 'MATCH'
+                  ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+                  : 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/30'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <AlertCircle className={`mt-0.5 h-5 w-5 shrink-0 ${
+                    existingDriverResolution.kind === 'MATCH' ? 'text-amber-600' : 'text-rose-600'
+                  }`} />
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        {existingDriverResolution.kind === 'MATCH'
+                          ? 'Motorista já cadastrado — esta CNH não deve criar outro cadastro'
+                          : 'Conflito de identificação encontrado'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        {existingDriverResolution.kind === 'MATCH'
+                          ? `${existingDriverResolution.driver.fullName} já possui este CPF e esta CNH no ERP.${existingDriverResolution.renewalCandidate ? ' A validade informada é posterior; faça a atualização pelo fluxo de renovação do motorista existente.' : ' O reenvio desta mesma CNH foi bloqueado para evitar duplicidade.'}`
+                          : existingDriverResolution.detail}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const driverId = existingDriverResolution.driver.id;
+                        reset();
+                        onClose();
+                        onExistingDriver?.(driverId);
+                      }}
+                      disabled={busy}
+                    >
+                      Abrir motorista existente
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             {isRenewal && renewalDriver && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
                 <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Comparação com a CNH vigente</p>
@@ -518,6 +625,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
                 disabled={
                   busy ||
                   extraction.detectedDocumentType !== 'CNH' ||
+                  (!isRenewal && (!knownDriversLoaded || Boolean(existingDriverResolution))) ||
                   (isRenewal && !renewalDriver) ||
                   (additionalRenewalDifferences.length > 0 && !additionalChangesConfirmed)
                 }
