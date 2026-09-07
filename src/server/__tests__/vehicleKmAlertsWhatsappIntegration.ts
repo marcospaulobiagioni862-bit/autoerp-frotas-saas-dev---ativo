@@ -23,7 +23,6 @@ async function resetAndSeed():Promise<void>{
   await db.execute(sql`DELETE FROM tracker_telemetry_events WHERE company_id=${companyId}`);
   await db.execute(sql`DELETE FROM whatsapp_outbox WHERE company_id=${companyId}`);
   await db.execute(sql`DELETE FROM whatsapp_consents WHERE company_id=${companyId}`);
-  await db.execute(sql`DELETE FROM whatsapp_template_catalog WHERE company_id=${companyId}`);
   await db.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id=${companyId}`);
   await db.execute(sql`DELETE FROM vehicle_km_records WHERE company_id=${companyId}`);
   await db.execute(sql`DELETE FROM trackers WHERE company_id=${companyId}`);
