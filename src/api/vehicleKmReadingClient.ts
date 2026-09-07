@@ -2,6 +2,7 @@ import type { KmRecord } from '../types/entities';
 import type { KmReadingScheduleFrequency } from '../shared/utils/kmReadingSchedule';
 
 export type KmReadingSourceType='MANUAL'|'DRIVER_PHOTO'|'TRACKER';
+export type KmReadingAlertStage='DUE_SOON'|'DUE_TODAY'|'OVERDUE';
 
 export interface KmReadingSchedule {
   companyId:string;vehicleId:string;frequency:KmReadingScheduleFrequency;weekday:number|null;dayOfMonth:number|null;
@@ -12,6 +13,15 @@ export interface BatchKmReadingInput {vehicleId:string;sourceType:KmReadingSourc
 export interface BatchKmReadingResult {
   vehicleId:string;previousKm:number;currentKm:number;distanceKm:number;sourceType:KmReadingSourceType;
   record:KmRecord;created:boolean;nextDueDate?:string;
+}
+export interface KmReadingAlert {
+  companyId:string;vehicleId:string;plate:string;vehicleDescription:string;currentKm:number;driverId?:string;driverName?:string;
+  dueDate:string;daysUntilDue:number;overdueDays:number;stage:KmReadingAlertStage;trackerFresh:boolean;trackerKm?:number;
+  trackerObservedAt?:string;whatsappEligible:boolean;whatsappBlockedReason?:string;lastRequestAt?:string;lastRequestStatus?:string;
+}
+export interface KmWhatsappPreparationResult {
+  vehicleId:string;plate:string;driverId?:string;created:boolean;outboxId?:string;
+  status:'HELD_PROVIDER_DISABLED'|'SKIPPED';reason?:string;providerCallApplied:false;
 }
 
 type JsonRecord=Record<string,unknown>;
@@ -36,6 +46,24 @@ function result(value:unknown):BatchKmReadingResult{
   if(typeof item.vehicleId!=='string'||!Number.isInteger(item.previousKm)||!Number.isInteger(item.currentKm)||!Number.isInteger(item.distanceKm)||!['MANUAL','DRIVER_PHOTO','TRACKER'].includes(String(item.sourceType))||typeof item.created!=='boolean')throw new Error('Resultado de KM inválido');
   return item as unknown as BatchKmReadingResult;
 }
+function alert(value:unknown):KmReadingAlert{
+  const item=record(value);
+  if(
+    typeof item.companyId!=='string'||typeof item.vehicleId!=='string'||typeof item.plate!=='string'||typeof item.vehicleDescription!=='string'||
+    !Number.isInteger(item.currentKm)||typeof item.dueDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(item.dueDate)||
+    !Number.isInteger(item.daysUntilDue)||!Number.isInteger(item.overdueDays)||!['DUE_SOON','DUE_TODAY','OVERDUE'].includes(String(item.stage))||
+    typeof item.trackerFresh!=='boolean'||typeof item.whatsappEligible!=='boolean'
+  )throw new Error('Alerta de KM inválido');
+  return item as unknown as KmReadingAlert;
+}
+function whatsappResult(value:unknown):KmWhatsappPreparationResult{
+  const item=record(value);
+  if(
+    typeof item.vehicleId!=='string'||typeof item.plate!=='string'||typeof item.created!=='boolean'||
+    !['HELD_PROVIDER_DISABLED','SKIPPED'].includes(String(item.status))||item.providerCallApplied!==false
+  )throw new Error('Resultado de WhatsApp de KM inválido');
+  return item as unknown as KmWhatsappPreparationResult;
+}
 function json(method:string,body:unknown):RequestInit{return{method,headers:{'content-type':'application/json'},body:JSON.stringify(body)};}
 
 export class VehicleKmReadingClient {
@@ -51,6 +79,16 @@ export class VehicleKmReadingClient {
   static async trackerCandidate(vehicleId:string):Promise<TrackerKmCandidate>{
     const payload=await request(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/km-tracker-candidate`);
     return candidate(payload.item);
+  }
+  static async listAlerts():Promise<KmReadingAlert[]>{
+    const payload=await request('/api/fleet/km-reading-alerts');
+    if(!Array.isArray(payload.items))throw new Error('Lista de alertas de KM inválida');
+    return payload.items.map(alert);
+  }
+  static async prepareWhatsapp(vehicleIds:string[]):Promise<KmWhatsappPreparationResult[]>{
+    const payload=await request('/api/fleet/km-whatsapp/batch',json('POST',{vehicleIds}));
+    if(payload.providerCallApplied!==false||!Array.isArray(payload.items))throw new Error('Resultado de WhatsApp de KM inválido');
+    return payload.items.map(whatsappResult);
   }
   static async recordBatch(entries:BatchKmReadingInput[]):Promise<BatchKmReadingResult[]>{
     const payload=await request('/api/fleet/km-records/batch',json('POST',{entries}));
