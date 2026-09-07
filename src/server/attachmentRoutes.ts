@@ -14,7 +14,7 @@ import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
 import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
 import {registerVehicleDocumentIntakeRoutes} from './vehicleDocumentIntakeRoutes';
 
-type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT';
+type AttachmentAction='VIEW_ATTACHMENT'|'CREATE_ATTACHMENT'|'ARCHIVE_ATTACHMENT'|'RESTORE_ATTACHMENT'|'DELETE_ATTACHMENT';
 const CANONICAL_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
 const DEFAULT_WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const CONTRACT_TEMPLATE_WRITE_ROLES=new Set(['ADMIN','MANAGER']);
@@ -39,12 +39,15 @@ const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDo
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
+class AttachmentConflictError extends Error{}
 
 function principalFrom(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function hasAttachmentPermission(principal:AuthenticatedPrincipal,action:AttachmentAction):boolean{
   const role=String(principal.role||'').toUpperCase();if(!principal.userId||!principal.companyId||!CANONICAL_ROLES.has(role))return false;
   const permissions=Array.isArray(principal.permissions)?principal.permissions:[];if(permissions.includes('*')||permissions.includes(action))return true;
-  if(action==='VIEW_ATTACHMENT')return true;return DEFAULT_WRITE_ROLES.has(role);
+  if(action==='VIEW_ATTACHMENT')return true;
+  if(action==='DELETE_ATTACHMENT')return role==='ADMIN';
+  return DEFAULT_WRITE_ROLES.has(role);
 }
 function requireAttachmentPrincipal(req:Request,res:Response,action:AttachmentAction):AuthenticatedPrincipal|null{
   const principal=principalFrom(req);if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
@@ -120,12 +123,37 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
 }
 function sendAttachmentError(res:Response,error:unknown):void{
   if(error instanceof AttachmentForbiddenError){res.status(403).json({error:'Forbidden'});return;}
+  if(error instanceof AttachmentConflictError){res.status(409).json({error:error.message||'Attachment is linked and cannot be deleted'});return;}
   if(error instanceof AttachmentNotFoundError||error instanceof AttachmentStorageNotFoundError){res.status(404).json({error:'Not found'});return;}
   if(error instanceof AttachmentValidationError||error instanceof AttachmentStorageValidationError){res.status(400).json({error:'Invalid attachment request'});return;}
   if(error instanceof AttachmentStorageUnavailableError){res.status(503).json({error:'Attachment storage unavailable'});return;}
   console.error('AUTOERP_ATTACHMENT_AUTHORITY_FAILURE',error);res.status(500).json({error:'Attachment operation failed'});
 }
 function auditState(item:FileAttachment):string{return JSON.stringify({entityType:item.entityType,entityId:item.entityId,documentType:item.documentType,fileName:item.fileName,fileSize:item.fileSize,mimeType:item.mimeType,checksum:item.checksum,storageProvider:item.storageProvider,contentState:item.contentState,isArchived:item.isArchived});}
+async function assertPermanentDeleteAllowed(tx:any,principal:AuthenticatedPrincipal,item:FileAttachment):Promise<void>{
+  if(item.entityType==='ContractTemplate')throw new AttachmentConflictError('Modelo de contrato em uso: arquive em vez de excluir definitivamente.');
+  const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+  const linked:any=await raw.execute(sql`
+    SELECT source FROM (
+      SELECT 'documents' AS source WHERE EXISTS (SELECT 1 FROM documents WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'contract_artifacts' WHERE EXISTS (SELECT 1 FROM contract_artifacts WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'driver_document_intakes' WHERE EXISTS (SELECT 1 FROM driver_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'vehicle_document_intakes' WHERE EXISTS (SELECT 1 FROM vehicle_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'traffic_ticket_document_intakes' WHERE EXISTS (SELECT 1 FROM traffic_ticket_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'oil_change_records' WHERE EXISTS (SELECT 1 FROM oil_change_records WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+      UNION ALL SELECT 'tire_records' WHERE EXISTS (SELECT 1 FROM tire_records WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
+    ) refs LIMIT 1
+  `);
+  if(linked.rows?.[0])throw new AttachmentConflictError('Documento vinculado ao ERP: arquive em vez de excluir definitivamente.');
+  const extractionResult:any=await raw.execute(sql`SELECT status FROM document_ai_extractions WHERE company_id=${principal.companyId} AND attachment_id=${item.id} FOR UPDATE`);
+  const statuses=(extractionResult.rows||[]).map((row:any)=>String(row.status||''));
+  if(statuses.some((status:string)=>!['FAILED','REJECTED'].includes(status))){
+    throw new AttachmentConflictError('Documento possui extração ativa/aprovada: arquive em vez de excluir definitivamente.');
+  }
+  if(statuses.length>0){
+    await raw.execute(sql`DELETE FROM document_ai_extractions WHERE company_id=${principal.companyId} AND attachment_id=${item.id}`);
+  }
+}
 
 export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStorage=createAttachmentStorageFromEnvironment()):void{
   registerDriverDocumentIntakeRoutes(app);
@@ -207,6 +235,29 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     await UnitOfWork.run(principal.companyId,async tx=>{await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:item.id,action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,newState:JSON.stringify({event:'DOWNLOAD',checksum}),timestamp:new Date().toISOString()});});
     const safeName=item.fileName.replace(/[\r\n"]/g,'_');res.setHeader('content-type',item.mimeType);res.setHeader('content-length',String(bytes.length));res.setHeader('content-disposition',`inline; filename="${safeName}"`);res.setHeader('x-content-type-options','nosniff');res.send(bytes);
   }catch(error){sendAttachmentError(res,error);}});
+  app.delete('/api/attachments/:id',async(req,res)=>{
+    const principal=requireAttachmentPrincipal(req,res,'DELETE_ATTACHMENT');if(!principal)return;
+    let deletedItem:FileAttachment|undefined;
+    try{
+      deletedItem=await UnitOfWork.run(principal.companyId,async tx=>{
+        const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);
+        if(!existing)throw new AttachmentNotFoundError();
+        await validateEntity(tx,principal,existing.entityType,existing.entityId,true);
+        await assertPermanentDeleteAllowed(tx,principal,existing);
+        const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+        const removed:any=await raw.execute(sql`DELETE FROM file_attachments WHERE company_id=${principal.companyId} AND id=${existing.id} RETURNING id`);
+        if(!removed.rows?.[0])throw new AttachmentNotFoundError();
+        await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:existing.id,action:AuditAction.DELETE,previousState:auditState(existing),newState:JSON.stringify({event:'PERMANENT_DELETE'}),userId:principal.userId,userName:principal.name,timestamp:new Date().toISOString()});
+        return existing;
+      });
+      let storageRemoved=true;
+      if(deletedItem.storageProvider===storage.provider&&deletedItem.contentState==='AVAILABLE'&&deletedItem.storageKey){
+        try{await storage.remove(principal.companyId,deletedItem.storageKey);}
+        catch(storageError){storageRemoved=false;console.error('AUTOERP_ATTACHMENT_DELETE_STORAGE_FAILURE',storageError);}
+      }
+      res.json({deleted:true,storageRemoved});
+    }catch(error){sendAttachmentError(res,error);}
+  });
   for(const lifecycle of[{path:'archive',action:'ARCHIVE_ATTACHMENT' as const,archived:true},{path:'restore',action:'RESTORE_ATTACHMENT' as const,archived:false}]){
     app.post(`/api/attachments/:id/${lifecycle.path}`,async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,lifecycle.action);if(!principal)return;try{
       const item=await UnitOfWork.run(principal.companyId,async tx=>{const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!existing)throw new AttachmentNotFoundError();await validateEntity(tx,principal,existing.entityType,existing.entityId,true);if(existing.isArchived===lifecycle.archived)return existing;const saved=await tx.getAttachmentRepo().updateForCompany(principal.companyId,existing.id,{isArchived:lifecycle.archived});if(!saved)throw new AttachmentNotFoundError();await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:existing.id,action:AuditAction.UPDATE,previousState:JSON.stringify({isArchived:existing.isArchived}),newState:JSON.stringify({isArchived:saved.isArchived,event:lifecycle.path.toUpperCase()}),userId:principal.userId,userName:principal.name,timestamp:new Date().toISOString()});return saved;});res.json({item});

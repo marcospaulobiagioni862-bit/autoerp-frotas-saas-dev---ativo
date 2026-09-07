@@ -3,7 +3,7 @@ import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
 import { useAuth } from '../../hooks/useAuth';
-import { Bot, Download, Eye, File, History, Printer, RotateCcw, Send, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Archive, Bot, Download, Eye, File, History, Printer, RotateCcw, Send, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
@@ -52,6 +52,7 @@ export function AttachmentList({
   const [previewData, setPreviewData] = useState<{ url: string; type: string; name: string } | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [requestingExtractionId, setRequestingExtractionId] = useState<string | null>(null);
   const [documentAiMessage, setDocumentAiMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [historyAttachmentId, setHistoryAttachmentId] = useState<string | null>(null);
@@ -63,6 +64,11 @@ export function AttachmentList({
     DOCUMENT_AI_WRITE_ROLES.has(user.role.toUpperCase()) ||
     user.permissions.includes('*') ||
     user.permissions.includes('PROCESS_DOCUMENT_AI');
+
+  const canDeletePermanently =
+    user.role.toUpperCase() === 'ADMIN' ||
+    user.permissions.includes('*') ||
+    user.permissions.includes('DELETE_ATTACHMENT');
 
   const fetchAttachments = async () => {
     if (!entityType || !entityId) return;
@@ -262,6 +268,23 @@ export function AttachmentList({
     }
   };
 
+  const handlePermanentDelete = async () => {
+    if (!permanentDeleteId) return;
+    const targetId = permanentDeleteId;
+    try {
+      const result = await AttachmentClient.deletePermanently(targetId);
+      setPermanentDeleteId(null);
+      if (!result.storageRemoved) {
+        alert('O registro foi excluído, mas a limpeza física do arquivo ficou pendente no storage.');
+      }
+      if (onRefresh) onRefresh();
+      else if (entityType && entityId) await fetchAttachments();
+      else setAttachments((current) => current.filter((item) => item.id !== targetId));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erro ao excluir documento definitivamente.');
+    }
+  };
+
   if (loading) return <div className="text-sm text-gray-500">Carregando documentos...</div>;
   if (error && attachments.length === 0) return <div role="alert" className="text-sm text-red-500">{error}</div>;
 
@@ -345,9 +368,19 @@ export function AttachmentList({
                     size="sm"
                     onClick={() => setDeleteId(att.id)}
                     disabled={att.id === latestDriverCnhId}
-                    className="text-red-500 hover:text-red-700 disabled:text-slate-400"
+                    className="text-amber-500 hover:text-amber-700 disabled:text-slate-400"
                     title={att.id === latestDriverCnhId ? 'CNH vigente: substitua pelo fluxo Nova CNH / Renovar CNH' : 'Arquivar'}
-                  ><Trash2 className="h-4 w-4" /></Button>
+                  ><Archive className="h-4 w-4" /></Button>
+                  {canDeletePermanently && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPermanentDeleteId(att.id)}
+                      disabled={att.id === latestDriverCnhId}
+                      className="text-red-500 hover:text-red-700 disabled:text-slate-400"
+                      title={att.id === latestDriverCnhId ? 'CNH vigente: exclusão permanente bloqueada' : 'Excluir definitivamente'}
+                    ><Trash2 className="h-4 w-4" /></Button>
+                  )}
                 </div>
               </li>
             );
@@ -400,6 +433,19 @@ export function AttachmentList({
           onConfirm={() => void handleArchive()}
           onCancel={() => setDeleteId(null)}
           confirmText="Arquivar"
+          cancelText="Cancelar"
+          type="danger"
+        />
+      )}
+
+      {permanentDeleteId && (
+        <ConfirmDialog
+          isOpen={!!permanentDeleteId}
+          title="Excluir Documento Definitivamente"
+          description="Esta ação é permanente. O ERP bloqueará a exclusão se o documento estiver vinculado a cadastro, contrato, documento operacional ou extração ativa/aprovada."
+          onConfirm={() => void handlePermanentDelete()}
+          onCancel={() => setPermanentDeleteId(null)}
+          confirmText="Excluir definitivamente"
           cancelText="Cancelar"
           type="danger"
         />
