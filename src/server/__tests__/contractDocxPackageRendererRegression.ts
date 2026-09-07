@@ -1,6 +1,9 @@
 import { inflateRawSync } from 'node:zlib';
 import { ContractDocxTemplateError } from '../../domain/contracts/contractDocxTemplateRenderer';
-import { renderContractDocxPackage } from '../../domain/contracts/contractDocxPackageRenderer';
+import {
+  renderContractApprovedMasterDocxPackage,
+  renderContractDocxPackage,
+} from '../../domain/contracts/contractDocxPackageRenderer';
 
 const LOCAL_FILE = 0x04034b50;
 const CENTRAL_FILE = 0x02014b50;
@@ -119,6 +122,50 @@ export async function runContractDocxPackageRendererRegression(): Promise<void> 
   assert(xml.includes('João &amp; Maria') && xml.includes('ABC1D23'), 'DOCX package values were not rendered');
   assert(!xml.includes('{{') && !xml.includes('}}'), 'DOCX package retained unresolved placeholders');
   assert(entryContent(rendered.bytes, 'word/media/image1.png').equals(binary), 'DOCX non-XML bytes changed');
+
+
+  const approvedDocumentXml = Buffer.from(
+    '<w:document xmlns:w="urn:test"><w:body>' +
+    '<w:p><w:r><w:t>Campo: ____</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>Texto jurídico imutável.</w:t></w:r></w:p>' +
+    '</w:body></w:document>'
+  );
+  const approvedHeader = Buffer.from('<w:hdr xmlns:w="urn:test"><w:p><w:r><w:t>CABEÇALHO OFICIAL</w:t></w:r></w:p></w:hdr>');
+  const approvedFooter = Buffer.from('<w:ftr xmlns:w="urn:test"><w:p><w:r><w:t>RODAPÉ OFICIAL</w:t></w:r></w:p></w:ftr>');
+  const approvedSource = storedZip([
+    { name: '[Content_Types].xml', content: Buffer.from('<Types/>') },
+    { name: 'word/document.xml', content: approvedDocumentXml },
+    { name: 'word/header1.xml', content: approvedHeader },
+    { name: 'word/footer1.xml', content: approvedFooter },
+    { name: 'word/media/image1.png', content: binary },
+  ]);
+  const approvedRendered = renderContractApprovedMasterDocxPackage(approvedSource, [{
+    paragraphIndex: 0,
+    expectedText: 'Campo: ____',
+    needle: '____',
+    replacement: 'DADO ERP',
+    fieldKey: 'driver.name',
+  }]);
+  const approvedXml = entryContent(approvedRendered.bytes, 'word/document.xml').toString('utf8');
+  assert(approvedXml.includes('Campo: DADO ERP'), 'approved master blank was not filled');
+  assert(approvedXml.includes('Texto jurídico imutável.'), 'approved master legal text changed');
+  assert(entryContent(approvedRendered.bytes, 'word/header1.xml').equals(approvedHeader), 'approved master header changed');
+  assert(entryContent(approvedRendered.bytes, 'word/footer1.xml').equals(approvedFooter), 'approved master footer changed');
+  assert(entryContent(approvedRendered.bytes, 'word/media/image1.png').equals(binary), 'approved master image changed');
+
+  let approvedMismatchRejected = false;
+  try {
+    renderContractApprovedMasterDocxPackage(approvedSource, [{
+      paragraphIndex: 0,
+      expectedText: 'Campo ALTERADO: ____',
+      needle: '____',
+      replacement: 'DADO ERP',
+      fieldKey: 'driver.name',
+    }]);
+  } catch (error) {
+    approvedMismatchRejected = error instanceof ContractDocxTemplateError;
+  }
+  assert(approvedMismatchRejected, 'approved master paragraph drift did not fail closed');
 
   expectRejected(
     storedZip([
