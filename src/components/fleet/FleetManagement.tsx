@@ -73,7 +73,10 @@ export const FleetManagement: React.FC = () => {
       v.model.toLowerCase().includes(s) ||
       v.renavam.toLowerCase().includes(s) ||
       v.chassis.toLowerCase().includes(s);
-    const matchesStatus = statusFilter === 'ALL' || v.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      v.status === statusFilter ||
+      (statusFilter === VehicleStatus.MAINTENANCE && v.status === VehicleStatus.WAITING_MAINTENANCE);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
@@ -81,7 +84,7 @@ export const FleetManagement: React.FC = () => {
   const totalCount = vehicles.length;
   const rentedCount = vehicles.filter((v) => v.status === VehicleStatus.RENTED).length;
   const availableCount = vehicles.filter((v) => v.status === VehicleStatus.AVAILABLE).length;
-  const maintenanceCount = vehicles.filter((v) => v.status === VehicleStatus.MAINTENANCE).length;
+  const maintenanceCount = vehicles.filter((v) => v.status === VehicleStatus.MAINTENANCE || v.status === VehicleStatus.WAITING_MAINTENANCE).length;
   const inactiveCount = vehicles.filter((v) => v.status === VehicleStatus.INACTIVE || v.status === VehicleStatus.SOLD).length;
 
   const handleStatusChangeClick = (vehicle: Vehicle, newStatus: VehicleStatus) => {
