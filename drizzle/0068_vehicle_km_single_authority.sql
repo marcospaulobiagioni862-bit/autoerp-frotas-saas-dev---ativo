@@ -31,10 +31,9 @@ BEGIN
      WHERE r.company_id = NEW.company_id
        AND r.vehicle_id = NEW.vehicle_id
        AND r.km_value = NEW.km_value
-       AND r.record_date = NEW.record_date
   ) THEN
-    RAISE EXCEPTION 'Duplicate KM reading for vehicle/date'
-      USING ERRCODE = '23505', CONSTRAINT = 'vehicle_km_records_daily_value_guard';
+    RAISE EXCEPTION 'Duplicate KM value for vehicle'
+      USING ERRCODE = '23505', CONSTRAINT = 'vehicle_km_records_value_guard';
   END IF;
 
   RETURN NEW;
