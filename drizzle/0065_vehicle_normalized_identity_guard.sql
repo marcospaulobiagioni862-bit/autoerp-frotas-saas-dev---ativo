@@ -10,8 +10,8 @@ DECLARE
   normalized_renavam text;
   conflicting_vehicle_id text;
 BEGIN
-  normalized_plate := upper(regexp_replace(trim(coalesce(NEW.plate, '')), '[^A-Z0-9]', '', 'g'));
-  normalized_renavam := upper(regexp_replace(trim(coalesce(NEW.renavam, '')), '[^A-Z0-9]', '', 'g'));
+  normalized_plate := regexp_replace(upper(trim(coalesce(NEW.plate, ''))), '[^A-Z0-9]', '', 'g');
+  normalized_renavam := regexp_replace(upper(trim(coalesce(NEW.renavam, ''))), '[^A-Z0-9]', '', 'g');
 
   IF normalized_plate = '' OR normalized_renavam = '' THEN
     RAISE EXCEPTION USING ERRCODE = '23514', MESSAGE = 'Vehicle plate and RENAVAM are required';
@@ -27,8 +27,8 @@ BEGIN
   WHERE v.company_id = NEW.company_id
     AND v.id <> NEW.id
     AND (
-      upper(regexp_replace(trim(coalesce(v.plate, '')), '[^A-Z0-9]', '', 'g')) = normalized_plate
-      OR upper(regexp_replace(trim(coalesce(v.renavam, '')), '[^A-Z0-9]', '', 'g')) = normalized_renavam
+      regexp_replace(upper(trim(coalesce(v.plate, ''))), '[^A-Z0-9]', '', 'g') = normalized_plate
+      OR regexp_replace(upper(trim(coalesce(v.renavam, ''))), '[^A-Z0-9]', '', 'g') = normalized_renavam
     )
   ORDER BY v.created_at, v.id
   LIMIT 1;
