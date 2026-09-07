@@ -65,8 +65,8 @@ assert.match(
 );
 assert.match(
   app,
-  /h-screen overflow-hidden[\s\S]*flex font-sans/,
-  'global ERP shell must reserve the full viewport for sidebar and content',
+  /h-full min-h-0 overflow-hidden[\s\S]*flex font-sans/,
+  'global ERP shell must inherit the full root viewport for sidebar and content',
 );
 
 for (const [name, sidebar] of [['development', developmentSidebar], ['production', productionSidebar]] as const) {
