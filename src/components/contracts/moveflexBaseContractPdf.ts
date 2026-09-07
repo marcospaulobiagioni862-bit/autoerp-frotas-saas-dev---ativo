@@ -4,7 +4,7 @@ import { MOVEFLEX_LOGO_DATA_URL, MOVEFLEX_LOGO_JPEG_BASE64 } from '../../domain/
 
 export { MOVEFLEX_LOGO_DATA_URL };
 
-const BASE_CONTRACT_TEXT = moveFlexBlankContractText();
+const BASE_CONTRACT_TEXT = moveFlexBlankContractText().replace(/[☐☑]/g, '[ ]');
 
 function wrap(font:PDFFont,text:string,size:number,maxWidth:number):string[] {
   if(!text.trim()) return [''];
