@@ -9,9 +9,9 @@ const detailsModal = readFileSync(new URL('../ContractDetailsModal.tsx', import.
 const executionPanel = readFileSync(new URL('../ContractExecutionPanel.tsx', import.meta.url), 'utf8');
 const templatePolicy = readFileSync(new URL('../../../domain/contracts/contractTemplatePolicy.ts', import.meta.url), 'utf8');
 const executionRoutes = readFileSync(new URL('../../../server/contractExecutionRoutes.ts', import.meta.url), 'utf8');
-const moveflexDefaultTemplate = readFileSync(new URL('../../../domain/contracts/moveflexDefaultContractTemplate.ts', import.meta.url), 'utf8');
-const moveflexContract01Template = readFileSync(new URL('../../../domain/contracts/moveflexContract01Template.ts', import.meta.url), 'utf8');
-const moveflexContract02Template = readFileSync(new URL('../../../domain/contracts/moveflexContract02Template.ts', import.meta.url), 'utf8');
+const approvedMasterRegistry = readFileSync(new URL('../../../domain/contracts/moveflexApprovedContractMaster.ts', import.meta.url), 'utf8');
+const approvedMasterRenderer = readFileSync(new URL('../../../domain/contracts/moveflexApprovedMasterRenderer.ts', import.meta.url), 'utf8');
+const attachmentRoutes = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
 const templateClient = readFileSync(new URL('../../../api/contractTemplateClient.ts', import.meta.url), 'utf8');
 
 const modals = ['ContractFormModal', 'ContractDetailsModal', 'ContractTemplateManagementModal'] as const;
@@ -149,46 +149,24 @@ assert.match(
   /Modelos de Contrato MoveFlex/,
   'contract template manager must expose MoveFlex branding',
 );
-assert.match(
-  templateModal,
-  /Baixar modelo-base MoveFlex \(PDF\)/,
-  'empty template state must provide a downloadable MoveFlex base model',
-);
-assert.match(
-  templateModal,
-  /buildMoveFlexBaseContractPdf/,
-  'MoveFlex base PDF must be prepared before the user download click',
-);
-assert.match(
-  templateModal,
-  /onClick=\{downloadBasePdf\}/,
-  'MoveFlex base PDF download must use the prepared synchronous click handler',
-);
-assert.match(
-  templateModal,
-  /Baixar arquivo selecionado/,
-  'selected PDF or DOCX must be downloadable before save',
-);
-const moveflexBasePdf = readFileSync(new URL('../moveflexBaseContractPdf.ts', import.meta.url), 'utf8');
-assert.match(moveflexBasePdf, /MOVEFLEX_LOGO_DATA_URL/, 'MoveFlex contract base must embed the brand mark');
-assert.match(moveflexBasePdf, /Contrato_MoveFlex_Modelo_Base\.pdf/, 'MoveFlex base download must use a stable PDF filename');
-assert.match(moveflexBasePdf, /moveFlexBlankContractText/, 'MoveFlex base PDF must reuse the persisted default contract source');
-assert.match(moveflexDefaultTemplate, /MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES/, 'MoveFlex bootstrap must aggregate both official models');
-assert.match(moveflexContract01Template, /CLÁUSULA 20 – FORO/, 'MoveFlex Contract 01 must retain all 20 clauses from the approved source');
-assert.match(moveflexContract01Template, /ANEXO I – CHECKLIST DE ENTREGA/, 'MoveFlex Contract 01 must retain its approved checklist annex');
-assert.match(moveflexContract01Template, /{{driver\.name}}/, 'MoveFlex Contract 01 must fill the driver from server snapshot data');
-assert.match(moveflexContract01Template, /{{vehicle\.plate}}/, 'MoveFlex Contract 01 must fill the vehicle from server snapshot data');
-assert.match(moveflexContract02Template, /28\. ASSINATURAS/, 'MoveFlex Contract 02 must retain all 28 approved sections');
-assert.match(moveflexContract02Template, /MULTAS RECEBIDAS APÓS O ENCERRAMENTO DA LOCAÇÃO/, 'MoveFlex Contract 02 must retain post-return fine responsibility terms');
-assert.match(moveflexContract02Template, /{{driver\.name}}/, 'MoveFlex Contract 02 must fill the driver from server snapshot data');
-assert.match(moveflexContract02Template, /{{vehicle\.plate}}/, 'MoveFlex Contract 02 must fill the vehicle from server snapshot data');
-assert.match(templateRoutes, /MOVEFLEX_BUILT_IN_CONTRACT_TEMPLATES/, 'server bootstrap must ensure both official MoveFlex models');
-assert.match(templateRoutes, /ensure-moveflex-default/, 'server must expose the idempotent MoveFlex default bootstrap route');
-assert.match(templateRoutes, /hasActiveDocxFileSource/, 'MoveFlex bootstrap must detect a promoted active DOCX source');
-assert.match(templateRoutes, /if \(await hasActiveDocxFileSource\(tx, principal\.companyId, current\)\)/, 'MoveFlex bootstrap must preserve FILE authority once the official DOCX is promoted');
-assert.match(executionRoutes, /MOVEFLEX_LOGO_JPEG_BASE64/, 'official generated PDF must embed the official MoveFlex logo');
-assert.match(executionRoutes, /Documento oficial MoveFlex/, 'official generated PDF must identify the MoveFlex document');
-assert.match(executionRoutes, /MoveFlex • Locação de Veículos/, 'official generated PDF must carry the MoveFlex footer');
+assert.doesNotMatch(templateModal, /buildMoveFlexBaseContractPdf/, 'standard contract manager must not generate a reconstructed base PDF');
+assert.doesNotMatch(templateModal, /Baixar modelo-base MoveFlex/, 'standard contract manager must not offer a derived base document');
+assert.match(templateModal, /Arquivo mestre aprovado • imutável/, 'active standard template must be visibly locked to the approved master');
+assert.match(templateModal, /Carregar arquivo mestre/, 'pending standard template must request the approved master file');
+assert.match(templateModal, /getMoveFlexApprovedContractMaster/, 'template manager must identify standard masters from the immutable registry');
+assert.match(approvedMasterRegistry, /CONTRATO_01_MOVEFLEX_ERP_FINAL\.docx/, 'Contract 01 approved filename must be pinned');
+assert.match(approvedMasterRegistry, /7b85e9e97af67ce15368b81999c4ce73570fe012e8f1f06bc0fd9c150fa2e7c2/, 'Contract 01 approved SHA-256 must be pinned');
+assert.match(approvedMasterRegistry, /CONTRATO_02_MOVEFLEX_ERP_FINAL\.docx/, 'Contract 02 approved filename must be pinned');
+assert.match(approvedMasterRegistry, /792e7df4a5cfc7cd36cd5bd3659dc68be42432f63671279f24025b3039b39e7d/, 'Contract 02 approved SHA-256 must be pinned');
+assert.match(approvedMasterRenderer, /renderContractApprovedMasterDocxPackage/, 'approved master generation must fill a copy of the exact DOCX package');
+assert.match(templateRoutes, /MOVEFLEX_APPROVED_CONTRACT_MASTERS/, 'server bootstrap must prepare only checksum-pinned approved standard masters');
+assert.match(templateRoutes, /ApprovedMasterLockedError/, 'server must lock approved standard template lifecycle');
+assert.match(templateRoutes, /source\.checksum !== approvedMaster\.sha256/, 'standard promotion must reject any source whose SHA-256 differs from the approved master');
+assert.match(attachmentRoutes, /checksum!==master\.sha256/, 'standard master upload must be rejected before storage when bytes differ');
+assert.match(executionRoutes, /renderMoveFlexApprovedMasterDocx/, 'contract execution must render standard documents only from the approved master renderer');
+assert.match(executionRoutes, /GENERATE_DOCX_FROM_APPROVED_MASTER/, 'approved master generation must be explicitly audited');
+assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(generatedTemplate\.templateKey\)/, 'legacy DOCX-to-PDF reflow must be blocked for approved masters');
+assert.match(contractForm, /O arquivo mestre aprovado do Contrato 01 ainda não está ativo/, 'new contract creation must fail closed until the approved master is active');
 assert.match(
   templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,
