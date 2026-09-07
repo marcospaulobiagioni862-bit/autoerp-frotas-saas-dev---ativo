@@ -251,11 +251,14 @@ export class DocumentAiClientTestRunner {
 
 const reviewPanelSource = readFileSync(new URL('../../components/documents/DocumentAiReviewPanel.tsx', import.meta.url), 'utf8');
 assert(reviewPanelSource.includes('selectedFailedIds'), 'failed extraction selection state is missing');
-assert(reviewPanelSource.includes('Limpar selecionados ('), 'bulk cleanup action is missing');
+assert(reviewPanelSource.includes('Excluir definitivamente ('), 'bulk permanent-delete action for unused failures is missing');
+assert(reviewPanelSource.includes('Arquivar selecionados ('), 'bulk archive fallback is missing');
 assert(reviewPanelSource.includes('Arquivar esta falha'), 'individual cleanup action is missing');
 assert(reviewPanelSource.includes('DocumentAiClient.discardFailed(extractionIds)'), 'cleanup must send only explicitly selected extraction ids');
+assert(reviewPanelSource.includes('AttachmentClient.deletePermanently(item.attachmentId)'), 'unused failures must use the permanent attachment delete authority');
 assert(reviewPanelSource.includes('window.confirm'), 'destructive-looking cleanup must require explicit confirmation');
-assert(reviewPanelSource.includes('Itens em uso e arquivos com dados válidos serão preservados'), 'confirmation must explain preservation policy');
+assert(reviewPanelSource.includes('Itens em uso e arquivos com dados válidos serão preservados'), 'archive confirmation must explain preservation policy');
+assert(reviewPanelSource.includes('Esta ação remove o registro e o arquivo físico'), 'permanent-delete confirmation must explain physical deletion');
 assert(reviewPanelSource.includes('Nenhuma extração foi arquivada'), 'blocked cleanup must explain that selected items remain protected');
 assert(reviewPanelSource.includes('Vínculo ativo:'), 'blocked cleanup must identify the server-authoritative entity link');
 for (const label of ['Todos', 'Em uso', 'Não utilizados', 'Falhas']) {
