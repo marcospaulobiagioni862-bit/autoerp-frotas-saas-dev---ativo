@@ -47,6 +47,27 @@ const outbox: WhatsappOutboxItem = {
   providerCallApplied: false,
 };
 
+const kmOutbox: WhatsappOutboxItem = {
+  id: 'wao_cccccccccccccccccccccccccccccccc',
+  driverId: 'driver-1',
+  templateKey: 'KM_READING_REQUEST',
+  templateVersion: 1,
+  templateParameters: {
+    driverName: 'Motorista Sintético',
+    plate: 'ABC1D23',
+    vehicleDescription: 'VW Gol',
+    dueDate: '2026-09-07',
+  },
+  referenceType: 'VEHICLE_KM_READING',
+  referenceId: 'vehicle-1:2026-09-07',
+  status: 'HELD_PROVIDER_DISABLED',
+  cancellationReason: null,
+  createdAt: '2026-09-07T12:00:00.000Z',
+  updatedAt: '2026-09-07T12:00:00.000Z',
+  cancelledAt: null,
+  providerCallApplied: false,
+};
+
 const proposal: WhatsappTaskProposal = {
   id: 'wrp_11111111111111111111111111111111',
   webhookEventId: 'wwe_11111111111111111111111111111111',
@@ -76,6 +97,8 @@ export class WhatsappClientTestRunner {
   static async runAllTests(): Promise<void> {
     assert(parseWhatsappConsent(consent).status === 'GRANTED', 'valid consent rejected');
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
+    assert(parseWhatsappOutboxItem(kmOutbox).templateKey === 'KM_READING_REQUEST', 'KM outbox item rejected');
+    assert(parseWhatsappOutboxItem({ ...kmOutbox, templateVersion: 1 }).templateVersion === 1, 'server template version was rejected');
     assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
     assert(parseWhatsappObservabilitySummary(observability).windowDays === 30, 'valid observability summary rejected');
 
@@ -165,7 +188,7 @@ export class WhatsappClientTestRunner {
             headers: { 'content-type': 'application/json' },
           });
         }
-        return new Response(JSON.stringify({ items: [outbox, { ...outbox, id: 'wao_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', driverId: 'driver-2', referenceId: 'driver-2' }] }), {
+        return new Response(JSON.stringify({ items: [outbox, kmOutbox, { ...outbox, id: 'wao_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', driverId: 'driver-2', referenceId: 'driver-2' }] }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -193,7 +216,8 @@ export class WhatsappClientTestRunner {
       assert(outboxBody.templateKey === 'DRIVER_CNH_EXPIRY', 'template allowlist changed');
 
       const listed = await WhatsappClient.listForDriver('driver-1');
-      assert(listed.length === 1 && listed[0].driverId === 'driver-1', 'driver outbox filter failed');
+      assert(listed.length === 2 && listed.every((item) => item.driverId === 'driver-1'), 'driver outbox filter failed');
+      assert(listed.some((item) => item.templateKey === 'KM_READING_REQUEST'), 'driver outbox did not preserve KM request history');
       assert(requests[4].init?.credentials === 'include', 'outbox list omitted session');
 
       const proposals = await WhatsappClient.listTaskProposalsForDriver('driver-1');
