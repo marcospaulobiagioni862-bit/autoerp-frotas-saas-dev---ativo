@@ -35,7 +35,7 @@ function detectedMimeType(bytes:Buffer):string|undefined{
   }
   return undefined;
 }
-const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDocumentIntake','VehicleInspection','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
+const ENTITY_TYPES=new Set(['Vehicle','Driver','DriverDocumentIntake','VehicleDocumentIntake','TrafficTicketDocumentIntake','VehicleInspection','Contract','ContractTemplate','HealthAndEmergency','TrafficTicket','MaintenanceWorkOrder','Insurance','Tracker']);
 class AttachmentValidationError extends Error{}
 class AttachmentNotFoundError extends Error{}
 class AttachmentForbiddenError extends Error{}
@@ -118,6 +118,21 @@ async function validateEntity(tx:any,principal:AuthenticatedPrincipal,entityType
     if(write&&(status!=='DRAFT'||item.attachment_id))throw new AttachmentForbiddenError();
     return;
   }
+  if(entityType==='TrafficTicketDocumentIntake'){
+    const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+    const result:any=await raw.execute(sql`
+      SELECT created_by,status,expires_at,attachment_id
+      FROM traffic_ticket_document_intakes
+      WHERE company_id=${principal.companyId} AND id=${entityId}
+      LIMIT 1
+    `);
+    const item=result.rows?.[0];
+    if(!item||String(item.created_by)!==principal.userId)throw new AttachmentNotFoundError();
+    const status=String(item.status),expiresAt=new Date(item.expires_at).getTime();
+    if(status==='ARCHIVED'||status==='CONSUMED'||!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw new AttachmentNotFoundError();
+    if(write&&(status!=='DRAFT'||item.attachment_id))throw new AttachmentForbiddenError();
+    return;
+  }
   const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,entityId);if(!driver||driver.isArchived)throw new AttachmentNotFoundError();
   if(entityType==='HealthAndEmergency'){const action=write?'EDIT_DRIVER_HEALTH':'VIEW_DRIVER_HEALTH';if(!hasDriverHealthPermission(action,healthContext(principal)))throw new AttachmentForbiddenError();}
 }
@@ -133,25 +148,59 @@ function auditState(item:FileAttachment):string{return JSON.stringify({entityTyp
 async function assertPermanentDeleteAllowed(tx:any,principal:AuthenticatedPrincipal,item:FileAttachment):Promise<void>{
   if(item.entityType==='ContractTemplate')throw new AttachmentConflictError('Modelo de contrato em uso: arquive em vez de excluir definitivamente.');
   const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+
   const linked:any=await raw.execute(sql`
     SELECT source FROM (
       SELECT 'documents' AS source WHERE EXISTS (SELECT 1 FROM documents WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
       UNION ALL SELECT 'contract_artifacts' WHERE EXISTS (SELECT 1 FROM contract_artifacts WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
-      UNION ALL SELECT 'driver_document_intakes' WHERE EXISTS (SELECT 1 FROM driver_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
-      UNION ALL SELECT 'vehicle_document_intakes' WHERE EXISTS (SELECT 1 FROM vehicle_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
-      UNION ALL SELECT 'traffic_ticket_document_intakes' WHERE EXISTS (SELECT 1 FROM traffic_ticket_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
       UNION ALL SELECT 'oil_change_records' WHERE EXISTS (SELECT 1 FROM oil_change_records WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
       UNION ALL SELECT 'tire_records' WHERE EXISTS (SELECT 1 FROM tire_records WHERE company_id=${principal.companyId} AND attachment_id=${item.id})
     ) refs LIMIT 1
   `);
   if(linked.rows?.[0])throw new AttachmentConflictError('Documento vinculado ao ERP: arquive em vez de excluir definitivamente.');
-  const extractionResult:any=await raw.execute(sql`SELECT status FROM document_ai_extractions WHERE company_id=${principal.companyId} AND attachment_id=${item.id} FOR UPDATE`);
-  const statuses=(extractionResult.rows||[]).map((row:any)=>String(row.status||''));
-  if(statuses.some((status:string)=>!['FAILED','REJECTED'].includes(status))){
-    throw new AttachmentConflictError('Documento possui extração ativa/aprovada: arquive em vez de excluir definitivamente.');
+
+  const intakeResult:any=await raw.execute(sql`
+    SELECT intake_type,id,status,approved_extraction_id,business_id,consumed_at FROM (
+      SELECT 'DRIVER' AS intake_type,id,status,approved_extraction_id,driver_id AS business_id,consumed_at
+        FROM driver_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id}
+      UNION ALL
+      SELECT 'VEHICLE',id,status,approved_extraction_id,vehicle_id AS business_id,consumed_at
+        FROM vehicle_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id}
+      UNION ALL
+      SELECT 'TRAFFIC_TICKET',id,status,approved_extraction_id,traffic_ticket_id AS business_id,consumed_at
+        FROM traffic_ticket_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id}
+    ) intakes
+  `);
+  const intakes=intakeResult.rows||[];
+  for(const intake of intakes){
+    const status=String(intake.status||'');
+    if(!['FAILED','ARCHIVED'].includes(status)||intake.approved_extraction_id||intake.business_id||intake.consumed_at){
+      throw new AttachmentConflictError('Documento de entrada ainda está em uso: arquive em vez de excluir definitivamente.');
+    }
   }
-  if(statuses.length>0){
+
+  const extractionResult:any=await raw.execute(sql`
+    SELECT id,status,approved_at,proposed_fields,corrections
+    FROM document_ai_extractions
+    WHERE company_id=${principal.companyId} AND attachment_id=${item.id}
+    FOR UPDATE
+  `);
+  const extractions=extractionResult.rows||[];
+  for(const extraction of extractions){
+    const proposed=extraction.proposed_fields&&typeof extraction.proposed_fields==='object'&&!Array.isArray(extraction.proposed_fields)?extraction.proposed_fields:{};
+    const corrections=extraction.corrections&&typeof extraction.corrections==='object'&&!Array.isArray(extraction.corrections)?extraction.corrections:{};
+    if(!['FAILED','REJECTED'].includes(String(extraction.status||''))||extraction.approved_at||Object.keys(proposed).length>0||Object.keys(corrections).length>0){
+      throw new AttachmentConflictError('Documento possui extração ativa, aprovada ou dados aproveitados: arquive em vez de excluir definitivamente.');
+    }
+  }
+
+  if(extractions.length>0){
     await raw.execute(sql`DELETE FROM document_ai_extractions WHERE company_id=${principal.companyId} AND attachment_id=${item.id}`);
+  }
+  if(intakes.length>0){
+    await raw.execute(sql`DELETE FROM driver_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id} AND status IN ('FAILED','ARCHIVED') AND driver_id IS NULL AND consumed_at IS NULL AND approved_extraction_id IS NULL`);
+    await raw.execute(sql`DELETE FROM vehicle_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id} AND status IN ('FAILED','ARCHIVED') AND vehicle_id IS NULL AND consumed_at IS NULL AND approved_extraction_id IS NULL`);
+    await raw.execute(sql`DELETE FROM traffic_ticket_document_intakes WHERE company_id=${principal.companyId} AND attachment_id=${item.id} AND status IN ('FAILED','ARCHIVED') AND traffic_ticket_id IS NULL AND consumed_at IS NULL AND approved_extraction_id IS NULL`);
   }
 }
 
@@ -242,7 +291,9 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       deletedItem=await UnitOfWork.run(principal.companyId,async tx=>{
         const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);
         if(!existing)throw new AttachmentNotFoundError();
-        await validateEntity(tx,principal,existing.entityType,existing.entityId,true);
+        if(!['DriverDocumentIntake','VehicleDocumentIntake','TrafficTicketDocumentIntake'].includes(existing.entityType)){
+          await validateEntity(tx,principal,existing.entityType,existing.entityId,false);
+        }
         await assertPermanentDeleteAllowed(tx,principal,existing);
         const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
         const removed:any=await raw.execute(sql`DELETE FROM file_attachments WHERE company_id=${principal.companyId} AND id=${existing.id} RETURNING id`);
