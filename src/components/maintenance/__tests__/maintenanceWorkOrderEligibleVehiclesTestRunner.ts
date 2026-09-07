@@ -19,4 +19,30 @@ assert.match(
   'page-level error must avoid duplicating the modal error while the work-order form is open',
 );
 
+assert.match(
+  source,
+  /!woVehicleId\|\|!woSupplierId\|\|!woServiceDate/,
+  'new work orders must require a supplier or workshop before creation',
+);
+assert.match(
+  source,
+  /setWoParts\(\(current\)=>/,
+  'new work orders must support accumulating multiple catalog parts',
+);
+assert.match(
+  source,
+  /parts:woParts\.map\(\(item\)=>\(\{partId:item\.partId,quantity:item\.quantity\}\)\)/,
+  'all selected parts must be sent to the server-authoritative work-order create command',
+);
+assert.match(
+  source,
+  /Total estimado da OS/,
+  'work-order form must preview its operational cost before creation',
+);
+assert.match(
+  source,
+  /MAINTENANCE_INVOICE[\s\S]*MAINTENANCE_PART_PHOTO[\s\S]*MAINTENANCE_DOCUMENT/,
+  'work-order attachments must remain classified as invoice, part photo, or other maintenance evidence',
+);
+
 console.log('Maintenance work-order eligible vehicles UX PASS');
