@@ -60,6 +60,66 @@ assert.equal(responseFormat.mime_type, 'application/json');
 assert.ok(responseFormat.schema, 'strict JSON schema was not sent');
 assert.equal('tools' in (captured ?? {}), false);
 
+const narrowCaptured: Record<string, unknown>[] = [];
+const narrowProvider = new GeminiDocumentAiProvider({
+  apiKey: 'test-only-not-a-real-key',
+  model: 'gemini-3.7-flash',
+  allowedSyntheticChecksums: new Set([checksum]),
+  client: {
+    async create(request) {
+      narrowCaptured.push(request);
+      const expected = narrowCaptured.length === 1 ? 'CNH' : 'CRLV';
+      return {
+        output_text: JSON.stringify(expected === 'CNH'
+          ? {
+              documentType: 'CNH',
+              fields: { name: 'MOTORISTA TESTE' },
+              confidence: { name: 0.99 },
+              raw: { text: 'CNH sintética', pages: 1 },
+            }
+          : {
+              documentType: 'CRLV',
+              fields: { plate: 'ABC1D23' },
+              confidence: { plate: 0.99 },
+              raw: { text: 'CRLV sintético', pages: 1 },
+            }),
+      };
+    },
+  },
+});
+
+await processDocumentAiBytes(narrowProvider, {
+  content: syntheticPdf,
+  mimeType: 'application/pdf',
+  expectedChecksum: checksum,
+  expectedDocumentType: 'CNH',
+});
+await processDocumentAiBytes(narrowProvider, {
+  content: syntheticPdf,
+  mimeType: 'application/pdf',
+  expectedChecksum: checksum,
+  expectedDocumentType: 'CRLV',
+});
+
+for (const [index, expectedType] of ['CNH', 'CRLV'].entries()) {
+  const format = narrowCaptured[index]?.response_format as Record<string, unknown> | undefined;
+  assert.ok(format?.schema, `${expectedType} response schema missing`);
+  const narrowed = format.schema as Record<string, unknown>;
+  assert.equal('anyOf' in narrowed, false, `${expectedType} request must not send the global schema union`);
+  const properties = narrowed.properties as Record<string, unknown>;
+  const documentType = properties.documentType as Record<string, unknown>;
+  assert.deepEqual(documentType.enum, [expectedType], `${expectedType} schema must be specific to the expected document`);
+  const fields = properties.fields as Record<string, unknown>;
+  const fieldProperties = fields.properties as Record<string, unknown>;
+  if (expectedType === 'CNH') {
+    assert.equal('name' in fieldProperties, true);
+    assert.equal('plate' in fieldProperties, false);
+  } else {
+    assert.equal('plate' in fieldProperties, true);
+    assert.equal('name' in fieldProperties, false);
+  }
+}
+
 const schema = responseFormat.schema as Record<string, unknown>;
 const variants = schema.anyOf as Array<Record<string, unknown>> | undefined;
 assert.ok(Array.isArray(variants) && variants.length === 15, 'schema must contain one variant per document type');
