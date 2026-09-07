@@ -48,7 +48,7 @@ const TransferModal=lazy(()=>import('./components/modals/TransferModal').then(mo
 const RenegotiationModal=lazy(()=>import('./components/modals/RenegotiationModal').then(module=>({default:module.RenegotiationModal})));
 
 export default function App(){
-  const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);
+  const {user}=useAuth();const [activeTab,setActiveTab]=useState<NavigationTab>('dashboard');const [testStatus,setTestStatus]=useState<{passed:number;total:number;failed:number}|null>(null);const [isMobileSidebarOpen,setIsMobileSidebarOpen]=useState(false);const [isSidebarCollapsed,setIsSidebarCollapsed]=useState(false);
   const [selectedReceivableForReceipt,setSelectedReceivableForReceipt]=useState<AccountReceivable|null>(null),[selectedPayableForPayment,setSelectedPayableForPayment]=useState<AccountPayable|null>(null),[isTransferModalOpen,setIsTransferModalOpen]=useState(false),[selectedReceivablesForRenegotiation,setSelectedReceivablesForRenegotiation]=useState<AccountReceivable[]>([]);
   const [pendingReceivablesCount,setPendingReceivablesCount]=useState(0),[pendingPayablesCount,setPendingPayablesCount]=useState(0),[pendingPendingsCount,setPendingPendingsCount]=useState(0);
   const [documentFocusFileName,setDocumentFocusFileName]=useState<string|null>(null);
@@ -93,9 +93,10 @@ export default function App(){
 
   const financeModalResetKey=selectedReceivableForReceipt?'receipt':selectedPayableForPayment?'payment':isTransferModalOpen?'transfer':selectedReceivablesForRenegotiation.length>0?'renegotiation':'none';
 
-  return <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
-    <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)} onResolveNotification={handleResolveNotification}/>
-    <div className="flex-1 min-h-0 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
+  return <div className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex font-sans">
+    <Sidebar activeTab={activeTab} onTabChange={setActiveTab} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)} isCollapsed={isSidebarCollapsed} onToggleCollapsed={()=>setIsSidebarCollapsed(value=>!value)}/>
+    <div className="min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+      <Header testStatus={testStatus} onOpenTestRunner={()=>setActiveTab('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)} onResolveNotification={handleResolveNotification}/>
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard onNavigate={tab=>setActiveTab(tab as any)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>setActiveTab('tests' as any)}/>} 
         {activeTab==='executive-operations'&&<ExecutiveOperationsCenterView/>}
