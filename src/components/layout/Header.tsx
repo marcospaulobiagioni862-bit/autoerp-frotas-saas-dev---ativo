@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShieldCheck, Building2, Sun, Moon, Menu } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
+import type { NotificationItem } from '../../api/notificationClient';
 
 interface HeaderProps {
   testStatus: { passed: number; total: number; failed: number } | null;
@@ -10,6 +11,7 @@ interface HeaderProps {
   // the reset control from the runtime UI and intentionally never invokes it.
   onResetSeedData?: () => void;
   onToggleMobileSidebar?: () => void;
+  onResolveNotification?: (item: NotificationItem) => void | Promise<void>;
 }
 
 function initials(name: string): string {
@@ -38,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   testStatus,
   onOpenTestRunner,
   onToggleMobileSidebar,
+  onResolveNotification,
 }) => {
   const { user, authMode } = useAuth();
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -109,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        <NotificationBell />
+        <NotificationBell onResolve={onResolveNotification} />
 
         <button
           onClick={toggleDarkMode}
