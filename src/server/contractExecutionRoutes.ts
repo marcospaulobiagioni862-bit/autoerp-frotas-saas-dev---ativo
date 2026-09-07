@@ -10,6 +10,8 @@ import { AuditAction, ContractStatus } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
+import { renderMoveFlexApprovedMasterDocx } from '../domain/contracts/moveflexApprovedMasterRenderer';
+import { getMoveFlexApprovedContractMaster } from '../domain/contracts/moveflexApprovedContractMaster';
 import { ContractDocxTemplateError } from '../domain/contracts/contractDocxTemplateRenderer';
 import type { AuthenticatedPrincipal } from './auth';
 import {
@@ -102,7 +104,8 @@ interface ContractSnapshot {
   };
   contract: {
     id: string; number: string; startDate: string; endDate: string; rentalAmount: number;
-    billingPeriodicity: string; securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
+    billingPeriodicity: string; billingDueDayOfWeek: number; billingDueDayOfMonth: number;
+    securityDepositAmount: number; franchiseKm: number; excessKmRate: number;
   };
   driver: {
     id: string; name: string; cpf: string; rg: string; birthDate: string; phone: string; whatsapp: string; email: string; maritalStatus: string; profession: string; motherName: string; pixKey: string; cnh: string; cnhCategory: string; cnhExpiration: string;
@@ -150,6 +153,8 @@ function makeSnapshot(
       endDate: contract.endDate || '',
       rentalAmount: contract.rentalAmount,
       billingPeriodicity: contract.billingPeriodicity,
+      billingDueDayOfWeek: contract.billingDueDayOfWeek || 0,
+      billingDueDayOfMonth: contract.billingDueDayOfMonth || 0,
       securityDepositAmount: contract.securityDepositAmount,
       franchiseKm: contract.franchiseKm,
       excessKmRate: contract.excessKmRate,
@@ -207,6 +212,10 @@ function makeSnapshot(
   };
 }
 
+function billingWeekdayLabel(day: number): string {
+  return ['', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'][day] || '';
+}
+
 function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> {
   return {
     'company.name': snapshot.company.name,
@@ -230,6 +239,9 @@ function valuesFromSnapshot(snapshot: ContractSnapshot): Record<string, string> 
     'contract.endDate': snapshot.contract.endDate || 'Prazo indeterminado',
     'contract.rentalAmount': formatMoney(snapshot.contract.rentalAmount),
     'contract.billingPeriodicity': snapshot.contract.billingPeriodicity,
+    'contract.billingDueDayOfWeek': String(snapshot.contract.billingDueDayOfWeek || ''),
+    'contract.billingDueDayOfMonth': String(snapshot.contract.billingDueDayOfMonth || ''),
+    'contract.billingDueDayOfWeekLabel': billingWeekdayLabel(snapshot.contract.billingDueDayOfWeek),
     'contract.securityDepositAmount': formatMoney(snapshot.contract.securityDepositAmount),
     'contract.franchiseKm': String(snapshot.contract.franchiseKm),
     'contract.excessKmRate': formatMoney(snapshot.contract.excessKmRate),
@@ -481,7 +493,12 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
         if (!template || template.isArchived) throw new ExecutionNotFoundError();
-        if (!template.isCurrent || !template.isActive) throw new ExecutionConflictError();
+        if (
+          !template.isCurrent ||
+          !template.isActive ||
+          !template.contentMarkdown.trim() ||
+          getMoveFlexApprovedContractMaster(template.templateKey)
+        ) throw new ExecutionConflictError();
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
@@ -650,14 +667,26 @@ export function registerContractExecutionRoutes(app: Express): void {
           Boolean(item.storageKey)
         );
         if (sources.length !== 1) throw new ExecutionConflictError();
-        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0] };
+        const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+        if (
+          approvedMaster &&
+          (
+            sources[0].checksum !== approvedMaster.sha256 ||
+            sources[0].fileSize !== approvedMaster.fileSize
+          )
+        ) throw new ExecutionConflictError();
+        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0], approvedMaster };
       });
 
       const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!);
       const sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');
       if (
         !prepared.source.checksum || sourceChecksum !== prepared.source.checksum ||
-        sourceBytes.length !== prepared.source.fileSize
+        sourceBytes.length !== prepared.source.fileSize ||
+        (prepared.approvedMaster && (
+          sourceChecksum !== prepared.approvedMaster.sha256 ||
+          sourceBytes.length !== prepared.approvedMaster.fileSize
+        ))
       ) throw new ExecutionValidationError('Invalid DOCX template source');
 
       const snapshot = makeSnapshot(
@@ -695,7 +724,10 @@ export function registerContractExecutionRoutes(app: Express): void {
         return;
       }
 
-      const rendered = renderContractDocxPackage(sourceBytes, valuesFromSnapshot(snapshot));
+      const templateValues = valuesFromSnapshot(snapshot);
+      const rendered = prepared.approvedMaster
+        ? renderMoveFlexApprovedMasterDocx(sourceBytes, prepared.template.templateKey, templateValues)
+        : renderContractDocxPackage(sourceBytes, templateValues);
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, rendered.bytes);
       storedKey = stored.storageKey;
@@ -725,7 +757,11 @@ export function registerContractExecutionRoutes(app: Express): void {
           source.documentType !== 'CONTRACT_TEMPLATE_SOURCE' ||
           source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
           source.contentState !== 'AVAILABLE' || source.storageProvider !== storage.provider ||
-          source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum
+          source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum ||
+          (prepared.approvedMaster && (
+            source.checksum !== prepared.approvedMaster.sha256 ||
+            source.fileSize !== prepared.approvedMaster.fileSize
+          ))
         ) throw new ExecutionConflictError();
 
         const currentDocx = await tx.getContractArtifactRepo().findCurrentForContract(
@@ -805,10 +841,12 @@ export function registerContractExecutionRoutes(app: Express): void {
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
           newState: JSON.stringify({
-            event: 'GENERATE_DOCX',
+            event: prepared.approvedMaster ? 'GENERATE_DOCX_FROM_APPROVED_MASTER' : 'GENERATE_DOCX',
             templateId: template.id,
             sourceAttachmentId: source.id,
             sourceChecksum,
+            approvedMasterFileName: prepared.approvedMaster?.fileName,
+            approvedMasterSha256: prepared.approvedMaster?.sha256,
             snapshotHash,
             replacedKeys: rendered.replacedKeys,
           }),
@@ -848,6 +886,12 @@ export function registerContractExecutionRoutes(app: Express): void {
           principal.companyId, contract.id, 'GENERATED_DOCX'
         );
         if (!generatedDocx) throw new ExecutionConflictError();
+        const generatedTemplate = generatedDocx.templateId
+          ? await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, generatedDocx.templateId)
+          : null;
+        if (generatedTemplate && getMoveFlexApprovedContractMaster(generatedTemplate.templateKey)) {
+          throw new ExecutionConflictError();
+        }
         const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, generatedDocx.attachmentId);
         if (
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
