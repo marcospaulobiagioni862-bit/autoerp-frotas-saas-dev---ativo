@@ -37,8 +37,8 @@ export async function findVehicleIdentityConflict(
     WHERE company_id=${companyId}
       AND (${excludeVehicleId || null}::text IS NULL OR id<>${excludeVehicleId || null})
       AND (
-        regexp_replace(upper(trim(coalesce(plate,''))), '[^A-Z0-9]', '', 'g')=${normalizedPlate}
-        OR regexp_replace(upper(trim(coalesce(renavam,''))), '[^A-Z0-9]', '', 'g')=${normalizedRenavam}
+        (${normalizedPlate} <> '' AND regexp_replace(upper(trim(coalesce(plate,''))), '[^A-Z0-9]', '', 'g')=${normalizedPlate})
+        OR (${normalizedRenavam} <> '' AND regexp_replace(upper(trim(coalesce(renavam,''))), '[^A-Z0-9]', '', 'g')=${normalizedRenavam})
       )
     ORDER BY created_at,id
     LIMIT 1
