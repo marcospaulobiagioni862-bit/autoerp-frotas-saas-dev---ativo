@@ -10,6 +10,7 @@ const ALERT_LEAD_DAYS=2;
 const TRACKER_FRESH_MS=24*60*60*1000;
 const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
 const EXPECTED_PARAMETERS=['driverName','dueDate','plate','vehicleDescription'];
+const TEMPLATE_BODY='Olá {{driverName}}, precisamos atualizar a quilometragem do veículo {{plate}} — {{vehicleDescription}}. Por favor, envie a quilometragem atual exibida no painel e, se possível, uma foto do odômetro. Data prevista da leitura: {{dueDate}}.';
 
 export type KmReadingAlertStage='DUE_SOON'|'DUE_TODAY'|'OVERDUE';
 
@@ -176,6 +177,15 @@ export class VehicleKmAlertAuthority {
     const ids=cleanVehicleIds(vehicleIds).sort();
     return await UnitOfWork.run(principal.companyId,async context=>{
       const tx=context.getRawTransaction?.();if(!tx)throw new Error('KM WhatsApp persistence unavailable');
+      await tx.execute(sql`
+        INSERT INTO whatsapp_template_catalog(company_id,template_key,version,status,body_text,parameter_keys)
+        SELECT ${principal.companyId},${TEMPLATE_KEY},1,'ACTIVE',${TEMPLATE_BODY},${JSON.stringify(['driverName','plate','vehicleDescription','dueDate'])}::jsonb
+        WHERE NOT EXISTS (
+          SELECT 1 FROM whatsapp_template_catalog
+          WHERE company_id=${principal.companyId} AND template_key=${TEMPLATE_KEY}
+        )
+        ON CONFLICT(company_id,template_key,version) DO NOTHING
+      `);
       const template=rows(await tx.execute(sql`
         SELECT version,parameter_keys
         FROM whatsapp_template_catalog
