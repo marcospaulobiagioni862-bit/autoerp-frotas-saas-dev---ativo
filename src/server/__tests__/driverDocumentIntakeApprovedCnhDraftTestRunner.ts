@@ -178,5 +178,6 @@ const routesSource = readFileSync(new URL('../driverDocumentIntakeRoutes.ts', im
 assert.match(routesSource, /function parseMaterialization\(body: unknown\): \{ expectedDriverId\?: string \}/, 'materialization must parse the optional selected driver');
 assert.match(routesSource, /String\(intake\.driver_id\) !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'consumed replay must reject a different selected driver');
 assert.match(routesSource, /renewal\.kind === 'NEW'[\s\S]*renewal\.driver\.id !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'renewal must fail closed when the approved CNH does not match the selected driver');
+assert.match(routesSource, /renewal\.kind === 'DUPLICATE_WITHOUT_VALIDITY' \|\| renewal\.kind === 'REPLAY'[\s\S]*DriverDocumentIntakeDuplicateCnhError/, 'same CNH replay must stop before promotion instead of creating another canonical CNH version');
 
 console.log('Driver intake approved CNH draft checks passed.');
