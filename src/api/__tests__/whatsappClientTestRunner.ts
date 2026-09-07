@@ -99,6 +99,13 @@ export class WhatsappClientTestRunner {
     assert(parseWhatsappOutboxItem(outbox).providerCallApplied === false, 'held outbox rejected');
     assert(parseWhatsappOutboxItem(kmOutbox).templateKey === 'KM_READING_REQUEST', 'KM outbox item rejected');
     assert(parseWhatsappOutboxItem({ ...kmOutbox, templateVersion: 1 }).templateVersion === 1, 'server template version was rejected');
+    let invalidKmReferenceRejected = false;
+    try {
+      parseWhatsappOutboxItem({ ...kmOutbox, referenceType: 'DRIVER', referenceId: kmOutbox.driverId });
+    } catch {
+      invalidKmReferenceRejected = true;
+    }
+    assert(invalidKmReferenceRejected, 'KM outbox accepted an incompatible reference');
     assert(parseWhatsappTaskProposal(proposal).status === 'PENDING', 'valid sanitized task proposal rejected');
     assert(parseWhatsappObservabilitySummary(observability).windowDays === 30, 'valid observability summary rejected');
 
