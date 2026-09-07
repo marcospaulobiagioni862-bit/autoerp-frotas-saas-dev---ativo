@@ -63,6 +63,10 @@ assert.match(appSource, /import\('\.\/app\/navigationBadgeLoader'\)/, 'App must 
 assert.match(appSource, /handleResolveNotification/, 'App must route notification clicks to the source module');
 assert.match(appSource, /DocumentClient\.get\(item\.entityId\)/, 'Document notifications must resolve their canonical document before navigation');
 assert.match(appSource, /setActiveTab\('documentos'\)/, 'Document notifications must navigate to the document center');
+assert.match(appSource, /className="h-full min-h-0 overflow-hidden/, 'App shell must inherit the root height instead of creating a second viewport-sized scroll boundary');
+const globalCssSource = read('src/index.css');
+assert.match(globalCssSource, /html,[\s\S]*body,[\s\S]*#root[\s\S]*overflow:\s*hidden;/, 'Global document/root scroll must remain disabled so only the application scroll regions can move');
+assert.match(globalCssSource, /height:\s*100%;/, 'Global document/root height must remain anchored to the viewport');
 const badgeLoaderSource = read('src/app/navigationBadgeLoader.ts');
 assert.match(badgeLoaderSource, /persistence\/repositories\/serverReadModelRepositories/, 'Badge loader must import the authenticated server read-model adapter');
 assert.match(badgeLoaderSource, /domain\/operations\/serverOperationalPendingProjection/, 'Badge loader must import the tenant-safe pending projection explicitly');

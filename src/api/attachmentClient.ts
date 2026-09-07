@@ -148,4 +148,17 @@ export class AttachmentClient {
   static async restore(id: string): Promise<FileAttachment> {
     return await this.lifecycle(id, 'restore');
   }
+
+  static async deletePermanently(id: string): Promise<{ deleted: true; storageRemoved: boolean }> {
+    const response = await fetch(`/api/attachments/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!response.ok) throw await apiError(response, 'Falha ao excluir anexo definitivamente');
+    const payload = asRecord(await response.json());
+    if (payload.deleted !== true || typeof payload.storageRemoved !== 'boolean') {
+      throw new Error('Invalid attachment delete payload');
+    }
+    return { deleted: true, storageRemoved: payload.storageRemoved };
+  }
 }

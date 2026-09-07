@@ -107,11 +107,25 @@ export class AttachmentClientTestRunner {
     });
 
     tests.push(async () => {
+      let url = '';
+      let method = '';
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        url = String(input);
+        method = String(init?.method);
+        return new Response(JSON.stringify({ deleted: true, storageRemoved: true }), { status: 200 });
+      }) as typeof fetch;
+      const result = await AttachmentClient.deletePermanently('att 1');
+      assert(url.endsWith('/api/attachments/att%201') && method === 'DELETE', 'DELETE permanent transport');
+      assert(result.deleted === true && result.storageRemoved === true, 'DELETE permanent payload');
+    });
+
+    tests.push(async () => {
       globalThis.fetch = (async () => new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })) as typeof fetch;
       const expectations: Array<{ run: () => Promise<unknown>; operation: string }> = [
         { run: () => AttachmentClient.list({ entityType: 'MaintenanceWorkOrder', entityId: 'wo-1' }), operation: 'Falha ao listar anexos' },
         { run: () => AttachmentClient.content('att-1'), operation: 'Falha ao visualizar/baixar anexo' },
         { run: () => AttachmentClient.archive('att-1'), operation: 'Falha ao arquivar anexo' },
+        { run: () => AttachmentClient.deletePermanently('att-1'), operation: 'Falha ao excluir anexo definitivamente' },
       ];
       for (const expectation of expectations) {
         let error: unknown;

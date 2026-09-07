@@ -301,6 +301,51 @@ export class AttachmentAuthorityIntegrationRunner {
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}/restore`, { method: 'POST' }, adminA);
       assert(response.status === 200 && (await json(response)).item.isArchived === false, 'restore failed');
 
+      const deleteUploadResponse = await upload(adminA, { fileName: 'delete-me.pdf' });
+      assert(deleteUploadResponse.status === 201, 'permanent-delete fixture upload failed');
+      const deleteCandidate = (await json(deleteUploadResponse)).item;
+      await db.execute(sql`
+        INSERT INTO document_ai_extractions (
+          id, company_id, attachment_id, attachment_checksum, idempotency_key, status,
+          requested_by, attempt_count, created_at, updated_at
+        ) VALUES (
+          'i4a-delete-failed-extraction', ${companyA}, ${deleteCandidate.id}, ${deleteCandidate.checksum},
+          'i4a-delete-failed-extraction-key', 'FAILED', ${adminAId}, 1, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET attachment_id=EXCLUDED.attachment_id, attachment_checksum=EXCLUDED.attachment_checksum, status='FAILED'
+      `);
+      response = await request(`/api/attachments/${encodeURIComponent(deleteCandidate.id)}`, { method: 'DELETE' }, readonlyA);
+      assert(response.status === 403, `READONLY permanent delete expected 403, got ${response.status}`);
+      response = await request(`/api/attachments/${encodeURIComponent(deleteCandidate.id)}`, { method: 'DELETE' }, adminB);
+      assert(response.status === 404, `cross-tenant permanent delete expected 404, got ${response.status}`);
+      const filesBeforePermanentDelete = await fileCount(storageRoot, companyA);
+      response = await request(`/api/attachments/${encodeURIComponent(deleteCandidate.id)}`, { method: 'DELETE' }, adminA);
+      const permanentDeleteResult = await json(response);
+      assert(response.status === 200 && permanentDeleteResult.deleted === true && permanentDeleteResult.storageRemoved === true, 'ADMIN permanent delete failed');
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM file_attachments WHERE company_id=${companyA} AND id=${deleteCandidate.id}`))?.count || 0) === 0, 'permanent delete left attachment metadata');
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM document_ai_extractions WHERE company_id=${companyA} AND attachment_id=${deleteCandidate.id}`))?.count || 0) === 0, 'permanent delete left disposable failed extraction');
+      assert(await fileCount(storageRoot, companyA) === filesBeforePermanentDelete - 1, 'permanent delete did not remove stored bytes');
+
+      const linkedUploadResponse = await upload(adminA, { fileName: 'linked-document.pdf' });
+      assert(linkedUploadResponse.status === 201, 'linked delete fixture upload failed');
+      const linkedAttachment = (await json(linkedUploadResponse)).item;
+      await db.execute(sql`
+        INSERT INTO documents (
+          id, company_id, subject_type, subject_id, document_type, attachment_id,
+          version_number, is_current, is_archived, cost, created_by, created_at, updated_at
+        ) VALUES (
+          'i4a-linked-delete-doc', ${companyA}, 'VEHICLE', 'i4a-veh-a1', 'CRLV', ${linkedAttachment.id},
+          1, true, false, 0, ${adminAId}, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET attachment_id=EXCLUDED.attachment_id, is_archived=false
+      `);
+      response = await request(`/api/attachments/${encodeURIComponent(linkedAttachment.id)}`, { method: 'DELETE' }, adminA);
+      assert(response.status === 409, `linked permanent delete expected 409, got ${response.status}`);
+      assert(Number((await scalar(sql`SELECT count(*)::int AS count FROM file_attachments WHERE company_id=${companyA} AND id=${linkedAttachment.id}`))?.count || 0) === 1, 'linked attachment was permanently deleted');
+      await db.execute(sql`DELETE FROM documents WHERE company_id=${companyA} AND id='i4a-linked-delete-doc'`);
+      response = await request(`/api/attachments/${encodeURIComponent(linkedAttachment.id)}`, { method: 'DELETE' }, adminA);
+      assert(response.status === 200, 'unlinked attachment did not become permanently deletable');
+
       const beforeCount = Number((await scalar(sql`SELECT count(*)::int AS count FROM file_attachments WHERE company_id=${companyA}`))?.count || 0);
       const beforeFiles = await fileCount(storageRoot, companyA);
       const originalAuditCreate = PostgresAuditLogRepository.prototype.create;

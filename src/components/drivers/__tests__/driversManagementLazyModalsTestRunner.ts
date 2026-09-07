@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { matchesDriverSearch } from '../driverSearch';
 
 const source = readFileSync(new URL('../DriversManagement.tsx', import.meta.url), 'utf8');
 const detailsSource = readFileSync(new URL('../DriverDetailsModal.tsx', import.meta.url), 'utf8');
@@ -110,5 +111,45 @@ assert.match(source, /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*Vehicl
 assert.match(source, /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/, 'driver authority failure must fail the primary list closed');
 assert.match(source, /setDrivers\(driversResult\.value\);[\s\S]*if \(vehiclesResult\.status === 'fulfilled'\)[\s\S]*setVehiclesMap\(vMap\);[\s\S]*else[\s\S]*setVehiclesMap\(\{\}\);/, 'vehicle enrichment failure must preserve the already loaded driver list');
 assert.doesNotMatch(source, /Promise\.all\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(/, 'vehicle enrichment must not be able to reject the primary driver load');
+
+const searchableDriver = {
+  fullName: 'Yasmin Marques Pereira',
+  cpf: '539.382.738-52',
+  rg: '58.279.323-3 SSP SP',
+  birthDate: '2003-05-27',
+  phone: '(11) 99999-0000',
+  cnhNumber: '08115969538',
+  cnhExpiration: '2031-09-10',
+  address: {
+    street: 'Rua das Flores',
+    number: '180',
+    neighborhood: 'Centro',
+    city: 'São Paulo',
+    state: 'SP',
+    zipCode: '18077-381',
+  },
+} as any;
+
+for (const term of [
+  'yasmin',
+  '539382',
+  '081159',
+  '999990000',
+  '58279323',
+  'Rua das Flores',
+  'flores',
+  'Centro',
+  'sao paulo',
+  '18077381',
+  '2003-05-27',
+  '27/05/2003',
+  '2031-09-10',
+  '10/09/2031',
+]) {
+  assert.equal(matchesDriverSearch(searchableDriver, term), true, `driver expanded search must match: ${term}`);
+}
+assert.equal(matchesDriverSearch(searchableDriver, '1999-01-01'), false, 'driver expanded search must reject unrelated dates');
+assert.match(source, /matchesDriverSearch\(driver, searchTerm\)/, 'DriversManagement must delegate free-text matching to the expanded driver search policy');
+assert.match(source, /RG, endereço, CEP ou data/, 'driver search placeholder must advertise the expanded searchable fields');
 
 console.log('Deferred driver modals, profile photo, CNH history, document upload UX and driver list resilience regression: PASS');
