@@ -1,7 +1,10 @@
+import express, { type NextFunction, type Request, type Response as ExpressResponse } from 'express';
+import { createServer } from 'node:http';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import type { AuthenticatedPrincipal } from '../auth';
 import { TelemetryAuthorityService } from '../telemetryAuthority';
+import { registerVehicleRoutes } from '../vehicleRoutes';
 import {
   VehicleKmReadingAuthority,
   VehicleKmReadingValidationError,
@@ -123,6 +126,43 @@ async function main():Promise<void>{
   const tracker=await VehicleKmReadingAuthority.recordBatch(admin,[{vehicleId:vehicleA,sourceType:'TRACKER'}]);
   assert(tracker[0].record.sourceType==='TRACKER'&&tracker[0].record.sourceTrackerId===trackerA,'tracker source metadata was not persisted');
   assert(tracker[0].currentKm===1200&&await vehicleKm(vehicleA)===1200,'server-derived tracker KM did not update vehicle');
+
+  const app=express();
+  app.use(express.json());
+  app.use((req:Request,_res:ExpressResponse,next:NextFunction)=>{
+    (req as Request&{principal?:AuthenticatedPrincipal}).principal=admin;
+    next();
+  });
+  registerVehicleRoutes(app);
+  const server=createServer(app);
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try{
+    const address=server.address();
+    assert(address&&typeof address==='object','HTTP KM integration server unavailable');
+    const base=`http://127.0.0.1:${address.port}`;
+
+    let response=await fetch(`${base}/api/fleet/km-reading-schedules`);
+    assert(response.status===200,`HTTP KM schedule route was not registered: ${response.status}`);
+    const schedulePayload=await response.json() as any;
+    assert(Array.isArray(schedulePayload.items)&&schedulePayload.items.length===2,'HTTP KM schedule payload is incomplete');
+
+    response=await fetch(`${base}/api/fleet/km-records/batch`,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({companyId:'browser-must-not-control-tenant',entries:[{vehicleId:vehicleB,sourceType:'MANUAL',kmValue:2150}]}),
+    });
+    assert(response.status===400,'HTTP KM batch accepted browser tenant authority');
+
+    response=await fetch(`${base}/api/fleet/km-records/batch`,{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({entries:[{vehicleId:vehicleB,sourceType:'MANUAL',kmValue:2150}]}),
+    });
+    assert(response.status===201,`HTTP KM batch route failed: ${response.status}`);
+    assert(await vehicleKm(vehicleB)===2150,'HTTP KM batch did not update the authoritative vehicle');
+  }finally{
+    await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+  }
 
   const sourceRows=rows(await db.execute(sql`
     SELECT source_type,source_attachment_id,source_tracker_id
