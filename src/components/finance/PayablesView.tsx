@@ -180,7 +180,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     return matchesSearch && matchesStatus && matchesOrigin;
   });
 
-  const originOptions = Array.from(new Set(payables.map((item) => String(item.originType)))).sort((a, b) =>
+  const originOptions: string[] = Array.from(new Set<string>(payables.map((item) => String(item.originType)))).sort((a: string, b: string) =>
     originLabel(a).localeCompare(originLabel(b), 'pt-BR')
   );
 
