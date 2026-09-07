@@ -117,11 +117,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isSreActive = sreTabIds.includes(activeTab);
   const [isSreExpanded, setIsSreExpanded] = useState<boolean>(isSreActive);
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 1023px) and (pointer: coarse)').matches : false
   );
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px) and (pointer: coarse)');
     const syncViewport = () => setIsCompactViewport(media.matches);
     syncViewport();
     media.addEventListener?.('change', syncViewport);
