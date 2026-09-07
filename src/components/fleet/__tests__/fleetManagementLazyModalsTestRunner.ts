@@ -99,6 +99,9 @@ assert.equal(parseCurrencyInput('1.250,56'), 1250.56, 'BRL input must parse dot 
 assert.equal(parseCurrencyInput('1250.56'), 1250.56, 'canonical decimal values must remain compatible');
 assert.equal(formatCurrencyInputBRL(1250.56), '1.250,56', 'BRL input must render Brazilian separators');
 assert.match(vehicleFormSource, /CurrencyInput label="Valor de Aquisição \(R\$\) \*"/, 'manual vehicle monetary inputs must use BRL formatting');
+assert.doesNotMatch(vehicleFormSource, /nextMaintenanceKm: 10000/, 'new vehicle form must not invent a 10,000 KM maintenance target');
+assert.match(vehicleFormSource, /formData\.nextMaintenanceKm < formData\.currentKm/, 'manual form must reject maintenance KM below current KM');
+assert.match(vehicleFormSource, /formData\.acquisitionValue <= 0/, 'manual form must reject non-positive financial values');
 assert.match(intakeSource, /CurrencyInput label="Valor de Compra \(R\$\) \*"/, 'AI vehicle monetary inputs must use BRL formatting');
 
 assert.doesNotMatch(statusPresentationSource, /\{ id: VehicleStatus\.WAITING_MAINTENANCE,/, 'legacy waiting-maintenance status must not appear as a separate filter');
