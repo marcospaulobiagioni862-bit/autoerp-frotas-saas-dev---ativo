@@ -1,4 +1,4 @@
-import type { Part, Supplier, WorkOrder, WorkOrderStatus } from '../types/entities';
+import type { Part, Supplier, WorkOrder, WorkOrderFinancialComponent, WorkOrderStatus } from '../types/entities';
 
 export class MaintenanceApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -39,16 +39,17 @@ function validateLaborItem(value: unknown): any {
   const item = asRecord(value);
   return { id:text(item.id,'id'), description:text(item.description,'description'), hours:finite(item.hours,'hours'), hourlyRate:finite(item.hourlyRate,'hourlyRate'), totalCost:finite(item.totalCost,'totalCost') };
 }
+function validateFinancialComponent(value:unknown):WorkOrderFinancialComponent{const item=asRecord(value),kind=text(item.kind,'kind'),paymentCondition=text(item.paymentCondition,'paymentCondition');if(!['PARTS','SERVICES'].includes(kind)||!['CASH','INSTALLMENTS'].includes(paymentCondition)||typeof item.hasInvoice!=='boolean')throw new Error('Invalid work order financial component');return{id:text(item.id,'id'),kind:kind as WorkOrderFinancialComponent['kind'],supplierId:optionalString(item.supplierId),categoryId:text(item.categoryId,'categoryId'),paymentMethodId:text(item.paymentMethodId,'paymentMethodId'),paymentCondition:paymentCondition as WorkOrderFinancialComponent['paymentCondition'],installmentsCount:finite(item.installmentsCount,'installmentsCount'),firstDueDate:text(item.firstDueDate,'firstDueDate').slice(0,10),grossAmount:finite(item.grossAmount,'grossAmount'),discountAmount:finite(item.discountAmount,'discountAmount'),netAmount:finite(item.netAmount,'netAmount'),hasInvoice:item.hasInvoice,invoiceNumber:optionalString(item.invoiceNumber),createdAt:text(item.createdAt,'createdAt'),updatedAt:text(item.updatedAt,'updatedAt')};}
 function validateWorkOrder(value: unknown): WorkOrder {
   const item = asRecord(value);
   const status = text(item.status,'status') as WorkOrderStatus;
-  if (!WORK_ORDER_STATUSES.has(status) || !Array.isArray(item.parts) || !Array.isArray(item.services) || !Array.isArray(item.laborItems)) throw new Error('Invalid work order payload');
+  if (!WORK_ORDER_STATUSES.has(status) || !Array.isArray(item.parts) || !Array.isArray(item.services) || !Array.isArray(item.laborItems) || !Array.isArray(item.financialComponents)) throw new Error('Invalid work order payload');
   return {
     id:text(item.id,'id'), companyId:text(item.companyId,'companyId'), number:text(item.number,'number'), vehicleId:text(item.vehicleId,'vehicleId'), supplierId:optionalString(item.supplierId),
     status, openedAt:text(item.openedAt,'openedAt'), serviceDate:optionalString(item.serviceDate), startedAt:optionalString(item.startedAt), completedAt:optionalString(item.completedAt), cancelledAt:optionalString(item.cancelledAt),
     entryKm:finite(item.entryKm,'entryKm'), exitKm:item.exitKm === undefined || item.exitKm === null ? undefined : finite(item.exitKm,'exitKm'),
     description:text(item.description,'description'), diagnosis:optionalString(item.diagnosis), notes:optionalString(item.notes),
-    parts:item.parts.map(validatePartItem), services:item.services.map(validateServiceItem), laborItems:item.laborItems.map(validateLaborItem),
+    parts:item.parts.map(validatePartItem), services:item.services.map(validateServiceItem), laborItems:item.laborItems.map(validateLaborItem), financialComponents:item.financialComponents.map(validateFinancialComponent),
     subtotalParts:finite(item.subtotalParts,'subtotalParts'), subtotalServices:finite(item.subtotalServices,'subtotalServices'), subtotalLabor:finite(item.subtotalLabor,'subtotalLabor'),
     discount:finite(item.discount,'discount'), total:finite(item.total,'total'), accountPayableId:optionalString(item.accountPayableId),
     createdBy:optionalString(item.createdBy), createdAt:text(item.createdAt,'createdAt'), updatedAt:text(item.updatedAt,'updatedAt'),
@@ -80,8 +81,9 @@ export interface WorkOrderCreateRequest {
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
+  financialComponents?:Array<{kind:'PARTS'|'SERVICES';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface WorkOrderCompleteRequest { exitKm:number; categoryId:string; dueDate:string; installmentsCount?:number; }
+export interface WorkOrderCompleteRequest { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; }
 export type SupplierCreateRequest = Omit<Supplier,'id'|'companyId'|'status'|'createdAt'|'updatedAt'|'bankInfo'>;
 export type PartCreateRequest = Omit<Part,'id'|'companyId'|'status'|'createdAt'|'updatedAt'>;
 

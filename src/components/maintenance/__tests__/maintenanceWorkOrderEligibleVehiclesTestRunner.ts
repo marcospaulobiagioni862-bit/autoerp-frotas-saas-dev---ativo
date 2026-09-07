@@ -39,6 +39,9 @@ assert.match(
   /Total estimado da OS/,
   'work-order form must preview its operational cost before creation',
 );
+assert.match(source, /WorkOrderFinanceFields/, 'new work orders must expose financial payment details before save');
+assert.match(source, /Salvar OS/, 'new work-order footer must use an explicit save action');
+assert.match(source, /Contas a Pagar na criação da OS/, 'completed flow must recognize finance generated at creation');
 
 assert.match(
   source,
@@ -47,7 +50,7 @@ assert.match(
 );
 assert.match(
   source,
-  /sticky bottom-0 z-10 flex justify-end gap-2 border-t/,
+  /sticky bottom-0 z-10 border-t[\s\S]*flex justify-end gap-2/,
   'new work-order modal actions must remain reachable while the form scrolls',
 );
 assert.match(
