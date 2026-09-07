@@ -161,7 +161,9 @@ assert.match(moveflexDefaultTemplate, /CLÁUSULA 16/, 'MoveFlex default contract
 assert.match(moveflexDefaultTemplate, /{{driver\.name}}/, 'MoveFlex default contract must fill the driver from server snapshot data');
 assert.match(moveflexDefaultTemplate, /{{vehicle\.plate}}/, 'MoveFlex default contract must fill the vehicle from server snapshot data');
 assert.match(templateRoutes, /ensure-moveflex-default/, 'server must expose the idempotent MoveFlex default bootstrap route');
-assert.match(executionRoutes, /page\.drawText\('MoveFlex'/, 'official generated PDF must carry MoveFlex branding');
+assert.match(executionRoutes, /MOVEFLEX_LOGO_JPEG_BASE64/, 'official generated PDF must embed the official MoveFlex logo');
+assert.match(executionRoutes, /Documento oficial MoveFlex/, 'official generated PDF must identify the MoveFlex document');
+assert.match(executionRoutes, /MoveFlex • Locação de Veículos/, 'official generated PDF must carry the MoveFlex footer');
 assert.match(
   templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,
