@@ -432,7 +432,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
           if (renewal.kind === 'OLDER') {
             throw new DriverDocumentIntakeRenewalConflictError('CNH_RENEWAL_OLDER_THAN_CURRENT', renewal.driver.id);
           }
-          if (renewal.kind === 'DUPLICATE_WITHOUT_VALIDITY') {
+          if (renewal.kind === 'DUPLICATE_WITHOUT_VALIDITY' || renewal.kind === 'REPLAY') {
             throw new DriverDocumentIntakeDuplicateCnhError(renewal.driver.id);
           }
 
