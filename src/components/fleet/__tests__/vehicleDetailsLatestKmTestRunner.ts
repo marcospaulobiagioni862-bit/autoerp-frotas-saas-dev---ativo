@@ -205,6 +205,11 @@ assert.ok(fleetManagementSource.includes('<VehicleDocumentIntakeModal'), 'fleet 
 assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.create"), 'AI vehicle flow must create a server-authoritative intake first');
 assert.ok(vehicleIntakeModalSource.includes('VehicleDocumentIntakeClient.analyze'), 'AI vehicle flow must request Gemini analysis');
 assert.ok(vehicleIntakeModalSource.includes("DocumentAiClient.review"), 'AI vehicle flow must require explicit human review');
+assert.ok(vehicleIntakeModalSource.includes('VehicleClient.checkIdentityConflict(plate,renavam)'), 'AI vehicle flow must pre-check duplicate identity on the approved review screen');
+assert.ok(vehicleIntakeModalSource.includes('Verificando Placa e RENAVAM antes do cadastro'), 'approved AI review screen must show identity verification before save');
+assert.ok(vehicleIntakeModalSource.includes('Veículo já cadastrado — novo cadastro bloqueado'), 'approved AI review screen must surface the duplicate before materialization');
+assert.ok(vehicleIntakeModalSource.includes('duplicateCheckPending||Boolean(duplicateVehicle)'), 'AI vehicle save button must stay disabled while duplicate check is pending or conflicted');
+assert.ok(vehicleRoutesSource.includes("app.get('/api/fleet/vehicles/identity-conflict'"), 'vehicle authority must expose tenant-scoped identity pre-check before save');
 assert.ok(vehicleIntakeModalSource.includes("VehicleDocumentIntakeClient.materialize"), 'AI vehicle flow must create the Vehicle only after approval');
 assert.ok(vehicleIntakeModalSource.includes('Completar cadastro do veículo'), 'approved document must require post-CRLV completion before creation');
 for (const requiredLabel of ['Cor *','Categoria *','KM Atual *','Valor de Compra (R$) *','Valor Comercial Atual (R$) *','Aluguel Semanal (R$) *']) {
