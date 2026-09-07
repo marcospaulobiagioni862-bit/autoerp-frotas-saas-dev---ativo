@@ -94,7 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const { user } = useAuth();
-  const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(true);
+  const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(false);
   const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
 
   const categories: Array<{ title: string; items: MenuItem[] }> = [
