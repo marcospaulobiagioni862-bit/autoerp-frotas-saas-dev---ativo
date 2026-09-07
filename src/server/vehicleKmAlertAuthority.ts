@@ -200,10 +200,49 @@ export class VehicleKmAlertAuthority {
 
       const results:KmWhatsappPreparationResult[]=[];
       for(const vehicleId of ids){
+        const lockedVehicle=rows(await tx.execute(sql`
+          SELECT id,current_driver_id,current_contract_id
+          FROM vehicles
+          WHERE company_id=${principal.companyId} AND id=${vehicleId}
+          LIMIT 1 FOR SHARE
+        `))[0];
+        const lockedSchedule=rows(await tx.execute(sql`
+          SELECT vehicle_id,next_due_date
+          FROM vehicle_km_reading_schedules
+          WHERE company_id=${principal.companyId} AND vehicle_id=${vehicleId}
+          LIMIT 1 FOR SHARE
+        `))[0];
+        if(!lockedVehicle||!lockedSchedule){
+          results.push({vehicleId,plate:vehicleId,created:false,status:'SKIPPED',reason:'Veículo sem programação de leitura de KM.',providerCallApplied:false});
+          continue;
+        }
         const row=(await queryScheduleRows(tx,principal.companyId,vehicleId))[0];
         if(!row){
           results.push({vehicleId,plate:vehicleId,created:false,status:'SKIPPED',reason:'Veículo sem programação de leitura de KM.',providerCallApplied:false});
           continue;
+        }
+        if(row.driver_id){
+          const lockedDriver=rows(await tx.execute(sql`
+            SELECT id,name,phone,whatsapp,status,is_archived
+            FROM drivers
+            WHERE company_id=${principal.companyId} AND id=${String(row.driver_id)}
+            LIMIT 1 FOR SHARE
+          `))[0];
+          const lockedConsent=rows(await tx.execute(sql`
+            SELECT status,phone_e164,granted_at
+            FROM whatsapp_consents
+            WHERE company_id=${principal.companyId} AND driver_id=${String(row.driver_id)}
+            LIMIT 1 FOR SHARE
+          `))[0];
+          if(lockedDriver){
+            row.driver_name=lockedDriver.name;
+            row.driver_phone=lockedDriver.phone;
+            row.driver_whatsapp=lockedDriver.whatsapp;
+            row.driver_id=lockedDriver.id;
+          }
+          row.consent_status=lockedConsent?.status;
+          row.consent_phone_e164=lockedConsent?.phone_e164;
+          row.consent_granted_at=lockedConsent?.granted_at;
         }
         const alert=mapAlert(row);
         if(!alert.whatsappEligible||!alert.driverId){
@@ -240,7 +279,8 @@ export class VehicleKmAlertAuthority {
           await context.getAuditLogRepo().create({
             id:randomUUID(),companyId:principal.companyId,entityName:'WhatsappOutbox',entityId:outboxId,action:AuditAction.CREATE,
             newState:JSON.stringify({
-              event:'KM_READING_REQUEST_PREPARED',vehicleId,driverId:alert.driverId,referenceId,
+              event:'KM_READING_REQUEST_PREPARED',vehicleId,driverId:alert.driverId,
+              contractId:lockedVehicle.current_contract_id?String(lockedVehicle.current_contract_id):undefined,referenceId,
               templateKey:TEMPLATE_KEY,templateVersion:version,status:'HELD_PROVIDER_DISABLED',providerCallApplied:false,
             }),
             userId:principal.userId,userName:principal.name,timestamp:now,
