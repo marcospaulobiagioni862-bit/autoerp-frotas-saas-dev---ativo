@@ -7,6 +7,10 @@ const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', i
 const vehicleFormSource = readFileSync(new URL('../VehicleFormModal.tsx', import.meta.url), 'utf8');
 const statusPresentationSource = readFileSync(new URL('../vehicleStatusPresentation.ts', import.meta.url), 'utf8');
 const productionSidebarSource = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
+const kmBatchSource = readFileSync(new URL('../VehicleKmBatchModal.tsx', import.meta.url), 'utf8');
+const kmBatchAuthoritySource = readFileSync(new URL('../../../server/vehicleKmReadingAuthority.ts', import.meta.url), 'utf8');
+const kmBatchRoutesSource = readFileSync(new URL('../../../server/vehicleKmReadingRoutes.ts', import.meta.url), 'utf8');
+const kmBatchMigrationSource = readFileSync(new URL('../../../../drizzle/0064_vehicle_km_batch_schedule.sql', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
 
@@ -110,5 +114,24 @@ assert.match(source, /v\.status === VehicleStatus\.MAINTENANCE \|\| v\.status ==
 assert.match(productionSidebarSource, /window\.matchMedia\('\(max-width: 767px\)'\)/, 'production sidebar must decide compact mode at runtime');
 assert.match(productionSidebarSource, /data-testid="desktop-sidebar"/, 'desktop sidebar must have an explicit persistent render path');
 assert.doesNotMatch(productionSidebarSource, /className="hidden md:block h-dvh/, 'desktop sidebar must not rely on a hidden Tailwind breakpoint');
+
+assert.match(source, /Quilometragem em lote/, 'fleet must expose the KM batch action');
+assert.match(source, /const VehicleKmBatchModal=lazy\(\(\)=>import\('\.\/VehicleKmBatchModal'\)/, 'KM batch modal must remain lazy-loaded');
+assert.match(source, /\{isKmBatchOpen&&<VehicleKmBatchModal/, 'KM batch modal must render only when explicitly opened');
+assert.match(kmBatchSource, /VehicleKmReadingClient\.recordBatch\(entries\)/, 'KM batch UI must use the authoritative batch endpoint');
+assert.match(kmBatchSource, /documentType="KM_ODOMETER_PHOTO"/, 'driver odometer photo must use dedicated evidence classification');
+assert.match(kmBatchSource, /VehicleKmReadingClient\.trackerCandidate\(vehicle\.id\)/, 'tracker KM must be resolved by the server before batch submit');
+assert.match(kmBatchSource, /value: 'WEEKLY', label: 'Semanal'/, 'vehicle KM scheduling must support weekly frequency');
+assert.match(kmBatchSource, /value: 'MONTHLY', label: 'Mensal'/, 'vehicle KM scheduling must support monthly frequency');
+assert.match(kmBatchSource, /Dias 29–31 usam o último dia válido/, 'monthly scheduling must explain end-of-month clamping');
+assert.match(kmBatchAuthoritySource, /findByIdForCompanyWithLock/, 'KM batch must lock each vehicle before changing odometer authority');
+assert.match(kmBatchAuthoritySource, /input\.kmValue!==undefined[\s\S]*KM do rastreador deve ser derivado pelo servidor/, 'tracker KM must reject browser-supplied odometer values');
+assert.match(kmBatchAuthoritySource, /sourceType==='DRIVER_PHOTO'[\s\S]*KM_ODOMETER_PHOTO/, 'photo readings must verify dedicated vehicle evidence');
+assert.match(kmBatchAuthoritySource, /kmValue<vehicle\.currentKm/, 'KM batch must reject odometer regression');
+assert.doesNotMatch(kmBatchAuthoritySource, /FinancialTransaction|PAYABLE|RECEIVABLE|SettlementService/, 'KM batch stage must not mutate finance');
+assert.match(kmBatchRoutesSource, /new Set\(\['vehicleId','sourceType','kmValue','sourceAttachmentId'\]\)/, 'KM batch route must use a narrow browser payload');
+assert.doesNotMatch(kmBatchRoutesSource, /companyId|userId|userName/, 'KM batch route body must not trust browser tenant or actor authority');
+assert.match(kmBatchMigrationSource, /source_type IN \('MANUAL','DRIVER_PHOTO','TRACKER'\)/, 'KM persistence must restrict source classifications');
+assert.match(kmBatchMigrationSource, /FORCE ROW LEVEL SECURITY/, 'KM schedule persistence must enforce tenant RLS');
 
 console.log('Deferred fleet modals regression: PASS');
