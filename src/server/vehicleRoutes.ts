@@ -233,7 +233,7 @@ export function registerVehicleRoutes(app: Express): void {
         if (req.body?.color !== undefined) changes.color = requiredText(req.body.color, 'color');
         if (req.body?.chassis !== undefined) changes.chassis = requiredText(req.body.chassis, 'chassis').toUpperCase();
         if (req.body?.fuelType !== undefined) changes.fuelType = requiredText(req.body.fuelType, 'fuelType');
-        if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(req.body.category);
+        if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(requiredText(req.body.category, 'category'));
         if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
         if (req.body?.yearFabrication !== undefined) changes.yearFabrication = requiredVehicleYear(req.body.yearFabrication, 'yearFabrication');
         if (req.body?.yearModel !== undefined) changes.yearModel = requiredVehicleYear(req.body.yearModel, 'yearModel');
