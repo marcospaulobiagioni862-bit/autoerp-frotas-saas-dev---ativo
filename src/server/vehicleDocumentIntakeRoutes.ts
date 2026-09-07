@@ -14,6 +14,7 @@ import {
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { advanceVehicleKmInContext } from './vehicleKmReadingAuthority';
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
 type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
@@ -304,8 +305,15 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           createdBy: principal.userId, isArchived: false, contentState: 'AVAILABLE', description: `Documento promovido do intake ${intakeId}; sourceAttachmentId=${source.id}`,
           issueDate: source.issueDate, expirationDate: source.expirationDate, createdAt: now,
         });
-        await context.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: completion.currentKm,
-          recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo por documento aprovado e complementação humana', createdAt: now });
+        await advanceVehicleKmInContext(context, principal, {
+          vehicleId: created.id,
+          kmValue: completion.currentKm,
+          recordDate: now.split('T')[0],
+          readingType: 'PERIODIC',
+          sourceType: 'MANUAL',
+          notes: 'Cadastro inicial do veículo por documento aprovado e complementação humana',
+          advanceSchedule: false,
+        });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(context, principal, created);
         const available = await vehicleRepo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
         if (!available) throw new NotFoundError();
