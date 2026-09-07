@@ -251,17 +251,18 @@ export class DocumentAiClientTestRunner {
 
 const reviewPanelSource = readFileSync(new URL('../../components/documents/DocumentAiReviewPanel.tsx', import.meta.url), 'utf8');
 assert(reviewPanelSource.includes('selectedFailedIds'), 'failed extraction selection state is missing');
-assert(reviewPanelSource.includes('Limpar selecionados ('), 'bulk cleanup action is missing');
-assert(reviewPanelSource.includes('Arquivar esta falha'), 'individual cleanup action is missing');
+assert(reviewPanelSource.includes('Excluir selecionados ('), 'bulk cleanup action is missing');
+assert(reviewPanelSource.includes('Excluir da fila'), 'individual cleanup action is missing');
 assert(reviewPanelSource.includes('DocumentAiClient.discardFailed(extractionIds)'), 'cleanup must send only explicitly selected extraction ids');
 assert(reviewPanelSource.includes('window.confirm'), 'destructive-looking cleanup must require explicit confirmation');
-assert(reviewPanelSource.includes('Itens em uso e arquivos com dados válidos serão preservados'), 'confirmation must explain preservation policy');
-assert(reviewPanelSource.includes('Nenhuma extração foi arquivada'), 'blocked cleanup must explain that selected items remain protected');
+assert(reviewPanelSource.includes('Somente itens sem uso serão removidos; vínculos ativos e arquivos com dados válidos serão preservados'), 'confirmation must explain preservation policy');
+assert(reviewPanelSource.includes('Nenhuma extração foi removida'), 'blocked cleanup must explain that selected items remain protected');
 assert(reviewPanelSource.includes('Vínculo ativo:'), 'blocked cleanup must identify the server-authoritative entity link');
 for (const label of ['Todos', 'Em uso', 'Não utilizados', 'Falhas']) {
   assert(reviewPanelSource.includes(`'${label}'`), `cleanup filter ${label} is missing`);
 }
 assert(reviewPanelSource.includes('cleanupClassification(item)'), 'cleanup classification must drive filters and item reasons');
+assert(reviewPanelSource.includes('Excluir item não utilizado'), 'unused failed items must expose a direct delete action');
 assert(reviewPanelSource.includes('Possui dados extraídos; limpeza bloqueada.'), 'protected extracted data must have a visible reason');
 assert(reviewPanelSource.includes('Possui correções humanas; limpeza bloqueada.'), 'human corrections must have a visible reason');
 assert(reviewPanelSource.includes('o servidor ainda confirmará se existe vínculo ativo'), 'local eligibility must not bypass server authority');
