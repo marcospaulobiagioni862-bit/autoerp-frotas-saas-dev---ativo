@@ -83,4 +83,11 @@ assert.match(intakeSource, /Tentar análise novamente/, 'failed analysis must ex
 assert.match(intakeSource, /Cadastrar veículo manualmente/, 'failed analysis must allow a safe manual fallback');
 assert.match(source, /onManualRequested=\{\(\) => \{ setIsVehicleAiOpen\(false\); setVehicleToEdit\(null\); setIsFormOpen\(true\); \}\}/, 'manual fallback must close the intake and open a blank vehicle form');
 
+assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use a synchronous duplicate-submit lock');
+assert.match(intakeSource, /VehicleClient\.list\(\)/, 'vehicle intake must pre-check authoritative fleet identifiers');
+assert.match(intakeSource, /normalizedIdentifier\(vehicle\.plate\)===plate/, 'vehicle intake must detect duplicate plates');
+assert.match(intakeSource, /normalizedIdentifier\(vehicle\.renavam\)===renavam/, 'vehicle intake must detect duplicate RENAVAM');
+assert.match(intakeSource, /normalizedIdentifier\(vehicle\.chassis\)===chassis/, 'vehicle intake must detect duplicate chassis');
+assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\}/, 'vehicle materialization button must remain locked during synchronous submission');
+
 console.log('Deferred fleet modals regression: PASS');
