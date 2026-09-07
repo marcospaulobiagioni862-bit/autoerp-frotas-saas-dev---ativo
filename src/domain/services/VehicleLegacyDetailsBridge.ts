@@ -3,6 +3,7 @@ import { DocumentClient } from '../../api/documentClient';
 import { DriverClient } from '../../api/driverClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { MaintenanceClient } from '../../api/maintenanceClient';
+import { MaintenancePreventiveClient } from '../../api/maintenancePreventiveClient';
 import { TrackerClient } from '../../api/trackerClient';
 import { InsuranceClient } from '../../api/insuranceClient';
 import { TrafficTicketClient } from '../../api/trafficTicketClient';
@@ -33,10 +34,12 @@ export interface VehicleDetailedSummary {
 export class VehicleLegacyDetailsBridge {
   async compose(vehicle:Vehicle,kmRecords:KmRecord[]):Promise<VehicleDetailedSummary>{
     const vehicleId=vehicle.id;
-    const [driverCore,contracts,workOrders,canonicalTickets,documents,insurances,trackers,allReceivables,allPayables,historyLogs]=await Promise.all([
+    const [driverCore,contracts,workOrders,oilChanges,tires,canonicalTickets,documents,insurances,trackers,allReceivables,allPayables,historyLogs]=await Promise.all([
       vehicle.currentDriverId?DriverClient.get(vehicle.currentDriverId):Promise.resolve(null),
       ContractClient.list(),
       MaintenanceClient.listWorkOrders({vehicleId}),
+      MaintenancePreventiveClient.listOilChanges(vehicleId),
+      MaintenancePreventiveClient.listTires(vehicleId),
       TrafficTicketClient.list({vehicleId}),
       DocumentClient.list({subjectType:'VEHICLE',subjectId:vehicleId}),
       InsuranceClient.listByVehicle(vehicleId),
@@ -53,13 +56,30 @@ export class VehicleLegacyDetailsBridge {
     const receivables=allReceivables.filter(item=>item.vehicleId===vehicleId);
     const payables=allPayables.filter(item=>item.vehicleId===vehicleId);
 
-    const maintenances=workOrders.map(item=>({
+    const workOrderHistory=workOrders.map(item=>({
       id:item.id,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'WORK_ORDER',description:item.description,
       kmAtMaintenance:item.exitKm??item.entryKm,partsCost:item.subtotalParts,laborCost:item.subtotalLabor+item.subtotalServices,totalCost:item.total,
       status:item.status,startDate:item.serviceDate||item.startedAt||item.openedAt,completionDate:item.completedAt,accountPayableId:item.accountPayableId,notes:item.notes,
-      parts:item.parts,services:item.services,laborItems:item.laborItems,workOrderNumber:item.number,
+      parts:item.parts,services:item.services,laborItems:item.laborItems,workOrderNumber:item.number,attachmentEntityType:'MaintenanceWorkOrder',
       createdAt:item.createdAt,updatedAt:item.updatedAt,
     }));
+    const oilHistory=oilChanges.map(item=>({
+      id:`oil-${item.id}`,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'OIL_CHANGE',
+      description:`Troca de óleo ${item.oilBrand} ${item.oilType}${item.filterChanged?' com filtro':''}`,
+      kmAtMaintenance:item.km,partsCost:0,laborCost:0,totalCost:0,status:'COMPLETED',startDate:item.date,
+      completionDate:item.date,notes:item.notes,parts:[],services:[],laborItems:[],sourceAttachmentId:item.attachmentId,
+      nextMaintenanceKm:item.nextKm,nextMaintenanceDate:item.nextDate,createdAt:item.createdAt,updatedAt:item.updatedAt,
+    }));
+    const tireHistory=tires.map(item=>({
+      id:`tire-${item.id}`,companyId:item.companyId,vehicleId:item.vehicleId,supplierId:item.supplierId,type:'TIRE',
+      description:`Pneu ${item.brand} ${item.model} — posição ${item.position}${item.lastRotationDate?` — último rodízio em ${item.lastRotationDate}`:''}`,
+      kmAtMaintenance:item.lastRotationKm??item.removalKm??item.installationKm,partsCost:item.cost,laborCost:0,totalCost:item.cost,
+      status:'COMPLETED',startDate:item.lastRotationDate||item.removalDate||item.installationDate,
+      completionDate:item.lastRotationDate||item.removalDate||item.installationDate,notes:item.notes,parts:[],services:[],laborItems:[],
+      sourceAttachmentId:item.attachmentId,createdAt:item.createdAt,updatedAt:item.updatedAt,
+    }));
+    const maintenances=[...workOrderHistory,...oilHistory,...tireHistory]
+      .sort((a,b)=>Date.parse(String(b.startDate||''))-Date.parse(String(a.startDate||'')));
 
     const driver=driverCore?{...driverCore,name:driverCore.fullName}:undefined;
     const activeContract=activeCanonical?{

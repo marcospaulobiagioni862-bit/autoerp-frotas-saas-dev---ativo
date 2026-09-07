@@ -6,6 +6,7 @@ import {
 } from '../../../server/vehicleCrlvApplyAuthority';
 
 const source = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
+const vehicleDetailsBridgeSource = readFileSync(new URL('../../../domain/services/VehicleLegacyDetailsBridge.ts', import.meta.url), 'utf8');
 const crlvSource = readFileSync(new URL('../VehicleCrlvImportPanel.tsx', import.meta.url), 'utf8');
 const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRoutes.ts', import.meta.url), 'utf8');
 const vehicleClientSource = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
@@ -45,6 +46,17 @@ assert.ok(source.includes("Campos alterados:"), 'vehicle audit must summarize ch
 assert.ok(source.includes("Transição de status:"), 'vehicle audit must expose status transitions when present');
 assert.ok(source.includes("Valores brutos não são exibidos nesta visão."), 'vehicle audit must not expose raw state payloads');
 assert.ok(source.includes("Nenhum evento de auditoria registrado."), 'vehicle audit must preserve an explicit empty state');
+
+assert.ok(vehicleDetailsBridgeSource.includes('MaintenancePreventiveClient.listOilChanges(vehicleId)'), 'vehicle maintenance history must include authoritative oil changes');
+assert.ok(vehicleDetailsBridgeSource.includes('MaintenancePreventiveClient.listTires(vehicleId)'), 'vehicle maintenance history must include authoritative tire records and rotations');
+assert.ok(vehicleDetailsBridgeSource.includes("type:'OIL_CHANGE'"), 'oil changes must retain a filterable history type');
+assert.ok(vehicleDetailsBridgeSource.includes("type:'TIRE'"), 'tire events must retain a filterable history type');
+assert.ok(source.includes("[maintenanceType,setMaintenanceType]=useState('ALL')"), 'maintenance history must expose an independent type filter');
+assert.ok(source.includes("maintenanceType!=='ALL'&&m.type!==maintenanceType"), 'maintenance type must participate in the visible/report dataset');
+assert.ok(source.includes('Pneu / rodízio') && source.includes('Troca de óleo'), 'maintenance type labels must be operator-readable');
+assert.ok(source.includes("setMaintenanceType('ALL')"), 'clearing filters must also reset maintenance type');
+assert.ok(source.includes('<AttachmentList entityType="MaintenanceWorkOrder" entityId={m.id}/>'), 'internal work-order history must expose authorized invoice and part evidence');
+assert.ok(source.includes("printMaintenanceHistory('INTERNAL')") && source.includes("printMaintenanceHistory('SALE')"), 'internal and sale maintenance reports must remain separate');
 
 assert.ok(crlvSource.includes("DocumentAiClient.list('APPROVED')"), 'CRLV comparison must use approved extractions only');
 assert.ok(crlvSource.includes("attachment.documentType === 'CRLV'"), 'CRLV comparison must be restricted to vehicle CRLV attachments');
