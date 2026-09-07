@@ -19,6 +19,7 @@ import { registerVehicleCrlvApplyRoutes } from './vehicleCrlvApplyRoutes';
 import { registerVehicleLifecycleRoutes } from './vehicleLifecycleRoutes';
 import { registerVehicleInspectionRoutes } from './vehicleInspectionRoutes';
 import { registerVehicleKmReadingRoutes } from './vehicleKmReadingRoutes';
+import { advanceVehicleKmInContext, VehicleKmReadingConflictError, VehicleKmReadingNotFoundError, VehicleKmReadingValidationError } from './vehicleKmReadingAuthority';
 import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
@@ -129,10 +130,10 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function sendVehicleError(res: Response, error: unknown): void {
-  if (error instanceof VehicleValidationError) { res.status(400).json({ error: error.message || 'Invalid vehicle request' }); return; }
-  if (error instanceof VehicleConflictError) { res.status(409).json({ error: error.message || 'Vehicle conflict' }); return; }
+  if (error instanceof VehicleValidationError || error instanceof VehicleKmReadingValidationError) { res.status(400).json({ error: error.message || 'Invalid vehicle request' }); return; }
+  if (error instanceof VehicleConflictError || error instanceof VehicleKmReadingConflictError) { res.status(409).json({ error: error.message || 'Vehicle conflict' }); return; }
   if (isUniqueViolation(error)) { res.status(409).json({ error: 'Já existe um veículo com a mesma Placa ou RENAVAM.' }); return; }
-  if (error instanceof VehicleNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
+  if (error instanceof VehicleNotFoundError || error instanceof VehicleKmReadingNotFoundError) { res.status(404).json({ error: 'Not found' }); return; }
   console.error('AUTOERP_VEHICLE_AUTHORITY_FAILURE', error);
   res.status(500).json({ error: 'Vehicle operation failed' });
 }
@@ -221,7 +222,7 @@ export function registerVehicleRoutes(app: Express): void {
         if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
         const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color, renavam, chassis, currentKm, nextMaintenanceKm, fuelType, category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
-        await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
+        await advanceVehicleKmInContext(txContext, principal, { vehicleId: created.id, kmValue: created.currentKm, readingType: 'PERIODIC', recordDate: now.split('T')[0], notes: 'Cadastro inicial do veículo', sourceType: 'MANUAL', advanceSchedule: false });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(txContext, principal, created);
         const available = await repo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
         if (!available) throw new VehicleNotFoundError();
@@ -294,19 +295,18 @@ export function registerVehicleRoutes(app: Express): void {
     const allowedTypes = new Set(['CHECK_IN', 'CHECK_OUT', 'PERIODIC', 'MAINTENANCE']);
     if (!Number.isInteger(newKm) || newKm < 0 || !allowedTypes.has(readingType)) { res.status(400).json({ error: 'Invalid KM record request' }); return; }
     try {
-      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
-        const vehicleRepo = txContext.getVehicleRepo();
-        const vehicle = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
-        if (!vehicle) throw new VehicleNotFoundError();
-        if (vehicle.isArchived || vehicle.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
-        if (newKm < vehicle.currentKm) throw new VehicleValidationError('KM regression');
-        const now = new Date().toISOString();
-        const record = await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: vehicle.id, driverId: vehicle.currentDriverId, contractId: vehicle.currentContractId, kmValue: newKm, recordDate: now.split('T')[0], readingType: readingType as 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE', notes: optionalText(req.body?.notes), createdAt: now });
-        const updated = await vehicleRepo.updateForCompany(principal.companyId, vehicle.id, { currentKm: newKm, updatedAt: now });
-        if (!updated) throw new VehicleNotFoundError();
-        await txContext.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'KmRecord', entityId: record.id, action: AuditAction.CREATE, previousState: JSON.stringify({ vehicleId: vehicle.id, currentKm: vehicle.currentKm }), newState: JSON.stringify({ vehicleId: vehicle.id, currentKm: newKm, readingType }), userId: principal.userId, userName: principal.name, timestamp: now });
-        return { record, vehicle: updated };
-      });
+      const advanced = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await advanceVehicleKmInContext(txContext, principal, {
+          vehicleId: req.params.id,
+          kmValue: newKm,
+          readingType: readingType as 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE',
+          recordDate: new Date().toISOString().split('T')[0],
+          notes: optionalText(req.body?.notes),
+          sourceType: 'MANUAL',
+          advanceSchedule: true,
+        })
+      );
+      const result = { record: advanced.record, vehicle: advanced.vehicle };
       res.status(201).json(result);
     } catch (error) { sendVehicleError(res, error); }
   });
