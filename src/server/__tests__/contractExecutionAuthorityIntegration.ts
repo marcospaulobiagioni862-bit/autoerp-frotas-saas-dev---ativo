@@ -363,8 +363,9 @@ export class ContractExecutionAuthorityIntegrationRunner {
         'x-autoerp-document-type': 'SIGNED_CONTRACT',
         'x-autoerp-file-name': 'contrato-assinado.pdf',
       });
-      response = await request('/api/attachments', { method: 'POST', headers: signedHeaders, body: generatedPdfBytes }, adminA);
-      assert(response.status === 201, `signed attachment upload expected 201, got ${response.status}`);
+      const splitSignedPdfBytes = Buffer.concat([Buffer.from('\ufeff\n', 'utf8'), Buffer.from(generatedPdfBytes)]);
+      response = await request('/api/attachments', { method: 'POST', headers: signedHeaders, body: splitSignedPdfBytes }, adminA);
+      assert(response.status === 201, `split signed attachment upload expected 201, got ${response.status}`);
       const signedAttachment = (await json(response)).item;
       assert(signedAttachment.id !== generated.attachment.id, 'signed evidence reused generated attachment id');
 
