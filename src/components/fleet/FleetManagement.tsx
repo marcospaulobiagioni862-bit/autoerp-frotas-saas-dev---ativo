@@ -19,6 +19,7 @@ import {
 const VehicleFormModal=lazy(()=>import('./VehicleFormModal').then(module=>({default:module.VehicleFormModal})));
 const VehicleDetailsModal=lazy(()=>import('./VehicleDetailsModal').then(module=>({default:module.VehicleDetailsModal})));
 const RecordKmModal=lazy(()=>import('./RecordKmModal').then(module=>({default:module.RecordKmModal})));
+const VehicleKmBatchModal=lazy(()=>import('./VehicleKmBatchModal').then(module=>({default:module.VehicleKmBatchModal})));
 const VehicleDocumentIntakeModal=lazy(()=>import('./VehicleDocumentIntakeModal').then(module=>({default:module.VehicleDocumentIntakeModal})));
 
 export const FleetManagement: React.FC = () => {
@@ -35,6 +36,7 @@ export const FleetManagement: React.FC = () => {
   const [selectedVehicleIdForDetails, setSelectedVehicleIdForDetails] = useState<string | null>(null);
   const [readOnlyVehicleIdForHistory, setReadOnlyVehicleIdForHistory] = useState<string | null>(null);
   const [vehicleForKmRecord, setVehicleForKmRecord] = useState<Vehicle | null>(null);
+  const [isKmBatchOpen, setIsKmBatchOpen] = useState<boolean>(false);
   const [vehicleForSale, setVehicleForSale] = useState<Vehicle | null>(null);
   const [vehicleForArchive, setVehicleForArchive] = useState<Vehicle | null>(null);
 
@@ -112,7 +114,9 @@ export const FleetManagement: React.FC = () => {
       ? `details:${selectedVehicleIdForDetails}`
       : vehicleForKmRecord
         ? `km:${vehicleForKmRecord.id}`
-        : 'none';
+        : isKmBatchOpen
+          ? 'km-batch'
+          : 'none';
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -133,7 +137,10 @@ export const FleetManagement: React.FC = () => {
       />
 
       {!showArchived && (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => setIsKmBatchOpen(true)} className="gap-2">
+            <Gauge className="w-4 h-4" /> Atualizar KM em lote
+          </Button>
           <Button variant="outline" onClick={() => setIsVehicleAiOpen(true)} className="gap-2">
             <Sparkles className="w-4 h-4" /> Cadastrar por documento com IA
           </Button>
@@ -275,6 +282,7 @@ export const FleetManagement: React.FC = () => {
             onSaleRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForSale(v); } }}
             onArchiveRequest={() => { const v = vehicles.find((x) => x.id === selectedVehicleIdForDetails); if (v) { setSelectedVehicleIdForDetails(null); setVehicleForArchive(v); } }}/>} 
           {vehicleForKmRecord&&<RecordKmModal isOpen onClose={() => setVehicleForKmRecord(null)} onSuccess={loadVehicles} vehicle={vehicleForKmRecord}/>} 
+          {isKmBatchOpen&&<VehicleKmBatchModal isOpen vehicles={vehicles} onClose={() => setIsKmBatchOpen(false)} onSuccess={loadVehicles}/>}
         </Suspense>
       </LazyModuleErrorBoundary>
 
