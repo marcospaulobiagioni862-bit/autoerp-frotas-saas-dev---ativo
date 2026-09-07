@@ -36,6 +36,7 @@ const PERIODICITIES = new Set(Object.values(RecurringFrequency));
 
 class ContractValidationError extends Error {}
 class ContractConflictError extends Error {}
+class ContractReservationConflictError extends ContractConflictError {}
 class ContractNotFoundError extends Error {}
 
 function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
@@ -181,6 +182,10 @@ function sendContractError(res: Response, error: unknown): void {
     res.status(400).json({ error: 'Invalid contract request' });
     return;
   }
+  if (error instanceof ContractReservationConflictError) {
+    res.status(409).json({ error: error.message });
+    return;
+  }
   if (error instanceof ContractConflictError || isUniqueViolation(error)) {
     res.status(409).json({ error: 'Contract conflict' });
     return;
@@ -223,6 +228,33 @@ function ensureDriverEligible(driver: Driver): void {
 function ensureVehicleEligible(vehicle: Vehicle): void {
   if (vehicle.isArchived || vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle unavailable');
   if (vehicle.currentContractId || vehicle.currentDriverId) throw new ContractConflictError('Vehicle already bound');
+}
+
+async function ensureReservationAvailable(
+  tx: any,
+  companyId: string,
+  vehicleId: string,
+  driverId: string,
+  startDate: string,
+  endDate?: string,
+  excludeContractId?: string,
+): Promise<void> {
+  const driverConflict = await tx.getContractRepo().findOverlappingReservationByDriver(
+    companyId, driverId, startDate, endDate, excludeContractId
+  );
+  if (driverConflict) {
+    throw new ContractReservationConflictError(
+      `Motorista já possui o contrato ${driverConflict.contractNumber} reservado para o período informado.`
+    );
+  }
+  const vehicleConflict = await tx.getContractRepo().findOverlappingReservationByVehicle(
+    companyId, vehicleId, startDate, endDate, excludeContractId
+  );
+  if (vehicleConflict) {
+    throw new ContractReservationConflictError(
+      `Veículo já possui o contrato ${vehicleConflict.contractNumber} reservado para o período informado.`
+    );
+  }
 }
 
 async function ensureVehicleDocumentsEligible(companyId: string, vehicleId: string, effectiveDate: string, tx: any): Promise<void> {
@@ -317,10 +349,11 @@ export function registerContractRoutes(app: Express): void {
       const requestedTemplateId = optionalText(body.templateId);
 
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
-        const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
-        const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
+        const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, vehicleId);
+        const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
+        await ensureReservationAvailable(tx, principal.companyId, vehicleId, driverId, startDate, endDate);
         if (requestedTemplateId) {
           const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
           if (!template || template.isArchived) throw new ContractNotFoundError();
@@ -399,8 +432,8 @@ export function registerContractRoutes(app: Express): void {
 
         const vehicleId = body.vehicleId === undefined ? existing.vehicleId : requiredText(body.vehicleId, 'vehicleId');
         const driverId = body.driverId === undefined ? existing.driverId : requiredText(body.driverId, 'driverId');
-        const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
-        const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
+        const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, vehicleId);
+        const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived || !driver || driver.isArchived) throw new ContractNotFoundError();
         const nextTemplateId = body.templateId === undefined ? existing.templateId : optionalText(body.templateId);
         if (nextTemplateId) {
@@ -418,6 +451,7 @@ export function registerContractRoutes(app: Express): void {
         const startDate = body.startDate === undefined ? existing.startDate : normalizeDate(body.startDate, 'startDate');
         const endDate = body.endDate === undefined ? existing.endDate : optionalDate(body.endDate, 'endDate');
         validateDateRange(startDate, endDate);
+        await ensureReservationAvailable(tx, principal.companyId, vehicleId, driverId, startDate, endDate, existing.id);
         const billingPeriodicity = body.billingPeriodicity === undefined ? existing.billingPeriodicity : periodicity(body.billingPeriodicity);
         const dueDays = billingDueDays(
           billingPeriodicity,
