@@ -5,6 +5,7 @@ import { AuditAction } from '../types/enums';
 import type { MaintenancePlan, MaintenancePlanPriority, OilChangeRecord, TireRecord, TireStatus } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 import { maintenanceNextDue, projectMaintenancePlan } from '../domain/maintenance/maintenancePreventivePolicy';
+import { advanceVehicleKmInContext, VehicleKmReadingConflictError, VehicleKmReadingNotFoundError, VehicleKmReadingValidationError } from './vehicleKmReadingAuthority';
 
 export class MaintenancePreventiveValidationError extends Error{}
 export class MaintenancePreventiveNotFoundError extends Error{}
@@ -30,7 +31,18 @@ function priority(v:unknown):MaintenancePlanPriority{const p=String(v||'MEDIUM')
 async function audit(tx:any,p:AuthenticatedPrincipal,entityName:string,entityId:string,action:AuditAction,before:any,after:any){const now=new Date().toISOString();await tx.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName,entityId,action,previousState:before===undefined?undefined:JSON.stringify(before),newState:after===undefined?undefined:JSON.stringify(after),userId:p.userId,userName:p.name,timestamp:now});}
 async function vehicle(tx:any,companyId:string,id:string,lock=false){const v=lock?await tx.getVehicleRepo().findByIdForCompanyWithLock(companyId,id):await tx.getVehicleRepo().findByIdForCompany(companyId,id);if(!v||v.isArchived)throw new MaintenancePreventiveNotFoundError('Veículo não encontrado');return v;}
 async function supplier(tx:any,companyId:string,id?:string){if(!id)return;const s=await tx.getSupplierRepo().findByIdForCompany(companyId,id);if(!s||s.status!=='ACTIVE')throw new MaintenancePreventiveNotFoundError('Fornecedor não encontrado');}
-async function advanceOdometer(tx:any,p:AuthenticatedPrincipal,v:any,km:number,recordDate:string,notes:string){if(km<v.currentKm)throw new MaintenancePreventiveConflictError('KM não pode regredir');if(km===v.currentKm)return;const now=new Date().toISOString();const updated=await tx.getVehicleRepo().updateForCompany(p.companyId,v.id,{currentKm:km,updatedAt:now});if(!updated)throw new MaintenancePreventiveNotFoundError('Veículo não encontrado');await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:v.id,driverId:v.currentDriverId,contractId:v.currentContractId,kmValue:km,recordDate,readingType:'MAINTENANCE',notes,createdAt:now});}
+async function advanceOdometer(tx:any,p:AuthenticatedPrincipal,v:any,km:number,recordDate:string,notes:string){
+  try{
+    await advanceVehicleKmInContext(tx,p,{
+      vehicleId:v.id,kmValue:km,recordDate,readingType:'MAINTENANCE',sourceType:'MANUAL',notes,advanceSchedule:true,
+    });
+  }catch(error){
+    if(error instanceof VehicleKmReadingNotFoundError)throw new MaintenancePreventiveNotFoundError(error.message);
+    if(error instanceof VehicleKmReadingValidationError)throw new MaintenancePreventiveValidationError(error.message);
+    if(error instanceof VehicleKmReadingConflictError)throw new MaintenancePreventiveConflictError(error.message);
+    throw error;
+  }
+}
 
 export class MaintenancePreventiveAuthority{
   static async listPlans(companyId:string,vehicleId?:string):Promise<MaintenancePlan[]>{return UnitOfWork.run(companyId,async tx=>{const plans=await tx.getMaintenancePlanRepo().findAllByCompany(companyId,vehicleId);const now=today();const projected:MaintenancePlan[]=[];for(const p of plans){const v=await vehicle(tx,companyId,p.vehicleId);projected.push({...p,...projectMaintenancePlan(p,v.currentKm,now)});}return projected;});}
