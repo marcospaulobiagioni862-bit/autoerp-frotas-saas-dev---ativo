@@ -5,6 +5,7 @@ import { UnitOfWork } from '../db/uow';
 import { canManuallyTransitionVehicleStatus } from '../domain/fleet/vehicleStatusPolicy';
 import { AuditAction, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
+import { advanceVehicleKmInContext, VehicleKmReadingConflictError, VehicleKmReadingNotFoundError, VehicleKmReadingValidationError } from './vehicleKmReadingAuthority';
 
 type VehicleLifecycleAction = 'SOLD' | 'ARCHIVED';
 
@@ -82,15 +83,15 @@ function requiredKm(value: unknown): number {
 }
 
 function sendError(res: Response, error: unknown): void {
-  if (error instanceof VehicleLifecycleValidationError) {
-    res.status(400).json({ error: 'Invalid vehicle lifecycle request' });
+  if (error instanceof VehicleLifecycleValidationError || error instanceof VehicleKmReadingValidationError) {
+    res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid vehicle lifecycle request' });
     return;
   }
-  if (error instanceof VehicleLifecycleConflictError) {
-    res.status(409).json({ error: 'Vehicle lifecycle conflict' });
+  if (error instanceof VehicleLifecycleConflictError || error instanceof VehicleKmReadingConflictError) {
+    res.status(409).json({ error: error instanceof Error ? error.message : 'Vehicle lifecycle conflict' });
     return;
   }
-  if (error instanceof VehicleLifecycleNotFoundError) {
+  if (error instanceof VehicleLifecycleNotFoundError || error instanceof VehicleKmReadingNotFoundError) {
     res.status(404).json({ error: 'Not found' });
     return;
   }
@@ -195,16 +196,18 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
         })) throw new VehicleLifecycleConflictError('Sale blocked by vehicle lifecycle policy');
 
         const now = new Date().toISOString();
-        if (finalKm > existing.currentKm) {
-          await txContext.getKmRecordRepo().create({
-            id: randomUUID(), companyId: principal.companyId, vehicleId: existing.id,
-            kmValue: finalKm, recordDate: saleDate, readingType: 'PERIODIC',
-            notes: 'KM final registrado na venda do veículo', createdAt: now,
-          });
-        }
+        await advanceVehicleKmInContext(txContext, principal, {
+          vehicleId: existing.id,
+          kmValue: finalKm,
+          recordDate: saleDate,
+          readingType: 'PERIODIC',
+          sourceType: 'MANUAL',
+          notes: 'KM final registrado na venda do veículo',
+          advanceSchedule: false,
+        });
 
         const updated = await vehicleRepo.updateForCompany(principal.companyId, existing.id, {
-          status: VehicleStatus.SOLD, currentKm: finalKm, updatedAt: now,
+          status: VehicleStatus.SOLD, updatedAt: now,
         });
         if (!updated) throw new VehicleLifecycleNotFoundError();
 
