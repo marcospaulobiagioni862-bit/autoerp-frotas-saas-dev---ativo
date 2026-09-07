@@ -201,6 +201,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
     void loadData();
   };
 
+  const handleExistingDriverDetected = (driverId: string) => {
+    setIsCnhIntakeOpen(false);
+    setCnhRenewalDriverId(null);
+    setSelectedDriverId(driverId);
+    setIsDetailsOpen(true);
+  };
+
   const handleDelete = async () => {
     if (!deletingDriver) return;
     setDeleteLoading(true);
@@ -473,6 +480,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             onDraftReady={handleCnhDraftReady}
             expectedDriverId={cnhRenewalDriverId || undefined}
             onRenewed={handleCnhRenewed}
+            onExistingDriver={handleExistingDriverDetected}
           />}
           {isFormOpen && <DriverFormModal
             isOpen
