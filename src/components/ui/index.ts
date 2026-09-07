@@ -2,6 +2,7 @@ export * from './Button';
 export * from './Badge';
 export * from './Card';
 export * from './Input';
+export * from './CurrencyInput';
 export * from './Select';
 export * from './ModalContainer';
 export * from './ConfirmDialog';

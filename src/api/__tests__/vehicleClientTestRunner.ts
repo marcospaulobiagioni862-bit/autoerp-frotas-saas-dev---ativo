@@ -41,7 +41,7 @@ export class VehicleClientTestRunner {
         body = JSON.parse(String(init?.body));
         return new Response(JSON.stringify({ item: vehicle }), { status: 201 });
       }) as typeof fetch;
-      await VehicleClient.create({ plate: 'ABC1D23', renavam: '12345678901', brand: 'Chevrolet', model: 'Onix', currentKm: 10, acquisitionValue: 1, currentValue: 1, rentalValueBase: 1 });
+      await VehicleClient.create({ plate: 'ABC1D23', renavam: '12345678901', brand: 'Chevrolet', model: 'Onix', yearFabrication: 2025, yearModel: 2026, color: 'Branco', chassis: '9BG123', fuelType: 'Flex', category: 'Hatch / Sedan Compacto', currentKm: 10, acquisitionValue: 1, currentValue: 1, rentalValueBase: 1 });
       for (const key of ['companyId', 'userId', 'userName', 'role', 'currentDriverId', 'currentContractId', 'status', 'isArchived']) {
         if (key in body) throw new Error(`browser authority leaked ${key}`);
       }

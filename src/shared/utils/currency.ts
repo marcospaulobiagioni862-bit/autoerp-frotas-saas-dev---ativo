@@ -23,10 +23,30 @@ export function formatCurrencyBRL(amount: number): string {
  * Parses a numeric BRL input string back to standard number.
  */
 export function parseCurrencyInput(value: string): number {
-  if (!value) return 0;
-  const cleaned = value.replace(/[^\d,-]/g, '').replace(',', '.');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : roundCurrency(num);
+  const raw = String(value || '').trim().replace(/\s/g, '').replace(/R\$/gi, '');
+  if (!raw) return 0;
+
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw;
+
+  const cleaned = normalized.replace(/[^\d.-]/g, '');
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? roundCurrency(num) : 0;
+}
+
+/**
+ * Formats a number or canonical numeric string for BRL input controls,
+ * using dot as the thousands separator and comma as the decimal separator.
+ */
+export function formatCurrencyInputBRL(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '';
+  const amount = typeof value === 'number' ? value : parseCurrencyInput(String(value));
+  if (!Number.isFinite(amount)) return '';
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 /**

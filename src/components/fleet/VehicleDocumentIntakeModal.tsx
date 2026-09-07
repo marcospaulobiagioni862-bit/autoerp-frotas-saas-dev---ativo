@@ -2,12 +2,14 @@ import React,{useEffect,useRef,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import type { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
 import { FileUpload } from '../documents/FileUpload';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { CurrencyInput } from '../ui/CurrencyInput';
 import { Select } from '../ui/Select';
 
 const FIELD_LABELS:Record<string,string>={
@@ -42,11 +44,12 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   const[busy,setBusy]=useState(false);
   const[completionErrors,setCompletionErrors]=useState<Record<string,string>>({});
   const[identifierErrors,setIdentifierErrors]=useState<IdentifierErrors>({});
+  const[duplicateVehicle,setDuplicateVehicle]=useState<Vehicle|null>(null);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
   const materializingRef=useRef(false);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});materializingRef.current=false;setError(null);setMessage(null);};
+  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setDuplicateVehicle(null);materializingRef.current=false;setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
   useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
 
@@ -87,13 +90,44 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     finally{setBusy(false);}
   };
 
+  const checkExistingVehicle=async():Promise<Vehicle|null>=>{
+    const vehicles=await VehicleClient.list();
+    const plate=normalizedIdentifier(corrections.plate);
+    const renavam=normalizedIdentifier(corrections.renavam);
+    const duplicatePlate=plate?vehicles.find(vehicle=>normalizedIdentifier(vehicle.plate)===plate):undefined;
+    const duplicateRenavam=renavam?vehicles.find(vehicle=>normalizedIdentifier(vehicle.renavam)===renavam):undefined;
+    const identifierValidation:IdentifierErrors={};
+    if(duplicatePlate)identifierValidation.plate=`Placa ${duplicatePlate.plate} já cadastrada.`;
+    if(duplicateRenavam)identifierValidation.renavam=`RENAVAM ${duplicateRenavam.renavam} já cadastrado.`;
+    setIdentifierErrors(identifierValidation);
+
+    if(duplicatePlate&&duplicateRenavam&&duplicatePlate.id!==duplicateRenavam.id){
+      setDuplicateVehicle(null);
+      setError('Cadastro bloqueado: a Placa e o RENAVAM informados já pertencem a veículos diferentes no sistema. Revise o documento antes de continuar.');
+      return duplicatePlate;
+    }
+
+    const duplicate=duplicatePlate||duplicateRenavam||null;
+    setDuplicateVehicle(duplicate);
+    if(duplicate){
+      const matches=[
+        duplicatePlate?.id===duplicate.id?`Placa ${duplicate.plate}`:null,
+        duplicateRenavam?.id===duplicate.id?`RENAVAM ${duplicate.renavam}`:null,
+      ].filter(Boolean).join(' e ');
+      setError(`Este veículo já possui cadastro no sistema. ${matches} correspondem a ${duplicate.plate} — ${duplicate.brand} ${duplicate.model}. Abra o cadastro existente em vez de criar outro.`);
+    }
+    return duplicate;
+  };
+
   const review=async(decision:'APPROVE'|'REJECT')=>{
     if(!extraction)return;
     setBusy(true);setError(null);setIdentifierErrors({});
     try{
       const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
       setExtraction(reviewed);
-      if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
+      if(decision==='REJECT'){setDuplicateVehicle(null);setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
+      const duplicate=await checkExistingVehicle();
+      if(duplicate){setMessage(null);return;}
       setMessage('Dados do documento aprovados. Complete agora os dados operacionais e financeiros obrigatórios antes de criar o veículo.');
     }catch(e){setError(e instanceof Error?e.message:'Falha na revisão.');}
     finally{setBusy(false);}
@@ -114,23 +148,10 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     if(nextMaintenanceKm!==undefined&&(!Number.isFinite(nextMaintenanceKm)||nextMaintenanceKm<currentKm))fieldErrors.nextMaintenanceKm='Deve ser igual ou maior que o KM atual.';
     setCompletionErrors(fieldErrors);
     if(Object.keys(fieldErrors).length){setError('Corrija os campos destacados em vermelho antes de criar o veículo.');return;}
-    materializingRef.current=true;setBusy(true);setError(null);setIdentifierErrors({});
+    setError(null);setIdentifierErrors({});
     try{
-      const vehicles=await VehicleClient.list();
-      const identifierValidation:IdentifierErrors={};
-      const plate=normalizedIdentifier(corrections.plate),renavam=normalizedIdentifier(corrections.renavam),chassis=normalizedIdentifier(corrections.chassis);
-      const duplicatePlate=plate&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.plate)===plate);
-      const duplicateRenavam=renavam&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.renavam)===renavam);
-      const duplicateChassis=chassis&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.chassis)===chassis);
-      if(duplicatePlate)identifierValidation.plate=`Placa já cadastrada no veículo ${duplicatePlate.plate}.`;
-      if(duplicateRenavam)identifierValidation.renavam=`RENAVAM já cadastrado no veículo ${duplicateRenavam.plate}.`;
-      if(duplicateChassis)identifierValidation.chassis=`Chassi já cadastrado no veículo ${duplicateChassis.plate}.`;
-      if(Object.keys(identifierValidation).length>0){
-        setIdentifierErrors(identifierValidation);
-        setError('Este documento pertence a um veículo que já está cadastrado. Confira os identificadores destacados em vermelho.');
-        return;
-      }
-
+      if(await checkExistingVehicle())return;
+      materializingRef.current=true;setBusy(true);
       const result=await VehicleDocumentIntakeClient.materialize(intakeId,{
         color:completion.color.trim(),category:completion.category,currentKm,acquisitionValue,currentValue,rentalValueBase,
         version:completion.version.trim()||undefined,nextMaintenanceKm,notes:completion.notes.trim()||undefined,
@@ -251,6 +272,10 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             {FIELD_KEYS.map(key=>{const identifierError=identifierErrors[key as IdentifierField];return <div key={key} className={identifierError?'rounded-lg border border-red-500 bg-red-50 p-2 text-red-700 dark:bg-red-950/30 dark:text-red-300':'p-2'}><span className={identifierError?'font-semibold':'text-slate-500'}>{FIELD_LABELS[key]}</span><div className="font-semibold">{corrections[key]||'—'}</div>{identifierError&&<div className="mt-1 text-[11px]">{identifierError}</div>}</div>;})}
           </div>
 
+          {duplicateVehicle&&<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-300 bg-red-50 p-3 text-xs text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+            <div><strong className="block">Veículo já cadastrado — novo cadastro bloqueado</strong><span>{duplicateVehicle.plate} • RENAVAM {duplicateVehicle.renavam} • {duplicateVehicle.brand} {duplicateVehicle.model}</span></div>
+            <Button variant="outline" size="sm" onClick={()=>{const id=duplicateVehicle.id;reset();onClose();onCreated(id);}}>Abrir cadastro existente</Button>
+          </div>}
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
             <div><strong className="text-sm">Completar cadastro do veículo</strong><p className="text-xs text-slate-500">Os campos abaixo não são definidos pelo CRLV e devem ser informados antes da criação.</p></div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -263,15 +288,15 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
               <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Valores obrigatórios</h4>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Input label="Valor de Compra (R$) *" type="number" min="0.01" step="0.01" required value={completion.acquisitionValue} error={completionErrors.acquisitionValue} onChange={e=>{setCompletion(v=>({...v,acquisitionValue:e.target.value}));clearCompletionError('acquisitionValue');}}/>
-                <Input label="Valor Comercial Atual (R$) *" type="number" min="0.01" step="0.01" required value={completion.currentValue} error={completionErrors.currentValue} onChange={e=>{setCompletion(v=>({...v,currentValue:e.target.value}));clearCompletionError('currentValue');}}/>
-                <Input label="Aluguel Semanal (R$) *" type="number" min="0.01" step="0.01" required value={completion.rentalValueBase} error={completionErrors.rentalValueBase} onChange={e=>{setCompletion(v=>({...v,rentalValueBase:e.target.value}));clearCompletionError('rentalValueBase');}}/>
+                <CurrencyInput label="Valor de Compra (R$) *" required value={completion.acquisitionValue} error={completionErrors.acquisitionValue} onValueChange={value=>{setCompletion(v=>({...v,acquisitionValue:value===null?'':String(value)}));clearCompletionError('acquisitionValue');}}/>
+                <CurrencyInput label="Valor Comercial Atual (R$) *" required value={completion.currentValue} error={completionErrors.currentValue} onValueChange={value=>{setCompletion(v=>({...v,currentValue:value===null?'':String(value)}));clearCompletionError('currentValue');}}/>
+                <CurrencyInput label="Aluguel Semanal (R$) *" required value={completion.rentalValueBase} error={completionErrors.rentalValueBase} onValueChange={value=>{setCompletion(v=>({...v,rentalValueBase:value===null?'':String(value)}));clearCompletionError('rentalValueBase');}}/>
               </div>
               <p className="mt-2 text-[11px] text-slate-500">Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
             </div>
             <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
           </div>
-          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
+          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current||Boolean(duplicateVehicle)}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 

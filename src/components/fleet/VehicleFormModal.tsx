@@ -4,6 +4,7 @@ import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
+import { CurrencyInput } from '../ui/CurrencyInput';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AlertCircle } from 'lucide-react';
@@ -36,7 +37,8 @@ interface VehicleFormData {
 }
 
 const cleanText = (value: string | undefined) => (value || '').trim();
-const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizeIdentifier = (value: string) => value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizePlate = (value: string) => normalizeIdentifier(value);
 
 export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   isOpen,
@@ -55,7 +57,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     renavam: '',
     chassis: '',
     currentKm: 0,
-    nextMaintenanceKm: 10000,
+    nextMaintenanceKm: undefined,
     fuelType: 'Flex',
     category: 'Hatch / Sedan Compacto',
     acquisitionValue: 70000,
@@ -100,7 +102,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         renavam: '',
         chassis: '',
         currentKm: 0,
-        nextMaintenanceKm: 10000,
+        nextMaintenanceKm: undefined,
         fuelType: 'Flex',
         category: 'Hatch / Sedan Compacto',
         acquisitionValue: 70000,
@@ -130,7 +132,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     if (formData.yearModel !== existing.yearModel) changes.yearModel = formData.yearModel;
     if (cleanText(formData.color) !== cleanText(existing.color)) changes.color = cleanText(formData.color);
     if (cleanText(formData.chassis).toUpperCase() !== cleanText(existing.chassis).toUpperCase()) changes.chassis = cleanText(formData.chassis).toUpperCase();
-    if ((formData.nextMaintenanceKm || 0) !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm || 0;
+    if (formData.nextMaintenanceKm !== undefined && formData.nextMaintenanceKm !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm;
     if (cleanText(formData.fuelType) !== cleanText(existing.fuelType)) changes.fuelType = cleanText(formData.fuelType);
     if (cleanText(formData.category) !== cleanText(existing.category)) changes.category = cleanText(formData.category);
     if (formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
@@ -143,9 +145,27 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setErrorMessage(null);
 
+    const maxYear = new Date().getFullYear() + 1;
+    if (!Number.isInteger(formData.currentKm) || formData.currentKm < 0) {
+      setErrorMessage('Informe um KM atual inteiro e igual ou maior que zero.');
+      return;
+    }
+    if (formData.nextMaintenanceKm !== undefined && (!Number.isInteger(formData.nextMaintenanceKm) || formData.nextMaintenanceKm < formData.currentKm)) {
+      setErrorMessage('A próxima manutenção deve ser um KM inteiro e igual ou maior que o KM atual.');
+      return;
+    }
+    if (formData.yearFabrication < 1900 || formData.yearFabrication > maxYear || formData.yearModel < 1900 || formData.yearModel > maxYear) {
+      setErrorMessage('Confira o ano de fabricação e o ano do modelo.');
+      return;
+    }
+    if (formData.acquisitionValue <= 0 || formData.currentValue <= 0 || formData.rentalValueBase <= 0) {
+      setErrorMessage('Os valores de aquisição, comercial e aluguel semanal devem ser maiores que zero.');
+      return;
+    }
+
+    setLoading(true);
     try {
       if (vehicleToEdit) {
         const changedFields = buildChangedFields(vehicleToEdit);
@@ -153,7 +173,22 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           await VehicleClient.update(vehicleToEdit.id, changedFields);
         }
       } else {
-        await VehicleClient.create({ ...formData, plate: normalizePlate(formData.plate) });
+        const plate = normalizePlate(formData.plate);
+        const renavam = normalizeIdentifier(formData.renavam);
+        const existingVehicles = await VehicleClient.list();
+        const duplicate = existingVehicles.find((vehicle) =>
+          normalizeIdentifier(vehicle.plate) === plate ||
+          normalizeIdentifier(vehicle.renavam) === renavam
+        );
+        if (duplicate) {
+          const matches = [
+            normalizeIdentifier(duplicate.plate) === plate ? `Placa ${plate}` : '',
+            normalizeIdentifier(duplicate.renavam) === renavam ? `RENAVAM ${renavam}` : '',
+          ].filter(Boolean).join(' e ');
+          setErrorMessage(`Este veículo já possui cadastro no sistema: ${matches}. Cadastro existente ${duplicate.plate} — ${duplicate.brand} ${duplicate.model}.`);
+          return;
+        }
+        await VehicleClient.create({ ...formData, plate, renavam });
       }
       onSuccess();
       onClose();
@@ -193,8 +228,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Input label="Ano Fab. *" type="number" required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
-          <Input label="Ano Modelo *" type="number" required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
+          <Input label="Ano Fab. *" type="number" min="1900" max={new Date().getFullYear()+1} required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
+          <Input label="Ano Modelo *" type="number" min="1900" max={new Date().getFullYear()+1} required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
           <Input label="Cor *" placeholder="Branco" required value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
           <Select
             label="Combustível *"
@@ -216,22 +251,24 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           <Input
             label="KM Atual *"
             type="number"
+            min="0"
+            step="1"
             required
             disabled={!!vehicleToEdit}
             value={formData.currentKm}
             onChange={(e) => handleChange('currentKm', Number(e.target.value))}
             helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
-          <Input label="Próx. Manutenção (KM)" type="number" value={formData.nextMaintenanceKm || ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
+          <Input label="Próx. Manutenção (KM)" type="number" min={formData.currentKm} step="1" value={formData.nextMaintenanceKm ?? ''} onChange={(e) => handleChange('nextMaintenanceKm', e.target.value === '' ? undefined : Number(e.target.value))} />
           <Select label="Categoria *" value={formData.category} onChange={(e) => handleChange('category', e.target.value)} options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))} />
         </div>
 
         <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
           <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Valores Financeiros</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleChange('acquisitionValue', Number(e.target.value))} />
-            <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleChange('currentValue', Number(e.target.value))} />
-            <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleChange('rentalValueBase', Number(e.target.value))} />
+            <CurrencyInput label="Valor de Aquisição (R$) *" required value={formData.acquisitionValue} onValueChange={(value) => handleChange('acquisitionValue', value ?? 0)} />
+            <CurrencyInput label="Valor Comercial Atual (R$) *" required value={formData.currentValue} onValueChange={(value) => handleChange('currentValue', value ?? 0)} />
+            <CurrencyInput label="Valor Aluguel Semanal (R$) *" required value={formData.rentalValueBase} onValueChange={(value) => handleChange('rentalValueBase', value ?? 0)} />
           </div>
         </div>
 

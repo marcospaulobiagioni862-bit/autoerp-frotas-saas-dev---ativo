@@ -72,6 +72,12 @@ export type VehicleCreateInput = VehicleUpdateInput & {
   renavam: string;
   brand: string;
   model: string;
+  yearFabrication: number;
+  yearModel: number;
+  color: string;
+  chassis: string;
+  fuelType: string;
+  category: string;
   currentKm: number;
   acquisitionValue: number;
   currentValue: number;
