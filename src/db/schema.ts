@@ -108,12 +108,33 @@ export const vehicleKmRecords = pgTable('vehicle_km_records', {
   kmValue: integer('km_value').notNull(),
   recordDate: text('record_date').notNull(),
   readingType: text('reading_type').notNull(),
+  sourceType: text('source_type').notNull().default('MANUAL'),
+  sourceAttachmentId: text('source_attachment_id'),
+  sourceTrackerId: text('source_tracker_id'),
+  sourceObservedAt: timestamp('source_observed_at', { mode: 'string' }),
   photoUrl: text('photo_url'),
   notes: text('notes'),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
   idxCompanyVehicleDate: index('idx_vehicle_km_company_vehicle_date').on(t.companyId, t.vehicleId, t.recordDate, t.createdAt),
+  idxCompanySource: index('idx_vehicle_km_company_source').on(t.companyId, t.vehicleId, t.sourceType, t.recordDate),
   unqExactReading: unique('uq_vehicle_km_exact_reading').on(t.companyId, t.vehicleId, t.kmValue, t.readingType, t.recordDate),
+}));
+
+export const vehicleKmReadingSchedules = pgTable('vehicle_km_reading_schedules', {
+  companyId: text('company_id').notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  frequency: text('frequency').notNull(),
+  weekday: integer('weekday'),
+  dayOfMonth: integer('day_of_month'),
+  nextDueDate: text('next_due_date').notNull(),
+  createdBy: text('created_by').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  unqCompanyVehicle: unique('vehicle_km_reading_schedules_pk').on(t.companyId, t.vehicleId),
+  idxCompanyDue: index('idx_vehicle_km_schedule_due').on(t.companyId, t.nextDueDate, t.vehicleId),
 }));
 
 export const drivers = pgTable('drivers', {
