@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../MaintenanceManagement.tsx', import.meta.url), 'utf8');
 const financeFields = readFileSync(new URL('../WorkOrderFinanceFields.tsx', import.meta.url), 'utf8');
-const financeDefaultsMigration = readFileSync(new URL('../../../../drizzle/0066_finance_operational_defaults.sql', import.meta.url), 'utf8');
+const financeDefaultsMigration = readFileSync(new URL('../../../../drizzle/0067_finance_operational_defaults.sql', import.meta.url), 'utf8');
 
 assert.match(
   source,
