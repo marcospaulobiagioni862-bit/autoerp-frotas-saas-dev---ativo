@@ -10,7 +10,7 @@ import {
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.RESERVED), true);
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.RESERVED, VehicleStatus.AVAILABLE), true);
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.BLOCKED, VehicleStatus.INSPECTION), true);
-assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.DAMAGED, VehicleStatus.WAITING_MAINTENANCE), true);
+assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.DAMAGED, VehicleStatus.WAITING_MAINTENANCE), false);
 
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.RENTED, VehicleStatus.AVAILABLE), false);
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.RENTED), false);
@@ -128,8 +128,13 @@ assert.match(lifecycleMigration, /FORCE ROW LEVEL SECURITY/, 'lifecycle persiste
 assert.match(lifecycleMigration, /vehicle_lifecycle_events_tenant_policy/, 'lifecycle persistence must define tenant policy');
 
 assert.equal(vehicleStatusLabel(VehicleStatus.DOCUMENTATION_PENDING), 'Documentação pendente');
-assert.equal(vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE), 'Aguardando manutenção');
+assert.equal(vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE), 'Em manutenção');
 assert.equal(vehicleStatusLabel(VehicleStatus.DAMAGED), 'Sinistrado');
+assert.equal(
+  manuallyAllowedVehicleStatuses(VehicleStatus.AVAILABLE).includes(VehicleStatus.WAITING_MAINTENANCE),
+  false,
+  'legacy waiting-maintenance must not be an allowed destination',
+);
 
 console.log('vehicle status policy regressions: PASS');
 
