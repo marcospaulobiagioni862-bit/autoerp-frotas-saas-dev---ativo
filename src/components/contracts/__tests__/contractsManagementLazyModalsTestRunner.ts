@@ -68,6 +68,16 @@ assert.match(detailsModal, /initialFocus === 'FINANCIAL' \? 'FINANCIAL' : 'OVERV
 assert.match(detailsModal, /focusOnOpen=\{initialFocus === 'PDF_SIGNATURE'\}/, 'details modal must focus the execution panel for PDF/signature');
 assert.match(executionPanel, /data-contract-section="pdf-signature"/, 'execution panel must expose a stable PDF/signature anchor');
 assert.match(executionPanel, /scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/, 'PDF/signature action must visibly navigate to its section');
+assert.match(
+  executionPanel,
+  /anchor\.href = `\/api\/attachments\/\$\{encodeURIComponent\(attachmentId\)\}\/content`/,
+  'generated contract documents must open through the authenticated inline attachment endpoint',
+);
+assert.doesNotMatch(
+  executionPanel,
+  /await AttachmentClient\.content\(attachmentId\)[\s\S]*window\.open/,
+  'contract document opening must not lose the user click while awaiting a blob before opening a tab',
+);
 for (const placeholder of [
   'driver.rg','driver.birthDate','driver.phone','driver.whatsapp','driver.email','driver.cnhCategory',
   'vehicle.version','vehicle.brandModel','vehicle.yearFabrication','vehicle.yearModel','vehicle.yearDisplay',
