@@ -205,17 +205,25 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
     if (entries.length === 0) {
       setGlobalError(selectedCount === 0 ? 'Selecione ao menos um veículo.' : 'Corrija os veículos selecionados antes de salvar.');
       if (Object.keys(localErrors).length) {
-        setRows((current) => Object.fromEntries(
-          Object.entries(current).map(([id, row]) => [id, { ...row, error: localErrors[id] || row.error }]),
-        ));
+        setRows((current) => {
+          const next: Record<string, RowDraft> = { ...current };
+          for (const [id, error] of Object.entries(localErrors)) {
+            if (next[id]) next[id] = { ...next[id], error };
+          }
+          return next;
+        });
       }
       return;
     }
 
     if (Object.keys(localErrors).length) {
-      setRows((current) => Object.fromEntries(
-        Object.entries(current).map(([id, row]) => [id, { ...row, error: localErrors[id] || row.error }]),
-      ));
+      setRows((current) => {
+        const next: Record<string, RowDraft> = { ...current };
+        for (const [id, error] of Object.entries(localErrors)) {
+          if (next[id]) next[id] = { ...next[id], error };
+        }
+        return next;
+      });
       setGlobalError('Há veículos selecionados com dados pendentes. O lote não foi enviado.');
       return;
     }
