@@ -55,13 +55,23 @@ assert.match(source, /<span>Serviços<\/span>[\s\S]*<span>Mão de obra<\/span>/,
 
 assert.match(
   source,
-  /max-h-\[calc\(100dvh-2rem\)\] overflow-y-auto overscroll-contain/,
-  'new work-order modal must remain vertically scrollable inside the viewport',
+  /max-h-\[calc\(100dvh-2rem\)\] flex-col overflow-hidden/,
+  'new work-order modal shell must remain constrained to the viewport without scrolling the footer',
 );
 assert.match(
   source,
-  /sticky bottom-0 z-10 border-t[\s\S]*flex justify-end gap-2/,
-  'new work-order modal actions must remain reachable while the form scrolls',
+  /min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1 pb-4/,
+  'new work-order fields must scroll independently from the modal actions',
+);
+assert.match(
+  source,
+  /shrink-0 border-t[\s\S]*flex justify-end gap-2/,
+  'new work-order actions must remain visible without overlapping form fields',
+);
+assert.doesNotMatch(
+  source,
+  /sticky bottom-0 z-10 border-t/,
+  'new work-order footer must not overlay the lower financial fields',
 );
 assert.match(
   source,
