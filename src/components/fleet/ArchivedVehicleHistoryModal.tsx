@@ -19,6 +19,7 @@ interface ArchivedVehicleHistoryModalProps {
 type Tab = 'overview' | 'driver' | 'km' | 'maintenance' | 'tickets' | 'documents' | 'financial' | 'lifecycle';
 
 const dateBR = (value?: string) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR') : '-';
+const kmSourceLabel = (source?: string) => source === 'DRIVER_PHOTO' ? 'Foto do motorista' : source === 'TRACKER' ? 'Rastreador' : 'Manual';
 
 export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalProps> = ({ isOpen, onClose, vehicleId }) => {
   const [summary, setSummary] = useState<VehicleDetailedSummary | null>(null);
@@ -139,7 +140,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
           )}
 
           {activeTab === 'km' && (
-            <div className="overflow-x-auto border rounded-xl text-xs"><table className="w-full text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-2.5">Data</th><th className="p-2.5">Leitura</th><th className="p-2.5">Tipo</th><th className="p-2.5">Observação</th></tr></thead><tbody>{summary.kmRecords.map((row) => <tr key={row.id} className="border-b"><td className="p-2.5">{dateBR(row.recordDate)}</td><td className="p-2.5 font-mono font-bold">{row.kmValue.toLocaleString('pt-BR')} KM</td><td className="p-2.5">{row.readingType}</td><td className="p-2.5 text-slate-500">{row.notes || '-'}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto border rounded-xl text-xs"><table className="w-full text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-2.5">Data</th><th className="p-2.5">Leitura</th><th className="p-2.5">Tipo</th><th className="p-2.5">Origem</th><th className="p-2.5">Observação</th></tr></thead><tbody>{summary.kmRecords.map((row) => <tr key={row.id} className="border-b"><td className="p-2.5">{dateBR(row.recordDate)}</td><td className="p-2.5 font-mono font-bold">{row.kmValue.toLocaleString('pt-BR')} KM</td><td className="p-2.5">{row.readingType}</td><td className="p-2.5">{kmSourceLabel(row.sourceType)}</td><td className="p-2.5 text-slate-500">{row.notes || '-'}</td></tr>)}</tbody></table></div>
           )}
 
           {activeTab === 'maintenance' && (
