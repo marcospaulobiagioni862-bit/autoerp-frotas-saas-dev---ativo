@@ -39,6 +39,7 @@ console.log('Modal layout UX regression PASS');
 
 const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
 const productionSidebar = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
+const developmentSidebar = readFileSync(new URL('../../layout/Sidebar.tsx', import.meta.url), 'utf8');
 
 assert.match(
   app,
@@ -50,3 +51,30 @@ assert.match(
   /overflow-y-auto overflow-x-hidden overscroll-contain \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
   'production sidebar scrollbar must remain functional but visually hidden',
 );
+
+
+assert.match(
+  app,
+  /<Sidebar[\s\S]*isCollapsed=\{isSidebarCollapsed\}[\s\S]*onToggleCollapsed=/,
+  'global ERP layout must control sidebar collapse from App',
+);
+assert.match(
+  app,
+  /<Sidebar[\s\S]*\/?>\s*<div className="min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden">[\s\S]*<Header/,
+  'global ERP layout must keep sidebar outside the scrollable content column',
+);
+assert.match(
+  app,
+  /h-screen overflow-hidden[\s\S]*flex font-sans/,
+  'global ERP shell must reserve the full viewport for sidebar and content',
+);
+
+for (const [name, sidebar] of [['development', developmentSidebar], ['production', productionSidebar]] as const) {
+  assert.match(sidebar, /data-testid="desktop-sidebar"/, `${name} sidebar must remain explicitly mounted on desktop`);
+  assert.match(sidebar, /const compactDesktop = isCollapsed && !isCompactViewport/, `${name} sidebar must support desktop compact mode`);
+  assert.match(sidebar, /Expandir barra lateral/, `${name} sidebar must expose expand control`);
+  assert.match(sidebar, /Recolher barra lateral/, `${name} sidebar must expose collapse control`);
+  assert.match(sidebar, /transition-\[width\] duration-200/, `${name} sidebar must animate width changes`);
+  assert.doesNotMatch(sidebar, /className="hidden md:block h-full/, `${name} desktop sidebar must not depend on Tailwind hidden breakpoint rendering`);
+  assert.match(sidebar, /isCompactViewport && isMobileOpen[\s\S]*fixed inset-0 z-40/, `${name} mobile navigation must remain off-canvas`);
+}
