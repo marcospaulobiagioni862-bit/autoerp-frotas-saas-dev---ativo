@@ -133,6 +133,7 @@ async function main(): Promise<void> {
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
   assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
   assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
+  assert(sidebar.includes('useState(false)'), 'Production authority submenu must start collapsed');
   assert(sidebar.includes("id: 'transactions', label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
   assert(sidebar.includes("id: 'cashflow', label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
   assert(app.includes("activeTab==='cashflow'&&<FinanceHubView initialSubTab=\"cashflow\""), 'Fluxo de Caixa navigation must select the cashflow sub-tab');
