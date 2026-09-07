@@ -22,7 +22,7 @@ const DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.
 const ALLOWED_MIME_TYPES=new Set(['application/pdf','image/jpeg','image/jpg','image/png','image/webp','video/mp4',DOCX_MIME]);
 function canonicalMimeType(value:string):string{return value==='image/jpg'?'image/jpeg':value;}
 function detectedMimeType(bytes:Buffer):string|undefined{
-  const pdfHeader=Buffer.from('%PDF-','ascii');
+  const pdfHeader=Buffer.from('%PDF','ascii');
   const pdfPrefix=bytes.subarray(0,Math.min(bytes.length,1024));
   if(pdfPrefix.indexOf(pdfHeader)>=0)return'application/pdf';
   if(bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)return'image/jpeg';
