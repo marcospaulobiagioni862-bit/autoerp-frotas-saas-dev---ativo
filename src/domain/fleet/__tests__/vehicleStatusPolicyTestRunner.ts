@@ -64,6 +64,7 @@ assert.equal(
 
 const lifecycleRoute = readFileSync(new URL('../../../server/vehicleLifecycleRoutes.ts', import.meta.url), 'utf8');
 const vehicleRoutes = readFileSync(new URL('../../../server/vehicleRoutes.ts', import.meta.url), 'utf8');
+const kmAuthority = readFileSync(new URL('../../../server/vehicleKmReadingAuthority.ts', import.meta.url), 'utf8');
 const vehicleClient = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const fleetManagement = readFileSync(new URL('../../../components/fleet/FleetManagement.tsx', import.meta.url), 'utf8');
 const saleModal = readFileSync(new URL('../../../components/fleet/VehicleSaleModal.tsx', import.meta.url), 'utf8');
@@ -122,7 +123,8 @@ assert.match(archivedHistoryModal, /AttachmentList/, 'archived history must reta
 assert.doesNotMatch(archivedHistoryModal, /FileUpload|VehicleCrlvImportPanel|recordKm|markSold|archive\(/, 'archived history must not expose mutation controls');
 assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id'[\s\S]*if \(!item\) throw new VehicleNotFoundError/, 'archived vehicle detail must remain readable');
 assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*if \(!vehicle\) throw new VehicleNotFoundError/, 'archived KM history must remain readable');
-assert.match(vehicleRoutes, /app\.post\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*vehicle\.isArchived/, 'archived vehicles must remain immutable for new KM writes');
+assert.match(vehicleRoutes, /app\.post\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*advanceVehicleKmInContext/, 'KM endpoint must delegate mutation to the central authority');
+assert.match(kmAuthority, /vehicle\.isArchived\|\|vehicle\.status===VehicleStatus\.SOLD\|\|vehicle\.status===VehicleStatus\.ARCHIVED/, 'archived vehicles must remain immutable for new KM writes inside the central authority');
 
 assert.match(lifecycleMigration, /FORCE ROW LEVEL SECURITY/, 'lifecycle persistence must enforce tenant RLS');
 assert.match(lifecycleMigration, /vehicle_lifecycle_events_tenant_policy/, 'lifecycle persistence must define tenant policy');
