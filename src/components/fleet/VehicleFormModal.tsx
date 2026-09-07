@@ -4,6 +4,7 @@ import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
+import { CurrencyInput } from '../ui/CurrencyInput';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { AlertCircle } from 'lucide-react';
@@ -229,9 +230,9 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
           <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Valores Financeiros</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleChange('acquisitionValue', Number(e.target.value))} />
-            <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleChange('currentValue', Number(e.target.value))} />
-            <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleChange('rentalValueBase', Number(e.target.value))} />
+            <CurrencyInput label="Valor de Aquisição (R$) *" required value={formData.acquisitionValue} onValueChange={(value) => handleChange('acquisitionValue', value ?? 0)} />
+            <CurrencyInput label="Valor Comercial Atual (R$) *" required value={formData.currentValue} onValueChange={(value) => handleChange('currentValue', value ?? 0)} />
+            <CurrencyInput label="Valor Aluguel Semanal (R$) *" required value={formData.rentalValueBase} onValueChange={(value) => handleChange('rentalValueBase', value ?? 0)} />
           </div>
         </div>
 
