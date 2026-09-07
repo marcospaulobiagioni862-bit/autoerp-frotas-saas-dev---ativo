@@ -105,7 +105,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
           </button>
         </div>
 
-        <div className="min-w-0 p-4 overflow-y-auto overflow-x-hidden space-y-3">
+        <div className="min-w-0 p-4 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden space-y-3">
           {children}
         </div>
       </div>
