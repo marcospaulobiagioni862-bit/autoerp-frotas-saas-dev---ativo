@@ -147,6 +147,20 @@ export function registerVehicleRoutes(app: Express): void {
     } catch (error) { sendVehicleError(res, error); }
   });
 
+  app.get('/api/fleet/vehicles/identity-conflict', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const plate = normalizeVehicleIdentity(req.query?.plate);
+      const renavam = normalizeVehicleIdentity(req.query?.renavam);
+      if (!plate || !renavam) throw new VehicleValidationError('Plate and RENAVAM are required for identity check');
+      const conflict = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam)
+      );
+      res.json({ conflict });
+    } catch (error) { sendVehicleError(res, error); }
+  });
+
   app.get('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
     if (!principal) return;
