@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Archive, Download, ExternalLink, FilePlus2, History, Save, X } from 'lucide-react';
+import { Archive, Download, ExternalLink, FilePlus2, History, LockKeyhole, Save, Upload, X } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
 import { Badge, Button, Input, ModalContainer } from '../ui';
-import { MOVEFLEX_BASE_CONTRACT_PDF_FILENAME, buildMoveFlexBaseContractPdf } from './moveflexBaseContractPdf';
 import { MOVEFLEX_LOGO_DATA_URL } from '../../domain/contracts/moveflexBrand';
+import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 
 interface ContractTemplateManagementModalProps {
   isOpen: boolean;
@@ -46,11 +46,10 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [basePdfUrl, setBasePdfUrl] = useState<string | null>(null);
-  const [basePdfLoading, setBasePdfLoading] = useState(false);
 
   const load = async () => {
     try {
+      await ContractTemplateClient.ensureMoveFlexDefault();
       setTemplates(await ContractTemplateClient.list({ activeOnly: false }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar modelos.');
@@ -65,32 +64,6 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     setSourceMode('MARKDOWN');
     setSourceFile(null);
     void load();
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    let cancelled = false;
-    let preparedUrl: string | null = null;
-    setBasePdfLoading(true);
-    setBasePdfUrl(null);
-
-    void buildMoveFlexBaseContractPdf()
-      .then((bytes) => {
-        if (cancelled) return;
-        preparedUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-        setBasePdfUrl(preparedUrl);
-      })
-      .catch((caught) => {
-        if (!cancelled) setError(caught instanceof Error ? `Falha ao preparar modelo-base: ${caught.message}` : 'Falha ao preparar modelo-base MoveFlex.');
-      })
-      .finally(() => {
-        if (!cancelled) setBasePdfLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-      if (preparedUrl) URL.revokeObjectURL(preparedUrl);
-    };
   }, [isOpen]);
 
   const resetForm = () => {
@@ -191,6 +164,37 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     }
   };
 
+  const uploadApprovedMaster = async (item: ContractTemplate, file: File | null) => {
+    if (!file) return;
+    const master = getMoveFlexApprovedContractMaster(item.templateKey);
+    if (!master) return;
+    if (sourceMime(file) !== DOCX_MIME) {
+      setError(`Selecione o arquivo mestre DOCX aprovado: ${master.fileName}.`);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await AttachmentClient.upload({
+        entityType: 'ContractTemplate',
+        entityId: item.id,
+        documentType: 'CONTRACT_TEMPLATE_SOURCE',
+        fileName: file.name,
+        mimeType: DOCX_MIME,
+        content: file,
+        description: `Arquivo mestre aprovado e imutável: ${master.fileName}`,
+      });
+      await ContractTemplateClient.promoteFileSource(item.id);
+      setSuccess(`Arquivo mestre aprovado ativado: ${master.fileName}.`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'O arquivo enviado não corresponde ao mestre aprovado.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const archive = async (item: ContractTemplate) => {
     if (!confirm(`Arquivar o modelo “${item.title}”? O histórico será preservado.`)) return;
     setLoading(true);
@@ -204,20 +208,6 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     } finally {
       setLoading(false);
     }
-  };
-
-  const downloadBasePdf = () => {
-    setError(null);
-    if (!basePdfUrl) {
-      setError(basePdfLoading ? 'O modelo-base ainda está sendo preparado. Aguarde alguns segundos e tente novamente.' : 'O modelo-base MoveFlex não pôde ser preparado.');
-      return;
-    }
-    const anchor = document.createElement('a');
-    anchor.href = basePdfUrl;
-    anchor.download = MOVEFLEX_BASE_CONTRACT_PDF_FILENAME;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
   };
 
   const downloadSelectedSource = () => {
@@ -258,7 +248,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <img src={MOVEFLEX_LOGO_DATA_URL} alt="MoveFlex" className="h-10 w-auto rounded-md object-contain" />
-          <div><h2 className="font-bold">Modelos de Contrato MoveFlex</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Versionamento server-side; versões anteriores permanecem no histórico.</p></div>
+          <div><h2 className="font-bold">Modelos de Contrato MoveFlex</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Os modelos padrão usam somente os arquivos mestres aprovados; cabeçalho, rodapé e conteúdo não podem ser substituídos.</p></div>
         </div>
         <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
@@ -266,16 +256,27 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       <div className="grid gap-4 p-3 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="space-y-3">
           <div className="flex items-center justify-between"><h3 className="text-sm font-bold">Modelos atuais</h3><Button size="sm" variant="ghost" onClick={resetForm}><FilePlus2 className="w-4 h-4" />Novo</Button></div>
-          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><Button size="sm" variant="secondary" className="mt-3" onClick={downloadBasePdf} disabled={basePdfLoading || !basePdfUrl}><Download className="w-4 h-4" />{basePdfLoading ? 'Preparando modelo-base...' : 'Baixar modelo-base MoveFlex (PDF)'}</Button><p className="mt-2 text-[10px]">Você pode editar o modelo-base ou anexar seu próprio PDF/DOCX. Após salvar, o arquivo escolhido continuará disponível pelo botão Baixar.</p></div> : templates.map((item) => {
+          {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><p className="mt-2 text-[10px]">Atualize a tela para o servidor preparar os registros dos arquivos mestres aprovados.</p></div> : templates.map((item) => {
             const fileBacked = !item.contentMarkdown.trim();
+            const approvedMaster = getMoveFlexApprovedContractMaster(item.templateKey);
             return (
               <div key={item.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.title}</b><p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.templateKey}</p>{fileBacked && <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Fonte: arquivo PDF/DOCX</p>}</div><Badge variant={item.isActive ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
+                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.title}</b><p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.templateKey}</p>{approvedMaster ? <p className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"><LockKeyhole className="h-3 w-3" />{item.isActive ? 'Arquivo mestre aprovado • imutável' : `Aguardando mestre aprovado: ${approvedMaster.fileName}`}</p> : fileBacked ? <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Fonte: arquivo PDF/DOCX personalizado</p> : null}</div><Badge variant={item.isActive ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => startVersion(item)}><History className="w-4 h-4" />Nova versão</Button>
-                  {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir arquivo</Button>}
-                  {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item, true)}><Download className="w-4 h-4" />Baixar</Button>}
-                  <Button size="sm" variant="ghost" onClick={() => void archive(item)} disabled={loading}><Archive className="w-4 h-4" />Arquivar</Button>
+                  {approvedMaster ? (
+                    item.isActive ? <>
+                      <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir mestre</Button>
+                      <Button size="sm" variant="ghost" onClick={() => void openSource(item, true)}><Download className="w-4 h-4" />Baixar mestre</Button>
+                    </> : <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
+                      <Upload className="h-4 w-4" />Carregar arquivo mestre
+                      <input type="file" className="hidden" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={loading} onChange={(event) => { const file = event.target.files?.[0] || null; event.currentTarget.value = ''; void uploadApprovedMaster(item, file); }} />
+                    </label>
+                  ) : <>
+                    <Button size="sm" variant="secondary" onClick={() => startVersion(item)}><History className="w-4 h-4" />Nova versão</Button>
+                    {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir arquivo</Button>}
+                    {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item, true)}><Download className="w-4 h-4" />Baixar</Button>}
+                    <Button size="sm" variant="ghost" onClick={() => void archive(item)} disabled={loading}><Archive className="w-4 h-4" />Arquivar</Button>
+                  </>}
                 </div>
               </div>
             );
@@ -303,7 +304,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Arquivo-fonte PDF ou DOCX<input className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setSourceFile(event.target.files?.[0] || null)} /></label>
               {sourceFile && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50"><p className="text-xs text-slate-500 dark:text-slate-300">Selecionado: {sourceFile.name}</p><Button size="sm" variant="ghost" onClick={downloadSelectedSource}><Download className="w-4 h-4" />Baixar arquivo selecionado</Button></div>}
-              <p className="text-[11px] text-slate-500 dark:text-slate-300">O original ficará preservado nesta versão. PDF permanece como referência estática; DOCX com placeholders canônicos será ativado após validação para gerar um arquivo preenchido e revisável.</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-300">Esta área é apenas para modelos personalizados. Os dois modelos padrão MoveFlex são bloqueados e aceitam exclusivamente os arquivos mestres aprovados exibidos na coluna ao lado.</p>
             </div>
           )}
 
