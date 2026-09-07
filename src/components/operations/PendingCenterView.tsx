@@ -11,6 +11,7 @@ import {
   TrackerRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
+import { VehicleKmReadingClient } from '../../api/vehicleKmReadingClient';
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -49,7 +50,8 @@ type FilterCategory =
   | 'FINE' 
   | 'DRIVER' 
   | 'INSURANCE' 
-  | 'TRACKER';
+  | 'TRACKER'
+  | 'KM';
 
 export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   companyId = 'company-main-uuid',
@@ -59,6 +61,8 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   const [pendings, setPendings] = useState<OperationalPendingItem[]>([]);
   const [filter, setFilter] = useState<FilterCategory>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [kmWhatsappBusyId, setKmWhatsappBusyId] = useState<string | null>(null);
+  const [kmWhatsappFeedback, setKmWhatsappFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     loadPendings();
@@ -77,7 +81,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       const insRepo = new InsuranceRepository();
       const trackRepo = new TrackerRepository();
 
-      const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
+      const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, kmReadingAlerts] = await Promise.all([
         vehRepo.findAll({ companyId }),
         contractRepo.findAll({ companyId }),
         maintRepo.findAll({ companyId }),
@@ -87,6 +91,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         drvRepo.findAll({ companyId }),
         insRepo.findAll({ companyId }),
         trackRepo.findAll({ companyId }),
+        VehicleKmReadingClient.listAlerts(),
       ]);
 
       const results = generateOperationalPendings({
@@ -100,6 +105,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         drivers,
         insurances,
         trackers,
+        kmReadingAlerts,
       });
 
       setPendings(results);
@@ -135,6 +141,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
     if (filter === 'DRIVER') return item.type === 'DRIVER';
     if (filter === 'INSURANCE') return item.type === 'INSURANCE';
     if (filter === 'TRACKER') return item.type === 'TRACKER';
+    if (filter === 'KM') return item.category === 'Quilometragem';
 
     return true;
   });
@@ -143,6 +150,31 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   const criticalCount = pendings.filter(p => p.priority === 'P0' || p.priority === 'P1').length;
   const importantCount = pendings.filter(p => p.priority === 'P2').length;
   const overdueCount = pendings.filter(p => p.overdueDays > 0).length;
+
+  const prepareKmWhatsapp = async (item: OperationalPendingItem) => {
+    if (!item.vehicleId || item.actionKind !== 'REQUEST_KM_WHATSAPP') return;
+    setKmWhatsappBusyId(item.vehicleId);
+    setKmWhatsappFeedback(null);
+    try {
+      const result = (await VehicleKmReadingClient.prepareWhatsapp([item.vehicleId]))[0];
+      if (!result) {
+        setKmWhatsappFeedback('Não foi possível preparar a solicitação de KM.');
+      } else if (result.status === 'SKIPPED') {
+        setKmWhatsappFeedback(`${result.plate}: ${result.reason || 'Solicitação não elegível.'}`);
+      } else {
+        setKmWhatsappFeedback(
+          result.created
+            ? `${result.plate}: solicitação de KM preparada no WhatsApp. O provedor continua desabilitado; nenhum envio externo foi realizado.`
+            : `${result.plate}: a solicitação deste ciclo já estava preparada; nenhuma duplicidade foi criada.`,
+        );
+      }
+      await loadPendings();
+    } catch (error) {
+      setKmWhatsappFeedback(error instanceof Error ? error.message : 'Falha ao preparar solicitação de KM.');
+    } finally {
+      setKmWhatsappBusyId(null);
+    }
+  };
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
@@ -302,6 +334,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
               { id: 'DRIVER', label: 'Motoristas' },
               { id: 'INSURANCE', label: 'Seguros' },
               { id: 'TRACKER', label: 'Rastreadores' },
+              { id: 'KM', label: 'Quilometragem' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -318,6 +351,12 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
           </div>
         </div>
       </Card>
+
+      {kmWhatsappFeedback && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+          {kmWhatsappFeedback}
+        </div>
+      )}
 
       {/* Pendings List / Table */}
       <Card padding="none" className="overflow-hidden border border-slate-200/80 dark:border-slate-800">
@@ -393,7 +432,17 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                <div className="flex flex-wrap items-center gap-2 self-end md:self-center shrink-0">
+                  {item.actionKind === 'REQUEST_KM_WHATSAPP' && item.vehicleId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void prepareKmWhatsapp(item)}
+                      disabled={kmWhatsappBusyId === item.vehicleId}
+                    >
+                      {kmWhatsappBusyId === item.vehicleId ? 'Preparando...' : 'Preparar WhatsApp'}
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="primary"
