@@ -6,7 +6,8 @@ import { MaintenanceClient } from '../../api/maintenanceClient';
 import { TrackerClient } from '../../api/trackerClient';
 import { InsuranceClient } from '../../api/insuranceClient';
 import { TrafficTicketClient } from '../../api/trafficTicketClient';
-import type { Vehicle, KmRecord } from '../../types/entities';
+import { DetailAuthorityClient } from '../../api/detailAuthorityClient';
+import type { Vehicle, KmRecord, AuditLog } from '../../types/entities';
 import { ObligationStatus } from '../../types/enums';
 
 export interface VehicleDetailedSummary {
@@ -20,6 +21,7 @@ export interface VehicleDetailedSummary {
   insurances: any[];
   trackers: any[];
   kmRecords: KmRecord[];
+  historyLogs: AuditLog[];
   financialSummary: { totalRevenue:number; totalExpenses:number; netProfit:number; profitMargin:number; };
 }
 
@@ -31,7 +33,7 @@ export interface VehicleDetailedSummary {
 export class VehicleLegacyDetailsBridge {
   async compose(vehicle:Vehicle,kmRecords:KmRecord[]):Promise<VehicleDetailedSummary>{
     const vehicleId=vehicle.id;
-    const [driverCore,contracts,workOrders,canonicalTickets,documents,insurances,trackers,allReceivables,allPayables]=await Promise.all([
+    const [driverCore,contracts,workOrders,canonicalTickets,documents,insurances,trackers,allReceivables,allPayables,historyLogs]=await Promise.all([
       vehicle.currentDriverId?DriverClient.get(vehicle.currentDriverId):Promise.resolve(null),
       ContractClient.list(),
       MaintenanceClient.listWorkOrders({vehicleId}),
@@ -41,6 +43,7 @@ export class VehicleLegacyDetailsBridge {
       TrackerClient.listByVehicle(vehicleId),
       FinanceObligationClient.listReceivables(),
       FinanceObligationClient.listPayables(),
+      DetailAuthorityClient.listAudit('Vehicle',vehicleId),
     ]);
 
     const contractHistory=contracts.filter(item=>item.vehicleId===vehicleId);
@@ -86,6 +89,7 @@ export class VehicleLegacyDetailsBridge {
       insurances,
       trackers,
       kmRecords:[...kmRecords],
+      historyLogs,
       financialSummary:{totalRevenue,totalExpenses,netProfit,profitMargin},
     };
   }
