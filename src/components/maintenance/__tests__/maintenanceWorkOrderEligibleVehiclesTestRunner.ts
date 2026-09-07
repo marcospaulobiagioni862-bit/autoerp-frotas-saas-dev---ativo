@@ -39,6 +39,17 @@ assert.match(
   /Total estimado da OS/,
   'work-order form must preview its operational cost before creation',
 );
+
+assert.match(
+  source,
+  /max-h-\[calc\(100dvh-2rem\)\] overflow-y-auto overscroll-contain/,
+  'new work-order modal must remain vertically scrollable inside the viewport',
+);
+assert.match(
+  source,
+  /sticky bottom-0 z-10 flex justify-end gap-2 border-t/,
+  'new work-order modal actions must remain reachable while the form scrolls',
+);
 assert.match(
   source,
   /MAINTENANCE_INVOICE[\s\S]*MAINTENANCE_PART_PHOTO[\s\S]*MAINTENANCE_DOCUMENT/,
