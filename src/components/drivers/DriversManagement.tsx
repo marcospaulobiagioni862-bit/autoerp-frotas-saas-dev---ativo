@@ -25,6 +25,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus, DocumentStatus } from '../../types/enums';
+import { matchesDriverSearch } from './driverSearch';
 
 const DriverFormModal = lazy(() => import('./DriverFormModal').then(module => ({ default: module.DriverFormModal })));
 const DriverDetailsModal = lazy(() => import('./DriverDetailsModal').then(module => ({ default: module.DriverDetailsModal })));
@@ -124,18 +125,8 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   }, [drivers]);
 
   const filteredDrivers = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-    const searchDigits = searchTerm.replace(/\D/g, '');
     return drivers.filter((driver) => {
-      const normalizedName = driver.fullName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-      const cpfDigits = driver.cpf.replace(/\D/g, '');
-      const cnhDigits = driver.cnhNumber.replace(/\D/g, '');
-      const phoneDigits = driver.phone.replace(/\D/g, '');
-      const matchSearch =
-        !normalizedSearch ||
-        normalizedName.includes(normalizedSearch) ||
-        (Boolean(searchDigits) && (cpfDigits.includes(searchDigits) || cnhDigits.includes(searchDigits) || phoneDigits.includes(searchDigits)));
-      if (!matchSearch) return false;
+      if (!matchesDriverSearch(driver, searchTerm)) return false;
       if (statusFilter === 'ALL') return true;
       if (statusFilter === 'ACTIVE') return driver.status === DriverStatus.ACTIVE;
       if (statusFilter === 'INACTIVE') return driver.status === DriverStatus.INACTIVE;
@@ -309,7 +300,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Buscar por nome, CPF, CNH ou telefone..."
+            placeholder="Buscar por nome, CPF, CNH, telefone, RG, endereço, CEP ou data..."
             className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
