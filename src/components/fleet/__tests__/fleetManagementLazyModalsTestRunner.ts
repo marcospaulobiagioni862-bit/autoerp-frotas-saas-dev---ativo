@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
 const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
 
-const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal'] as const;
+const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal', 'VehicleKmBatchModal'] as const;
 
 for (const modal of modals) {
   assert.equal(
@@ -20,7 +20,7 @@ for (const modal of modals) {
 }
 
 assert.equal(
-  (source.match(/=lazy\(\(\)=>import\('\.\/(?:VehicleFormModal|VehicleDetailsModal|RecordKmModal)'/g) ?? []).length,
+  (source.match(/=lazy\(\(\)=>import\('\.\/(?:VehicleFormModal|VehicleDetailsModal|RecordKmModal|VehicleKmBatchModal)'/g) ?? []).length,
   modals.length,
   'FleetManagement must define exactly three lazy modal loaders',
 );
@@ -34,6 +34,12 @@ assert.match(
   source,
   /\{vehicleForKmRecord&&<RecordKmModal/,
   'KM recording must render only with its authorized vehicle',
+);
+assert.match(source, /Atualizar KM em lote/, 'fleet must expose the batch KM action');
+assert.match(
+  source,
+  /\{isKmBatchOpen&&<VehicleKmBatchModal isOpen vehicles=\{vehicles\}/,
+  'KM batch modal must receive the authoritative active fleet list only when opened',
 );
 assert.match(
   source,
