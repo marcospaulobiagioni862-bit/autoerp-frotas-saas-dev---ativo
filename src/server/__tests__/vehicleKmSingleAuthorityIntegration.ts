@@ -71,6 +71,9 @@ async function main():Promise<void>{
   const retry=await advance(12000,'2026-09-07','Repetição da mesma atualização em outro ponto');
   assert(!retry.created&&retry.currentKm===12000,'same-day same-KM replay created a duplicate reading');
   assert((await history()).length===2,'same-day duplicate KM was persisted');
+  const laterSameKm=await advance(12000,'2026-09-08','Mesmo KM confirmado em outro módulo/data');
+  assert(!laterSameKm.created&&laterSameKm.currentKm===12000,'same KM on another date created a duplicate central reading');
+  assert((await history()).length===2,'same KM value was duplicated across dates/modules');
 
   let directSnapshotBlocked=false;
   try{
@@ -138,7 +141,7 @@ async function main():Promise<void>{
   const migration=readFileSync(new URL('../../../drizzle/0068_vehicle_km_single_authority.sql',import.meta.url),'utf8');
   assert(migration.includes('trg_vehicle_current_km_guard'),'database current KM guard is missing');
   assert(migration.includes('trg_vehicle_km_record_sync_snapshot'),'database KM snapshot synchronization trigger is missing');
-  assert(migration.includes('vehicle_km_records_daily_value_guard'),'database duplicate KM guard is missing');
+  assert(migration.includes('vehicle_km_records_value_guard'),'database duplicate KM guard is missing');
 
   console.log('Vehicle KM single authority integration: PASS');
 }
