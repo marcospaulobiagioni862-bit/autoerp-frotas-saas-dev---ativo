@@ -417,7 +417,9 @@ export function registerContractTemplateRoutes(app: Express): void {
         if (candidate.isCurrent && candidate.isActive === shouldActivate) return candidate;
 
         const current = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, candidate.templateKey);
-        if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
+        if (approvedMaster) {
+          if (!current || current.id !== candidate.id || !candidate.isCurrent) throw new TemplateConflictError();
+        } else if (candidate.supersedesTemplateId && (!current || current.id !== candidate.supersedesTemplateId)) {
           throw new TemplateConflictError();
         }
         const now = new Date().toISOString();
