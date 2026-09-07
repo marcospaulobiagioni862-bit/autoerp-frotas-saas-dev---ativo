@@ -28,6 +28,22 @@ function validateVehicle(value: unknown): Vehicle {
   return item as unknown as Vehicle;
 }
 
+function validateVehicleIdentityConflict(value: unknown): VehicleIdentityConflictPreview {
+  const item = asRecord(value);
+  if (
+    typeof item.id !== 'string' ||
+    typeof item.plate !== 'string' ||
+    typeof item.renavam !== 'string' ||
+    typeof item.brand !== 'string' ||
+    typeof item.model !== 'string' ||
+    typeof item.isArchived !== 'boolean' ||
+    typeof item.status !== 'string' ||
+    typeof item.plateMatch !== 'boolean' ||
+    typeof item.renavamMatch !== 'boolean'
+  ) throw new Error('Invalid vehicle identity conflict');
+  return item as unknown as VehicleIdentityConflictPreview;
+}
+
 const KM_TYPES = new Set(['CHECK_IN', 'CHECK_OUT', 'PERIODIC', 'MAINTENANCE']);
 function validateKmRecord(value: unknown): KmRecord {
   const item = asRecord(value);
@@ -83,6 +99,18 @@ export type VehicleCreateInput = VehicleUpdateInput & {
   currentValue: number;
   rentalValueBase: number;
 };
+
+export interface VehicleIdentityConflictPreview {
+  id: string;
+  plate: string;
+  renavam: string;
+  brand: string;
+  model: string;
+  isArchived: boolean;
+  status: string;
+  plateMatch: boolean;
+  renavamMatch: boolean;
+}
 
 export interface VehicleKmInput {
   kmValue: number;
@@ -184,6 +212,15 @@ export class VehicleClient {
     const payload = asRecord(await response.json());
     if (!Array.isArray(payload.items)) throw new Error('Invalid vehicle list');
     return payload.items.map(validateVehicle);
+  }
+
+  static async checkIdentityConflict(plate: string, renavam: string): Promise<VehicleIdentityConflictPreview | null> {
+    const params = new URLSearchParams({ plate, renavam });
+    const response = await fetch(`/api/fleet/vehicles/identity-conflict?${params.toString()}`, { credentials: 'include' });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (payload.conflict === null) return null;
+    return validateVehicleIdentityConflict(payload.conflict);
   }
 
   static async listArchived(): Promise<Vehicle[]> {
