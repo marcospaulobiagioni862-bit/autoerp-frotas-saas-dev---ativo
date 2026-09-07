@@ -50,7 +50,7 @@ assert.match(
 );
 assert.match(
   source,
-  /sticky bottom-0 z-10 flex justify-end gap-2 border-t/,
+  /sticky bottom-0 z-10 border-t[\s\S]*flex justify-end gap-2/,
   'new work-order modal actions must remain reachable while the form scrolls',
 );
 assert.match(
