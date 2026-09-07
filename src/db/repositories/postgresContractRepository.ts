@@ -131,6 +131,78 @@ export class PostgresContractRepository implements ITransactionContractRepositor
     return row ? this.map(row) : null;
   }
 
+  async findOverlappingReservationByVehicle(
+    companyId: string,
+    vehicleId: string,
+    startDate: string,
+    endDate?: string,
+    excludeContractId?: string,
+  ): Promise<Contract | null> {
+    const effectiveEnd = endDate || '9999-12-31';
+    const result = excludeContractId
+      ? await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND vehicle_id = ${vehicleId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND start_date <= ${effectiveEnd}
+            AND COALESCE(end_date, '9999-12-31') >= ${startDate}
+            AND id <> ${excludeContractId}
+          ORDER BY start_date, created_at, id
+          LIMIT 1
+        `)
+      : await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND vehicle_id = ${vehicleId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND start_date <= ${effectiveEnd}
+            AND COALESCE(end_date, '9999-12-31') >= ${startDate}
+          ORDER BY start_date, created_at, id
+          LIMIT 1
+        `);
+    const row = rowsOf(result)[0];
+    return row ? this.map(row) : null;
+  }
+
+  async findOverlappingReservationByDriver(
+    companyId: string,
+    driverId: string,
+    startDate: string,
+    endDate?: string,
+    excludeContractId?: string,
+  ): Promise<Contract | null> {
+    const effectiveEnd = endDate || '9999-12-31';
+    const result = excludeContractId
+      ? await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND driver_id = ${driverId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND start_date <= ${effectiveEnd}
+            AND COALESCE(end_date, '9999-12-31') >= ${startDate}
+            AND id <> ${excludeContractId}
+          ORDER BY start_date, created_at, id
+          LIMIT 1
+        `)
+      : await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND driver_id = ${driverId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND start_date <= ${effectiveEnd}
+            AND COALESCE(end_date, '9999-12-31') >= ${startDate}
+          ORDER BY start_date, created_at, id
+          LIMIT 1
+        `);
+    const row = rowsOf(result)[0];
+    return row ? this.map(row) : null;
+  }
+
   async create(item: Contract): Promise<Contract> {
     await this.tx.execute(sql`
       INSERT INTO contracts (
