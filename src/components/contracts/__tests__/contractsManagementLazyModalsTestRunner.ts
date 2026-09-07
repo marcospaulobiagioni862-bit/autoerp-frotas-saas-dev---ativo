@@ -120,6 +120,11 @@ assert.match(
 );
 assert.match(
   contractForm,
+  /required && <span className="ml-1 text-red-500" aria-hidden="true">\*<\/span>/,
+  'required contract fields must render a visible red marker',
+);
+assert.match(
+  contractForm,
   /dark:text-slate-300/,
   'contract attachment helper text must remain readable in dark mode',
 );
