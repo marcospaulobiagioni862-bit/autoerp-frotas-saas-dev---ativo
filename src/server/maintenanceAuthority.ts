@@ -4,7 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { PayableService } from '../domain/finance/PayableService';
 import { roundCurrency } from '../shared/utils/currency';
 import { AuditAction, ContractStatus, OriginType, VehicleStatus } from '../types/enums';
-import type { Part, Supplier, WorkOrder, WorkOrderLaborItem, WorkOrderPartItem, WorkOrderServiceItem } from '../types/entities';
+import type { Part, Supplier, WorkOrder, WorkOrderFinancialComponent, WorkOrderLaborItem, WorkOrderPartItem, WorkOrderServiceItem } from '../types/entities';
 import type { AuthenticatedPrincipal } from './auth';
 
 export class MaintenanceValidationError extends Error {}
@@ -16,8 +16,9 @@ export interface CreateWorkOrderInput {
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
+  financialComponents?:Array<{kind:'PARTS'|'SERVICES';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface CompleteWorkOrderInput { exitKm:number; categoryId:string; dueDate:string; installmentsCount?:number; }
+export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; }
 export interface CreateSupplierInput { name:string; tradeName?:string; document:string; phone?:string; email?:string; address?:string; category:string; notes?:string; }
 export interface UpdateSupplierInput { name?:string; tradeName?:string|null; document?:string; phone?:string|null; email?:string|null; address?:string|null; category?:string; status?:Supplier['status']; notes?:string|null; }
 export interface CreatePartInput { code:string; name:string; description?:string; manufacturer?:string; category:string; unit:string; currentCost:number; minimumStock:number; currentStock:number; }
@@ -43,6 +44,16 @@ async function expenseCategory(tx:any,companyId:string,categoryId:string):Promis
   const r=rows(await raw.execute(sql`SELECT id,type FROM financial_categories WHERE company_id=${companyId} AND id=${categoryId} AND active=true LIMIT 1`))[0];
   if(!r) throw new MaintenanceNotFoundError('Categoria financeira não encontrada');
   if(!['EXPENSE','BOTH'].includes(String(r.type||'').toUpperCase())) throw new MaintenanceConflictError('Categoria financeira incompatível com manutenção');
+}
+
+async function activePaymentMethod(tx:any,companyId:string,paymentMethodId:string):Promise<void>{
+  const raw=tx.getRawTransaction?.(); if(!raw) throw new Error('Maintenance persistence unavailable');
+  const r=rows(await raw.execute(sql`SELECT id FROM payment_methods WHERE company_id=${companyId} AND id=${paymentMethodId} AND active=true LIMIT 1`))[0];
+  if(!r) throw new MaintenanceNotFoundError('Forma de pagamento não encontrada ou inativa');
+}
+async function activeSupplier(tx:any,companyId:string,supplierId:string):Promise<void>{
+  const s=await tx.getSupplierRepo().findByIdForCompany(companyId,supplierId);
+  if(!s||s.status!=='ACTIVE')throw new MaintenanceNotFoundError('Fornecedor não encontrado');
 }
 async function targetVehicleStatus(tx:any,companyId:string,vehicle:any,workOrderId:string):Promise<VehicleStatus>{
   if(await tx.getWorkOrderRepo().hasBlockingWorkOrder(companyId,vehicle.id,workOrderId)) return VehicleStatus.MAINTENANCE;
@@ -103,9 +114,37 @@ export class MaintenanceAuthorityService {
     const parts:WorkOrderPartItem[]=[];for(const raw of input.parts||[]){const quantity=pos(raw.quantity,'part quantity');if(raw.partId){const c=await tx.getPartRepo().findByIdForCompany(p.companyId,raw.partId);if(!c||c.status!=='ACTIVE')throw new MaintenanceNotFoundError('Peça não encontrada');parts.push({id:randomUUID(),partId:c.id,description:c.name,quantity,unitCost:roundCurrency(c.currentCost),totalCost:roundCurrency(quantity*c.currentCost)});}else{const unitCost=roundCurrency(nn(raw.unitCost,'part unitCost'));parts.push({id:randomUUID(),description:reqText(raw.description,'part description',300),quantity,unitCost,totalCost:roundCurrency(quantity*unitCost)});}}
     const services:WorkOrderServiceItem[]=(input.services||[]).map(raw=>{const quantity=pos(raw.quantity,'service quantity'),unitCost=roundCurrency(nn(raw.unitCost,'service unitCost'));return{id:randomUUID(),serviceId:optText(raw.serviceId,120),description:reqText(raw.description,'service description',300),quantity,unitCost,totalCost:roundCurrency(quantity*unitCost)};});
     const laborItems:WorkOrderLaborItem[]=(input.laborItems||[]).map(raw=>{const hours=pos(raw.hours,'labor hours'),hourlyRate=roundCurrency(nn(raw.hourlyRate,'hourlyRate'));return{id:randomUUID(),description:reqText(raw.description,'labor description',300),hours,hourlyRate,totalCost:roundCurrency(hours*hourlyRate)};});
-    const subtotalParts=roundCurrency(parts.reduce((s,i)=>s+i.totalCost,0)),subtotalServices=roundCurrency(services.reduce((s,i)=>s+i.totalCost,0)),subtotalLabor=roundCurrency(laborItems.reduce((s,i)=>s+i.totalCost,0)),gross=roundCurrency(subtotalParts+subtotalServices+subtotalLabor),discount=roundCurrency(nn(input.discount??0,'discount'));if(discount>gross)throw new MaintenanceValidationError('Desconto excede o total da OS');const now=new Date().toISOString();
-    const item:WorkOrder={id:randomUUID(),companyId:p.companyId,number,vehicleId:vehicle.id,supplierId,status:'OPEN',openedAt:now,serviceDate,entryKm,description:reqText(input.description,'description',1000),diagnosis:optText(input.diagnosis,1000),notes:optText(input.notes,2000),parts,services,laborItems,subtotalParts,subtotalServices,subtotalLabor,discount,total:roundCurrency(gross-discount),createdBy:p.userId,createdAt:now,updatedAt:now};
-    const created=await tx.getWorkOrderRepo().create(item);await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,created,now);
+    const subtotalParts=roundCurrency(parts.reduce((s,i)=>s+i.totalCost,0)),subtotalServices=roundCurrency(services.reduce((s,i)=>s+i.totalCost,0)),subtotalLabor=roundCurrency(laborItems.reduce((s,i)=>s+i.totalCost,0)),gross=roundCurrency(subtotalParts+subtotalServices+subtotalLabor);const now=new Date().toISOString();
+    const financialComponents:WorkOrderFinancialComponent[]=[];
+    if(input.financialComponents!==undefined){
+      if(!Array.isArray(input.financialComponents)||input.financialComponents.length>2)throw new MaintenanceValidationError('Configuração financeira inválida');
+      const seen=new Set<string>();
+      for(const raw of input.financialComponents){
+        const kind=raw.kind;if(kind!=='PARTS'&&kind!=='SERVICES')throw new MaintenanceValidationError('Componente financeiro inválido');if(seen.has(kind))throw new MaintenanceValidationError('Componente financeiro duplicado');seen.add(kind);
+        const grossAmount=kind==='PARTS'?subtotalParts:roundCurrency(subtotalServices+subtotalLabor);if(grossAmount<=0)throw new MaintenanceValidationError('Componente financeiro sem valor');
+        const categoryId=reqText(raw.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);
+        const paymentMethodId=reqText(raw.paymentMethodId,'paymentMethodId',120);await activePaymentMethod(tx,p.companyId,paymentMethodId);
+        const componentSupplierId=optText(raw.supplierId,120)||supplierId;if(!componentSupplierId)throw new MaintenanceValidationError('Fornecedor do pagamento é obrigatório');await activeSupplier(tx,p.companyId,componentSupplierId);
+        const paymentCondition=raw.paymentCondition;if(paymentCondition!=='CASH'&&paymentCondition!=='INSTALLMENTS')throw new MaintenanceValidationError('Condição de pagamento inválida');
+        const installmentsCount=Number(raw.installmentsCount);if(!Number.isInteger(installmentsCount)||installmentsCount<1||installmentsCount>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');if(paymentCondition==='CASH'&&installmentsCount!==1)throw new MaintenanceValidationError('Pagamento à vista deve ter uma parcela');if(paymentCondition==='INSTALLMENTS'&&installmentsCount<2)throw new MaintenanceValidationError('Pagamento parcelado exige ao menos duas parcelas');
+        const firstDueDate=reqText(raw.firstDueDate,'firstDueDate',10);isoDate(firstDueDate);const discountAmount=roundCurrency(nn(raw.discountAmount??0,'discountAmount'));if(discountAmount>grossAmount)throw new MaintenanceValidationError('Desconto excede o valor do componente');
+        const hasInvoice=Boolean(raw.hasInvoice),invoiceNumber=hasInvoice?optText(raw.invoiceNumber,120):undefined;
+        financialComponents.push({id:randomUUID(),kind,supplierId:componentSupplierId,categoryId,paymentMethodId,paymentCondition,installmentsCount,firstDueDate,grossAmount,discountAmount,netAmount:roundCurrency(grossAmount-discountAmount),hasInvoice,invoiceNumber,createdAt:now,updatedAt:now});
+      }
+      if(subtotalParts>0&&!seen.has('PARTS'))throw new MaintenanceValidationError('Informe o pagamento das peças');
+      if(roundCurrency(subtotalServices+subtotalLabor)>0&&!seen.has('SERVICES'))throw new MaintenanceValidationError('Informe o pagamento dos serviços');
+    }
+    const discount=financialComponents.length>0?roundCurrency(financialComponents.reduce((sum,item)=>sum+item.discountAmount,0)):roundCurrency(nn(input.discount??0,'discount'));if(discount>gross)throw new MaintenanceValidationError('Desconto excede o total da OS');
+    const item:WorkOrder={id:randomUUID(),companyId:p.companyId,number,vehicleId:vehicle.id,supplierId,status:'OPEN',openedAt:now,serviceDate,entryKm,description:reqText(input.description,'description',1000),diagnosis:optText(input.diagnosis,1000),notes:optText(input.notes,2000),parts,services,laborItems,financialComponents,subtotalParts,subtotalServices,subtotalLabor,discount,total:roundCurrency(gross-discount),createdBy:p.userId,createdAt:now,updatedAt:now};
+    let created=await tx.getWorkOrderRepo().create(item);
+    const payableIds:string[]=[];
+    for(const component of financialComponents){
+      if(component.netAmount<=0)continue;
+      const createdPayables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:`${created.id}:${component.kind}`,vehicleId:created.vehicleId,supplierId:component.supplierId,categoryId:component.categoryId,description:`Manutenção OS #${created.number} - ${component.kind==='PARTS'?'Peças':'Serviços / mão de obra'}`,totalAmount:component.netAmount,dueDate:component.firstDueDate,installmentsCount:component.installmentsCount,userId:p.userId,userName:p.name},tx);
+      payableIds.push(...createdPayables.map((item:any)=>item.id));
+    }
+    if(payableIds.length>0){const linked=await tx.getWorkOrderRepo().updateLifecycle(p.companyId,created.id,{status:'OPEN',accountPayableId:payableIds[0],updatedAt:now});if(!linked)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');created=linked;}
+    await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,{...created,payableIds},now);
     if(sourceAttachment){
       const relinked=await rawTx.execute(sql`UPDATE file_attachments SET entity_name='MaintenanceWorkOrder',entity_type='MaintenanceWorkOrder',entity_id=${created.id} WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} AND entity_type='Vehicle' AND entity_id=${vehicle.id} AND is_archived=false RETURNING id`);
       if(rows(relinked).length!==1)throw new MaintenanceConflictError('Falha ao vincular documento original à ordem de serviço');
@@ -121,9 +160,11 @@ export class MaintenanceAuthorityService {
 
   static completeWorkOrder(p:AuthenticatedPrincipal,id:string,input:CompleteWorkOrderInput):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
     const repo=tx.getWorkOrderRepo(),before=await repo.findByIdForCompanyWithLock(p.companyId,id);if(!before)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(before.status==='COMPLETED')return before;if(before.status==='CANCELLED')throw new MaintenanceConflictError('Ordem de serviço cancelada');if(before.status!=='IN_PROGRESS')throw new MaintenanceConflictError('Ordem de serviço deve estar em andamento para conclusão');
-    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');const exitKm=nn(input.exitKm,'exitKm');if(!Number.isInteger(exitKm)||exitKm<before.entryKm||exitKm<vehicle.currentKm)throw new MaintenanceValidationError('KM de saída regressivo');const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');
+    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');const exitKm=nn(input.exitKm,'exitKm');if(!Number.isInteger(exitKm)||exitKm<before.entryKm||exitKm<vehicle.currentKm)throw new MaintenanceValidationError('KM de saída regressivo');
     const t=totals(before);if(t.subtotalParts!==roundCurrency(before.subtotalParts)||t.subtotalServices!==roundCurrency(before.subtotalServices)||t.subtotalLabor!==roundCurrency(before.subtotalLabor)||t.total!==roundCurrency(before.total))throw new MaintenanceConflictError('Totais persistidos da OS estão inconsistentes');
-    const payables=t.total>0?await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx):[];await afterPayableCreatedForTests?.();
+    let payables:any[]=[];
+    if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();
+    }
     const now=new Date().toISOString(),updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{currentKm:exitKm,status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
     await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:vehicle.id,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,kmValue:exitKm,recordDate:now.slice(0,10),readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`,createdAt:now});await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id)},now);return updated;
   },{financialPeriodLock:'SHARED'}); }

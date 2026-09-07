@@ -39,6 +39,9 @@ assert.match(
   /Total estimado da OS/,
   'work-order form must preview its operational cost before creation',
 );
+assert.match(source, /WorkOrderFinanceFields/, 'new work orders must expose financial payment details before save');
+assert.match(source, /Salvar OS/, 'new work-order footer must use an explicit save action');
+assert.match(source, /Contas a Pagar na criação da OS/, 'completed flow must recognize finance generated at creation');
 
 assert.match(
   source,

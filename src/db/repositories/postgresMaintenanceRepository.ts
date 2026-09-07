@@ -3,6 +3,7 @@ import type {
   Part,
   Supplier,
   WorkOrder,
+  WorkOrderFinancialComponent,
   WorkOrderLaborItem,
   WorkOrderPartItem,
   WorkOrderServiceItem,
@@ -109,6 +110,26 @@ function mapLaborItem(row: any): WorkOrderLaborItem {
   };
 }
 
+function mapFinancialComponent(row: any): WorkOrderFinancialComponent {
+  return {
+    id: String(row.id),
+    kind: String(row.kind) as WorkOrderFinancialComponent['kind'],
+    supplierId: optionalText(row.supplier_id),
+    categoryId: String(row.category_id || ''),
+    paymentMethodId: String(row.payment_method_id || ''),
+    paymentCondition: String(row.payment_condition) as WorkOrderFinancialComponent['paymentCondition'],
+    installmentsCount: Number(row.installments_count || 1),
+    firstDueDate: String(row.first_due_date || '').slice(0,10),
+    grossAmount: Number(row.gross_amount || 0),
+    discountAmount: Number(row.discount_amount || 0),
+    netAmount: Number(row.net_amount || 0),
+    hasInvoice: Boolean(row.has_invoice),
+    invoiceNumber: optionalText(row.invoice_number),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  };
+}
+
 function mapWorkOrderBase(row: any): WorkOrder {
   return {
     id: String(row.id),
@@ -130,6 +151,7 @@ function mapWorkOrderBase(row: any): WorkOrder {
     parts: [],
     services: [],
     laborItems: [],
+    financialComponents: [],
     subtotalParts: Number(row.subtotal_parts || 0),
     subtotalServices: Number(row.subtotal_services || 0),
     subtotalLabor: Number(row.subtotal_labor || 0),
@@ -275,7 +297,7 @@ export class PostgresWorkOrderRepository {
 
   private async hydrate(row: any): Promise<WorkOrder> {
     const item = mapWorkOrderBase(row);
-    const [partsResult, servicesResult, laborResult] = await Promise.all([
+    const [partsResult, servicesResult, laborResult, financeResult] = await Promise.all([
       this.tx.execute(sql`
         SELECT * FROM work_order_parts
         WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
@@ -291,10 +313,16 @@ export class PostgresWorkOrderRepository {
         WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
         ORDER BY id
       `),
+      this.tx.execute(sql`
+        SELECT * FROM work_order_financial_components
+        WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
+        ORDER BY kind, id
+      `),
     ]);
     item.parts = rows(partsResult).map(mapPartItem);
     item.services = rows(servicesResult).map(mapServiceItem);
     item.laborItems = rows(laborResult).map(mapLaborItem);
+    item.financialComponents = rows(financeResult).map(mapFinancialComponent);
     return item;
   }
 
@@ -394,6 +422,19 @@ export class PostgresWorkOrderRepository {
         ) VALUES (
           ${labor.id}, ${item.companyId}, ${item.id}, ${labor.description}, ${String(labor.hours)},
           ${String(labor.hourlyRate)}, ${String(labor.totalCost)}
+        )
+      `);
+    }
+    for (const finance of item.financialComponents || []) {
+      await this.tx.execute(sql`
+        INSERT INTO work_order_financial_components (
+          id, company_id, work_order_id, kind, supplier_id, category_id, payment_method_id, payment_condition,
+          installments_count, first_due_date, gross_amount, discount_amount, net_amount, has_invoice, invoice_number, created_at, updated_at
+        ) VALUES (
+          ${finance.id}, ${item.companyId}, ${item.id}, ${finance.kind}, ${finance.supplierId || null}, ${finance.categoryId},
+          ${finance.paymentMethodId}, ${finance.paymentCondition}, ${finance.installmentsCount}, ${finance.firstDueDate},
+          ${String(finance.grossAmount)}, ${String(finance.discountAmount)}, ${String(finance.netAmount)}, ${finance.hasInvoice},
+          ${finance.invoiceNumber || null}, ${finance.createdAt}, ${finance.updatedAt}
         )
       `);
     }
