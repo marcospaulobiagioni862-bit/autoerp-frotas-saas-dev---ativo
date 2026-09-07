@@ -168,6 +168,23 @@ function decodeWordXmlText(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
+function encodeWordXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+interface PackageTextNode {
+  open: string;
+  value: string;
+  close: string;
+  start: number;
+  end: number;
+}
+
 export function extractContractDocxPlainText(docx: Buffer): string {
   const entries = readZip(docx);
   const document = entries.find((entry) => entry.name === 'word/document.xml');
@@ -205,7 +222,7 @@ function replaceLiteralInParagraph(
   replacement: ContractDocxLiteralReplacement,
 ): string {
   const token = /(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g;
-  const nodes: TextNode[] = [];
+  const nodes: PackageTextNode[] = [];
   let visible = '';
   let match: RegExpExecArray | null;
 
@@ -241,7 +258,7 @@ function replaceLiteralInParagraph(
   let index = 0;
   return paragraphXml.replace(token, () => {
     const node = nodes[index++];
-    return node.open + encodeXmlText(node.value) + node.close;
+    return node.open + encodeWordXmlText(node.value) + node.close;
   });
 }
 
