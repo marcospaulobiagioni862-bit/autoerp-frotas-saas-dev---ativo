@@ -210,6 +210,22 @@ export class ContractAuthorityIntegrationRunner {
       assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
       await markLegacyContract(created.id);
 
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-DRIVER-OVERLAP', vehicleId: 'i3-veh-a2' }),
+      }, adminA);
+      assert(response.status === 409, `same driver overlapping draft expected 409, got ${response.status}`);
+      const driverOverlapPayload = await json(response);
+      assert(String(driverOverlapPayload.error || '').includes('Motorista já possui o contrato'), 'driver overlap must explain the conflicting reservation');
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-VEHICLE-OVERLAP', driverId: 'i3-drv-a2' }),
+      }, adminA);
+      assert(response.status === 409, `same vehicle overlapping draft expected 409, got ${response.status}`);
+      const vehicleOverlapPayload = await json(response);
+      assert(String(vehicleOverlapPayload.error || '').includes('Veículo já possui o contrato'), 'vehicle overlap must explain the conflicting reservation');
+
       const draftCloseAuditBefore = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
         method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Nunca ativado' }),
@@ -396,11 +412,9 @@ export class ContractAuthorityIntegrationRunner {
         method: 'POST',
         body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-CONFLICT', driverId: 'i3-drv-a2' }),
       }, adminA);
-      assert(response.status === 201, `conflict draft create expected 201, got ${response.status}`);
-      const conflictContract = (await json(response)).item;
-      await markLegacyContract(conflictContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `vehicle active conflict expected 409, got ${response.status}`);
+      assert(response.status === 409, `vehicle reservation conflict must block at draft save, got ${response.status}`);
+      const activeVehicleConflictPayload = await json(response);
+      assert(String(activeVehicleConflictPayload.error || '').includes('Veículo já possui o contrato'), 'active vehicle conflict must be reported before a duplicate draft is persisted');
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
         method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
