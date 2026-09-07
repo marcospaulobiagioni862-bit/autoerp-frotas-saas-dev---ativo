@@ -123,7 +123,7 @@ assert.match(intakeSource, /CurrencyInput label="Valor de Compra \(R\$\) \*"/, '
 assert.doesNotMatch(statusPresentationSource, /\{ id: VehicleStatus\.WAITING_MAINTENANCE,/, 'legacy waiting-maintenance status must not appear as a separate filter');
 assert.match(source, /v\.status === VehicleStatus\.MAINTENANCE \|\| v\.status === VehicleStatus\.WAITING_MAINTENANCE/, 'legacy waiting-maintenance vehicles must count under Em manutenção');
 
-assert.match(productionSidebarSource, /window\.matchMedia\('\(max-width: 767px\)'\)/, 'production sidebar must decide compact mode at runtime');
+assert.match(productionSidebarSource, /window\.matchMedia\('\(max-width: 1023px\) and \(pointer: coarse\)'\)/, 'production sidebar must reserve drawer mode for touch/coarse viewports');
 assert.match(productionSidebarSource, /data-testid="desktop-sidebar"/, 'desktop sidebar must have an explicit persistent render path');
 assert.doesNotMatch(productionSidebarSource, /className="hidden md:block h-dvh/, 'desktop sidebar must not rely on a hidden Tailwind breakpoint');
 
