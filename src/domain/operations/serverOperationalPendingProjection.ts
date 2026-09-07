@@ -37,6 +37,27 @@ export type PendingPriority = 'P0' | 'P1' | 'P2' | 'P3';
 export type PendingSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
 export type PendingStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'DISMISSED';
 
+export interface OperationalKmReadingAlert {
+  companyId: string;
+  vehicleId: string;
+  plate: string;
+  vehicleDescription: string;
+  currentKm: number;
+  driverId?: string;
+  driverName?: string;
+  dueDate: string;
+  daysUntilDue: number;
+  overdueDays: number;
+  stage: 'DUE_SOON' | 'DUE_TODAY' | 'OVERDUE';
+  trackerFresh: boolean;
+  trackerKm?: number;
+  trackerObservedAt?: string;
+  whatsappEligible: boolean;
+  whatsappBlockedReason?: string;
+  lastRequestAt?: string;
+  lastRequestStatus?: string;
+}
+
 export interface OperationalPendingItem {
   id: string;
   type: PendingType;
@@ -57,6 +78,10 @@ export interface OperationalPendingItem {
   origin: string;
   actionRecommended: string;
   destinationTab: string;
+  vehicleId?: string;
+  actionKind?: 'REQUEST_KM_WHATSAPP';
+  whatsappEligible?: boolean;
+  whatsappBlockedReason?: string;
   whatsappTemplateKey?: 'DRIVER_CNH_EXPIRY';
   companyId: string;
   timestamp: string;
@@ -73,6 +98,7 @@ export interface OperationalPendingInput {
   drivers?: Driver[];
   insurances?: Insurance[];
   trackers?: Tracker[];
+  kmReadingAlerts?: OperationalKmReadingAlert[];
   receivables?: AccountReceivable[];
   payables?: AccountPayable[];
 }
@@ -90,6 +116,7 @@ function canonicalCompanyId(data: OperationalPendingInput): string {
     data.drivers,
     data.insurances,
     data.trackers,
+    data.kmReadingAlerts,
     data.receivables,
     data.payables,
   ];
@@ -135,6 +162,7 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
   const drivers = sameTenant(data.drivers).filter((driver) => !driver.isArchived);
   const insurances = sameTenant(data.insurances);
   const trackers = sameTenant(data.trackers);
+  const kmReadingAlerts = sameTenant(data.kmReadingAlerts);
   const receivables = sameTenant(data.receivables);
   const payables = sameTenant(data.payables);
 
@@ -158,6 +186,48 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
     seen.add(key);
     pendings.push({ ...item, id: deterministicId(key), companyId, timestamp });
   };
+
+  for (const alert of kmReadingAlerts) {
+    const title = alert.stage === 'OVERDUE'
+      ? `Leitura de KM vencida: ${alert.plate}`
+      : alert.stage === 'DUE_TODAY'
+        ? `Leitura de KM para hoje: ${alert.plate}`
+        : `Leitura de KM próxima: ${alert.plate}`;
+    const priority: PendingPriority = alert.stage === 'DUE_SOON' ? 'P2' : 'P1';
+    const severity: PendingSeverity = alert.stage === 'DUE_SOON' ? 'WARNING' : 'CRITICAL';
+    const trackerText = alert.trackerFresh && alert.trackerKm !== undefined
+      ? ` Rastreador com leitura recente de ${alert.trackerKm.toLocaleString('pt-BR')} KM.`
+      : '';
+    const whatsappText = alert.whatsappEligible
+      ? ' Solicitação de KM pode ser preparada pelo WhatsApp.'
+      : alert.whatsappBlockedReason ? ` ${alert.whatsappBlockedReason}` : '';
+    add({
+      type: 'VEHICLE',
+      category: 'Quilometragem',
+      priority,
+      severity,
+      title,
+      description: `Veículo ${alert.plate} (${alert.vehicleDescription}) está com KM atual ${alert.currentKm.toLocaleString('pt-BR')} e leitura prevista para ${alert.dueDate}.${trackerText}${whatsappText}`,
+      entity: 'VehicleKmReadingSchedule',
+      entityId: alert.vehicleId,
+      vehicleId: alert.vehicleId,
+      vehiclePlate: alert.plate,
+      driverName: alert.driverName,
+      dueDate: alert.dueDate,
+      overdueDays: alert.overdueDays,
+      status: 'OPEN',
+      origin: 'Quilometragem Programada',
+      actionRecommended: alert.trackerFresh
+        ? 'Atualizar KM usando a leitura do rastreador'
+        : alert.whatsappEligible
+          ? 'Preparar solicitação de KM pelo WhatsApp'
+          : alert.whatsappBlockedReason || 'Abrir quilometragem em lote',
+      destinationTab: 'fleet',
+      actionKind: alert.whatsappEligible ? 'REQUEST_KM_WHATSAPP' : undefined,
+      whatsappEligible: alert.whatsappEligible,
+      whatsappBlockedReason: alert.whatsappBlockedReason,
+    });
+  }
 
   for (const vehicle of vehicles) {
     if (vehicle.status === VehicleStatus.MAINTENANCE) {
