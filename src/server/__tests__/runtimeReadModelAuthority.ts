@@ -30,6 +30,9 @@ assert.doesNotMatch(projection, /Math\.random|Date\.now/, 'Operational pending I
 assert.doesNotMatch(projection, /StorageAdapter|indexedDB|localStorage/i, 'Operational pending projection must be pure and read-only');
 assert.match(projection, /SERVER_READ_MODEL_CROSS_TENANT_PAYLOAD/, 'Mixed-tenant canonical payloads must fail closed');
 assert.match(projection, /SERVER_READ_MODEL_TENANT_MISMATCH/, 'Forged/mismatched tenant hints must fail closed');
+assert.match(projection, /receivables\?: AccountReceivable\[\]/, 'Central alerts projection must accept receivable read models');
+assert.match(projection, /payables\?: AccountPayable\[\]/, 'Central alerts projection must accept payable read models');
+assert.match(projection, /Documentos do Motorista/, 'Central alerts projection must include driver document pendings');
 
 const seedStub = read('src/persistence/seed/productionSeedStub.ts');
 assert.doesNotMatch(seedStub, /StorageAdapter|indexedDB|localStorage/i, 'Production seed stub must have no browser persistence path');
@@ -65,6 +68,8 @@ assert.match(overviewSource, /domain\/operations\/serverOperationalPendingProjec
 assert.match(overviewSource, /companyId:\s*companyIdSnapshot/, 'Overview must pass the authenticated company snapshot into the pending projection');
 const pendingSource = read('src/components/operations/PendingCenterView.tsx');
 assert.match(pendingSource, /domain\/operations\/serverOperationalPendingProjection/, 'Pending center must import the tenant-safe pending projection explicitly');
+assert.match(pendingSource, /WhatsappClient\.createCnhReminder\(item\.entityId\)/, 'Driver CNH alerts must expose the existing predefined WhatsApp reminder action');
+assert.match(pendingSource, /id: 'FINANCE', label: 'Financeiro'/, 'Central alerts must expose the consolidated Financeiro filter');
 
 const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
 assert.doesNotMatch(testPanel, /PersistenceTestRunner|StorageAdapter|seedAutoERPTestData/, 'Production test panel must not pull browser test persistence');

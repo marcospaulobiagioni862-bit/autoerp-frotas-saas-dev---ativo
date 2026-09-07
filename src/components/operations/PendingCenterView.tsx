@@ -9,8 +9,11 @@ import {
   DriverRepository,
   InsuranceRepository,
   TrackerRepository,
+  AccountReceivableRepository,
+  AccountPayableRepository,
 } from '../../persistence/repositories/serverReadModelRepositories';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
+import { WhatsappClient } from '../../api/whatsappClient';
 import { 
   AlertTriangle, 
   ShieldAlert, 
@@ -27,7 +30,9 @@ import {
   CheckCircle2, 
   Filter,
   RefreshCw,
-  Lock
+  Lock,
+  DollarSign,
+  MessageCircle
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton } from '../ui';
 
@@ -49,7 +54,8 @@ type FilterCategory =
   | 'FINE' 
   | 'DRIVER' 
   | 'INSURANCE' 
-  | 'TRACKER';
+  | 'TRACKER'
+  | 'FINANCE';
 
 export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   companyId = 'company-main-uuid',
@@ -59,6 +65,8 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   const [pendings, setPendings] = useState<OperationalPendingItem[]>([]);
   const [filter, setFilter] = useState<FilterCategory>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [whatsappSendingId, setWhatsappSendingId] = useState<string | null>(null);
+  const [whatsappMessage, setWhatsappMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadPendings();
@@ -76,8 +84,10 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       const drvRepo = new DriverRepository();
       const insRepo = new InsuranceRepository();
       const trackRepo = new TrackerRepository();
+      const receivableRepo = new AccountReceivableRepository();
+      const payableRepo = new AccountPayableRepository();
 
-      const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers] = await Promise.all([
+      const [vehicles, contracts, maintenances, vehicleDocuments, driverDocuments, tickets, drivers, insurances, trackers, receivables, payables] = await Promise.all([
         vehRepo.findAll({ companyId }),
         contractRepo.findAll({ companyId }),
         maintRepo.findAll({ companyId }),
@@ -87,6 +97,8 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         drvRepo.findAll({ companyId }),
         insRepo.findAll({ companyId }),
         trackRepo.findAll({ companyId }),
+        receivableRepo.findAllForCompany(companyId),
+        payableRepo.findAllForCompany(companyId),
       ]);
 
       const results = generateOperationalPendings({
@@ -100,6 +112,8 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         drivers,
         insurances,
         trackers,
+        receivables,
+        payables,
       });
 
       setPendings(results);
@@ -135,6 +149,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
     if (filter === 'DRIVER') return item.type === 'DRIVER';
     if (filter === 'INSURANCE') return item.type === 'INSURANCE';
     if (filter === 'TRACKER') return item.type === 'TRACKER';
+    if (filter === 'FINANCE') return item.type === 'RECEIVABLE' || item.type === 'PAYABLE';
 
     return true;
   });
@@ -167,7 +182,31 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       case 'DRIVER': return <Users className="w-4 h-4 text-purple-500" />;
       case 'INSURANCE': return <ShieldCheck className="w-4 h-4 text-emerald-500" />;
       case 'TRACKER': return <Radio className="w-4 h-4 text-teal-500" />;
+      case 'RECEIVABLE':
+      case 'PAYABLE': return <DollarSign className="w-4 h-4 text-emerald-500" />;
       default: return <AlertTriangle className="w-4 h-4 text-slate-500" />;
+    }
+  };
+
+  const sendWhatsapp = async (item: OperationalPendingItem) => {
+    if (item.whatsappTemplateKey !== 'DRIVER_CNH_EXPIRY' || item.entity !== 'Driver' || whatsappSendingId) return;
+    setWhatsappSendingId(item.id);
+    setWhatsappMessage(null);
+    try {
+      const result = await WhatsappClient.createCnhReminder(item.entityId);
+      setWhatsappMessage({
+        kind: 'success',
+        text: result.created
+          ? 'Lembrete de CNH registrado no canal de WhatsApp. O envio efetivo depende do provedor configurado para o ambiente.'
+          : 'Esse lembrete de CNH já estava registrado no canal de WhatsApp.',
+      });
+    } catch (error) {
+      setWhatsappMessage({
+        kind: 'error',
+        text: error instanceof Error ? error.message : 'Não foi possível registrar o lembrete de WhatsApp.',
+      });
+    } finally {
+      setWhatsappSendingId(null);
     }
   };
 
@@ -216,6 +255,16 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {whatsappMessage && (
+        <div className={`rounded-xl border p-3 text-sm ${
+          whatsappMessage.kind === 'success'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
+            : 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200'
+        }`}>
+          {whatsappMessage.text}
+        </div>
+      )}
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -302,6 +351,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
               { id: 'DRIVER', label: 'Motoristas' },
               { id: 'INSURANCE', label: 'Seguros' },
               { id: 'TRACKER', label: 'Rastreadores' },
+              { id: 'FINANCE', label: 'Financeiro' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -394,6 +444,18 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                  {item.whatsappTemplateKey === 'DRIVER_CNH_EXPIRY' && item.entity === 'Driver' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void sendWhatsapp(item)}
+                      disabled={whatsappSendingId !== null}
+                      isLoading={whatsappSendingId === item.id}
+                      icon={<MessageCircle className="w-3.5 h-3.5" />}
+                    >
+                      WhatsApp
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="primary"

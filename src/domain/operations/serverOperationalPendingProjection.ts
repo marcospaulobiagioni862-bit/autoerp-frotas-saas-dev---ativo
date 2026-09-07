@@ -8,6 +8,8 @@ import type {
   Driver,
   Insurance,
   Tracker,
+  AccountReceivable,
+  AccountPayable,
 } from '../../types/entities';
 import {
   VehicleStatus,
@@ -15,6 +17,8 @@ import {
   MaintenanceStatus,
   DocumentStatus,
   TicketStatus,
+  ObligationStatus,
+  DriverStatus,
 } from '../../types/enums';
 
 export type PendingType =
@@ -26,6 +30,8 @@ export type PendingType =
   | 'DRIVER'
   | 'INSURANCE'
   | 'TRACKER'
+  | 'RECEIVABLE'
+  | 'PAYABLE'
   | 'DELIVERY_RETURN';
 export type PendingPriority = 'P0' | 'P1' | 'P2' | 'P3';
 export type PendingSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
@@ -51,6 +57,7 @@ export interface OperationalPendingItem {
   origin: string;
   actionRecommended: string;
   destinationTab: string;
+  whatsappTemplateKey?: 'DRIVER_CNH_EXPIRY';
   companyId: string;
   timestamp: string;
 }
@@ -66,6 +73,8 @@ export interface OperationalPendingInput {
   drivers?: Driver[];
   insurances?: Insurance[];
   trackers?: Tracker[];
+  receivables?: AccountReceivable[];
+  payables?: AccountPayable[];
 }
 
 type TenantEntity = { companyId?: string };
@@ -81,6 +90,8 @@ function canonicalCompanyId(data: OperationalPendingInput): string {
     data.drivers,
     data.insurances,
     data.trackers,
+    data.receivables,
+    data.payables,
   ];
   const serverCompanyIds = new Set<string>();
   for (const collection of candidates) {
@@ -119,10 +130,13 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
   const contracts = sameTenant(data.contracts).filter((contract) => !contract.isArchived);
   const maintenances = sameTenant(data.maintenances);
   const vehicleDocuments = sameTenant(data.vehicleDocuments);
+  const driverDocuments = sameTenant(data.driverDocuments);
   const tickets = sameTenant(data.tickets);
   const drivers = sameTenant(data.drivers).filter((driver) => !driver.isArchived);
   const insurances = sameTenant(data.insurances);
   const trackers = sameTenant(data.trackers);
+  const receivables = sameTenant(data.receivables);
+  const payables = sameTenant(data.payables);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayTime = Date.parse(`${todayStr}T00:00:00.000Z`);
@@ -192,15 +206,96 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
     }
   }
 
+  for (const document of driverDocuments) {
+    if (String(document.documentType || '').toUpperCase() === 'CNH') continue;
+    const driver = driverMap.get(document.driverId);
+    if (!driver) continue;
+
+    if (document.status === DocumentStatus.PENDING) {
+      add({ type: 'DOCUMENT', category: 'Documentos do Motorista', priority: 'P2', severity: 'WARNING', title: `Documento Pendente: ${document.documentType} — ${driver.fullName}`, description: `O documento ${document.documentType} do motorista ${driver.fullName} está pendente de regularização.`, entity: 'DriverDocument', entityId: document.id, driverName: driver.fullName, dueDate: document.expirationDate || undefined, overdueDays: 0, status: 'OPEN', origin: 'Documentos do Motorista', actionRecommended: 'Abrir o cadastro do motorista e regularizar o documento pendente', destinationTab: 'drivers' });
+      continue;
+    }
+
+    if (!document.expirationDate) continue;
+    if (document.expirationDate < todayStr || document.status === DocumentStatus.EXPIRED) {
+      const overdueDays = daysFrom(document.expirationDate);
+      add({ type: 'DOCUMENT', category: 'Documentos do Motorista', priority: 'P1', severity: 'CRITICAL', title: `Documento Vencido: ${document.documentType} — ${driver.fullName}`, description: `O documento ${document.documentType} do motorista ${driver.fullName} venceu em ${document.expirationDate}.`, entity: 'DriverDocument', entityId: document.id, driverName: driver.fullName, dueDate: document.expirationDate, overdueDays, status: 'OPEN', origin: 'Documentos do Motorista', actionRecommended: 'Abrir o cadastro do motorista e renovar o documento', destinationTab: 'drivers' });
+    } else {
+      const remaining = daysUntil(document.expirationDate);
+      if (remaining >= 0 && remaining <= 30) {
+        add({ type: 'DOCUMENT', category: 'Documentos do Motorista', priority: 'P2', severity: 'WARNING', title: `Documento Vencendo: ${document.documentType} — ${driver.fullName}`, description: `O documento ${document.documentType} do motorista ${driver.fullName} vence em ${remaining} dia(s) (${document.expirationDate}).`, entity: 'DriverDocument', entityId: document.id, driverName: driver.fullName, dueDate: document.expirationDate, overdueDays: 0, status: 'OPEN', origin: 'Documentos do Motorista', actionRecommended: 'Solicitar a renovação do documento ao motorista', destinationTab: 'drivers' });
+      }
+    }
+  }
+
   for (const driver of drivers) {
+    if (driver.status === DriverStatus.PENDING_DOCS) {
+      add({ type: 'DOCUMENT', category: 'Documentos do Motorista', priority: 'P2', severity: 'WARNING', title: `Documentação Pendente: ${driver.fullName}`, description: `O cadastro do motorista ${driver.fullName} está marcado com documentação pendente.`, entity: 'Driver', entityId: driver.id, driverName: driver.fullName, overdueDays: 0, status: 'OPEN', origin: 'Gestão de Motoristas', actionRecommended: 'Abrir o cadastro do motorista e concluir os documentos obrigatórios', destinationTab: 'drivers' });
+    }
     if (!driver.cnhExpiration) continue;
     if (driver.cnhExpiration < todayStr || driver.cnhStatus === DocumentStatus.EXPIRED) {
       const overdueDays = daysFrom(driver.cnhExpiration);
-      add({ type: 'DRIVER', category: 'Motoristas', priority: 'P1', severity: 'CRITICAL', title: `CNH Vencida: ${driver.fullName}`, description: `A CNH do motorista ${driver.fullName} venceu em ${driver.cnhExpiration} (${overdueDays} dias atrás).`, entity: 'Driver', entityId: driver.id, driverName: driver.fullName, dueDate: driver.cnhExpiration, overdueDays, status: 'OPEN', origin: 'Gestão de Motoristas', actionRecommended: 'Exigir renovação imediata da CNH para manter locação', destinationTab: 'drivers' });
+      add({ type: 'DRIVER', category: 'Motoristas', priority: 'P1', severity: 'CRITICAL', title: `CNH Vencida: ${driver.fullName}`, description: `A CNH do motorista ${driver.fullName} venceu em ${driver.cnhExpiration} (${overdueDays} dias atrás).`, entity: 'Driver', entityId: driver.id, driverName: driver.fullName, dueDate: driver.cnhExpiration, overdueDays, status: 'OPEN', origin: 'Gestão de Motoristas', actionRecommended: 'Exigir renovação imediata da CNH para manter locação', destinationTab: 'drivers', whatsappTemplateKey: 'DRIVER_CNH_EXPIRY' });
     } else {
       const remaining = daysUntil(driver.cnhExpiration);
-      if (remaining >= 0 && remaining <= 30) add({ type: 'DRIVER', category: 'Motoristas', priority: 'P2', severity: 'WARNING', title: `CNH Próxima do Vencimento: ${driver.fullName}`, description: `A CNH do motorista ${driver.fullName} vence em ${remaining} dia(s) (${driver.cnhExpiration}).`, entity: 'Driver', entityId: driver.id, driverName: driver.fullName, dueDate: driver.cnhExpiration, overdueDays: 0, status: 'OPEN', origin: 'Gestão de Motoristas', actionRecommended: 'Avisar motorista sobre renovação de CNH', destinationTab: 'drivers' });
+      if (remaining >= 0 && remaining <= 30) add({ type: 'DRIVER', category: 'Motoristas', priority: 'P2', severity: 'WARNING', title: `CNH Próxima do Vencimento: ${driver.fullName}`, description: `A CNH do motorista ${driver.fullName} vence em ${remaining} dia(s) (${driver.cnhExpiration}).`, entity: 'Driver', entityId: driver.id, driverName: driver.fullName, dueDate: driver.cnhExpiration, overdueDays: 0, status: 'OPEN', origin: 'Gestão de Motoristas', actionRecommended: 'Avisar motorista sobre renovação de CNH', destinationTab: 'drivers', whatsappTemplateKey: 'DRIVER_CNH_EXPIRY' });
     }
+  }
+
+  for (const receivable of receivables) {
+    const isOpen = receivable.status === ObligationStatus.PENDING || receivable.status === ObligationStatus.PARTIALLY_PAID || receivable.status === ObligationStatus.OVERDUE;
+    if (!isOpen) continue;
+    const overdue = receivable.status === ObligationStatus.OVERDUE || receivable.dueDate < todayStr;
+    const remaining = daysUntil(receivable.dueDate);
+    const priority: PendingPriority = overdue ? 'P1' : remaining <= 7 ? 'P2' : 'P3';
+    const driver = receivable.driverId ? driverMap.get(receivable.driverId) : undefined;
+    const vehicle = receivable.vehicleId ? vehicleMap.get(receivable.vehicleId) : undefined;
+    add({
+      type: 'RECEIVABLE',
+      category: 'Financeiro • Contas a Receber',
+      priority,
+      severity: overdue ? 'CRITICAL' : priority === 'P2' ? 'WARNING' : 'INFO',
+      title: `${overdue ? 'Conta a Receber Vencida' : 'Conta a Receber Pendente'}: ${receivable.description}`,
+      description: `Saldo pendente de R$ ${Number(receivable.balanceAmount || 0).toFixed(2)} com vencimento em ${receivable.dueDate}.`,
+      entity: 'AccountReceivable',
+      entityId: receivable.id,
+      vehiclePlate: vehicle?.plate,
+      driverName: driver?.fullName,
+      dueDate: receivable.dueDate,
+      overdueDays: overdue ? daysFrom(receivable.dueDate) : 0,
+      status: 'OPEN',
+      origin: 'Financeiro • Contas a Receber',
+      actionRecommended: 'Abrir o lançamento financeiro e regularizar a cobrança',
+      destinationTab: 'receivables',
+    });
+  }
+
+  for (const payable of payables) {
+    const isOpen = payable.status === ObligationStatus.PENDING || payable.status === ObligationStatus.PARTIALLY_PAID || payable.status === ObligationStatus.OVERDUE;
+    if (!isOpen) continue;
+    const overdue = payable.status === ObligationStatus.OVERDUE || payable.dueDate < todayStr;
+    const remaining = daysUntil(payable.dueDate);
+    const priority: PendingPriority = overdue ? 'P1' : remaining <= 7 ? 'P2' : 'P3';
+    const driver = payable.driverId ? driverMap.get(payable.driverId) : undefined;
+    const vehicle = payable.vehicleId ? vehicleMap.get(payable.vehicleId) : undefined;
+    add({
+      type: 'PAYABLE',
+      category: 'Financeiro • Contas a Pagar',
+      priority,
+      severity: overdue ? 'CRITICAL' : priority === 'P2' ? 'WARNING' : 'INFO',
+      title: `${overdue ? 'Conta a Pagar Vencida' : 'Conta a Pagar Pendente'}: ${payable.description}`,
+      description: `Saldo pendente de R$ ${Number(payable.balanceAmount || 0).toFixed(2)} com vencimento em ${payable.dueDate}.`,
+      entity: 'AccountPayable',
+      entityId: payable.id,
+      vehiclePlate: vehicle?.plate,
+      driverName: driver?.fullName,
+      dueDate: payable.dueDate,
+      overdueDays: overdue ? daysFrom(payable.dueDate) : 0,
+      status: 'OPEN',
+      origin: 'Financeiro • Contas a Pagar',
+      actionRecommended: 'Abrir o lançamento financeiro e regularizar o pagamento',
+      destinationTab: 'payables',
+    });
   }
 
   for (const ticket of tickets) {

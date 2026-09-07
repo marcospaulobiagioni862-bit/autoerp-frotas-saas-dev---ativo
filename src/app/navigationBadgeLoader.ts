@@ -82,6 +82,8 @@ export async function loadNavigationBadgeCounts(
     drivers,
     insurances,
     trackers,
+    receivables,
+    payables,
   }).length;
 
   if (!requestStillCurrent()) return null;
