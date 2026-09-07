@@ -184,11 +184,10 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             if (selectedTemplate.contentMarkdown.trim()) {
               completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
             } else {
-              await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id);
-              completedContract = (await ContractExecutionClient.generatePdfFromDocx(savedContract.id)).contract;
+              completedContract = (await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id)).contract;
             }
           } catch (generationError) {
-            warnings.push(`Contrato salvo, mas o PDF automático não foi gerado: ${generationError instanceof Error ? generationError.message : 'falha na geração'}.`);
+            warnings.push(`Contrato salvo, mas o documento oficial automático não foi gerado: ${generationError instanceof Error ? generationError.message : 'falha na geração'}.`);
           }
         }
       }
@@ -240,7 +239,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             className="control border-slate-300 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100"
           />
           <span className="block text-[11px] font-normal text-slate-600 dark:text-slate-300">
-            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. O modelo selecionado acima é preenchido com os dados do ERP e gera o PDF automaticamente após salvar.'}
+            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. O modelo Markdown gera PDF; o modelo DOCX preserva o layout oficial do Word e gera um DOCX preenchido para revisão e assinatura externa em PDF.'}
           </span>
         </Field>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
