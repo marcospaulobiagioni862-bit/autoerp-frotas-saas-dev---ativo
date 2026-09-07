@@ -16,7 +16,7 @@ export interface CreateWorkOrderInput {
   parts?:Array<{partId?:string;description?:string;quantity:number;unitCost?:number}>;
   services?:Array<{serviceId?:string;description:string;quantity:number;unitCost:number}>;
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
-  financialComponents?:Array<{kind:'PARTS'|'SERVICES';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
+  financialComponents?:Array<{kind:'PARTS'|'SERVICES'|'LABOR';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
 export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; }
 export interface CreateSupplierInput { name:string; tradeName?:string; document:string; phone?:string; email?:string; address?:string; category:string; notes?:string; }
@@ -46,10 +46,11 @@ async function expenseCategory(tx:any,companyId:string,categoryId:string):Promis
   if(!['EXPENSE','BOTH'].includes(String(r.type||'').toUpperCase())) throw new MaintenanceConflictError('Categoria financeira incompatível com manutenção');
 }
 
-async function activePaymentMethod(tx:any,companyId:string,paymentMethodId:string):Promise<void>{
+async function activePaymentMethod(tx:any,companyId:string,paymentMethodId:string):Promise<{name:string;type:string}>{
   const raw=tx.getRawTransaction?.(); if(!raw) throw new Error('Maintenance persistence unavailable');
-  const r=rows(await raw.execute(sql`SELECT id FROM payment_methods WHERE company_id=${companyId} AND id=${paymentMethodId} AND active=true LIMIT 1`))[0];
+  const r=rows(await raw.execute(sql`SELECT id,name,type FROM payment_methods WHERE company_id=${companyId} AND id=${paymentMethodId} AND active=true LIMIT 1`))[0];
   if(!r) throw new MaintenanceNotFoundError('Forma de pagamento não encontrada ou inativa');
+  return {name:String(r.name||r.type||paymentMethodId),type:String(r.type||'')};
 }
 async function activeSupplier(tx:any,companyId:string,supplierId:string):Promise<void>{
   const s=await tx.getSupplierRepo().findByIdForCompany(companyId,supplierId);
