@@ -422,6 +422,11 @@ function parseSignedAt(value: unknown): string {
   return parsed.toISOString();
 }
 
+function hasPdfSignature(bytes: Buffer): boolean {
+  const prefix = bytes.subarray(0, Math.min(bytes.length, 1024));
+  return prefix.indexOf(Buffer.from('%PDF', 'ascii')) >= 0;
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof ExecutionValidationError || error instanceof ContractTemplatePolicyError || error instanceof ContractDocxTemplateError || error instanceof AttachmentStorageValidationError) {
     res.status(400).json({ error: 'Invalid contract execution request' });
@@ -1003,7 +1008,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       const checksum = createHash('sha256').update(bytes).digest('hex');
       if (
         !bytes.length || bytes.length > 10 * 1024 * 1024 ||
-        bytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
+        !hasPdfSignature(bytes) ||
         bytes.length !== prepared.attachment.fileSize ||
         !prepared.attachment.checksum || checksum !== prepared.attachment.checksum
       ) throw new ExecutionValidationError('Invalid reviewed final PDF content');
@@ -1100,7 +1105,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       const checksum = createHash('sha256').update(bytes).digest('hex');
       if (
         !bytes.length || bytes.length > 10 * 1024 * 1024 ||
-        bytes.subarray(0, 5).toString('ascii') !== '%PDF-' ||
+        !hasPdfSignature(bytes) ||
         bytes.length !== prepared.attachment.fileSize ||
         !prepared.attachment.checksum || checksum !== prepared.attachment.checksum
       ) throw new ExecutionValidationError('Invalid signature evidence content');
