@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Car,
@@ -30,6 +30,8 @@ import {
   GitBranch,
   LifeBuoy,
   FolderOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 export type NavigationTab =
@@ -81,6 +83,8 @@ interface SidebarProps {
   pendingPendingsCount?: number;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -91,6 +95,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingPendingsCount = 0,
   isMobileOpen = false,
   onCloseMobile,
+  isCollapsed = false,
+  onToggleCollapsed,
 }) => {
   const sreTabIds: NavigationTab[] = [
     'performance-management',
@@ -110,6 +116,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const isSreActive = sreTabIds.includes(activeTab);
   const [isSreExpanded, setIsSreExpanded] = useState<boolean>(isSreActive);
+  const [isCompactViewport, setIsCompactViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsCompactViewport(media.matches);
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
+
+  const compactDesktop = isCollapsed && !isCompactViewport;
 
   const categories = [
     {
@@ -279,16 +298,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <aside className="w-64 h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
-      <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-        <div>
+    <aside className={`${compactDesktop ? 'w-20' : 'w-64'} h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none transition-[width] duration-200 ease-out`}>
+      <div className={`${compactDesktop ? 'px-3' : 'p-4'} min-h-16 border-b border-slate-800/80 flex items-center justify-between gap-2`}>
+        <div className={compactDesktop ? 'sr-only' : ''}>
           <span className="text-sm font-black tracking-wide text-white block">MoveFlex</span>
           <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 block">Gestão de Frotas</span>
         </div>
-        {onCloseMobile && (
+        {!isCompactViewport && onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className={`${compactDesktop ? 'mx-auto' : ''} p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            aria-label={compactDesktop ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+            title={compactDesktop ? 'Expandir barra lateral' : 'Recolher barra lateral'}
+          >
+            {compactDesktop ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+        )}
+        {isCompactViewport && onCloseMobile && (
           <button
             onClick={onCloseMobile}
-            className="md:hidden p-1 text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-1 text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Fechar menu"
           >
             <X className="w-5 h-5" />
@@ -299,9 +329,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <nav className="flex-1 min-h-0 p-3 space-y-4 overflow-y-auto">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
-            <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
-              {category.title}
-            </div>
+            {!compactDesktop && (
+              <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
+                {category.title}
+              </div>
+            )}
             <div className="space-y-0.5">
               {category.items.map((item) => {
                 const Icon = item.icon;
@@ -313,24 +345,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onTabChange(item.id);
                       if (onCloseMobile) onCloseMobile();
                     }}
-                    className={`w-full flex items-center justify-between px-3.5 py-2 rounded-lg text-xs font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    title={compactDesktop ? item.label : undefined}
+                    className={`w-full flex items-center ${compactDesktop ? 'justify-center px-2' : 'justify-between px-3.5'} py-2 rounded-lg text-xs font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/30'
                         : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center ${compactDesktop ? '' : 'gap-3'}`}>
                       <Icon className={`w-3.5 h-3.5 transition-transform group-hover:scale-105 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                      <span>{item.label}</span>
+                      {!compactDesktop && <span>{item.label}</span>}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    {!compactDesktop && <div className="flex items-center gap-1.5">
                       {item.badge !== null && (
                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${item.badgeColor || 'bg-slate-800 text-slate-300'}`}>
                           {item.badge}
                         </span>
                       )}
                       {isActive && <ChevronRight className="w-3 h-3 text-blue-200" />}
-                    </div>
+                    </div>}
                   </button>
                 );
               })}
@@ -342,10 +375,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="space-y-1 border-t border-slate-800/60 pt-3">
           <button
             onClick={() => setIsSreExpanded(!isSreExpanded)}
-            className="w-full flex items-center justify-between text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1 hover:text-slate-300"
+            title={compactDesktop ? 'Cockpit SRE & GOV' : undefined}
+            className={`w-full flex items-center ${compactDesktop ? 'justify-center px-2' : 'justify-between px-3.5'} text-[10px] font-bold tracking-wider text-slate-500 uppercase py-1 hover:text-slate-300`}
           >
-            <span>COCKPIT SRE & GOV</span>
-            {isSreExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            {compactDesktop ? <ShieldCheck className="w-4 h-4" /> : <span>COCKPIT SRE & GOV</span>}
+            {!compactDesktop && (isSreExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />)}
           </button>
 
           {isSreExpanded && (
@@ -360,24 +394,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onTabChange(item.id);
                       if (onCloseMobile) onCloseMobile();
                     }}
-                    className={`w-full flex items-center justify-between px-3.5 py-1.5 rounded-lg text-[11px] font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    title={compactDesktop ? item.label : undefined}
+                    className={`w-full flex items-center ${compactDesktop ? 'justify-center px-2' : 'justify-between px-3.5'} py-1.5 rounded-lg text-[11px] font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-900/30'
                         : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center ${compactDesktop ? '' : 'gap-3'}`}>
                       <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-500'}`} />
-                      <span>{item.label}</span>
+                      {!compactDesktop && <span>{item.label}</span>}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    {!compactDesktop && <div className="flex items-center gap-1.5">
                       {item.badge !== null && (
                         <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-800 text-slate-400">
                           {item.badge}
                         </span>
                       )}
                       {isActive && <ChevronRight className="w-3 h-3 text-indigo-200" />}
-                    </div>
+                    </div>}
                   </button>
                 );
               })}
@@ -386,7 +421,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500 flex flex-col gap-1">
+      <div className={`${compactDesktop ? 'hidden' : 'flex'} p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500 flex-col gap-1`}>
         <div className="flex items-center justify-between font-mono">
           <span>Ambiente:</span>
           <span className="text-emerald-400 font-semibold">Cloud Run Baseline</span>
@@ -401,14 +436,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <div className="hidden md:block h-full min-h-0">
-        {sidebarContent}
-      </div>
+      {!isCompactViewport && (
+        <div data-testid="desktop-sidebar" className="h-full min-h-0 shrink-0 overflow-hidden">
+          {sidebarContent}
+        </div>
+      )}
 
-      {/* Mobile drawer sidebar */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
+      {isCompactViewport && isMobileOpen && (
+        <div className="fixed inset-0 z-40 flex">
           <div
             className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
             onClick={onCloseMobile}
