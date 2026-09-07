@@ -16,7 +16,7 @@ export type WorkOrderStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'WAITIN
 export interface WorkOrderPartItem { id:string; partId?:string; description:string; quantity:number; unitCost:number; totalCost:number; }
 export interface WorkOrderServiceItem { id:string; serviceId?:string; description:string; quantity:number; unitCost:number; totalCost:number; }
 export interface WorkOrderLaborItem { id:string; description:string; hours:number; hourlyRate:number; totalCost:number; }
-export type WorkOrderFinanceKind = 'PARTS'|'SERVICES';
+export type WorkOrderFinanceKind = 'PARTS'|'SERVICES'|'LABOR';
 export type WorkOrderPaymentCondition = 'CASH'|'INSTALLMENTS';
 export interface WorkOrderFinancialComponent {
   id:string; kind:WorkOrderFinanceKind; supplierId?:string; categoryId:string; paymentMethodId:string; paymentCondition:WorkOrderPaymentCondition;
