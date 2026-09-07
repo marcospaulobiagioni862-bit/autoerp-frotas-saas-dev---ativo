@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -95,7 +95,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { user } = useAuth();
   const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  );
   const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsCompactViewport(media.matches);
+    syncViewport();
+    media.addEventListener?.('change', syncViewport);
+    return () => media.removeEventListener?.('change', syncViewport);
+  }, []);
 
   const categories: Array<{ title: string; items: MenuItem[] }> = [
     {
@@ -218,8 +229,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">AutoERP Fleet Manager</span>
           <span className="mt-1 block text-[9px] uppercase tracking-wide text-emerald-400">Production server authority</span>
         </div>
-        {onCloseMobile && (
-          <button onClick={onCloseMobile} className="md:hidden p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar menu">
+        {isCompactViewport && onCloseMobile && (
+          <button onClick={onCloseMobile} className="p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar menu">
             <X className="w-5 h-5" />
           </button>
         )}
@@ -256,9 +267,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className="hidden md:block h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden flex">
+      {!isCompactViewport && (
+        <div data-testid="desktop-sidebar" className="h-full min-h-0 shrink-0 overflow-hidden">
+          {sidebarContent}
+        </div>
+      )}
+      {isCompactViewport && isMobileOpen && (
+        <div className="fixed inset-0 z-40 flex">
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs" onClick={onCloseMobile} aria-hidden="true" />
           <div className="relative z-50 h-dvh max-h-dvh min-h-0 overflow-hidden">{sidebarContent}</div>
         </div>
