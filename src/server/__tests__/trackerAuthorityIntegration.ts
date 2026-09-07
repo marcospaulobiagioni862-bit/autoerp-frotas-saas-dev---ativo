@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { RecurringAuthorityService } from '../recurringAuthority';
-import { TrackerAuthorityService, setTrackerTestHooksForTests } from '../trackerAuthority';
+import { TrackerAuthorityService, TrackerValidationError, setTrackerTestHooksForTests } from '../trackerAuthority';
 import { registerTrackerRoutes } from '../trackerRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 
@@ -52,6 +52,9 @@ async function testAtomicRecurringLifecycle():Promise<void>{
   try{await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Rollback GPS',imei:'444444444444444',monthlyCost:50,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});}catch(error){failed=String(error).includes('INDUCED_TRACKER_RULE_FAILURE');}finally{setTrackerTestHooksForTests({});}
   assert(failed,'induced failure did not propagate');assert(Number((await one(sql`SELECT count(*)::int count FROM trackers WHERE company_id=${companyA} AND imei='444444444444444'`))?.count)===0,'tracker survived failed aggregate');
 
+  let missingSupplierRejected=false;
+  try{await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Sem fornecedor',imei:'444444444444444',monthlyCost:65,installationDate:'2026-09-01',categoryId:categoryA});}catch(error){missingSupplierRejected=error instanceof TrackerValidationError;}
+  assert(missingSupplierRejected,'positive tracker monthly cost without supplier was accepted');
   const tracker=await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Concox K',imei:'555555555555555',chipCarrier:'Vivo',chipNumber:'11999990000',monthlyCost:65,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});
   let rule=await one(sql`SELECT id,status,amount,category_id,vehicle_id,supplier_id,next_generation_date::text next_date FROM recurring_rules WHERE company_id=${companyA} AND origin_type='TRACKER' AND origin_id=${tracker.id}`);
   assert(rule&&rule.status==='ACTIVE'&&Number(rule.amount)===65&&rule.category_id===categoryA,'tracker recurring rule not created canonically');
