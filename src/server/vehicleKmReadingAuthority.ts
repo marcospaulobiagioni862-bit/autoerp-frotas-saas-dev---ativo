@@ -196,12 +196,13 @@ export class VehicleKmReadingAuthority {
 
   static recordBatch(p:AuthenticatedPrincipal,entries:BatchKmReadingEntryInput[]):Promise<BatchKmReadingResultItem[]>{
     if(!Array.isArray(entries)||entries.length<1||entries.length>500)throw new VehicleKmReadingValidationError('Lote de KM inválido');
-    const ids=entries.map(item=>text(item?.vehicleId,'vehicleId'));
+    const normalizedEntries=entries.map(item=>({...item,vehicleId:text(item?.vehicleId,'vehicleId')}));
+    const ids=normalizedEntries.map(item=>item.vehicleId);
     if(new Set(ids).size!==ids.length)throw new VehicleKmReadingValidationError('Veículo duplicado no lote de KM');
 
     return UnitOfWork.run(p.companyId,async tx=>{
       const raw=tx.getRawTransaction?.();if(!raw)throw new Error('KM batch persistence unavailable');
-      const byId=new Map(entries.map(item=>[item.vehicleId,item]));
+      const byId=new Map(normalizedEntries.map(item=>[item.vehicleId,item]));
       const result:BatchKmReadingResultItem[]=[];
       const recordDate=today();
 
