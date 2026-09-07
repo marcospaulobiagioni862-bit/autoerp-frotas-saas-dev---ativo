@@ -14,10 +14,40 @@ interface PayablesViewProps {
   onOpenPaymentModal: (payable: AccountPayable) => void;
 }
 
+const originLabel = (origin: string): string => {
+  const labels: Record<string, string> = {
+    MAINTENANCE: 'Manutenção',
+    INSURANCE: 'Seguro',
+    TRACKER: 'Rastreador',
+    DOCUMENTATION: 'Documentação',
+    FINANCING: 'Financiamento',
+    ADMINISTRATIVE: 'Administrativo',
+    TRAFFIC_TICKET_COMPANY: 'Multa — Empresa',
+    TRAFFIC_TICKET_NIC: 'Multa — NIC',
+    MANUAL: 'Lançamento manual',
+    RENEGOTIATION: 'Renegociação',
+  };
+  return labels[origin] || origin.replaceAll('_', ' ');
+};
+
+const statusLabel = (status: string): string => {
+  const labels: Record<string, string> = {
+    PENDING: 'Pendente',
+    PARTIALLY_PAID: 'Pago parcialmente',
+    PAID: 'Pago',
+    OVERDUE: 'Vencido',
+    CANCELLED: 'Cancelado',
+    RENEGOTIATED: 'Renegociado',
+    WRITTEN_OFF: 'Baixado',
+  };
+  return labels[status] || status;
+};
+
 export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }) => {
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [originFilter, setOriginFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
   const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
   const [detailsTarget, setDetailsTarget] = useState<AccountPayable | null>(null);
@@ -134,14 +164,25 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   };
 
   const filtered = payables.filter((p) => {
+    const term = searchTerm.trim().toLowerCase();
+    const categoryName = categories.find((category) => category.id === p.categoryId)?.name || '';
     const matchesSearch =
-      p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (p.supplierId && p.supplierId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (p.vehicleId && p.vehicleId.toLowerCase().includes(searchTerm.toLowerCase()));
+      !term ||
+      p.description.toLowerCase().includes(term) ||
+      String(p.originType).toLowerCase().includes(term) ||
+      originLabel(String(p.originType)).toLowerCase().includes(term) ||
+      categoryName.toLowerCase().includes(term) ||
+      (p.supplierId && p.supplierId.toLowerCase().includes(term)) ||
+      (p.vehicleId && p.vehicleId.toLowerCase().includes(term));
 
     const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesOrigin = originFilter === 'ALL' || String(p.originType) === originFilter;
+    return matchesSearch && matchesStatus && matchesOrigin;
   });
+
+  const originOptions = Array.from(new Set(payables.map((item) => String(item.originType)))).sort((a, b) =>
+    originLabel(a).localeCompare(originLabel(b), 'pt-BR')
+  );
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -189,9 +230,18 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
             />
           </div>
 
-          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
-            {['ALL', ObligationStatus.PENDING, ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <select
+              aria-label="Filtrar contas a pagar por origem"
+              value={originFilter}
+              onChange={(event) => setOriginFilter(event.target.value)}
+              className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <option value="ALL">Todas as origens</option>
+              {originOptions.map((origin) => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
+            </select>
+            {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE, ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
@@ -201,13 +251,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                {st === 'ALL'
-                  ? 'Todos'
-                  : st === ObligationStatus.PENDING
-                  ? 'Pendentes'
-                  : st === ObligationStatus.PAID
-                  ? 'Pagas'
-                  : 'Canceladas'}
+                {st === 'ALL' ? 'Todos' : statusLabel(String(st))}
               </button>
             ))}
           </div>
@@ -236,6 +280,9 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {filtered.length === 0 && (
+                  <tr><td colSpan={6} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
+                )}
                 {filtered.map((item) => {
                   const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID;
                   const isPaid = item.status === ObligationStatus.PAID;
@@ -245,12 +292,19 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5">
                         <div className="font-semibold text-slate-900 dark:text-slate-100">{item.description}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          Origem: {item.originType} • Chave: {item.idempotencyKey}
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                          <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
+                          <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || item.categoryId}</span>
+                          {item.installmentNumber && item.totalInstallments && (
+                            <span className="font-semibold">Parcela {item.installmentNumber}/{item.totalInstallments}</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono truncate">
+                          Chave: {item.idempotencyKey}
                         </div>
                       </td>
                       <td className="p-3.5 font-mono tabular-nums">
-                        {item.dueDate}
+                        {new Date(`${item.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}
                         {isOverdue && (
                           <span className="block text-[10px] text-red-600 dark:text-red-400 font-bold">EM ATRASO</span>
                         )}
@@ -273,7 +327,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                               : 'neutral'
                           }
                         >
-                          {item.status}
+                          {statusLabel(String(item.status))}
                         </Badge>
                       </td>
                       <td className="p-3.5 text-right space-x-2">
