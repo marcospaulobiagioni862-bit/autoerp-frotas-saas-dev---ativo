@@ -89,7 +89,9 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             notes: contractToEdit.notes || '',
           });
         } else {
-          const defaultTemplate = templateList.find((item) => item.templateKey === 'locacao-padrao');
+          const defaultTemplate = templateList.find((item) =>
+            getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
+          );
           if (!defaultTemplate) {
             setError('O arquivo mestre aprovado do Contrato 01 ainda não está ativo. Abra Modelos de Contrato e carregue exatamente o DOCX mestre aprovado.');
           }
