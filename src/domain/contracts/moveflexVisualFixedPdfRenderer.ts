@@ -48,6 +48,10 @@ function first(values: Values, ...keys: string[]): string {
   return '';
 }
 
+function moneyAmount(values: Values, key: string): string {
+  return val(values, key).replace(/^R\$\s*/i, '').trim();
+}
+
 function checkbox(values: Values, expected: string): string {
   return val(values, 'contract.billingPeriodicity') === expected ? 'X' : '';
 }
@@ -94,11 +98,11 @@ function commonCompanyAndDriver01(): Overlay[] {
     { page: 0, x: 194, y: 1297, fieldKey: 'contract.startDate', required: true, value: (v) => dateBr(val(v, 'contract.startDate')), maxWidth: 125, eraseWidth: 90 },
     { page: 0, x: 279, y: 1318, fieldKey: 'contract.endDate', value: (v) => dateBr(val(v, 'contract.endDate')), maxWidth: 120, eraseWidth: 90 },
 
-    { page: 1, x: 96, y: 317, fieldKey: 'contract.rentalAmount', required: true, value: (v) => val(v, 'contract.rentalAmount'), maxWidth: 380 },
+    { page: 1, x: 96, y: 317, fieldKey: 'contract.rentalAmount', required: true, value: (v) => moneyAmount(v, 'contract.rentalAmount'), maxWidth: 380 },
     { page: 1, x: 91, y: 354, fieldKey: 'contract.billingPeriodicity.weekly', value: (v) => checkbox(v, 'WEEKLY'), fontSize: 7.5 },
     { page: 1, x: 91, y: 395, fieldKey: 'contract.billingPeriodicity.monthly', value: (v) => checkbox(v, 'MONTHLY'), fontSize: 7.5 },
     { page: 1, x: 108, y: 441, fieldKey: 'contract.billingDue', value: (v) => first(v, 'contract.billingDueDayOfWeekLabel', 'contract.billingDueDayOfMonth'), maxWidth: 210 },
-    { page: 1, x: 96, y: 611, fieldKey: 'contract.securityDepositAmount', value: (v) => val(v, 'contract.securityDepositAmount'), maxWidth: 380 },
+    { page: 1, x: 96, y: 611, fieldKey: 'contract.securityDepositAmount', value: (v) => moneyAmount(v, 'contract.securityDepositAmount'), maxWidth: 380 },
 
     { page: 3, x: 289, y: 559, fieldKey: 'company.address.forum', required: true, value: (v) => cityState(v, 'company.address'), maxWidth: 220 },
     { page: 3, x: 123, y: 866, fieldKey: 'company.address.city.signature', required: true, value: (v) => val(v, 'company.address.city'), maxWidth: 180 },
