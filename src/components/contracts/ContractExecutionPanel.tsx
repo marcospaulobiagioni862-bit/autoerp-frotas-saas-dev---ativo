@@ -20,6 +20,13 @@ interface ContractExecutionPanelProps {
 const signatureMethodLabel = (method?: ContractSignatureMethod): string =>
   method === 'GOV_BR' ? 'GOV.br' : method === 'NOTARY' ? 'Cartório' : 'Upload de PDF assinado';
 
+function operationalTemplateLabel(item: ContractTemplate): string {
+  const master = getMoveFlexApprovedContractMaster(item.templateKey);
+  const title = master?.title || item.title;
+  const mode = master ? 'VISUAL_FIXO → PDF' : item.contentMarkdown.trim() ? 'PDF' : 'DOCX';
+  return `${title} • v${item.versionNumber} • ${mode}`;
+}
+
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
@@ -59,9 +66,14 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       ]);
       setTemplates(templateList);
       setArtifacts(artifactList);
-      setSelectedTemplateId((current) => current || contract.templateId || templateList.find((item) =>
-        getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
-      )?.id || templateList[0]?.id || '');
+      setSelectedTemplateId((current) => {
+        const availableIds = new Set(templateList.map((item) => item.id));
+        if (current && availableIds.has(current)) return current;
+        if (contract.templateId && availableIds.has(contract.templateId)) return contract.templateId;
+        return templateList.find((item) =>
+          getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
+        )?.id || templateList[0]?.id || '';
+      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
     }
@@ -202,7 +214,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               onChange={(event) => setSelectedTemplateId(event.target.value)}
             >
               <option value="">Selecione</option>
-              {templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber} • {getMoveFlexApprovedContractMaster(item.templateKey) ? 'VISUAL_FIXO → PDF' : item.contentMarkdown.trim() ? 'PDF' : 'DOCX'}</option>)}
+              {templates.map((item) => <option key={item.id} value={item.id}>{operationalTemplateLabel(item)}</option>)}
             </select>
           </label>
           {generated ? (

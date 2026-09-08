@@ -258,18 +258,33 @@ export function registerContractTemplateRoutes(app: Express): void {
     if (!principal) return;
     try {
       const includeArchived = req.query.includeArchived === 'true';
-      const items = await UnitOfWork.run(principal.companyId, async (tx) =>
-        await tx.getContractTemplateRepo().findAllByCompany(principal.companyId, includeArchived)
-      );
       const currentOnly = req.query.currentOnly !== 'false';
       const activeOnly = req.query.activeOnly !== 'false';
-      res.json({
-        items: items.filter((item) =>
+      const items = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const all = await tx.getContractTemplateRepo().findAllByCompany(principal.companyId, includeArchived);
+        const base = all.filter((item) =>
           (!currentOnly || item.isCurrent) &&
           (!activeOnly || item.isActive) &&
           (includeArchived || !item.isArchived)
-        ),
+        );
+
+        // Operational selectors use the default activeOnly=true list. Approved
+        // MoveFlex standards are exposed there only when the currently linked
+        // file is byte-for-byte the approved master. Management screens ask for
+        // activeOnly=false and still see invalid/legacy sources so they can be
+        // repaired without deleting history.
+        if (!activeOnly) return base;
+
+        const operational: typeof base = [];
+        for (const item of base) {
+          const master = getMoveFlexApprovedContractMaster(item.templateKey);
+          if (!master || await approvedMasterSource(tx, principal.companyId, item, master)) {
+            operational.push(item);
+          }
+        }
+        return operational;
       });
+      res.json({ items });
     } catch (error) {
       sendError(res, error);
     }

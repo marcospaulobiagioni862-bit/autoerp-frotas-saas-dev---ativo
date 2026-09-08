@@ -201,6 +201,42 @@ export async function runContractTemplateFileSourceRegression(): Promise<void> {
     assert(response.status === 400, `DOCX outside ContractTemplate expected 400, got ${response.status}`);
 
 
+    // Legacy standard aliases may exist as active records with an old source.
+    // They must remain visible to management but never be selectable operationally.
+    const invalidAliasId = `legacy-contract-02-${suffix}`;
+    const invalidAliasAttachmentId = `legacy-contract-02-source-${suffix}`;
+    await db.execute(sql`
+      INSERT INTO contract_templates (
+        id, company_id, template_key, title, content_markdown, version_number,
+        is_current, is_active, is_archived, created_by, created_at, updated_at
+      ) VALUES (
+        ${invalidAliasId}, ${companyA}, 'contrato-02', 'Contrato de Locação de Veículo', '', 1,
+        true, true, false, ${adminAId}, NOW(), NOW()
+      )
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO file_attachments (
+        id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
+        size, file_size, storage_provider, storage_key, checksum, created_by, is_archived, content_state, created_at
+      ) VALUES (
+        ${invalidAliasAttachmentId}, ${companyA}, 'ContractTemplate', 'ContractTemplate', ${invalidAliasId},
+        'CONTRACT_TEMPLATE_SOURCE', 'contrato-02-antigo.docx', ${DOCX_MIME}, 'attachment://legacy-contract-02',
+        123, 123, 'SERVER_FS', 'legacy/contract-02', repeat('f',64), ${adminAId}, false, 'AVAILABLE', NOW()
+      )
+      ON CONFLICT (id) DO NOTHING
+    `);
+
+    response = await request('/api/contract-templates', {}, adminA);
+    assert(response.status === 200, `operational template list expected 200, got ${response.status}`);
+    let listed = (await json(response)).items;
+    assert(!listed.some((item: any) => item.id === invalidAliasId), 'invalid approved alias leaked into operational selector');
+
+    response = await request('/api/contract-templates?activeOnly=false', {}, adminA);
+    assert(response.status === 200, `management template list expected 200, got ${response.status}`);
+    listed = (await json(response)).items;
+    assert(listed.some((item: any) => item.id === invalidAliasId), 'invalid approved alias must remain visible for management repair');
+
     // Approved MoveFlex standards are now checksum-pinned file authorities.
     response = await request('/api/contract-templates/ensure-moveflex-default', { method: 'POST', body: '{}' }, adminA);
     assert([200, 201].includes(response.status), `approved master bootstrap expected 200/201, got ${response.status}`);
