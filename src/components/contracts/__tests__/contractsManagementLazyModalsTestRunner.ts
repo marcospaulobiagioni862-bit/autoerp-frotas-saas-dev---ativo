@@ -154,6 +154,14 @@ assert.match(
 assert.doesNotMatch(templateModal, /buildMoveFlexBaseContractPdf/, 'standard contract manager must not generate a reconstructed base PDF');
 assert.doesNotMatch(templateModal, /Baixar modelo-base MoveFlex/, 'standard contract manager must not offer a derived base document');
 assert.match(templateModal, /Arquivo mestre aprovado • imutável/, 'active standard template must be visibly locked to the approved master');
+assert.match(templateModal, /Fonte antiga\/inválida — substituir por/, 'management must identify an invalid legacy standard source');
+assert.match(templateModal, /Substituir pelo mestre aprovado/, 'management must allow replacing an invalid legacy standard source');
+assert.match(templateModal, /AttachmentClient\.archive\(attachment\.id\)/, 'invalid legacy source must be archived before approved master upload');
+assert.match(templateRoutes, /if \(!activeOnly\) return base/, 'management listing must retain invalid standards for repair');
+assert.match(templateRoutes, /await approvedMasterSource\(tx, principal\.companyId, item, master\)/, 'operational listing must require the exact approved standard source');
+assert.match(executionPanel, /availableIds\.has\(current\)/, 'execution panel must discard a stale invalid template selection');
+assert.match(executionPanel, /operationalTemplateLabel\(item\)/, 'execution selector must use canonical standard labels');
+assert.match(contractForm, /contractTemplateOptionLabel\(item\)/, 'contract form must use canonical standard labels');
 assert.match(executionPanel, /VISUAL_FIXO aprovadas como fundo imutável/, 'execution UI must explain the immutable VISUAL_FIXO workflow');
 assert.match(templateModal, /Carregar arquivo mestre/, 'pending standard template must request the approved master file');
 assert.match(templateModal, /getMoveFlexApprovedContractMaster/, 'template manager must identify standard masters from the immutable registry');
