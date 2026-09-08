@@ -168,6 +168,40 @@ function decodeWordXmlText(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
+export function extractContractDocxPagePngs(docx: Buffer): Buffer[] {
+  const entries = readZip(docx);
+  const document = entries.find((entry) => entry.name === 'word/document.xml');
+  if (!document) throw new ContractDocxTemplateError('DOCX required parts are missing');
+
+  const documentXml = document.content.toString('utf8');
+  if (/<w:t\b/i.test(documentXml)) {
+    throw new ContractDocxTemplateError('VISUAL_FIXO master must not contain editable Word text');
+  }
+
+  const pageEntries = entries
+    .map((entry) => {
+      const match = /^word\/media\/image(\d+)\.png$/i.exec(entry.name);
+      return match ? { index: Number(match[1]), bytes: entry.content } : null;
+    })
+    .filter((item): item is { index: number; bytes: Buffer } => Boolean(item))
+    .sort((left, right) => left.index - right.index);
+
+  if (!pageEntries.length || pageEntries.length > 10) {
+    throw new ContractDocxTemplateError('VISUAL_FIXO master has invalid page images');
+  }
+  for (const page of pageEntries) {
+    const bytes = page.bytes;
+    if (
+      bytes.length < 24 ||
+      bytes[0] !== 0x89 ||
+      bytes[1] !== 0x50 ||
+      bytes[2] !== 0x4e ||
+      bytes[3] !== 0x47
+    ) throw new ContractDocxTemplateError('VISUAL_FIXO page is not PNG');
+  }
+  return pageEntries.map((item) => Buffer.from(item.bytes));
+}
+
 export function extractContractDocxPlainText(docx: Buffer): string {
   const entries = readZip(docx);
   const document = entries.find((entry) => entry.name === 'word/document.xml');
