@@ -174,7 +174,7 @@ export async function runContractDocxPackageRendererRegression(): Promise<void> 
     'contract.rentalAmount': 'R$ 700,00',
     'contract.billingPeriodicity': 'WEEKLY',
     'contract.billingDueDayOfWeekLabel': 'segunda-feira',
-  });
+  };
   const missingBefore = getMoveFlexVisualFixedMissingFields('contrato-01', {
     ...visualValues,
     'company.address.full': '',
