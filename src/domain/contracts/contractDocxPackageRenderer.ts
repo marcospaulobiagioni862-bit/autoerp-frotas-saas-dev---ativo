@@ -198,6 +198,11 @@ export function extractContractDocxPagePngs(docx: Buffer): Buffer[] {
       bytes[2] !== 0x4e ||
       bytes[3] !== 0x47
     ) throw new ContractDocxTemplateError('VISUAL_FIXO page is not PNG');
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    if (width !== 1055 || height !== 1491) {
+      throw new ContractDocxTemplateError('VISUAL_FIXO page dimensions changed');
+    }
   }
   return pageEntries.map((item) => Buffer.from(item.bytes));
 }
