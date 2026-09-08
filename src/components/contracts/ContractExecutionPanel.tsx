@@ -59,7 +59,9 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       ]);
       setTemplates(templateList);
       setArtifacts(artifactList);
-      setSelectedTemplateId((current) => current || contract.templateId || templateList.find((item) => item.templateKey === 'locacao-padrao')?.id || templateList[0]?.id || '');
+      setSelectedTemplateId((current) => current || contract.templateId || templateList.find((item) =>
+        getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
+      )?.id || templateList[0]?.id || '');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
     }
