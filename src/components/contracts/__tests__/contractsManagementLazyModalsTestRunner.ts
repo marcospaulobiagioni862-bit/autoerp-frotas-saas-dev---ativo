@@ -88,9 +88,9 @@ assert.match(executionRoutes, /'driver\.pixKey': snapshot\.driver\.pixKey/, 'PIX
 
 assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
-assert.match(contractForm, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'new contract must preselect the standard MoveFlex template');
+assert.match(contractForm, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'new contract must preselect Contract 01 even when the persisted key uses the legacy alias');
 assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\S]*startDate: '', endDate: '', rentalAmount: '',[\s\S]*billingPeriodicity: '',[\s\S]*securityDepositAmount: '', franchiseKm: '', excessKmRate: '',[\s\S]*templateId: defaultTemplate\?\.id \|\| ''/, 'new contract must keep operational and financial values blank while preselecting only the template');
-assert.match(executionPanel, /templateList\.find\(\(item\) => item\.templateKey === 'locacao-padrao'\)/, 'contract execution must prefer the standard rental template');
+assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'contract execution must prefer Contract 01 even when the persisted key uses the legacy alias');
 assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure both persisted MoveFlex official models before listing templates');
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
@@ -163,15 +163,19 @@ assert.match(approvedMasterRegistry, /fileSize: 4331240/, 'Contract 01 VISUAL_FI
 assert.match(approvedMasterRegistry, /CONTRATO_02_MOVEFLEX_VISUAL_FIXO\.docx/, 'Contract 02 VISUAL_FIXO filename must be pinned');
 assert.match(approvedMasterRegistry, /910636f745f16c8d3c8e08dec9dca112d3c3250bb282f1536e800ebc03258193/, 'Contract 02 VISUAL_FIXO SHA-256 must be pinned');
 assert.match(approvedMasterRegistry, /fileSize: 6621021/, 'Contract 02 VISUAL_FIXO size must be pinned');
+assert.match(approvedMasterRegistry, /'contrato-01': 'locacao-padrao'/, 'persisted Contract 01 alias must resolve to the approved rental master');
+assert.match(approvedMasterRegistry, /'contrato-02': 'termo-multas-infracoes'/, 'persisted Contract 02 alias must resolve to the approved second master');
 assert.match(visualFixedRenderer, /extractContractDocxPagePngs/, 'VISUAL_FIXO generation must use the immutable page images from the approved DOCX');
 assert.match(visualFixedRenderer, /page\.drawImage\(image, \{ x: 0, y: 0, width: PDF_WIDTH, height: PDF_HEIGHT \}\)/, 'VISUAL_FIXO must render each exact page image as the PDF background');
-assert.match(visualFixedRenderer, /expectedPageCount = templateKey === 'locacao-padrao' \? 4 : 5/, 'VISUAL_FIXO must keep the approved 4-page and 5-page counts');
+assert.match(visualFixedRenderer, /expectedPageCount = master\.templateKey === 'locacao-padrao' \? 4 : 5/, 'VISUAL_FIXO must keep the approved 4-page and 5-page counts after alias canonicalization');
 assert.match(templateRoutes, /MOVEFLEX_APPROVED_CONTRACT_MASTERS/, 'server bootstrap must prepare only checksum-pinned approved standard masters');
 assert.match(templateRoutes, /ApprovedMasterLockedError/, 'server must lock approved standard template lifecycle');
 assert.match(templateRoutes, /source\.checksum !== approvedMaster\.sha256/, 'standard promotion must reject any source whose SHA-256 differs from the approved master');
 assert.match(attachmentRoutes, /checksum!==master\.sha256/, 'standard master upload must be rejected before storage when bytes differ');
 assert.match(executionRoutes, /renderMoveFlexVisualFixedPdf/, 'contract execution must render standard documents only from the VISUAL_FIXO renderer');
 assert.match(executionRoutes, /GENERATE_PDF_FROM_VISUAL_FIXED_MASTER/, 'VISUAL_FIXO generation must be explicitly audited');
+assert.match(executionRoutes, /getMoveFlexVisualFixedMissingFields/, 'VISUAL_FIXO generation must preflight required source data before writing a PDF');
+assert.match(executionRoutes, /Preencha os dados obrigatórios antes de gerar o contrato/, 'missing contract data must return an actionable Portuguese error instead of a generic validation message');
 assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(template\.templateKey\)/, 'standard VISUAL_FIXO must be distinguished from custom templates server-side');
 assert.match(contractForm, /O arquivo mestre aprovado do Contrato 01 ainda não está ativo/, 'new contract creation must fail closed until the approved master is active');
 assert.match(
