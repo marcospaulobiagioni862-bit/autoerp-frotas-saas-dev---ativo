@@ -9,6 +9,7 @@ import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -184,7 +185,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         const selectedTemplate = templates.find((item) => item.id === form.templateId);
         if (selectedTemplate) {
           try {
-            if (selectedTemplate.contentMarkdown.trim()) {
+            const visualFixed = Boolean(getMoveFlexApprovedContractMaster(selectedTemplate.templateKey));
+            if (visualFixed || selectedTemplate.contentMarkdown.trim()) {
               completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
             } else {
               completedContract = (await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id)).contract;
@@ -242,7 +244,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             className="control border-slate-300 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100"
           />
           <span className="block text-[11px] font-normal text-slate-600 dark:text-slate-300">
-            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. O modelo Markdown gera PDF; o modelo DOCX preserva o layout oficial do Word e gera um DOCX preenchido para revisão e assinatura externa em PDF.'}
+            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. Os modelos padrão MoveFlex VISUAL_FIXO geram PDF sobre as páginas imutáveis aprovadas; modelos personalizados seguem o fluxo configurado.'}
           </span>
         </Field>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
