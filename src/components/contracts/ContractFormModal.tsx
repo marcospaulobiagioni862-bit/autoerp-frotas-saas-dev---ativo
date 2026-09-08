@@ -19,6 +19,12 @@ interface ContractFormModalProps {
   onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
 }
 
+function contractTemplateOptionLabel(item: ContractTemplate): string {
+  const master = getMoveFlexApprovedContractMaster(item.templateKey);
+  const title = master?.title || item.title;
+  return `${title} • v${item.versionNumber}${master ? ' • Padrão MoveFlex' : ''}`;
+}
+
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -223,7 +229,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
-          <Field label="Modelo de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber}{item.templateKey === 'locacao-padrao' ? ' • Padrão MoveFlex' : ''}</option>)}</select></Field>
+          <Field label="Modelo de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
           <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
           <Field label="Veículo *" error={fieldErrors.vehicleId}><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
           <Field label="Motorista *" error={fieldErrors.driverId}><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.driverId?'border-red-500':''}`}><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
