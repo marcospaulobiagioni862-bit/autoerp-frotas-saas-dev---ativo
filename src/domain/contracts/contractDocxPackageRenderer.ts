@@ -168,6 +168,23 @@ function decodeWordXmlText(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
+function encodeWordXmlText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+interface PackageTextNode {
+  open: string;
+  value: string;
+  close: string;
+  start: number;
+  end: number;
+}
+
 export function extractContractDocxPlainText(docx: Buffer): string {
   const entries = readZip(docx);
   const document = entries.find((entry) => entry.name === 'word/document.xml');
@@ -190,6 +207,106 @@ export function extractContractDocxPlainText(docx: Buffer): string {
     .trim();
   if (!normalized) throw new ContractDocxTemplateError('Rendered DOCX has no readable text');
   return normalized;
+}
+
+export interface ContractDocxLiteralReplacement {
+  paragraphIndex: number;
+  expectedText: string;
+  needle: string;
+  replacement: string;
+  fieldKey: string;
+}
+
+function replaceLiteralInParagraph(
+  paragraphXml: string,
+  replacement: ContractDocxLiteralReplacement,
+): string {
+  const token = /(<w:t\b[^>]*>)([\s\S]*?)(<\/w:t>)/g;
+  const nodes: PackageTextNode[] = [];
+  let visible = '';
+  let match: RegExpExecArray | null;
+
+  while ((match = token.exec(paragraphXml))) {
+    const value = decodeWordXmlText(match[2]);
+    const start = visible.length;
+    visible += value;
+    nodes.push({ open: match[1], value, close: match[3], start, end: visible.length });
+  }
+  if (!nodes.length || visible !== replacement.expectedText) {
+    throw new ContractDocxTemplateError(`Approved DOCX master paragraph mismatch: ${replacement.fieldKey}`);
+  }
+
+  const start = visible.indexOf(replacement.needle);
+  if (start < 0 || visible.indexOf(replacement.needle, start + 1) >= 0) {
+    throw new ContractDocxTemplateError(`Approved DOCX master field mismatch: ${replacement.fieldKey}`);
+  }
+  const end = start + replacement.needle.length;
+  const affected = nodes.filter((node) => node.end > start && node.start < end);
+  if (!affected.length) throw new ContractDocxTemplateError('Approved DOCX master replacement mapping failed');
+
+  const first = affected[0];
+  const last = affected[affected.length - 1];
+  const prefixLength = Math.max(0, start - first.start);
+  const suffixOffset = Math.max(0, end - last.start);
+  const prefix = first.value.slice(0, prefixLength);
+  const suffix = last.value.slice(suffixOffset);
+
+  first.value = prefix + replacement.replacement + (first === last ? suffix : '');
+  for (const node of affected.slice(1, -1)) node.value = '';
+  if (last !== first) last.value = suffix;
+
+  let index = 0;
+  return paragraphXml.replace(token, () => {
+    const node = nodes[index++];
+    return node.open + encodeWordXmlText(node.value) + node.close;
+  });
+}
+
+/**
+ * Applies data only to explicitly mapped blank fields in a checksum-pinned
+ * approved DOCX master. The rest of the package, including headers, footers,
+ * images, section settings and pagination fields, is copied byte-for-byte
+ * through the ZIP package writer without semantic reconstruction.
+ */
+export function renderContractApprovedMasterDocxPackage(
+  docx: Buffer,
+  replacements: readonly ContractDocxLiteralReplacement[],
+): { bytes: Buffer; replacedKeys: string[] } {
+  if (!replacements.length) throw new ContractDocxTemplateError('Approved DOCX master has no fillable data');
+  const entries = readZip(docx);
+  const document = entries.find((entry) => entry.name === 'word/document.xml');
+  if (!document) throw new ContractDocxTemplateError('DOCX required parts are missing');
+
+  const byParagraph = new Map<number, ContractDocxLiteralReplacement[]>();
+  for (const replacement of replacements) {
+    if (!Number.isInteger(replacement.paragraphIndex) || replacement.paragraphIndex < 0) {
+      throw new ContractDocxTemplateError('Invalid approved DOCX master paragraph index');
+    }
+    const items = byParagraph.get(replacement.paragraphIndex) || [];
+    items.push(replacement);
+    byParagraph.set(replacement.paragraphIndex, items);
+  }
+
+  let paragraphIndex = 0;
+  const replacedKeys = new Set<string>();
+  const paragraphToken = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/g;
+  const xml = document.content.toString('utf8');
+  const renderedXml = xml.replace(paragraphToken, (paragraphXml) => {
+    const items = byParagraph.get(paragraphIndex++);
+    if (!items?.length) return paragraphXml;
+    let renderedParagraph = paragraphXml;
+    for (const item of items) {
+      renderedParagraph = replaceLiteralInParagraph(renderedParagraph, item);
+      replacedKeys.add(item.fieldKey);
+    }
+    return renderedParagraph;
+  });
+
+  if (replacedKeys.size !== replacements.length) {
+    throw new ContractDocxTemplateError('Approved DOCX master replacement count mismatch');
+  }
+  document.content = Buffer.from(renderedXml, 'utf8');
+  return { bytes: writeZip(entries), replacedKeys: [...replacedKeys].sort() };
 }
 
 export function renderContractDocxPackage(
