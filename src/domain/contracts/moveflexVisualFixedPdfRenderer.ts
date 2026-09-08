@@ -56,6 +56,11 @@ function checkbox(values: Values, expected: string): string {
   return val(values, 'contract.billingPeriodicity') === expected ? 'X' : '';
 }
 
+function kmText(values: Values): string {
+  const raw = val(values, 'vehicle.currentKm');
+  return raw ? `${raw} km` : '';
+}
+
 function commonCompanyAndDriver01(): Overlay[] {
   return [
     { page: 0, x: 165, y: 264, fieldKey: 'company.name', required: true, value: (v) => val(v, 'company.name'), maxWidth: 355 },
@@ -92,7 +97,7 @@ function commonCompanyAndDriver01(): Overlay[] {
     { page: 0, x: 149, y: 1033, fieldKey: 'vehicle.renavam', required: true, value: (v) => val(v, 'vehicle.renavam'), maxWidth: 365 },
     { page: 0, x: 111, y: 1054, fieldKey: 'vehicle.color', required: true, value: (v) => val(v, 'vehicle.color'), maxWidth: 395 },
     { page: 0, x: 123, y: 1075, fieldKey: 'vehicle.chassis', required: true, value: (v) => val(v, 'vehicle.chassis'), maxWidth: 380 },
-    { page: 0, x: 198, y: 1096, fieldKey: 'vehicle.currentKm', required: true, value: (v) => `${val(v, 'vehicle.currentKm')} km`, maxWidth: 300 },
+    { page: 0, x: 198, y: 1096, fieldKey: 'vehicle.currentKm', required: true, value: kmText, maxWidth: 300 },
     { page: 0, x: 181, y: 1116, fieldKey: 'vehicle.tracker.identifier', value: (v) => first(v, 'vehicle.tracker.serialNumber', 'vehicle.tracker.imei'), maxWidth: 315 },
 
     { page: 0, x: 194, y: 1314, fieldKey: 'contract.startDate', required: true, value: (v) => dateBr(val(v, 'contract.startDate')), maxWidth: 125, eraseWidth: 90 },
@@ -176,6 +181,14 @@ function drawOverlay(page: PDFPage, font: PDFFont, overlay: Overlay, text: strin
   });
 }
 
+export function getMoveFlexVisualFixedMissingFields(templateKey: string, values: Values): string[] {
+  const master = getMoveFlexApprovedContractMaster(templateKey);
+  if (!master) throw new ContractDocxTemplateError('Contract template is not a VISUAL_FIXO MoveFlex master');
+  return overlaysFor(master.templateKey)
+    .filter((overlay) => overlay.required && !overlay.value(values).trim())
+    .map((overlay) => overlay.fieldKey);
+}
+
 export async function renderMoveFlexVisualFixedPdf(
   masterDocx: Buffer,
   templateKey: string,
@@ -185,9 +198,15 @@ export async function renderMoveFlexVisualFixedPdf(
   if (!master) throw new ContractDocxTemplateError('Contract template is not a VISUAL_FIXO MoveFlex master');
 
   const pagePngs = extractContractDocxPagePngs(masterDocx);
-  const expectedPageCount = templateKey === 'locacao-padrao' ? 4 : 5;
+  const expectedPageCount = master.templateKey === 'locacao-padrao' ? 4 : 5;
   if (pagePngs.length !== expectedPageCount) {
     throw new ContractDocxTemplateError('VISUAL_FIXO master page count mismatch');
+  }
+
+  const overlays = overlaysFor(master.templateKey);
+  const missingFields = getMoveFlexVisualFixedMissingFields(templateKey, values);
+  if (missingFields.length) {
+    throw new ContractDocxTemplateError(`Missing VISUAL_FIXO values: ${missingFields.join(',')}`);
   }
 
   const pdf = await PDFDocument.create();
@@ -199,12 +218,9 @@ export async function renderMoveFlexVisualFixedPdf(
   }
 
   const filled = new Set<string>();
-  for (const overlay of overlaysFor(templateKey)) {
+  for (const overlay of overlays) {
     const text = overlay.value(values).trim();
-    if (!text) {
-      if (overlay.required) throw new ContractDocxTemplateError(`Missing VISUAL_FIXO value: ${overlay.fieldKey}`);
-      continue;
-    }
+    if (!text) continue;
     const page = pdf.getPage(overlay.page);
     drawOverlay(page, font, overlay, text);
     filled.add(overlay.fieldKey);
