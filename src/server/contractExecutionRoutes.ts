@@ -10,7 +10,10 @@ import { AuditAction, ContractStatus } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
-import { renderMoveFlexVisualFixedPdf } from '../domain/contracts/moveflexVisualFixedPdfRenderer';
+import {
+  getMoveFlexVisualFixedMissingFields,
+  renderMoveFlexVisualFixedPdf,
+} from '../domain/contracts/moveflexVisualFixedPdfRenderer';
 import { getMoveFlexApprovedContractMaster } from '../domain/contracts/moveflexApprovedContractMaster';
 import { ContractDocxTemplateError } from '../domain/contracts/contractDocxTemplateRenderer';
 import type { AuthenticatedPrincipal } from './auth';
@@ -38,6 +41,11 @@ const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATI
 const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR', 'NOTARY']);
 
 class ExecutionValidationError extends Error {}
+class ExecutionRequiredDataError extends Error {
+  constructor(public readonly fields: string[]) {
+    super('Missing required contract data');
+  }
+}
 class ExecutionNotFoundError extends Error {}
 class ExecutionConflictError extends Error {}
 
@@ -434,7 +442,52 @@ function parseSignedAt(value: unknown): string {
   return parsed.toISOString();
 }
 
+const REQUIRED_DATA_LABELS: Readonly<Record<string, string>> = {
+  'company.name': 'razão social da empresa',
+  'company.document': 'CNPJ/CPF da empresa',
+  'company.address.full': 'endereço completo da empresa',
+  'company.address.cityState': 'cidade/UF da empresa',
+  'company.address.forum': 'cidade/UF da empresa',
+  'company.address.city.signature': 'cidade da empresa',
+  'driver.name': 'nome do motorista',
+  'driver.cpf': 'CPF do motorista',
+  'driver.cnh': 'CNH do motorista',
+  'driver.cnhCategory': 'categoria da CNH',
+  'driver.cnhExpiration': 'validade da CNH',
+  'driver.birthDate': 'data de nascimento do motorista',
+  'driver.address.full': 'endereço completo do motorista',
+  'driver.address.cityState': 'cidade/UF do motorista',
+  'driver.address.zipCode': 'CEP do motorista',
+  'driver.phone': 'telefone do motorista',
+  'vehicle.brand': 'marca do veículo',
+  'vehicle.model': 'modelo do veículo',
+  'vehicle.brandModel': 'marca/modelo do veículo',
+  'vehicle.yearDisplay': 'ano/modelo do veículo',
+  'vehicle.plate': 'placa do veículo',
+  'vehicle.renavam': 'RENAVAM do veículo',
+  'vehicle.color': 'cor do veículo',
+  'vehicle.chassis': 'chassi do veículo',
+  'vehicle.currentKm': 'quilometragem atual do veículo',
+  'contract.startDate': 'data de início do contrato',
+  'contract.rentalAmount': 'valor do aluguel',
+  'company.document.signature': 'CNPJ/CPF da empresa',
+  'driver.cpf.signature': 'CPF do motorista',
+  'driver.name.signature': 'nome do motorista',
+};
+
+function requiredDataLabels(fields: string[]): string[] {
+  return [...new Set(fields.map((field) => REQUIRED_DATA_LABELS[field] || field))];
+}
+
 function sendError(res: Response, error: unknown): void {
+  if (error instanceof ExecutionRequiredDataError) {
+    const fields = requiredDataLabels(error.fields);
+    res.status(422).json({
+      error: `Preencha os dados obrigatórios antes de gerar o contrato: ${fields.join('; ')}.`,
+      missingFields: error.fields,
+    });
+    return;
+  }
   if (error instanceof ExecutionValidationError || error instanceof ContractTemplatePolicyError || error instanceof ContractDocxTemplateError || error instanceof AttachmentStorageValidationError) {
     res.status(400).json({ error: 'Invalid contract execution request' });
     return;
@@ -547,6 +600,8 @@ export function registerContractExecutionRoutes(app: Express): void {
       let visualPageCount: number | undefined;
       let pdf: Buffer;
       if (prepared.approvedMaster) {
+        const missingFields = getMoveFlexVisualFixedMissingFields(prepared.template.templateKey, templateValues);
+        if (missingFields.length) throw new ExecutionRequiredDataError(missingFields);
         if (!prepared.source?.storageKey) throw new ExecutionConflictError();
         const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey);
         sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');

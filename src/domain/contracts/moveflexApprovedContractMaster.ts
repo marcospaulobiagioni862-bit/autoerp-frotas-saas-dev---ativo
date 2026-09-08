@@ -1,5 +1,7 @@
+export type MoveFlexApprovedContractMasterKey = 'locacao-padrao' | 'termo-multas-infracoes';
+
 export interface MoveFlexApprovedContractMaster {
-  templateKey: 'locacao-padrao' | 'termo-multas-infracoes';
+  templateKey: MoveFlexApprovedContractMasterKey;
   title: string;
   fileName: string;
   sha256: string;
@@ -25,8 +27,21 @@ export const MOVEFLEX_APPROVED_CONTRACT_MASTERS = [
 
 export const MOVEFLEX_DEFAULT_TEMPLATE_KEY = 'locacao-padrao' as const;
 
+const MOVEFLEX_APPROVED_TEMPLATE_KEY_ALIASES: Readonly<Record<string, MoveFlexApprovedContractMasterKey>> = {
+  'contrato-01': 'locacao-padrao',
+  'contrato-02': 'termo-multas-infracoes',
+};
+
+export function canonicalMoveFlexApprovedTemplateKey(templateKey: string): MoveFlexApprovedContractMasterKey | undefined {
+  if (templateKey === 'locacao-padrao' || templateKey === 'termo-multas-infracoes') return templateKey;
+  return MOVEFLEX_APPROVED_TEMPLATE_KEY_ALIASES[templateKey];
+}
+
 export function getMoveFlexApprovedContractMaster(templateKey: string): MoveFlexApprovedContractMaster | undefined {
-  return MOVEFLEX_APPROVED_CONTRACT_MASTERS.find((item) => item.templateKey === templateKey);
+  const canonicalKey = canonicalMoveFlexApprovedTemplateKey(templateKey);
+  return canonicalKey
+    ? MOVEFLEX_APPROVED_CONTRACT_MASTERS.find((item) => item.templateKey === canonicalKey)
+    : undefined;
 }
 
 export function isMoveFlexApprovedContractMasterKey(templateKey: string): boolean {

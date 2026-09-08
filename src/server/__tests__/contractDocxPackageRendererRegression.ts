@@ -4,7 +4,10 @@ import {
   extractContractDocxPagePngs,
   renderContractDocxPackage,
 } from '../../domain/contracts/contractDocxPackageRenderer';
-import { renderMoveFlexVisualFixedPdf } from '../../domain/contracts/moveflexVisualFixedPdfRenderer';
+import {
+  getMoveFlexVisualFixedMissingFields,
+  renderMoveFlexVisualFixedPdf,
+} from '../../domain/contracts/moveflexVisualFixedPdfRenderer';
 import { PDFDocument } from 'pdf-lib';
 
 const LOCAL_FILE = 0x04034b50;
@@ -142,7 +145,7 @@ export async function runContractDocxPackageRendererRegression(): Promise<void> 
   assert(extractedPages.length === 4, 'VISUAL_FIXO page extraction did not preserve 4 master pages');
   assert(extractedPages.every((item) => item.equals(pagePng)), 'VISUAL_FIXO page bytes changed during extraction');
 
-  const visual = await renderMoveFlexVisualFixedPdf(visualSource, 'locacao-padrao', {
+  const visualValues = {
     'company.name': 'MoveFlex Locação',
     'company.document': '00.000.000/0001-00',
     'company.address.full': 'Rua Teste, 10, Centro, Sorocaba - SP, CEP 18000-000',
@@ -171,7 +174,17 @@ export async function runContractDocxPackageRendererRegression(): Promise<void> 
     'contract.rentalAmount': 'R$ 700,00',
     'contract.billingPeriodicity': 'WEEKLY',
     'contract.billingDueDayOfWeekLabel': 'segunda-feira',
+  };
+  const missingBefore = getMoveFlexVisualFixedMissingFields('contrato-01', {
+    ...visualValues,
+    'company.address.full': '',
+    'company.address.city': '',
+    'company.address.state': '',
   });
+  assert(missingBefore.includes('company.address.full'), 'VISUAL_FIXO preflight did not report missing company address through Contract 01 alias');
+  assert(missingBefore.includes('company.address.cityState'), 'VISUAL_FIXO preflight did not report missing company city/state through Contract 01 alias');
+
+  const visual = await renderMoveFlexVisualFixedPdf(visualSource, 'contrato-01', visualValues);
   assert(visual.bytes.subarray(0, 5).toString('ascii') === '%PDF-', 'VISUAL_FIXO output is not PDF');
   assert(visual.pageCount === 4, 'VISUAL_FIXO PDF page count changed');
   assert(visual.filledKeys.includes('driver.name') && visual.filledKeys.includes('vehicle.plate'), 'VISUAL_FIXO required fields were not overlaid');
