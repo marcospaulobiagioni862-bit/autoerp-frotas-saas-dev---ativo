@@ -13,6 +13,24 @@ interface ContractTemplateManagementModalProps {
 }
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+type ApprovedSourceStatus = 'VALID' | 'INVALID' | 'MISSING';
+
+function approvedSourceStatus(
+  items: FileAttachment[],
+  master: NonNullable<ReturnType<typeof getMoveFlexApprovedContractMaster>>,
+): ApprovedSourceStatus {
+  const activeSources = items.filter((item) =>
+    !item.isArchived &&
+    item.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+    item.contentState === 'AVAILABLE'
+  );
+  if (activeSources.some((item) =>
+    item.mimeType === DOCX_MIME &&
+    item.fileSize === master.fileSize &&
+    item.checksum === master.sha256
+  )) return 'VALID';
+  return activeSources.length ? 'INVALID' : 'MISSING';
+}
 const PLACEHOLDERS = [
   '{{company.name}}', '{{company.document}}', '{{contract.number}}', '{{contract.startDate}}',
   '{{contract.endDate}}', '{{contract.rentalAmount}}', '{{contract.securityDepositAmount}}',
@@ -37,6 +55,7 @@ async function sourceAttachment(templateId: string): Promise<FileAttachment> {
 
 export const ContractTemplateManagementModal: React.FC<ContractTemplateManagementModalProps> = ({ isOpen, onClose }) => {
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+  const [approvedSources, setApprovedSources] = useState<Record<string, ApprovedSourceStatus>>({});
   const [editing, setEditing] = useState<ContractTemplate | null>(null);
   const [templateKey, setTemplateKey] = useState('locacao-padrao');
   const [title, setTitle] = useState('Contrato de Locação de Veículo');
@@ -50,7 +69,15 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   const load = async () => {
     try {
       await ContractTemplateClient.ensureMoveFlexDefault();
-      setTemplates(await ContractTemplateClient.list({ activeOnly: false }));
+      const list = await ContractTemplateClient.list({ activeOnly: false });
+      const sourcePairs = await Promise.all(list.map(async (item) => {
+        const master = getMoveFlexApprovedContractMaster(item.templateKey);
+        if (!master) return [item.id, 'MISSING'] as const;
+        const attachments = await AttachmentClient.list({ entityType: 'ContractTemplate', entityId: item.id });
+        return [item.id, approvedSourceStatus(attachments, master)] as const;
+      }));
+      setTemplates(list);
+      setApprovedSources(Object.fromEntries(sourcePairs));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar modelos.');
     }
@@ -176,15 +203,33 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     setError(null);
     setSuccess(null);
     try {
-      await AttachmentClient.upload({
-        entityType: 'ContractTemplate',
-        entityId: item.id,
-        documentType: 'CONTRACT_TEMPLATE_SOURCE',
-        fileName: file.name,
-        mimeType: DOCX_MIME,
-        content: file,
-        description: `Arquivo mestre aprovado e imutável: ${master.fileName}`,
-      });
+      const existing = await AttachmentClient.list({ entityType: 'ContractTemplate', entityId: item.id });
+      const activeSources = existing.filter((attachment) =>
+        !attachment.isArchived &&
+        attachment.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+        attachment.contentState === 'AVAILABLE'
+      );
+      const exactExisting = activeSources.find((attachment) =>
+        attachment.mimeType === DOCX_MIME &&
+        attachment.fileSize === master.fileSize &&
+        attachment.checksum === master.sha256
+      );
+
+      if (!exactExisting) {
+        for (const attachment of activeSources) {
+          await AttachmentClient.archive(attachment.id);
+        }
+        await AttachmentClient.upload({
+          entityType: 'ContractTemplate',
+          entityId: item.id,
+          documentType: 'CONTRACT_TEMPLATE_SOURCE',
+          fileName: file.name,
+          mimeType: DOCX_MIME,
+          content: file,
+          description: `Arquivo mestre aprovado e imutável: ${master.fileName}`,
+        });
+      }
+
       await ContractTemplateClient.promoteFileSource(item.id);
       setSuccess(`Arquivo mestre aprovado ativado: ${master.fileName}.`);
       await load();
@@ -259,18 +304,30 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
           {templates.length === 0 ? <div className="rounded-xl border border-dashed p-5 text-center text-xs text-slate-500 dark:text-slate-300"><p>Nenhum modelo cadastrado.</p><p className="mt-2 text-[10px]">Atualize a tela para o servidor preparar os registros dos arquivos mestres aprovados.</p></div> : templates.map((item) => {
             const fileBacked = !item.contentMarkdown.trim();
             const approvedMaster = getMoveFlexApprovedContractMaster(item.templateKey);
+            const sourceStatus = approvedMaster ? approvedSources[item.id] || 'MISSING' : 'MISSING';
+            const approvedValid = Boolean(approvedMaster && sourceStatus === 'VALID');
+            const displayTitle = approvedMaster?.title || item.title;
             return (
               <div key={item.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{item.title}</b><p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.templateKey}</p>{approvedMaster ? <p className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"><LockKeyhole className="h-3 w-3" />{item.isActive ? 'Arquivo mestre aprovado • imutável' : `Aguardando mestre aprovado: ${approvedMaster.fileName}`}</p> : fileBacked ? <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Fonte: arquivo PDF/DOCX personalizado</p> : null}</div><Badge variant={item.isActive ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
+                <div className="flex items-start justify-between gap-3"><div><b className="text-sm">{displayTitle}</b><p className="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.templateKey}</p>{approvedMaster ? (
+                  sourceStatus === 'VALID'
+                    ? <p className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"><LockKeyhole className="h-3 w-3" />Arquivo mestre aprovado • imutável</p>
+                    : sourceStatus === 'INVALID'
+                      ? <p className="mt-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Fonte antiga/inválida — substituir por {approvedMaster.fileName}</p>
+                      : <p className="mt-1 text-[10px] font-semibold text-slate-500 dark:text-slate-300">Aguardando mestre aprovado: {approvedMaster.fileName}</p>
+                ) : fileBacked ? <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">Fonte: arquivo PDF/DOCX personalizado</p> : null}</div><Badge variant={approvedValid || (!approvedMaster && item.isActive) ? 'success' : 'neutral'}>v{item.versionNumber}</Badge></div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {approvedMaster ? (
-                    item.isActive ? <>
+                    approvedValid ? <>
                       <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir mestre</Button>
                       <Button size="sm" variant="ghost" onClick={() => void openSource(item, true)}><Download className="w-4 h-4" />Baixar mestre</Button>
-                    </> : <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
-                      <Upload className="h-4 w-4" />Carregar arquivo mestre
-                      <input type="file" className="hidden" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={loading} onChange={(event) => { const file = event.target.files?.[0] || null; event.currentTarget.value = ''; void uploadApprovedMaster(item, file); }} />
-                    </label>
+                    </> : <>
+                      {sourceStatus === 'INVALID' && <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir fonte antiga</Button>}
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-900">
+                        <Upload className="h-4 w-4" />{sourceStatus === 'INVALID' ? 'Substituir pelo mestre aprovado' : 'Carregar arquivo mestre'}
+                        <input type="file" className="hidden" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={loading} onChange={(event) => { const file = event.target.files?.[0] || null; event.currentTarget.value = ''; void uploadApprovedMaster(item, file); }} />
+                      </label>
+                    </>
                   ) : <>
                     <Button size="sm" variant="secondary" onClick={() => startVersion(item)}><History className="w-4 h-4" />Nova versão</Button>
                     {fileBacked && <Button size="sm" variant="ghost" onClick={() => void openSource(item)}><ExternalLink className="w-4 h-4" />Abrir arquivo</Button>}
