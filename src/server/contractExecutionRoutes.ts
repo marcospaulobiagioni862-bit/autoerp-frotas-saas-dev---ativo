@@ -10,7 +10,7 @@ import { AuditAction, ContractStatus } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
-import { renderMoveFlexApprovedMasterDocx } from '../domain/contracts/moveflexApprovedMasterRenderer';
+import { renderMoveFlexVisualFixedPdf } from '../domain/contracts/moveflexVisualFixedPdfRenderer';
 import { getMoveFlexApprovedContractMaster } from '../domain/contracts/moveflexApprovedContractMaster';
 import { ContractDocxTemplateError } from '../domain/contracts/contractDocxTemplateRenderer';
 import type { AuthenticatedPrincipal } from './auth';
@@ -493,12 +493,29 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
         if (!template || template.isArchived) throw new ExecutionNotFoundError();
-        if (
-          !template.isCurrent ||
-          !template.isActive ||
-          !template.contentMarkdown.trim() ||
-          getMoveFlexApprovedContractMaster(template.templateKey)
-        ) throw new ExecutionConflictError();
+        if (!template.isCurrent || !template.isActive) throw new ExecutionConflictError();
+        const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+        let source: any | undefined;
+        if (approvedMaster) {
+          if (template.contentMarkdown.trim()) throw new ExecutionConflictError();
+          const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
+          const sources = attachments.filter((item) =>
+            !item.isArchived &&
+            item.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
+            item.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
+            item.contentState === 'AVAILABLE' &&
+            item.storageProvider === storage.provider &&
+            Boolean(item.storageKey)
+          );
+          if (
+            sources.length !== 1 ||
+            sources[0].checksum !== approvedMaster.sha256 ||
+            sources[0].fileSize !== approvedMaster.fileSize
+          ) throw new ExecutionConflictError();
+          source = sources[0];
+        } else if (!template.contentMarkdown.trim()) {
+          throw new ExecutionConflictError();
+        }
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
@@ -510,7 +527,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         const vehicleTracker = await loadContractVehicleTrackerSnapshot(
           tx, principal.companyId, vehicle.id
         );
-        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker };
+        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, approvedMaster, source };
       });
 
       const snapshot = makeSnapshot(
@@ -524,8 +541,29 @@ export function registerContractExecutionRoutes(app: Express): void {
       );
       const snapshotJson = JSON.stringify(snapshot);
       const snapshotHash = createHash('sha256').update(snapshotJson).digest('hex');
-      const rendered = renderContractTemplate(prepared.template.contentMarkdown, valuesFromSnapshot(snapshot));
-      const pdf = await createPdf(`${prepared.template.title} - ${prepared.contract.contractNumber}`, rendered);
+      const templateValues = valuesFromSnapshot(snapshot);
+      let sourceChecksum: string | undefined;
+      let filledKeys: string[] | undefined;
+      let visualPageCount: number | undefined;
+      let pdf: Buffer;
+      if (prepared.approvedMaster) {
+        if (!prepared.source?.storageKey) throw new ExecutionConflictError();
+        const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey);
+        sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');
+        if (
+          sourceChecksum !== prepared.approvedMaster.sha256 ||
+          sourceBytes.length !== prepared.approvedMaster.fileSize ||
+          sourceChecksum !== prepared.source.checksum ||
+          sourceBytes.length !== prepared.source.fileSize
+        ) throw new ExecutionValidationError('Invalid VISUAL_FIXO master source');
+        const visual = await renderMoveFlexVisualFixedPdf(sourceBytes, prepared.template.templateKey, templateValues);
+        pdf = visual.bytes;
+        filledKeys = visual.filledKeys;
+        visualPageCount = visual.pageCount;
+      } else {
+        const rendered = renderContractTemplate(prepared.template.contentMarkdown, templateValues);
+        pdf = await createPdf(`${prepared.template.title} - ${prepared.contract.contractNumber}`, rendered);
+      }
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, pdf);
       storedKey = stored.storageKey;
@@ -549,6 +587,32 @@ export function registerContractExecutionRoutes(app: Express): void {
           tx, principal.companyId, vehicle.id
         );
         if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, vehicleTracker, template)) throw new ExecutionConflictError();
+        const currentApprovedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+        if (prepared.approvedMaster) {
+          if (
+            !currentApprovedMaster ||
+            currentApprovedMaster.sha256 !== prepared.approvedMaster.sha256 ||
+            template.contentMarkdown.trim() ||
+            !prepared.source ||
+            !sourceChecksum
+          ) throw new ExecutionConflictError();
+          const source = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, prepared.source.id);
+          if (
+            !source || source.isArchived ||
+            source.entityType !== 'ContractTemplate' ||
+            source.entityId !== template.id ||
+            source.documentType !== 'CONTRACT_TEMPLATE_SOURCE' ||
+            source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            source.contentState !== 'AVAILABLE' ||
+            source.storageProvider !== storage.provider ||
+            source.storageKey !== prepared.source.storageKey ||
+            source.checksum !== sourceChecksum ||
+            source.checksum !== currentApprovedMaster.sha256 ||
+            source.fileSize !== currentApprovedMaster.fileSize
+          ) throw new ExecutionConflictError();
+        } else if (currentApprovedMaster || !template.contentMarkdown.trim()) {
+          throw new ExecutionConflictError();
+        }
 
         const attachment = await tx.getAttachmentRepo().create({
           id: attachmentId,
@@ -566,7 +630,9 @@ export function registerContractExecutionRoutes(app: Express): void {
           checksum: stored.checksum,
           createdBy: principal.userId,
           contentState: 'AVAILABLE',
-          description: 'PDF oficial do contrato gerado no servidor',
+          description: prepared.approvedMaster
+            ? 'PDF oficial gerado sobre o arquivo mestre VISUAL_FIXO imutável'
+            : 'PDF oficial do contrato gerado no servidor',
           isArchived: false,
           createdAt: now,
         });
@@ -614,7 +680,17 @@ export function registerContractExecutionRoutes(app: Express): void {
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
-          newState: JSON.stringify({ event: 'GENERATE_PDF', templateId: template.id, snapshotHash }),
+          newState: JSON.stringify({
+            event: prepared.approvedMaster ? 'GENERATE_PDF_FROM_VISUAL_FIXED_MASTER' : 'GENERATE_PDF',
+            templateId: template.id,
+            snapshotHash,
+            approvedMasterFileName: prepared.approvedMaster?.fileName,
+            approvedMasterSha256: prepared.approvedMaster?.sha256,
+            sourceAttachmentId: prepared.source?.id,
+            sourceChecksum,
+            pageCount: visualPageCount,
+            filledKeys,
+          }),
           timestamp: now,
         });
 
@@ -645,7 +721,12 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) throw new ExecutionConflictError();
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
         if (!template || template.isArchived) throw new ExecutionNotFoundError();
-        if (!template.isCurrent || !template.isActive || template.contentMarkdown.trim()) throw new ExecutionConflictError();
+        if (
+          !template.isCurrent ||
+          !template.isActive ||
+          template.contentMarkdown.trim() ||
+          getMoveFlexApprovedContractMaster(template.templateKey)
+        ) throw new ExecutionConflictError();
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
@@ -667,26 +748,14 @@ export function registerContractExecutionRoutes(app: Express): void {
           Boolean(item.storageKey)
         );
         if (sources.length !== 1) throw new ExecutionConflictError();
-        const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
-        if (
-          approvedMaster &&
-          (
-            sources[0].checksum !== approvedMaster.sha256 ||
-            sources[0].fileSize !== approvedMaster.fileSize
-          )
-        ) throw new ExecutionConflictError();
-        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0], approvedMaster };
+        return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0] };
       });
 
       const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!);
       const sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');
       if (
         !prepared.source.checksum || sourceChecksum !== prepared.source.checksum ||
-        sourceBytes.length !== prepared.source.fileSize ||
-        (prepared.approvedMaster && (
-          sourceChecksum !== prepared.approvedMaster.sha256 ||
-          sourceBytes.length !== prepared.approvedMaster.fileSize
-        ))
+        sourceBytes.length !== prepared.source.fileSize
       ) throw new ExecutionValidationError('Invalid DOCX template source');
 
       const snapshot = makeSnapshot(
@@ -725,9 +794,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       }
 
       const templateValues = valuesFromSnapshot(snapshot);
-      const rendered = prepared.approvedMaster
-        ? renderMoveFlexApprovedMasterDocx(sourceBytes, prepared.template.templateKey, templateValues)
-        : renderContractDocxPackage(sourceBytes, templateValues);
+      const rendered = renderContractDocxPackage(sourceBytes, templateValues);
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, rendered.bytes);
       storedKey = stored.storageKey;
@@ -757,11 +824,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           source.documentType !== 'CONTRACT_TEMPLATE_SOURCE' ||
           source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
           source.contentState !== 'AVAILABLE' || source.storageProvider !== storage.provider ||
-          source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum ||
-          (prepared.approvedMaster && (
-            source.checksum !== prepared.approvedMaster.sha256 ||
-            source.fileSize !== prepared.approvedMaster.fileSize
-          ))
+          source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum
         ) throw new ExecutionConflictError();
 
         const currentDocx = await tx.getContractArtifactRepo().findCurrentForContract(
@@ -841,12 +904,10 @@ export function registerContractExecutionRoutes(app: Express): void {
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
           newState: JSON.stringify({
-            event: prepared.approvedMaster ? 'GENERATE_DOCX_FROM_APPROVED_MASTER' : 'GENERATE_DOCX',
+            event: 'GENERATE_DOCX',
             templateId: template.id,
             sourceAttachmentId: source.id,
             sourceChecksum,
-            approvedMasterFileName: prepared.approvedMaster?.fileName,
-            approvedMasterSha256: prepared.approvedMaster?.sha256,
             snapshotHash,
             replacedKeys: rendered.replacedKeys,
           }),

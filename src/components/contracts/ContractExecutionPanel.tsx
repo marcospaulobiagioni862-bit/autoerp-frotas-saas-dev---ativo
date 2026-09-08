@@ -6,6 +6,7 @@ import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, FileAttachment } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
+import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 import { Badge, Button, Card, Input } from '../ui';
 import { FileUpload } from '../documents/FileUpload';
 
@@ -108,16 +109,19 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       setError('O modelo selecionado não está disponível.');
       return;
     }
-    const docxBacked = !selected.contentMarkdown.trim();
+    const visualFixed = Boolean(getMoveFlexApprovedContractMaster(selected.templateKey));
+    const customDocx = !visualFixed && !selected.contentMarkdown.trim();
     void run(async () => {
-      if (docxBacked) {
-        await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
-      } else {
+      if (visualFixed || selected.contentMarkdown.trim()) {
         await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
+      } else {
+        await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
       }
-    }, docxBacked
-      ? 'DOCX oficial preenchido preservando o layout do modelo. Revise e assine externamente em PDF.'
-      : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
+    }, visualFixed
+      ? 'PDF oficial gerado sobre as páginas VISUAL_FIXO aprovadas, sem reconstruir cabeçalho, rodapé ou cláusulas.'
+      : customDocx
+        ? 'DOCX personalizado preenchido para revisão humana.'
+        : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
   };
 
   const openAttachment = async (attachmentId: string) => {
@@ -173,7 +177,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            Gere o documento oficial. Modelos DOCX preservam o layout do Word: abra o DOCX preenchido, revise/converta e assine externamente em PDF; depois envie o PDF assinado como evidência. GOV.br registra o método informado, sem validação criptográfica automática pelo ERP.
+            Gere o documento oficial. Os dois modelos padrão MoveFlex usam as páginas VISUAL_FIXO aprovadas como fundo imutável e apenas recebem os dados nos campos em branco, gerando PDF para assinatura. GOV.br registra o método informado, sem validação criptográfica automática pelo ERP.
           </p>
         </div>
         <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
@@ -196,7 +200,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               onChange={(event) => setSelectedTemplateId(event.target.value)}
             >
               <option value="">Selecione</option>
-              {templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber} • {item.contentMarkdown.trim() ? 'PDF' : 'DOCX'}</option>)}
+              {templates.map((item) => <option key={item.id} value={item.id}>{item.title} • v{item.versionNumber} • {getMoveFlexApprovedContractMaster(item.templateKey) ? 'VISUAL_FIXO → PDF' : item.contentMarkdown.trim() ? 'PDF' : 'DOCX'}</option>)}
             </select>
           </label>
           {generated ? (

@@ -10,16 +10,16 @@ export const MOVEFLEX_APPROVED_CONTRACT_MASTERS = [
   {
     templateKey: 'locacao-padrao',
     title: 'Contrato 01 — Contrato Particular de Locação de Veículo',
-    fileName: 'CONTRATO_01_MOVEFLEX_ERP_FINAL.docx',
-    sha256: '7b85e9e97af67ce15368b81999c4ce73570fe012e8f1f06bc0fd9c150fa2e7c2',
-    fileSize: 806470,
+    fileName: 'CONTRATO_01_MOVEFLEX_VISUAL_FIXO.docx',
+    sha256: '76bf2d51fef2679b7d47294c35800bbd9c807ab7e40cfd01c171a53a6d0a9b6c',
+    fileSize: 4331240,
   },
   {
     templateKey: 'termo-multas-infracoes',
     title: 'Contrato 02 — Termo de Responsabilidade por Multas e Infrações',
-    fileName: 'CONTRATO_02_MOVEFLEX_ERP_FINAL.docx',
-    sha256: '792e7df4a5cfc7cd36cd5bd3659dc68be42432f63671279f24025b3039b39e7d',
-    fileSize: 808960,
+    fileName: 'CONTRATO_02_MOVEFLEX_VISUAL_FIXO.docx',
+    sha256: '910636f745f16c8d3c8e08dec9dca112d3c3250bb282f1536e800ebc03258193',
+    fileSize: 6621021,
   },
 ] as const satisfies readonly MoveFlexApprovedContractMaster[];
 

@@ -10,7 +10,7 @@ const executionPanel = readFileSync(new URL('../ContractExecutionPanel.tsx', imp
 const templatePolicy = readFileSync(new URL('../../../domain/contracts/contractTemplatePolicy.ts', import.meta.url), 'utf8');
 const executionRoutes = readFileSync(new URL('../../../server/contractExecutionRoutes.ts', import.meta.url), 'utf8');
 const approvedMasterRegistry = readFileSync(new URL('../../../domain/contracts/moveflexApprovedContractMaster.ts', import.meta.url), 'utf8');
-const approvedMasterRenderer = readFileSync(new URL('../../../domain/contracts/moveflexApprovedMasterRenderer.ts', import.meta.url), 'utf8');
+const visualFixedRenderer = readFileSync(new URL('../../../domain/contracts/moveflexVisualFixedPdfRenderer.ts', import.meta.url), 'utf8');
 const attachmentRoutes = readFileSync(new URL('../../../server/attachmentRoutes.ts', import.meta.url), 'utf8');
 const templateClient = readFileSync(new URL('../../../api/contractTemplateClient.ts', import.meta.url), 'utf8');
 
@@ -94,10 +94,12 @@ assert.match(executionPanel, /templateList\.find\(\(item\) => item\.templateKey 
 assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure both persisted MoveFlex official models before listing templates');
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
-assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'new markdown-backed contract must generate its official PDF automatically after save');
-assert.match(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id, selectedTemplate\.id\)/, 'new DOCX-backed contract must generate the filled DOCX from the official file source');
+assert.match(contractForm, /visualFixed \|\| selectedTemplate\.contentMarkdown\.trim\(\)/, 'VISUAL_FIXO and Markdown templates must generate PDF directly');
+assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'standard VISUAL_FIXO contract must generate its official PDF automatically after save');
+assert.match(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id, selectedTemplate\.id\)/, 'custom DOCX templates must retain their separate DOCX flow');
 assert.doesNotMatch(contractForm, /generatePdfFromDocx/, 'new DOCX-backed contract must not reflow the official Word layout into the legacy server PDF');
-assert.match(executionPanel, /ContractExecutionClient\.generateDocx\(contract\.id, selectedTemplateId\)/, 'contract execution must regenerate the official filled DOCX on demand');
+assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(selected\.templateKey\)/, 'contract execution must recognize VISUAL_FIXO standard templates');
+assert.match(executionPanel, /visualFixed \|\| selected\.contentMarkdown\.trim\(\)/, 'VISUAL_FIXO standard must generate PDF instead of DOCX');
 assert.doesNotMatch(executionPanel, /generatePdfFromDocx/, 'contract execution UI must not use the layout-losing DOCX-to-text PDF path');
 assert.match(source, /handleContractSaved[\s\S]*openContractDetails\(result\.contract\.id, 'PDF_SIGNATURE'\)/, 'new contract save must open the PDF/signature flow automatically');
 assert.match(contractForm, /Segunda-feira/, 'weekly billing must offer Monday');
@@ -152,20 +154,25 @@ assert.match(
 assert.doesNotMatch(templateModal, /buildMoveFlexBaseContractPdf/, 'standard contract manager must not generate a reconstructed base PDF');
 assert.doesNotMatch(templateModal, /Baixar modelo-base MoveFlex/, 'standard contract manager must not offer a derived base document');
 assert.match(templateModal, /Arquivo mestre aprovado • imutável/, 'active standard template must be visibly locked to the approved master');
+assert.match(executionPanel, /VISUAL_FIXO aprovadas como fundo imutável/, 'execution UI must explain the immutable VISUAL_FIXO workflow');
 assert.match(templateModal, /Carregar arquivo mestre/, 'pending standard template must request the approved master file');
 assert.match(templateModal, /getMoveFlexApprovedContractMaster/, 'template manager must identify standard masters from the immutable registry');
-assert.match(approvedMasterRegistry, /CONTRATO_01_MOVEFLEX_ERP_FINAL\.docx/, 'Contract 01 approved filename must be pinned');
-assert.match(approvedMasterRegistry, /7b85e9e97af67ce15368b81999c4ce73570fe012e8f1f06bc0fd9c150fa2e7c2/, 'Contract 01 approved SHA-256 must be pinned');
-assert.match(approvedMasterRegistry, /CONTRATO_02_MOVEFLEX_ERP_FINAL\.docx/, 'Contract 02 approved filename must be pinned');
-assert.match(approvedMasterRegistry, /792e7df4a5cfc7cd36cd5bd3659dc68be42432f63671279f24025b3039b39e7d/, 'Contract 02 approved SHA-256 must be pinned');
-assert.match(approvedMasterRenderer, /renderContractApprovedMasterDocxPackage/, 'approved master generation must fill a copy of the exact DOCX package');
+assert.match(approvedMasterRegistry, /CONTRATO_01_MOVEFLEX_VISUAL_FIXO\.docx/, 'Contract 01 VISUAL_FIXO filename must be pinned');
+assert.match(approvedMasterRegistry, /76bf2d51fef2679b7d47294c35800bbd9c807ab7e40cfd01c171a53a6d0a9b6c/, 'Contract 01 VISUAL_FIXO SHA-256 must be pinned');
+assert.match(approvedMasterRegistry, /fileSize: 4331240/, 'Contract 01 VISUAL_FIXO size must be pinned');
+assert.match(approvedMasterRegistry, /CONTRATO_02_MOVEFLEX_VISUAL_FIXO\.docx/, 'Contract 02 VISUAL_FIXO filename must be pinned');
+assert.match(approvedMasterRegistry, /910636f745f16c8d3c8e08dec9dca112d3c3250bb282f1536e800ebc03258193/, 'Contract 02 VISUAL_FIXO SHA-256 must be pinned');
+assert.match(approvedMasterRegistry, /fileSize: 6621021/, 'Contract 02 VISUAL_FIXO size must be pinned');
+assert.match(visualFixedRenderer, /extractContractDocxPagePngs/, 'VISUAL_FIXO generation must use the immutable page images from the approved DOCX');
+assert.match(visualFixedRenderer, /page\.drawImage\(image, \{ x: 0, y: 0, width: PDF_WIDTH, height: PDF_HEIGHT \}\)/, 'VISUAL_FIXO must render each exact page image as the PDF background');
+assert.match(visualFixedRenderer, /expectedPageCount = templateKey === 'locacao-padrao' \? 4 : 5/, 'VISUAL_FIXO must keep the approved 4-page and 5-page counts');
 assert.match(templateRoutes, /MOVEFLEX_APPROVED_CONTRACT_MASTERS/, 'server bootstrap must prepare only checksum-pinned approved standard masters');
 assert.match(templateRoutes, /ApprovedMasterLockedError/, 'server must lock approved standard template lifecycle');
 assert.match(templateRoutes, /source\.checksum !== approvedMaster\.sha256/, 'standard promotion must reject any source whose SHA-256 differs from the approved master');
 assert.match(attachmentRoutes, /checksum!==master\.sha256/, 'standard master upload must be rejected before storage when bytes differ');
-assert.match(executionRoutes, /renderMoveFlexApprovedMasterDocx/, 'contract execution must render standard documents only from the approved master renderer');
-assert.match(executionRoutes, /GENERATE_DOCX_FROM_APPROVED_MASTER/, 'approved master generation must be explicitly audited');
-assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(generatedTemplate\.templateKey\)/, 'legacy DOCX-to-PDF reflow must be blocked for approved masters');
+assert.match(executionRoutes, /renderMoveFlexVisualFixedPdf/, 'contract execution must render standard documents only from the VISUAL_FIXO renderer');
+assert.match(executionRoutes, /GENERATE_PDF_FROM_VISUAL_FIXED_MASTER/, 'VISUAL_FIXO generation must be explicitly audited');
+assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(template\.templateKey\)/, 'standard VISUAL_FIXO must be distinguished from custom templates server-side');
 assert.match(contractForm, /O arquivo mestre aprovado do Contrato 01 ainda não está ativo/, 'new contract creation must fail closed until the approved master is active');
 assert.match(
   templateModal,
