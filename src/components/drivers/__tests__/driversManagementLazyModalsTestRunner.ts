@@ -111,6 +111,12 @@ assert.match(detailsSource, /currentOnly:\s*true/, 'driver document list must re
 assert.match(detailsSource, /includeArchived:\s*false/, 'driver document list must exclude archived records from the main profile');
 assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'current CNH UI must not consume storage or tenant authority fields');
 
+assert.match(detailsSource, /coreDriver\.currentVehicleId \|\| supplemental\.currentContract\?\.vehicleId/, 'driver vehicle tab must resolve a vehicle from a blocking contract before activation');
+assert.match(detailsSource, /Veículo vinculado ao contrato/, 'pre-active contract must be described as a contractual vehicle link, not an active rental');
+assert.match(detailsSource, /AWAITING_SIGNATURE: 'Aguardando assinatura'/, 'driver contract status must be translated for operational users');
+assert.match(detailsSource, /contract\.rentalAmount \|\| 0/, 'driver contract history must display the authoritative rental amount');
+assert.doesNotMatch(detailsSource, /contract\.recurringValue \|\| 0/, 'driver contract history must not use the legacy recurringValue field');
+
 assert.match(source, /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/, 'driver list and optional vehicle enrichment must settle independently');
 assert.match(source, /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/, 'driver authority failure must fail the primary list closed');
 assert.match(source, /setDrivers\(driversResult\.value\);[\s\S]*if \(vehiclesResult\.status === 'fulfilled'\)[\s\S]*setVehiclesMap\(vMap\);[\s\S]*else[\s\S]*setVehiclesMap\(\{\}\);/, 'vehicle enrichment failure must preserve the already loaded driver list');
