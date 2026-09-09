@@ -25,6 +25,18 @@ export function confirmDiscardUnsavedChanges(message = UNSAVED_CHANGES_MESSAGE):
   return window.confirm(message);
 }
 
+export function requestGuardedClose(
+  event: { currentTarget: EventTarget | null },
+  onClose: () => void,
+  message = UNSAVED_CHANGES_MESSAGE
+): void {
+  const element = event.currentTarget instanceof Element ? event.currentTarget : null;
+  const guardId = element?.closest('[data-unsaved-guard]')?.getAttribute('data-unsaved-guard') || '';
+  if (guardId && dirtySources.has(guardId) && !window.confirm(message)) return;
+  if (guardId) clearUnsavedChanges(guardId);
+  onClose();
+}
+
 export function installUnsavedChangesBeforeUnload(): () => void {
   const handler = (event: BeforeUnloadEvent) => {
     if (!hasUnsavedChanges()) return;
