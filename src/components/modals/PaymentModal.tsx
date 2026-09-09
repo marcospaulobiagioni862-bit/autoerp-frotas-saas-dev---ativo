@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
 import {
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
   FinanceSettlementClient,
   SettlementAccountOption,
   SettlementPaymentMethodOption,
@@ -103,7 +104,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={(event)=>requestGuardedClose(event,onClose)}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -214,7 +215,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={onClose}
+              onClick={(event)=>requestGuardedClose(event,onClose)}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancelar
