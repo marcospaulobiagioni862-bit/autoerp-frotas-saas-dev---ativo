@@ -873,6 +873,7 @@ jobs:
           npx tsx src/server/__tests__/vehicleIdentityGuardIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractAuthorityIntegration.ts
+          npx tsx src/server/__tests__/contractTemplateFileSourceRegression.ts
           npx tsx src/server/__tests__/contractSignatureTimeGateRegression.ts
       - name: Finance authority regressions
         if: matrix.suite == 'finance'
