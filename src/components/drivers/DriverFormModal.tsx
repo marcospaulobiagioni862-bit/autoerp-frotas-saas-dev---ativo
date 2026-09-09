@@ -28,7 +28,8 @@ type FieldName =
   | 'fullName' | 'cpf' | 'birthDate' | 'phone' | 'whatsapp' | 'email'
   | 'zipCode' | 'street' | 'number' | 'complement' | 'neighborhood' | 'city' | 'state'
   | 'residenceType' | 'residenceTypeOther' | 'condominiumName' | 'blockTower' | 'unit' | 'floor'
-  | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration' | 'cnhEar';
+  | 'cnhNumber' | 'cnhCategory' | 'cnhExpiration' | 'cnhEar'
+  | 'emergencyContactName' | 'emergencyContactRelationship' | 'emergencyContactPhone';
 type FieldErrors = Partial<Record<FieldName, string>>;
 const STANDARD_PLATFORMS = ['Uber', '99', 'InDrive', 'Particular', 'Lalamove'] as const;
 
@@ -100,6 +101,14 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
   const [cnhEar, setCnhEar] = useState<EarValue>('');
   const [appPlatforms, setAppPlatforms] = useState<string[]>([]);
   const [status, setStatus] = useState<DriverStatus>(DriverStatus.ACTIVE);
+  const [bloodType, setBloodType] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [relevantConditions, setRelevantConditions] = useState('');
+  const [continuousMedications, setContinuousMedications] = useState('');
+  const [emergencyContactName, setEmergencyContactName] = useState('');
+  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [emergencyNotes, setEmergencyNotes] = useState('');
   const [notes, setNotes] = useState('');
 
   const cnhDraftMeta = initialCnhDraft as ApprovedCnhDriverDraftWithIntake | null | undefined;
@@ -116,12 +125,12 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
       setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || ''); setMaritalStatus(driverToEdit.maritalStatus || ''); setProfession(driverToEdit.profession || ''); setMotherName(driverToEdit.motherName || ''); setPixKey(driverToEdit.pixKey || '');
       setZipCode(driverToEdit.address?.zipCode || ''); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
       setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
-      setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setNotes(driverToEdit.notes || '');
+      setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(''); setEmergencyNotes(''); setNotes(driverToEdit.notes || '');
       setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
     } else {
       setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail(''); setMaritalStatus(''); setProfession(''); setMotherName(''); setPixKey('');
       setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
-      setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setNotes('');
+      setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(''); setEmergencyNotes(''); setNotes('');
     }
   }, [driverToEdit, initialCnhDraft, isOpen]);
 
@@ -185,6 +194,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
         if (!floor.trim()) errors.floor = 'Informe o andar.';
       }
       if (residenceType === 'OTHER' && !residenceTypeOther.trim()) errors.residenceTypeOther = 'Descreva o tipo de residência.';
+      if (!emergencyContactName.trim()) errors.emergencyContactName = 'Informe o contato de emergência.';
+      if (!emergencyContactRelationship.trim()) errors.emergencyContactRelationship = 'Informe o parentesco ou relação.';
+      if (!emergencyContactPhone.trim()) errors.emergencyContactPhone = 'Informe o telefone de emergência.';
+      else if (!validPhone(emergencyContactPhone)) errors.emergencyContactPhone = 'Telefone de emergência inválido.';
     }
     return errors;
   };
@@ -214,13 +227,23 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           reference: addressReference.trim() || undefined,
         } : undefined,
         cnhNumber: normalizedCnh, cnhCategory, cnhExpiration, cnhEar: cnhEar ? cnhEar === 'YES' : undefined, appPlatforms, notes: notes.trim() || undefined,
+        health: requiresCompleteProfile ? {
+          bloodType: bloodType.trim() || undefined,
+          allergies: allergies.trim() || undefined,
+          relevantConditions: relevantConditions.trim() || undefined,
+          continuousMedications: continuousMedications.trim() || undefined,
+          emergencyContactName: emergencyContactName.trim(),
+          emergencyContactRelationship: emergencyContactRelationship.trim(),
+          emergencyContactPhone: digits(emergencyContactPhone),
+          emergencyNotes: emergencyNotes.trim() || undefined,
+        } : undefined,
       };
       let driverId = driverToEdit?.id || cnhDriverId || createdDriverId || undefined;
       if (driverToEdit) {
         await DriverClient.update(driverToEdit.id, input);
         if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) await DriverClient.changeStatus(driverToEdit.id, status as Exclude<DriverStatus, DriverStatus.ARCHIVED>);
       } else if (isCnhCompletion && cnhDriverId) {
-        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, maritalStatus: input.maritalStatus, profession: input.profession, motherName: input.motherName, pixKey: input.pixKey, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address };
+        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, maritalStatus: input.maritalStatus, profession: input.profession, motherName: input.motherName, pixKey: input.pixKey, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address, health: input.health };
         if (normalizedPhone) update.phone = normalizedPhone; if (normalizedWhatsapp) update.whatsapp = normalizedWhatsapp; else if (normalizedPhone) update.whatsapp = normalizedPhone;
         await DriverClient.update(cnhDriverId, update);
       } else {
@@ -293,7 +316,18 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <div className="sm:col-span-2"><Input label="Referência / observação do endereço" value={addressReference} onChange={(e) => setAddressReference(e.target.value)} /></div>
         </div></div>
 
-        <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800"><FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">4. Plataformas e Observações</h3></div><div><label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Plataformas de Atuação</label><div className="flex flex-wrap gap-2">
+        {requiresCompleteProfile && <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800"><AlertCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">4. Saúde e Contato de Emergência</h3></div><p className="text-xs text-slate-500">Contato de emergência é obrigatório. Informações médicas são opcionais e ficam protegidas por permissão.</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Select label="Tipo sanguíneo (opcional)" value={bloodType} onChange={(e) => setBloodType(e.target.value)}><option value="">Não informado</option><option value="A+">A+</option><option value="A-">A-</option><option value="B+">B+</option><option value="B-">B-</option><option value="AB+">AB+</option><option value="AB-">AB-</option><option value="O+">O+</option><option value="O-">O-</option></Select>
+          <div className="sm:col-span-2 lg:col-span-3"><Input label="Alergias (opcional)" value={allergies} onChange={(e) => setAllergies(e.target.value)} /></div>
+          <div className="sm:col-span-2"><Input label="Condições de saúde relevantes (opcional)" value={relevantConditions} onChange={(e) => setRelevantConditions(e.target.value)} /></div>
+          <div className="sm:col-span-2"><Input label="Medicamentos contínuos (opcional)" value={continuousMedications} onChange={(e) => setContinuousMedications(e.target.value)} /></div>
+          <Input id="driver-emergencyContactName" label="Contato de emergência" value={emergencyContactName} onChange={(e) => { setEmergencyContactName(e.target.value); clearFieldError('emergencyContactName'); }} required error={fieldErrors.emergencyContactName} />
+          <Input id="driver-emergencyContactRelationship" label="Parentesco / relação" value={emergencyContactRelationship} onChange={(e) => { setEmergencyContactRelationship(e.target.value); clearFieldError('emergencyContactRelationship'); }} required error={fieldErrors.emergencyContactRelationship} />
+          <Input id="driver-emergencyContactPhone" label="Telefone de emergência" value={emergencyContactPhone} onChange={(e) => { setEmergencyContactPhone(e.target.value); clearFieldError('emergencyContactPhone'); }} required error={fieldErrors.emergencyContactPhone} />
+          <div className="sm:col-span-2 lg:col-span-4"><Input label="Observação de emergência (opcional)" value={emergencyNotes} onChange={(e) => setEmergencyNotes(e.target.value)} /></div>
+        </div></div>}
+
+        <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-800"><FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /><h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">5. Plataformas e Observações</h3></div><div><label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Plataformas de Atuação</label><div className="flex flex-wrap gap-2">
           <button type="button" onClick={toggleAllPlatforms} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${allStandardSelected ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>Todas</button>
           {STANDARD_PLATFORMS.map((platform) => { const active = appPlatforms.includes(platform); return <button type="button" key={platform} onClick={() => togglePlatform(platform)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${active ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>{platform}</button>; })}
           <button type="button" onClick={() => setShowOtherPlatform((value) => !value)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${showOtherPlatform || customPlatforms.length > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>Outras</button>
