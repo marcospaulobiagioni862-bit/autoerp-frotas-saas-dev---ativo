@@ -102,16 +102,14 @@ assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, '
 assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must be wired to the renewal intake');
 assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
 
-assert.match(cnhCardSource, /setAttachments\(cnh\)/, 'CNH card must retain all available driver CNH attachments');
-assert.match(cnhCardSource, /const history = useMemo\(\(\) => attachments\.slice\(1, 2\)/, 'CNH card must expose only the immediately previous CNH in the profile');
-assert.match(cnhCardSource, /Última CNH anterior/, 'CNH card must label only the latest previous CNH');
-assert.match(cnhCardSource, /history\.map\(\(item\)/, 'CNH card must render the single immediately previous CNH');
-assert.match(cnhCardSource, /onClick=\{\(\) => openPreview\(item\)\}/, 'historical CNH must remain previewable through authenticated content');
-assert.match(cnhCardSource, /onClick=\{\(\) => downloadOriginal\(item\)\}/, 'historical CNH must remain downloadable through authenticated content');
-assert.match(cnhCardSource, /AttachmentClient\.archive\(target\.id\)/, 'previous CNH removal must use audited attachment archive authority');
-assert.match(cnhCardSource, />Excluir<\//, 'previous CNH must expose an explicit removal action');
-
-assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'CNH history UI must not consume storage or tenant authority fields');
+assert.match(cnhCardSource, /const current = items[\s\S]*documentType \|\| ''\)\.toUpperCase\(\) === 'CNH'/, 'CNH card must select only the current available CNH');
+assert.match(cnhCardSource, /CNH vigente/, 'CNH card must label only the current CNH');
+assert.doesNotMatch(cnhCardSource, /Última CNH anterior|history\.map|setAttachments\(cnh\)/, 'previous CNHs must not occupy the main driver profile');
+assert.match(detailsSource, /Ver arquivo \/ histórico/, 'driver documents must keep old attachments behind a collapsed history action');
+assert.match(detailsSource, /showDocumentArchive\s*&&/, 'driver attachment history must render only after explicit user expansion');
+assert.match(detailsSource, /currentOnly:\s*true/, 'driver document list must request only current document records for the main profile');
+assert.match(detailsSource, /includeArchived:\s*false/, 'driver document list must exclude archived records from the main profile');
+assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'current CNH UI must not consume storage or tenant authority fields');
 
 assert.match(source, /Promise\.allSettled\(\[\s*DriverClient\.list\(\),\s*VehicleClient\.list\(\),?\s*\]\)/, 'driver list and optional vehicle enrichment must settle independently');
 assert.match(source, /if \(driversResult\.status === 'rejected'\)[\s\S]*setDrivers\(\[\]\)[\s\S]*return;/, 'driver authority failure must fail the primary list closed');
