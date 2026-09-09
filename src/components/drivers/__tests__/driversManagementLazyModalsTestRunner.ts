@@ -56,6 +56,12 @@ assert.match(formSource, /PROFILE_PHOTO_MIME_TYPES\.includes\(selected\.type\)/,
 assert.match(formSource, /selected\.size <= 0 \|\| selected\.size > PROFILE_PHOTO_MAX_BYTES/, 'new driver photo must use the canonical size policy');
 assert.match(formSource, /const clearProfilePhoto = \(\) => \{[\s\S]*setProfilePhoto\(null\)[\s\S]*profilePhotoInputRef\.current\.value = ''/, 'invalid or removed photo must clear state and native input');
 assert.doesNotMatch(formSource, /required[^\n]*profilePhoto|profilePhoto[^\n]*required/, 'photo must not become a driver creation prerequisite');
+assert.match(formSource, /4\. Saúde e Contato de Emergência/, 'complete driver intake must include health and emergency section');
+assert.match(formSource, /Contato de emergência é obrigatório/, 'driver intake must explain emergency contact requirement');
+assert.match(formSource, /driver-emergencyContactName/, 'complete driver intake must require emergency contact name');
+assert.match(formSource, /driver-emergencyContactRelationship/, 'complete driver intake must require emergency relationship');
+assert.match(formSource, /driver-emergencyContactPhone/, 'complete driver intake must require emergency phone');
+assert.match(formSource, /health: requiresCompleteProfile \? \{/, 'driver intake must submit health/emergency in the same authority request');
 
 const vehicleDocumentCatalog = [
   ['CRLV', 'CRLV / Licenciamento'],
