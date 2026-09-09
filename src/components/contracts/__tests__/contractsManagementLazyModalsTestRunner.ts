@@ -154,6 +154,13 @@ assert.match(templateModal, /Contratos salvos/, 'template manager must expose a 
 assert.match(templateModal, /Novo \/ importar contrato/, 'template manager must expose a dedicated new/import contract tab');
 assert.match(templateModal, /Editar texto no ERP/, 'saved contracts must support direct editable text');
 assert.match(templateModal, /Importar DOCX\/PDF/, 'saved contracts must support file import');
+assert.match(templateModal, /chooseImportFile/, 'import action must have an explicit file-selection handler');
+assert.match(templateModal, /fileInputRef\.current\?\.click\(\)/, 'clicking Importar DOCX/PDF must open the file chooser immediately');
+assert.match(templateModal, /Selecionar DOCX\/PDF/, 'file import mode must expose an explicit reselect-file action');
+assert.match(templateModal, /sticky bottom-0/, 'save/cancel actions must remain visible while editing long contract content');
+assert.match(templateModal, /disabled=\{!title\.trim\(\) \|\| \(sourceMode === 'FILE' \? !sourceFile : !content\.trim\(\)\)\}/, 'save button must be enabled only when the selected source is actually ready');
+assert.match(templateModal, /title="Modelos de contrato"/, 'template manager must use the shared modal header');
+assert.doesNotMatch(templateModal, /<h2 className="font-bold">Modelos de contrato<\/h2>/, 'template manager must not render a duplicate inner modal header');
 assert.match(templateModal, /Salvar nova versão/, 'editing a saved contract must create a new version instead of overwriting history');
 assert.match(templateModal, /modelo-contrato-/, 'saved editable contracts must use the isolated sequential key family');
 assert.match(templateModal, /número é gerado automaticamente pelo servidor/, 'template manager must explain server-authoritative numbering');
