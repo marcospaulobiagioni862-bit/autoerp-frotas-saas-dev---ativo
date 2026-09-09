@@ -20,6 +20,10 @@ assert.match(input, /dark:placeholder-slate-400/, 'shared input placeholders mus
 assert.match(input, /helperText[\s\S]*dark:text-slate-300/, 'shared input helper text must remain legible in dark mode');
 assert.match(select, /dark:text-slate-200/, 'shared select labels must remain legible in dark mode');
 assert.match(select, /helperText[\s\S]*dark:text-slate-300/, 'shared select helper text must remain legible in dark mode');
+assert.match(modal, /max-h-\[calc\(100dvh-1rem\)\]/, 'modal height must respect the dynamic viewport');
+assert.match(modal, /min-h-0 flex-1[^"]*overflow-y-auto/, 'modal body must own the internal vertical scroll area');
+assert.match(modal, /\[scrollbar-gutter:stable\]/, 'modal body must reserve stable scrollbar space');
+assert.match(modal, /shrink-0 items-start justify-between/, 'modal header must remain visible while the body scrolls');
 
 
 assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
