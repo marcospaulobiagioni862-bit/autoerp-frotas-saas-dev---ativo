@@ -125,6 +125,38 @@ export class ContractExecutionAuthorityIntegrationRunner {
         ('i4c-drv-b1', ${companyB}, 'Driver I4C B1', '39053344705', 'I4C-CNH-B1', true, '2035-01-01', 'ACTIVE', ARRAY['99'], false, NOW(), NOW())
       ON CONFLICT (id) DO NOTHING
     `);
+    await db.execute(sql`
+      INSERT INTO file_attachments (
+        id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
+        size, file_size, storage_provider, storage_key, checksum, created_by, is_archived, content_state, created_at
+      ) VALUES
+        ('i4c-att-a1', ${companyA}, 'Vehicle', 'Vehicle', 'i4c-veh-a1', 'CRLV', 'i4c-a1.pdf', 'application/pdf', 'attachment://i4c-a1', 10, 10, 'SERVER_FS', 'i4c/a1', repeat('a',64), ${adminAId}, false, 'AVAILABLE', NOW()),
+        ('i4c-att-a2', ${companyA}, 'Vehicle', 'Vehicle', 'i4c-veh-a2', 'CRLV', 'i4c-a2.pdf', 'application/pdf', 'attachment://i4c-a2', 10, 10, 'SERVER_FS', 'i4c/a2', repeat('b',64), ${adminAId}, false, 'AVAILABLE', NOW())
+      ON CONFLICT (id) DO NOTHING
+    `);
+    await db.execute(sql`
+      INSERT INTO documents (
+        id, company_id, subject_type, subject_id, document_type, reference_year, expiration_date, attachment_id,
+        version_number, is_current, is_archived, cost, created_by, created_at, updated_at
+      ) VALUES
+        ('i4c-doc-a1-ipva', ${companyA}, 'VEHICLE', 'i4c-veh-a1', 'IPVA', 2026, '2035-01-01', 'i4c-att-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i4c-doc-a1-crlv', ${companyA}, 'VEHICLE', 'i4c-veh-a1', 'CRLV', 2026, '2035-01-01', 'i4c-att-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i4c-doc-a1-lic', ${companyA}, 'VEHICLE', 'i4c-veh-a1', 'LICENCIAMENTO', 2026, '2035-01-01', 'i4c-att-a1', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i4c-doc-a2-ipva', ${companyA}, 'VEHICLE', 'i4c-veh-a2', 'IPVA', 2026, '2035-01-01', 'i4c-att-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i4c-doc-a2-crlv', ${companyA}, 'VEHICLE', 'i4c-veh-a2', 'CRLV', 2026, '2035-01-01', 'i4c-att-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW()),
+        ('i4c-doc-a2-lic', ${companyA}, 'VEHICLE', 'i4c-veh-a2', 'LICENCIAMENTO', 2026, '2035-01-01', 'i4c-att-a2', 1, true, false, 0, ${adminAId}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
+    `);
+    await db.execute(sql`
+      INSERT INTO insurances (
+        id, company_id, vehicle_id, insurance_company, policy_number, coverage_details,
+        deductible_amount, total_premium_amount, installments_count, start_date, end_date, status,
+        account_payable_ids, created_by, created_at, updated_at
+      ) VALUES
+        ('i4c-ins-a1', ${companyA}, 'i4c-veh-a1', 'Seguradora I4C', 'I4C-A1', 'Cobertura teste', 0, 0, 1, '2026-01-01', '2035-01-01', 'ACTIVE', '[]'::jsonb, ${adminAId}, NOW(), NOW()),
+        ('i4c-ins-a2', ${companyA}, 'i4c-veh-a2', 'Seguradora I4C', 'I4C-A2', 'Cobertura teste', 0, 0, 1, '2026-01-01', '2035-01-01', 'ACTIVE', '[]'::jsonb, ${adminAId}, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET status='ACTIVE', start_date='2026-01-01', end_date='2035-01-01', updated_at=NOW()
+    `);
 
     const app = express();
     app.use(express.json());
