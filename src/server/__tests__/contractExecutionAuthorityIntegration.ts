@@ -270,6 +270,13 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const generated = await json(response);
       assert(generated.artifact.artifactType === 'GENERATED_PDF' && /^[0-9a-f]{64}$/.test(generated.artifact.snapshotHash), 'generated artifact invalid');
       assert(generated.attachment.mimeType === 'application/pdf' && generated.attachment.storageProvider === 'SERVER_FS', 'generated attachment invalid');
+      assert(Array.isArray(generated.receivables) && generated.receivables.length === 1, 'PDF generation must create the first rental receivable');
+      const generatedReceivableId = generated.receivables[0].id;
+      row = await scalar(sql`
+        SELECT count(*)::int AS count, min(status) AS status, min(original_amount)::numeric AS amount
+        FROM account_receivables WHERE contract_id=${contract.id}
+      `);
+      assert(Number(row?.count) === 1 && row?.status === 'PENDING' && Number(row?.amount) === 800, 'generated contract receivable mismatch');
 
       response = await request(`/api/attachments/${generated.attachment.id}/content`, {}, adminA);
       assert(response.status === 200, `generated PDF content expected 200, got ${response.status}`);
@@ -312,6 +319,8 @@ export class ContractExecutionAuthorityIntegrationRunner {
         WHERE contract_id=${contract.id} AND artifact_type='GENERATED_DOCX'
       `);
       assert(Number(row?.count) === 1, 'DOCX replay created an extra artifact');
+      row = await scalar(sql`SELECT count(*)::int AS count, min(id) AS id FROM account_receivables WHERE contract_id=${contract.id} AND status<>'CANCELLED'`);
+      assert(Number(row?.count) === 1 && row?.id === generatedReceivableId, 'DOCX generation/replay duplicated the rental receivable');
 
       response = await request(`/api/attachments/${generatedDocx.attachment.id}/content`, {}, adminA);
       assert(response.status === 200, `generated DOCX content expected 200, got ${response.status}`);
@@ -405,8 +414,28 @@ export class ContractExecutionAuthorityIntegrationRunner {
       assert(response.status === 200, `activation with signed evidence expected 200, got ${response.status}`);
       const activated = await json(response);
       assert(activated.item.status === 'ACTIVE' && activated.receivables.length === 1, 'signed activation result mismatch');
+      assert(activated.receivables[0].id === generatedReceivableId, 'activation must reuse the receivable created at document generation');
+      row = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${contract.id} AND status<>'CANCELLED'`);
+      assert(Number(row?.count) === 1, 'activation duplicated the generated rental receivable');
       row = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i4c-veh-a1'`);
       assert(row?.status === VehicleStatus.RENTED && row?.current_contract_id === contract.id, 'signed activation vehicle binding mismatch');
+
+      const cancelInput = { ...contractInput, contractNumber: 'CNT-I4C-CANCEL', driverId: 'i4c-drv-a2', vehicleId: 'i4c-veh-a2' };
+      response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(cancelInput) }, adminA);
+      assert(response.status === 201, `cancel fixture contract create expected 201, got ${response.status}`);
+      const cancellable = (await json(response)).item;
+      response = await request(`/api/contracts/${cancellable.id}/generate-pdf`, {
+        method: 'POST', body: JSON.stringify({ templateId: template.id }),
+      }, adminA);
+      assert(response.status === 201, `cancel fixture PDF generation expected 201, got ${response.status}`);
+      row = await scalar(sql`SELECT count(*)::int AS count, min(status) AS status FROM account_receivables WHERE contract_id=${cancellable.id}`);
+      assert(Number(row?.count) === 1 && row?.status === 'PENDING', 'cancel fixture did not create pending receivable');
+      response = await request(`/api/contracts/${cancellable.id}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: 'Motorista desistiu antes da ativação' }),
+      }, adminA);
+      assert(response.status === 200, `cancel generated contract expected 200, got ${response.status}`);
+      row = await scalar(sql`SELECT count(*)::int AS count, min(status) AS status, min(cancel_reason) AS reason FROM account_receivables WHERE contract_id=${cancellable.id}`);
+      assert(Number(row?.count) === 1 && row?.status === 'CANCELLED' && String(row?.reason || '').includes('Contrato cancelado'), 'contract cancellation did not cancel unpaid generated receivable');
 
       const legacyInput = { ...contractInput, contractNumber: 'CNT-I4C-LEGACY', driverId: 'i4c-drv-a2', vehicleId: 'i4c-veh-a2', templateId: undefined };
       response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(legacyInput) }, adminA);
