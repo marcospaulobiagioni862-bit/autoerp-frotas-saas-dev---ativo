@@ -118,6 +118,17 @@ export interface VehicleCrlvMaintenanceHandoffResult {
   reused: boolean;
 }
 
+export interface VehicleIdentityCheckResult {
+  exists: boolean;
+  item: Vehicle | null;
+  matches?: {
+    plate: boolean;
+    renavam: boolean;
+    chassis: boolean;
+  };
+  historical?: boolean;
+}
+
 export interface VehicleSaleInput {
   saleDate: string;
   reason: string;
@@ -210,6 +221,29 @@ export class VehicleClient {
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}`, { credentials: 'include' });
     if (!response.ok) throw await apiError(response);
     return validateVehicle(asRecord(await response.json()).item);
+  }
+
+  static async checkIdentity(input: { plate?: string; renavam?: string; chassis?: string }): Promise<VehicleIdentityCheckResult> {
+    const params = new URLSearchParams();
+    if (input.plate) params.set('plate', input.plate);
+    if (input.renavam) params.set('renavam', input.renavam);
+    if (input.chassis) params.set('chassis', input.chassis);
+    const response = await fetch(`/api/fleet/vehicles/identity-check?${params.toString()}`, { credentials: 'include' });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (typeof payload.exists !== 'boolean') throw new Error('Invalid vehicle identity response');
+    if (!payload.exists) return { exists: false, item: null };
+    const matchesRaw = asRecord(payload.matches);
+    return {
+      exists: true,
+      item: validateVehicle(payload.item),
+      matches: {
+        plate: Boolean(matchesRaw.plate),
+        renavam: Boolean(matchesRaw.renavam),
+        chassis: Boolean(matchesRaw.chassis),
+      },
+      historical: Boolean(payload.historical),
+    };
   }
 
   static async lifecycle(id: string): Promise<VehicleLifecycleHistoryResult> {
