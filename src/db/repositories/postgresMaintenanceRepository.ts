@@ -297,28 +297,29 @@ export class PostgresWorkOrderRepository {
 
   private async hydrate(row: any): Promise<WorkOrder> {
     const item = mapWorkOrderBase(row);
-    const [partsResult, servicesResult, laborResult, financeResult] = await Promise.all([
-      this.tx.execute(sql`
-        SELECT * FROM work_order_parts
-        WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
-        ORDER BY id
-      `),
-      this.tx.execute(sql`
-        SELECT * FROM work_order_services
-        WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
-        ORDER BY id
-      `),
-      this.tx.execute(sql`
-        SELECT * FROM work_order_labor
-        WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
-        ORDER BY id
-      `),
-      this.tx.execute(sql`
-        SELECT * FROM work_order_financial_components
-        WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
-        ORDER BY kind, id
-      `),
-    ]);
+    // node-postgres does not support concurrent queries on the same transaction
+    // client. Keep work-order hydration sequential to avoid pg@9 deprecation
+    // warnings and future runtime failures.
+    const partsResult = await this.tx.execute(sql`
+      SELECT * FROM work_order_parts
+      WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
+      ORDER BY id
+    `);
+    const servicesResult = await this.tx.execute(sql`
+      SELECT * FROM work_order_services
+      WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
+      ORDER BY id
+    `);
+    const laborResult = await this.tx.execute(sql`
+      SELECT * FROM work_order_labor
+      WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
+      ORDER BY id
+    `);
+    const financeResult = await this.tx.execute(sql`
+      SELECT * FROM work_order_financial_components
+      WHERE company_id = ${item.companyId} AND work_order_id = ${item.id}
+      ORDER BY kind, id
+    `);
     item.parts = rows(partsResult).map(mapPartItem);
     item.services = rows(servicesResult).map(mapServiceItem);
     item.laborItems = rows(laborResult).map(mapLaborItem);
@@ -354,7 +355,9 @@ export class PostgresWorkOrderRepository {
           WHERE company_id = ${companyId}
           ORDER BY opened_at DESC, id DESC
         `);
-    return await Promise.all(rows(result).map((row) => this.hydrate(row)));
+    const hydrated: WorkOrder[] = [];
+    for (const row of rows(result)) hydrated.push(await this.hydrate(row));
+    return hydrated;
   }
 
   async findByNumber(companyId: string, number: string): Promise<WorkOrder | null> {
