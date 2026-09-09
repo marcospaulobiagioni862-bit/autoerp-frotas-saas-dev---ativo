@@ -106,7 +106,7 @@ assert.match(cnhCardSource, /const current = items[\s\S]*documentType \|\| ''\)\
 assert.match(cnhCardSource, /CNH vigente/, 'CNH card must label only the current CNH');
 assert.doesNotMatch(cnhCardSource, /Última CNH anterior|history\.map|setAttachments\(cnh\)/, 'previous CNHs must not occupy the main driver profile');
 assert.match(detailsSource, /Ver arquivo \/ histórico/, 'driver documents must keep old attachments behind a collapsed history action');
-assert.match(detailsSource, /showDocumentArchive&&/, 'driver attachment history must render only after explicit user expansion');
+assert.match(detailsSource, /showDocumentArchive\s*&&/, 'driver attachment history must render only after explicit user expansion');
 assert.match(detailsSource, /currentOnly:\s*true/, 'driver document list must request only current document records for the main profile');
 assert.match(detailsSource, /includeArchived:\s*false/, 'driver document list must exclude archived records from the main profile');
 assert.doesNotMatch(cnhCardSource, /storageKey|companyId|x-autoerp-/, 'current CNH UI must not consume storage or tenant authority fields');
