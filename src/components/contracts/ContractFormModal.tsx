@@ -37,15 +37,17 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({});
   const [contractFile, setContractFile] = useState<File | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [form, setForm] = useState({
     contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '',
     billingPeriodicity: '' as '' | RecurringFrequency, billingDueDayOfWeek: '', billingDueDayOfMonth: '',
     securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
   });
 
-  const set = (key: keyof typeof form, value: string) => { setForm((current) => ({ ...current, [key]: value })); setFieldErrors((current)=>{if(!current[key])return current;const next={...current};delete next[key];return next;}); };
+  const set = (key: keyof typeof form, value: string) => { setHasUnsavedChanges(true); setForm((current) => ({ ...current, [key]: value })); setFieldErrors((current)=>{if(!current[key])return current;const next={...current};delete next[key];return next;}); };
 
   const setBillingPeriodicity = (value: string) => {
+    setHasUnsavedChanges(true);
     setForm((current) => ({
       ...current,
       billingPeriodicity: value as '' | RecurringFrequency,
@@ -67,6 +69,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setError(null);
     setFieldErrors({});
     setContractFile(null);
+    setHasUnsavedChanges(false);
     setLoadingOptions(true);
     Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
       .then(([vehicleList, driverList, templateList]) => {
@@ -116,6 +119,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
 
   const selectContractFile = (file: File | null) => {
     setError(null);
+    setHasUnsavedChanges(true);
     if (!file) {
       setContractFile(null);
       return;
@@ -131,6 +135,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       return;
     }
     setContractFile(file);
+  };
+
+  const requestClose = () => {
+    if (loading) return;
+    if (hasUnsavedChanges && !window.confirm('Existem informações não salvas. Deseja sair sem salvar?')) return;
+    onClose();
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -205,6 +215,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         }
       }
 
+      setHasUnsavedChanges(false);
       onClose();
       onSuccess({
         contract: completedContract,
@@ -221,7 +232,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
   return (
     <ModalContainer
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       size="5xl"
       title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
     >
@@ -258,7 +269,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
           <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel é uma <strong>Conta a Receber do motorista</strong>, vinculada também ao veículo e ao contrato. O veículo é o ativo locado e não gera Conta a Pagar pelo aluguel. A categoria financeira de receita é obrigatória na ativação, quando o primeiro título é criado. Caução, franquia de KM e KM excedente devem ser informados conscientemente conforme a regra do contrato; não são mais preenchidos automaticamente.
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />Salvar</Button></div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />Salvar</Button></div>
       </form>
       <style>{`.control{width:100%;border:1px solid rgb(203 213 225);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem;color:inherit}.dark .control{border-color:rgb(51 65 85);background:rgb(2 6 23 / .35);color:rgb(226 232 240)}`}</style>
     </ModalContainer>
