@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Download, Eye, FileClock, FileText, Trash2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Download, Eye, FileText } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverClient } from '../../api/driverClient';
 import type { Driver, FileAttachment } from '../../types/entities';
@@ -10,58 +10,77 @@ interface DriverCnhDocumentCardProps {
   driverId: string;
 }
 
+function dateLabel(value?: string): string {
+  if (!value) return 'não informada';
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString('pt-BR') : value;
+}
+
 export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) {
-  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [attachment, setAttachment] = useState<FileAttachment | null>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewAttachment, setPreviewAttachment] = useState<FileAttachment | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(null); setAttachments([]); setDriver(null);
+    setLoading(true);
+    setError(null);
+    setAttachment(null);
+    setDriver(null);
     void Promise.all([
       AttachmentClient.list({ entityType: 'Driver', entityId: driverId }),
       DriverClient.get(driverId),
     ])
       .then(([items, loadedDriver]) => {
         if (cancelled) return;
-        const cnh = items
-          .filter((item) => !item.isArchived && String(item.documentType || '').toUpperCase() === 'CNH' && item.contentState === 'AVAILABLE')
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        setAttachments(cnh);
+        const current = items
+          .filter((item) =>
+            !item.isArchived &&
+            String(item.documentType || '').toUpperCase() === 'CNH' &&
+            item.contentState === 'AVAILABLE'
+          )
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+        setAttachment(current);
         setDriver(loadedDriver);
       })
-      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Não foi possível carregar a CNH.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Não foi possível carregar a CNH.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => { cancelled = true; };
   }, [driverId]);
 
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
-  const attachment = attachments[0] || null;
-  const history = useMemo(() => attachments.slice(1, 2), [attachments]);
-
-  const openPreview = async (target: FileAttachment) => {
+  const openPreview = async () => {
+    if (!attachment) return;
     setError(null);
     try {
-      const blob = await AttachmentClient.content(target.id);
-      setPreviewAttachment(target);
-      setPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
+      const blob = await AttachmentClient.content(attachment.id);
+      setPreviewUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(blob);
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Não foi possível abrir a CNH.');
     }
   };
 
-  const downloadOriginal = async (target: FileAttachment) => {
+  const downloadOriginal = async () => {
+    if (!attachment) return;
     setError(null);
     try {
-      const blob = await AttachmentClient.content(target.id);
+      const blob = await AttachmentClient.content(attachment.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = target.fileName || 'CNH';
+      anchor.download = attachment.fileName || 'CNH';
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -71,47 +90,55 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
     }
   };
 
-  const removePrevious = async (target: FileAttachment) => {
-    if (!window.confirm('Excluir esta CNH anterior da ficha? A CNH vigente não será afetada.')) return;
-    setError(null);
-    try {
-      await AttachmentClient.archive(target.id);
-      setAttachments((current) => current.filter((item) => item.id !== target.id));
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Não foi possível excluir a CNH anterior.');
-    }
-  };
+  const earLabel = driver?.cnhEar === true ? 'Sim' : driver?.cnhEar === false ? 'Não' : 'Pendente';
 
-  const closePreview = () => {
-    setPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
-    setPreviewAttachment(null);
-  };
+  if (loading) {
+    return <div className="rounded-lg border p-3 text-xs text-slate-500">Carregando CNH vigente…</div>;
+  }
 
-  const earLabel = driver?.cnhEar === true ? 'Sim' : driver?.cnhEar === false ? 'Não' : 'Pendente de confirmação';
-
-  if (loading) return <div className="rounded-xl border p-4 text-xs text-slate-500">Carregando CNH vigente…</div>;
-  if (!attachment) return <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"><strong>CNH vigente não localizada.</strong><div className="mt-1">O cadastro possui dados de CNH, mas o arquivo original não está disponível nos anexos do motorista.</div><div className="mt-2"><strong>Atividade remunerada (EAR):</strong> {earLabel}</div>{error && <div className="mt-2 text-rose-600">{error}</div>}</div>;
-
-  return <>
-    <div className="space-y-3">
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3"><FileText className="h-6 w-6 shrink-0 text-emerald-600" /><div className="min-w-0"><strong className="block text-sm">CNH vigente</strong><span className="block truncate text-xs text-slate-500">{attachment.fileName}</span><span className="block text-[11px] text-slate-500"><strong>Atividade remunerada (EAR):</strong> {earLabel}</span><span className="text-[11px] text-slate-400">Arquivo original preservado; o QR Code permanece visível no documento.</span></div></div>
-          <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => openPreview(attachment)}><Eye className="mr-1 h-4 w-4" />Visualizar / Zoom</Button><Button type="button" size="sm" variant="outline" onClick={() => downloadOriginal(attachment)}><Download className="mr-1 h-4 w-4" />Baixar original</Button></div>
-        </div>
-        {error && <div className="mt-2 text-xs text-rose-600">{error}</div>}
+  if (!attachment) {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+        <strong>CNH — arquivo vigente pendente</strong>
+        <div className="mt-1">Validade cadastrada: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}</div>
+        {error && <div className="mt-1 text-rose-600">{error}</div>}
       </div>
+    );
+  }
 
-      {history.length > 0 && <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><FileClock className="h-4 w-4" />Última CNH anterior</div>
-        <div className="space-y-2">
-          {history.map((item) => <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-slate-100 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0"><div className="truncate text-xs font-medium">{item.fileName}</div><div className="text-[11px] text-slate-500">Última versão anterior · preservada em {new Date(item.createdAt).toLocaleDateString('pt-BR')}</div></div>
-            <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => openPreview(item)}><Eye className="mr-1 h-4 w-4" />Visualizar</Button><Button type="button" size="sm" variant="outline" onClick={() => downloadOriginal(item)}><Download className="mr-1 h-4 w-4" />Baixar</Button><Button type="button" size="sm" variant="danger" onClick={() => void removePrevious(item)}><Trash2 className="mr-1 h-4 w-4" />Excluir</Button></div>
-          </div>)}
+  return (
+    <>
+      <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <FileText className="h-5 w-5 shrink-0 text-emerald-600" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">CNH vigente</div>
+            <div className="truncate text-[11px] text-slate-500">
+              Validade: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}
+            </div>
+          </div>
         </div>
-      </div>}
-    </div>
-    {previewUrl && previewAttachment && <DocumentPreviewModal url={previewUrl} type={previewAttachment.mimeType} name={previewAttachment.fileName} onClose={closePreview} />}
-  </>;
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => void openPreview()}>
+            <Eye className="mr-1 h-4 w-4" />Ver
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => void downloadOriginal()}>
+            <Download className="mr-1 h-4 w-4" />Baixar
+          </Button>
+        </div>
+        {error && <div className="text-xs text-rose-600 sm:basis-full">{error}</div>}
+      </div>
+      {previewUrl && attachment && (
+        <DocumentPreviewModal
+          url={previewUrl}
+          type={attachment.mimeType}
+          name={attachment.fileName}
+          onClose={() => setPreviewUrl((current) => {
+            if (current) URL.revokeObjectURL(current);
+            return null;
+          })}
+        />
+      )}
+    </>
+  );
 }
