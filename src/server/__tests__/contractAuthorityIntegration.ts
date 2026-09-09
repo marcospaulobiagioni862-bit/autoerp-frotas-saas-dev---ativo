@@ -208,6 +208,19 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 201, `tenant A create expected 201, got ${response.status}`);
       const created = (await json(response)).item;
       assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-VEH-BLOCK', driverId: 'i3-drv-a2' }),
+      }, adminA);
+      assert(response.status === 409, `vehicle already attached to DRAFT contract expected 409, got ${response.status}`);
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-DRV-BLOCK', vehicleId: 'i3-veh-a2' }),
+      }, adminA);
+      assert(response.status === 409, `driver already attached to DRAFT contract expected 409, got ${response.status}`);
+
       await markLegacyContract(created.id);
 
       const draftCloseAuditBefore = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
