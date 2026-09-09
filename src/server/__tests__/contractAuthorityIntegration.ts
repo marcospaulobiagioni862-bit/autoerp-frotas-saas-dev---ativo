@@ -409,11 +409,7 @@ export class ContractAuthorityIntegrationRunner {
         method: 'POST',
         body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-CONFLICT', driverId: 'i3-drv-a2' }),
       }, adminA);
-      assert(response.status === 201, `conflict draft create expected 201, got ${response.status}`);
-      const conflictContract = (await json(response)).item;
-      await markLegacyContract(conflictContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `vehicle active conflict expected 409, got ${response.status}`);
+      assert(response.status === 409, `vehicle already bound to ACTIVE contract expected create 409, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
         method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
