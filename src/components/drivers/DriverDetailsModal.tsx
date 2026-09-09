@@ -559,7 +559,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 </div>
                 {onRenewCnh && (
                   <Button size="sm" variant="primary" onClick={() => onRenewCnh(driver.id)}>
-                    <CreditCard className="w-4 h-4 mr-1" />Nova CNH / Renovar
+                    <CreditCard className="w-4 h-4 mr-1" />Nova CNH / Renovar CNH
                   </Button>
                 )}
               </div>
