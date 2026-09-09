@@ -37,6 +37,7 @@ import {
   BellRing,
   ArrowRight,
   ShieldAlert,
+  FileText,
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
 import { PerformanceMetricsWidget } from './PerformanceMetricsWidget';
@@ -233,7 +234,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-32 w-full" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
@@ -348,7 +349,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       </div>
 
       {/* Operational Summary Bento Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card padding="sm" onClick={() => onNavigate('fleet')} className="cursor-pointer hover:border-blue-500 transition-all">
           <div className="flex justify-between items-start">
             <div>
