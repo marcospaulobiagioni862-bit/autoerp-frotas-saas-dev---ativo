@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Maximize2, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface DocumentPreviewModalProps {
   url: string;
@@ -37,7 +38,7 @@ export function DocumentPreviewModal({ url, type, name, onClose }: DocumentPrevi
           <div className="min-w-0"><h3 className="truncate font-medium">{name}</h3><p className="mt-0.5 text-xs text-slate-500">{isImage ? 'Use o zoom para conferir QR Code, números e outros detalhes da CNH.' : 'Use os controles do PDF para ampliar o documento.'}</p></div>
           <div className="flex items-center gap-1.5">
             {isImage && <><Button type="button" variant="ghost" size="sm" onClick={() => setZoom((current) => Math.max(MIN_ZOOM, current - ZOOM_STEP))} disabled={zoom <= MIN_ZOOM}><Minus className="h-4 w-4" /></Button><span className="min-w-14 text-center text-xs font-semibold">{Math.round(zoom * 100)}%</span><Button type="button" variant="ghost" size="sm" onClick={() => setZoom((current) => Math.min(MAX_ZOOM, current + ZOOM_STEP))} disabled={zoom >= MAX_ZOOM}><Plus className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => setZoom(1)}><RotateCcw className="h-4 w-4" /></Button><Button type="button" variant="ghost" size="sm" onClick={() => setZoom(MAX_ZOOM)}><Maximize2 className="h-4 w-4" /></Button></>}
-            <Button type="button" variant="ghost" size="sm" onClick={onClose}><X className="h-5 w-5" /></Button>
+            <Button type="button" variant="ghost" size="sm" onClick={(event)=>requestGuardedClose(event,onClose)}><X className="h-5 w-5" /></Button>
           </div>
         </div>
         <div className="flex-1 overflow-auto bg-slate-100 p-3 dark:bg-black/50 sm:p-4">
