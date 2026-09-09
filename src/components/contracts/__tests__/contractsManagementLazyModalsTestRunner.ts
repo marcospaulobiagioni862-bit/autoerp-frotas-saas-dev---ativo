@@ -67,6 +67,10 @@ assert.match(source, /initialFocus=\{detailsFocus\}/, 'details modal must receiv
 assert.match(detailsModal, /initialFocus === 'FINANCIAL' \? 'FINANCIAL' : 'OVERVIEW'/, 'details modal must open billing actions in the financial tab');
 assert.match(detailsModal, /focusOnOpen=\{initialFocus === 'PDF_SIGNATURE'\}/, 'details modal must focus the execution panel for PDF/signature');
 assert.match(executionPanel, /data-contract-section="pdf-signature"/, 'execution panel must expose a stable PDF/signature anchor');
+assert.match(executionPanel, /AttachmentClient\.list\(\{ entityType: 'Contract', entityId: contract\.id \}\)/, 'signature panel must recover previously uploaded signed PDFs after reopening');
+assert.match(executionPanel, /PDF ASSINADO ENVIADO • CONFIRMAR/, 'signature panel must distinguish uploaded PDF from registered signature evidence');
+assert.match(executionPanel, /Falta informar o assinante e registrar a evidência/, 'signature panel must explain the pending confirmation step');
+assert.match(source, /Assinado • aguardando ativação/, 'contracts list must distinguish signed evidence from pending activation');
 assert.match(executionPanel, /scrollIntoView\(\{ behavior: 'smooth', block: 'start' \}\)/, 'PDF/signature action must visibly navigate to its section');
 for (const placeholder of [
   'driver.rg','driver.birthDate','driver.phone','driver.whatsapp','driver.email','driver.cnhCategory',
