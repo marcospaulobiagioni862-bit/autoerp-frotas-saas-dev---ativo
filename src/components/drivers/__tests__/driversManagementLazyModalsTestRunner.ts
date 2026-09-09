@@ -101,6 +101,8 @@ assert.match(detailsSource, /onRenewCnh\(driver\.id\)/, 'CNH renewal action must
 assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, 'CNH intake must receive the selected renewal driver');
 assert.match(source, /onRenewCnh=\{handleOpenCnhRenewal\}/, 'driver details must be wired to the renewal intake');
 assert.match(source, /onRenewed=\{handleCnhRenewed\}/, 'successful renewal must refresh the selected driver details');
+assert.match(cnhIntakeSource, /materializeApprovedCnh\(intakeId, expectedDriverId\)[\s\S]*if \(isRenewal && onRenewed\)[\s\S]*onRenewed\(materialized\.driverId\)/, 'CNH renewal must refresh the parent immediately after the server confirms materialization');
+assert.match(source, /const handleCnhRenewed = \(driverId: string\) => \{[\s\S]*void loadData\(\);/, 'renewal callback must reload the authoritative driver list so CNH KPIs are recalculated immediately');
 
 assert.match(cnhCardSource, /const current = items[\s\S]*documentType \|\| ''\)\.toUpperCase\(\) === 'CNH'/, 'CNH card must select only the current available CNH');
 assert.match(cnhCardSource, /CNH vigente/, 'CNH card must label only the current CNH');
