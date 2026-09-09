@@ -166,6 +166,37 @@ export function registerVehicleRoutes(app: Express): void {
     } catch (error) { sendVehicleError(res, error); }
   });
 
+  app.get('/api/fleet/vehicles/identity-check', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const plate = normalizeVehicleIdentity(req.query.plate);
+      const renavam = normalizeVehicleIdentity(req.query.renavam);
+      const chassis = normalizeVehicleIdentity(req.query.chassis);
+      if (!plate && !renavam && !chassis) {
+        res.status(400).json({ error: 'Informe placa, RENAVAM ou chassi para consulta.' });
+        return;
+      }
+      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const conflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam, chassis);
+        if (!conflict) return { exists: false as const, item: null };
+        const item = await txContext.getVehicleRepo().findByIdForCompany(principal.companyId, conflict.id);
+        if (!item) throw new VehicleNotFoundError();
+        return {
+          exists: true as const,
+          item,
+          matches: {
+            plate: conflict.plateMatch,
+            renavam: conflict.renavamMatch,
+            chassis: conflict.chassisMatch,
+          },
+          historical: conflict.isArchived || conflict.status === VehicleStatus.SOLD || conflict.status === VehicleStatus.ARCHIVED,
+        };
+      });
+      res.json(result);
+    } catch (error) { sendVehicleError(res, error); }
+  });
+
   app.get('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
     if (!principal) return;
@@ -201,7 +232,7 @@ export function registerVehicleRoutes(app: Express): void {
       const category = normalizeVehicleCategory(requiredText(req.body?.category, 'category'));
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
-        const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam);
+        const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam, chassis);
         if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
         const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color, renavam, chassis, currentKm, nextMaintenanceKm, fuelType, category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
@@ -227,13 +258,13 @@ export function registerVehicleRoutes(app: Express): void {
         if (!existing) throw new VehicleNotFoundError();
         if (existing.isArchived || existing.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
         const changes: Partial<Vehicle> = { updatedAt: new Date().toISOString() };
-        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, plate, existing.renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.plate = plate; }
-        if (req.body?.renavam !== undefined) { const renavam = normalizeVehicleIdentity(requiredText(req.body.renavam, 'renavam')); if (!renavam) throw new VehicleValidationError('Invalid renavam'); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, existing.plate, renavam, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.renavam = renavam; }
+        if (req.body?.plate !== undefined) { const plate = normalizePlate(req.body.plate); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, plate, existing.renavam, existing.chassis, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.plate = plate; }
+        if (req.body?.renavam !== undefined) { const renavam = normalizeVehicleIdentity(requiredText(req.body.renavam, 'renavam')); if (!renavam) throw new VehicleValidationError('Invalid renavam'); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, existing.plate, renavam, existing.chassis, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.renavam = renavam; }
         if (req.body?.brand !== undefined) changes.brand = requiredText(req.body.brand, 'brand');
         if (req.body?.model !== undefined) changes.model = requiredText(req.body.model, 'model');
         if (req.body?.version !== undefined) changes.version = optionalText(req.body.version) || '';
         if (req.body?.color !== undefined) changes.color = requiredText(req.body.color, 'color');
-        if (req.body?.chassis !== undefined) changes.chassis = requiredText(req.body.chassis, 'chassis').toUpperCase();
+        if (req.body?.chassis !== undefined) { const chassis = normalizeVehicleIdentity(requiredText(req.body.chassis, 'chassis')); if (!chassis) throw new VehicleValidationError('Invalid chassis'); const duplicate = await findVehicleIdentityConflict(txContext, principal.companyId, existing.plate, existing.renavam, chassis, existing.id); if (duplicate) throw new VehicleConflictError(vehicleIdentityConflictMessage(duplicate)); changes.chassis = chassis; }
         if (req.body?.fuelType !== undefined) changes.fuelType = requiredText(req.body.fuelType, 'fuelType');
         if (req.body?.category !== undefined) changes.category = normalizeVehicleCategory(requiredText(req.body.category, 'category'));
         if (req.body?.notes !== undefined) changes.notes = optionalText(req.body.notes) || '';
