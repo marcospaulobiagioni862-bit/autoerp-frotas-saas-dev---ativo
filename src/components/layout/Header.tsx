@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Building2, Sun, Moon, Menu } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
 import type { NotificationItem } from '../../api/notificationClient';
+import { OpsHealthClient, type OpsBuildIdentity } from '../../api/opsHealthClient';
 
 interface HeaderProps {
   testStatus: { passed: number; total: number; failed: number } | null;
@@ -43,9 +44,22 @@ export const Header: React.FC<HeaderProps> = ({
   onResolveNotification,
 }) => {
   const { user, authMode } = useAuth();
+  const [buildIdentity, setBuildIdentity] = useState<OpsBuildIdentity | null>(null);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark');
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    if (authMode !== 'server-session') {
+      setBuildIdentity(null);
+      return () => { cancelled = true; };
+    }
+    void OpsHealthClient.get()
+      .then((summary) => { if (!cancelled) setBuildIdentity(summary.build); })
+      .catch(() => { if (!cancelled) setBuildIdentity({ commitSha: null, environment: 'unknown', service: null }); });
+    return () => { cancelled = true; };
+  }, [authMode]);
 
   const toggleDarkMode = () => {
     if (document.documentElement.classList.contains('dark')) {
@@ -89,7 +103,15 @@ export const Header: React.FC<HeaderProps> = ({
             </h1>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:flex items-center gap-1">
               <Building2 className="w-3 h-3 text-slate-400" />
-              {authMode === 'server-session' ? 'Sessão autenticada do servidor' : 'Ambiente de desenvolvimento'}
+              <span>{authMode === 'server-session' ? 'Sessão autenticada do servidor' : 'Ambiente de desenvolvimento'}</span>
+              {authMode === 'server-session' && (
+                <span
+                  className={buildIdentity?.commitSha ? 'font-mono text-emerald-600 dark:text-emerald-400' : 'font-medium text-amber-600 dark:text-amber-400'}
+                  title={buildIdentity?.commitSha || 'O ambiente implantado ainda não expôs o SHA do commit.'}
+                >
+                  · {buildIdentity?.environment || 'verificando'} · {buildIdentity?.commitSha ? buildIdentity.commitSha.slice(0, 7) : 'SHA ?'}
+                </span>
+              )}
             </p>
           </div>
         </div>

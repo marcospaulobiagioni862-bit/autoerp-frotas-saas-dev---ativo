@@ -95,6 +95,18 @@ export interface VehicleKmResult {
   vehicle: Vehicle;
 }
 
+export interface VehicleKmBatchInput {
+  entries: Array<{
+    vehicleId: string;
+    kmValue: number;
+    notes?: string;
+  }>;
+}
+
+export interface VehicleKmBatchResult {
+  items: VehicleKmResult[];
+}
+
 export interface VehicleCrlvApplyResult {
   item: Vehicle;
   appliedFields: string[];
@@ -291,5 +303,20 @@ export class VehicleClient {
     if (!response.ok) throw await apiError(response);
     const payload = asRecord(await response.json());
     return { record: validateKmRecord(payload.record), vehicle: validateVehicle(payload.vehicle) };
+  }
+
+  static async recordKmBatch(input: VehicleKmBatchInput): Promise<VehicleKmBatchResult> {
+    const response = await fetch('/api/fleet/vehicles/km-records/batch', {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (!Array.isArray(payload.items)) throw new Error('Invalid KM batch response');
+    return {
+      items: payload.items.map((value) => {
+        const item = asRecord(value);
+        return { record: validateKmRecord(item.record), vehicle: validateVehicle(item.vehicle) };
+      }),
+    };
   }
 }
