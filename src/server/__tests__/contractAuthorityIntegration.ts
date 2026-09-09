@@ -208,6 +208,19 @@ export class ContractAuthorityIntegrationRunner {
       assert(response.status === 201, `tenant A create expected 201, got ${response.status}`);
       const created = (await json(response)).item;
       assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-VEH-BLOCK', driverId: 'i3-drv-a2' }),
+      }, adminA);
+      assert(response.status === 409, `vehicle already attached to DRAFT contract expected 409, got ${response.status}`);
+
+      response = await request('/api/contracts', {
+        method: 'POST',
+        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-DRV-BLOCK', vehicleId: 'i3-veh-a2' }),
+      }, adminA);
+      assert(response.status === 409, `driver already attached to DRAFT contract expected 409, got ${response.status}`);
+
       await markLegacyContract(created.id);
 
       const draftCloseAuditBefore = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
@@ -354,6 +367,10 @@ export class ContractAuthorityIntegrationRunner {
       assert(pastPeriodBlockedContract?.status === ContractStatus.DRAFT, 'past period gate mutated contract');
       assert(pastPeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !pastPeriodBlockedVehicle?.current_driver_id && !pastPeriodBlockedVehicle?.current_contract_id, 'past period gate mutated vehicle');
       assert(Number(pastPeriodBlockedReceivables?.count) === 0, 'past period gate created receivable');
+      response = await request(`/api/contracts/${encodeURIComponent(pastPeriodContract.id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período passado' }),
+      }, adminA);
+      assert(response.status === 200, `past period draft cancel expected 200, got ${response.status}`);
 
       response = await request('/api/contracts', {
         method: 'POST',
@@ -378,6 +395,10 @@ export class ContractAuthorityIntegrationRunner {
       assert(futurePeriodBlockedContract?.status === ContractStatus.DRAFT, 'future period gate mutated contract');
       assert(futurePeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futurePeriodBlockedVehicle?.current_driver_id && !futurePeriodBlockedVehicle?.current_contract_id, 'future period gate mutated vehicle');
       assert(Number(futurePeriodBlockedReceivables?.count) === 0, 'future period gate created receivable');
+      response = await request(`/api/contracts/${encodeURIComponent(futurePeriodContract.id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período futuro' }),
+      }, adminA);
+      assert(response.status === 200, `future period draft cancel expected 200, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
@@ -396,11 +417,7 @@ export class ContractAuthorityIntegrationRunner {
         method: 'POST',
         body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-CONFLICT', driverId: 'i3-drv-a2' }),
       }, adminA);
-      assert(response.status === 201, `conflict draft create expected 201, got ${response.status}`);
-      const conflictContract = (await json(response)).item;
-      await markLegacyContract(conflictContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(conflictContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `vehicle active conflict expected 409, got ${response.status}`);
+      assert(response.status === 409, `vehicle already bound to ACTIVE contract expected create 409, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
         method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),

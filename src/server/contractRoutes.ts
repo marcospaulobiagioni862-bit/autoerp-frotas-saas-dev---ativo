@@ -321,6 +321,10 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
+        const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
+        const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);
+        if (vehicleBinding) throw new ContractConflictError('Vehicle already bound to another contract');
+        if (driverBinding) throw new ContractConflictError('Driver already bound to another contract');
         if (requestedTemplateId) {
           const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
           if (!template || template.isArchived) throw new ContractNotFoundError();
@@ -402,6 +406,10 @@ export function registerContractRoutes(app: Express): void {
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived || !driver || driver.isArchived) throw new ContractNotFoundError();
+        const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId, existing.id);
+        const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId, existing.id);
+        if (vehicleBinding) throw new ContractConflictError('Vehicle already bound to another contract');
+        if (driverBinding) throw new ContractConflictError('Driver already bound to another contract');
         const nextTemplateId = body.templateId === undefined ? existing.templateId : optionalText(body.templateId);
         if (nextTemplateId) {
           const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, nextTemplateId);
@@ -516,9 +524,9 @@ export function registerContractRoutes(app: Express): void {
         }
         ensureDriverEligible(driver);
 
-        const vehicleConflict = await tx.getContractRepo().findActiveByVehicle(principal.companyId, contract.vehicleId, contract.id);
-        const driverConflict = await tx.getContractRepo().findActiveByDriver(principal.companyId, contract.driverId, contract.id);
-        if (vehicleConflict || driverConflict) throw new ContractConflictError('Active binding conflict');
+        const vehicleConflict = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, contract.vehicleId, contract.id);
+        const driverConflict = await tx.getContractRepo().findBlockingByDriver(principal.companyId, contract.driverId, contract.id);
+        if (vehicleConflict || driverConflict) throw new ContractConflictError('Contract binding conflict');
 
         const now = new Date().toISOString();
         const active = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
