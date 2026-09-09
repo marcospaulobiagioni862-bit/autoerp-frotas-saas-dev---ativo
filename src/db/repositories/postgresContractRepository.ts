@@ -108,6 +108,56 @@ export class PostgresContractRepository implements ITransactionContractRepositor
     return row ? this.map(row) : null;
   }
 
+  async findBlockingByVehicle(companyId: string, vehicleId: string, excludeContractId?: string): Promise<Contract | null> {
+    const result = excludeContractId
+      ? await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND vehicle_id = ${vehicleId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND id <> ${excludeContractId}
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        `)
+      : await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND vehicle_id = ${vehicleId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        `);
+    const row = rowsOf(result)[0];
+    return row ? this.map(row) : null;
+  }
+
+  async findBlockingByDriver(companyId: string, driverId: string, excludeContractId?: string): Promise<Contract | null> {
+    const result = excludeContractId
+      ? await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND driver_id = ${driverId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+            AND id <> ${excludeContractId}
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        `)
+      : await this.tx.execute(sql`
+          SELECT * FROM contracts
+          WHERE company_id = ${companyId}
+            AND driver_id = ${driverId}
+            AND status IN ('DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED')
+            AND is_archived = false
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        `);
+    const row = rowsOf(result)[0];
+    return row ? this.map(row) : null;
+  }
+
   async findActiveByDriver(companyId: string, driverId: string, excludeContractId?: string): Promise<Contract | null> {
     const result = excludeContractId
       ? await this.tx.execute(sql`
