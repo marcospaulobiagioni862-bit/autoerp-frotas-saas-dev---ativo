@@ -22,12 +22,12 @@ async function json(response: globalThis.Response): Promise<any> {
 }
 
 export async function runContractTemplateFileSourceRegression(): Promise<void> {
-  const companyA = 'contract-template-file-company-a';
-  const companyB = 'contract-template-file-company-b';
-  const adminAId = 'contract-template-file-admin-a';
-  const adminBId = 'contract-template-file-admin-b';
-  const operationalAId = 'contract-template-file-operational-a';
   const suffix = randomUUID().slice(0, 8);
+  const companyA = `contract-template-file-company-a-${suffix}`;
+  const companyB = `contract-template-file-company-b-${suffix}`;
+  const adminAId = `contract-template-file-admin-a-${suffix}`;
+  const adminBId = `contract-template-file-admin-b-${suffix}`;
+  const operationalAId = `contract-template-file-operational-a-${suffix}`;
   const originalStorageDir = process.env.ATTACHMENT_STORAGE_DIR;
   const originalDurable = process.env.ATTACHMENT_STORAGE_DURABLE;
   const storageDir = await mkdtemp(join(tmpdir(), 'autoerp-contract-template-file-'));
@@ -36,15 +36,15 @@ export async function runContractTemplateFileSourceRegression(): Promise<void> {
 
   await db.execute(sql`
     INSERT INTO companies (id, document, name, status, created_at, updated_at) VALUES
-      (${companyA}, 'CTF-A', 'Contract Template File A', 'ACTIVE', NOW(), NOW()),
-      (${companyB}, 'CTF-B', 'Contract Template File B', 'ACTIVE', NOW(), NOW())
+      (${companyA}, ${`CTF-A-${suffix}`}, 'Contract Template File A', 'ACTIVE', NOW(), NOW()),
+      (${companyB}, ${`CTF-B-${suffix}`}, 'Contract Template File B', 'ACTIVE', NOW(), NOW())
     ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, status='ACTIVE', updated_at=NOW()
   `);
   await db.execute(sql`
     INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at) VALUES
-      (${adminAId}, ${companyA}, 'Template Admin A', 'template-admin-a@example.test', 'ADMIN', true, NOW(), NOW()),
-      (${adminBId}, ${companyB}, 'Template Admin B', 'template-admin-b@example.test', 'ADMIN', true, NOW(), NOW()),
-      (${operationalAId}, ${companyA}, 'Template Operational A', 'template-operational-a@example.test', 'OPERATIONAL', true, NOW(), NOW())
+      (${adminAId}, ${companyA}, 'Template Admin A', ${`template-admin-a-${suffix}@example.test`}, 'ADMIN', true, NOW(), NOW()),
+      (${adminBId}, ${companyB}, 'Template Admin B', ${`template-admin-b-${suffix}@example.test`}, 'ADMIN', true, NOW(), NOW()),
+      (${operationalAId}, ${companyA}, 'Template Operational A', ${`template-operational-a-${suffix}@example.test`}, 'OPERATIONAL', true, NOW(), NOW())
     ON CONFLICT (id) DO NOTHING
   `);
 

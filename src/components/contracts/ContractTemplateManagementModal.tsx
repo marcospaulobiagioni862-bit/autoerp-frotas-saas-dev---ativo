@@ -1,6 +1,5 @@
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, Download, Edit3, FilePlus2, FileText, Save, Upload, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Archive, Download, Edit3, FilePlus2, FileText, Save, Upload } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
@@ -60,6 +59,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   const [content, setContent] = useState('');
   const [sourceMode, setSourceMode] = useState<ContractTemplateSourceMode>('MARKDOWN');
   const [sourceFile, setSourceFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -124,6 +124,21 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
     setError(null);
     setSuccess(null);
     setTab('EDITOR');
+  };
+
+  const chooseImportFile = () => {
+    setSourceMode('FILE');
+    setContent('');
+    setError(null);
+    window.setTimeout(() => fileInputRef.current?.click(), 0);
+  };
+
+  const handleSourceFile = (file: File | null) => {
+    setSourceFile(file);
+    setError(null);
+    if (file && !title.trim()) {
+      setTitle(file.name.replace(/\.(docx|pdf)$/i, '').replace(/[_-]+/g, ' ').trim());
+    }
   };
 
   const save = async () => {
@@ -236,20 +251,14 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl">
-      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <div>
-          <h2 className="font-bold">Modelos de contrato</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
-            Salve modelos numerados e escolha depois qual será usado no contrato do motorista.
-          </p>
-        </div>
-        <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-slate-400" aria-label="Fechar">
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      <div className="border-b border-slate-100 px-4 pt-3 dark:border-slate-800">
+    <ModalContainer
+      isOpen={isOpen}
+      onClose={onClose}
+      size="5xl"
+      title="Modelos de contrato"
+      subtitle="Salve modelos numerados e escolha depois qual será usado no contrato do motorista."
+    >
+      <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
         <div className="flex gap-2">
           <Button size="sm" variant={tab === 'SAVED' ? 'primary' : 'ghost'} onClick={() => setTab('SAVED')}>
             <FileText className="h-4 w-4" />Contratos salvos
@@ -365,7 +374,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                 <Button
                   size="sm"
                   variant={sourceMode === 'FILE' ? 'primary' : 'secondary'}
-                  onClick={() => { setSourceMode('FILE'); setContent(''); }}
+                  onClick={chooseImportFile}
                 >
                   <Upload className="h-4 w-4" />Importar DOCX/PDF
                 </Button>
@@ -377,7 +386,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
                   Conteúdo do contrato
                   <textarea
-                    className="mt-1 min-h-80 w-full rounded-lg border border-slate-200 bg-transparent p-3 font-mono text-xs dark:border-slate-700"
+                    className="mt-1 min-h-56 w-full rounded-lg border border-slate-200 bg-transparent p-3 font-mono text-xs dark:border-slate-700"
                     value={content}
                     onChange={(event) => setContent(event.target.value)}
                     placeholder="# Contrato {{contract.number}}\n\nEntre {{company.name}} e {{driver.name}}..."
@@ -401,23 +410,42 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                   </p>
                 </div>
                 <input
+                  ref={fileInputRef}
                   className="block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200"
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(event) => setSourceFile(event.target.files?.[0] || null)}
+                  onChange={(event) => handleSourceFile(event.target.files?.[0] || null)}
                 />
-                {sourceFile && <div className="text-xs text-slate-600 dark:text-slate-300">Selecionado: <b>{sourceFile.name}</b></div>}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-4 w-4" />Selecionar DOCX/PDF
+                  </Button>
+                  {sourceFile
+                    ? <div className="text-xs text-slate-600 dark:text-slate-300">Selecionado: <b>{sourceFile.name}</b></div>
+                    : <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum arquivo selecionado.</div>}
+                </div>
                 <div className="text-[10px] text-slate-500">
                   DOCX pode ficar disponível para preenchimento automático. PDF é mantido como arquivo de referência e não é ativado automaticamente.
                 </div>
               </div>
             )}
 
-            <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <Button variant="ghost" onClick={() => { resetEditor(); setTab('SAVED'); }}>Cancelar</Button>
-              <Button onClick={() => void save()} isLoading={loading}>
-                <Save className="h-4 w-4" />{editing ? 'Salvar nova versão' : 'Salvar contrato'}
-              </Button>
+            <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                {sourceMode === 'FILE'
+                  ? sourceFile ? `Arquivo pronto para salvar: ${sourceFile.name}` : 'Selecione um DOCX/PDF para habilitar o salvamento.'
+                  : 'Preencha o título e o conteúdo do contrato.'}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => { resetEditor(); setTab('SAVED'); }}>Cancelar</Button>
+                <Button
+                  onClick={() => void save()}
+                  isLoading={loading}
+                  disabled={!title.trim() || (sourceMode === 'FILE' ? !sourceFile : !content.trim())}
+                >
+                  <Save className="h-4 w-4" />{editing ? 'Salvar nova versão' : 'Salvar contrato'}
+                </Button>
+              </div>
             </div>
           </div>
         )}
