@@ -38,36 +38,47 @@ export function LoginView({ onLogin }: LoginViewProps) {
           <p className="mt-2 text-sm text-slate-600">Entre com os dados da sua empresa e do seu usuário.</p>
         </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <label className="block">
+        <form className="space-y-5" onSubmit={handleSubmit} autoComplete="on">
+          <label className="block" htmlFor="company-document">
             <span className="mb-1.5 block text-sm font-medium text-slate-700">Documento da empresa</span>
             <input
+              id="company-document"
+              name="companyDocument"
               type="text"
               value={companyDocument}
               onChange={(event) => setCompanyDocument(event.target.value)}
-              autoComplete="organization"
+              autoComplete="off"
+              inputMode="numeric"
+              autoCapitalize="none"
+              spellCheck={false}
               required
               disabled={isSubmitting}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
             />
           </label>
 
-          <label className="block">
+          <label className="block" htmlFor="login-email">
             <span className="mb-1.5 block text-sm font-medium text-slate-700">E-mail</span>
             <input
+              id="login-email"
+              name="username"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
               required
               disabled={isSubmitting}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
             />
           </label>
 
-          <label className="block">
+          <label className="block" htmlFor="login-password">
             <span className="mb-1.5 block text-sm font-medium text-slate-700">Senha</span>
             <input
+              id="login-password"
+              name="password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
