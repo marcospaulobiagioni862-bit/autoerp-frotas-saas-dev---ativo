@@ -2,6 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../MaintenanceManagement.tsx', import.meta.url), 'utf8');
+const repositorySource = readFileSync(new URL('../../../db/repositories/postgresMaintenanceRepository.ts', import.meta.url), 'utf8');
+
+assert.match(source, /setVehicleLabels\(Object\.fromEntries\(veh\.map/, 'maintenance history must keep labels for vehicles outside the eligible work-order list');
+assert.match(source, /const vehicleLabel = \(id: string\) => vehicleLabels\[id\] \|\| id;/, 'maintenance history must resolve vehicle plate/model before falling back to an internal id');
+assert.doesNotMatch(repositorySource, /const \[partsResult, servicesResult, laborResult, financeResult\] = await Promise\.all/, 'work-order hydration must not execute concurrent queries on one transaction client');
+assert.doesNotMatch(repositorySource, /return await Promise\.all\(rows\(result\)\.map\(\(row\) => this\.hydrate\(row\)\)\)/, 'work-order list hydration must not fan out concurrent queries on one transaction client');
 
 assert.match(
   source,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { OpsHealthClient } from '../../api/opsHealthClient';
 
 export type NavigationTab =
   | 'dashboard'
@@ -93,9 +94,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
 }) => {
-  const { user } = useAuth();
+  const { user, authMode } = useAuth();
   const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(false);
+  const [runtimeEnvironment, setRuntimeEnvironment] = useState('server');
   const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+
+  useEffect(() => {
+    let cancelled = false;
+    if (authMode !== 'server-session') {
+      setRuntimeEnvironment('development');
+      return () => { cancelled = true; };
+    }
+    void OpsHealthClient.get()
+      .then((summary) => { if (!cancelled) setRuntimeEnvironment(summary.build.environment.toLowerCase()); })
+      .catch(() => { if (!cancelled) setRuntimeEnvironment('server'); });
+    return () => { cancelled = true; };
+  }, [authMode]);
+
+  const authorityEnvironmentLabel = runtimeEnvironment === 'staging'
+    ? 'STAGING SERVER AUTHORITY'
+    : runtimeEnvironment === 'production'
+      ? 'PRODUCTION SERVER AUTHORITY'
+      : runtimeEnvironment === 'development'
+        ? 'DEVELOPMENT SERVER AUTHORITY'
+        : 'SERVER AUTHORITY';
 
   const categories: Array<{ title: string; items: MenuItem[] }> = [
     {
@@ -216,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="shrink-0 p-4 border-b border-slate-800/80 flex items-center justify-between">
         <div>
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block font-mono">AutoERP Fleet Manager</span>
-          <span className="mt-1 block text-[9px] uppercase tracking-wide text-emerald-400">Production server authority</span>
+          <span className="mt-1 block text-[9px] uppercase tracking-wide text-emerald-400">{authorityEnvironmentLabel}</span>
         </div>
         {onCloseMobile && (
           <button onClick={onCloseMobile} className="md:hidden p-1 text-slate-400 hover:text-white rounded-lg" aria-label="Fechar menu">
