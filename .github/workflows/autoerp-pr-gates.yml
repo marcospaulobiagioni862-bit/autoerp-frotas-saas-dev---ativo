@@ -873,9 +873,9 @@ jobs:
           npx tsx src/server/__tests__/vehicleIdentityGuardIntegration.ts
           npx tsx src/server/__tests__/documentAuthorityIntegration.ts
           npx tsx src/server/__tests__/contractAuthorityIntegration.ts
-          npm run test:audit-wave-a-activation
           npx tsx src/server/__tests__/contractTemplateFileSourceRegression.ts
           npx tsx src/server/__tests__/contractSignatureTimeGateRegression.ts
+          npm run test:audit-wave-a-activation
       - name: Finance authority regressions
         if: matrix.suite == 'finance'
         run: |
