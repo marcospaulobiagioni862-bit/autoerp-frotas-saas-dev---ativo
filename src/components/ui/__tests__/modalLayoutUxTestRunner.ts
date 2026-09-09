@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const modal = readFileSync(new URL('../ModalContainer.tsx', import.meta.url), 'utf8');
 const contractForm = readFileSync(new URL('../../contracts/ContractFormModal.tsx', import.meta.url), 'utf8');
@@ -30,6 +32,32 @@ assert.match(modal, /onClick=\{requireExplicitClose \? undefined : requestClose\
 assert.doesNotMatch(modal, /onClick=\{requireExplicitClose \? undefined : onClose\}/, 'modal backdrop must not bypass unsaved changes');
 assert.match(unsavedAuthority, /beforeunload/, 'global authority must protect browser refresh and tab close');
 assert.match(unsavedAuthority, /dirtySources = new Set<string>\(\)/, 'global authority must track multiple independent dirty editors');
+assert.match(unsavedAuthority, /requestGuardedClose/, 'explicit Cancel/close actions must have a shared guarded-close authority');
+assert.match(unsavedAuthority, /closest\('\[data-unsaved-guard\]'\)/, 'explicit close must resolve the nearest modal dirty source instead of clearing every editor');
+
+const componentsRoot = fileURLToPath(new URL('../../', import.meta.url));
+const directCloseBypasses: string[] = [];
+const scanDirectCloseBypasses = (directory: string) => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const absolute = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      scanDirectCloseBypasses(absolute);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.tsx')) continue;
+    const source = readFileSync(absolute, 'utf8');
+    if (source.includes('onClick={onClose}')) {
+      directCloseBypasses.push(absolute.slice(componentsRoot.length + 1));
+    }
+  }
+};
+scanDirectCloseBypasses(componentsRoot);
+assert.deepEqual(
+  directCloseBypasses,
+  [],
+  `all explicit component close actions must use requestGuardedClose; bypasses: ${directCloseBypasses.join(', ')}`,
+);
+
 
 
 assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
