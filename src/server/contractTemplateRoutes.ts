@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
@@ -65,6 +66,22 @@ function templateKey(value: unknown): string {
   const clean = text(value, 'templateKey', 2, 80).toLowerCase().replace(/\s+/g, '-');
   if (!/^[a-z0-9][a-z0-9._-]*$/.test(clean)) throw new TemplateValidationError('Invalid templateKey');
   return clean;
+}
+
+const SAVED_CONTRACT_KEY = /^modelo-contrato-(\d+)$/;
+
+async function nextSavedContractKey(tx: any, companyId: string): Promise<string> {
+  const raw = tx.getRawTransaction?.();
+  if (!raw) throw new Error('Contract template sequence authority unavailable');
+  await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${companyId}:saved-contract-template-sequence`})))`);
+  const all = await tx.getContractTemplateRepo().findAllByCompany(companyId, true);
+  let maxNumber = 0;
+  for (const item of all) {
+    const match = SAVED_CONTRACT_KEY.exec(String(item.templateKey || ''));
+    if (!match) continue;
+    maxNumber = Math.max(maxNumber, Number(match[1]) || 0);
+  }
+  return `modelo-contrato-${String(maxNumber + 1).padStart(2, '0')}`;
 }
 
 function bodyOf(req: Request): Record<string, unknown> {
@@ -325,12 +342,15 @@ export function registerContractTemplateRoutes(app: Express): void {
     const body = bodyOf(req);
     try {
       rejectAuthorityFields(body);
-      const key = templateKey(body.templateKey);
-      if (getMoveFlexApprovedContractMaster(key)) throw new ApprovedMasterLockedError();
+      const requestedKey = body.templateKey === undefined || body.templateKey === null || String(body.templateKey).trim() === ''
+        ? undefined
+        : templateKey(body.templateKey);
       const title = text(body.title, 'title', 2, 160);
       const mode = sourceMode(body.sourceMode);
       const contentMarkdown = contentForMode(body, mode);
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const key = requestedKey || await nextSavedContractKey(tx, principal.companyId);
+        if (getMoveFlexApprovedContractMaster(key)) throw new ApprovedMasterLockedError();
         const existing = await tx.getContractTemplateRepo().findCurrentWithLock(principal.companyId, key);
         if (existing) throw new TemplateConflictError();
         const versions = await tx.getContractTemplateRepo().findVersions(principal.companyId, key);
