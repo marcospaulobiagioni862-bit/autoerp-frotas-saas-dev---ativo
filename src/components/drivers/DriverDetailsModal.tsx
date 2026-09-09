@@ -154,6 +154,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [docNotes, setDocNotes] = useState('');
   const [docAttachmentId, setDocAttachmentId] = useState('');
   const [driverAttachmentRefresh, setDriverAttachmentRefresh] = useState(0);
+  const [showDocumentArchive, setShowDocumentArchive] = useState(false);
 
   const [isHealthUnlocked, setIsHealthUnlocked] = useState(false);
   const [isEditHealthOpen, setIsEditHealthOpen] = useState(false);
@@ -177,6 +178,10 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
   const driver = summary?.driver;
+  const currentResidenceDocument = summary?.documents.find((item) => {
+    const type = String(item.documentType || '').toLocaleUpperCase('pt-BR');
+    return item.isCurrent && !item.isArchived && type.includes('RESID');
+  });
 
   const applyHealthProfile = (health: DriverHealthAndEmergency) => {
     setHealthProfile(health);
@@ -197,10 +202,14 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     try {
       const coreDriver = await DriverClient.get(driverId);
       const supplemental = await bridge.getSupplementalSummary(coreDriver);
-      supplemental.documents = await DocumentClient.list({ subjectType: 'DRIVER', subjectId: coreDriver.id });
-      const linkedVehicleId = coreDriver.currentVehicleId || supplemental.currentContract?.vehicleId;
-      if (linkedVehicleId) {
-        const vehicle = await VehicleClient.get(linkedVehicleId);
+      supplemental.documents = await DocumentClient.list({
+        subjectType: 'DRIVER',
+        subjectId: coreDriver.id,
+        currentOnly: true,
+        includeArchived: false,
+      });
+      if (coreDriver.currentVehicleId) {
+        const vehicle = await VehicleClient.get(coreDriver.currentVehicleId);
         supplemental.currentVehicle = { ...vehicle, year: vehicle.yearModel || vehicle.yearFabrication };
       }
       setSummary(supplemental);
@@ -237,6 +246,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   useEffect(() => {
     if (!isOpen || !driverId) return;
     setActiveTab('overview');
+    setShowDocumentArchive(false);
     setIsHealthUnlocked(false);
     setWhatsappConsent(null);
     setWhatsappOutbox([]);
@@ -431,17 +441,6 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     return <Badge variant="neutral">{status || 'Sem Status'}</Badge>;
   };
 
-  const contractStatusLabel = (status?: string): string => ({
-    DRAFT: 'Rascunho',
-    AWAITING_SIGNATURE: 'Aguardando assinatura',
-    ACTIVE: 'Ativo',
-    SUSPENDED: 'Suspenso',
-    FINISHED: 'Finalizado',
-    CLOSED: 'Encerrado',
-    CANCELLED: 'Cancelado',
-    ARCHIVED: 'Arquivado',
-  }[String(status)] || String(status || 'Sem status'));
-
   const getCnhBadge = (status?: DocumentStatus) => {
     if (status === DocumentStatus.VALID) return <Badge variant="success">CNH Válida</Badge>;
     if (status === DocumentStatus.EXPIRING_SOON) return <Badge variant="warning">CNH Vencendo</Badge>;
@@ -552,64 +551,93 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           )}
 
           {activeTab === 'cnh' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">CNH vigente e histórico</h3>
+                <div>
+                  <h3 className="text-sm font-semibold">Documentos essenciais do cadastro</h3>
+                  <p className="text-[11px] text-slate-500">A ficha mostra somente o que é vigente e necessário. Versões antigas ficam no arquivo/histórico.</p>
+                </div>
                 {onRenewCnh && (
                   <Button size="sm" variant="primary" onClick={() => onRenewCnh(driver.id)}>
                     <CreditCard className="w-4 h-4 mr-1" />Nova CNH / Renovar CNH
                   </Button>
                 )}
               </div>
+
               <DriverCnhDocumentCard driverId={driver.id} />
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-semibold">Documentos Registrados</h3>
-                <Button size="sm" onClick={() => setIsAddDocOpen(true)}><Plus className="w-4 h-4 mr-1" />Anexar Documento</Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {summary.documents.length === 0 && <p className="text-xs text-slate-400">Nenhum documento suplementar registrado.</p>}
-                {summary.documents.map((doc) => (
-                  <div key={doc.id} className="p-3 border rounded-xl flex justify-between items-center">
-                    <div className="flex gap-3 items-center">
-                      <File className="w-5 h-5 text-emerald-600" />
-                      <div><strong className="text-sm block">{doc.documentType}</strong><span className="text-xs text-slate-500">{doc.documentNumber || 'Sem número'} {doc.expirationDate ? `• ${doc.expirationDate}` : ''} • v{doc.versionNumber}</span><div className="mt-1"><Badge variant={doc.complianceStatus === DocumentStatus.VALID ? 'success' : doc.complianceStatus === DocumentStatus.EXPIRED ? 'danger' : 'warning'}>{doc.complianceStatus}</Badge></div></div>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => handleRemoveDocument(doc.id)}><Trash2 className="w-4 h-4 text-rose-600" /></Button>
+
+              <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <File className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <div>
+                    <div className="text-sm font-semibold">Identificação cadastral</div>
+                    <div className="text-[11px] text-slate-500">CPF {driver.cpf ? 'cadastrado' : 'pendente'} • RG {driver.rg ? 'cadastrado' : 'pendente'}</div>
                   </div>
-                ))}
+                </div>
+                <Badge variant={driver.cpf && driver.rg ? 'success' : 'warning'}>{driver.cpf && driver.rg ? 'Conferido' : 'Completar dados'}</Badge>
               </div>
-              <Card className="p-4 space-y-3">
-                <h4 className="text-xs font-bold uppercase text-slate-400">Arquivos do Motorista — authority do servidor</h4>
-                <div key={`${driver.id}-${driverAttachmentRefresh}`}><AttachmentList
-                  entityType="Driver"
-                  entityId={driver.id}
-                  showPdfActions
-                  protectLatestDriverCnh
-                  excludeAttachmentIds={summary.documents.map((document) => document.attachmentId).filter((id): id is string => Boolean(id))}
-                /></div>
-              </Card>
+
+              <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <FileText className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <div>
+                    <div className="text-sm font-semibold">Comprovante de residência</div>
+                    <div className="text-[11px] text-slate-500">
+                      {currentResidenceDocument ? 'Documento vigente registrado no servidor.' : 'Ainda não anexado.'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {currentResidenceDocument && (
+                    <Badge variant={currentResidenceDocument.complianceStatus === DocumentStatus.VALID ? 'success' : currentResidenceDocument.complianceStatus === DocumentStatus.EXPIRED ? 'danger' : 'warning'}>
+                      {currentResidenceDocument.complianceStatus === DocumentStatus.VALID ? 'Válido' : currentResidenceDocument.complianceStatus === DocumentStatus.EXPIRED ? 'Vencido' : 'Revisar'}
+                    </Badge>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => { setDocType('Comprovante de Residência'); setIsAddDocOpen(true); }}>
+                    <Plus className="w-4 h-4 mr-1" />{currentResidenceDocument ? 'Atualizar' : 'Anexar'}
+                  </Button>
+                  {currentResidenceDocument && (
+                    <Button size="sm" variant="ghost" onClick={() => handleRemoveDocument(currentResidenceDocument.id)} title="Arquivar comprovante atual">
+                      <Trash2 className="w-4 h-4 text-rose-600" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-semibold">Arquivo e histórico</div>
+                    <p className="text-[10px] text-slate-500">Arquivos antigos, substituídos e complementares permanecem preservados sem ocupar espaço na ficha.</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setShowDocumentArchive((value) => !value)}>
+                    {showDocumentArchive ? 'Ocultar arquivo' : 'Ver arquivo / histórico'}
+                  </Button>
+                </div>
+                {showDocumentArchive && (
+                  <div className="mt-3" key={`${driver.id}-${driverAttachmentRefresh}`}>
+                    <AttachmentList
+                      entityType="Driver"
+                      entityId={driver.id}
+                      showPdfActions
+                      protectLatestDriverCnh
+                      excludeAttachmentIds={summary.documents.map((document) => document.attachmentId).filter((id): id is string => Boolean(id))}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'vehicles' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">
-                {summary.currentContract?.status === 'ACTIVE' ? 'Veículo atual em locação' : 'Veículo vinculado ao contrato'}
-              </h3>
+              <h3 className="text-sm font-semibold">Veículo Atual Vinculado</h3>
               {summary.currentVehicle ? (
-                <Card className="p-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                  <div>
-                    <strong>{summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})</strong>
-                    <p className="text-xs text-slate-500">Placa {summary.currentVehicle.plate} • Renavam {summary.currentVehicle.renavam}</p>
-                    {summary.currentContract && (
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Contrato {summary.currentContract.contractNumber} • {contractStatusLabel(summary.currentContract.status)}
-                      </p>
-                    )}
-                  </div>
+                <Card className="p-4 flex justify-between items-center">
+                  <div><strong>{summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})</strong><p className="text-xs text-slate-500">Placa {summary.currentVehicle.plate} • Renavam {summary.currentVehicle.renavam}</p></div>
                   {onSelectVehicle && <Button size="sm" variant="outline" onClick={() => { onClose(); onSelectVehicle(summary.currentVehicle.id); }}><ExternalLink className="w-4 h-4 mr-1" />Ver Veículo</Button>}
                 </Card>
-              ) : <p className="text-xs text-slate-400">Nenhum veículo vinculado por contrato.</p>}
+              ) : <p className="text-xs text-slate-400">Nenhum veículo vinculado.</p>}
             </div>
           )}
 
@@ -619,7 +647,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               {summary.contractHistory.length === 0 ? <p className="text-xs text-slate-400">Nenhum contrato registrado.</p> : summary.contractHistory.map((contract) => (
                 <Card key={contract.id} className="p-3 flex justify-between text-xs">
                   <div><strong className="font-mono block">Contrato #{contract.contractNumber || contract.id}</strong><span>{contract.startDate || '—'} → {contract.endDate || 'Em andamento'}</span></div>
-                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.rentalAmount || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : contract.status === 'AWAITING_SIGNATURE' ? 'warning' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge></div>
+                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.recurringValue || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : 'neutral'}>{contract.status}</Badge></div>
                 </Card>
               ))}
             </div>
@@ -861,9 +889,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           <form onSubmit={handleAddDocument} className="space-y-4">
             <Select label="Tipo de Documento *" value={docType} onChange={(event) => setDocType(event.target.value)} required>
               <option value="Comprovante de Residência">Comprovante de Residência</option>
-              <option value="Certidão de Antecedentes Criminais">Certidão de Antecedentes Criminais</option>
-              <option value="Contrato Assinado">Contrato Assinado</option>
-              <option value="Outro Documento">Outro Documento</option>
+              <option value="Documento Complementar">Documento Complementar</option>
             </Select>
             <Input label="Número do Documento" value={docNumber} onChange={(event) => setDocNumber(event.target.value)} />
             <Input label="Data de Validade" type="date" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />
