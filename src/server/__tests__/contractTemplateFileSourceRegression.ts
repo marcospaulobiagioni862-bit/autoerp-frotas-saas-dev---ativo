@@ -100,6 +100,31 @@ export async function runContractTemplateFileSourceRegression(): Promise<void> {
     let response = await request('/api/contract-templates', {
       method: 'POST',
       body: JSON.stringify({
+        title: 'Contrato salvo automático A',
+        contentMarkdown: 'Contrato {{contract.number}} para {{driver.name}} no veículo {{vehicle.plate}}.',
+      }),
+    }, adminA);
+    assert(response.status === 201, `auto-numbered saved template A expected 201, got ${response.status}`);
+    const autoSavedA = (await json(response)).item;
+    const autoMatchA = /^modelo-contrato-(\d+)$/.exec(String(autoSavedA.templateKey));
+    assert(Boolean(autoMatchA), 'saved template must receive a server-generated sequential key');
+
+    response = await request('/api/contract-templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Contrato salvo automático B',
+        contentMarkdown: 'Contrato {{contract.number}} para {{driver.name}} no veículo {{vehicle.plate}}.',
+      }),
+    }, adminA);
+    assert(response.status === 201, `auto-numbered saved template B expected 201, got ${response.status}`);
+    const autoSavedB = (await json(response)).item;
+    const autoMatchB = /^modelo-contrato-(\d+)$/.exec(String(autoSavedB.templateKey));
+    assert(Boolean(autoMatchB), 'second saved template must receive a server-generated sequential key');
+    assert(Number(autoMatchB?.[1]) === Number(autoMatchA?.[1]) + 1, 'saved template sequence must advance exactly by one');
+
+    response = await request('/api/contract-templates', {
+      method: 'POST',
+      body: JSON.stringify({
         templateKey: `markdown-${suffix}`,
         title: 'Modelo Markdown',
         contentMarkdown: 'Contrato {{contract.number}} para {{driver.name}} no veículo {{vehicle.plate}}.',
