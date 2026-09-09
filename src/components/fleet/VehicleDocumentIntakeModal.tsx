@@ -1,8 +1,10 @@
 import React,{useEffect,useRef,useState} from 'react';
 import { AlertCircle,CheckCircle2,RefreshCw,Sparkles } from 'lucide-react';
 import { VehicleDocumentIntakeClient,type VehicleIntakeDocumentType } from '../../api/vehicleDocumentIntakeClient';
-import { VehicleClient } from '../../api/vehicleClient';
+import { VehicleClient, type VehicleIdentityCheckResult } from '../../api/vehicleClient';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
+import type { Vehicle } from '../../types/entities';
+import { vehicleStatusLabel } from './vehicleStatusPresentation';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
 import { FileUpload } from '../documents/FileUpload';
 import { ModalContainer } from '../ui/ModalContainer';
@@ -29,7 +31,7 @@ function analysisProgress(status:DocumentAiExtraction['status']|null):number{
   return 45;
 }
 
-export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualRequested}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void;onManualRequested?:()=>void}){
+export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualRequested,onExistingFound}:{isOpen:boolean;onClose:()=>void;onCreated:(vehicleId:string)=>void;onManualRequested?:()=>void;onExistingFound?:(vehicle:Vehicle)=>void}){
   const[documentType,setDocumentType]=useState<VehicleIntakeDocumentType>('CRLV');
   const[intakeId,setIntakeId]=useState<string|null>(null);
   const[attachmentId,setAttachmentId]=useState<string|null>(null);
@@ -42,13 +44,53 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   const[busy,setBusy]=useState(false);
   const[completionErrors,setCompletionErrors]=useState<Record<string,string>>({});
   const[identifierErrors,setIdentifierErrors]=useState<IdentifierErrors>({});
+  const[identityCheck,setIdentityCheck]=useState<VehicleIdentityCheckResult|null>(null);
+  const[checkingIdentity,setCheckingIdentity]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[message,setMessage]=useState<string|null>(null);
   const materializingRef=useRef(false);
 
-  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});materializingRef.current=false;setError(null);setMessage(null);};
+  const reset=()=>{setDocumentType('CRLV');setIntakeId(null);setAttachmentId(null);setExtraction(null);setCorrections({});setCompletion({color:'',category:'',currentKm:'',acquisitionValue:'',currentValue:'',rentalValueBase:'',version:'',nextMaintenanceKm:'',notes:''});setBusy(false);setCompletionErrors({});setIdentifierErrors({});setIdentityCheck(null);setCheckingIdentity(false);materializingRef.current=false;setError(null);setMessage(null);};
   useEffect(()=>{if(!isOpen)reset();},[isOpen]);
   useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
+
+  useEffect(()=>{
+    if(!isOpen||!extraction||!['REVIEW_REQUIRED','APPROVED'].includes(extraction.status)){
+      setIdentityCheck(null);
+      return;
+    }
+    const plate=normalizedIdentifier(corrections.plate);
+    const renavam=normalizedIdentifier(corrections.renavam);
+    const chassis=normalizedIdentifier(corrections.chassis);
+    if(!plate&&!renavam&&!chassis){
+      setIdentityCheck(null);
+      setIdentifierErrors({});
+      return;
+    }
+    let cancelled=false;
+    const timer=window.setTimeout(()=>{
+      setCheckingIdentity(true);
+      void VehicleClient.checkIdentity({plate,renavam,chassis})
+        .then(result=>{
+          if(cancelled)return;
+          setIdentityCheck(result);
+          if(result.exists&&result.matches){
+            const next:IdentifierErrors={};
+            if(result.matches.plate)next.plate='Placa já cadastrada.';
+            if(result.matches.renavam)next.renavam='RENAVAM já cadastrado.';
+            if(result.matches.chassis)next.chassis='Chassi já cadastrado.';
+            setIdentifierErrors(next);
+          }else{
+            setIdentifierErrors({});
+          }
+        })
+        .catch(err=>{
+          if(!cancelled)setError(err instanceof Error?err.message:'Não foi possível conferir se o veículo já existe.');
+        })
+        .finally(()=>{if(!cancelled)setCheckingIdentity(false);});
+    },250);
+    return()=>{cancelled=true;window.clearTimeout(timer);};
+  },[isOpen,extraction?.status,corrections.plate,corrections.renavam,corrections.chassis]);
 
   const start=async()=>{
     setBusy(true);setError(null);
@@ -89,7 +131,11 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
 
   const review=async(decision:'APPROVE'|'REJECT')=>{
     if(!extraction)return;
-    setBusy(true);setError(null);setIdentifierErrors({});
+    if(decision==='APPROVE'&&identityCheck?.exists){
+      setError('Este veículo já possui cadastro. Abra o registro existente em vez de criar outro.');
+      return;
+    }
+    setBusy(true);setError(null);
     try{
       const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
       setExtraction(reviewed);
@@ -116,18 +162,16 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     if(Object.keys(fieldErrors).length){setError('Corrija os campos destacados em vermelho antes de criar o veículo.');return;}
     materializingRef.current=true;setBusy(true);setError(null);setIdentifierErrors({});
     try{
-      const vehicles=await VehicleClient.list();
-      const identifierValidation:IdentifierErrors={};
       const plate=normalizedIdentifier(corrections.plate),renavam=normalizedIdentifier(corrections.renavam),chassis=normalizedIdentifier(corrections.chassis);
-      const duplicatePlate=plate&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.plate)===plate);
-      const duplicateRenavam=renavam&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.renavam)===renavam);
-      const duplicateChassis=chassis&&vehicles.find(vehicle=>normalizedIdentifier(vehicle.chassis)===chassis);
-      if(duplicatePlate)identifierValidation.plate=`Placa já cadastrada no veículo ${duplicatePlate.plate}.`;
-      if(duplicateRenavam)identifierValidation.renavam=`RENAVAM já cadastrado no veículo ${duplicateRenavam.plate}.`;
-      if(duplicateChassis)identifierValidation.chassis=`Chassi já cadastrado no veículo ${duplicateChassis.plate}.`;
-      if(Object.keys(identifierValidation).length>0){
-        setIdentifierErrors(identifierValidation);
-        setError('Este documento pertence a um veículo que já está cadastrado. Confira os identificadores destacados em vermelho.');
+      const latestIdentity=await VehicleClient.checkIdentity({plate,renavam,chassis});
+      setIdentityCheck(latestIdentity);
+      if(latestIdentity.exists&&latestIdentity.item){
+        const next:IdentifierErrors={};
+        if(latestIdentity.matches?.plate)next.plate='Placa já cadastrada.';
+        if(latestIdentity.matches?.renavam)next.renavam='RENAVAM já cadastrado.';
+        if(latestIdentity.matches?.chassis)next.chassis='Chassi já cadastrado.';
+        setIdentifierErrors(next);
+        setError('Este veículo já possui cadastro no ERP. Abra o registro existente em vez de criar uma duplicidade.');
         return;
       }
 
@@ -234,13 +278,33 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
           <p className="text-[11px] text-red-700/80 dark:text-red-300/80">Nenhum veículo foi criado automaticamente. O documento enviado permanece preservado neste fluxo.</p>
         </div>}
 
+        {checkingIdentity&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300">Conferindo placa, RENAVAM e chassi em toda a base do ERP…</div>}
+
+        {identityCheck?.exists&&identityCheck.item&&<div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+          <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0"/>
+            <div className="min-w-0 flex-1">
+              <strong className="block text-sm">Veículo já cadastrado no ERP</strong>
+              <p className="mt-1 text-xs">Não crie um novo registro. Os dados lidos correspondem a um cadastro existente.</p>
+              <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 p-3 text-xs dark:border-amber-800 dark:bg-slate-900/60">
+                <div><b>Placa:</b> {identityCheck.item.plate}</div>
+                <div><b>Veículo:</b> {identityCheck.item.brand} {identityCheck.item.model}</div>
+                <div><b>Status:</b> {vehicleStatusLabel(identityCheck.item.status)}</div>
+                <div><b>Local:</b> {identityCheck.historical?'Vendidos / Arquivados — histórico':'Frota cadastrada'}</div>
+                <div className="mt-1 font-mono text-[10px] text-slate-500">Cadastro: {identityCheck.item.id}</div>
+              </div>
+              {onExistingFound&&<div className="mt-3"><Button variant="outline" onClick={()=>onExistingFound(identityCheck.item!)}>Abrir cadastro existente</Button></div>}
+            </div>
+          </div>
+        </div>}
+
         {canEdit&&<div className="space-y-3">
           <p className="text-xs text-slate-500">Confira e corrija os campos abaixo antes de aprovar.</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {FIELD_KEYS.map(key=><Input key={key} label={FIELD_LABELS[key]} value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:e.target.value}))}/>)}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={()=>void review('APPROVE')} disabled={busy} className="gap-2"><CheckCircle2 className="h-4 w-4"/>Aprovar dados</Button>
+            <Button onClick={()=>void review('APPROVE')} disabled={busy||checkingIdentity||Boolean(identityCheck?.exists)} className="gap-2"><CheckCircle2 className="h-4 w-4"/>{identityCheck?.exists?'Cadastro já existe':'Aprovar dados'}</Button>
             <Button variant="outline" onClick={()=>void review('REJECT')} disabled={busy}>Rejeitar leitura</Button>
           </div>
         </div>}
