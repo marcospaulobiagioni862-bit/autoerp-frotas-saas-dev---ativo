@@ -1,4 +1,3 @@
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, Download, Edit3, FilePlus2, FileText, Save, Upload } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
