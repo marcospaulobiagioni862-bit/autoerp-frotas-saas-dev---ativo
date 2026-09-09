@@ -3,6 +3,7 @@ import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
+import { AttachmentClient } from '../../api/attachmentClient';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, FileAttachment } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
@@ -59,12 +60,18 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
   const load = async () => {
     try {
-      const [templateList, artifactList] = await Promise.all([
+      const [templateList, artifactList, attachmentList] = await Promise.all([
         ContractTemplateClient.list(),
         ContractExecutionClient.listArtifacts(contract.id),
+        AttachmentClient.list({ entityType: 'Contract', entityId: contract.id }),
       ]);
       setTemplates(templateList);
       setArtifacts(artifactList);
+      const signedEvidence = artifactList.find((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived);
+      const pendingSignedAttachment = attachmentList
+        .filter((item) => !item.isArchived && item.documentType === 'SIGNED_CONTRACT' && item.mimeType === 'application/pdf')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
+      setSignedAttachment(signedEvidence ? null : pendingSignedAttachment);
       setSelectedTemplateId((current) => {
         const availableIds = new Set(templateList.map((item) => item.id));
         if (current && availableIds.has(current)) return current;
@@ -190,8 +197,14 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
             Gere o documento oficial. Os dois modelos padrão MoveFlex usam as páginas VISUAL_FIXO aprovadas como fundo imutável e apenas recebem os dados nos campos em branco, gerando PDF para assinatura. GOV.br registra o método informado, sem validação criptográfica automática pelo ERP.
           </p>
         </div>
-        <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
-          {signed ? 'ASSINADO / EVIDÊNCIA' : generated ? 'AGUARDANDO ASSINATURA' : 'DOCUMENTO NÃO GERADO'}
+        <Badge variant={signed ? 'success' : signedAttachment ? 'warning' : generated ? 'warning' : 'neutral'}>
+          {signed
+            ? 'ASSINADO / EVIDÊNCIA'
+            : signedAttachment
+              ? 'PDF ASSINADO ENVIADO • CONFIRMAR'
+              : generated
+                ? 'AGUARDANDO ASSINATURA'
+                : 'DOCUMENTO NÃO GERADO'}
         </Badge>
       </div>
 
@@ -262,7 +275,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                 multiple={false}
                 onUploadComplete={(attachment) => setSignedAttachment(attachment as FileAttachment)}
               />
-              {signedAttachment && <div className="rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-900/50">Arquivo pronto: <b>{signedAttachment.fileName}</b></div>}
+              {signedAttachment && <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><b>PDF assinado já enviado:</b> {signedAttachment.fileName}<div className="mt-1">Falta informar o assinante e registrar a evidência para o ERP considerar o contrato assinado.</div></div>}
               <label className="block text-xs font-semibold text-slate-600">
                 Método de assinatura
                 <select
