@@ -8,7 +8,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
-import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 
 interface ContractFormModalProps {
@@ -71,11 +71,32 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setContractFile(null);
     setHasUnsavedChanges(false);
     setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
-      .then(([vehicleList, driverList, templateList]) => {
+    Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
+      .then(([vehicleList, driverList, contractList, templateList]) => {
         if (!active) return;
-        const validVehicles = vehicleList.filter((item) => !item.isArchived && (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId));
-        const validDrivers = driverList.filter((item) => !item.isArchived && (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId));
+        const blockingStatuses = new Set<ContractStatus>([
+          ContractStatus.DRAFT,
+          ContractStatus.AWAITING_SIGNATURE,
+          ContractStatus.ACTIVE,
+          ContractStatus.SUSPENDED,
+        ]);
+        const blockingContracts = contractList.filter((item) =>
+          !item.isArchived &&
+          item.id !== contractToEdit?.id &&
+          blockingStatuses.has(item.status)
+        );
+        const blockedVehicleIds = new Set(blockingContracts.map((item) => item.vehicleId));
+        const blockedDriverIds = new Set(blockingContracts.map((item) => item.driverId));
+        const validVehicles = vehicleList.filter((item) =>
+          !item.isArchived &&
+          !blockedVehicleIds.has(item.id) &&
+          (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId)
+        );
+        const validDrivers = driverList.filter((item) =>
+          !item.isArchived &&
+          !blockedDriverIds.has(item.id) &&
+          (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
+        );
         setVehicles(validVehicles);
         setDrivers(validDrivers);
         setTemplates(templateList);
