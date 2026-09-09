@@ -92,17 +92,19 @@ assert.match(executionRoutes, /'driver\.pixKey': snapshot\.driver\.pixKey/, 'PIX
 
 assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
-assert.match(contractForm, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'new contract must preselect Contract 01 even when the persisted key uses the legacy alias');
-assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\S]*startDate: '', endDate: '', rentalAmount: '',[\s\S]*billingPeriodicity: '',[\s\S]*securityDepositAmount: '', franchiseKm: '', excessKmRate: '',[\s\S]*templateId: defaultTemplate\?\.id \|\| ''/, 'new contract must keep operational and financial values blank while preselecting only the template');
+assert.match(contractForm, /const SAVED_CONTRACT_KEY = \/\^modelo-contrato-/, 'new contract selector must use only the saved sequential template family');
+assert.match(contractForm, /savedTemplates = templateList[\s\S]*savedContractNumber\(item\.templateKey\) !== undefined/, 'new contract must filter technical and legacy templates out of the selector');
+assert.match(contractForm, /templateId: '', notes: ''/, 'new contract must require the user to explicitly choose which saved contract model to use');
 assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'contract execution must prefer Contract 01 even when the persisted key uses the legacy alias');
-assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure both persisted MoveFlex official models before listing templates');
+assert.doesNotMatch(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must not mix legacy master bootstrap into the saved-contract selector');
+assert.match(contractForm, /ContractTemplateClient\.list\(\)/, 'new contract must load operational templates before filtering to saved contracts');
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
 assert.match(contractForm, /Existem informações não salvas\. Deseja sair sem salvar\?/, 'new/edit contract must warn before closing when fields changed');
 assert.match(contractForm, /onClose=\{requestClose\}/, 'contract modal X must use guarded close handler');
 assert.match(contractForm, /onClick=\{requestClose\}>Cancelar/, 'contract cancel action must use guarded close handler');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
-assert.match(contractForm, /visualFixed \|\| selectedTemplate\.contentMarkdown\.trim\(\)/, 'VISUAL_FIXO and Markdown templates must generate PDF directly');
-assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'standard VISUAL_FIXO contract must generate its official PDF automatically after save');
+assert.match(contractForm, /if \(selectedTemplate\.contentMarkdown\.trim\(\)\)/, 'saved text templates must generate PDF directly');
+assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'saved text contract must generate its PDF automatically after save');
 assert.match(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id, selectedTemplate\.id\)/, 'custom DOCX templates must retain their separate DOCX flow');
 assert.doesNotMatch(contractForm, /generatePdfFromDocx/, 'new DOCX-backed contract must not reflow the official Word layout into the legacy server PDF');
 assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(selected\.templateKey\)/, 'contract execution must recognize VISUAL_FIXO standard templates');
@@ -163,7 +165,8 @@ assert.match(templateRoutes, /if \(!activeOnly\) return base/, 'management listi
 assert.match(templateRoutes, /await approvedMasterSource\(tx, principal\.companyId, item, master\)/, 'operational listing must require the exact approved standard source');
 assert.match(executionPanel, /availableIds\.has\(current\)/, 'execution panel must discard a stale invalid template selection');
 assert.match(executionPanel, /operationalTemplateLabel\(item\)/, 'execution selector must use canonical standard labels');
-assert.match(contractForm, /contractTemplateOptionLabel\(item\)/, 'contract form must use canonical standard labels');
+assert.match(contractForm, /Contrato \$\{String\(number\)\.padStart\(2, '0'\)\}/, 'contract form must show saved templates as Contrato 01, 02, 03...');
+assert.match(contractForm, /contractTemplateOptionLabel\(item\)/, 'contract form must use saved-contract display labels');
 assert.match(executionPanel, /VISUAL_FIXO aprovadas como fundo imutável/, 'execution UI must explain the immutable VISUAL_FIXO workflow');
 assert.doesNotMatch(templateModal, /Carregar arquivo mestre/, 'legacy master upload controls must stay out of the saved-contract workflow');
 assert.doesNotMatch(templateModal, /getMoveFlexApprovedContractMaster/, 'saved-contract UI must not couple editable models to the immutable master registry');
@@ -187,7 +190,11 @@ assert.match(executionRoutes, /GENERATE_PDF_FROM_VISUAL_FIXED_MASTER/, 'VISUAL_F
 assert.match(executionRoutes, /getMoveFlexVisualFixedMissingFields/, 'VISUAL_FIXO generation must preflight required source data before writing a PDF');
 assert.match(executionRoutes, /Preencha os dados obrigatórios antes de gerar o contrato/, 'missing contract data must return an actionable Portuguese error instead of a generic validation message');
 assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(template\.templateKey\)/, 'standard VISUAL_FIXO must be distinguished from custom templates server-side');
-assert.match(contractForm, /O arquivo mestre aprovado do Contrato 01 ainda não está ativo/, 'new contract creation must fail closed until the approved master is active');
+assert.match(contractForm, /Nenhum contrato salvo está disponível/, 'new contract must fail closed when no saved contract model exists');
+assert.match(contractForm, /blockedVehicleIds/, 'new contract must hide vehicles already bound to another non-terminal contract');
+assert.match(contractForm, /blockedDriverIds/, 'new contract must hide drivers already bound to another non-terminal contract');
+assert.match(contractForm, /ContractStatus\.DRAFT/, 'draft contracts must block vehicle and driver reuse');
+assert.match(contractForm, /ContractStatus\.AWAITING_SIGNATURE/, 'awaiting-signature contracts must block vehicle and driver reuse');
 assert.match(
   templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,
