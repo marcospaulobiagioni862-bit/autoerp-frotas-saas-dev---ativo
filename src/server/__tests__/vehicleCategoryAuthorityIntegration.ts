@@ -121,6 +121,19 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       const created = (await json(response)).item;
       assert(created.category === 'Pickup / Caminhonete', 'Pickup category was not persisted on create');
 
+      response = await request('/api/fleet/vehicles', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...baseVehicle,
+          plate: 'BAT1A23',
+          renavam: '26500000008',
+          chassis: '9BR265PICKUP00008',
+          currentKm: 150,
+        }),
+      });
+      assert(response.status === 201, `KM batch fixture create expected 201, got ${response.status}`);
+      const batchVehicle = (await json(response)).item;
+
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ brand: 'Ram' }),
@@ -153,6 +166,38 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       assert(response.status === 200, `vehicle list expected 200, got ${response.status}`);
       const list = (await json(response)).items;
       assert(list.some((item: any) => item.id === created.id && item.category === 'Pickup / Caminhonete'), 'Pickup category is missing from the fleet read model');
+
+      response = await request('/api/fleet/vehicles/km-records/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          entries: [
+            { vehicleId: created.id, kmValue: 200, notes: 'Leitura semanal' },
+            { vehicleId: batchVehicle.id, kmValue: 140, notes: 'Leitura inválida' },
+          ],
+        }),
+      });
+      assert(response.status === 400, `regressive KM batch expected 400, got ${response.status}`);
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`);
+      assert((await json(response)).item.currentKm === 100, 'invalid KM batch partially updated the first vehicle');
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(batchVehicle.id)}`);
+      assert((await json(response)).item.currentKm === 150, 'invalid KM batch mutated the regressive vehicle');
+
+      response = await request('/api/fleet/vehicles/km-records/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          entries: [
+            { vehicleId: created.id, kmValue: 200, notes: 'Leitura semanal' },
+            { vehicleId: batchVehicle.id, kmValue: 250, notes: 'Leitura semanal' },
+          ],
+        }),
+      });
+      assert(response.status === 201, `valid KM batch expected 201, got ${response.status}`);
+      const batchResult = (await json(response)).items;
+      assert(Array.isArray(batchResult) && batchResult.length === 2, 'valid KM batch must return both updated vehicles');
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`);
+      assert((await json(response)).item.currentKm === 200, 'valid KM batch did not update the first vehicle');
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(batchVehicle.id)}`);
+      assert((await json(response)).item.currentKm === 250, 'valid KM batch did not update the second vehicle');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }

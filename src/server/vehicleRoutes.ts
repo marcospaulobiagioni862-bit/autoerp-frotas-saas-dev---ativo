@@ -295,6 +295,80 @@ export function registerVehicleRoutes(app: Express): void {
     } catch (error) { sendVehicleError(res, error); }
   });
 
+  app.post('/api/fleet/vehicles/km-records/batch', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'RECORD_VEHICLE_KM');
+    if (!principal) return;
+    const rawEntries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+    if (rawEntries.length === 0 || rawEntries.length > 100) {
+      res.status(400).json({ error: 'Informe entre 1 e 100 leituras de KM.' });
+      return;
+    }
+
+    const normalized = rawEntries.map((entry: any) => ({
+      vehicleId: typeof entry?.vehicleId === 'string' ? entry.vehicleId.trim() : '',
+      kmValue: Number(entry?.kmValue),
+      notes: optionalText(entry?.notes),
+    }));
+    const seen = new Set<string>();
+    for (const entry of normalized) {
+      if (!entry.vehicleId || !Number.isInteger(entry.kmValue) || entry.kmValue < 0 || seen.has(entry.vehicleId)) {
+        res.status(400).json({ error: 'Lote de KM inválido ou com veículo duplicado.' });
+        return;
+      }
+      seen.add(entry.vehicleId);
+    }
+
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const vehicleRepo = txContext.getVehicleRepo();
+        const results: Array<{ record: any; vehicle: Vehicle }> = [];
+        for (const entry of [...normalized].sort((a, b) => a.vehicleId.localeCompare(b.vehicleId))) {
+          const vehicle = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, entry.vehicleId);
+          if (!vehicle) throw new VehicleNotFoundError();
+          if (vehicle.isArchived || vehicle.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
+          if (entry.kmValue < vehicle.currentKm) {
+            throw new VehicleValidationError(`KM de ${vehicle.plate} não pode ser menor que ${vehicle.currentKm}.`);
+          }
+          const now = new Date().toISOString();
+          const record = await txContext.getKmRecordRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            vehicleId: vehicle.id,
+            driverId: vehicle.currentDriverId,
+            contractId: vehicle.currentContractId,
+            kmValue: entry.kmValue,
+            recordDate: now.split('T')[0],
+            readingType: 'PERIODIC',
+            notes: entry.notes || 'Atualização de KM em lote',
+            createdAt: now,
+          });
+          const updated = await vehicleRepo.updateForCompany(principal.companyId, vehicle.id, {
+            currentKm: entry.kmValue,
+            updatedAt: now,
+          });
+          if (!updated) throw new VehicleNotFoundError();
+          await txContext.getAuditLogRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            entityName: 'KmRecord',
+            entityId: record.id,
+            action: AuditAction.CREATE,
+            previousState: JSON.stringify({ vehicleId: vehicle.id, currentKm: vehicle.currentKm }),
+            newState: JSON.stringify({ vehicleId: vehicle.id, currentKm: entry.kmValue, readingType: 'PERIODIC', source: 'BATCH' }),
+            userId: principal.userId,
+            userName: principal.name,
+            timestamp: now,
+          });
+          results.push({ record, vehicle: updated });
+        }
+        return results;
+      });
+      res.status(201).json({ items });
+    } catch (error) {
+      sendVehicleError(res, error);
+    }
+  });
+
   app.patch('/api/fleet/vehicles/:id/status', async (req: Request, res: Response) => {
     const principal = requireVehiclePrincipal(req, res, 'CHANGE_VEHICLE_STATUS');
     if (!principal) return;
