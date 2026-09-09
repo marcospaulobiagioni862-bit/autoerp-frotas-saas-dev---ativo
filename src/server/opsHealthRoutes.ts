@@ -6,6 +6,33 @@ import { inspectDocumentAiRuntimeMode } from './documentAiObservability';
 
 type OperationalState = 'OK' | 'DEGRADED';
 
+type BuildIdentity = {
+  commitSha: string | null;
+  environment: string;
+  service: string | null;
+};
+
+function cleanMetadata(value: unknown, max = 160): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  if (!clean || clean.length > max || !/^[A-Za-z0-9._:/-]+$/.test(clean)) return null;
+  return clean;
+}
+
+function resolveBuildIdentity(env: NodeJS.ProcessEnv): BuildIdentity {
+  return {
+    commitSha:
+      cleanMetadata(env.RENDER_GIT_COMMIT, 80) ||
+      cleanMetadata(env.GIT_COMMIT_SHA, 80) ||
+      cleanMetadata(env.COMMIT_SHA, 80),
+    environment:
+      cleanMetadata(env.AUTOERP_ENVIRONMENT, 40) ||
+      cleanMetadata(env.NODE_ENV, 40) ||
+      'unknown',
+    service: cleanMetadata(env.RENDER_SERVICE_NAME, 120),
+  };
+}
+
 export function registerOpsHealthRoutes(app: Express): void {
   app.get('/api/ops/health', async (req: Request, res: Response) => {
     const principal = req.principal;
@@ -45,6 +72,7 @@ export function registerOpsHealthRoutes(app: Express): void {
     }
 
     const documentAiMode = inspectDocumentAiRuntimeMode(process.env);
+    const build = resolveBuildIdentity(process.env);
     const state: OperationalState =
       databaseOk && storage.configured && storage.durable && documentAiMode !== 'MISCONFIGURED'
         ? 'OK'
@@ -53,6 +81,7 @@ export function registerOpsHealthRoutes(app: Express): void {
     res.json({
       state,
       requestId: req.requestId || null,
+      build,
       checks: {
         database: { ok: databaseOk },
         attachments: storage,
