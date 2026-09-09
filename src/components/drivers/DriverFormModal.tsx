@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useState, useEffect, useRef } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2, CheckCircle2, Plus } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
@@ -335,7 +336,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
           <div><label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações Operacionais</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm" /></div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading}>{driverToEdit ? 'Salvar Alterações' : isCnhCompletion ? 'Concluir cadastro' : 'Cadastrar Motorista'}</Button></div>
+        <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading}>{driverToEdit ? 'Salvar Alterações' : isCnhCompletion ? 'Concluir cadastro' : 'Cadastrar Motorista'}</Button></div>
       </form>
     </ModalContainer>
   );

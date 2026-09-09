@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useState, useEffect } from 'react';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
@@ -247,7 +248,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>{vehicleToEdit ? 'Atualizar Veículo' : 'Cadastrar Veículo'}</Button>
         </div>
       </form>
