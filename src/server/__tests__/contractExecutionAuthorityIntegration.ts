@@ -1,6 +1,8 @@
 import express, { type NextFunction, type Request, type Response as ExpressResponse } from 'express';
 import { createServer } from 'node:http';
-import { rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { UnitOfWork } from '../../db/uow';
@@ -91,6 +93,9 @@ function syntheticContractDocx(): Buffer {
 
 export class ContractExecutionAuthorityIntegrationRunner {
   static async runAllTests(): Promise<void> {
+    const previousAttachmentStorageDir = process.env.ATTACHMENT_STORAGE_DIR;
+    const testAttachmentStorageDir = await mkdtemp(join(tmpdir(), 'autoerp-contract-execution-'));
+    process.env.ATTACHMENT_STORAGE_DIR = testAttachmentStorageDir;
     await db.execute(sql`
       INSERT INTO companies (id, document, name, status, created_at, updated_at) VALUES
         (${companyA}, 'I4C-A', 'I4C Company A', 'ACTIVE', NOW(), NOW()),
@@ -451,7 +456,9 @@ export class ContractExecutionAuthorityIntegrationRunner {
       console.log('SECURITY-2I4C_CONTRACT_EXECUTION_INTEGRATION_PASS');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-      if (process.env.ATTACHMENT_STORAGE_DIR) await rm(process.env.ATTACHMENT_STORAGE_DIR, { recursive: true, force: true });
+      await rm(testAttachmentStorageDir, { recursive: true, force: true });
+      if (previousAttachmentStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
+      else process.env.ATTACHMENT_STORAGE_DIR = previousAttachmentStorageDir;
     }
   }
 }
