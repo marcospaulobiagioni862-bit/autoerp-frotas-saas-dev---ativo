@@ -97,6 +97,11 @@ assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\
 assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'contract execution must prefer Contract 01 even when the persisted key uses the legacy alias');
 assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure both persisted MoveFlex official models before listing templates');
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
+assert.match(contractForm, /ContractClient\.list\(\)/, 'new contract must load existing contracts before exposing vehicle and driver options');
+assert.match(contractForm, /ContractStatus\.DRAFT/, 'draft contracts must block vehicle and driver reuse');
+assert.match(contractForm, /ContractStatus\.AWAITING_SIGNATURE/, 'awaiting-signature contracts must block vehicle and driver reuse');
+assert.match(contractForm, /blockedVehicleIds/, 'new contract must hide vehicles bound to another non-terminal contract');
+assert.match(contractForm, /blockedDriverIds/, 'new contract must hide drivers bound to another non-terminal contract');
 assert.match(contractForm, /Existem informações não salvas\. Deseja sair sem salvar\?/, 'new/edit contract must warn before closing when fields changed');
 assert.match(contractForm, /onClose=\{requestClose\}/, 'contract modal X must use guarded close handler');
 assert.match(contractForm, /onClick=\{requestClose\}>Cancelar/, 'contract cancel action must use guarded close handler');
