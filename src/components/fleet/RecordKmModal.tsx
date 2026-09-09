@@ -6,6 +6,7 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 import { Gauge, AlertCircle } from 'lucide-react';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface RecordKmModalProps {
   isOpen: boolean;
@@ -101,7 +102,7 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+          <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>
             Cancelar
           </Button>
           <Button type="submit" variant="primary" isLoading={loading}>
