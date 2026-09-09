@@ -335,7 +335,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             </div>
             <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
           </div>
-          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current}>{busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
+          <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current||checkingIdentity||Boolean(identityCheck?.exists)}>{identityCheck?.exists?'Cadastro existente — não criar':busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 
