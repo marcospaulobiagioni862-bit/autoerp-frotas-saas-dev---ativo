@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React,{useEffect,useMemo,useState}from'react';
 import { Sparkles,ShieldCheck } from 'lucide-react';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
@@ -125,7 +126,7 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
         <p className="text-[11px] text-slate-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
       </div>}
       {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Seguro</Button>}</div>
+      <div className="flex justify-end gap-2"><Button variant="ghost" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Seguro</Button>}</div>
     </div>
   </ModalContainer>;
 };

@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React,{useEffect,useMemo,useState}from'react';
 import { Radio,Sparkles } from 'lucide-react';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
@@ -32,6 +33,6 @@ export const TrackerAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,onUs
     {extraction?.status==='FAILED'&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">A leitura falhou. Tente novamente com um documento mais legível.</div>}
     {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3"><div className="flex items-center gap-2"><Radio className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(([key,original])=><Input key={key} label={documentAiFieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(cur=>({...cur,[key]:e.target.value}))}/>)}</div><p className="text-[11px] text-slate-500">Campos ausentes continuam vazios e poderão ser preenchidos no formulário normal.</p></div>}
     {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-    <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Rastreador</Button>}</div>
+    <div className="flex justify-end gap-2"><Button variant="ghost" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Rastreador</Button>}</div>
   </div></ModalContainer>;
 };

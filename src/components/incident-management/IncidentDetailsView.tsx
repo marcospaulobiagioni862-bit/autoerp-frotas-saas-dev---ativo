@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useState } from 'react';
 import {
   ProductionIncident,
@@ -246,7 +247,7 @@ export const IncidentDetailsView: React.FC<IncidentDetailsViewProps> = ({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={(event)=>requestGuardedClose(event,onClose)}
             className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />

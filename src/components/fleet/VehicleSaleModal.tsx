@@ -5,6 +5,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ModalContainer } from '../ui/ModalContainer';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface VehicleSaleModalProps {
   isOpen: boolean;
@@ -106,7 +107,7 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
         <p className="text-xs text-slate-500">O histórico, documentos, contratos, manutenções e registros financeiros vinculados ao veículo não serão apagados.</p>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>Confirmar venda</Button>
         </div>
       </form>

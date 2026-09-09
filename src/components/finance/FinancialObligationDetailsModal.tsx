@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useState } from 'react';
 import type { AccountPayable, AccountReceivable, FinancialTransaction } from '../../types/entities';
 import { FinanceTransactionClient } from '../../api/financeTransactionClient';
@@ -182,7 +183,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
         </section>
 
         <div className="flex justify-end border-t border-slate-200 pt-3 dark:border-slate-800">
-          <Button type="button" variant="outline" onClick={onClose}>Fechar</Button>
+          <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>Fechar</Button>
         </div>
       </div>
     </ModalContainer>

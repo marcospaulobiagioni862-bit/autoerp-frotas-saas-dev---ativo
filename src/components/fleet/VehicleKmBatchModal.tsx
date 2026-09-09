@@ -4,6 +4,7 @@ import type { Vehicle } from '../../types/entities';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Button } from '../ui/Button';
 import { ModalContainer } from '../ui/ModalContainer';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface VehicleKmBatchModalProps {
   isOpen: boolean;
@@ -143,7 +144,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
             {entries.length} veículo(s) selecionado(s)
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
             <Button type="submit" variant="primary" isLoading={loading}>Salvar KM em lote</Button>
           </div>
         </div>

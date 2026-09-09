@@ -3,6 +3,7 @@ import { AccountReceivable } from '../../types/entities';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { FinanceRenegotiationClient } from '../../api/financeRenegotiationClient';
 import type { RenegotiationInstallmentFrequency } from '../../shared/utils/renegotiationSchedule';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface RenegotiationModalProps {
   isOpen: boolean;
@@ -70,7 +71,7 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={(event)=>requestGuardedClose(event,onClose)}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -187,7 +188,7 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={onClose}
+              onClick={(event)=>requestGuardedClose(event,onClose)}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancelar

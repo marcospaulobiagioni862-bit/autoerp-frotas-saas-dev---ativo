@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React,{useEffect,useMemo,useState}from'react';
 import { Sparkles,FileText } from 'lucide-react';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
@@ -30,6 +31,6 @@ export const VehicleDocumentAiAssistModal:React.FC<Props>=({isOpen,vehicles,onCl
   {extraction?.status==='FAILED'&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">A leitura falhou. Tente novamente com um documento mais legível.</div>}
   {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{fields.map(([key,original])=><Input key={key} label={documentAiFieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(cur=>({...cur,[key]:e.target.value}))}/>)}</div></div>}
   {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
-  <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Documento</Button>}</div>
+  <div className="flex justify-end gap-2"><Button variant="ghost" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Documento</Button>}</div>
  </div></ModalContainer>;
 };
