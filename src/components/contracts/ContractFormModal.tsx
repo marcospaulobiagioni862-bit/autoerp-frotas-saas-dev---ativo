@@ -8,7 +8,8 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
-import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { isContractBlocking } from '../../domain/operations/fleetOperationalState';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -83,16 +84,10 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
       .then(([vehicleList, driverList, contractList, templateList]) => {
         if (!active) return;
-        const blockingStatuses = new Set<ContractStatus>([
-          ContractStatus.DRAFT,
-          ContractStatus.AWAITING_SIGNATURE,
-          ContractStatus.ACTIVE,
-          ContractStatus.SUSPENDED,
-        ]);
         const blockingContracts = contractList.filter((item) =>
           !item.isArchived &&
           item.id !== contractToEdit?.id &&
-          blockingStatuses.has(item.status)
+          isContractBlocking(item.status)
         );
         const blockedVehicleIds = new Set(blockingContracts.map((item) => item.vehicleId));
         const blockedDriverIds = new Set(blockingContracts.map((item) => item.driverId));

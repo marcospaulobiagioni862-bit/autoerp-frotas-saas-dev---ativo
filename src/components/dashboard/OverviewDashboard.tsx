@@ -37,10 +37,12 @@ import {
   BellRing,
   ArrowRight,
   ShieldAlert,
+  FileText,
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
 import { PerformanceMetricsWidget } from './PerformanceMetricsWidget';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
+import { summarizeFleetOperationalState } from '../../domain/operations/fleetOperationalState';
 
 interface OverviewDashboardProps {
   onNavigate: (tab: any) => void;
@@ -220,9 +222,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   );
   const totalPayableBalance = pendingPayables.reduce((sum, p) => sum + p.balanceAmount, 0);
 
-  const activeVehicles = vehicles.filter((v) => v.status === 'RENTED');
-  const availableVehicles = vehicles.filter((v) => v.status === 'AVAILABLE');
-  const maintenanceVehicles = vehicles.filter((v) => v.status === 'MAINTENANCE');
+  const fleetOperational = summarizeFleetOperationalState(vehicles, contracts);
+  const rentedVehiclesCount = fleetOperational.RENTED;
+  const contractingVehiclesCount = fleetOperational.CONTRACTING;
+  const availableVehiclesCount = fleetOperational.AVAILABLE;
+  const maintenanceVehiclesCount = fleetOperational.MAINTENANCE;
   const activeDriversCount = drivers.filter((d) => d.status === 'ACTIVE').length;
   const activeContractsCount = contracts.filter((c) => c.status === 'ACTIVE').length;
 
@@ -328,7 +332,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Frota em Operação</span>
               <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
-                {activeVehicles.length} / {vehicles.length}
+                {rentedVehiclesCount} / {vehicles.length}
               </h3>
             </div>
             <div className="p-2.5 bg-slate-100 text-slate-700 rounded-xl dark:bg-slate-800 dark:text-slate-300">
@@ -338,20 +342,20 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] flex justify-between">
             <span className="text-slate-500">Taxa de Ocupação:</span>
             <strong className="text-emerald-600 font-bold">
-              {vehicles.length > 0 ? `${Math.round((activeVehicles.length / vehicles.length) * 100)}%` : '0%'}
+              {vehicles.length > 0 ? `${Math.round((rentedVehiclesCount / vehicles.length) * 100)}%` : '0%'}
             </strong>
           </div>
         </Card>
       </div>
 
       {/* Operational Summary Bento Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card padding="sm" onClick={() => onNavigate('fleet')} className="cursor-pointer hover:border-blue-500 transition-all">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Veículos Disponíveis</span>
               <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                {availableVehicles.length}
+                {availableVehiclesCount}
               </h3>
             </div>
             <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl dark:bg-emerald-950/60 dark:text-emerald-400">
@@ -364,12 +368,30 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
         </Card>
 
+        <Card padding="sm" onClick={() => onNavigate('contracts')} className="cursor-pointer hover:border-violet-500 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Em contratação</span>
+              <h3 className="text-xl sm:text-2xl font-black text-violet-600 dark:text-violet-400 mt-1">
+                {contractingVehiclesCount}
+              </h3>
+            </div>
+            <div className="p-2.5 bg-violet-50 text-violet-600 rounded-xl dark:bg-violet-950/60 dark:text-violet-400">
+              <FileText className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 flex justify-between">
+            <span>Contrato em preparação/assinatura</span>
+            <span className="text-violet-600 font-semibold">Ver Contratos →</span>
+          </div>
+        </Card>
+
         <Card padding="sm" onClick={() => onNavigate('maintenance')} className="cursor-pointer hover:border-blue-500 transition-all">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Em Manutenção</span>
               <h3 className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
-                {maintenanceVehicles.length}
+                {maintenanceVehiclesCount}
               </h3>
             </div>
             <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl dark:bg-amber-950/60 dark:text-amber-400">

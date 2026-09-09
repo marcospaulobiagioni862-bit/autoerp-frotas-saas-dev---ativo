@@ -5,6 +5,7 @@ import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import type { CommunicationLog, DocumentRecord, Driver } from '../../types/entities';
 import { DocumentStatus, DriverStatus, ObligationStatus } from '../../types/enums';
+import { selectCurrentBlockingContract } from '../../domain/operations/fleetOperationalState';
 
 export interface DriverLegacyDetailedSummary {
   driver: Driver;
@@ -83,12 +84,9 @@ export class DriverLegacyDetailsBridge {
     ]);
 
     const contractHistory = contracts.filter((item) => item.driverId === driverId);
-    const blockingStatuses = new Set(['DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED']);
     const currentContract = driver.currentContractId
       ? contractHistory.find((item) => item.id === driver.currentContractId)
-      : contractHistory
-          .filter((item) => blockingStatuses.has(String(item.status)) && !item.isArchived)
-          .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0];
+      : selectCurrentBlockingContract(contractHistory);
     const receivables = allReceivables.filter((item) => item.driverId === driverId);
     const securityDeposits = (await Promise.all(
       contractHistory.map((contract) => FinanceDepositClient.getByContract(contract.id))

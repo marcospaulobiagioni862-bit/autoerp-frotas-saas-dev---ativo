@@ -193,8 +193,8 @@ assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(template\.temp
 assert.match(contractForm, /Nenhum contrato salvo está disponível/, 'new contract must fail closed when no saved contract model exists');
 assert.match(contractForm, /blockedVehicleIds/, 'new contract must hide vehicles already bound to another non-terminal contract');
 assert.match(contractForm, /blockedDriverIds/, 'new contract must hide drivers already bound to another non-terminal contract');
-assert.match(contractForm, /ContractStatus\.DRAFT/, 'draft contracts must block vehicle and driver reuse');
-assert.match(contractForm, /ContractStatus\.AWAITING_SIGNATURE/, 'awaiting-signature contracts must block vehicle and driver reuse');
+assert.match(contractForm, /isContractBlocking\(item\.status\)/, 'new contract must use the shared blocking-contract authority');
+assert.doesNotMatch(contractForm, /new Set<ContractStatus>/, 'new contract must not maintain a local blocking-status matrix');
 assert.match(
   templateModal,
   /dark:bg-slate-950\/50 dark:text-slate-200/,

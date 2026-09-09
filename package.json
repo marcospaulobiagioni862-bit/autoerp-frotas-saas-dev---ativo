@@ -12,6 +12,7 @@
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
     "test:maintenance-client": "tsx src/api/__tests__/maintenancePreventiveClientTestRunner.ts",
     "test:contract-billing-client": "tsx src/api/__tests__/contractBillingDayClientTestRunner.ts",
+    "test:audit-wave-a": "tsx src/domain/operations/__tests__/erpWaveASourceOfTruthTestRunner.ts",
     "start": "node dist/server.mjs",
     "db:migrate": "node migrate_db.cjs",
     "db:push": "drizzle-kit push",

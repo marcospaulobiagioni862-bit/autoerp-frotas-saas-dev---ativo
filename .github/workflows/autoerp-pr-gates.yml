@@ -68,6 +68,9 @@ jobs:
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
 
+      - name: AUDIT-WAVE-A source-of-truth transversal invariants
+        run: npm run test:audit-wave-a
+
       - name: DOC-AI-CNH progress and RG regressions
         shell: bash
         run: |
