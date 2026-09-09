@@ -20,6 +20,8 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
   maxWidth = 'lg',
   size,
 }) => {
+  const requireExplicitClose = title === 'Novo Contrato' || title === 'Editar Contrato';
+
   useEffect(() => {
     if (!isOpen) return;
     const previousBodyOverflow = document.body.style.overflow;
@@ -38,11 +40,11 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) onClose();
+      if (e.key === 'Escape' && isOpen && !requireExplicitClose) onClose();
     };
     if (isOpen) window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, requireExplicitClose]);
 
   if (!isOpen) return null;
 
@@ -78,7 +80,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
     >
       <div
         className="fixed inset-0"
-        onClick={onClose}
+        onClick={requireExplicitClose ? undefined : onClose}
         aria-hidden="true"
       />
 
