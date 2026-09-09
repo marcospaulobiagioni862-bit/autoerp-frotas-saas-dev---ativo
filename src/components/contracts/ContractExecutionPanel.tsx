@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
-import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
@@ -138,16 +137,13 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
   };
 
-  const openAttachment = async (attachmentId: string) => {
+  const openAttachment = (attachmentId: string) => {
     setError(null);
-    try {
-      const blob = await AttachmentClient.content(attachmentId);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank', 'noopener,noreferrer');
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Erro ao abrir documento.');
-    }
+    const anchor = document.createElement('a');
+    anchor.href = `/api/attachments/${encodeURIComponent(attachmentId)}/content`;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.click();
   };
 
   const registerEvidence = () => {
