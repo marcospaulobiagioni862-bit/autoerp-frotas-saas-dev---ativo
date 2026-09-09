@@ -19,10 +19,20 @@ interface ContractFormModalProps {
   onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
 }
 
+const SAVED_CONTRACT_KEY = /^modelo-contrato-(\d+)$/;
+
+function savedContractNumber(templateKey: string): number | undefined {
+  const match = SAVED_CONTRACT_KEY.exec(templateKey);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function contractTemplateOptionLabel(item: ContractTemplate): string {
-  const master = getMoveFlexApprovedContractMaster(item.templateKey);
-  const title = master?.title || item.title;
-  return `${title} • v${item.versionNumber}${master ? ' • Padrão MoveFlex' : ''}`;
+  const number = savedContractNumber(item.templateKey);
+  return number
+    ? `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`
+    : `${item.title} • v${item.versionNumber} • Histórico`;
 }
 
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -71,7 +81,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setContractFile(null);
     setHasUnsavedChanges(false);
     setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.ensureMoveFlexDefault().then(() => ContractTemplateClient.list())])
+    Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
       .then(([vehicleList, driverList, contractList, templateList]) => {
         if (!active) return;
         const blockingStatuses = new Set<ContractStatus>([
@@ -97,9 +107,18 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           !blockedDriverIds.has(item.id) &&
           (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
         );
+        const savedTemplates = templateList
+          .filter((item) => savedContractNumber(item.templateKey) !== undefined)
+          .sort((a, b) => (savedContractNumber(a.templateKey) || 0) - (savedContractNumber(b.templateKey) || 0));
+        const currentHistoricalTemplate = contractToEdit?.templateId
+          ? templateList.find((item) => item.id === contractToEdit.templateId)
+          : undefined;
+        const selectableTemplates = currentHistoricalTemplate && !savedTemplates.some((item) => item.id === currentHistoricalTemplate.id)
+          ? [...savedTemplates, currentHistoricalTemplate]
+          : savedTemplates;
         setVehicles(validVehicles);
         setDrivers(validDrivers);
-        setTemplates(templateList);
+        setTemplates(selectableTemplates);
         if (contractToEdit) {
           setForm({
             contractNumber: contractToEdit.contractNumber,
@@ -119,17 +138,14 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             notes: contractToEdit.notes || '',
           });
         } else {
-          const defaultTemplate = templateList.find((item) =>
-            getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
-          );
-          if (!defaultTemplate) {
-            setError('O arquivo mestre aprovado do Contrato 01 ainda não está ativo. Abra Modelos de Contrato e carregue exatamente o DOCX mestre aprovado.');
+          if (savedTemplates.length === 0) {
+            setError('Nenhum contrato salvo está disponível. Abra Modelos de Contrato, crie ou importe um modelo e salve antes de cadastrar o contrato do motorista.');
           }
           setForm({
             contractNumber: '', vehicleId: '', driverId: '',
             startDate: '', endDate: '', rentalAmount: '',
             billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
-            securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: defaultTemplate?.id || '', notes: '',
+            securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
           });
         }
       })
@@ -224,8 +240,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         const selectedTemplate = templates.find((item) => item.id === form.templateId);
         if (selectedTemplate) {
           try {
-            const visualFixed = Boolean(getMoveFlexApprovedContractMaster(selectedTemplate.templateKey));
-            if (visualFixed || selectedTemplate.contentMarkdown.trim()) {
+            if (selectedTemplate.contentMarkdown.trim()) {
               completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
             } else {
               completedContract = (await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id)).contract;
