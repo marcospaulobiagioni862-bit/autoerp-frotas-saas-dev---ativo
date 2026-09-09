@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
+import { ReceivableService } from '../domain/finance/ReceivableService';
+import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
 import { ANNUAL_VEHICLE_DOCUMENT_TYPES } from '../domain/documents/documentPolicy';
 import type { Contract, Driver, Vehicle } from '../types/entities';
 import {
@@ -8,6 +10,7 @@ import {
   ContractStatus,
   DocumentStatus,
   DriverStatus,
+  OriginType,
   RecurringFrequency,
   VehicleStatus,
 } from '../types/enums';
