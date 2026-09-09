@@ -148,30 +148,25 @@ assert.match(
   /dark:text-slate-300/,
   'contract attachment helper text must remain readable in dark mode',
 );
-assert.match(
-  templateModal,
-  /Anexar PDF\/DOCX/,
-  'template modal must expose the file-source action explicitly',
-);
-assert.match(
-  templateModal,
-  /Modelos de Contrato MoveFlex/,
-  'contract template manager must expose MoveFlex branding',
-);
-assert.doesNotMatch(templateModal, /buildMoveFlexBaseContractPdf/, 'standard contract manager must not generate a reconstructed base PDF');
-assert.doesNotMatch(templateModal, /Baixar modelo-base MoveFlex/, 'standard contract manager must not offer a derived base document');
-assert.match(templateModal, /Arquivo mestre aprovado • imutável/, 'active standard template must be visibly locked to the approved master');
-assert.match(templateModal, /Fonte antiga\/inválida — substituir por/, 'management must identify an invalid legacy standard source');
-assert.match(templateModal, /Substituir pelo mestre aprovado/, 'management must allow replacing an invalid legacy standard source');
-assert.match(templateModal, /AttachmentClient\.archive\(attachment\.id\)/, 'invalid legacy source must be archived before approved master upload');
+assert.match(templateModal, /Contratos salvos/, 'template manager must expose a dedicated saved-contracts tab');
+assert.match(templateModal, /Novo \/ importar contrato/, 'template manager must expose a dedicated new/import contract tab');
+assert.match(templateModal, /Editar texto no ERP/, 'saved contracts must support direct editable text');
+assert.match(templateModal, /Importar DOCX\/PDF/, 'saved contracts must support file import');
+assert.match(templateModal, /Salvar nova versão/, 'editing a saved contract must create a new version instead of overwriting history');
+assert.match(templateModal, /modelo-contrato-/, 'saved editable contracts must use the isolated sequential key family');
+assert.match(templateModal, /número é gerado automaticamente pelo servidor/, 'template manager must explain server-authoritative numbering');
+assert.doesNotMatch(templateModal, /Modelos de Contrato MoveFlex/, 'operational template manager must not mix legacy master branding into saved contracts');
+assert.doesNotMatch(templateModal, /Arquivo mestre aprovado • imutável/, 'saved-contract view must not mix immutable master status with editable contracts');
+assert.match(templateRoutes, /nextSavedContractKey/, 'server must allocate sequential saved contract keys');
+assert.match(templateRoutes, /pg_advisory_xact_lock/, 'saved contract sequence must be protected by a transaction-scoped advisory lock');
 assert.match(templateRoutes, /if \(!activeOnly\) return base/, 'management listing must retain invalid standards for repair');
 assert.match(templateRoutes, /await approvedMasterSource\(tx, principal\.companyId, item, master\)/, 'operational listing must require the exact approved standard source');
 assert.match(executionPanel, /availableIds\.has\(current\)/, 'execution panel must discard a stale invalid template selection');
 assert.match(executionPanel, /operationalTemplateLabel\(item\)/, 'execution selector must use canonical standard labels');
 assert.match(contractForm, /contractTemplateOptionLabel\(item\)/, 'contract form must use canonical standard labels');
 assert.match(executionPanel, /VISUAL_FIXO aprovadas como fundo imutável/, 'execution UI must explain the immutable VISUAL_FIXO workflow');
-assert.match(templateModal, /Carregar arquivo mestre/, 'pending standard template must request the approved master file');
-assert.match(templateModal, /getMoveFlexApprovedContractMaster/, 'template manager must identify standard masters from the immutable registry');
+assert.doesNotMatch(templateModal, /Carregar arquivo mestre/, 'legacy master upload controls must stay out of the saved-contract workflow');
+assert.doesNotMatch(templateModal, /getMoveFlexApprovedContractMaster/, 'saved-contract UI must not couple editable models to the immutable master registry');
 assert.match(approvedMasterRegistry, /CONTRATO_01_MOVEFLEX_VISUAL_FIXO\.docx/, 'Contract 01 VISUAL_FIXO filename must be pinned');
 assert.match(approvedMasterRegistry, /76bf2d51fef2679b7d47294c35800bbd9c807ab7e40cfd01c171a53a6d0a9b6c/, 'Contract 01 VISUAL_FIXO SHA-256 must be pinned');
 assert.match(approvedMasterRegistry, /fileSize: 4331240/, 'Contract 01 VISUAL_FIXO size must be pinned');
