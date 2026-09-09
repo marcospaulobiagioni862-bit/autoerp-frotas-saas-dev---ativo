@@ -62,7 +62,8 @@ assert.doesNotMatch(appSource, /persistence\/seed\/seedData|seedAutoERPTestData|
 assert.match(appSource, /import\('\.\/app\/navigationBadgeLoader'\)/, 'App must load the authenticated badge read-model boundary explicitly and on demand');
 assert.match(appSource, /handleResolveNotification/, 'App must route notification clicks to the source module');
 assert.match(appSource, /DocumentClient\.get\(item\.entityId\)/, 'Document notifications must resolve their canonical document before navigation');
-assert.match(appSource, /setActiveTab\('documentos'\)/, 'Document notifications must navigate to the document center');
+assert.match(appSource, /requestTabChange\('documentos'\)/, 'Document notifications must navigate to the document center through the unsaved-changes authority');
+assert.doesNotMatch(appSource, /setActiveTab\('documentos'\)/, 'Document notification routing must not bypass the unsaved-changes authority');
 assert.match(appSource, /className="h-full min-h-0 overflow-hidden/, 'App shell must inherit the root height instead of creating a second viewport-sized scroll boundary');
 const globalCssSource = read('src/index.css');
 assert.match(globalCssSource, /html,[\s\S]*body,[\s\S]*#root[\s\S]*overflow:\s*hidden;/, 'Global document/root scroll must remain disabled so only the application scroll regions can move');
