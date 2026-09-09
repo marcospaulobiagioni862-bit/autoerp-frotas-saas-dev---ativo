@@ -72,6 +72,35 @@
   }
 }
 
+/* The application content is the single vertical page scroll root.
+   Keep its scrollbar visible on every module so users can see and drag it. */
+main.app-content-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+  scrollbar-color: #64748b transparent;
+}
+
+main.app-content-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+}
+
+main.app-content-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+main.app-content-scrollbar::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+main.app-content-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: content-box;
+}
+
 /* The sidebar is an independent scroll region. Keep its scrollbar visible so
    opening longer modules never makes navigation look stuck or unscrollable. */
 aside > nav {
