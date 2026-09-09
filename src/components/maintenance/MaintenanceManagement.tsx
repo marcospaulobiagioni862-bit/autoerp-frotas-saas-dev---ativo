@@ -36,6 +36,7 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({ on
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [parts, setParts] = useState<Part[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleLabels, setVehicleLabels] = useState<Record<string, string>>({});
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [paymentMethods, setPaymentMethods] = useState<Array<{ id:string; name:string; type:string }>>([]);
@@ -82,17 +83,17 @@ export const MaintenanceManagement: React.FC<MaintenanceManagementProps> = ({ on
     try {
       const [wo, sup, prt, veh, pay, masterData] = await Promise.all([MaintenanceClient.listWorkOrders(),MaintenanceClient.listSuppliers(),MaintenanceClient.listParts(),VehicleClient.list(),FinanceObligationClient.listPayables(),FinanceMasterDataClient.list()]);
       const eligibleExpenseCategories = masterData.categories.filter((item) => item.active && (item.type === 'EXPENSE' || item.type === 'BOTH'));
-      setWorkOrders(wo); setSuppliers(sup); setParts(prt); setVehicles(veh.filter((item) => !item.isArchived && !['SOLD','INACTIVE','ARCHIVED'].includes(String(item.status)))); setPayables(pay); setExpenseCategories(eligibleExpenseCategories); setPaymentMethods(masterData.paymentMethods.filter((item)=>item.active).map((item)=>({id:item.id,name:item.name,type:item.type})));
+      setWorkOrders(wo); setSuppliers(sup); setParts(prt); setVehicleLabels(Object.fromEntries(veh.map((item) => [item.id, `${item.plate} — ${item.brand} ${item.model}`]))); setVehicles(veh.filter((item) => !item.isArchived && !['SOLD','INACTIVE','ARCHIVED'].includes(String(item.status)))); setPayables(pay); setExpenseCategories(eligibleExpenseCategories); setPaymentMethods(masterData.paymentMethods.filter((item)=>item.active).map((item)=>({id:item.id,name:item.name,type:item.type})));
       if (!woNumber) setWoNumber(`OS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar manutenção.'); setWorkOrders([]); setSuppliers([]); setParts([]); setVehicles([]); setPayables([]); setExpenseCategories([]); setPaymentMethods([]);
+      setError(err instanceof Error ? err.message : 'Falha ao carregar manutenção.'); setWorkOrders([]); setSuppliers([]); setParts([]); setVehicles([]); setVehicleLabels({}); setPayables([]); setExpenseCategories([]); setPaymentMethods([]);
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
-  const vehicleLabel = (id: string) => { const vehicle = vehicles.find((item) => item.id === id); return vehicle ? `${vehicle.plate} — ${vehicle.brand} ${vehicle.model}` : id; };
+  const vehicleLabel = (id: string) => vehicleLabels[id] || id;
   const supplierLabel = (id?: string) => suppliers.find((item) => item.id === id)?.name || 'Sem fornecedor';
   const payableFor = (wo: WorkOrder) => wo.accountPayableId ? payables.find((item) => item.id === wo.accountPayableId) : payables.find((item) => String(item.originType) === 'MAINTENANCE' && item.originId === wo.id);
-  const filteredOrders = useMemo(() => { const term = search.trim().toLowerCase(); if (!term) return workOrders; return workOrders.filter((wo) => wo.number.toLowerCase().includes(term) || wo.description.toLowerCase().includes(term) || vehicleLabel(wo.vehicleId).toLowerCase().includes(term) || supplierLabel(wo.supplierId).toLowerCase().includes(term)); }, [workOrders, search, vehicles, suppliers]);
+  const filteredOrders = useMemo(() => { const term = search.trim().toLowerCase(); if (!term) return workOrders; return workOrders.filter((wo) => wo.number.toLowerCase().includes(term) || wo.description.toLowerCase().includes(term) || vehicleLabel(wo.vehicleId).toLowerCase().includes(term) || supplierLabel(wo.supplierId).toLowerCase().includes(term)); }, [workOrders, search, vehicleLabels, suppliers]);
   const run = async (action: () => Promise<void>) => { setBusy(true); setError(null); try { await action(); await load(); } catch (err) { setError(err instanceof Error ? err.message : 'Operação de manutenção falhou.'); } finally { setBusy(false); } };
   const useMaintenanceAiDraft=(draft:MaintenanceAiDraft)=>{const doc=(value:string)=>value.replace(/\D/g,'');const exactSupplier=suppliers.find(s=>draft.supplierDocument&&doc(s.document)===doc(draft.supplierDocument))||suppliers.find(s=>draft.supplierName&&s.name.trim().toLocaleLowerCase('pt-BR')===draft.supplierName.trim().toLocaleLowerCase('pt-BR'));setWoParts([]);setWoPartId('');setWoPartQty('1');setWoVehicleId(draft.vehicleId);setWoServiceDate(draft.serviceDate);setWoEntryKm(draft.odometer);setWoDescription(draft.description);setWoServiceCost(draft.amount);setWoSupplierId(exactSupplier?.id||'');setWoSourceAttachmentId(draft.sourceAttachmentId);setNewWoOpen(true);};
   const addWoPart = () => { const selected=parts.find((item)=>item.id===woPartId); const quantity=Number(woPartQty); if(!selected){setError('Selecione uma peça do catálogo.');return;} if(!Number.isFinite(quantity)||quantity<=0){setError('Informe uma quantidade válida para a peça.');return;} setWoParts((current)=>{const existing=current.find((item)=>item.partId===selected.id);return existing?current.map((item)=>item.partId===selected.id?{...item,quantity:item.quantity+quantity}:item):[...current,{partId:selected.id,quantity}];});setWoPartId('');setWoPartQty('1');setError(null); };
