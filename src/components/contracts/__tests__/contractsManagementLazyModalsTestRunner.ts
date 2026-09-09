@@ -93,6 +93,9 @@ assert.match(contractForm, /contractNumber: '', vehicleId: '', driverId: '',[\s\
 assert.match(executionPanel, /getMoveFlexApprovedContractMaster\(item\.templateKey\)\?\.templateKey === 'locacao-padrao'/, 'contract execution must prefer Contract 01 even when the persisted key uses the legacy alias');
 assert.match(contractForm, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'new contract must ensure both persisted MoveFlex official models before listing templates');
 assert.match(contractForm, /Modelo de contrato \*/, 'new contract must expose an explicit model selector');
+assert.match(contractForm, /Existem informações não salvas\. Deseja sair sem salvar\?/, 'new/edit contract must warn before closing when fields changed');
+assert.match(contractForm, /onClose=\{requestClose\}/, 'contract modal X must use guarded close handler');
+assert.match(contractForm, /onClick=\{requestClose\}>Cancelar/, 'contract cancel action must use guarded close handler');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
 assert.match(contractForm, /visualFixed \|\| selectedTemplate\.contentMarkdown\.trim\(\)/, 'VISUAL_FIXO and Markdown templates must generate PDF directly');
 assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'standard VISUAL_FIXO contract must generate its official PDF automatically after save');
