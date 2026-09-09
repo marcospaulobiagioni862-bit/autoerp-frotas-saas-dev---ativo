@@ -382,6 +382,9 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
         const materialized = await DriverDocumentIntakeClient.materializeApprovedCnh(intakeId, expectedDriverId);
         setApprovedDraft(approved);
         setSavedDriverId(materialized.driverId);
+        if (isRenewal && onRenewed) {
+          onRenewed(materialized.driverId);
+        }
       }
     } catch (err) {
       setError(safeError(err));
