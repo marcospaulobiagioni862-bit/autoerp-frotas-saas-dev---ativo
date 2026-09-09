@@ -17,10 +17,10 @@ interface ContractsManagementProps {
   companyId: string;
 }
 
-const contractStatusLabel=(status:ContractStatus):string=>{
+const contractStatusLabel=(status:ContractStatus,signedContractUrl?:string):string=>{
   switch(status){
     case ContractStatus.DRAFT:return 'Rascunho';
-    case ContractStatus.AWAITING_SIGNATURE:return 'Aguardando assinatura';
+    case ContractStatus.AWAITING_SIGNATURE:return signedContractUrl ? 'Assinado • aguardando ativação' : 'Aguardando assinatura';
     case ContractStatus.ACTIVE:return 'Ativo';
     case ContractStatus.SUSPENDED:return 'Suspenso';
     case ContractStatus.FINISHED:return 'Finalizado';
@@ -235,7 +235,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /><span>{driver?.fullName || '—'}</span></div></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.startDate}{item.endDate ? ` → ${item.endDate}` : ''}</span></div></td>
                       <td className="px-4 py-3 text-right font-mono">{item.rentalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status)}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE || (item.status === ContractStatus.AWAITING_SIGNATURE && Boolean(item.signedContractUrl)) ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status,item.signedContractUrl)}</Badge></td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5 flex-wrap">
                           <Button size="sm" variant="ghost" title="Visualizar contrato" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4" /></Button>
