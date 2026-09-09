@@ -90,10 +90,13 @@ assert.match(intakeSource, /Cadastrar veículo manualmente/, 'failed analysis mu
 assert.match(source, /onManualRequested=\{\(\) => \{ setIsVehicleAiOpen\(false\); setVehicleToEdit\(null\); setIsFormOpen\(true\); \}\}/, 'manual fallback must close the intake and open a blank vehicle form');
 
 assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use a synchronous duplicate-submit lock');
-assert.match(intakeSource, /VehicleClient\.list\(\)/, 'vehicle intake must pre-check authoritative fleet identifiers');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.plate\)===plate/, 'vehicle intake must detect duplicate plates');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.renavam\)===renavam/, 'vehicle intake must detect duplicate RENAVAM');
-assert.match(intakeSource, /normalizedIdentifier\(vehicle\.chassis\)===chassis/, 'vehicle intake must detect duplicate chassis');
-assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\}/, 'vehicle materialization button must remain locked during synchronous submission');
+assert.match(intakeSource, /VehicleClient\.checkIdentity\(\{plate,renavam,chassis\}\)/, 'vehicle intake must preflight plate, RENAVAM and chassis against the server authority');
+assert.match(intakeSource, /\['REVIEW_REQUIRED','APPROVED'\]\.includes\(extraction\.status\)/, 'identity preflight must start as soon as AI identifiers are available for human review');
+assert.match(intakeSource, /Veículo já cadastrado no ERP/, 'identity conflict must be visible before completing the vehicle form');
+assert.match(intakeSource, /Vendidos \/ Arquivados — histórico/, 'identity conflict must tell the user when the existing vehicle is historical');
+assert.match(intakeSource, /Abrir cadastro existente/, 'identity conflict must provide a direct action to the existing record');
+assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|checkingIdentity\|\|Boolean\(identityCheck\?\.exists\)\}/, 'vehicle materialization must remain locked during identity checks or existing-registration conflicts');
+assert.match(source, /onExistingFound=\{\(vehicle\) =>/, 'fleet must receive existing vehicle detection from AI intake');
+assert.match(source, /setReadOnlyVehicleIdForHistory\(vehicle\.id\)/, 'archived or sold duplicate must open its read-only historical record');
 
 console.log('Deferred fleet modals regression: PASS');

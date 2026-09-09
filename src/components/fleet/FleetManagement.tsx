@@ -272,6 +272,14 @@ export const FleetManagement: React.FC = () => {
             isOpen
             onClose={() => setIsVehicleAiOpen(false)}
             onCreated={async (vehicleId) => { await loadVehicles(); setSelectedVehicleIdForDetails(vehicleId); }}
+            onExistingFound={(vehicle) => {
+              setIsVehicleAiOpen(false);
+              if (vehicle.isArchived || vehicle.status === VehicleStatus.SOLD || vehicle.status === VehicleStatus.ARCHIVED) {
+                setReadOnlyVehicleIdForHistory(vehicle.id);
+              } else {
+                setSelectedVehicleIdForDetails(vehicle.id);
+              }
+            }}
             onManualRequested={() => { setIsVehicleAiOpen(false); setVehicleToEdit(null); setIsFormOpen(true); }}
           />}
           {isFormOpen&&<VehicleFormModal isOpen onClose={() => { setIsFormOpen(false); setVehicleToEdit(null); }} onSuccess={loadVehicles} vehicleToEdit={vehicleToEdit}/>} 

@@ -14,6 +14,7 @@ import {
   isDocumentAiRuntimeAvailableFromEnvironment,
 } from './documentAiRuntime';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { findVehicleIdentityConflict, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
 type Action = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'PROCESS_DOCUMENT_AI';
 const ROLES = new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','OPERATIONAL','READONLY']);
@@ -262,17 +263,15 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         const model = requiredDraftText(fields, 'model');
         const chassis = requiredDraftText(fields, 'chassis').toUpperCase();
         const fuelType = requiredDraftText(fields, 'fuel');
-        if (await vehicleRepo.findByPlate(principal.companyId, plate)) {
-          throw new ConflictError(`Já existe um veículo cadastrado com a placa ${plate}. Abra o veículo existente em vez de criar outro.`);
-        }
-        if (await vehicleRepo.findByRenavam(principal.companyId, renavam)) {
-          throw new ConflictError(`Já existe um veículo cadastrado com o RENAVAM ${renavam}. Abra o veículo existente em vez de criar outro.`);
-        }
-        if (chassis) {
-          const duplicateChassis: any = await tx.execute(sql`SELECT id FROM vehicles WHERE company_id=${principal.companyId} AND chassis=${chassis} AND is_archived=false LIMIT 1`);
-          if (duplicateChassis.rows?.[0]) {
-            throw new ConflictError('Já existe um veículo cadastrado com este chassi. Abra o veículo existente em vez de criar outro.');
-          }
+        const identityConflict = await findVehicleIdentityConflict(
+          context,
+          principal.companyId,
+          plate,
+          renavam,
+          chassis,
+        );
+        if (identityConflict) {
+          throw new ConflictError(vehicleIdentityConflictMessage(identityConflict));
         }
         const attachmentRepo = context.getAttachmentRepo();
         const source = await attachmentRepo.findByIdForCompany(principal.companyId, String(row.attachment_id));
