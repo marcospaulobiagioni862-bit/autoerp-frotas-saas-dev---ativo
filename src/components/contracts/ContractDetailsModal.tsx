@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Calendar, Car, DollarSign, FileText, History, Receipt, ShieldCheck, User, X } from 'lucide-react';
 import { Badge, Button, Card, ModalContainer } from '../ui';
@@ -213,7 +214,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     <ModalContainer isOpen={isOpen} onClose={onClose} size="6xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
         <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-600" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contract.status}</Badge>}</div><p className="mt-1 text-xs text-slate-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
-        <button onClick={onClose} className="text-slate-400"><X className="w-5 h-5" /></button>
+        <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
       {contract && <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">

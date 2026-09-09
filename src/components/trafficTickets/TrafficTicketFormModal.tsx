@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useMemo, useState } from 'react';
 import { DriverClient } from '../../api/driverClient';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
@@ -56,6 +57,6 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
       <label className="md:col-span-2">Observações<textarea className="w-full mt-1 p-2 border rounded-xl bg-transparent" rows={2} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
     </div>}
     {!loading&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200"><strong className="block mb-1">Integração financeira</strong>{financialSummary}<div className="mt-1 text-[11px] opacity-80">Veículo e contrato permanecem vinculados como origem operacional; o responsável financeiro depende da responsabilidade selecionada.</div></div>}
-    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onClose}>Cancelar</Button><Button type="submit" disabled={loading||submitting}>{submitting?'Salvando...':'Salvar multa'}</Button></div>
+    <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>Cancelar</Button><Button type="submit" disabled={loading||submitting}>{submitting?'Salvando...':'Salvar multa'}</Button></div>
   </form></ModalContainer>;
 };

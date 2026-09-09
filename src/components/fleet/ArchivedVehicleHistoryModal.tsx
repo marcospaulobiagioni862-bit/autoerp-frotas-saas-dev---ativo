@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useState } from 'react';
 import { Car, FileText, Gauge, ShieldCheck, TrendingUp, User, Wrench, AlertTriangle } from 'lucide-react';
 import { VehicleClient, type VehicleLifecycleEvent } from '../../api/vehicleClient';
@@ -166,7 +167,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
             </div>
           )}
 
-          <div className="flex justify-end pt-3 border-t"><Button variant="outline" onClick={onClose}>Fechar histórico</Button></div>
+          <div className="flex justify-end pt-3 border-t"><Button variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>Fechar histórico</Button></div>
         </div>
       )}
     </ModalContainer>

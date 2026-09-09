@@ -1,3 +1,4 @@
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, Download, Edit3, FilePlus2, FileText, Save, Upload, X } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
@@ -243,7 +244,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             Salve modelos numerados e escolha depois qual será usado no contrato do motorista.
           </p>
         </div>
-        <button onClick={onClose} className="text-slate-400" aria-label="Fechar">
+        <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-slate-400" aria-label="Fechar">
           <X className="h-5 w-5" />
         </button>
       </div>
