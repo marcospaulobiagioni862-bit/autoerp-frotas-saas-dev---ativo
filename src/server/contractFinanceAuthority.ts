@@ -72,12 +72,22 @@ export async function cancelUnpaidContractReceivables(
   tx:ITransactionContext
 ):Promise<void>{
   const receivables=await tx.getReceivableRepo().findByContractId(contract.id);
+  const now=new Date().toISOString();
   for(const item of receivables){
     if(item.companyId!==contract.companyId)continue;
+    if(item.originType!==OriginType.CONTRACT_RENT)continue;
     if(item.status===ObligationStatus.CANCELLED)continue;
     if(item.paidAmount>0||item.status===ObligationStatus.PAID)continue;
-    await ReceivableService.cancelReceivable(
-      contract.companyId,item.id,reason,principal.userId,principal.name,tx
-    );
+    const updated=await tx.getReceivableRepo().update(item.id,{
+      status:ObligationStatus.CANCELLED,
+      cancelledAt:now,
+      cancelReason:reason,
+      updatedAt:now,
+    });
+    await tx.getAuditLogRepo().create({
+      id:randomUUID(),companyId:contract.companyId,entityName:'AccountReceivable',entityId:item.id,
+      action:AuditAction.CANCEL,userId:principal.userId,userName:principal.name,
+      previousState:JSON.stringify(item),newState:JSON.stringify(updated),timestamp:now,
+    });
   }
 }
