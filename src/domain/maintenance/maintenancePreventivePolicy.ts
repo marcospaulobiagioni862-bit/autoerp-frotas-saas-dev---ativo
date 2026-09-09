@@ -1,6 +1,15 @@
 import { alertStageForDays, daysUntilExpiration } from '../documents/documentPolicy';
 import type { MaintenanceDueStage, MaintenancePlan, MaintenanceProjectedStatus } from '../../types/entities';
 
+export interface MaintenanceProjectionRule {
+  warningKm:number;
+  urgentKm:number;
+  warningDays:number;
+  urgentDays:number;
+  toleranceKm:number;
+  toleranceDays:number;
+}
+
 export interface MaintenancePlanProjection {
   projectedStatus: MaintenanceProjectedStatus;
   projectedStage: MaintenanceDueStage;
@@ -16,8 +25,23 @@ export function addDaysIso(base:string,days:number):string{
 export function maintenanceNextDue(baseKm:number,baseDate:string,intervalKm?:number,intervalDays?:number):{nextDueKm?:number;nextDueDate?:string}{
   return {nextDueKm:intervalKm===undefined?undefined:baseKm+intervalKm,nextDueDate:intervalDays===undefined?undefined:addDaysIso(baseDate,intervalDays)};
 }
-function kmStage(remaining?:number):MaintenanceDueStage{
-  if(remaining===undefined)return 'NONE';if(remaining<0)return 'OVERDUE_KM';if(remaining===0)return 'DUE_KM';if(remaining<=500)return 'KM500';if(remaining<=1000)return 'KM1000';return 'NONE';
+function kmStage(remaining?:number,rule?:MaintenanceProjectionRule):MaintenanceDueStage{
+  if(remaining===undefined)return 'NONE';
+  if(!rule){if(remaining<0)return 'OVERDUE_KM';if(remaining===0)return 'DUE_KM';if(remaining<=500)return 'KM500';if(remaining<=1000)return 'KM1000';return 'NONE';}
+  if(remaining < -rule.toleranceKm)return 'OVERDUE_KM';
+  if(remaining<=0)return 'DUE_KM';
+  if(rule.urgentKm>0&&remaining<=rule.urgentKm)return 'KM500';
+  if(rule.warningKm>0&&remaining<=rule.warningKm)return 'KM1000';
+  return 'NONE';
+}
+function dayStage(remaining:number|undefined,rule?:MaintenanceProjectionRule):MaintenanceDueStage{
+  if(remaining===undefined)return 'NONE';
+  if(!rule)return alertStageForDays(remaining) as MaintenanceDueStage;
+  if(remaining < -rule.toleranceDays)return 'POST_DUE';
+  if(remaining<=0)return 'DUE_TODAY';
+  if(rule.urgentDays>0&&remaining<=rule.urgentDays)return 'D7';
+  if(rule.warningDays>0&&remaining<=rule.warningDays)return 'D15';
+  return 'NONE';
 }
 function rank(stage:MaintenanceDueStage):number{
   if(stage==='POST_DUE'||stage==='OVERDUE_KM')return 5;
@@ -27,13 +51,14 @@ function rank(stage:MaintenanceDueStage):number{
   if(stage==='D30'||stage==='D60'||stage==='D90')return 1;
   return 0;
 }
-export function projectMaintenancePlan(plan:MaintenancePlan,currentKm:number,today:string):MaintenancePlanProjection{
-  const dueReference=`${plan.nextDueKm??'-'}:${plan.nextDueDate??'-'}`;
+export function projectMaintenancePlan(plan:MaintenancePlan,currentKm:number,today:string,rule?:MaintenanceProjectionRule):MaintenancePlanProjection{
+  const ruleReference=rule?`:R${rule.warningKm}-${rule.urgentKm}-${rule.warningDays}-${rule.urgentDays}-${rule.toleranceKm}-${rule.toleranceDays}`:'';
+  const dueReference=`${plan.nextDueKm??'-'}:${plan.nextDueDate??'-'}${ruleReference}`;
   if(plan.status==='PAUSED')return{projectedStatus:'PAUSED',projectedStage:'NONE',dueReference};
   if(plan.status==='COMPLETED')return{projectedStatus:'COMPLETED',projectedStage:'NONE',dueReference};
   const remainingKm=plan.nextDueKm===undefined?undefined:plan.nextDueKm-currentKm;
   const remainingDays=plan.nextDueDate?daysUntilExpiration(plan.nextDueDate,new Date(`${today}T00:00:00Z`)):undefined;
-  const k=kmStage(remainingKm),d=(plan.nextDueDate?alertStageForDays(remainingDays):'NONE') as MaintenanceDueStage;
+  const k=kmStage(remainingKm,rule),d=plan.nextDueDate?dayStage(remainingDays,rule):'NONE';
   const projectedStage=rank(k)>rank(d)?k:d;
   const projectedStatus:MaintenanceProjectedStatus=(projectedStage==='POST_DUE'||projectedStage==='OVERDUE_KM')?'OVERDUE':(projectedStage==='DUE_TODAY'||projectedStage==='DUE_KM')?'DUE':projectedStage==='NONE'?'OK':'UPCOMING';
   return{projectedStatus,projectedStage,dueReference,remainingKm,remainingDays};
