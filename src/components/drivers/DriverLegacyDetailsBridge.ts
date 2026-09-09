@@ -83,9 +83,12 @@ export class DriverLegacyDetailsBridge {
     ]);
 
     const contractHistory = contracts.filter((item) => item.driverId === driverId);
+    const blockingStatuses = new Set(['DRAFT','AWAITING_SIGNATURE','ACTIVE','SUSPENDED']);
     const currentContract = driver.currentContractId
       ? contractHistory.find((item) => item.id === driver.currentContractId)
-      : contractHistory.find((item) => item.status === 'ACTIVE');
+      : contractHistory
+          .filter((item) => blockingStatuses.has(String(item.status)) && !item.isArchived)
+          .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0];
     const receivables = allReceivables.filter((item) => item.driverId === driverId);
     const securityDeposits = (await Promise.all(
       contractHistory.map((contract) => FinanceDepositClient.getByContract(contract.id))

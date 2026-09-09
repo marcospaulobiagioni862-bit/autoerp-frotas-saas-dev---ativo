@@ -198,8 +198,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
       const coreDriver = await DriverClient.get(driverId);
       const supplemental = await bridge.getSupplementalSummary(coreDriver);
       supplemental.documents = await DocumentClient.list({ subjectType: 'DRIVER', subjectId: coreDriver.id });
-      if (coreDriver.currentVehicleId) {
-        const vehicle = await VehicleClient.get(coreDriver.currentVehicleId);
+      const linkedVehicleId = coreDriver.currentVehicleId || supplemental.currentContract?.vehicleId;
+      if (linkedVehicleId) {
+        const vehicle = await VehicleClient.get(linkedVehicleId);
         supplemental.currentVehicle = { ...vehicle, year: vehicle.yearModel || vehicle.yearFabrication };
       }
       setSummary(supplemental);
@@ -430,6 +431,17 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     return <Badge variant="neutral">{status || 'Sem Status'}</Badge>;
   };
 
+  const contractStatusLabel = (status?: string): string => ({
+    DRAFT: 'Rascunho',
+    AWAITING_SIGNATURE: 'Aguardando assinatura',
+    ACTIVE: 'Ativo',
+    SUSPENDED: 'Suspenso',
+    FINISHED: 'Finalizado',
+    CLOSED: 'Encerrado',
+    CANCELLED: 'Cancelado',
+    ARCHIVED: 'Arquivado',
+  }[String(status)] || String(status || 'Sem status'));
+
   const getCnhBadge = (status?: DocumentStatus) => {
     if (status === DocumentStatus.VALID) return <Badge variant="success">CNH Válida</Badge>;
     if (status === DocumentStatus.EXPIRING_SOON) return <Badge variant="warning">CNH Vencendo</Badge>;
@@ -581,13 +593,23 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
           {activeTab === 'vehicles' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">Veículo Atual Vinculado</h3>
+              <h3 className="text-sm font-semibold">
+                {summary.currentContract?.status === 'ACTIVE' ? 'Veículo atual em locação' : 'Veículo vinculado ao contrato'}
+              </h3>
               {summary.currentVehicle ? (
-                <Card className="p-4 flex justify-between items-center">
-                  <div><strong>{summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})</strong><p className="text-xs text-slate-500">Placa {summary.currentVehicle.plate} • Renavam {summary.currentVehicle.renavam}</p></div>
+                <Card className="p-4 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+                  <div>
+                    <strong>{summary.currentVehicle.brand} {summary.currentVehicle.model} ({summary.currentVehicle.year})</strong>
+                    <p className="text-xs text-slate-500">Placa {summary.currentVehicle.plate} • Renavam {summary.currentVehicle.renavam}</p>
+                    {summary.currentContract && (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Contrato {summary.currentContract.contractNumber} • {contractStatusLabel(summary.currentContract.status)}
+                      </p>
+                    )}
+                  </div>
                   {onSelectVehicle && <Button size="sm" variant="outline" onClick={() => { onClose(); onSelectVehicle(summary.currentVehicle.id); }}><ExternalLink className="w-4 h-4 mr-1" />Ver Veículo</Button>}
                 </Card>
-              ) : <p className="text-xs text-slate-400">Nenhum veículo vinculado.</p>}
+              ) : <p className="text-xs text-slate-400">Nenhum veículo vinculado por contrato.</p>}
             </div>
           )}
 
@@ -597,7 +619,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               {summary.contractHistory.length === 0 ? <p className="text-xs text-slate-400">Nenhum contrato registrado.</p> : summary.contractHistory.map((contract) => (
                 <Card key={contract.id} className="p-3 flex justify-between text-xs">
                   <div><strong className="font-mono block">Contrato #{contract.contractNumber || contract.id}</strong><span>{contract.startDate || '—'} → {contract.endDate || 'Em andamento'}</span></div>
-                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.recurringValue || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : 'neutral'}>{contract.status}</Badge></div>
+                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.rentalAmount || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : contract.status === 'AWAITING_SIGNATURE' ? 'warning' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge></div>
                 </Card>
               ))}
             </div>
