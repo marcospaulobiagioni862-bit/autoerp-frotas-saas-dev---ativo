@@ -9,7 +9,6 @@ import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus, DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
-import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 
 interface ContractFormModalProps {
   isOpen: boolean;
