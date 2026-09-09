@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { FinanceTransactionClient, createTransferIdempotencyKey } from '../../api/financeTransactionClient';
 import type {
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
   SettlementAccountOption,
   SettlementPaymentMethodOption,
 } from '../../api/financeSettlementClient';
 import { X, ArrowRightLeft, AlertCircle } from 'lucide-react';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface TransferModalProps {
   isOpen: boolean;
