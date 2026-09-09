@@ -55,7 +55,7 @@ async function itemRequest(url: string, init?: RequestInit): Promise<ContractTem
 export type ContractTemplateSourceMode = 'MARKDOWN' | 'FILE';
 
 export interface ContractTemplateCreateInput {
-  templateKey: string;
+  templateKey?: string;
   title: string;
   contentMarkdown?: string;
   sourceMode?: ContractTemplateSourceMode;
