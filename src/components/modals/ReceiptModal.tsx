@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import {
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
   FinanceSettlementClient,
   SettlementAccountOption,
   SettlementPaymentMethodOption,
   createSettlementIdempotencyKey,
 } from '../../api/financeSettlementClient';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface ReceiptModalProps {
   isOpen: boolean;
