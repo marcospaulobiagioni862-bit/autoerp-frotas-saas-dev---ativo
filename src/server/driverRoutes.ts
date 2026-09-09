@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import type { AuthenticatedPrincipal } from './auth';
-import type { Driver } from '../types/entities';
+import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import { hasDriverHealthPermission } from '../shared/security/driverHealthAuthorization';
 
@@ -190,6 +190,67 @@ function addressFrom(value: unknown, fallback?: Driver['address']): Driver['addr
   };
 }
 
+function healthFrom(value: unknown, requireEmergency: boolean): DriverHealthAndEmergency | undefined {
+  if (value === undefined || value === null) {
+    if (requireEmergency) throw new DriverValidationError('Missing emergency contact');
+    return undefined;
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) throw new DriverValidationError('Invalid health profile');
+  const input = value as Record<string, unknown>;
+  const allowed = ['bloodType','allergies','relevantConditions','continuousMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes'] as const;
+  const health: DriverHealthAndEmergency = {};
+  for (const key of allowed) {
+    const raw = input[key];
+    if (raw === undefined || raw === null || raw === '') continue;
+    if (typeof raw !== 'string') throw new DriverValidationError('Invalid health profile');
+    const clean = raw.trim();
+    if (!clean) continue;
+    (health as Record<string,string>)[key] = clean.slice(0, 1000);
+  }
+  if (health.emergencyContactPhone) {
+    health.emergencyContactPhone = normalizePhone(health.emergencyContactPhone, 'emergencyContactPhone')!;
+  }
+  if (requireEmergency) {
+    if (!health.emergencyContactName || !health.emergencyContactRelationship || !health.emergencyContactPhone) {
+      throw new DriverValidationError('Incomplete emergency contact');
+    }
+  }
+  return health;
+}
+
+async function saveHealthProfile(
+  tx: any,
+  principal: AuthenticatedPrincipal,
+  driverId: string,
+  health: DriverHealthAndEmergency | undefined,
+  now: string
+): Promise<void> {
+  if (!health) return;
+  const existing = await tx.getDriverHealthRepo().findByDriverId(driverId);
+  await tx.getDriverHealthRepo().upsert({
+    id: existing?.id || randomUUID(),
+    companyId: principal.companyId,
+    driverId,
+    ...(existing || {}),
+    ...health,
+    lastUpdateDate: now,
+    responsibleUser: principal.name,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+  await tx.getAuditLogRepo().create({
+    id: randomUUID(),
+    companyId: principal.companyId,
+    entityName: 'DriverHealthSecurity',
+    entityId: driverId,
+    action: AuditAction.UPDATE,
+    userId: principal.userId,
+    userName: principal.name,
+    newState: JSON.stringify({ event: 'EDIT_DRIVER_HEALTH', fieldsChanged: Object.keys(health) }),
+    timestamp: now,
+  });
+}
+
 function requireCompletedProfile(driver: Driver): void {
   if (!driver.email) throw new DriverValidationError('Missing email');
   if (driver.cnhEar === undefined) throw new DriverValidationError('Missing cnhEar');
@@ -295,6 +356,11 @@ export function registerDriverRoutes(app: Express): void {
       const cnhExpiration = normalizeIsoDate(req.body?.cnhExpiration, 'cnhExpiration', true);
       const cnhState = evaluateCnhStatus(cnhExpiration);
       const address = addressFrom(req.body?.address);
+      if (!healthPermission(principal, 'EDIT_DRIVER_HEALTH')) {
+        res.status(403).json({ error: 'Forbidden: health permission required for complete driver intake' });
+        return;
+      }
+      const health = healthFrom(req.body?.health, true);
       const now = new Date().toISOString();
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const repo = tx.getDriverRepo();
@@ -330,6 +396,7 @@ export function registerDriverRoutes(app: Express): void {
         };
         requireCompletedProfile(candidate);
         const created = await repo.create(candidate);
+        await saveHealthProfile(tx, principal, created.id, health, now);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Driver', entityId: created.id,
           action: AuditAction.CREATE, newState: auditState(created), userId: principal.userId,
@@ -352,7 +419,7 @@ export function registerDriverRoutes(app: Express): void {
       res.status(400).json({ error: 'Invalid driver authority surface' });
       return;
     }
-    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','maritalStatus','profession','motherName','pixKey','address','cnhNumber','cnhCategory','cnhExpiration','cnhEar','appPlatforms','photoUrl','notes'];
+    const editable = ['fullName','cpf','rg','birthDate','phone','whatsapp','email','maritalStatus','profession','motherName','pixKey','address','cnhNumber','cnhCategory','cnhExpiration','cnhEar','appPlatforms','photoUrl','notes','health'];
     if (!editable.some((key) => Object.prototype.hasOwnProperty.call(body, key))) {
       res.status(400).json({ error: 'Invalid driver request' });
       return;
@@ -363,6 +430,10 @@ export function registerDriverRoutes(app: Express): void {
         const existing = await repo.findByIdForCompany(principal.companyId, req.params.id);
         if (!existing || existing.isArchived) throw new DriverNotFoundError();
         const completingPendingDocs = existing.status === DriverStatus.PENDING_DOCS;
+        if (body.health !== undefined && !healthPermission(principal, 'EDIT_DRIVER_HEALTH')) {
+          throw new DriverValidationError('Health permission required');
+        }
+        const health = healthFrom(body.health, completingPendingDocs);
         const updatedCnhExpiration = body.cnhExpiration === undefined ? existing.cnhExpiration : normalizeIsoDate(body.cnhExpiration, 'cnhExpiration', true);
         const updatedCnhStatus = evaluateCnhStatus(updatedCnhExpiration);
         const updated: Driver = {
@@ -399,6 +470,7 @@ export function registerDriverRoutes(app: Express): void {
         if (cnhDuplicate && cnhDuplicate.id !== existing.id) throw new DriverConflictError();
         const saved = await repo.updateForCompany(principal.companyId, existing.id, updated);
         if (!saved) throw new DriverNotFoundError();
+        await saveHealthProfile(tx, principal, saved.id, health, updated.updatedAt);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Driver', entityId: existing.id,
           action: AuditAction.UPDATE, previousState: auditState(existing), newState: auditState(saved),

@@ -1,4 +1,4 @@
-import type { Driver } from '../types/entities';
+import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { DocumentStatus, DriverStatus } from '../types/enums';
 
 export class DriverApiError extends Error {
@@ -108,6 +108,7 @@ export interface DriverCreateInput {
   appPlatforms?: string[];
   photoUrl?: string;
   notes?: string;
+  health?: DriverHealthAndEmergency;
 }
 
 export type DriverUpdateInput = Partial<Omit<DriverCreateInput, 'fullName' | 'cpf' | 'birthDate' | 'phone' | 'cnhNumber' | 'cnhExpiration'>> & {
