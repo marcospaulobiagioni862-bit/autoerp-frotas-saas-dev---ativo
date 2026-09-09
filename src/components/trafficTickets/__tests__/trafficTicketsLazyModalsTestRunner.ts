@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../TrafficTicketsManagement.tsx', import.meta.url), 'utf8');
+const intakeModalSource = readFileSync(new URL('../TrafficTicketDocumentIntakeModal.tsx', import.meta.url), 'utf8');
+const manualModalSource = readFileSync(new URL('../TrafficTicketFormModal.tsx', import.meta.url), 'utf8');
 const tollSource = readFileSync(new URL('../../tolls/TollPassagesManagement.tsx', import.meta.url), 'utf8');
 const tollClient = readFileSync(new URL('../../../api/tollPassageClient.ts', import.meta.url), 'utf8');
 const tollAuthority = readFileSync(new URL('../../../server/tollPassageAuthority.ts', import.meta.url), 'utf8');
@@ -47,6 +49,16 @@ assert.doesNotMatch(
   /error\.(?:message|stack)|String\(error\)/,
   'ticket modal fallback must not expose raw errors',
 );
+
+for (const modalSource of [intakeModalSource, manualModalSource]) {
+  assert.match(modalSource, /Motorista responsável/, 'responsibility DRIVER must be shown in Portuguese');
+  assert.match(modalSource, /MoveFlex \(Empresa\)/, 'responsibility COMPANY must name the company clearly');
+  assert.match(modalSource, /Não identificado \/ Em investigação/, 'unidentified responsibility must be explained in Portuguese');
+  assert.doesNotMatch(modalSource, />\{v\}<\/option>/, 'raw responsibility enum values must never be rendered to users');
+}
+assert.match(intakeModalSource, /Quem vai assumir a multa\? \*/, 'AI intake must ask the operational responsibility question in plain language');
+assert.match(intakeModalSource, /A MoveFlex assume o custo da multa/, 'AI intake must explain the company-responsibility effect');
+assert.match(manualModalSource, /Conta a Pagar \+ Conta a Receber/, 'manual ticket entry must explain the financial effect for the driver');
 
 assert.match(
   source,
