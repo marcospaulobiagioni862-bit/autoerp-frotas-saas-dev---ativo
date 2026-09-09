@@ -97,7 +97,7 @@ export class ErpWaveAActivationFinanceIntegrationRunner {
         AND entity_type='Contract'
         AND entity_id=${contractRow.id}
         AND action='UPDATE'
-        AND changes::text LIKE '%"status":"ACTIVE"%'
+        AND ((changes::jsonb->>'newState')::jsonb->>'status')='ACTIVE'
     `);
     assert(Number(audit?.count) >= 1, 'INV-002 activation must create an auditable Contract ACTIVE transition');
 
