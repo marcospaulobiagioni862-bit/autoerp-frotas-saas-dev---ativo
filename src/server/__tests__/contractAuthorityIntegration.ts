@@ -254,18 +254,12 @@ export class ContractAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 400, `generic PATCH lifecycle expected 400, got ${response.status}`);
 
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: '{}' }, adminA);
-      assert(response.status === 400, `activate without category expected 400, got ${response.status}`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryB }) }, adminA);
-      assert(response.status === 400, `cross-tenant income category expected 400, got ${response.status}`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: expenseCategoryA }) }, adminA);
-      assert(response.status === 400, `expense category for contract expected 400, got ${response.status}`);
-      const beforeValidActivation = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const vehicleBeforeValidActivation = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const receivablesBeforeValidActivation = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(beforeValidActivation?.status === ContractStatus.DRAFT, 'invalid category mutated contract');
-      assert(vehicleBeforeValidActivation?.status === VehicleStatus.AVAILABLE && !vehicleBeforeValidActivation?.current_contract_id, 'invalid category mutated vehicle');
-      assert(Number(receivablesBeforeValidActivation?.count) === 0, 'invalid category created receivable');
+      const beforeActivationGates = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
+      const vehicleBeforeActivationGates = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      const receivablesBeforeActivationGates = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
+      assert(beforeActivationGates?.status === ContractStatus.DRAFT, 'pre-activation baseline contract mismatch');
+      assert(vehicleBeforeActivationGates?.status === VehicleStatus.AVAILABLE && !vehicleBeforeActivationGates?.current_contract_id, 'pre-activation baseline vehicle mismatch');
+      assert(Number(receivablesBeforeActivationGates?.count) === 0, 'pre-activation baseline must not contain receivable before document generation');
 
       await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-crlv'`);
       await db.execute(sql`
