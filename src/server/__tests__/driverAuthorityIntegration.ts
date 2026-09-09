@@ -94,6 +94,13 @@ export class DriverAuthorityIntegrationRunner {
       cnhExpiration: '2035-01-01',
       cnhEar: true,
       appPlatforms: ['Uber'],
+      health: {
+        bloodType: 'O+',
+        allergies: 'Nenhuma conhecida',
+        emergencyContactName: 'Contato Teste',
+        emergencyContactRelationship: 'Irmã',
+        emergencyContactPhone: '11988887777',
+      },
     };
 
     try {
@@ -136,6 +143,10 @@ export class DriverAuthorityIntegrationRunner {
         { label: 'apartment-unit', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', blockTower: 'A', unit: '', floor: '3' } } },
         { label: 'apartment-floor', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'APARTMENT', condominiumName: 'Condomínio Teste', blockTower: 'A', unit: '12', floor: '' } } },
         { label: 'other-description', body: { ...baseDriver, address: { ...baseDriver.address, residenceType: 'OTHER', residenceTypeOther: '' } } },
+        { label: 'emergency-required', body: { ...baseDriver, health: undefined } },
+        { label: 'emergency-name', body: { ...baseDriver, health: { ...baseDriver.health, emergencyContactName: '' } } },
+        { label: 'emergency-relationship', body: { ...baseDriver, health: { ...baseDriver.health, emergencyContactRelationship: '' } } },
+        { label: 'emergency-phone', body: { ...baseDriver, health: { ...baseDriver.health, emergencyContactPhone: '123' } } },
       ];
       for (const invalid of invalidCases) {
         response = await request('/api/drivers', {
@@ -173,6 +184,12 @@ export class DriverAuthorityIntegrationRunner {
       assert(driverA.profession === 'Motorista de aplicativo', 'profession was not persisted');
       assert(driverA.motherName === 'Maria da Silva', 'mother name was not persisted');
       assert(driverA.pixKey === '52998224725', 'PIX key was not persisted');
+
+      response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}/health`, {}, adminA);
+      assert(response.status === 200, `health created with Driver expected 200, got ${response.status}`);
+      const createdHealth = (await json(response)).health;
+      assert(createdHealth.emergencyContactName === 'Contato Teste', 'emergency contact was not persisted transactionally');
+      assert(createdHealth.emergencyContactPhone === '11988887777', 'emergency phone was not normalized/persisted');
 
       response = await request(`/api/drivers/${encodeURIComponent(driverA.id)}`, {
         method: 'PATCH', body: JSON.stringify({ phone: '(15) 99742-4411', whatsapp: '+55 (15) 99742-4411' }),
