@@ -367,6 +367,10 @@ export class ContractAuthorityIntegrationRunner {
       assert(pastPeriodBlockedContract?.status === ContractStatus.DRAFT, 'past period gate mutated contract');
       assert(pastPeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !pastPeriodBlockedVehicle?.current_driver_id && !pastPeriodBlockedVehicle?.current_contract_id, 'past period gate mutated vehicle');
       assert(Number(pastPeriodBlockedReceivables?.count) === 0, 'past period gate created receivable');
+      response = await request(`/api/contracts/${encodeURIComponent(pastPeriodContract.id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período passado' }),
+      }, adminA);
+      assert(response.status === 200, `past period draft cancel expected 200, got ${response.status}`);
 
       response = await request('/api/contracts', {
         method: 'POST',
@@ -391,6 +395,10 @@ export class ContractAuthorityIntegrationRunner {
       assert(futurePeriodBlockedContract?.status === ContractStatus.DRAFT, 'future period gate mutated contract');
       assert(futurePeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futurePeriodBlockedVehicle?.current_driver_id && !futurePeriodBlockedVehicle?.current_contract_id, 'future period gate mutated vehicle');
       assert(Number(futurePeriodBlockedReceivables?.count) === 0, 'future period gate created receivable');
+      response = await request(`/api/contracts/${encodeURIComponent(futurePeriodContract.id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período futuro' }),
+      }, adminA);
+      assert(response.status === 200, `future period draft cancel expected 200, got ${response.status}`);
 
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
       assert(response.status === 200, `activate expected 200, got ${response.status}`);
