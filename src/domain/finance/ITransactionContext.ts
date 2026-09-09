@@ -185,6 +185,8 @@ export interface ITransactionContractRepository {
   findByNumber(companyId: string, contractNumber: string): Promise<Contract | null>;
   findActiveByVehicle(companyId: string, vehicleId: string, excludeContractId?: string): Promise<Contract | null>;
   findActiveByDriver(companyId: string, driverId: string, excludeContractId?: string): Promise<Contract | null>;
+  findBlockingByVehicle(companyId: string, vehicleId: string, excludeContractId?: string): Promise<Contract | null>;
+  findBlockingByDriver(companyId: string, driverId: string, excludeContractId?: string): Promise<Contract | null>;
   create(item: Contract): Promise<Contract>;
   updateForCompany(companyId: string, id: string, item: Partial<Contract>): Promise<Contract | null>;
 }
