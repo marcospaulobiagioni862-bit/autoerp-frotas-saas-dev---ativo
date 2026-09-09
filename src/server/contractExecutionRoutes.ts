@@ -34,6 +34,7 @@ import {
   type ContractVehicleTrackerSnapshot,
 } from './contractVehicleTrackerSnapshot';
 import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTemplateValues';
+import { ensureInitialContractReceivable } from './contractFinanceAuthority';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -736,6 +737,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!updatedContract) throw new ExecutionConflictError();
+        const receivables = await ensureInitialContractReceivable(updatedContract, principal, tx);
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
@@ -754,7 +756,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           timestamp: now,
         });
 
-        return { artifact, attachment, contract: updatedContract };
+        return { artifact, attachment, contract: updatedContract, receivables };
       });
 
       storedKey = undefined;
@@ -849,7 +851,12 @@ export function registerContractExecutionRoutes(app: Express): void {
         return { artifact, attachment, contract: prepared.contract };
       });
       if (replay) {
-        res.status(200).json(replay);
+        const receivables = await UnitOfWork.run(principal.companyId, async (tx) => {
+          const current = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, replay.contract.id);
+          if (!current || current.isArchived) throw new ExecutionConflictError();
+          return ensureInitialContractReceivable(current, principal, tx);
+        });
+        res.status(200).json({ ...replay, receivables });
         return;
       }
 
@@ -959,6 +966,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!updatedContract) throw new ExecutionConflictError();
+        const receivables = await ensureInitialContractReceivable(updatedContract, principal, tx);
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
@@ -973,7 +981,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           }),
           timestamp: now,
         });
-        return { artifact, attachment, contract: updatedContract, replayed: false as const };
+        return { artifact, attachment, contract: updatedContract, receivables, replayed: false as const };
       });
 
       if (result.replayed) {
