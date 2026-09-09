@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
-import { ReceivableService } from '../domain/finance/ReceivableService';
-import { assertFinancialCategoryForObligation } from '../domain/finance/FinancialCategoryAuthority';
 import { ANNUAL_VEHICLE_DOCUMENT_TYPES } from '../domain/documents/documentPolicy';
 import type { Contract, Driver, Vehicle } from '../types/entities';
 import {
@@ -10,12 +8,12 @@ import {
   ContractStatus,
   DocumentStatus,
   DriverStatus,
-  OriginType,
   RecurringFrequency,
   VehicleStatus,
 } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
+import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -510,9 +508,6 @@ export function registerContractRoutes(app: Express): void {
         if (contract.endDate && contract.endDate < today) {
           throw new ContractConflictError('Contract period already ended');
         }
-        const categoryId = requiredText(req.body?.categoryId, 'categoryId');
-        await assertFinancialCategoryForObligation(principal.companyId, categoryId, 'RECEIVABLE', tx);
-
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
@@ -543,21 +538,7 @@ export function registerContractRoutes(app: Express): void {
         });
         if (!boundVehicle) throw new ContractNotFoundError();
 
-        const receivables = await ReceivableService.create({
-          companyId: principal.companyId,
-          originType: OriginType.CONTRACT_RENT,
-          originId: `${active.id}:${active.startDate}`,
-          vehicleId: active.vehicleId,
-          driverId: active.driverId,
-          contractId: active.id,
-          categoryId,
-          description: `Aluguel Contrato ${active.contractNumber} (${active.billingPeriodicity})`,
-          totalAmount: active.rentalAmount,
-          dueDate: active.startDate,
-          competenceDate: active.startDate,
-          userId: principal.userId,
-          userName: principal.name,
-        }, tx);
+        const receivables = await ensureInitialContractReceivable(active, principal, tx);
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: active.id,
@@ -754,6 +735,12 @@ export function registerContractRoutes(app: Express): void {
           });
           if (!released) throw new ContractNotFoundError();
         }
+        await cancelUnpaidContractReceivables(
+          contract,
+          `Contrato cancelado: ${reason}`,
+          principal,
+          tx
+        );
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.CANCEL, previousState: auditState(contract), newState: auditState(saved),
