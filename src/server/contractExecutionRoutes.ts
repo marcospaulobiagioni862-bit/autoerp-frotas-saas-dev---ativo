@@ -570,8 +570,13 @@ export function registerContractExecutionRoutes(app: Express): void {
           return { receivable: currentReceivable, reused: true };
         }
 
-        const receivable = await ensureInitialContractReceivable(contract, principal, tx);
-        if (!receivable || receivable.status === ObligationStatus.CANCELLED) throw new ExecutionConflictError();
+        const createdReceivables = await ensureInitialContractReceivable(contract, principal, tx);
+        const receivable = createdReceivables.find((item) =>
+          item.companyId === principal.companyId &&
+          item.originType === OriginType.CONTRACT_RENT &&
+          item.status !== ObligationStatus.CANCELLED
+        );
+        if (!receivable) throw new ExecutionConflictError();
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(),
