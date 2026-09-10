@@ -162,7 +162,11 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
 
   const allApprovedApplied = selectableApprovedFields.length > 0 && selectableApprovedFields.every((field) => appliedApprovedFields.includes(field));
   const completionReady = Boolean(vehicle) && missingCompletionFields.length === 0;
-  const completedSteps = [hasCrlvAttachment, Boolean(approvedExtraction), allApprovedApplied, completionReady].filter(Boolean).length;
+  const stepCrlvSent = hasCrlvAttachment;
+  const stepReviewed = stepCrlvSent && Boolean(approvedExtraction);
+  const stepApplied = stepReviewed && allApprovedApplied;
+  const stepCompletion = stepApplied && completionReady;
+  const completedSteps = [stepCrlvSent, stepReviewed, stepApplied, stepCompletion].filter(Boolean).length;
   const progressPercent = completedSteps * 25;
 
   const applyFields = async (fields: string[]) => {
@@ -212,10 +216,10 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           <div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600 sm:grid-cols-4">
-          <span>{hasCrlvAttachment ? '✓' : '○'} CRLV enviado</span>
-          <span>{approvedExtraction ? '✓' : '○'} Revisão humana</span>
-          <span>{allApprovedApplied ? '✓' : '○'} Dados aplicados</span>
-          <span>{completionReady ? '✓' : '○'} Complementação manual</span>
+          <span>{stepCrlvSent ? '✓' : '○'} CRLV enviado</span>
+          <span>{stepReviewed ? '✓' : '○'} Revisão humana</span>
+          <span>{stepApplied ? '✓' : '○'} Dados aplicados</span>
+          <span>{stepCompletion ? '✓' : '○'} Campos essenciais</span>
         </div>
       </div>
 
@@ -325,8 +329,8 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
               );
             })}
           </div>
-          {!completionReady && <p className="text-[11px] font-medium text-amber-800">Cadastro pós-CRLV ainda incompleto. Abra “Editar Veículo” e confirme os campos pendentes antes de considerar o cadastro concluído.</p>}
-          {completionReady && <p className="text-[11px] font-medium text-emerald-800">Complementação manual preenchida. Os valores continuam editáveis e separados dos dados lidos do CRLV.</p>}
+          {!completionReady && <p className="text-[11px] font-medium text-amber-800">Cadastro pós-CRLV ainda incompleto. Use “Registrar KM” para o odômetro e “Editar Veículo” para os demais campos pendentes.</p>}
+          {completionReady && <p className="text-[11px] font-medium text-emerald-800">Campos essenciais preenchidos. Confirme os valores antes de considerar o cadastro concluído.</p>}
           <p className="text-[10px] text-slate-500">FIPE será tratada como consulta externa separada: não substituirá automaticamente o valor de aquisição nem o valor comercial informado pelo operador.</p>
         </div>
       )}
