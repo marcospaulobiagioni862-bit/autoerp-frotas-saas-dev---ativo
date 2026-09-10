@@ -31,7 +31,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
   const activeTires=tires.filter(t=>t.status==='ACTIVE').length;
   const completedForOil=useMemo(()=>workOrders.filter(w=>w.status==='COMPLETED'&&w.vehicleId===oilVehicle&&w.exitKm!==undefined),[workOrders,oilVehicle]);
   const templateByPlan=useMemo(()=>{const byId=new Map(templates.map(t=>[t.id,t]));const byType=new Map(templates.map(t=>[t.maintenanceType,t]));return (p:MaintenancePlan)=>p.templateId?byId.get(p.templateId):byType.get(p.maintenanceType);},[templates]);
-  const maintenanceTypes=useMemo(()=>Array.from(new Set(plans.map(p=>p.maintenanceType))).sort((a,b)=>a.localeCompare(b,'pt-BR')),[plans]);
+  const maintenanceTypes=useMemo(()=>Array.from(new Set<string>(plans.map(p=>p.maintenanceType))).sort((a,b)=>a.localeCompare(b,'pt-BR')),[plans]);
   const filteredPlans=useMemo(()=>{
     const statusOf=(p:MaintenancePlan)=>p.status==='PAUSED'?'PAUSED':p.projectedStatus||'OK';
     const urgency=(p:MaintenancePlan)=>({OVERDUE:0,DUE:1,UPCOMING:2,OK:3,PAUSED:4,COMPLETED:5}[statusOf(p)]??6);
