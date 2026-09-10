@@ -17,6 +17,12 @@ type ReviewField = {
   label: string;
 };
 
+type CompletionField = {
+  vehicleKey: keyof Vehicle;
+  label: string;
+  isComplete: (value: unknown) => boolean;
+};
+
 const REVIEW_FIELDS: readonly ReviewField[] = [
   { extractionKey: 'plate', vehicleKey: 'plate', label: 'Placa' },
   { extractionKey: 'renavam', vehicleKey: 'renavam', label: 'RENAVAM' },
@@ -29,15 +35,33 @@ const REVIEW_FIELDS: readonly ReviewField[] = [
   { extractionKey: 'ownerName', label: 'Titular no CRLV' },
 ] as const;
 
+const positiveNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+const nonEmptyText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
+
+const POST_CRLV_COMPLETION_FIELDS: readonly CompletionField[] = [
+  { vehicleKey: 'color', label: 'Cor', isComplete: nonEmptyText },
+  { vehicleKey: 'category', label: 'Categoria', isComplete: nonEmptyText },
+  { vehicleKey: 'currentKm', label: 'KM atual', isComplete: (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0 },
+  { vehicleKey: 'acquisitionValue', label: 'Valor de aquisição', isComplete: positiveNumber },
+  { vehicleKey: 'currentValue', label: 'Valor comercial atual', isComplete: positiveNumber },
+  { vehicleKey: 'rentalValueBase', label: 'Valor de aluguel semanal', isComplete: positiveNumber },
+] as const;
+
 function visibleValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'string' || typeof value === 'number') return String(value);
   return '—';
 }
 
+function comparableValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLocaleUpperCase('pt-BR');
+}
+
 export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ vehicleId }) => {
   const [uploadCount, setUploadCount] = useState(0);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [hasCrlvAttachment, setHasCrlvAttachment] = useState(false);
   const [approvedExtraction, setApprovedExtraction] = useState<DocumentAiExtraction | null>(null);
   const [selectedFields, setSelectedFields] = useState<Set<string>>(() => new Set());
   const [loadingReview, setLoadingReview] = useState(true);
@@ -58,11 +82,10 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
     ])
       .then(([currentVehicle, attachments, approvedExtractions]) => {
         if (cancelled) return;
-        const crlvAttachmentIds = new Set(
-          attachments
-            .filter((attachment) => !attachment.isArchived && attachment.documentType === 'CRLV')
-            .map((attachment) => attachment.id),
+        const activeCrlvAttachments = attachments.filter(
+          (attachment) => !attachment.isArchived && attachment.documentType === 'CRLV',
         );
+        const crlvAttachmentIds = new Set(activeCrlvAttachments.map((attachment) => attachment.id));
         const matching = approvedExtractions
           .filter((extraction) =>
             extraction.status === 'APPROVED' &&
@@ -72,12 +95,14 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           .sort((a, b) => Date.parse(b.approvedAt || b.updatedAt) - Date.parse(a.approvedAt || a.updatedAt));
 
         setVehicle(currentVehicle);
+        setHasCrlvAttachment(activeCrlvAttachments.length > 0);
         setApprovedExtraction(matching[0] || null);
         setSelectedFields(new Set());
       })
       .catch((error: unknown) => {
         if (!cancelled) {
           setVehicle(null);
+          setHasCrlvAttachment(false);
           setApprovedExtraction(null);
           setReviewError(error instanceof Error ? error.message : 'Não foi possível carregar a revisão do CRLV.');
         }
@@ -118,17 +143,35 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
     [reviewedValues],
   );
 
+  const appliedApprovedFields = useMemo(() => {
+    if (!vehicle) return [] as string[];
+    return REVIEW_FIELDS
+      .filter((field) => {
+        if (!field.vehicleKey) return false;
+        const extracted = reviewedValues[field.extractionKey];
+        if (typeof extracted !== 'string' && typeof extracted !== 'number') return false;
+        return comparableValue(vehicle[field.vehicleKey]) === comparableValue(extracted);
+      })
+      .map((field) => field.extractionKey);
+  }, [reviewedValues, vehicle]);
+
+  const missingCompletionFields = useMemo(() => {
+    if (!vehicle) return POST_CRLV_COMPLETION_FIELDS;
+    return POST_CRLV_COMPLETION_FIELDS.filter((field) => !field.isComplete(vehicle[field.vehicleKey]));
+  }, [vehicle]);
+
+  const allApprovedApplied = selectableApprovedFields.length > 0 && selectableApprovedFields.every((field) => appliedApprovedFields.includes(field));
+  const completionReady = Boolean(vehicle) && missingCompletionFields.length === 0;
+  const completedSteps = [hasCrlvAttachment, Boolean(approvedExtraction), allApprovedApplied, completionReady].filter(Boolean).length;
+  const progressPercent = completedSteps * 25;
+
   const applyFields = async (fields: string[]) => {
     if (!approvedExtraction || fields.length === 0 || applying) return;
     setApplying(true);
     setReviewError(null);
     setApplyNotice(null);
     try {
-      const result = await VehicleClient.applyApprovedCrlv(
-        vehicleId,
-        approvedExtraction.id,
-        fields,
-      );
+      const result = await VehicleClient.applyApprovedCrlv(vehicleId, approvedExtraction.id, fields);
       setVehicle(result.item);
       setSelectedFields(new Set());
       setApplyNotice(`${result.appliedFields.length} campo(s) copiado(s) do CRLV aprovado para o cadastro do veículo.`);
@@ -159,6 +202,23 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           </p>
         </div>
       </div>
+
+      <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-2" aria-label="Progresso do cadastro pós-CRLV">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-semibold text-slate-800">Progresso CRLV → cadastro completo</span>
+          <span className="font-bold text-blue-700">{progressPercent}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
+        </div>
+        <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600 sm:grid-cols-4">
+          <span>{hasCrlvAttachment ? '✓' : '○'} CRLV enviado</span>
+          <span>{approvedExtraction ? '✓' : '○'} Revisão humana</span>
+          <span>{allApprovedApplied ? '✓' : '○'} Dados aplicados</span>
+          <span>{completionReady ? '✓' : '○'} Complementação manual</span>
+        </div>
+      </div>
+
       <FileUpload
         entityType="Vehicle"
         entityId={vehicleId}
@@ -242,6 +302,34 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           </>
         )}
       </div>
+
+      {vehicle && approvedExtraction && (
+        <div className={`rounded-lg border p-3 space-y-2 ${completionReady ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h5 className="font-bold text-slate-900">Etapa obrigatória: completar dados que não vêm no CRLV</h5>
+              <p className="text-[11px] text-slate-600">A IA não deve inventar valores operacionais ou patrimoniais. Confira e edite esses dados manualmente no cadastro do veículo.</p>
+            </div>
+            <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-700">
+              {POST_CRLV_COMPLETION_FIELDS.length - missingCompletionFields.length}/{POST_CRLV_COMPLETION_FIELDS.length} preenchidos
+            </span>
+          </div>
+          <div className="grid gap-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            {POST_CRLV_COMPLETION_FIELDS.map((field) => {
+              const complete = field.isComplete(vehicle[field.vehicleKey]);
+              return (
+                <div key={field.vehicleKey} className="rounded-md border bg-white px-2 py-1.5">
+                  <span className={complete ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>{complete ? '✓' : '○'} {field.label}</span>
+                  <span className="ml-1 text-slate-500">{complete ? visibleValue(vehicle[field.vehicleKey]) : 'pendente'}</span>
+                </div>
+              );
+            })}
+          </div>
+          {!completionReady && <p className="text-[11px] font-medium text-amber-800">Cadastro pós-CRLV ainda incompleto. Abra “Editar Veículo” e confirme os campos pendentes antes de considerar o cadastro concluído.</p>}
+          {completionReady && <p className="text-[11px] font-medium text-emerald-800">Complementação manual preenchida. Os valores continuam editáveis e separados dos dados lidos do CRLV.</p>}
+          <p className="text-[10px] text-slate-500">FIPE será tratada como consulta externa separada: não substituirá automaticamente o valor de aquisição nem o valor comercial informado pelo operador.</p>
+        </div>
+      )}
     </div>
   );
 };
