@@ -98,6 +98,7 @@ export interface ITransactionAttachmentRepository {
   findByIdForCompany(companyId: string, id: string): Promise<FileAttachment | null>;
   findAllByCompany(companyId: string): Promise<FileAttachment[]>;
   findByEntity(companyId: string, entityType: string, entityId: string): Promise<FileAttachment[]>;
+  findEntityGallery(companyId: string, entityType: 'Vehicle' | 'Driver', entityId: string): Promise<FileAttachment[]>;
   create(item: FileAttachment): Promise<FileAttachment>;
   updateForCompany(
     companyId: string,
