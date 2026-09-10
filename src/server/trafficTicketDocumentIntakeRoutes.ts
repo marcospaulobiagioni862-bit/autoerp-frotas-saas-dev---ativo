@@ -150,7 +150,10 @@ async function suggestions(context:any,principal:AuthenticatedPrincipal,intakeId
   const plate=normalizedPlate(draft.fields.plate);if(!plate)return {plate:undefined,vehicle:undefined,contract:undefined,driver:undefined,ambiguous:false};
   const vehicleResult:any=await tx.execute(sql`
     SELECT id,plate,brand,model FROM vehicles
-    WHERE company_id=${principal.companyId} AND plate=${plate} AND is_archived=false LIMIT 2
+    WHERE company_id=${principal.companyId}
+      AND UPPER(regexp_replace(plate,'[^A-Za-z0-9]','','g'))=${plate}
+      AND is_archived=false
+    LIMIT 2
   `);
   const vehicles=Array.isArray(vehicleResult.rows)?vehicleResult.rows:[];
   if(vehicles.length!==1)return {plate,vehicle:undefined,contract:undefined,driver:undefined,ambiguous:vehicles.length>1};
@@ -260,12 +263,49 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
           String(row.attachment_id)!==String(row.extraction_attachment_id)||String(row.extraction_status)!=='APPROVED'||String(row.detected_document_type||'').toUpperCase()!=='TRAFFIC_TICKET'||
           String(row.attachment_entity_type)!=='TrafficTicketDocumentIntake'||String(row.attachment_entity_id)!==intakeId||Boolean(row.attachment_archived))throw new ConflictError();
         const fields=projectDraft(row.proposed_fields,row.corrections),plate=normalizedPlate(fields.plate);if(!plate)throw new ConflictError();
-        const vehicleCheck:any=await tx.execute(sql`SELECT id,plate FROM vehicles WHERE company_id=${principal.companyId} AND id=${vehicleId} AND is_archived=false LIMIT 1 FOR UPDATE`);
-        const vehicle=vehicleCheck.rows?.[0];if(!vehicle||normalizedPlate(String(vehicle.plate||''))!==plate)throw new ConflictError();
+        const infractionDate=requiredDate(fields,'infractionDate');
+        const vehicleCheck:any=await tx.execute(sql`
+          SELECT id,plate FROM vehicles
+          WHERE company_id=${principal.companyId}
+            AND UPPER(regexp_replace(plate,'[^A-Za-z0-9]','','g'))=${plate}
+            AND is_archived=false
+          LIMIT 2 FOR UPDATE
+        `);
+        const matchingVehicles=Array.isArray(vehicleCheck.rows)?vehicleCheck.rows:[];
+        if(matchingVehicles.length!==1||String(matchingVehicles[0].id)!==vehicleId)throw new ConflictError();
+        const vehicle=matchingVehicles[0];
+        if(normalizedPlate(String(vehicle.plate||''))!==plate)throw new ConflictError();
+
+        const requestedDriverId=bodyText(body,'driverId',false,200);
+        const requestedContractId=bodyText(body,'contractId',false,200);
+        if(responsibility!==TicketResponsibility.DRIVER&&requestedDriverId)throw new ValidationError();
+
+        const contractResult:any=await tx.execute(sql`
+          SELECT contract.id,contract.driver_id
+          FROM contracts contract
+          WHERE contract.company_id=${principal.companyId}
+            AND contract.vehicle_id=${vehicleId}
+            AND contract.is_archived=false
+            AND contract.status NOT IN ('DRAFT','AWAITING_SIGNATURE','CANCELLED','ARCHIVED')
+            AND contract.start_date<=${infractionDate}
+            AND (contract.end_date IS NULL OR contract.end_date>=${infractionDate})
+          ORDER BY contract.start_date DESC,contract.id
+          LIMIT 2
+        `);
+        const contractMatches=Array.isArray(contractResult.rows)?contractResult.rows:[];
+        const exactContract=contractMatches.length===1?contractMatches[0]:undefined;
+        if(requestedContractId&&(!exactContract||String(exactContract.id)!==requestedContractId))throw new ConflictError();
+        if(responsibility===TicketResponsibility.DRIVER){
+          if(!exactContract||!exactContract.driver_id)throw new ConflictError();
+          if(requestedDriverId&&String(exactContract.driver_id)!==requestedDriverId)throw new ConflictError();
+        }
+
+        const contractId=exactContract?String(exactContract.id):undefined;
+        const driverId=responsibility===TicketResponsibility.DRIVER?String(exactContract!.driver_id):undefined;
         const input:CreateTrafficTicketAuthorityInput={
-          vehicleId,driverId:bodyText(body,'driverId',false,200),contractId:bodyText(body,'contractId',false,200),
+          vehicleId,driverId,contractId,
           autoNumber:requiredText(fields,'noticeNumber',160),organName:requiredText(fields,'organName',200),infractionCode:requiredText(fields,'infractionCode',120),
-          description:requiredText(fields,'description',2000),infractionDate:requiredDate(fields,'infractionDate'),infractionTime:optionalText(fields,'infractionTime',5),
+          description:requiredText(fields,'description',2000),infractionDate,infractionTime:optionalText(fields,'infractionTime',5),
           infractionLocation:optionalText(fields,'infractionLocation',500),dueDate:requiredDate(fields,'dueDate'),discountDueDate:optionalDate(fields,'discountDueDate'),
           originalAmount:requiredAmount(fields,'amount'),discountedAmount:optionalAmount(fields,'discountAmount'),points:requiredPoints(fields),responsibility,
           notes:bodyText(body,'notes',false,4000),baseExpenseCategoryId:bodyText(body,'baseExpenseCategoryId',true,200)!,
