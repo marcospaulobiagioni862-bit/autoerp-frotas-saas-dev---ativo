@@ -74,6 +74,11 @@ async function atomicityAndRules():Promise<string>{
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
+  assert(!company.item.driverId,'COMPANY responsibility must never persist driver_id');
+  let companyDriverRejected=false;
+  try{await TrafficTicketAuthorityService.create(admin,input('M-COMPANY-DRIVER',TicketResponsibility.COMPANY,{driverId:driverA}));}
+  catch(error){companyDriverRejected=String(error).includes('não aceita motorista');}
+  assert(companyDriverRejected,'COMPANY responsibility accepted browser/user driver authority');
   await TrafficTicketAuthorityService.cancel(admin,company.item.id,'Auto de infração cancelado');
   const cancelledTask=await one(sql`SELECT status,version FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${company.item.id}`);
   assert(cancelledTask?.status==='CANCELLED'&&Number(cancelledTask.version)===2,'cancelled ticket left an actionable operational task');
@@ -86,6 +91,11 @@ async function atomicityAndRules():Promise<string>{
   assert(Number(totals.total)===400&&Number(totals.count)===2,'NIC default must produce two separate APs totaling 2x');
 
   let duplicate=false;try{await TrafficTicketAuthorityService.create(admin,input('m-company',TicketResponsibility.COMPANY));}catch{duplicate=true;}assert(duplicate,'tenant auto number uniqueness not enforced');
+
+  let companyTransitionDriverRejected=false;
+  try{await TrafficTicketAuthorityService.changeResponsibility(admin,unidentified.item.id,{responsibility:TicketResponsibility.COMPANY,driverId:driverA});}
+  catch(error){companyTransitionDriverRejected=String(error).includes('não aceita motorista');}
+  assert(companyTransitionDriverRejected,'COMPANY responsibility transition accepted driver authority');
 
   const changed=await TrafficTicketAuthorityService.changeResponsibility(admin,unidentified.item.id,{responsibility:TicketResponsibility.DRIVER,driverId:driverA,driverIncomeCategoryId:incomeA});
   assert(changed.item.payableId===unidentified.item.payableId&&Boolean(changed.item.receivableId)&&!changed.item.nicPayableId,'responsibility transition did not preserve base AP/reconcile secondary obligations');
