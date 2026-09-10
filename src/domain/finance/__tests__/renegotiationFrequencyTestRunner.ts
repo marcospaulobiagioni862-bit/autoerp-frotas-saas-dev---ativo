@@ -14,17 +14,17 @@ function assertEqual(actual: unknown, expected: unknown, message: string): void 
   }
 }
 
-function makeContext(kind: 'RECEIVABLE' | 'PAYABLE') {
+function makeContext(kind: 'RECEIVABLE' | 'PAYABLE', authoritativeAmount = 100) {
   const companyId = 'company-a';
   const original: MutableObligation = {
     id: kind === 'RECEIVABLE' ? 'ar-original' : 'ap-original',
     companyId,
     status: ObligationStatus.PENDING,
     categoryId: 'cat-finance',
-    originalAmount: 100,
-    updatedAmount: 100,
+    originalAmount: authoritativeAmount,
+    updatedAmount: authoritativeAmount,
     paidAmount: 0,
-    balanceAmount: 100,
+    balanceAmount: authoritativeAmount,
     dueDate: '2026-08-31',
     competenceDate: '2026-08-31',
   };
@@ -104,7 +104,7 @@ async function renegotiate(
   installmentsCount = 3,
   newTotalAmount = 100.01
 ) {
-  const fixture = makeContext(kind);
+  const fixture = makeContext(kind, newTotalAmount);
   const items = await RenegotiationService.renegociate(
     {
       companyId: fixture.companyId,
