@@ -18,7 +18,7 @@ export interface CreateWorkOrderInput {
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
   financialComponents?:Array<{kind:'PARTS'|'SERVICES'|'LABOR';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; }
+export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; }
 export interface CreateSupplierInput { name:string; tradeName?:string; document:string; phone?:string; email?:string; address?:string; category:string; notes?:string; }
 export interface UpdateSupplierInput { name?:string; tradeName?:string|null; document?:string; phone?:string|null; email?:string|null; address?:string|null; category?:string; status?:Supplier['status']; notes?:string|null; }
 export interface CreatePartInput { code:string; name:string; description?:string; manufacturer?:string; category:string; unit:string; currentCost:number; minimumStock:number; currentStock:number; }
@@ -167,12 +167,62 @@ export class MaintenanceAuthorityService {
   static completeWorkOrder(p:AuthenticatedPrincipal,id:string,input:CompleteWorkOrderInput):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
     const repo=tx.getWorkOrderRepo(),before=await repo.findByIdForCompanyWithLock(p.companyId,id);if(!before)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(before.status==='COMPLETED')return before;if(before.status==='CANCELLED')throw new MaintenanceConflictError('Ordem de serviço cancelada');if(before.status!=='IN_PROGRESS')throw new MaintenanceConflictError('Ordem de serviço deve estar em andamento para conclusão');
     const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');const exitKm=nn(input.exitKm,'exitKm');if(!Number.isInteger(exitKm)||exitKm<before.entryKm||exitKm<vehicle.currentKm)throw new MaintenanceValidationError('KM de saída regressivo');
+
+    const explicitPreventiveSelection=input.preventivePlanIds!==undefined;
+    const preventivePlanIds=explicitPreventiveSelection
+      ?Array.from(new Set((input.preventivePlanIds||[]).map(value=>reqText(value,'preventivePlanId',200))))
+      :[];
+    if(preventivePlanIds.length>100)throw new MaintenanceValidationError('Muitos itens preventivos selecionados');
+    const raw=tx.getRawTransaction?.();if(explicitPreventiveSelection&&!raw)throw new Error('Maintenance persistence unavailable');
+    const selectedPlans:any[]=[];
+    if(explicitPreventiveSelection){
+      for(const planId of preventivePlanIds){
+        const plan=rows(await raw.execute(sql`SELECT id,vehicle_id,status,interval_km,interval_days,next_due_km,next_due_date,cycle_sequence,last_work_order_id FROM maintenance_plans WHERE company_id=${p.companyId} AND id=${planId} FOR UPDATE`))[0];
+        if(!plan)throw new MaintenanceNotFoundError('Plano preventivo não encontrado');
+        if(String(plan.vehicle_id)!==before.vehicleId)throw new MaintenanceConflictError('Plano preventivo pertence a outro veículo');
+        if(String(plan.status)!=='ACTIVE')throw new MaintenanceConflictError('Somente planos preventivos ativos podem ser executados');
+        selectedPlans.push(plan);
+      }
+    }
+
     const t=totals(before);if(t.subtotalParts!==roundCurrency(before.subtotalParts)||t.subtotalServices!==roundCurrency(before.subtotalServices)||t.subtotalLabor!==roundCurrency(before.subtotalLabor)||t.total!==roundCurrency(before.total))throw new MaintenanceConflictError('Totais persistidos da OS estão inconsistentes');
     let payables:any[]=[];
-    if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();
+    if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();}
+
+    const now=new Date().toISOString(),completionDate=now.slice(0,10);
+    const preventiveExecutions:Array<{planId:string;executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'}>=[];
+    if(explicitPreventiveSelection){
+      await raw.execute(sql`UPDATE work_orders SET preventive_plan_selection_applied=true,updated_at=${now} WHERE company_id=${p.companyId} AND id=${id}`);
+      for(const plan of selectedPlans){
+        const dueKm=plan.next_due_km===null||plan.next_due_km===undefined?undefined:Number(plan.next_due_km);
+        const dueDate=plan.next_due_date===null||plan.next_due_date===undefined?undefined:(plan.next_due_date instanceof Date?plan.next_due_date.toISOString().slice(0,10):String(plan.next_due_date).slice(0,10));
+        const hasDue=dueKm!==undefined||dueDate!==undefined;
+        const beforeKmDue=dueKm===undefined||exitKm<dueKm;
+        const beforeDateDue=dueDate===undefined||completionDate<dueDate;
+        const executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'=hasDue&&beforeKmDue&&beforeDateDue?'PREVENTIVA_ANTECIPADA':'SCHEDULED';
+        const executionId=randomUUID();
+        const inserted=rows(await raw.execute(sql`INSERT INTO maintenance_work_order_plan_executions(id,company_id,work_order_id,maintenance_plan_id,execution_kind,execution_km,execution_date,created_by,created_at)
+          VALUES(${executionId},${p.companyId},${id},${String(plan.id)},${executionKind},${exitKm},${completionDate},${p.userId},${now})
+          ON CONFLICT(company_id,work_order_id,maintenance_plan_id) DO NOTHING RETURNING id`))[0];
+        if(!inserted)continue;
+        const updatedPlan=rows(await raw.execute(sql`UPDATE maintenance_plans
+          SET last_execution_km=${exitKm},
+              last_execution_date=${completionDate},
+              next_due_km=CASE WHEN interval_km IS NULL THEN NULL ELSE ${exitKm}+interval_km END,
+              next_due_date=CASE WHEN interval_days IS NULL THEN NULL ELSE CAST(${completionDate} AS date)+interval_days END,
+              last_work_order_id=${id},
+              cycle_sequence=cycle_sequence+1,
+              updated_at=${now}
+          WHERE company_id=${p.companyId} AND id=${String(plan.id)} AND vehicle_id=${before.vehicleId} AND status='ACTIVE'
+          RETURNING id,cycle_sequence,next_due_km,next_due_date,last_execution_km,last_execution_date,last_work_order_id`))[0];
+        if(!updatedPlan)throw new MaintenanceConflictError('Falha ao avançar item preventivo');
+        preventiveExecutions.push({planId:String(plan.id),executionKind});
+        await audit(tx,p,'MaintenancePlan',String(plan.id),AuditAction.UPDATE,plan,{event:executionKind,workOrderId:id,executionKm:exitKm,executionDate:completionDate,cycleSequence:Number(updatedPlan.cycle_sequence),nextDueKm:updatedPlan.next_due_km===null?undefined:Number(updatedPlan.next_due_km),nextDueDate:updatedPlan.next_due_date===null?undefined:String(updatedPlan.next_due_date).slice(0,10)},now);
+      }
     }
-    const now=new Date().toISOString(),updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{currentKm:exitKm,status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
-    await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:vehicle.id,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,kmValue:exitKm,recordDate:now.slice(0,10),readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`,createdAt:now});await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id)},now);return updated;
+
+    const updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{currentKm:exitKm,status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
+    await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:vehicle.id,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,kmValue:exitKm,recordDate:completionDate,readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`,createdAt:now});await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id),preventiveSelectionApplied:explicitPreventiveSelection,preventiveExecutions},now);return updated;
   },{financialPeriodLock:'SHARED'}); }
 
   static cancelWorkOrder(p:AuthenticatedPrincipal,id:string,reason:string):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{

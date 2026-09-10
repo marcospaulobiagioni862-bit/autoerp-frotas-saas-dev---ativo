@@ -57,4 +57,12 @@ assert.match(preventiveSource, /OVERDUE:0,DUE:1,UPCOMING:2,OK:3,PAUSED:4/, 'prev
 assert.match(preventiveSource, /Nenhum plano corresponde aos filtros selecionados/, 'combined filters must provide an empty state');
 assert.doesNotMatch(preventiveSource, /plans\.map\(p=><tr/, 'preventive table must not bypass the filtered projection');
 
+assert.match(source, /Itens preventivos executados nesta OS/, 'OS completion must expose executed preventive item selection');
+assert.match(source, /Preventiva Antecipada/, 'OS completion must explain early preventive execution');
+assert.match(source, /MaintenancePreventiveClient\.listPlans\(wo\.vehicleId\)/, 'OS completion must load preventive plans for the same vehicle');
+assert.match(source, /plan=>plan\.status==='ACTIVE'/, 'OS completion must only offer active preventive plans');
+assert.match(source, /preventivePlanIds:preventiveSelection/, 'OS completion must send the explicit preventive selection to server authority');
+assert.match(source, /completePlansLoaded\?selectedPreventivePlanIds:undefined/, 'failed preventive-plan loading must preserve legacy completion behavior');
+assert.match(source, /type="checkbox"/, 'OS completion must support multiple preventive items');
+
 console.log('Deferred maintenance panels regression: PASS');
