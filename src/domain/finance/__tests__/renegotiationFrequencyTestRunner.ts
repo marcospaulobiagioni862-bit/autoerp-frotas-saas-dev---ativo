@@ -84,6 +84,7 @@ function makeContext(kind: 'RECEIVABLE' | 'PAYABLE') {
     getRawTransaction: () => ({
       async execute() { return { rows: [] }; },
     }),
+    findReceivableByIdWithLock: async (id: string) => kind === 'RECEIVABLE' && id === original.id ? original : null,
     findPayableByIdWithLock: async (id: string) => kind === 'PAYABLE' && id === original.id ? original : null,
     getAuditLogRepo: () => ({
       async create(item: MutableObligation) {
