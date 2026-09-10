@@ -6,7 +6,7 @@ import { MOVEFLEX_LOGO_JPEG_BASE64 } from '../domain/contracts/moveflexBrand';
 import { db } from '../db/index';
 import { companies } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
-import { AuditAction, ContractStatus } from '../types/enums';
+import { AuditAction, ContractStatus, ObligationStatus, OriginType } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
 import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
@@ -36,7 +36,7 @@ import {
 import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTemplateValues';
 import { ensureInitialContractReceivable } from './contractFinanceAuthority';
 
-type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE';
+type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE' | 'RECONCILE_CONTRACT_FINANCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR', 'NOTARY']);
@@ -531,6 +531,69 @@ export function registerContractExecutionRoutes(app: Express): void {
         return await tx.getContractArtifactRepo().findAllForContract(principal.companyId, contract.id);
       });
       res.json({ items });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/contracts/:id/reconcile-initial-receivable', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res, 'RECONCILE_CONTRACT_FINANCE');
+    if (!principal) return;
+    if (!['ADMIN', 'MANAGER'].includes(String(principal.role || '').toUpperCase())) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    try {
+      rejectAuthorityFields(bodyOf(req), []);
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ExecutionNotFoundError();
+        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(contract.status)) {
+          throw new ExecutionConflictError();
+        }
+
+        const artifacts = await tx.getContractArtifactRepo().findAllForContract(principal.companyId, contract.id);
+        const hasOfficialArtifact = artifacts.some((artifact) =>
+          !artifact.isArchived &&
+          artifact.isCurrent &&
+          ['GENERATED_PDF', 'GENERATED_DOCX', 'REVIEWED_FINAL_PDF', 'SIGNED_EVIDENCE'].includes(artifact.artifactType)
+        );
+        if (!hasOfficialArtifact) throw new ExecutionConflictError();
+
+        const existingReceivables = await tx.getReceivableRepo().findByContractId(contract.id);
+        const currentReceivable = existingReceivables.find((receivable) =>
+          receivable.companyId === principal.companyId &&
+          receivable.originType === OriginType.CONTRACT_RENT &&
+          receivable.status !== ObligationStatus.CANCELLED
+        );
+        if (currentReceivable) {
+          return { receivable: currentReceivable, reused: true };
+        }
+
+        const receivable = await ensureInitialContractReceivable(contract, principal, tx);
+        if (!receivable || receivable.status === ObligationStatus.CANCELLED) throw new ExecutionConflictError();
+
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Contract',
+          entityId: contract.id,
+          action: AuditAction.UPDATE,
+          userId: principal.userId,
+          userName: principal.name,
+          newState: JSON.stringify({
+            event: 'RECONCILE_INITIAL_RECEIVABLE',
+            contractId: contract.id,
+            receivableId: receivable.id,
+            originType: receivable.originType,
+          }),
+          timestamp: new Date().toISOString(),
+        });
+
+        return { receivable, reused: false };
+      }, { financialPeriodLock: 'SHARED' });
+
+      res.status(result.reused ? 200 : 201).json(result);
     } catch (error) {
       sendError(res, error);
     }
