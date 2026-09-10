@@ -75,7 +75,7 @@ export class ContractExecutionClient {
     return payload.items.map(validateArtifact);
   }
 
-  static async generatePdf(contractId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
+  static async generatePdf(contractId: string, _legacyTemplateId?: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-pdf`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -103,7 +103,7 @@ export class ContractExecutionClient {
     };
   }
 
-  static async generateDocx(contractId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
+  static async generateDocx(contractId: string, _legacyTemplateId?: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-docx`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: '{}',
