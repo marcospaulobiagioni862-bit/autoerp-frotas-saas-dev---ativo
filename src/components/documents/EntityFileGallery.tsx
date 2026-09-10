@@ -104,7 +104,7 @@ export function EntityFileGallery({entityType,entityId}:{entityType:RootEntityTy
             <option value="DOCUMENT">Documento</option><option value="PHOTO">Foto</option><option value="VIDEO">Vídeo MP4</option><option value="OTHER">Outro</option>
           </select>
         </label>
-        <FileUpload key={uploadKind} entityType={entityType} entityId={entityId} documentType={uploadConfig.documentType} allowedTypes={uploadConfig.allowedTypes} maxSizeMB={uploadConfig.maxSizeMB} multiple onUploadComplete={()=>void load()}/>
+        <React.Fragment key={uploadKind}><FileUpload entityType={entityType} entityId={entityId} documentType={uploadConfig.documentType} allowedTypes={uploadConfig.allowedTypes} maxSizeMB={uploadConfig.maxSizeMB} multiple onUploadComplete={()=>void load()}/></React.Fragment>
         <p className="mt-2 text-[11px] text-slate-500">Limite atual do storage: 10 MB por arquivo. Vídeos aceitos somente em MP4.</p>
       </div>}
 
