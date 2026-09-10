@@ -185,7 +185,7 @@ export class TrafficTicketAuthorityService {
     const nic=input.nicAmount==null?undefined:round(Number(input.nicAmount));if(nic!==undefined&&nic<=0)throw new TrafficTicketValidationError('NIC inválida');
     if(!Number.isInteger(input.points)||input.points<0||input.points>99)throw new TrafficTicketValidationError('Pontuação inválida');
     if(!Object.values(TicketResponsibility).includes(input.responsibility))throw new TrafficTicketValidationError('Responsabilidade inválida');
-    if(input.responsibility===TicketResponsibility.UNIDENTIFIED&&input.driverId)throw new TrafficTicketValidationError('Multa não identificada não aceita motorista');
+    if(input.responsibility!==TicketResponsibility.DRIVER&&input.driverId)throw new TrafficTicketValidationError('Responsabilidade da empresa ou não identificada não aceita motorista');
     if(input.responsibility===TicketResponsibility.DRIVER&&!input.driverIncomeCategoryId)throw new TrafficTicketValidationError('Categoria de receita obrigatória');
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');
@@ -203,7 +203,7 @@ export class TrafficTicketAuthorityService {
       if(input.responsibility===TicketResponsibility.UNIDENTIFIED)await validateCategory(rawTx,principal.companyId,nicCategory,'EXPENSE');
       const now=new Date().toISOString(),id=randomUUID();
       let ticket:TrafficTicket=await repo.create({
-        id,companyId:principal.companyId,vehicleId:input.vehicleId,driverId:input.responsibility===TicketResponsibility.UNIDENTIFIED?undefined:driverId,
+        id,companyId:principal.companyId,vehicleId:input.vehicleId,driverId:input.responsibility===TicketResponsibility.DRIVER?driverId:undefined,
         contractId,autoNumber,organName,infractionCode,description,infractionDate:input.infractionDate,infractionTime,infractionLocation,dueDate:input.dueDate,
         discountDueDate:input.discountDueDate,originalAmount:original,discountedAmount:discounted,nicAmount:nic,points:input.points,
         responsibility:input.responsibility,status:input.responsibility===TicketResponsibility.UNIDENTIFIED?TicketStatus.PENDING_IDENTIFICATION:TicketStatus.IDENTIFIED,
@@ -244,7 +244,7 @@ export class TrafficTicketAuthorityService {
   static async changeResponsibility(principal:AuthenticatedPrincipal,id:string,input:ChangeTicketResponsibilityInput):Promise<TrafficTicketDetails>{
     assertWrite(principal);if(!Object.values(TicketResponsibility).includes(input.responsibility))throw new TrafficTicketValidationError();
     if(input.responsibility===TicketResponsibility.DRIVER&&!input.driverIncomeCategoryId)throw new TrafficTicketValidationError('Categoria de receita obrigatória');
-    if(input.responsibility===TicketResponsibility.UNIDENTIFIED&&input.driverId)throw new TrafficTicketValidationError('Não identificado não aceita motorista');
+    if(input.responsibility!==TicketResponsibility.DRIVER&&input.driverId)throw new TrafficTicketValidationError('Responsabilidade da empresa ou não identificada não aceita motorista');
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
@@ -254,7 +254,7 @@ export class TrafficTicketAuthorityService {
       if(input.responsibility===TicketResponsibility.DRIVER&&!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
       if(current.responsibility===input.responsibility&&current.driverId===driverId)return (await TrafficTicketAuthorityService.getDetails(principal.companyId,id))!;
       const version=(current.responsibilityVersion||0)+1,originId=originForVersion(id,version);
-      let next:TrafficTicket={...current,responsibility:input.responsibility,responsibilityVersion:version,driverId:input.responsibility===TicketResponsibility.UNIDENTIFIED?undefined:driverId,contractId,updatedAt:new Date().toISOString()};
+      let next:TrafficTicket={...current,responsibility:input.responsibility,responsibilityVersion:version,driverId:input.responsibility===TicketResponsibility.DRIVER?driverId:undefined,contractId,updatedAt:new Date().toISOString()};
       if(current.receivableId){await cancelReceivableIfOpen(tx,principal,current.receivableId);next.receivableId=undefined;}
       if(current.nicPayableId){await cancelPayableIfOpen(tx,principal,current.nicPayableId);next.nicPayableId=undefined;}
       if(input.responsibility===TicketResponsibility.DRIVER){
