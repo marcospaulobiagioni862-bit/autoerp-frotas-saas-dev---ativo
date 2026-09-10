@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
 const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
+const detailsSource = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
+const gallerySource = readFileSync(new URL('../../documents/EntityFileGallery.tsx', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal', 'VehicleKmBatchModal'] as const;
 
@@ -98,5 +100,15 @@ assert.match(intakeSource, /Abrir cadastro existente/, 'identity conflict must p
 assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|checkingIdentity\|\|Boolean\(identityCheck\?\.exists\)\}/, 'vehicle materialization must remain locked during identity checks or existing-registration conflicts');
 assert.match(source, /onExistingFound=\{\(vehicle\) =>/, 'fleet must receive existing vehicle detection from AI intake');
 assert.match(source, /setReadOnlyVehicleIdForHistory\(vehicle\.id\)/, 'archived or sold duplicate must open its read-only historical record');
+
+assert.match(detailsSource, /id:'files',label:'Arquivos'/, 'vehicle details must expose the unified Arquivos tab');
+assert.match(detailsSource, /<EntityFileGallery entityType="Vehicle" entityId=\{vehicle\.id\}\/>/, 'vehicle file tab must bind the selected vehicle to the shared gallery');
+assert.match(gallerySource, /AttachmentClient\.listEntityGallery\(entityType,entityId\)/, 'entity gallery must load through the authenticated gallery client');
+assert.match(gallerySource, /Todas as origens/, 'entity gallery must filter by source');
+assert.match(gallerySource, /Todos os tipos/, 'entity gallery must filter by file kind');
+assert.match(gallerySource, /type="date"/, 'entity gallery must support date filtering');
+assert.match(gallerySource, /Vídeo MP4/, 'entity gallery must expose the configured video upload surface');
+assert.match(gallerySource, /10 MB por arquivo/, 'entity gallery must state the actual storage size limit');
+assert.doesNotMatch(gallerySource, /storageKey|companyId|x-autoerp-/, 'entity gallery UI must not consume storage or tenant authority fields');
 
 console.log('Deferred fleet modals regression: PASS');
