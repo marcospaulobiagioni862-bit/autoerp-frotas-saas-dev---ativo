@@ -467,12 +467,50 @@ export class ContractExecutionAuthorityIntegrationRunner {
       assert(response.status === 201, `cancel fixture PDF generation expected 201, got ${response.status}`);
       row = await scalar(sql`SELECT count(*)::int AS count, min(status) AS status FROM account_receivables WHERE contract_id=${cancellable.id}`);
       assert(Number(row?.count) === 1 && row?.status === 'PENDING', 'cancel fixture did not create pending receivable');
+
+      // Simulate a contract whose official document predates the document-generation receivable rule.
+      await db.execute(sql`DELETE FROM account_receivables WHERE contract_id=${cancellable.id}`);
+      row = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${cancellable.id}`);
+      assert(Number(row?.count) === 0, 'legacy reconciliation fixture must start without receivable');
+
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, readonlyA);
+      assert(response.status === 403, `readonly legacy reconciliation expected 403, got ${response.status}`);
+
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminB);
+      assert(response.status === 404, `cross-tenant legacy reconciliation expected 404, got ${response.status}`);
+
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, {
+        method: 'POST', body: JSON.stringify({ force: true }),
+      }, adminA);
+      assert(response.status === 400, `legacy reconciliation authority-field injection expected 400, got ${response.status}`);
+
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminA);
+      assert(response.status === 201, `legacy reconciliation expected 201, got ${response.status}`);
+      const reconciledReceivable = (await json(response)).receivable;
+      assert(reconciledReceivable?.contractId === cancellable.id, 'legacy reconciliation receivable contract link mismatch');
+      row = await scalar(sql`
+        SELECT count(*)::int AS count, min(status) AS status, min(origin_type) AS origin_type
+        FROM account_receivables WHERE contract_id=${cancellable.id}
+      `);
+      assert(Number(row?.count) === 1 && row?.status === 'PENDING' && row?.origin_type === 'CONTRACT_RENT', 'legacy reconciliation must create exactly one pending CONTRACT_RENT receivable');
+
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminA);
+      assert(response.status === 200, `legacy reconciliation replay expected 200, got ${response.status}`);
+      const replayedReceivable = (await json(response)).receivable;
+      assert(replayedReceivable?.id === reconciledReceivable.id, 'legacy reconciliation replay must reuse the same receivable');
+      row = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${cancellable.id}`);
+      assert(Number(row?.count) === 1, 'legacy reconciliation replay duplicated receivable');
+
       response = await request(`/api/contracts/${cancellable.id}/cancel`, {
         method: 'POST', body: JSON.stringify({ reason: 'Motorista desistiu antes da ativação' }),
       }, adminA);
       assert(response.status === 200, `cancel generated contract expected 200, got ${response.status}`);
       row = await scalar(sql`SELECT count(*)::int AS count, min(status) AS status, min(cancel_reason) AS reason FROM account_receivables WHERE contract_id=${cancellable.id}`);
-      assert(Number(row?.count) === 1 && row?.status === 'CANCELLED' && String(row?.reason || '').includes('Contrato cancelado'), 'contract cancellation did not cancel unpaid generated receivable');
+      assert(Number(row?.count) === 1 && row?.status === 'CANCELLED' && String(row?.reason || '').includes('Contrato cancelado'), 'contract cancellation did not cancel unpaid reconciled receivable');
+
+      await db.execute(sql`UPDATE contracts SET status='ARCHIVED', is_archived=true, updated_at=NOW() WHERE id=${cancellable.id}`);
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminA);
+      assert(response.status === 404, `archived legacy reconciliation expected 404, got ${response.status}`);
 
       const legacyInput = { ...contractInput, contractNumber: 'CNT-I4C-LEGACY', driverId: 'i4c-drv-a2', vehicleId: 'i4c-veh-a2', templateId: undefined };
       response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(legacyInput) }, adminA);
