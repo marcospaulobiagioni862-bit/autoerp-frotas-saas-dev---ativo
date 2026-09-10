@@ -39,7 +39,7 @@ async function ensureCurrentActivationPrerequisites(): Promise<void> {
       ('signature-time-doc-a2-ipva', 'security-2i4c-company-a', 'VEHICLE', 'i4c-veh-a2', 'IPVA', 2026, '2035-01-01', 'signature-time-att-a2', 1, true, false, 0, 'security-2i4c-admin-a', NOW(), NOW()),
       ('signature-time-doc-a2-crlv', 'security-2i4c-company-a', 'VEHICLE', 'i4c-veh-a2', 'CRLV', 2026, '2035-01-01', 'signature-time-att-a2', 1, true, false, 0, 'security-2i4c-admin-a', NOW(), NOW()),
       ('signature-time-doc-a2-lic', 'security-2i4c-company-a', 'VEHICLE', 'i4c-veh-a2', 'LICENCIAMENTO', 2026, '2035-01-01', 'signature-time-att-a2', 1, true, false, 0, 'security-2i4c-admin-a', NOW(), NOW())
-    ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2035-01-01', updated_at=NOW()
+    ON CONFLICT DO NOTHING
   `);
   await db.execute(sql`
     INSERT INTO insurances (
@@ -49,7 +49,7 @@ async function ensureCurrentActivationPrerequisites(): Promise<void> {
     ) VALUES
       ('signature-time-ins-a1', 'security-2i4c-company-a', 'i4c-veh-a1', 'Seguradora Teste', 'SIGN-A1', 'Cobertura teste', 0, 0, 1, '2026-01-01', '2035-01-01', 'ACTIVE', '[]'::jsonb, 'security-2i4c-admin-a', NOW(), NOW()),
       ('signature-time-ins-a2', 'security-2i4c-company-a', 'i4c-veh-a2', 'Seguradora Teste', 'SIGN-A2', 'Cobertura teste', 0, 0, 1, '2026-01-01', '2035-01-01', 'ACTIVE', '[]'::jsonb, 'security-2i4c-admin-a', NOW(), NOW())
-    ON CONFLICT (id) DO UPDATE SET status='ACTIVE', start_date='2026-01-01', end_date='2035-01-01', updated_at=NOW()
+    ON CONFLICT DO NOTHING
   `);
 }
 
