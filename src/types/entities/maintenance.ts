@@ -41,7 +41,7 @@ export type MaintenancePlanStatus = 'ACTIVE'|'PAUSED'|'COMPLETED';
 export type MaintenanceDueStage = 'NONE'|'D90'|'D60'|'D30'|'D15'|'D7'|'DUE_TODAY'|'POST_DUE'|'KM1000'|'KM500'|'DUE_KM'|'OVERDUE_KM';
 export type MaintenanceProjectedStatus = 'OK'|'UPCOMING'|'DUE'|'OVERDUE'|'PAUSED'|'COMPLETED';
 export interface MaintenancePlan {
-  id:string; companyId:string; vehicleId:string; name:string; maintenanceType:string; intervalKm?:number; intervalDays?:number;
+  id:string; companyId:string; vehicleId:string; templateId?:string; name:string; maintenanceType:string; intervalKm?:number; intervalDays?:number;
   lastExecutionKm?:number; lastExecutionDate?:string; nextDueKm?:number; nextDueDate?:string; priority:MaintenancePlanPriority; estimatedCost?:number;
   status:MaintenancePlanStatus; notes?:string; lastWorkOrderId?:string; cycleSequence:number; createdBy:string; createdAt:string; updatedAt:string;
   projectedStatus?:MaintenanceProjectedStatus; projectedStage?:MaintenanceDueStage; dueReference?:string; remainingKm?:number; remainingDays?:number;
