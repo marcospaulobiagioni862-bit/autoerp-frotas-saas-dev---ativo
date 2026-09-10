@@ -10,6 +10,7 @@ import {
   ExternalLink,
   File,
   FileText,
+  FolderOpen,
   Lock,
   Mail,
   MapPin,
@@ -44,6 +45,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
 import { FileUpload } from '../documents/FileUpload';
 import { AttachmentList } from '../documents/AttachmentList';
+import { EntityFileGallery } from '../documents/EntityFileGallery';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
 import type { DriverHealthAndEmergency } from '../../types/entities';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -125,6 +127,7 @@ type DriverTab =
   | 'tickets'
   | 'communications'
   | 'health'
+  | 'files'
   | 'history';
 
 export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
@@ -471,6 +474,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     { id: 'tickets', label: 'Multas', icon: AlertTriangle },
     { id: 'communications', label: 'Comunicações', icon: MessageSquare },
     { id: 'health', label: 'Saúde & Emergência', icon: ShieldAlert },
+    { id: 'files', label: 'Arquivos', icon: FolderOpen },
     { id: 'history', label: 'Histórico', icon: Clock },
   ];
 
@@ -880,6 +884,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               </div>
             )
           )}
+
+          {activeTab === 'files' && <EntityFileGallery entityType="Driver" entityId={driver.id} />}
 
           {activeTab === 'history' && (
             <div className="space-y-3">
