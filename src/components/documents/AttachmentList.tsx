@@ -18,6 +18,7 @@ interface AttachmentListProps {
   attachmentStatusesUnavailable?: boolean;
   showPdfActions?: boolean;
   protectLatestDriverCnh?: boolean;
+  showProtectedDriverCnh?: boolean;
   excludeAttachmentIds?: string[];
 }
 
@@ -43,6 +44,7 @@ export function AttachmentList({
   attachmentStatusesUnavailable = false,
   showPdfActions = false,
   protectLatestDriverCnh = false,
+  showProtectedDriverCnh = false,
   excludeAttachmentIds = [],
 }: AttachmentListProps) {
   const { user } = useAuth();
@@ -115,7 +117,7 @@ export function AttachmentList({
     : undefined;
 
   const excludedAttachmentIds = new Set(excludeAttachmentIds);
-  const visibleAttachments = (protectLatestDriverCnh && entityType === 'Driver'
+  const visibleAttachments = (protectLatestDriverCnh && entityType === 'Driver' && !showProtectedDriverCnh
     ? attachments.filter((item) => String(item.documentType || '').toUpperCase() !== 'CNH')
     : attachments
   ).filter((item) => !excludedAttachmentIds.has(item.id));

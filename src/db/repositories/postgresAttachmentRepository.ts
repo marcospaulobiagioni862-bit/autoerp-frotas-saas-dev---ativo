@@ -69,6 +69,67 @@ export class PostgresAttachmentRepository implements ITransactionAttachmentRepos
     return rowsOf(result).map((row) => this.map(row));
   }
 
+  async findEntityGallery(companyId: string, entityType: 'Vehicle' | 'Driver', entityId: string): Promise<FileAttachment[]> {
+    const result = entityType === 'Vehicle'
+      ? await this.tx.execute(sql`
+          SELECT fa.*
+          FROM file_attachments fa
+          WHERE fa.company_id=${companyId}
+            AND fa.is_archived=false
+            AND (
+              (fa.entity_type='Vehicle' AND fa.entity_id=${entityId})
+              OR (fa.entity_type='Contract' AND EXISTS (
+                SELECT 1 FROM contracts c
+                WHERE c.company_id=${companyId} AND c.id=fa.entity_id AND c.vehicle_id=${entityId}
+              ))
+              OR (fa.entity_type='TrafficTicket' AND EXISTS (
+                SELECT 1 FROM traffic_tickets t
+                WHERE t.company_id=${companyId} AND t.id=fa.entity_id AND t.vehicle_id=${entityId}
+              ))
+              OR (fa.entity_type='MaintenanceWorkOrder' AND EXISTS (
+                SELECT 1 FROM work_orders w
+                WHERE w.company_id=${companyId} AND w.id=fa.entity_id AND w.vehicle_id=${entityId}
+              ))
+              OR (fa.entity_type='Insurance' AND EXISTS (
+                SELECT 1 FROM insurances i
+                WHERE i.company_id=${companyId} AND i.id=fa.entity_id AND i.vehicle_id=${entityId}
+              ))
+              OR (fa.entity_type='Tracker' AND EXISTS (
+                SELECT 1 FROM trackers tr
+                WHERE tr.company_id=${companyId} AND tr.id=fa.entity_id AND tr.vehicle_id=${entityId}
+              ))
+              OR (fa.entity_type='VehicleInspection' AND EXISTS (
+                SELECT 1 FROM vehicle_inspections vi
+                WHERE vi.company_id=${companyId} AND vi.id=fa.entity_id AND vi.vehicle_id=${entityId}
+              ))
+            )
+          ORDER BY fa.created_at DESC,fa.id DESC
+        `)
+      : await this.tx.execute(sql`
+          SELECT fa.*
+          FROM file_attachments fa
+          WHERE fa.company_id=${companyId}
+            AND fa.is_archived=false
+            AND (
+              (fa.entity_type='Driver' AND fa.entity_id=${entityId})
+              OR (fa.entity_type='Contract' AND EXISTS (
+                SELECT 1 FROM contracts c
+                WHERE c.company_id=${companyId} AND c.id=fa.entity_id AND c.driver_id=${entityId}
+              ))
+              OR (fa.entity_type='TrafficTicket' AND EXISTS (
+                SELECT 1 FROM traffic_tickets t
+                WHERE t.company_id=${companyId} AND t.id=fa.entity_id AND t.driver_id=${entityId}
+              ))
+              OR (fa.entity_type='VehicleInspection' AND EXISTS (
+                SELECT 1 FROM vehicle_inspections vi
+                WHERE vi.company_id=${companyId} AND vi.id=fa.entity_id AND vi.driver_id=${entityId}
+              ))
+            )
+          ORDER BY fa.created_at DESC,fa.id DESC
+        `);
+    return rowsOf(result).map((row) => this.map(row));
+  }
+
   async create(item: FileAttachment): Promise<FileAttachment> {
     await this.tx.execute(sql`
       INSERT INTO file_attachments (

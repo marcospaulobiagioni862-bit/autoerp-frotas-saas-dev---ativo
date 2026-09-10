@@ -270,6 +270,28 @@ export class AttachmentAuthorityIntegrationRunner {
         bytes: new Uint8Array([0xef, 0xbb, 0xbf, 0x0a, 0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]),
       });
       assert(response.status === 201, `split signed PDF with leading bytes expected 201, got ${response.status}`);
+      const relatedContractAttachment = (await json(response)).item;
+
+      response = await request('/api/attachments/gallery?entityType=Vehicle&entityId=i4a-veh-a1', {}, readonlyA);
+      assert(response.status === 200, `vehicle gallery READONLY expected 200, got ${response.status}`);
+      const vehicleGallery = (await json(response)).items;
+      assert(vehicleGallery.some((item:any)=>item.id===created.id), 'vehicle gallery omitted direct vehicle attachment');
+      assert(vehicleGallery.some((item:any)=>item.id===relatedContractAttachment.id), 'vehicle gallery omitted related contract attachment');
+      assert(vehicleGallery.some((item:any)=>item.id===cancelledWorkOrderAttachment.id), 'vehicle gallery omitted related maintenance work-order attachment');
+      assert(new Set(vehicleGallery.map((item:any)=>item.id)).size===vehicleGallery.length, 'vehicle gallery duplicated attachment metadata');
+
+      response = await request('/api/attachments/gallery?entityType=Driver&entityId=i4a-drv-a1', {}, readonlyA);
+      assert(response.status === 200, `driver gallery READONLY expected 200, got ${response.status}`);
+      const driverGallery = (await json(response)).items;
+      assert(driverGallery.some((item:any)=>item.id===relatedContractAttachment.id), 'driver gallery omitted related contract attachment');
+      assert(!driverGallery.some((item:any)=>item.id===created.id), 'driver gallery leaked unrelated vehicle attachment');
+
+      response = await request('/api/attachments/gallery?entityType=Vehicle&entityId=i4a-veh-a1', {}, adminB);
+      assert(response.status === 404, `cross-tenant vehicle gallery expected 404, got ${response.status}`);
+      response = await request('/api/attachments/gallery?entityType=Driver&entityId=i4a-drv-a1', {}, adminB);
+      assert(response.status === 404, `cross-tenant driver gallery expected 404, got ${response.status}`);
+      response = await request('/api/attachments/gallery?entityType=Contract&entityId=i4a-contract-a1', {}, adminA);
+      assert(response.status === 400, `unsupported gallery entity expected 400, got ${response.status}`);
 
       response = await upload(adminA, { mimeType: 'image/png', fileName: 'forged.png', bytes: new Uint8Array([37, 80, 68, 70]) });
       assert(response.status === 400, `mismatched PNG signature expected 400, got ${response.status}`);

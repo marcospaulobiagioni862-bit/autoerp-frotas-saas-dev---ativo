@@ -220,6 +220,20 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'',entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';
     try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');});res.json({items});}catch(error){sendAttachmentError(res,error);}
   });
+  app.get('/api/attachments/gallery',async(req,res)=>{
+    const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
+    const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'';
+    const entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';
+    try{
+      if(entityType!=='Vehicle'&&entityType!=='Driver')throw new AttachmentValidationError('Invalid gallery entity type');
+      if(!entityId)throw new AttachmentValidationError('Missing gallery entity id');
+      const items=await UnitOfWork.run(principal.companyId,async tx=>{
+        await validateEntity(tx,principal,entityType,entityId,false);
+        return await tx.getAttachmentRepo().findEntityGallery(principal.companyId,entityType,entityId);
+      });
+      res.json({items});
+    }catch(error){sendAttachmentError(res,error);}
+  });
   app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});res.json({item});}catch(error){sendAttachmentError(res,error);}});
   app.post('/api/attachments',express.raw({type:()=>true,limit:MAX_ATTACHMENT_BYTES}),async(req:Request,res:Response)=>{
     const principal=requireAttachmentPrincipal(req,res,'CREATE_ATTACHMENT');if(!principal)return;let storageKey:string|undefined;

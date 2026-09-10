@@ -10,6 +10,7 @@ const cnhIntakeSource = readFileSync(new URL('../DriverCnhIntakeModal.tsx', impo
 const cnhCardSource = readFileSync(new URL('../DriverCnhDocumentCard.tsx', import.meta.url), 'utf8');
 const fileUploadSource = readFileSync(new URL('../../documents/FileUpload.tsx', import.meta.url), 'utf8');
 const attachmentListSource = readFileSync(new URL('../../documents/AttachmentList.tsx', import.meta.url), 'utf8');
+const entityGallerySource = readFileSync(new URL('../../documents/EntityFileGallery.tsx', import.meta.url), 'utf8');
 
 for (const modal of ['DriverFormModal', 'DriverDetailsModal', 'DriverCnhIntakeModal']) {
   assert.equal(
@@ -96,6 +97,13 @@ assert.match(detailsSource, /<AttachmentList[\s\S]*entityType="Driver"[\s\S]*ent
 assert.match(attachmentListSource, /const latestDriverCnhId = protectLatestDriverCnh[\s\S]*documentType \|\| ''\)\.toUpperCase\(\) === 'CNH'/, 'attachment list must identify the latest available driver CNH');
 assert.match(attachmentListSource, /disabled=\{att\.id === latestDriverCnhId\}/, 'archive action must be disabled for the current CNH');
 assert.match(attachmentListSource, /CNH vigente: substitua pelo fluxo Nova CNH \/ Renovar CNH/, 'current CNH archive guard must explain the renewal flow');
+assert.match(detailsSource, /\| 'files'/, 'driver tab type must include the unified file gallery');
+assert.match(detailsSource, /id: 'files', label: 'Arquivos'/, 'driver details must expose the Arquivos tab');
+assert.match(detailsSource, /<EntityFileGallery entityType="Driver" entityId=\{driver\.id\} \/>/, 'driver file tab must bind the current driver to the shared gallery');
+assert.match(entityGallerySource, /protectLatestDriverCnh=\{entityType==='Driver'\}/, 'driver gallery must protect the current CNH');
+assert.match(entityGallerySource, /showProtectedDriverCnh=\{entityType==='Driver'\}/, 'driver gallery must keep the protected current CNH visible');
+assert.match(attachmentListSource, /showProtectedDriverCnh = false/, 'legacy attachment views must keep their previous CNH visibility behavior by default');
+
 assert.match(detailsSource, /Nova CNH \/ Renovar CNH/, 'driver details must expose the explicit CNH renewal action');
 assert.match(detailsSource, /onRenewCnh\(driver\.id\)/, 'CNH renewal action must keep the selected driver id');
 assert.match(source, /expectedDriverId=\{cnhRenewalDriverId \|\| undefined\}/, 'CNH intake must receive the selected renewal driver');

@@ -46,6 +46,20 @@ export class AttachmentClientTestRunner {
 
     tests.push(async () => {
       let credentials = '';
+      let url = '';
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        url = String(input);
+        credentials = String(init?.credentials);
+        return new Response(JSON.stringify({ items: [attachment] }), { status: 200 });
+      }) as typeof fetch;
+      const items = await AttachmentClient.listEntityGallery('Vehicle', 'vehicle 1');
+      assert(items.length === 1, 'GALLERY payload');
+      assert(credentials === 'include', 'GALLERY credentials');
+      assert(url.includes('/api/attachments/gallery?') && url.includes('entityType=Vehicle') && url.includes('entityId=vehicle+1'), 'GALLERY filters');
+    });
+
+    tests.push(async () => {
+      let credentials = '';
       globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
         credentials = String(init?.credentials);
         return new Response(JSON.stringify({ item: attachment }), { status: 200 });
@@ -123,6 +137,7 @@ export class AttachmentClientTestRunner {
       globalThis.fetch = (async () => new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })) as typeof fetch;
       const expectations: Array<{ run: () => Promise<unknown>; operation: string }> = [
         { run: () => AttachmentClient.list({ entityType: 'MaintenanceWorkOrder', entityId: 'wo-1' }), operation: 'Falha ao listar anexos' },
+        { run: () => AttachmentClient.listEntityGallery('Vehicle', 'vehicle-1'), operation: 'Falha ao carregar arquivos relacionados' },
         { run: () => AttachmentClient.content('att-1'), operation: 'Falha ao visualizar/baixar anexo' },
         { run: () => AttachmentClient.archive('att-1'), operation: 'Falha ao arquivar anexo' },
         { run: () => AttachmentClient.deletePermanently('att-1'), operation: 'Falha ao excluir anexo definitivamente' },

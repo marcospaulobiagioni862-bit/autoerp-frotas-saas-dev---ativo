@@ -92,6 +92,15 @@ export class AttachmentClient {
     return payload.items.map(validateAttachment);
   }
 
+  static async listEntityGallery(entityType:'Vehicle'|'Driver',entityId:string):Promise<FileAttachment[]> {
+    const params=new URLSearchParams({entityType,entityId});
+    const response=await fetch(`/api/attachments/gallery?${params.toString()}`,{credentials:'include'});
+    if(!response.ok)throw await apiError(response,'Falha ao carregar arquivos relacionados');
+    const payload=asRecord(await response.json());
+    if(!Array.isArray(payload.items))throw new Error('Invalid attachment gallery payload');
+    return payload.items.map(validateAttachment);
+  }
+
   static async get(id: string): Promise<FileAttachment> {
     const response = await fetch(`/api/attachments/${encodeURIComponent(id)}`, { credentials: 'include' });
     if (!response.ok) throw await apiError(response, 'Falha ao consultar anexo');
