@@ -45,6 +45,14 @@ assert.match(source, /Cancelar \{cancelTarget\.number\}/, 'maintenance cancellat
 assert.match(source, /Informe o motivo do cancelamento da OS\./, 'maintenance cancellation must require a reason');
 assert.match(source, /Confirmar cancelamento/, 'maintenance cancellation modal must expose an explicit confirmation action');
 
+for (const ruleLabel of ['Aviso KM', 'Urgente KM', 'Aviso dias', 'Urgente dias', 'Tolerância KM', 'Tolerância dias']) {
+  assert.match(
+    preventiveSource,
+    new RegExp(`<span className="mb-1 block text-\\[10px\\] font-semibold text-slate-500">${ruleLabel}<\\/span><Input aria-label="${ruleLabel}"`),
+    `${ruleLabel} must remain visible and accessible when the rule field has a value`,
+  );
+}
+
 assert.match(preventiveSource, /Todos os veículos/, 'preventive plans must offer vehicle filtering');
 assert.match(preventiveSource, /Todas as categorias/, 'preventive plans must offer category filtering');
 assert.match(preventiveSource, /Todos os tipos\/itens/, 'preventive plans must offer maintenance item filtering');
