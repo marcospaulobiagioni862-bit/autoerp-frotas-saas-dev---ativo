@@ -2,11 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
-import { ContractTemplateClient } from '../../api/contractTemplateClient';
 import { AttachmentClient } from '../../api/attachmentClient';
-import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, FileAttachment } from '../../types/entities';
+import type { Contract, ContractArtifact, ContractSignatureMethod, FileAttachment } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
-import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
 import { Badge, Button, Card, Input } from '../ui';
 import { FileUpload } from '../documents/FileUpload';
 
@@ -20,18 +18,9 @@ interface ContractExecutionPanelProps {
 const signatureMethodLabel = (method?: ContractSignatureMethod): string =>
   method === 'GOV_BR' ? 'GOV.br' : method === 'NOTARY' ? 'Cartório' : 'Upload de PDF assinado';
 
-function operationalTemplateLabel(item: ContractTemplate): string {
-  const master = getMoveFlexApprovedContractMaster(item.templateKey);
-  const title = master?.title || item.title;
-  const mode = master ? 'VISUAL_FIXO → PDF' : item.contentMarkdown.trim() ? 'PDF' : 'DOCX';
-  return `${title} • v${item.versionNumber} • ${mode}`;
-}
-
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState(contract.templateId || '');
   const [signedAttachment, setSignedAttachment] = useState<FileAttachment | null>(null);
   const [signedByName, setSignedByName] = useState('');
   const [signedAt, setSignedAt] = useState('');
@@ -49,10 +38,6 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     [artifacts]
   );
   const generated = generatedDocx || generatedPdf;
-  const reviewed = useMemo(
-    () => artifacts.find((item) => item.artifactType === 'REVIEWED_FINAL_PDF' && item.isCurrent && !item.isArchived),
-    [artifacts]
-  );
   const signed = useMemo(
     () => artifacts.find((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived),
     [artifacts]
@@ -60,26 +45,16 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
   const load = async () => {
     try {
-      const [templateList, artifactList, attachmentList] = await Promise.all([
-        ContractTemplateClient.list(),
+      const [artifactList, attachmentList] = await Promise.all([
         ContractExecutionClient.listArtifacts(contract.id),
         AttachmentClient.list({ entityType: 'Contract', entityId: contract.id }),
       ]);
-      setTemplates(templateList);
       setArtifacts(artifactList);
       const signedEvidence = artifactList.find((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived);
       const pendingSignedAttachment = attachmentList
         .filter((item) => !item.isArchived && item.documentType === 'SIGNED_CONTRACT' && item.mimeType === 'application/pdf')
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
       setSignedAttachment(signedEvidence ? null : pendingSignedAttachment);
-      setSelectedTemplateId((current) => {
-        const availableIds = new Set(templateList.map((item) => item.id));
-        if (current && availableIds.has(current)) return current;
-        if (contract.templateId && availableIds.has(contract.templateId)) return contract.templateId;
-        return templateList.find((item) =>
-          getMoveFlexApprovedContractMaster(item.templateKey)?.templateKey === 'locacao-padrao'
-        )?.id || templateList[0]?.id || '';
-      });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
     }
@@ -120,28 +95,13 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   };
 
   const generateOfficial = () => {
-    if (!selectedTemplateId) {
-      setError('Selecione um modelo de contrato.');
+    if (!contract.templateId) {
+      setError('Este contrato não possui um dos modelos padrão vinculado. Edite o contrato antes de gerar o documento.');
       return;
     }
-    const selected = templates.find((item) => item.id === selectedTemplateId);
-    if (!selected) {
-      setError('O modelo selecionado não está disponível.');
-      return;
-    }
-    const visualFixed = Boolean(getMoveFlexApprovedContractMaster(selected.templateKey));
-    const customDocx = !visualFixed && !selected.contentMarkdown.trim();
     void run(async () => {
-      if (visualFixed || selected.contentMarkdown.trim()) {
-        await ContractExecutionClient.generatePdf(contract.id, selectedTemplateId);
-      } else {
-        await ContractExecutionClient.generateDocx(contract.id, selectedTemplateId);
-      }
-    }, visualFixed
-      ? 'PDF oficial gerado sobre as páginas VISUAL_FIXO aprovadas, sem reconstruir cabeçalho, rodapé ou cláusulas.'
-      : customDocx
-        ? 'DOCX personalizado preenchido para revisão humana.'
-        : 'PDF oficial gerado no servidor e registrado com integridade SHA-256.');
+      await ContractExecutionClient.generatePdf(contract.id);
+    }, 'PDF oficial gerado a partir do modelo padrão vinculado ao contrato.');
   };
 
   const openAttachment = (attachmentId: string) => {
@@ -194,7 +154,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            Gere o documento oficial. Os dois modelos padrão MoveFlex usam as páginas VISUAL_FIXO aprovadas como fundo imutável e apenas recebem os dados nos campos em branco, gerando PDF para assinatura. GOV.br registra o método informado, sem validação criptográfica automática pelo ERP.
+            O documento é gerado exclusivamente a partir do modelo padrão já vinculado ao contrato. A tela de execução não pode substituir essa escolha.
           </p>
         </div>
         <Badge variant={signed ? 'success' : signedAttachment ? 'warning' : generated ? 'warning' : 'neutral'}>
@@ -214,18 +174,12 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
           <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">Documento oficial</b></div>
-          <label className="block text-xs font-semibold text-slate-600">
-            Modelo do contrato
-            <select
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
-              value={selectedTemplateId}
-              disabled={!canGenerate || Boolean(generated)}
-              onChange={(event) => setSelectedTemplateId(event.target.value)}
-            >
-              <option value="">Selecione</option>
-              {templates.map((item) => <option key={item.id} value={item.id}>{operationalTemplateLabel(item)}</option>)}
-            </select>
-          </label>
+          <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/50">
+            <b>Modelo vinculado ao contrato</b>
+            <div className="mt-1 text-slate-500">
+              {contract.templateId ? 'Definido no cadastro do contrato e protegido pelo servidor.' : 'Nenhum modelo padrão vinculado.'}
+            </div>
+          </div>
           {generated ? (
             <div className="space-y-2 text-xs">
               <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
@@ -248,7 +202,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
             <p className="text-xs text-slate-500">Nenhum documento oficial foi gerado para este contrato.</p>
           )}
           {canGenerate && (
-            <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!selectedTemplateId}>
+            <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!contract.templateId}>
               {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar documento' : 'Gerar documento'}
             </Button>
           )}
