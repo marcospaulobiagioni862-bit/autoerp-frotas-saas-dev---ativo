@@ -16,28 +16,58 @@ interface VehicleFormModalProps {
   vehicleToEdit?: Vehicle | null;
 }
 
+type NumericField = number | '';
+
 interface VehicleFormData {
   plate: string;
   brand: string;
   model: string;
   version?: string;
-  yearFabrication: number;
-  yearModel: number;
+  yearFabrication: NumericField;
+  yearModel: NumericField;
   color: string;
   renavam: string;
   chassis: string;
-  currentKm: number;
-  nextMaintenanceKm?: number;
+  currentKm: NumericField;
+  nextMaintenanceKm?: NumericField;
   fuelType: string;
   category: string;
-  acquisitionValue: number;
-  currentValue: number;
-  rentalValueBase: number;
+  acquisitionValue: NumericField;
+  currentValue: NumericField;
+  rentalValueBase: NumericField;
   notes?: string;
 }
 
 const cleanText = (value: string | undefined) => (value || '').trim();
 const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+const emptyVehicleForm = (): VehicleFormData => ({
+  plate: '',
+  brand: '',
+  model: '',
+  version: '',
+  yearFabrication: '',
+  yearModel: '',
+  color: '',
+  renavam: '',
+  chassis: '',
+  currentKm: '',
+  nextMaintenanceKm: '',
+  fuelType: '',
+  category: '',
+  acquisitionValue: '',
+  currentValue: '',
+  rentalValueBase: '',
+  notes: '',
+});
+
+const requiredNumber = (value: NumericField, label: string): number => {
+  if (value === '' || !Number.isFinite(value)) throw new Error(`Informe ${label}.`);
+  return value;
+};
+
+const optionalNumber = (value: NumericField | undefined): number | undefined =>
+  value === '' || value === undefined ? undefined : value;
 
 export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   isOpen,
@@ -45,25 +75,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
   onSuccess,
   vehicleToEdit,
 }) => {
-  const [formData, setFormData] = useState<VehicleFormData>({
-    plate: '',
-    brand: '',
-    model: '',
-    version: '',
-    yearFabrication: new Date().getFullYear(),
-    yearModel: new Date().getFullYear(),
-    color: 'Branco',
-    renavam: '',
-    chassis: '',
-    currentKm: 0,
-    nextMaintenanceKm: 10000,
-    fuelType: 'Flex',
-    category: 'Hatch / Sedan Compacto',
-    acquisitionValue: 70000,
-    currentValue: 65000,
-    rentalValueBase: 750,
-    notes: '',
-  });
+  const [formData, setFormData] = useState<VehicleFormData>(() => emptyVehicleForm());
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -90,25 +102,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         notes: vehicleToEdit.notes || '',
       });
     } else {
-      setFormData({
-        plate: '',
-        brand: '',
-        model: '',
-        version: '',
-        yearFabrication: new Date().getFullYear(),
-        yearModel: new Date().getFullYear(),
-        color: 'Branco',
-        renavam: '',
-        chassis: '',
-        currentKm: 0,
-        nextMaintenanceKm: 10000,
-        fuelType: 'Flex',
-        category: 'Hatch / Sedan Compacto',
-        acquisitionValue: 70000,
-        currentValue: 65000,
-        rentalValueBase: 750,
-        notes: '',
-      });
+      setFormData(emptyVehicleForm());
     }
     setErrorMessage(null);
   }, [vehicleToEdit, isOpen]);
@@ -118,25 +112,30 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     if (errorMessage) setErrorMessage(null);
   };
 
+  const handleNumericChange = (field: keyof VehicleFormData, rawValue: string) => {
+    handleChange(field, rawValue === '' ? '' : Number(rawValue));
+  };
+
   const buildChangedFields = (existing: Vehicle): VehicleUpdateInput => {
     const changes: VehicleUpdateInput = {};
     const originalMaintenanceKm = existing.nextMaintenanceKm || existing.currentKm + 10000;
+    const maintenanceKm = optionalNumber(formData.nextMaintenanceKm);
 
     if (normalizePlate(formData.plate) !== normalizePlate(existing.plate)) changes.plate = normalizePlate(formData.plate);
     if (cleanText(formData.renavam) !== cleanText(existing.renavam)) changes.renavam = cleanText(formData.renavam);
     if (cleanText(formData.brand) !== cleanText(existing.brand)) changes.brand = cleanText(formData.brand);
     if (cleanText(formData.model) !== cleanText(existing.model)) changes.model = cleanText(formData.model);
     if (cleanText(formData.version) !== cleanText(existing.version)) changes.version = cleanText(formData.version);
-    if (formData.yearFabrication !== existing.yearFabrication) changes.yearFabrication = formData.yearFabrication;
-    if (formData.yearModel !== existing.yearModel) changes.yearModel = formData.yearModel;
+    if (formData.yearFabrication !== '' && formData.yearFabrication !== existing.yearFabrication) changes.yearFabrication = formData.yearFabrication;
+    if (formData.yearModel !== '' && formData.yearModel !== existing.yearModel) changes.yearModel = formData.yearModel;
     if (cleanText(formData.color) !== cleanText(existing.color)) changes.color = cleanText(formData.color);
     if (cleanText(formData.chassis).toUpperCase() !== cleanText(existing.chassis).toUpperCase()) changes.chassis = cleanText(formData.chassis).toUpperCase();
-    if ((formData.nextMaintenanceKm || 0) !== originalMaintenanceKm) changes.nextMaintenanceKm = formData.nextMaintenanceKm || 0;
+    if ((maintenanceKm ?? 0) !== originalMaintenanceKm) changes.nextMaintenanceKm = maintenanceKm ?? 0;
     if (cleanText(formData.fuelType) !== cleanText(existing.fuelType)) changes.fuelType = cleanText(formData.fuelType);
     if (cleanText(formData.category) !== cleanText(existing.category)) changes.category = cleanText(formData.category);
-    if (formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
-    if (formData.currentValue !== existing.currentValue) changes.currentValue = formData.currentValue;
-    if (formData.rentalValueBase !== existing.rentalValueBase) changes.rentalValueBase = formData.rentalValueBase;
+    if (formData.acquisitionValue !== '' && formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
+    if (formData.currentValue !== '' && formData.currentValue !== existing.currentValue) changes.currentValue = formData.currentValue;
+    if (formData.rentalValueBase !== '' && formData.rentalValueBase !== existing.rentalValueBase) changes.rentalValueBase = formData.rentalValueBase;
     if (cleanText(formData.notes) !== cleanText(existing.notes)) changes.notes = cleanText(formData.notes);
 
     return changes;
@@ -154,7 +153,25 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           await VehicleClient.update(vehicleToEdit.id, changedFields);
         }
       } else {
-        await VehicleClient.create({ ...formData, plate: normalizePlate(formData.plate) });
+        await VehicleClient.create({
+          plate: normalizePlate(formData.plate),
+          renavam: cleanText(formData.renavam),
+          brand: cleanText(formData.brand),
+          model: cleanText(formData.model),
+          version: cleanText(formData.version),
+          yearFabrication: requiredNumber(formData.yearFabrication, 'o ano de fabricação'),
+          yearModel: requiredNumber(formData.yearModel, 'o ano do modelo'),
+          color: cleanText(formData.color),
+          chassis: cleanText(formData.chassis).toUpperCase(),
+          currentKm: requiredNumber(formData.currentKm, 'a quilometragem atual'),
+          nextMaintenanceKm: optionalNumber(formData.nextMaintenanceKm),
+          fuelType: cleanText(formData.fuelType),
+          category: cleanText(formData.category),
+          acquisitionValue: requiredNumber(formData.acquisitionValue, 'o valor de aquisição'),
+          currentValue: requiredNumber(formData.currentValue, 'o valor comercial atual'),
+          rentalValueBase: requiredNumber(formData.rentalValueBase, 'o valor do aluguel semanal'),
+          notes: cleanText(formData.notes),
+        });
       }
       onSuccess();
       onClose();
@@ -194,14 +211,16 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Input label="Ano Fab. *" type="number" required value={formData.yearFabrication} onChange={(e) => handleChange('yearFabrication', Number(e.target.value))} />
-          <Input label="Ano Modelo *" type="number" required value={formData.yearModel} onChange={(e) => handleChange('yearModel', Number(e.target.value))} />
-          <Input label="Cor *" placeholder="Branco" required value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
+          <Input label="Ano Fab. *" type="number" required value={formData.yearFabrication} onChange={(e) => handleNumericChange('yearFabrication', e.target.value)} />
+          <Input label="Ano Modelo *" type="number" required value={formData.yearModel} onChange={(e) => handleNumericChange('yearModel', e.target.value)} />
+          <Input label="Cor *" placeholder="Ex: Branco" required value={formData.color} onChange={(e) => handleChange('color', e.target.value)} />
           <Select
             label="Combustível *"
+            required
             value={formData.fuelType}
             onChange={(e) => handleChange('fuelType', e.target.value)}
             options={[
+              { value: '', label: 'Selecione...', disabled: true },
               { value: 'Flex', label: 'Flex' },
               { value: 'Gasolina', label: 'Gasolina' },
               { value: 'Etanol', label: 'Etanol' },
@@ -220,19 +239,28 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             required
             disabled={!!vehicleToEdit}
             value={formData.currentKm}
-            onChange={(e) => handleChange('currentKm', Number(e.target.value))}
+            onChange={(e) => handleNumericChange('currentKm', e.target.value)}
             helperText={vehicleToEdit ? 'Use “Registrar KM” para alterar o odômetro.' : 'Leitura inicial do veículo.'}
           />
-          <Input label="Próx. Manutenção (KM)" type="number" value={formData.nextMaintenanceKm || ''} onChange={(e) => handleChange('nextMaintenanceKm', Number(e.target.value))} />
-          <Select label="Categoria *" value={formData.category} onChange={(e) => handleChange('category', e.target.value)} options={VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))} />
+          <Input label="Próx. Manutenção (KM)" type="number" value={formData.nextMaintenanceKm ?? ''} onChange={(e) => handleNumericChange('nextMaintenanceKm', e.target.value)} />
+          <Select
+            label="Categoria *"
+            required
+            value={formData.category}
+            onChange={(e) => handleChange('category', e.target.value)}
+            options={[
+              { value: '', label: 'Selecione...', disabled: true },
+              ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category })),
+            ]}
+          />
         </div>
 
         <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
           <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Valores Financeiros</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleChange('acquisitionValue', Number(e.target.value))} />
-            <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleChange('currentValue', Number(e.target.value))} />
-            <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleChange('rentalValueBase', Number(e.target.value))} />
+            <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleNumericChange('acquisitionValue', e.target.value)} />
+            <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleNumericChange('currentValue', e.target.value)} />
+            <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleNumericChange('rentalValueBase', e.target.value)} />
           </div>
         </div>
 
