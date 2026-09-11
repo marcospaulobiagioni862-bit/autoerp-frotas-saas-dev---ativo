@@ -134,6 +134,16 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       assert(response.status === 201, `KM batch fixture create expected 201, got ${response.status}`);
       const batchVehicle = (await json(response)).item;
 
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}/km-records`, {
+        method: 'POST',
+        body: JSON.stringify({ kmValue: 100, readingType: 'PERIODIC', notes: 'KM igual não deve gravar' }),
+      });
+      assert(response.status === 400, `equal KM single update expected 400, got ${response.status}`);
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}/km-records`);
+      assert(response.status === 200, `KM history expected 200, got ${response.status}`);
+      const initialHistory = (await json(response)).items;
+      assert(Array.isArray(initialHistory) && initialHistory.length === 1, 'equal KM single update created a duplicate visible KM record');
+
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`, {
         method: 'PATCH',
         body: JSON.stringify({ brand: 'Ram' }),
@@ -166,6 +176,21 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       assert(response.status === 200, `vehicle list expected 200, got ${response.status}`);
       const list = (await json(response)).items;
       assert(list.some((item: any) => item.id === created.id && item.category === 'Pickup / Caminhonete'), 'Pickup category is missing from the fleet read model');
+
+      response = await request('/api/fleet/vehicles/km-records/batch', {
+        method: 'POST',
+        body: JSON.stringify({
+          entries: [
+            { vehicleId: created.id, kmValue: 200, notes: 'Leitura semanal' },
+            { vehicleId: batchVehicle.id, kmValue: 150, notes: 'KM igual não deve gravar' },
+          ],
+        }),
+      });
+      assert(response.status === 400, `equal KM batch expected 400, got ${response.status}`);
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`);
+      assert((await json(response)).item.currentKm === 100, 'equal KM batch partially updated the first vehicle');
+      response = await request(`/api/fleet/vehicles/${encodeURIComponent(batchVehicle.id)}`);
+      assert((await json(response)).item.currentKm === 150, 'equal KM batch mutated the equal-KM vehicle');
 
       response = await request('/api/fleet/vehicles/km-records/batch', {
         method: 'POST',
