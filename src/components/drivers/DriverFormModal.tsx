@@ -244,7 +244,18 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
         await DriverClient.update(driverToEdit.id, input);
         if (status !== driverToEdit.status && status !== DriverStatus.ARCHIVED) await DriverClient.changeStatus(driverToEdit.id, status as Exclude<DriverStatus, DriverStatus.ARCHIVED>);
       } else if (isCnhCompletion && cnhDriverId) {
-        const update: DriverUpdateInput = { fullName: input.fullName, cpf: input.cpf, rg: input.rg, birthDate: input.birthDate, maritalStatus: input.maritalStatus, profession: input.profession, motherName: input.motherName, pixKey: input.pixKey, cnhNumber: input.cnhNumber, cnhCategory: input.cnhCategory, cnhExpiration: input.cnhExpiration, cnhEar: input.cnhEar, appPlatforms: input.appPlatforms, notes: input.notes, email: input.email, address: input.address, health: input.health };
+        const update: DriverUpdateInput = {
+          rg: input.rg,
+          maritalStatus: input.maritalStatus,
+          profession: input.profession,
+          motherName: input.motherName,
+          pixKey: input.pixKey,
+          appPlatforms: input.appPlatforms,
+          notes: input.notes,
+          email: input.email,
+          address: input.address,
+          health: input.health,
+        };
         if (normalizedPhone) update.phone = normalizedPhone; if (normalizedWhatsapp) update.whatsapp = normalizedWhatsapp; else if (normalizedPhone) update.whatsapp = normalizedPhone;
         await DriverClient.update(cnhDriverId, update);
       } else {

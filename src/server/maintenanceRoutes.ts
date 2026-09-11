@@ -3,6 +3,7 @@ import type {AuthenticatedPrincipal} from './auth';
 import {MaintenanceAuthorityService,MaintenanceConflictError,MaintenanceNotFoundError,MaintenanceValidationError,type CreatePartInput,type CreateSupplierInput,type CreateWorkOrderInput,type UpdatePartInput,type UpdateSupplierInput} from './maintenanceAuthority';
 import {registerMaintenancePreventiveRoutes} from './maintenancePreventiveRoutes';
 import {registerMaintenanceTimelineRoutes} from './maintenanceTimelineRoutes';
+import {registerMaintenanceTemplateVehicleRoutes} from './maintenanceTemplateVehicleRoutes';
 
 type Action='VIEW_MAINTENANCE'|'MUTATE_MAINTENANCE';
 const READ=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']),WRITE=new Set(['ADMIN','MANAGER','OPERATIONAL']);
@@ -23,6 +24,7 @@ function send(res:Response,e:unknown){const m=e instanceof Error?e.message:'';if
 
 export function registerMaintenanceRoutes(app:Express):void{
   registerMaintenancePreventiveRoutes(app);
+  registerMaintenanceTemplateVehicleRoutes(app);
   registerMaintenanceTimelineRoutes(app);
   app.get('/api/maintenance/work-orders',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const vehicleId=typeof req.query.vehicleId==='string'&&req.query.vehicleId.trim()?req.query.vehicleId.trim():undefined;res.json({items:await MaintenanceAuthorityService.listWorkOrders(p.companyId,vehicleId)});}catch(e){send(res,e);}});
   app.get('/api/maintenance/work-orders/:id',async(req,res)=>{const p=actor(req,res,'VIEW_MAINTENANCE');if(!p)return;try{const item=await MaintenanceAuthorityService.getWorkOrder(p.companyId,req.params.id);if(!item)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');res.json({item});}catch(e){send(res,e);}});
