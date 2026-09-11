@@ -60,7 +60,7 @@ async function atomicityAndRules():Promise<string>{
   assert(Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND description LIKE 'Multa M-ROLLBACK%'`))?.count)===0,'base AP survived rollback');
   assert(Number((await one(sql`SELECT count(*)::int count FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND title LIKE '%M-ROLLBACK%'`))?.count)===0,'operational alert survived rollback');
 
-  const driver=await TrafficTicketAuthorityService.create(admin,input('M-DRIVER',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));
+  const driver=await TrafficTicketAuthorityService.create(admin,input('M-DRIVER',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA,dueDate:'2099-09-10'}));
   assert(driver.item.status===TicketStatus.CHARGED_DRIVER&&Boolean(driver.item.payableId)&&Boolean(driver.item.receivableId)&&!driver.item.nicPayableId,'DRIVER aggregate mismatch');
   assert(!driver.item.contractId,'ticket without a matching contract must remain without contract linkage');
   const driverAp=await one(sql`SELECT origin_type,origin_id,vehicle_id,original_amount FROM account_payables WHERE id=${driver.item.payableId}`);
@@ -70,7 +70,7 @@ async function atomicityAndRules():Promise<string>{
   const driverTask=await one(sql`SELECT title,description,category,priority,severity,status,source_type,source_id,entity_type,entity_id,assigned_team,due_at FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${driver.item.id}`);
   assert(driverTask?.title==='Tratar multa M-DRIVER'&&driverTask.category==='FINE'&&driverTask.priority==='P2'&&driverTask.severity==='MEDIUM'&&driverTask.status==='OPEN','DRIVER operational alert classification mismatch');
   assert(driverTask.entity_type==='TRAFFIC_TICKET'&&driverTask.entity_id===driver.item.id&&driverTask.assigned_team==='OPERATIONS','DRIVER operational alert traceability mismatch');
-  assert(['Auto: M-DRIVER','Veículo: MAA1A01','Motorista: Motorista A','Contrato: não localizado','Pontos: 4','Valor: R$ 200,00','Infração: 2026-08-01 às 14:35','Responsabilidade: DRIVER'].every(value=>String(driverTask.description).includes(value))&&String(driverTask.due_at).startsWith('2026-09-10'),'DRIVER operational alert context mismatch');
+  assert(['Auto: M-DRIVER','Veículo: MAA1A01','Motorista: Motorista A','Contrato: não localizado','Pontos: 4','Valor: R$ 200,00','Infração: 2026-08-01 às 14:35','Responsabilidade: DRIVER'].every(value=>String(driverTask.description).includes(value))&&String(driverTask.due_at).startsWith('2099-09-10'),'DRIVER operational alert context mismatch');
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
