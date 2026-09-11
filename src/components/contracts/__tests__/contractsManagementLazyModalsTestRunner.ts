@@ -154,7 +154,11 @@ assert.match(templateModal, /Editar texto no ERP/, 'custom saved contracts must 
 assert.match(templateModal, /Importar DOCX\/PDF/, 'custom saved contracts must support file import');
 assert.match(templateModal, /chooseImportFile/, 'import action must have an explicit file-selection handler');
 assert.match(templateModal, /fileInputRef\.current\?\.click\(\)/, 'clicking Importar DOCX/PDF must open the file chooser immediately');
-assert.match(templateModal, /Selecionar DOCX\/PDF/, 'custom file import mode must expose an explicit reselect-file action');
+assert.match(
+  templateModal,
+  /Selecionar \{editing && getMoveFlexApprovedContractMaster\(editing\.templateKey\) \? 'DOCX oficial' : 'DOCX\/PDF'\}/,
+  'custom file import mode must expose an explicit reselect-file action',
+);
 assert.match(templateModal, /sticky bottom-0/, 'save/cancel actions must remain visible while editing long contract content');
 assert.match(templateModal, /disabled=\{!title\.trim\(\) \|\| \(sourceMode === 'FILE' \? !sourceFile : !content\.trim\(\)\)\}/, 'save button must be enabled only when the selected source is actually ready');
 assert.match(templateModal, /title="Modelos de contrato"/, 'template manager must use the shared modal header');
