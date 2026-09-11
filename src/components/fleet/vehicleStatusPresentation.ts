@@ -23,7 +23,6 @@ export const VEHICLE_STATUS_FILTERS: VehicleStatusFilterOption[] = [
   { id: VehicleStatus.AVAILABLE, label: vehicleStatusLabel(VehicleStatus.AVAILABLE) },
   { id: VehicleStatus.RESERVED, label: vehicleStatusLabel(VehicleStatus.RESERVED) },
   { id: VehicleStatus.RENTED, label: vehicleStatusLabel(VehicleStatus.RENTED) },
-  { id: VehicleStatus.WAITING_MAINTENANCE, label: vehicleStatusLabel(VehicleStatus.WAITING_MAINTENANCE) },
   { id: VehicleStatus.MAINTENANCE, label: vehicleStatusLabel(VehicleStatus.MAINTENANCE) },
   { id: VehicleStatus.BLOCKED, label: vehicleStatusLabel(VehicleStatus.BLOCKED) },
   { id: VehicleStatus.DAMAGED, label: vehicleStatusLabel(VehicleStatus.DAMAGED) },
@@ -32,6 +31,14 @@ export const VEHICLE_STATUS_FILTERS: VehicleStatusFilterOption[] = [
   { id: VehicleStatus.INACTIVE, label: vehicleStatusLabel(VehicleStatus.INACTIVE) },
   { id: VehicleStatus.SOLD, label: vehicleStatusLabel(VehicleStatus.SOLD) },
 ];
+
+export function vehicleMatchesStatusFilter(status: VehicleStatus, filter: 'ALL' | VehicleStatus): boolean {
+  if (filter === 'ALL') return true;
+  if (filter === VehicleStatus.MAINTENANCE) {
+    return status === VehicleStatus.MAINTENANCE || status === VehicleStatus.WAITING_MAINTENANCE;
+  }
+  return status === filter;
+}
 
 export function vehicleManualStatusOptions(status: VehicleStatus): VehicleManualStatusOption[] {
   if (
