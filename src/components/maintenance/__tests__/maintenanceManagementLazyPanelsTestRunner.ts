@@ -4,6 +4,9 @@ import './maintenanceSlaTestRunner';
 
 const source = readFileSync(new URL('../MaintenanceManagement.tsx', import.meta.url), 'utf8');
 const preventiveSource = readFileSync(new URL('../MaintenancePreventivePanel.tsx', import.meta.url), 'utf8');
+const preventiveClientSource = readFileSync(new URL('../../../api/maintenancePreventiveClient.ts', import.meta.url), 'utf8');
+const templateVehicleRoutesSource = readFileSync(new URL('../../../server/maintenanceTemplateVehicleRoutes.ts', import.meta.url), 'utf8');
+const templateAuthoritySource = readFileSync(new URL('../../../server/maintenancePlanTemplateAuthority.ts', import.meta.url), 'utf8');
 
 for (const component of ['AttachmentModal', 'MaintenancePreventivePanel']) {
   assert.equal(
@@ -56,6 +59,35 @@ assert.match(preventiveSource, /filteredPlans\.map/, 'preventive table must rend
 assert.match(preventiveSource, /OVERDUE:0,DUE:1,UPCOMING:2,OK:3,PAUSED:4/, 'preventive plans must sort by operational urgency');
 assert.match(preventiveSource, /Nenhum plano corresponde aos filtros selecionados/, 'combined filters must provide an empty state');
 assert.doesNotMatch(preventiveSource, /plans\.map\(p=><tr/, 'preventive table must not bypass the filtered projection');
+
+assert.match(preventiveSource, /aria-label="Item preventivo para aplicação individual"/, 'individual preventive apply must expose template selection');
+assert.match(preventiveSource, /aria-label="Veículo para aplicação individual"/, 'individual preventive apply must expose vehicle selection');
+assert.match(preventiveSource, />Aplicar ao veículo</, 'individual preventive apply must expose an explicit action');
+assert.match(preventiveSource, />Aplicar à frota</, 'fleet-wide preventive apply must remain available');
+assert.ok(
+  preventiveSource.includes('MaintenancePreventiveClient.applyTemplatesToVehicle(applyVehicle,applyTemplate)'),
+  'individual preventive action must send both selected vehicle and selected template',
+);
+assert.ok(
+  preventiveClientSource.includes("templateId?{vehicleId,templateId}:{vehicleId}"),
+  'preventive client must preserve vehicle-only compatibility while supporting explicit template scope',
+);
+assert.ok(
+  templateVehicleRoutesSource.includes("key !== 'vehicleId' && key !== 'templateId'"),
+  'server route must accept only the protected vehicle/template scope fields',
+);
+assert.ok(
+  templateVehicleRoutesSource.includes('}, requestedTemplateId);'),
+  'server route must pass the selected template to authority',
+);
+assert.ok(
+  templateAuthoritySource.includes('AND id=${templateId} AND active=true LIMIT 1'),
+  'authority must resolve the selected template server-side and require it to be active',
+);
+assert.ok(
+  templateAuthoritySource.includes("templateId?'APPLIED_FROM_SELECTED_TEMPLATE':'APPLIED_FROM_GLOBAL_TEMPLATE'"),
+  'individual template application must remain auditable separately from fleet-wide application',
+);
 
 assert.match(source, /Itens preventivos executados nesta OS/, 'OS completion must expose executed preventive item selection');
 assert.match(source, /Preventiva Antecipada/, 'OS completion must explain early preventive execution');

@@ -34,7 +34,7 @@ export class MaintenancePreventiveClient{
   static async createTemplate(input:CreateMaintenancePlanTemplateInput){return template((await request('/api/maintenance/templates',json('POST',input))).item);}
   static async updateTemplate(id:string,input:UpdateMaintenancePlanTemplateInput){return template((await request(`/api/maintenance/templates/${encodeURIComponent(id)}`,json('PATCH',input))).item);}
   static async applyTemplatesToFleet(){const payload=await request('/api/maintenance/templates/apply-all',json('POST',{}));return{vehicles:num(payload.vehicles,'vehicles'),plansCreated:num(payload.plansCreated,'plansCreated')};}
-  static async applyTemplatesToVehicle(vehicleId:string){const payload=await request('/api/maintenance/templates/apply-vehicle',json('POST',{vehicleId}));return{vehicleId:txt(payload.vehicleId,'vehicleId'),plansCreated:num(payload.plansCreated,'plansCreated')};}
+  static async applyTemplatesToVehicle(vehicleId:string,templateId?:string){const payload=await request('/api/maintenance/templates/apply-vehicle',json('POST',templateId?{vehicleId,templateId}:{vehicleId}));return{vehicleId:txt(payload.vehicleId,'vehicleId'),templateId:opt(payload.templateId),plansCreated:num(payload.plansCreated,'plansCreated')};}
   static async listPlans(vehicleId?:string){return list(await request(`/api/maintenance/plans${q(vehicleId)}`),plan);}
   static async getPlan(id:string){return plan((await request(`/api/maintenance/plans/${encodeURIComponent(id)}`)).item);}
   static async createPlan(input:CreateMaintenancePlanInput){return plan((await request('/api/maintenance/plans',json('POST',input))).item);}

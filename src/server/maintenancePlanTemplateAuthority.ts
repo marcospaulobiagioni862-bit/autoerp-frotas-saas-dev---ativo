@@ -112,9 +112,13 @@ async function listInContext(context:any,p:AuthenticatedPrincipal):Promise<Maint
   const r=await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} ORDER BY code`);
   return rows(r).map(mapTemplate);
 }
-async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehicle:Pick<Vehicle,'id'|'currentKm'>):Promise<number>{
+async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehicle:Pick<Vehicle,'id'|'currentKm'>,templateId?:string):Promise<number>{
   await ensureCatalog(context,p);const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
-  const templates=rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND active=true ORDER BY code`)).map(mapTemplate);
+  const templateRows=templateId
+    ? rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND id=${templateId} AND active=true LIMIT 1`))
+    : rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND active=true ORDER BY code`));
+  if(templateId&&templateRows.length===0)throw new MaintenanceTemplateNotFoundError('Plano padrão não encontrado ou inativo');
+  const templates=templateRows.map(mapTemplate);
   const now=new Date().toISOString(),baseDate=now.slice(0,10);let created=0;
   for(const t of templates){
     const nextKm=t.intervalKm===undefined?undefined:vehicle.currentKm+t.intervalKm;
@@ -125,7 +129,7 @@ async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehi
       ON CONFLICT(company_id,vehicle_id,template_id) WHERE template_id IS NOT NULL DO NOTHING RETURNING id`);
     if(rows(r)[0]){
       created++;
-      await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlan',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify({event:'APPLIED_FROM_GLOBAL_TEMPLATE',templateId:t.id,vehicleId:vehicle.id,currentKm:vehicle.currentKm,nextDueKm:nextKm,nextDueDate:nextDate}),userId:p.userId,userName:p.name,timestamp:now});
+      await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlan',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify({event:templateId?'APPLIED_FROM_SELECTED_TEMPLATE':'APPLIED_FROM_GLOBAL_TEMPLATE',templateId:t.id,vehicleId:vehicle.id,currentKm:vehicle.currentKm,nextDueKm:nextKm,nextDueDate:nextDate}),userId:p.userId,userName:p.name,timestamp:now});
     }
   }
   return created;
@@ -173,5 +177,5 @@ export class MaintenancePlanTemplateAuthority {
     let plansCreated=0;for(const v of vehicles)plansCreated+=await applyToVehicleInContext(context,p,{id:String(v.id),currentKm:Number(v.current_km)});
     return{vehicles:vehicles.length,plansCreated};
   });}
-  static async applyToVehicleContext(context:any,p:AuthenticatedPrincipal,vehicle:Pick<Vehicle,'id'|'currentKm'>):Promise<number>{return applyToVehicleInContext(context,p,vehicle);}
+  static async applyToVehicleContext(context:any,p:AuthenticatedPrincipal,vehicle:Pick<Vehicle,'id'|'currentKm'>,templateId?:string):Promise<number>{return applyToVehicleInContext(context,p,vehicle,templateId);}
 }
