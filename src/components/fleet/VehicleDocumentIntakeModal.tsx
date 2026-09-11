@@ -6,6 +6,7 @@ import { VEHICLE_CATEGORIES } from '../../types/enums';
 import type { Vehicle } from '../../types/entities';
 import { vehicleStatusLabel } from './vehicleStatusPresentation';
 import { DocumentAiClient,type DocumentAiExtraction } from '../../api/documentAiClient';
+import { formatCurrencyBRL,parseCurrencyInput } from '../../shared/utils/currency';
 import { FileUpload } from '../documents/FileUpload';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Button } from '../ui/Button';
@@ -19,6 +20,7 @@ const FIELD_LABELS:Record<string,string>={
 const FIELD_KEYS=Object.keys(FIELD_LABELS);
 type IdentifierField='plate'|'renavam'|'chassis';
 type IdentifierErrors=Partial<Record<IdentifierField,string>>;
+type MoneyField='acquisitionValue'|'currentValue'|'rentalValueBase';
 
 function normalizedIdentifier(value:unknown):string{
   return typeof value==='string'||typeof value==='number'?String(value).toUpperCase().replace(/[^A-Z0-9]/g,''):'';
@@ -146,9 +148,13 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   };
 
   const clearCompletionError=(field:string)=>setCompletionErrors(current=>{if(!current[field])return current;const next={...current};delete next[field];return next;});
+  const formatMoneyField=(field:MoneyField)=>setCompletion(current=>{
+    const raw=current[field].trim();if(!raw)return current;
+    const amount=parseCurrencyInput(raw);return amount>0?{...current,[field]:formatCurrencyBRL(amount)}:current;
+  });
   const createVehicle=async()=>{
     if(!intakeId||materializingRef.current)return;
-    const currentKm=Number(completion.currentKm),acquisitionValue=Number(completion.acquisitionValue),currentValue=Number(completion.currentValue),rentalValueBase=Number(completion.rentalValueBase);
+    const currentKm=Number(completion.currentKm),acquisitionValue=parseCurrencyInput(completion.acquisitionValue),currentValue=parseCurrencyInput(completion.currentValue),rentalValueBase=parseCurrencyInput(completion.rentalValueBase);
     const fieldErrors:Record<string,string>={};
     if(!completion.color.trim())fieldErrors.color='Informe a cor.';
     if(!completion.category)fieldErrors.category='Selecione a categoria.';
@@ -327,11 +333,11 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
               <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Valores obrigatórios</h4>
               <div className="grid gap-3 sm:grid-cols-3">
-                <Input label="Valor de Compra (R$) *" type="number" min="0.01" step="0.01" required value={completion.acquisitionValue} error={completionErrors.acquisitionValue} onChange={e=>{setCompletion(v=>({...v,acquisitionValue:e.target.value}));clearCompletionError('acquisitionValue');}}/>
-                <Input label="Valor Comercial Atual (R$) *" type="number" min="0.01" step="0.01" required value={completion.currentValue} error={completionErrors.currentValue} onChange={e=>{setCompletion(v=>({...v,currentValue:e.target.value}));clearCompletionError('currentValue');}}/>
-                <Input label="Aluguel Semanal (R$) *" type="number" min="0.01" step="0.01" required value={completion.rentalValueBase} error={completionErrors.rentalValueBase} onChange={e=>{setCompletion(v=>({...v,rentalValueBase:e.target.value}));clearCompletionError('rentalValueBase');}}/>
+                <Input label="Valor de Compra (R$) *" type="text" inputMode="decimal" required value={completion.acquisitionValue} error={completionErrors.acquisitionValue} onBlur={()=>formatMoneyField('acquisitionValue')} onChange={e=>{setCompletion(v=>({...v,acquisitionValue:e.target.value}));clearCompletionError('acquisitionValue');}} placeholder="R$ 0,00"/>
+                <Input label="Valor Comercial Atual (R$) *" type="text" inputMode="decimal" required value={completion.currentValue} error={completionErrors.currentValue} onBlur={()=>formatMoneyField('currentValue')} onChange={e=>{setCompletion(v=>({...v,currentValue:e.target.value}));clearCompletionError('currentValue');}} placeholder="R$ 0,00"/>
+                <Input label="Aluguel Semanal (R$) *" type="text" inputMode="decimal" required value={completion.rentalValueBase} error={completionErrors.rentalValueBase} onBlur={()=>formatMoneyField('rentalValueBase')} onChange={e=>{setCompletion(v=>({...v,rentalValueBase:e.target.value}));clearCompletionError('rentalValueBase');}} placeholder="R$ 0,00"/>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
+              <p className="mt-2 text-[11px] text-slate-500">Valores exibidos em Real brasileiro (R$). Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
             </div>
             <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
           </div>
