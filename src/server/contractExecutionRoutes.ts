@@ -138,10 +138,11 @@ async function enforcePersistedTemplateAuthority(req: Request, res: Response, ne
         contract.templateId,
       );
       if (!template || template.isArchived) return { kind: 'TEMPLATE_NOT_FOUND' as const };
-      if (!template.isCurrent || !template.isActive || !STANDARD_TEMPLATE_KEYS.has(template.templateKey)) {
+      const templateKeyIsApprovedStandard = STANDARD_TEMPLATE_KEYS.has(template.templateKey);
+      if (!template.isCurrent || !template.isActive) {
         return { kind: 'TEMPLATE_INELIGIBLE' as const };
       }
-      return { kind: 'OK' as const, templateId: template.id };
+      return { kind: 'OK' as const, templateId: template.id, templateKeyIsApprovedStandard };
     });
 
     if (authority.kind === 'CONTRACT_NOT_FOUND') {
@@ -164,7 +165,7 @@ async function enforcePersistedTemplateAuthority(req: Request, res: Response, ne
     }
     if (authority.kind === 'TEMPLATE_INELIGIBLE') {
       res.status(409).json({
-        error: 'O modelo vinculado ao contrato não é um dos dois modelos padrão ativos.',
+        error: 'O modelo vinculado ao contrato não está ativo ou atual.',
         code: 'CONTRACT_INELIGIBLE',
       });
       return;
