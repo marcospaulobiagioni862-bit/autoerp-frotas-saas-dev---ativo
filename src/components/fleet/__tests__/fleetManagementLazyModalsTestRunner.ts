@@ -119,4 +119,8 @@ assert.match(gallerySource, /Vídeo MP4/, 'entity gallery must expose the config
 assert.match(gallerySource, /10 MB por arquivo/, 'entity gallery must state the actual storage size limit');
 assert.doesNotMatch(gallerySource, /storageKey|companyId|x-autoerp-/, 'entity gallery UI must not consume storage or tenant authority fields');
 
+assert.match(detailsSource, /<Icon className="w-3\.5 h-3\.5 shrink-0"\/>/, 'vehicle detail tab icons must not shrink into labels');
+assert.match(detailsSource, /<span className="min-w-0 leading-tight \[overflow-wrap:anywhere\]">\{tab\.label\}<\/span>/, 'vehicle detail tab labels must wrap without horizontal overflow');
+assert.match(detailsSource, /min-w-5 shrink-0 rounded-full px-1\.5 text-center/, 'vehicle detail tab counters must keep a centered minimum width');
+
 console.log('Deferred fleet modals regression: PASS');
