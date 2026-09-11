@@ -186,5 +186,15 @@ assert.match(routesSource, /function parseMaterialization\(body: unknown\): \{ e
 assert.match(routesSource, /String\(intake\.driver_id\) !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'consumed replay must reject a different selected driver');
 assert.match(routesSource, /renewal\.kind === 'NEW'[\s\S]*renewal\.driver\.id !== expectedDriverId[\s\S]*CNH_RENEWAL_IDENTITY_CONFLICT/, 'renewal must fail closed when the approved CNH does not match the selected driver');
 assert.match(routesSource, /renewal\.kind === 'DUPLICATE_WITHOUT_VALIDITY' \|\| renewal\.kind === 'REPLAY'[\s\S]*DriverDocumentIntakeDuplicateCnhError/, 'same CNH replay must stop before promotion instead of creating another canonical CNH version');
+assert.match(
+  routesSource,
+  /candidate\.code === '23505'[\s\S]*Archived driver identity conflicts with CPF\/CNH combination/,
+  'archived CPF/CNH uniqueness conflicts must be recognized without exposing arbitrary database errors',
+);
+assert.match(
+  routesSource,
+  /isArchivedDriverIdentityConflict\(error\)[\s\S]*status\(409\)[\s\S]*ARCHIVED_DRIVER_IDENTITY_CONFLICT/,
+  'archived identity conflicts must return a structured 409 instead of the generic 500 fallback',
+);
 
 console.log('Driver intake approved CNH draft checks passed.');
