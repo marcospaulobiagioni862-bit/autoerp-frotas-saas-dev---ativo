@@ -264,6 +264,38 @@ export class SessionLoginTestRunner {
       }
     });
 
+    await run('SL14', 'Company login resolves CNPJ or unique trade-name alias and fails closed on ambiguity', async () => {
+      const serverSource = await import('node:fs/promises').then(({ readFile }) =>
+        readFile(new URL('../../../server.ts', import.meta.url), 'utf8')
+      );
+      for (const requiredSource of [
+        'const companyIdentifier = companyDocument.trim().toLowerCase();',
+        'lower(${companies.document}) = ${companyIdentifier}',
+        "lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}",
+        '.limit(2);',
+        'if (companyRows.length !== 1)',
+      ]) {
+        if (!serverSource.includes(requiredSource)) {
+          throw new Error(`Company alias login invariant missing: ${requiredSource}`);
+        }
+      }
+    });
+
+    await run('SL15', 'Login UI accepts textual company alias as well as CNPJ', async () => {
+      const loginViewSource = await import('node:fs/promises').then(({ readFile }) =>
+        readFile(new URL('../../components/auth/LoginView.tsx', import.meta.url), 'utf8')
+      );
+      for (const requiredSource of [
+        'Empresa ou CNPJ',
+        'inputMode="text"',
+        'MOVEFLEX ou 22791551000153',
+      ]) {
+        if (!loginViewSource.includes(requiredSource)) {
+          throw new Error(`Company alias login UI invariant missing: ${requiredSource}`);
+        }
+      }
+    });
+
     const passed = tests.filter((test) => test.passed).length;
     return {
       total: tests.length,
