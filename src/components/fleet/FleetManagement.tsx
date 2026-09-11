@@ -11,6 +11,7 @@ import { VehicleArchiveModal } from './VehicleArchiveModal';
 import { ArchivedVehicleHistoryModal } from './ArchivedVehicleHistoryModal';
 import {
   VEHICLE_STATUS_FILTERS,
+  vehicleMatchesStatusFilter,
   vehicleManualStatusOptions,
   vehicleStatusBadgeVariant,
   vehicleStatusLabel,
@@ -26,7 +27,7 @@ export const FleetManagement: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -75,7 +76,7 @@ export const FleetManagement: React.FC = () => {
       v.model.toLowerCase().includes(s) ||
       v.renavam.toLowerCase().includes(s) ||
       v.chassis.toLowerCase().includes(s);
-    const matchesStatus = statusFilter === 'ALL' || v.status === statusFilter;
+    const matchesStatus = vehicleMatchesStatusFilter(v.status, statusFilter);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
   });
@@ -83,7 +84,7 @@ export const FleetManagement: React.FC = () => {
   const totalCount = vehicles.length;
   const rentedCount = vehicles.filter((v) => v.status === VehicleStatus.RENTED).length;
   const availableCount = vehicles.filter((v) => v.status === VehicleStatus.AVAILABLE).length;
-  const maintenanceCount = vehicles.filter((v) => v.status === VehicleStatus.MAINTENANCE).length;
+  const maintenanceCount = vehicles.filter((v) => vehicleMatchesStatusFilter(v.status, VehicleStatus.MAINTENANCE)).length;
   const inactiveCount = vehicles.filter((v) => v.status === VehicleStatus.INACTIVE || v.status === VehicleStatus.SOLD).length;
 
   const handleStatusChangeClick = (vehicle: Vehicle, newStatus: VehicleStatus) => {
