@@ -328,46 +328,18 @@ export class ContractExecutionAuthorityIntegrationRunner {
       response = await request(`/api/contracts/${contract.id}/generate-docx`, {
         method: 'POST', body: JSON.stringify({ templateId: docxTemplate.id }),
       }, adminA);
-      assert(response.status === 201, `generate DOCX expected 201, got ${response.status}`);
-      const generatedDocx = await json(response);
-      assert(
-        generatedDocx.artifact.artifactType === 'GENERATED_DOCX' &&
-        /^[0-9a-f]{64}$/.test(generatedDocx.artifact.snapshotHash),
-        'generated DOCX artifact invalid'
-      );
-      assert(
-        generatedDocx.attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
-        generatedDocx.attachment.storageProvider === 'SERVER_FS',
-        'generated DOCX attachment invalid'
-      );
-
-      response = await request(`/api/contracts/${contract.id}/generate-docx`, {
-        method: 'POST', body: JSON.stringify({ templateId: docxTemplate.id }),
-      }, adminA);
-      assert(response.status === 200, `DOCX replay expected 200, got ${response.status}`);
-      const replayedDocx = await json(response);
-      assert(
-        replayedDocx.artifact.id === generatedDocx.artifact.id &&
-        replayedDocx.attachment.id === generatedDocx.attachment.id,
-        'DOCX replay created a different authority chain'
-      );
+      assert(response.status === 409, `mismatched browser DOCX template expected 409, got ${response.status}`);
       row = await scalar(sql`
         SELECT count(*)::int AS count FROM contract_artifacts
         WHERE contract_id=${contract.id} AND artifact_type='GENERATED_DOCX'
       `);
-      assert(Number(row?.count) === 1, 'DOCX replay created an extra artifact');
+      assert(Number(row?.count) === 0, 'mismatched browser templateId created a DOCX artifact');
       row = await scalar(sql`SELECT count(*)::int AS count, min(id) AS id FROM account_receivables WHERE contract_id=${contract.id} AND status<>'CANCELLED'`);
-      assert(Number(row?.count) === 1 && row?.id === generatedReceivableId, 'DOCX generation/replay duplicated the rental receivable');
-
-      response = await request(`/api/attachments/${generatedDocx.attachment.id}/content`, {}, adminA);
-      assert(response.status === 200, `generated DOCX content expected 200, got ${response.status}`);
-      const generatedDocxBytes = new Uint8Array(await response.arrayBuffer());
-      assert(new TextDecoder('ascii').decode(generatedDocxBytes.slice(0, 2)) === 'PK', 'generated content is not a DOCX ZIP');
-
-      const supersededPdf = await scalar(sql`
+      assert(Number(row?.count) === 1 && row?.id === generatedReceivableId, 'rejected DOCX generation mutated the rental receivable');
+      const currentPdf = await scalar(sql`
         SELECT is_current, is_archived FROM contract_artifacts WHERE id=${generated.artifact.id}
       `);
-      assert(supersededPdf?.is_current === false && supersededPdf?.is_archived === true, 'DOCX generation did not archive prior PDF');
+      assert(currentPdf?.is_current === true && currentPdf?.is_archived === false, 'rejected DOCX generation mutated prior PDF');
 
       response = await request(`/api/contracts/${contract.id}`, {
         method: 'PATCH', body: JSON.stringify({ rentalAmount: 999 }),
@@ -397,7 +369,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const reviewedArtifact = (await json(response)).artifact;
       assert(
         reviewedArtifact.artifactType === 'REVIEWED_FINAL_PDF' &&
-        reviewedArtifact.sourceArtifactId === generatedDocx.artifact.id &&
+        reviewedArtifact.sourceArtifactId === generated.artifact.id &&
         reviewedArtifact.attachmentId === reviewedAttachment.id,
         'reviewed final artifact link mismatch',
       );
