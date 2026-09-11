@@ -128,9 +128,6 @@ assert.match(executionRoutes, /tradeName: company\.tradeName \|\| ''/, 'contract
 assert.match(executionRoutes, /legalRepresentativeName/, 'contract generator must source the legal representative from the company profile');
 assert.match(executionRoutes, /'company\.address\.full': snapshot\.company\.address\.full/, 'company full address must be exposed to the template renderer');
 
-
-
-
 assert.match(
   templateRoutes,
   /findVersions\(principal\.companyId, key\)[\s\S]*Math\.max\(\.\.\.versions\.map\(\(version\) => version\.versionNumber\), 0\) \+ 1/,
@@ -153,20 +150,29 @@ assert.match(
 );
 assert.match(templateModal, /Contratos salvos/, 'template manager must expose a dedicated saved-contracts tab');
 assert.match(templateModal, /Novo \/ importar contrato/, 'template manager must expose a dedicated new/import contract tab');
-assert.match(templateModal, /Editar texto no ERP/, 'saved contracts must support direct editable text');
-assert.match(templateModal, /Importar DOCX\/PDF/, 'saved contracts must support file import');
+assert.match(templateModal, /Editar texto no ERP/, 'custom saved contracts must support direct editable text');
+assert.match(templateModal, /Importar DOCX\/PDF/, 'custom saved contracts must support file import');
 assert.match(templateModal, /chooseImportFile/, 'import action must have an explicit file-selection handler');
 assert.match(templateModal, /fileInputRef\.current\?\.click\(\)/, 'clicking Importar DOCX/PDF must open the file chooser immediately');
-assert.match(templateModal, /Selecionar DOCX\/PDF/, 'file import mode must expose an explicit reselect-file action');
+assert.match(
+  templateModal,
+  /Selecionar \{editing && getMoveFlexApprovedContractMaster\(editing\.templateKey\) \? 'DOCX oficial' : 'DOCX\/PDF'\}/,
+  'custom file import mode must expose an explicit reselect-file action',
+);
 assert.match(templateModal, /sticky bottom-0/, 'save/cancel actions must remain visible while editing long contract content');
 assert.match(templateModal, /disabled=\{!title\.trim\(\) \|\| \(sourceMode === 'FILE' \? !sourceFile : !content\.trim\(\)\)\}/, 'save button must be enabled only when the selected source is actually ready');
 assert.match(templateModal, /title="Modelos de contrato"/, 'template manager must use the shared modal header');
 assert.doesNotMatch(templateModal, /<h2 className="font-bold">Modelos de contrato<\/h2>/, 'template manager must not render a duplicate inner modal header');
-assert.match(templateModal, /Salvar nova versão/, 'editing a saved contract must create a new version instead of overwriting history');
+assert.match(templateModal, /Salvar nova versão/, 'editing a custom saved contract must create a new version instead of overwriting history');
 assert.match(templateModal, /modelo-contrato-/, 'saved editable contracts must use the isolated sequential key family');
 assert.match(templateModal, /número é gerado automaticamente pelo servidor/, 'template manager must explain server-authoritative numbering');
-assert.doesNotMatch(templateModal, /Modelos de Contrato MoveFlex/, 'operational template manager must not mix legacy master branding into saved contracts');
-assert.doesNotMatch(templateModal, /Arquivo mestre aprovado • imutável/, 'saved-contract view must not mix immutable master status with editable contracts');
+assert.match(templateModal, /Modelos oficiais MoveFlex/, 'template manager must expose canonical approved master slots separately from custom models');
+assert.match(templateModal, /getMoveFlexApprovedContractMaster/, 'template manager must recognize canonical approved masters');
+assert.match(templateModal, /ContractTemplateClient\.ensureMoveFlexDefault\(\)/, 'template manager must ensure canonical MoveFlex master slots before listing');
+assert.match(templateModal, /Importar arquivo oficial/, 'pending approved master must expose a dedicated official-file import action');
+assert.match(templateModal, /ContractTemplateClient\.promoteFileSource\(editing\.id\)/, 'official master upload must promote the existing canonical slot instead of creating modelo-contrato-N');
+assert.match(templateModal, /AttachmentClient\.archive\(uploadedApprovedSource\.id\)/, 'rejected official master upload must be archived so a retry is possible');
+assert.match(templateModal, /Este modelo oficial não possui edição textual no ERP/, 'official file-backed masters must not pretend to support ERP text editing');
 assert.match(templateRoutes, /nextSavedContractKey/, 'server must allocate sequential saved contract keys');
 assert.match(templateRoutes, /pg_advisory_xact_lock/, 'saved contract sequence must be protected by a transaction-scoped advisory lock');
 assert.match(templateRoutes, /if \(!activeOnly\) return base/, 'management listing must retain invalid standards for repair');
@@ -176,8 +182,7 @@ assert.match(executionPanel, /Modelo vinculado ao contrato/, 'execution UI must 
 assert.match(contractForm, /Contrato \$\{String\(number\)\.padStart\(2, '0'\)\}/, 'contract form must show saved templates as Contrato 01, 02, 03...');
 assert.match(contractForm, /contractTemplateOptionLabel\(item\)/, 'contract form must use saved-contract display labels');
 assert.match(executionPanel, /protegido pelo servidor/, 'execution UI must explain server authority over the bound model');
-assert.doesNotMatch(templateModal, /Carregar arquivo mestre/, 'legacy master upload controls must stay out of the saved-contract workflow');
-assert.doesNotMatch(templateModal, /getMoveFlexApprovedContractMaster/, 'saved-contract UI must not couple editable models to the immutable master registry');
+assert.doesNotMatch(templateModal, /Carregar arquivo mestre/, 'legacy master upload wording must stay out of the repaired canonical flow');
 assert.match(approvedMasterRegistry, /CONTRATO_01_MOVEFLEX_VISUAL_FIXO\.docx/, 'Contract 01 VISUAL_FIXO filename must be pinned');
 assert.match(approvedMasterRegistry, /76bf2d51fef2679b7d47294c35800bbd9c807ab7e40cfd01c171a53a6d0a9b6c/, 'Contract 01 VISUAL_FIXO SHA-256 must be pinned');
 assert.match(approvedMasterRegistry, /fileSize: 4331240/, 'Contract 01 VISUAL_FIXO size must be pinned');
