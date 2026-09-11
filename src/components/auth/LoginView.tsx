@@ -40,7 +40,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
 
         <form className="space-y-5" onSubmit={handleSubmit} autoComplete="on">
           <label className="block" htmlFor="company-document">
-            <span className="mb-1.5 block text-sm font-medium text-slate-700">Documento da empresa</span>
+            <span className="mb-1.5 block text-sm font-medium text-slate-700">Empresa ou CNPJ</span>
             <input
               id="company-document"
               name="companyDocument"
@@ -48,13 +48,15 @@ export function LoginView({ onLogin }: LoginViewProps) {
               value={companyDocument}
               onChange={(event) => setCompanyDocument(event.target.value)}
               autoComplete="off"
-              inputMode="numeric"
+              inputMode="text"
               autoCapitalize="none"
               spellCheck={false}
+              placeholder="Ex.: MOVEFLEX ou 22791551000153"
               required
               disabled={isSubmitting}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
             />
+            <span className="mt-1.5 block text-xs text-slate-500">Use o nome de acesso da empresa ou o CNPJ cadastrado.</span>
           </label>
 
           <label className="block" htmlFor="login-email">
