@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
+const formSource = readFileSync(new URL('../VehicleFormModal.tsx', import.meta.url), 'utf8');
 const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
 const detailsSource = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
 const gallerySource = readFileSync(new URL('../../documents/EntityFileGallery.tsx', import.meta.url), 'utf8');
@@ -90,6 +91,13 @@ assert.match(intakeSource, /DocumentAiClient\.retry\(extraction\.id\)/, 'failed 
 assert.match(intakeSource, /Tentar análise novamente/, 'failed analysis must expose an explicit retry action');
 assert.match(intakeSource, /Cadastrar veículo manualmente/, 'failed analysis must allow a safe manual fallback');
 assert.match(source, /onManualRequested=\{\(\) => \{ setIsVehicleAiOpen\(false\); setVehicleToEdit\(null\); setIsFormOpen\(true\); \}\}/, 'manual fallback must close the intake and open a blank vehicle form');
+
+assert.match(formSource, /const emptyVehicleForm = \(\): VehicleFormData => \(\{[\s\S]*yearFabrication: '',[\s\S]*yearModel: '',[\s\S]*currentKm: '',[\s\S]*acquisitionValue: '',[\s\S]*currentValue: '',[\s\S]*rentalValueBase: ''/, 'manual vehicle form must initialize required numeric fields empty');
+assert.match(formSource, /fuelType: '',[\s\S]*category: ''/, 'manual vehicle form must not assume fuel type or category');
+assert.doesNotMatch(formSource, /color:\s*'Branco'|nextMaintenanceKm:\s*10000|acquisitionValue:\s*70000|currentValue:\s*65000|rentalValueBase:\s*750/, 'manual vehicle form must not contain example values as persisted defaults');
+assert.match(formSource, /rawValue === '' \? '' : Number\(rawValue\)/, 'clearing a numeric field must keep it empty instead of coercing it to zero');
+assert.equal((formSource.match(/\{ value: '', label: 'Selecione\.\.\.', disabled: true \}/g) ?? []).length, 2, 'manual fuel and category selects must start with an explicit empty option');
+assert.match(formSource, /if \(vehicleToEdit\) \{[\s\S]*yearFabrication: vehicleToEdit\.yearFabrication/, 'editing must continue loading persisted vehicle values');
 
 assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use a synchronous duplicate-submit lock');
 assert.match(intakeSource, /VehicleClient\.checkIdentity\(\{plate,renavam,chassis\}\)/, 'vehicle intake must preflight plate, RENAVAM and chassis against the server authority');
