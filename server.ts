@@ -249,8 +249,8 @@ async function startServer() {
   });
 
   // Login must be reachable before the protected /api middleware. Tenant is
-  // resolved from the company document first; users and credentials are read
-  // only after app.current_tenant has been established in a transaction.
+  // resolved from exactly one ACTIVE company by CNPJ/document or trade name;
+  // users and credentials are read only after app.current_tenant is established.
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
       const principal = await authenticatePasswordLogin(
@@ -260,21 +260,25 @@ async function startServer() {
           password: req.body?.password,
         },
         async ({ companyDocument, email }) => {
+          const companyIdentifier = companyDocument.trim().toLowerCase();
           const companyRows = await db
             .select()
             .from(companies)
             .where(
               and(
-                eq(companies.document, companyDocument),
-                eq(companies.status, 'ACTIVE')
+                eq(companies.status, 'ACTIVE'),
+                sql`(
+                  lower(${companies.document}) = ${companyIdentifier}
+                  OR lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}
+                )`
               )
             )
-            .limit(1);
+            .limit(2);
 
-          const company = companyRows[0];
-          if (!company) {
+          if (companyRows.length !== 1) {
             return null;
           }
+          const company = companyRows[0];
 
           return await db.transaction(async (tx) => {
             await tx.execute(
