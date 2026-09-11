@@ -139,6 +139,26 @@ export function runOperationalPendingTests(): void {
   }
   console.log('✓ Scenario 13 & 14 (Multi-Tenancy Isolation): Passed (Found', pendingsA.length, 'pendings for Company A)');
 
+  const availableVehicle: Vehicle = { ...vehicleB, id: 'vA2', companyId: companyA, plate: 'AVA-1000' };
+  const coveragePendings = generateOperationalPendings({
+    companyId: companyA,
+    vehicles: [vehicleA, availableVehicle],
+    contracts: [expiredContract],
+    insurances: [],
+    trackers: [],
+  });
+  for (const type of ['INSURANCE', 'TRACKER'] as const) {
+    const operational = coveragePendings.find(item => item.type === type && item.vehiclePlate === vehicleA.plate);
+    if (!operational || operational.priority !== 'P0' || operational.severity !== 'CRITICAL') {
+      throw new Error(`${type} missing coverage must be CRITICAL/P0 for an active-contract vehicle`);
+    }
+    const available = coveragePendings.find(item => item.type === type && item.vehiclePlate === availableVehicle.plate);
+    if (!available || available.priority !== 'P2' || available.severity !== 'WARNING' || !available.actionRecommended.includes('antes da próxima locação')) {
+      throw new Error(`${type} missing coverage must be WARNING/P2 with pre-rental guidance for an available vehicle`);
+    }
+  }
+  console.log('✓ Vehicle insurance/tracker severity by operational status: Passed');
+
   // Test Zero / Empty input safety (Scenario 12)
   const emptyPendings = generateOperationalPendings({ companyId: companyA });
   if (!Array.isArray(emptyPendings) || emptyPendings.length !== 0) {
