@@ -123,4 +123,17 @@ assert.match(detailsSource, /<Icon className="w-3\.5 h-3\.5 shrink-0"\/>/, 'vehi
 assert.match(detailsSource, /<span className="min-w-0 leading-tight \[overflow-wrap:anywhere\]">\{tab\.label\}<\/span>/, 'vehicle detail tab labels must wrap without horizontal overflow');
 assert.match(detailsSource, /min-w-5 shrink-0 rounded-full px-1\.5 text-center/, 'vehicle detail tab counters must keep a centered minimum width');
 
+const technicalSheetStart = detailsSource.indexOf('const printVehicleTechnicalSheet=');
+const technicalSheetEnd = detailsSource.indexOf("const printMaintenanceHistory=", technicalSheetStart);
+assert.ok(technicalSheetStart >= 0 && technicalSheetEnd > technicalSheetStart, 'vehicle details must define the consolidated technical sheet');
+const technicalSheetSource = detailsSource.slice(technicalSheetStart, technicalSheetEnd);
+assert.match(detailsSource, />Salvar ficha em PDF<\/Button>/, 'vehicle header must expose the technical sheet action independently from the active tab');
+assert.match(technicalSheetSource, /window\.open\('','_blank','width=900,height=800'\)/, 'technical sheet must open synchronously for browser printing');
+assert.match(technicalSheetSource, /popup\.opener=null/, 'technical sheet popup must detach its opener before writing');
+assert.match(technicalSheetSource, /Imprimir \/ Salvar em PDF/, 'technical sheet must expose browser print/PDF action');
+for (const label of ['Identificação', 'Status operacional', 'KM atual', 'Próxima manutenção', 'Motorista atual', 'Contrato vigente', 'Manutenções', 'Multas', 'Documentos', 'Seguros', 'Rastreadores', 'Vistorias']) {
+  assert.ok(technicalSheetSource.includes(label), `technical sheet must include ${label}`);
+}
+assert.doesNotMatch(technicalSheetSource, /\.cpf|\.cnhNumber|\.cnhCategory/, 'technical sheet must not include unnecessary driver identifiers');
+
 console.log('Deferred fleet modals regression: PASS');
