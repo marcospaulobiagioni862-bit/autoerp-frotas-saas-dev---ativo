@@ -109,11 +109,11 @@ async function enforcePersistedTemplateAuthority(req: Request, res: Response, ne
 
   structuredExecutionResponse(res);
 
-  const principal = principalFrom(req);
-  if (!principal) {
-    next();
-    return;
-  }
+  const action: ExecutionAction = req.baseUrl.endsWith('/generate-docx')
+    ? 'GENERATE_CONTRACT_DOCX'
+    : 'GENERATE_CONTRACT_PDF';
+  const principal = requirePrincipal(req, res, action);
+  if (!principal) return;
 
   const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
     ? req.body as Record<string, unknown>
