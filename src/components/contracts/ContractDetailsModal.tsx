@@ -6,6 +6,7 @@ import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { FinanceDepositClient, createDepositReceiptIdempotencyKey } from '../../api/financeDepositClient';
+import { FinanceMasterDataClient } from '../../api/financeMasterDataClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { FinanceSettlementClient, type SettlementOptions } from '../../api/financeSettlementClient';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
@@ -160,6 +161,12 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     finally { setActionLoading(false); }
   };
 
+  const createRentalIncomeCategory = () => {
+    void action(
+      () => FinanceMasterDataClient.createCategory({ name: 'Aluguel de veículos', type: 'INCOME' }),
+      'Categoria financeira “Aluguel de veículos” criada e selecionada.'
+    );
+  };
   const activate = () => {
     if (!contract) return;
     if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
@@ -224,7 +231,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
             <option value="">Selecione uma categoria INCOME/BOTH</option>
             {incomeCategories.map((category) => <option key={category.id} value={category.id}>{category.name} • {category.type}</option>)}
           </select>
-          {incomeCategories.length === 0 && <p className="mt-1 text-[11px] text-rose-600">Nenhuma categoria de receita ativa disponível para este tenant.</p>}
+          {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 dark:border-rose-900 dark:bg-rose-950/20"><p className="text-[11px] text-rose-700 dark:text-rose-300">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
         </div>
         <div className="flex flex-wrap gap-2">
           {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={() => void activate()}>Ativar legado</Button>}
