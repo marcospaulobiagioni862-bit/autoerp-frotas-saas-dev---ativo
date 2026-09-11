@@ -225,6 +225,13 @@ function safeConflictCode(error: unknown): string {
   return /^[A-Z][A-Z0-9_]{2,80}$/.test(raw) ? raw : 'DRIVER_DOCUMENT_INTAKE_CONFLICT';
 }
 
+function isArchivedDriverIdentityConflict(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return candidate.code === '23505'
+    && candidate.message === 'Archived driver identity conflicts with CPF/CNH combination';
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof DriverDocumentIntakeRenewalConflictError) {
     const message = error.code === 'CNH_RENEWAL_OLDER_THAN_CURRENT'
@@ -238,6 +245,14 @@ function sendError(res: Response, error: unknown): void {
       error: 'Esta CNH já está cadastrada. Abra o cadastro existente antes de substituir ou reenviar o documento.',
       code: 'CNH_ALREADY_REGISTERED',
       driverId: error.driverId,
+    });
+    return;
+  }
+  if (isArchivedDriverIdentityConflict(error)) {
+    console.warn('AUTOERP_DRIVER_DOCUMENT_INTAKE_CONFLICT', 'ARCHIVED_DRIVER_IDENTITY_CONFLICT');
+    res.status(409).json({
+      error: 'Já existem cadastros arquivados associados ao CPF ou à CNH informados. Revise os cadastros arquivados antes de continuar.',
+      code: 'ARCHIVED_DRIVER_IDENTITY_CONFLICT',
     });
     return;
   }
