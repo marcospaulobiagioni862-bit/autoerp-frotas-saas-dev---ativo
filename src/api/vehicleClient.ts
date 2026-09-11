@@ -186,7 +186,10 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
   ) throw new Error('Invalid vehicle lifecycle payload');
 
   if (item.action === 'SOLD') {
-    if (typeof item.disposalType !== 'string' || !Number.isFinite(item.saleValue) || !Number.isInteger(item.finalKm) || typeof item.notes !== 'string' || typeof item.buyerName !== 'string' || !item.buyerName.trim() || typeof item.buyerDocument !== 'string' || !item.buyerDocument.trim()) {
+    // New sales remain strict at the write boundary. The history reader is
+    // intentionally backward-compatible with legacy SOLD rows created before
+    // buyerName/buyerDocument became mandatory.
+    if (typeof item.disposalType !== 'string' || !Number.isFinite(item.saleValue) || !Number.isInteger(item.finalKm) || typeof item.notes !== 'string') {
       throw new Error('Invalid vehicle sale lifecycle payload');
     }
   }
