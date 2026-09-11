@@ -2,7 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import type { AuthenticatedPrincipal } from './auth';
-import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
+import { MaintenancePlanTemplateAuthority, MaintenanceTemplateNotFoundError } from './maintenancePlanTemplateAuthority';
 
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL']);
 
@@ -21,13 +21,14 @@ function principal(req: Request, res: Response): AuthenticatedPrincipal | null {
   return item;
 }
 
-function vehicleId(body: unknown): string {
+function requestScope(body: unknown): { vehicleId: string; templateId?: string } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('INVALID_PAYLOAD');
   const payload = body as Record<string, unknown>;
-  if (Object.keys(payload).some(key => key !== 'vehicleId')) throw new Error('INVALID_PAYLOAD');
-  const value = typeof payload.vehicleId === 'string' ? payload.vehicleId.trim() : '';
-  if (!value || value.length > 200) throw new Error('INVALID_PAYLOAD');
-  return value;
+  if (Object.keys(payload).some(key => key !== 'vehicleId' && key !== 'templateId')) throw new Error('INVALID_PAYLOAD');
+  const vehicleId = typeof payload.vehicleId === 'string' ? payload.vehicleId.trim() : '';
+  const templateId = payload.templateId === undefined ? undefined : typeof payload.templateId === 'string' ? payload.templateId.trim() : '';
+  if (!vehicleId || vehicleId.length > 200 || templateId === '' || (templateId && templateId.length > 200)) throw new Error('INVALID_PAYLOAD');
+  return { vehicleId, templateId };
 }
 
 export function registerMaintenanceTemplateVehicleRoutes(app: Express): void {
@@ -35,7 +36,7 @@ export function registerMaintenanceTemplateVehicleRoutes(app: Express): void {
     const actor = principal(req, res);
     if (!actor) return;
     try {
-      const requestedVehicleId = vehicleId(req.body);
+      const { vehicleId: requestedVehicleId, templateId: requestedTemplateId } = requestScope(req.body);
       const plansCreated = await UnitOfWork.run(actor.companyId, async context => {
         const tx = context.getRawTransaction?.();
         if (!tx) throw new Error('PERSISTENCE_UNAVAILABLE');
@@ -53,9 +54,9 @@ export function registerMaintenanceTemplateVehicleRoutes(app: Express): void {
         return MaintenancePlanTemplateAuthority.applyToVehicleContext(context, actor, {
           id: String(row.id),
           currentKm: Number(row.current_km),
-        });
+        }, requestedTemplateId);
       });
-      res.json({ vehicleId: requestedVehicleId, plansCreated });
+      res.json({ vehicleId: requestedVehicleId, templateId: requestedTemplateId, plansCreated });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (message === 'INVALID_PAYLOAD') {
@@ -64,6 +65,10 @@ export function registerMaintenanceTemplateVehicleRoutes(app: Express): void {
       }
       if (message === 'VEHICLE_NOT_FOUND') {
         res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      if (error instanceof MaintenanceTemplateNotFoundError) {
+        res.status(404).json({ error: 'Preventive maintenance template not found or inactive' });
         return;
       }
       console.error('AUTOERP_PREVENTIVE_VEHICLE_TEMPLATE_FAILURE', error);
