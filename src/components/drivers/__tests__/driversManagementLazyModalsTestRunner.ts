@@ -63,6 +63,11 @@ assert.match(formSource, /driver-emergencyContactName/, 'complete driver intake 
 assert.match(formSource, /driver-emergencyContactRelationship/, 'complete driver intake must require emergency relationship');
 assert.match(formSource, /driver-emergencyContactPhone/, 'complete driver intake must require emergency phone');
 assert.match(formSource, /health: requiresCompleteProfile \? \{/, 'driver intake must submit health/emergency in the same authority request');
+const cnhCompletionBlock = formSource.match(/else if \(isCnhCompletion && cnhDriverId\) \{([\s\S]*?)await DriverClient\.update\(cnhDriverId, update\);/)?.[1] ?? '';
+assert.match(cnhCompletionBlock, /rg: input\.rg/, 'CNH completion must still submit complementary profile fields');
+assert.match(cnhCompletionBlock, /address: input\.address/, 'CNH completion must submit the completed address');
+assert.match(cnhCompletionBlock, /health: input\.health/, 'CNH completion must submit health/emergency data');
+assert.doesNotMatch(cnhCompletionBlock, /fullName:|cpf:|birthDate:|cnhNumber:|cnhCategory:|cnhExpiration:|cnhEar:/, 'CNH completion must not resend approved identity/document fields');
 
 const vehicleDocumentCatalog = [
   ['CRLV', 'CRLV / Licenciamento'],
