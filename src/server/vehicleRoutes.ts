@@ -297,7 +297,8 @@ export function registerVehicleRoutes(app: Express): void {
         if (!vehicle) throw new VehicleNotFoundError();
         return await txContext.getKmRecordRepo().findByVehicleIdForCompany(principal.companyId, vehicle.id);
       });
-      res.json({ items });
+      const visibleItems = items.filter((item, index) => index === 0 || item.kmValue !== items[index - 1].kmValue);
+      res.json({ items: visibleItems });
     } catch (error) { sendVehicleError(res, error); }
   });
 
@@ -314,7 +315,7 @@ export function registerVehicleRoutes(app: Express): void {
         const vehicle = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!vehicle) throw new VehicleNotFoundError();
         if (vehicle.isArchived || vehicle.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
-        if (newKm < vehicle.currentKm) throw new VehicleValidationError('KM regression');
+        if (newKm <= vehicle.currentKm) throw new VehicleValidationError(`A nova quilometragem deve ser maior que ${vehicle.currentKm} km.`);
         const now = new Date().toISOString();
         const record = await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: vehicle.id, driverId: vehicle.currentDriverId, contractId: vehicle.currentContractId, kmValue: newKm, recordDate: now.split('T')[0], readingType: readingType as 'CHECK_IN' | 'CHECK_OUT' | 'PERIODIC' | 'MAINTENANCE', notes: optionalText(req.body?.notes), createdAt: now });
         const updated = await vehicleRepo.updateForCompany(principal.companyId, vehicle.id, { currentKm: newKm, updatedAt: now });
@@ -357,8 +358,8 @@ export function registerVehicleRoutes(app: Express): void {
           const vehicle = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, entry.vehicleId);
           if (!vehicle) throw new VehicleNotFoundError();
           if (vehicle.isArchived || vehicle.status === VehicleStatus.SOLD) throw new VehicleConflictError('Terminal vehicle is read-only');
-          if (entry.kmValue < vehicle.currentKm) {
-            throw new VehicleValidationError(`KM de ${vehicle.plate} não pode ser menor que ${vehicle.currentKm}.`);
+          if (entry.kmValue <= vehicle.currentKm) {
+            throw new VehicleValidationError(`KM de ${vehicle.plate} deve ser maior que ${vehicle.currentKm}.`);
           }
           const now = new Date().toISOString();
           const record = await txContext.getKmRecordRepo().create({
