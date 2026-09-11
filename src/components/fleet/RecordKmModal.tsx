@@ -31,12 +31,18 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
+    const kmValue = Number(newKm);
+    if (!Number.isInteger(kmValue) || kmValue <= vehicle.currentKm) {
+      setError(`A nova quilometragem deve ser maior que a atual (${vehicle.currentKm.toLocaleString('pt-BR')} KM).`);
+      return;
+    }
+
+    setLoading(true);
     try {
       await VehicleClient.recordKm(vehicle.id, {
-        kmValue: Number(newKm),
+        kmValue,
         readingType,
         notes,
       });
@@ -69,10 +75,10 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
           label="Nova Quilometragem (KM) *"
           type="number"
           required
-          min={vehicle.currentKm}
+          min={vehicle.currentKm + 1}
           value={newKm}
           onChange={(e) => setNewKm(Number(e.target.value))}
-          helperText={`A nova leitura deve ser maior ou igual a ${vehicle.currentKm.toLocaleString('pt-BR')} KM`}
+          helperText={`A nova leitura deve ser maior que ${vehicle.currentKm.toLocaleString('pt-BR')} KM`}
           icon={<Gauge className="w-4 h-4 text-slate-400" />}
         />
 
