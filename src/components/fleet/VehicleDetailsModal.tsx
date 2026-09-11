@@ -66,8 +66,12 @@ export const VehicleDetailsModal:React.FC<VehicleDetailsModalProps>=({isOpen,onC
       const services=(m.services||[]).map((s:any)=>escape(s.description)).join(', ')||'—';
       return `<tr><td>${escape(date)}</td><td>${escape(maintenanceTypeLabel(String(m.type||'')))}</td><td>${escape(m.workOrderNumber||m.id)}</td><td>${escape(m.supplierName||'—')}</td><td>${escape(m.description)}</td><td>${escape(m.kmAtMaintenance?.toLocaleString('pt-BR')||'—')}</td><td>${parts}</td><td>${services}</td>${includeCosts?`<td>R$ ${Number(m.totalCost||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>`:''}<td>${escape(maintenanceStatusLabel(String(m.status||'')))}</td></tr>`;
     }).join('');
-    const popup=window.open('','_blank','noopener,noreferrer,width=1100,height=800');
-    if(!popup)return;
+    const popup=window.open('','_blank','width=1100,height=800');
+    if(!popup){
+      window.alert('Não foi possível abrir o relatório. Permita pop-ups para este site e tente novamente.');
+      return;
+    }
+    popup.opener=null;
     const title=mode==='SALE'?'Histórico de Manutenção para Venda':'Histórico Interno de Manutenção';
     const subtitle=mode==='SALE'?'Documento operacional para compartilhar com o comprador. Custos internos não são exibidos.':'Relatório interno com custos e histórico operacional.';
     const costHeader=includeCosts?'<th>Custo</th>':'';
