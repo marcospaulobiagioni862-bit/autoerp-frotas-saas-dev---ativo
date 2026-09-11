@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { VehicleStatus } from '../../../types/enums';
 import {
+  VEHICLE_STATUS_FILTERS,
+  vehicleMatchesStatusFilter,
+} from '../../../components/fleet/vehicleStatusPresentation';
+import {
   canManuallyTransitionVehicleStatus,
   manuallyAllowedVehicleStatuses,
   vehicleStatusLabel,
@@ -32,6 +36,18 @@ assert.equal(
 
 const maintenanceLockedTargets = manuallyAllowedVehicleStatuses(VehicleStatus.MAINTENANCE, { hasBlockingMaintenance: true });
 assert.equal(maintenanceLockedTargets.length, 0);
+
+const visibleMaintenanceFilters = VEHICLE_STATUS_FILTERS.filter(
+  ({ id }) => id === VehicleStatus.WAITING_MAINTENANCE || id === VehicleStatus.MAINTENANCE,
+);
+assert.deepEqual(
+  visibleMaintenanceFilters.map(({ id }) => id),
+  [VehicleStatus.MAINTENANCE],
+  'fleet UI must expose only one maintenance filter option',
+);
+assert.equal(vehicleMatchesStatusFilter(VehicleStatus.WAITING_MAINTENANCE, VehicleStatus.MAINTENANCE), true);
+assert.equal(vehicleMatchesStatusFilter(VehicleStatus.MAINTENANCE, VehicleStatus.MAINTENANCE), true);
+assert.equal(vehicleMatchesStatusFilter(VehicleStatus.AVAILABLE, VehicleStatus.MAINTENANCE), false);
 
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.AVAILABLE, VehicleStatus.SOLD), true);
 assert.equal(canManuallyTransitionVehicleStatus(VehicleStatus.DAMAGED, VehicleStatus.SOLD), true);
@@ -70,6 +86,17 @@ const saleModal = readFileSync(new URL('../../../components/fleet/VehicleSaleMod
 const archiveModal = readFileSync(new URL('../../../components/fleet/VehicleArchiveModal.tsx', import.meta.url), 'utf8');
 const archivedHistoryModal = readFileSync(new URL('../../../components/fleet/ArchivedVehicleHistoryModal.tsx', import.meta.url), 'utf8');
 const lifecycleMigration = readFileSync(new URL('../../../../drizzle/0053_vehicle_lifecycle_events.sql', import.meta.url), 'utf8');
+
+assert.match(
+  fleetManagement,
+  /vehicleMatchesStatusFilter\(v\.status, statusFilter\)/,
+  'fleet status filter must use the compatibility matcher',
+);
+assert.match(
+  fleetManagement,
+  /vehicleMatchesStatusFilter\(v\.status, VehicleStatus\.MAINTENANCE\)/,
+  'maintenance summary must include waiting and active maintenance',
+);
 
 assert.match(lifecycleRoute, /app\.post\('\/api\/fleet\/vehicles\/:id\/sale'/, 'sale must use a dedicated server route');
 assert.match(lifecycleRoute, /findByIdForCompanyWithLock/, 'sale must lock the authoritative vehicle row');
