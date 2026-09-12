@@ -109,7 +109,7 @@ assert.match(intakeSource, /disabled=\{busy\|\|materializingRef\.current\|\|chec
 assert.match(source, /onExistingFound=\{\(vehicle\) =>/, 'fleet must receive existing vehicle detection from AI intake');
 assert.match(source, /setReadOnlyVehicleIdForHistory\(vehicle\.id\)/, 'archived or sold duplicate must open its read-only historical record');
 
-assert.match(detailsSource, /id:'files',label:'Arquivos'/, 'vehicle details must expose the unified Arquivos tab');
+assert.match(detailsSource, /id:'files',label:'Fotos, Vídeos & Arquivos'/, 'vehicle details must expose the explicit photos, videos and files tab');
 assert.match(detailsSource, /<EntityFileGallery entityType="Vehicle" entityId=\{vehicle\.id\}\/>/, 'vehicle file tab must bind the selected vehicle to the shared gallery');
 assert.match(gallerySource, /AttachmentClient\.listEntityGallery\(entityType,entityId\)/, 'entity gallery must load through the authenticated gallery client');
 assert.match(gallerySource, /Todas as origens/, 'entity gallery must filter by source');
