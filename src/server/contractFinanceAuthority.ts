@@ -9,10 +9,9 @@ import { roundCurrency } from '../shared/utils/currency';
 
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 
-async function ensureIncomeCategory(
+async function ensureNamedIncomeCategory(
   companyId:string,
   name:string,
-  aliases:string[],
   principal:AuthenticatedPrincipal,
   tx:ITransactionContext
 ):Promise<string>{
@@ -20,13 +19,12 @@ async function ensureIncomeCategory(
   if(!raw) throw new Error('Financial category authority unavailable');
   const lockKey=`${companyId}:contract-finance-category:${name}`;
   await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${lockKey})))`);
-  const aliasArray=[name,...aliases].map((value)=>value.toLocaleLowerCase('pt-BR'));
   const existing=rows(await raw.execute(sql`
     SELECT id FROM financial_categories
     WHERE company_id=${companyId}
       AND active=true
       AND type IN ('INCOME','BOTH')
-      AND lower(name)=ANY(${aliasArray}::text[])
+      AND lower(name)=lower(${name})
     ORDER BY created_at ASC
     LIMIT 1
   `))[0];
@@ -51,13 +49,32 @@ export async function ensureRentalIncomeCategory(
   principal:AuthenticatedPrincipal,
   tx:ITransactionContext
 ):Promise<string>{
-  return ensureIncomeCategory(
-    companyId,
-    'Receita de Aluguel',
-    ['Aluguel','Aluguel de Veiculos','Aluguel de Veículos'],
-    principal,
-    tx
-  );
+  const raw=tx.getRawTransaction?.();
+  if(!raw) throw new Error('Financial category authority unavailable');
+  await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${companyId}:rental-income-category`})))`);
+  const existing=rows(await raw.execute(sql`
+    SELECT id FROM financial_categories
+    WHERE company_id=${companyId}
+      AND active=true
+      AND type IN ('INCOME','BOTH')
+      AND lower(name) IN ('receita de aluguel','aluguel','aluguel de veiculos','aluguel de veículos')
+    ORDER BY CASE WHEN lower(name)='receita de aluguel' THEN 0 ELSE 1 END, created_at ASC
+    LIMIT 1
+  `))[0];
+  if(existing?.id)return String(existing.id);
+
+  const id=randomUUID();
+  const now=new Date().toISOString();
+  await raw.execute(sql`
+    INSERT INTO financial_categories(id,company_id,name,type,parent_id,active,created_at,updated_at)
+    VALUES(${id},${companyId},'Receita de Aluguel','INCOME',NULL,true,${now},${now})
+  `);
+  await tx.getAuditLogRepo().create({
+    id:randomUUID(),companyId,entityName:'FinancialCategory',entityId:id,
+    action:AuditAction.CREATE,userId:principal.userId,userName:principal.name,
+    newState:JSON.stringify({name:'Receita de Aluguel',type:'INCOME',active:true}),timestamp:now,
+  });
+  return id;
 }
 
 async function ensureSecurityDepositCategory(
@@ -65,7 +82,7 @@ async function ensureSecurityDepositCategory(
   principal:AuthenticatedPrincipal,
   tx:ITransactionContext
 ):Promise<string>{
-  return ensureIncomeCategory(companyId,'Caução Contratual',['Caução','Caucao Contratual'],principal,tx);
+  return ensureNamedIncomeCategory(companyId,'Caução Contratual',principal,tx);
 }
 
 async function ensureExcessKmCategory(
@@ -73,7 +90,7 @@ async function ensureExcessKmCategory(
   principal:AuthenticatedPrincipal,
   tx:ITransactionContext
 ):Promise<string>{
-  return ensureIncomeCategory(companyId,'KM Excedente',['Quilometragem Excedente'],principal,tx);
+  return ensureNamedIncomeCategory(companyId,'KM Excedente',principal,tx);
 }
 
 export async function ensureInitialContractReceivable(
