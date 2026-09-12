@@ -7,14 +7,14 @@ import { AuditAction, ContractStatus, ObligationStatus, OriginType } from '../ty
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureContractCloseReceivables } from './contractFinanceAuthority';
 
-const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL']);
+const RECONCILE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL','FINANCIAL']);
 
 function principal(req:Request,res:Response):AuthenticatedPrincipal|null{
   const actor=(req as Request&{principal?:AuthenticatedPrincipal}).principal;
   if(!actor){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
   const role=String(actor.role||'').toUpperCase();
   const permissions=Array.isArray(actor.permissions)?actor.permissions:[];
-  if(!permissions.includes('*')&&!permissions.includes('CLOSE_CONTRACT')&&!WRITE_ROLES.has(role)){
+  if(!permissions.includes('*')&&!permissions.includes('CLOSE_CONTRACT')&&!permissions.includes('RECEIPT_REGISTER')&&!RECONCILE_ROLES.has(role)){
     res.status(403).json({error:'Forbidden'});return null;
   }
   return actor;
