@@ -61,6 +61,14 @@ assert.match(preventiveSource, /Todas as categorias/, 'preventive plans must off
 assert.match(preventiveSource, /Todos os tipos\/itens/, 'preventive plans must offer maintenance item filtering');
 assert.match(preventiveSource, /Todas as ações/, 'preventive plans must offer action filtering');
 assert.match(preventiveSource, /Todos os status/, 'preventive plans must offer operational status filtering');
+assert.match(preventiveSource, /Todas as prioridades/, 'preventive plans must offer priority filtering');
+assert.match(preventiveSource, /Ordenar por urgência/, 'preventive plans must keep urgency as the default sorting option');
+assert.match(preventiveSource, /Maior prioridade/, 'preventive plans must allow explicit priority sorting');
+assert.match(preventiveSource, /Menor KM restante/, 'preventive plans must allow KM proximity sorting');
+assert.match(preventiveSource, /Menor prazo em dias/, 'preventive plans must allow day proximity sorting');
+assert.match(preventiveSource, /PRIORITY_RANK=\{CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3\}/, 'priority sorting must use the approved critical-to-low order');
+assert.match(preventiveSource, /<th className="p-3 text-left">Prioridade<\/th>/, 'preventive plan table must display priority');
+assert.match(preventiveSource, /priorityBadge\(p\)/, 'preventive rows must project the plan priority visibly');
 assert.match(preventiveSource, /Até X km restantes/, 'preventive plans must offer KM proximity filtering');
 assert.match(preventiveSource, /Até X dias restantes/, 'preventive plans must offer day proximity filtering');
 assert.match(preventiveSource, /filteredPlans\.map/, 'preventive table must render the filtered projection');
@@ -95,6 +103,21 @@ assert.ok(
 assert.ok(
   templateAuthoritySource.includes("templateId?'APPLIED_FROM_SELECTED_TEMPLATE':'APPLIED_FROM_GLOBAL_TEMPLATE'"),
   'individual template application must remain auditable separately from fleet-wide application',
+);
+
+assert.match(preventiveSource, />Desativar<\/Button>/, 'active preventive templates must expose an explicit deactivate action');
+assert.ok(
+  preventiveSource.includes('MaintenancePreventiveClient.updateTemplate(t.id,{active:false})'),
+  'template deactivation must use the existing server-side update authority',
+);
+assert.match(preventiveSource, /histórico será preservado/, 'template deactivation must warn that history is preserved');
+assert.ok(
+  templateAuthoritySource.includes("UPDATE maintenance_plans SET status='PAUSED'") && templateAuthoritySource.includes("template_id=${id} AND status='ACTIVE'"),
+  'server authority must pause active plans when a template is deactivated',
+);
+assert.ok(
+  templateAuthoritySource.includes('previousState:JSON.stringify(before),newState:JSON.stringify(saved)'),
+  'template deactivation must remain covered by server-side before/after audit',
 );
 
 assert.match(source, /Itens preventivos executados nesta OS/, 'OS completion must expose executed preventive item selection');
