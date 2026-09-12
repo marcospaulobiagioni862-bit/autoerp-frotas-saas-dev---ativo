@@ -500,7 +500,7 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
     const operational = isOperationallyRented(v);
     const relevant = operational || v.status === VehicleStatus.AVAILABLE;
     if (!relevant) return;
-    const validInsurance = insurances.some(ins => ins.vehicleId === v.id && ins.endDate >= todayStr && ins.status === DocumentStatus.ACTIVE);
+    const validInsurance = insurances.some(ins => ins.vehicleId === v.id && ins.endDate >= todayStr && ins.status === 'ACTIVE');
     const hasExpiredInsuranceAlert = insurances.some(ins => ins.vehicleId === v.id && (ins.endDate < todayStr || ins.status === DocumentStatus.EXPIRED));
     if (!validInsurance && !hasExpiredInsuranceAlert) {
       addPending({
