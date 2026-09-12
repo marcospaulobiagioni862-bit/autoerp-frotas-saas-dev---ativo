@@ -62,18 +62,20 @@ assert.match(intakeModalSource, /Quem vai assumir a multa\? \*/, 'AI intake must
 assert.match(intakeModalSource, /A MoveFlex assume o custo da multa/, 'AI intake must explain the company-responsibility effect');
 assert.match(manualModalSource, /Conta a Pagar \+ Conta a Receber/, 'manual ticket entry must explain the financial effect for the driver');
 
-assert.doesNotMatch(intakeModalSource, /VehicleClient\.list\(\)|DriverClient\.list\(\)/, 'AI intake must not load free vehicle/driver lists after document approval');
+assert.doesNotMatch(intakeModalSource, /VehicleClient\.list\(\)/, 'AI intake must not load a free vehicle list after document approval');
+assert.match(intakeModalSource, /DriverClient\.list\(\)/, 'AI intake must load active drivers only for explicit human responsibility selection');
 assert.match(intakeModalSource, /Veículo não cadastrado \/ Outro/, 'AI intake must explain when the extracted plate has no exact vehicle match');
 assert.match(intakeModalSource, /<Select value=\{vehicleId\} disabled>/, 'AI intake vehicle binding must be read-only and server-derived');
-assert.match(intakeModalSource, /<Select value=\{driverId\} disabled>/, 'AI intake driver binding must be read-only and server-derived');
-assert.match(intakeModalSource, /Revisar responsável/, 'AI intake must surface missing or ambiguous driver linkage');
-assert.doesNotMatch(intakeModalSource, /Selecione manualmente; a IA não decidirá/, 'AI intake must not encourage arbitrary manual linkage when the contract match is ambiguous');
+assert.match(intakeModalSource, /Selecione um motorista ativo/, 'AI intake must require an explicit active-driver choice when no unique suggestion exists');
+assert.match(intakeModalSource, /activeDrivers\.map/, 'AI intake must limit manual responsibility selection to active drivers');
+assert.match(intakeModalSource, /setContractId\(selected&&selected===suggestions\?\.driver\?\.id\?suggestions\?\.contract\?\.id\|\|''\:''\)/, 'manual driver selection must clear a non-matching contract instead of inventing a link');
 
 assert.match(intakeAuthoritySource, /UPPER\(regexp_replace\(plate,'\[\^A-Za-z0-9\]','','g'\)\)=\$\{plate\}/, 'AI intake must resolve vehicles by exact normalized plate');
 assert.match(intakeAuthoritySource, /matchingVehicles\.length!==1\|\|String\(matchingVehicles\[0\]\.id\)!==vehicleId/, 'materialization must reject absent, duplicate or mismatched vehicle identity');
 assert.match(intakeAuthoritySource, /contractMatches\.length===1\?contractMatches\[0\]:undefined/, 'AI intake must derive a contract only when exactly one contract covers the infraction date');
-assert.match(intakeAuthoritySource, /responsibility===TicketResponsibility\.DRIVER[\s\S]*!exactContract\|\|!exactContract\.driver_id/, 'driver responsibility must fail closed without a unique dated contract and driver');
-assert.match(intakeAuthoritySource, /requestedDriverId&&String\(exactContract\.driver_id\)!==requestedDriverId/, 'browser-supplied driver must match the server-derived dated contract');
+assert.match(intakeAuthoritySource, /requestedDriverId\|\|\(exactContract\?\.driver_id\?String\(exactContract\.driver_id\):undefined\)/, 'driver responsibility may use an explicitly selected driver when no unique contract is available');
+assert.match(intakeAuthoritySource, /is_archived=false AND status='ACTIVE'/, 'manual driver selection must be verified as active in the tenant');
+assert.match(intakeAuthoritySource, /exactContract&&String\(exactContract\.driver_id\)===driverId\?String\(exactContract\.id\):undefined/, 'contract must remain optional and be retained only when it matches the selected driver');
 assert.match(ticketAuthoritySource, /responsibility!==TicketResponsibility\.DRIVER&&input\.driverId/, 'company and unidentified responsibility must reject driver authority');
 assert.match(ticketAuthoritySource, /driverId:input\.responsibility===TicketResponsibility\.DRIVER\?driverId:undefined/, 'persisted ticket must never retain a driver for company or unidentified responsibility');
 
