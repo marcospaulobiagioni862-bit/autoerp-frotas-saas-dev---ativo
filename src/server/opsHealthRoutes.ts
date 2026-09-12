@@ -76,7 +76,7 @@ export function registerOpsHealthRoutes(app: Express): void {
       ephemeralPath: false,
     };
     try {
-      const configuration = attachmentStorage.getConfiguration();
+      const configuration = createAttachmentStorageFromEnvironment(process.env).getConfiguration();
       storage = {
         provider: configuration.provider,
         configured: configuration.configured,
