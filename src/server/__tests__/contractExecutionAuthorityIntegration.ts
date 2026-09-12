@@ -422,10 +422,24 @@ export class ContractExecutionAuthorityIntegrationRunner {
       response = await request(`/api/contracts/${contract.id}/activate`, { method: 'POST', body: '{}' }, adminA);
       assert(response.status === 200, `activation with signed evidence expected 200, got ${response.status}`);
       const activated = await json(response);
-      assert(activated.item.status === 'ACTIVE' && activated.receivables.length === 1, 'signed activation result mismatch');
-      assert(activated.receivables[0].id === generatedReceivableId, 'activation must reuse the receivable created at document generation');
-      row = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${contract.id} AND status<>'CANCELLED'`);
-      assert(Number(row?.count) === 1, 'activation duplicated the generated rental receivable');
+      assert(activated.item.status === 'ACTIVE' && activated.receivables.length === 2, 'signed activation result mismatch');
+      const activatedRent = activated.receivables.find((item: any) => item.originType === 'CONTRACT_RENT');
+      const activatedDeposit = activated.receivables.find((item: any) => item.originType === 'SECURITY_DEPOSIT');
+      assert(activatedRent?.id === generatedReceivableId, 'activation must reuse the receivable created at document generation');
+      assert(Number(activatedDeposit?.originalAmount) === 1000, 'activation must create the agreed security-deposit receivable');
+      row = await scalar(sql`
+        SELECT
+          count(*)::int AS count,
+          count(*) FILTER (WHERE origin_type='CONTRACT_RENT')::int AS rent_count,
+          count(*) FILTER (WHERE origin_type='SECURITY_DEPOSIT')::int AS deposit_count,
+          max(original_amount) FILTER (WHERE origin_type='SECURITY_DEPOSIT')::numeric AS deposit_amount
+        FROM account_receivables
+        WHERE contract_id=${contract.id} AND status<>'CANCELLED'
+      `);
+      assert(
+        Number(row?.count) === 2 && Number(row?.rent_count) === 1 && Number(row?.deposit_count) === 1 && Number(row?.deposit_amount) === 1000,
+        'activation must preserve one rental receivable and create one security-deposit receivable',
+      );
       row = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i4c-veh-a1'`);
       assert(row?.status === VehicleStatus.RENTED && row?.current_contract_id === contract.id, 'signed activation vehicle binding mismatch');
 

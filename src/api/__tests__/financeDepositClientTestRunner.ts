@@ -22,12 +22,22 @@ export class FinanceDepositClientTestRunner {
     });
 
     tests.push(async () => {
-      let url='';let credentials:RequestCredentials|undefined;let body:any;
-      globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{url=String(input);credentials=init?.credentials;body=JSON.parse(String(init?.body));return new Response(JSON.stringify({deposit,movement}),{status:201})}) as typeof fetch;
+      const calls:Array<{url:string;credentials:RequestCredentials|undefined;body:any}> = [];
+      globalThis.fetch=(async(input:RequestInfo|URL,init?:RequestInit)=>{
+        const url=String(input);
+        calls.push({url,credentials:init?.credentials,body:init?.body?JSON.parse(String(init.body)):undefined});
+        if(url==='/api/finance/security-deposits/receive')return new Response(JSON.stringify({deposit,movement}),{status:201});
+        if(url==='/api/contracts/contract-a/reconcile-deposit-receivable')return new Response(JSON.stringify({receivables:[]}),{status:200});
+        return new Response(JSON.stringify({error:'Unexpected request'}),{status:500});
+      }) as typeof fetch;
       const result=await FinanceDepositClient.receive({contractId:'contract-a',amount:400,financialAccountId:'acc-a',paymentMethodId:'pm-pix',idempotencyKey:'deposit-key-1'});
-      if(url!=='/api/finance/security-deposits/receive'||credentials!=='include'||result.deposit.id!=='dep-1'||result.movement.id!=='mov-1')throw Error('deposit receive transport');
-      if(body.idempotencyKey!=='deposit-key-1')throw Error('deposit idempotency key missing from transport');
-      for(const key of ['companyId','userId','userName','driverId','vehicleId'])if(key in body)throw Error(`browser authority leaked: ${key}`);
+      if(calls.length!==2)throw Error(`deposit receive expected 2 transports, got ${calls.length}`);
+      const receiveCall=calls[0];
+      const reconcileCall=calls[1];
+      if(receiveCall.url!=='/api/finance/security-deposits/receive'||receiveCall.credentials!=='include'||result.deposit.id!=='dep-1'||result.movement.id!=='mov-1')throw Error('deposit receive transport');
+      if(receiveCall.body.idempotencyKey!=='deposit-key-1')throw Error('deposit idempotency key missing from transport');
+      for(const key of ['companyId','userId','userName','driverId','vehicleId'])if(key in receiveCall.body)throw Error(`browser authority leaked: ${key}`);
+      if(reconcileCall.url!=='/api/contracts/contract-a/reconcile-deposit-receivable'||reconcileCall.credentials!=='include')throw Error('deposit receivable reconciliation transport');
     });
 
     tests.push(async () => {
