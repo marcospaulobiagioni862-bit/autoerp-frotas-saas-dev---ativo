@@ -4,6 +4,7 @@ import { UnitOfWork } from '../db/uow';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
 import { inspectDocumentAiRuntimeMode } from './documentAiObservability';
 import { registerContractSimpleSignRoutes } from './contractSimpleSignRoutes';
+import { registerContractFinanceReconcileRoutes } from './contractFinanceReconcileRoutes';
 
 type OperationalState = 'OK' | 'DEGRADED';
 
@@ -36,6 +37,7 @@ function resolveBuildIdentity(env: NodeJS.ProcessEnv): BuildIdentity {
 
 export function registerOpsHealthRoutes(app: Express): void {
   registerContractSimpleSignRoutes(app);
+  registerContractFinanceReconcileRoutes(app);
 
   app.get('/api/ops/health', async (req: Request, res: Response) => {
     const principal = req.principal;
