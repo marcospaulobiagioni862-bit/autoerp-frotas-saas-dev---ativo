@@ -116,9 +116,9 @@ export async function ensureInitialContractReceivable(
     userName:principal.name,
   },tx);
 
-  // Legacy contracts predate the current signature/deposit projection flow. Preserve
-  // their activation semantics (rent only); modern contracts project the agreed deposit.
-  if(!contract.signatureRequired||contract.securityDepositAmount<=0)return rental;
+  // Document generation historically projects rent only. Project the deposit once
+  // the modern contract is ACTIVE; legacy contracts remain rent-only end-to-end.
+  if(contract.status!=='ACTIVE'||!contract.signatureRequired||contract.securityDepositAmount<=0)return rental;
   const depositCategoryId=await ensureSecurityDepositCategory(contract.companyId,principal,tx);
   const deposit=await ReceivableService.create({
     companyId:contract.companyId,
