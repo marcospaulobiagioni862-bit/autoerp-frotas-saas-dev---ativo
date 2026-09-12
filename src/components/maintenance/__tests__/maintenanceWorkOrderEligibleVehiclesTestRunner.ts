@@ -77,4 +77,10 @@ assert.match(
   'work-order attachments must remain classified as invoice, part photo, or other maintenance evidence',
 );
 
+assert.match(source, /useState<WorkOrderView>\('ACTIVE'\)/, 'maintenance must default to the current operational work-order queue');
+assert.match(source, /workOrderView==='ACTIVE'&&!historicalVehicle&&!\['COMPLETED','CANCELLED'\]\.includes\(wo\.status\)/, 'default queue must omit closed orders and orders from historical vehicles');
+assert.match(source, /<option value="HISTORICAL">Veículos vendidos\/baixados<\/option>/, 'historical vehicle work orders must remain explicitly searchable');
+assert.match(source, /<option value="ALL">Todas<\/option>/, 'operators must retain access to the complete work-order history');
+assert.match(source, /setVehicleLifecycle\(Object\.fromEntries\(veh\.map/, 'historical filtering must derive vehicle lifecycle from the authorized vehicle payload');
+
 console.log('Maintenance work-order eligible vehicles UX PASS');
