@@ -2,6 +2,7 @@
 
 @layer base {
   :root {
+    color-scheme: light;
     --bg-app: #f8fafc;
     --bg-surface: #ffffff;
     --bg-elevated: #f1f5f9;
@@ -29,6 +30,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --bg-app: #0f172a;
     --bg-surface: #1e293b;
     --bg-elevated: #334155;
@@ -127,6 +129,13 @@ aside > nav::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
 
+
+/* Native selects use the active color scheme for their browser/OS popup. */
+select,
+select option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
 
 /* Native date controls need explicit contrast in dark mode, especially Chrome/Edge. */
 .dark input[type="date"] {
