@@ -33,7 +33,7 @@ export class ErpWaveAActivationFinanceIntegrationRunner {
     }
 
     const contractRow = await one(sql`
-      SELECT id, company_id, driver_id, vehicle_id, status, rental_amount
+      SELECT id, company_id, driver_id, vehicle_id, status, rental_amount, security_deposit_amount
       FROM contracts
       WHERE company_id=${companyId} AND contract_number=${contractNumber}
       LIMIT 1
@@ -80,23 +80,26 @@ export class ErpWaveAActivationFinanceIntegrationRunner {
     const receivable = await one(sql`
       SELECT
         count(*)::int AS count,
-        min(id) AS id,
-        min(status) AS status,
-        min(origin_type) AS origin_type,
+        count(*) FILTER (WHERE origin_type='CONTRACT_RENT')::int AS rent_count,
+        count(*) FILTER (WHERE origin_type='SECURITY_DEPOSIT')::int AS deposit_count,
+        count(*) FILTER (WHERE status='PENDING')::int AS pending_count,
         min(driver_id) AS driver_id,
         min(vehicle_id) AS vehicle_id,
-        min(original_amount)::numeric AS original_amount
+        max(original_amount) FILTER (WHERE origin_type='CONTRACT_RENT')::numeric AS rental_amount,
+        max(original_amount) FILTER (WHERE origin_type='SECURITY_DEPOSIT')::numeric AS deposit_amount
       FROM account_receivables
       WHERE company_id=${companyId}
         AND contract_id=${contractRow.id}
         AND status<>'CANCELLED'
     `);
-    assert(Number(receivable?.count) === 1, 'INV-003 document generation/activation must leave exactly one open rental receivable');
-    assert(receivable?.status === ObligationStatus.PENDING, 'INV-003 rental receivable must remain PENDING before settlement');
-    assert(receivable?.origin_type === OriginType.CONTRACT_RENT, 'INV-003 receivable origin must be CONTRACT_RENT');
-    assert(receivable?.driver_id === driverId, 'INV-003 receivable must be linked to the contract driver');
-    assert(receivable?.vehicle_id === vehicleId, 'INV-003 receivable must be linked to the contract vehicle');
-    assert(Number(receivable?.original_amount) === Number(contractRow.rental_amount), 'INV-003 receivable amount must equal authoritative contract rental amount');
+    assert(Number(receivable?.count) === 2, 'INV-003 modern activation must leave rent and security-deposit receivables open');
+    assert(Number(receivable?.rent_count) === 1, 'INV-003 document generation/activation must leave exactly one open rental receivable');
+    assert(Number(receivable?.deposit_count) === 1, 'INV-003 modern activation must create exactly one security-deposit receivable');
+    assert(Number(receivable?.pending_count) === 2, 'INV-003 receivables must remain PENDING before settlement');
+    assert(receivable?.driver_id === driverId, 'INV-003 receivables must be linked to the contract driver');
+    assert(receivable?.vehicle_id === vehicleId, 'INV-003 receivables must be linked to the contract vehicle');
+    assert(Number(receivable?.rental_amount) === Number(contractRow.rental_amount), 'INV-003 rental receivable amount must equal authoritative contract rental amount');
+    assert(Number(receivable?.deposit_amount) === Number(contractRow.security_deposit_amount), 'INV-003 deposit receivable amount must equal authoritative contract security deposit');
 
     const audit = await one(sql`
       SELECT count(*)::int AS count
