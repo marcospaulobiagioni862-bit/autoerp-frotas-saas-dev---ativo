@@ -1,4 +1,5 @@
 import type { ContractTemplate } from '../types/entities';
+import { runIdempotentMutation } from './idempotentMutation';
 
 export class ContractTemplateApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -62,6 +63,10 @@ export interface ContractTemplateCreateInput {
   isActive?: boolean;
 }
 
+function mutationKey(prefix: string, input: unknown): string {
+  return `${prefix}:${JSON.stringify(input)}`;
+}
+
 export class ContractTemplateClient {
   static async ensureMoveFlexDefault(): Promise<ContractTemplate> {
     return itemRequest('/api/contract-templates/ensure-moveflex-default', {
@@ -97,15 +102,23 @@ export class ContractTemplateClient {
   }
 
   static async create(input: ContractTemplateCreateInput): Promise<ContractTemplate> {
-    return itemRequest('/api/contract-templates', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
-    });
+    return runIdempotentMutation(mutationKey('contract-template:create', input), (token) =>
+      itemRequest('/api/contract-templates', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idempotency-key': token },
+        body: JSON.stringify(input),
+      })
+    );
   }
 
   static async createVersion(id: string, input: { title?: string; contentMarkdown?: string; sourceMode?: ContractTemplateSourceMode; isActive?: boolean }): Promise<ContractTemplate> {
-    return itemRequest(`/api/contract-templates/${encodeURIComponent(id)}/versions`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
-    });
+    return runIdempotentMutation(mutationKey(`contract-template:${id}:version`, input), (token) =>
+      itemRequest(`/api/contract-templates/${encodeURIComponent(id)}/versions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idempotency-key': token },
+        body: JSON.stringify(input),
+      })
+    );
   }
 
   static async promoteFileSource(id: string): Promise<ContractTemplate> {
