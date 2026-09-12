@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import './maintenanceSlaTestRunner';
 
 const source = readFileSync(new URL('../MaintenanceManagement.tsx', import.meta.url), 'utf8');
+const globalStylesSource = readFileSync(new URL('../../../index.css', import.meta.url), 'utf8');
+const sharedSelectSource = readFileSync(new URL('../../ui/Select.tsx', import.meta.url), 'utf8');
 const preventiveSource = readFileSync(new URL('../MaintenancePreventivePanel.tsx', import.meta.url), 'utf8');
 const preventiveClientSource = readFileSync(new URL('../../../api/maintenancePreventiveClient.ts', import.meta.url), 'utf8');
 const templateVehicleRoutesSource = readFileSync(new URL('../../../server/maintenanceTemplateVehicleRoutes.ts', import.meta.url), 'utf8');
@@ -104,5 +106,10 @@ assert.match(source, /plan=>plan\.status==='ACTIVE'/, 'OS completion must only o
 assert.match(source, /preventivePlanIds:preventiveSelection/, 'OS completion must send the explicit preventive selection to server authority');
 assert.match(source, /completePlansLoaded\?selectedPreventivePlanIds:undefined/, 'failed preventive-plan loading must preserve legacy completion behavior');
 assert.match(source, /type="checkbox"/, 'OS completion must support multiple preventive items');
+
+assert.match(globalStylesSource, /:root \{\s*color-scheme: light;/, 'native controls must use the light browser color scheme by default');
+assert.match(globalStylesSource, /\.dark \{\s*color-scheme: dark;/, 'native controls must use the dark browser color scheme with the dark theme');
+assert.match(globalStylesSource, /select,\s*select option \{[\s\S]*background-color: var\(--bg-surface\);[\s\S]*color: var\(--text-primary\);/, 'native select popups must retain explicit foreground/background contrast');
+assert.match(sharedSelectSource, /bg-white dark:bg-slate-900[\s\S]*text-slate-900 dark:text-slate-100/, 'shared Select must retain explicit theme contrast');
 
 console.log('Deferred maintenance panels regression: PASS');
