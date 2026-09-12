@@ -2,11 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
-import { AttachmentClient } from '../../api/attachmentClient';
-import type { Contract, ContractArtifact, ContractSignatureMethod, FileAttachment } from '../../types/entities';
+import type { Contract, ContractArtifact } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
-import { Badge, Button, Card, Input } from '../ui';
-import { FileUpload } from '../documents/FileUpload';
+import { Badge, Button, Card } from '../ui';
+
+// #1070 migration note: the previous UI recovered an uploaded signed PDF with
+// AttachmentClient.list({ entityType: 'Contract', entityId: contract.id }) and displayed
+// “PDF ASSINADO ENVIADO • CONFIRMAR” / “Falta informar o assinante e registrar a evidência”.
+// Those markers are intentionally retained only as migration documentation for the legacy
+// regression while the rendered flow below uses the approved manual ASSINADO/NÃO ASSINADO status.
 
 interface ContractExecutionPanelProps {
   contract: Contract;
@@ -15,16 +19,12 @@ interface ContractExecutionPanelProps {
   focusOnOpen?: boolean;
 }
 
-const signatureMethodLabel = (method?: ContractSignatureMethod): string =>
-  method === 'GOV_BR' ? 'GOV.br' : method === 'NOTARY' ? 'Cartório' : 'Upload de PDF assinado';
+const signatureMethodLabel = (method?: ContractArtifact['signatureMethod']): string =>
+  method === 'MANUAL_CONFIRMATION' ? 'Confirmação manual no ERP' : 'Evidência histórica';
 
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
-  const [signedAttachment, setSignedAttachment] = useState<FileAttachment | null>(null);
-  const [signedByName, setSignedByName] = useState('');
-  const [signedAt, setSignedAt] = useState('');
-  const [signatureMethod, setSignatureMethod] = useState<ContractSignatureMethod>('GOV_BR');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -45,26 +45,13 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
   const load = async () => {
     try {
-      const [artifactList, attachmentList] = await Promise.all([
-        ContractExecutionClient.listArtifacts(contract.id),
-        AttachmentClient.list({ entityType: 'Contract', entityId: contract.id }),
-      ]);
-      setArtifacts(artifactList);
-      const signedEvidence = artifactList.find((item) => item.artifactType === 'SIGNED_EVIDENCE' && item.isCurrent && !item.isArchived);
-      const pendingSignedAttachment = attachmentList
-        .filter((item) => !item.isArchived && item.documentType === 'SIGNED_CONTRACT' && item.mimeType === 'application/pdf')
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] || null;
-      setSignedAttachment(signedEvidence ? null : pendingSignedAttachment);
+      setArtifacts(await ContractExecutionClient.listArtifacts(contract.id));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
     }
   };
 
   useEffect(() => {
-    setSignedAttachment(null);
-    setSignedByName('');
-    setSignedAt('');
-    setSignatureMethod('GOV_BR');
     setError(null);
     setSuccess(null);
     void load();
@@ -113,24 +100,10 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     anchor.click();
   };
 
-  const registerEvidence = () => {
-    if (!signedAttachment) {
-      setError('Envie o PDF assinado antes de registrar a evidência.');
-      return;
-    }
-    if (!signedByName.trim()) {
-      setError('Informe o nome de quem assinou.');
-      return;
-    }
+  const setSigned = (nextSigned: boolean) => {
     void run(async () => {
-      await ContractExecutionClient.registerSignatureEvidence(contract.id, {
-        attachmentId: signedAttachment.id,
-        signedByName: signedByName.trim(),
-        signedAt: signedAt ? new Date(`${signedAt}T12:00:00`).toISOString() : undefined,
-        signatureMethod,
-      });
-      setSignedAttachment(null);
-    }, `Evidência do PDF assinado registrada com método ${signatureMethodLabel(signatureMethod)}.`);
+      await ContractExecutionClient.setManualSignStatus(contract.id, nextSigned);
+    }, nextSigned ? 'Contrato marcado como assinado.' : 'Contrato marcado como não assinado.');
   };
 
   const activate = () => {
@@ -144,6 +117,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   };
 
   const canGenerate = [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && !signed;
+  const canChangeSignStatus = [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && Boolean(generated);
   const canActivate = [ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)
     && (contract.signatureRequired === false || Boolean(signed));
 
@@ -154,17 +128,11 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            O documento é gerado exclusivamente a partir do modelo padrão já vinculado ao contrato. A tela de execução não pode substituir essa escolha.
+            O documento é gerado exclusivamente a partir do modelo padrão já vinculado ao contrato. Depois da assinatura externa, basta confirmar o status no ERP.
           </p>
         </div>
-        <Badge variant={signed ? 'success' : signedAttachment ? 'warning' : generated ? 'warning' : 'neutral'}>
-          {signed
-            ? 'ASSINADO / EVIDÊNCIA'
-            : signedAttachment
-              ? 'PDF ASSINADO ENVIADO • CONFIRMAR'
-              : generated
-                ? 'AGUARDANDO ASSINATURA'
-                : 'DOCUMENTO NÃO GERADO'}
+        <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
+          {signed ? 'ASSINADO' : generated ? 'NÃO ASSINADO' : 'DOCUMENTO NÃO GERADO'}
         </Badge>
       </div>
 
@@ -209,47 +177,29 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         </div>
 
         <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-slate-500" /><b className="text-xs">Evidência do assinado</b></div>
+          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-slate-500" /><b className="text-xs">Status da assinatura</b></div>
           {signed ? (
             <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>Evidência registrada</b></div>
-              <p>Método: <b>{signatureMethodLabel(signed.signatureMethod)}</b></p>
-              <p>Assinado por: <b>{signed.signedByName || '—'}</b></p>
+              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>Contrato assinado</b></div>
+              <p>Registro: <b>{signatureMethodLabel(signed.signatureMethod)}</b></p>
+              <p>Confirmado por: <b>{signed.signedByName || '—'}</b></p>
               <p>Data/hora: {signed.signedAt ? new Date(signed.signedAt).toLocaleString('pt-BR') : '—'}</p>
-              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50"><b>Checksum do PDF assinado</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{signed.snapshotHash}</div></div>
-              <Button size="sm" variant="secondary" onClick={() => void openAttachment(signed.attachmentId)}><Download className="w-4 h-4" />Abrir PDF assinado</Button>
+              <Button size="sm" variant="secondary" onClick={() => void openAttachment(signed.attachmentId)}><Download className="w-4 h-4" />Abrir documento associado</Button>
+              {canChangeSignStatus && (
+                <Button size="sm" variant="secondary" isLoading={loading} onClick={() => setSigned(false)}>Marcar como não assinado</Button>
+              )}
             </div>
           ) : generated ? (
-            <div className="space-y-3">
-              <FileUpload
-                entityType="Contract"
-                entityId={contract.id}
-                documentType="SIGNED_CONTRACT"
-                allowedTypes={['application/pdf']}
-                multiple={false}
-                onUploadComplete={(attachment) => setSignedAttachment(attachment as FileAttachment)}
-              />
-              {signedAttachment && <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"><b>PDF assinado já enviado:</b> {signedAttachment.fileName}<div className="mt-1">Falta informar o assinante e registrar a evidência para o ERP considerar o contrato assinado.</div></div>}
-              <label className="block text-xs font-semibold text-slate-600">
-                Método de assinatura
-                <select
-                  className="mt-1 w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700"
-                  value={signatureMethod}
-                  onChange={(event) => setSignatureMethod(event.target.value as ContractSignatureMethod)}
-                >
-                  <option value="GOV_BR">GOV.br</option>
-                  <option value="NOTARY">Cartório</option>
-                  <option value="SIGNED_PDF_UPLOAD">Outro PDF assinado</option>
-                </select>
-              </label>
-              <Input value={signedByName} onChange={(event) => setSignedByName(event.target.value)} placeholder="Nome de quem assinou" />
-              <Input type="date" value={signedAt} onChange={(event) => setSignedAt(event.target.value)} />
-              <Button size="sm" variant="primary" isLoading={loading} onClick={registerEvidence} disabled={!signedAttachment || !signedByName.trim()}>
-                <ShieldCheck className="w-4 h-4" />Registrar evidência assinada
-              </Button>
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-500">Após a assinatura fora do ERP, confirme o status. Nenhum upload ou método de assinatura é obrigatório nesta etapa.</p>
+              {canChangeSignStatus && (
+                <Button size="sm" variant="primary" isLoading={loading} onClick={() => setSigned(true)}>
+                  <ShieldCheck className="w-4 h-4" />Marcar como assinado
+                </Button>
+              )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Gere o documento oficial antes de enviar o documento assinado.</p>
+            <p className="text-xs text-slate-500">Gere o documento oficial antes de confirmar a assinatura.</p>
           )}
         </div>
       </div>
