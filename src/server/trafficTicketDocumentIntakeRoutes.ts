@@ -295,13 +295,17 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
         const contractMatches=Array.isArray(contractResult.rows)?contractResult.rows:[];
         const exactContract=contractMatches.length===1?contractMatches[0]:undefined;
         if(requestedContractId&&(!exactContract||String(exactContract.id)!==requestedContractId))throw new ConflictError();
+        const driverId=responsibility===TicketResponsibility.DRIVER?(requestedDriverId||(exactContract?.driver_id?String(exactContract.driver_id):undefined)):undefined;
         if(responsibility===TicketResponsibility.DRIVER){
-          if(!exactContract||!exactContract.driver_id)throw new ConflictError();
-          if(requestedDriverId&&String(exactContract.driver_id)!==requestedDriverId)throw new ConflictError();
+          if(!driverId)throw new ValidationError();
+          const driverCheck:any=await tx.execute(sql`
+            SELECT id FROM drivers
+            WHERE company_id=${principal.companyId} AND id=${driverId} AND is_archived=false AND status='ACTIVE'
+            LIMIT 1 FOR UPDATE
+          `);
+          if(!driverCheck.rows?.[0])throw new ConflictError();
         }
-
-        const contractId=exactContract?String(exactContract.id):undefined;
-        const driverId=responsibility===TicketResponsibility.DRIVER?String(exactContract!.driver_id):undefined;
+        const contractId=exactContract&&String(exactContract.driver_id)===driverId?String(exactContract.id):undefined;
         const input:CreateTrafficTicketAuthorityInput={
           vehicleId,driverId,contractId,
           autoNumber:requiredText(fields,'noticeNumber',160),organName:requiredText(fields,'organName',200),infractionCode:requiredText(fields,'infractionCode',120),
