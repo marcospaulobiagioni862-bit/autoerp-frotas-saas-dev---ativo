@@ -1,5 +1,6 @@
 import type { AccountReceivable, Contract } from '../types/entities';
 import { ContractStatus, ObligationStatus, RecurringFrequency } from '../types/enums';
+import { runIdempotentMutation } from './idempotentMutation';
 
 export class ContractApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -121,11 +122,13 @@ export class ContractClient {
   }
 
   static async create(input: ContractCreateInput): Promise<Contract> {
-    return requestItem('/api/contracts', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(input),
-    });
+    return runIdempotentMutation(`contract:create:${JSON.stringify(input)}`, (token) =>
+      requestItem('/api/contracts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-idempotency-key': token },
+        body: JSON.stringify(input),
+      })
+    );
   }
 
   static async update(id: string, input: ContractUpdateInput): Promise<Contract> {
