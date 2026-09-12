@@ -235,7 +235,10 @@ assert.ok(vehicleIntakeModalSource.includes('Progresso estimado da análise docu
 assert.ok(vehicleIntakeModalSource.includes('Percentual estimado por etapa'), 'vehicle AI flow must label progress as estimated rather than provider telemetry');
 assert.ok(vehicleIntakeModalSource.includes("status==='PROCESSING')return 70"), 'PROCESSING must map to a deterministic estimated percentage');
 assert.ok(vehicleIntakeModalSource.includes('role="progressbar"'), 'vehicle AI progress must use progressbar semantics');
-assert.ok(vehicleIntakeModalSource.includes("CRLV") && vehicleIntakeModalSource.includes("CRV") && vehicleIntakeModalSource.includes("ATPV-e"), 'AI vehicle flow must expose all approved initial document classes');
+assert.ok(vehicleIntakeModalSource.includes("{value:'CRLV',label:'CRLV'},{value:'CRV',label:'CRV'}"), 'AI vehicle creation flow must expose CRLV and CRV');
+assert.ok(!vehicleIntakeModalSource.includes("{value:'ATPV_E',label:'ATPV-e'}"), 'ATPV-e must not be offered as a vehicle creation document');
+assert.ok(vehicleIntakeRoutesSource.includes("expectedType === 'ATPV_E'"), 'server must reject ATPV-e materialization even if the UI is bypassed');
+assert.ok(vehicleIntakeRoutesSource.includes('ATPV-e deve ser anexada ao veículo existente'), 'ATPV-e materialization rejection must explain the supported flow');
 
 
 
