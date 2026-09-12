@@ -72,7 +72,12 @@ export class FinanceDepositClient {
     });
     if (!response.ok) throw await apiError(response);
     const payload = asRecord(await response.json());
-    return { deposit: validateDeposit(payload.deposit), movement: validateMovement(payload.movement) };
+    const result = { deposit: validateDeposit(payload.deposit), movement: validateMovement(payload.movement) };
+    const reconciliation = await fetch(`/api/contracts/${encodeURIComponent(input.contractId)}/reconcile-deposit-receivable`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    if (!reconciliation.ok) throw await apiError(reconciliation);
+    return result;
   }
   static returnDeposit(input: ReturnSecurityDepositInput) { return command('return', input); }
   static compensate(input: CompensateSecurityDepositInput) { return command('compensate', input); }
