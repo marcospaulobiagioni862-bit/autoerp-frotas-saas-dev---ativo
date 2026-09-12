@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
 import { inspectDocumentAiRuntimeMode } from './documentAiObservability';
+import { registerContractSimpleSignRoutes } from './contractSimpleSignRoutes';
 
 type OperationalState = 'OK' | 'DEGRADED';
 
@@ -34,6 +35,8 @@ function resolveBuildIdentity(env: NodeJS.ProcessEnv): BuildIdentity {
 }
 
 export function registerOpsHealthRoutes(app: Express): void {
+  registerContractSimpleSignRoutes(app);
+
   app.get('/api/ops/health', async (req: Request, res: Response) => {
     const principal = req.principal;
     if (!principal) {

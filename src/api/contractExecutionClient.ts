@@ -25,7 +25,7 @@ function validateArtifact(value: unknown): ContractArtifact {
   for (const key of ['templateId','sourceArtifactId','snapshotJson','signedByName','signedAt'] as const) {
     if (item[key] !== undefined && typeof item[key] !== 'string') throw new Error('Invalid contract artifact payload');
   }
-  if (item.signatureMethod !== undefined && item.signatureMethod !== 'SIGNED_PDF_UPLOAD' && item.signatureMethod !== 'GOV_BR' && item.signatureMethod !== 'NOTARY') {
+  if (item.signatureMethod !== undefined && item.signatureMethod !== 'MANUAL_CONFIRMATION' && item.signatureMethod !== 'SIGNED_PDF_UPLOAD' && item.signatureMethod !== 'GOV_BR' && item.signatureMethod !== 'NOTARY') {
     throw new Error('Invalid contract artifact payload');
   }
   return item as unknown as ContractArtifact;
@@ -117,10 +117,7 @@ export class ContractExecutionClient {
     };
   }
 
-  static async registerReviewedFinalPdf(
-    contractId: string,
-    attachmentId: string
-  ): Promise<ContractArtifact> {
+  static async registerReviewedFinalPdf(contractId: string, attachmentId: string): Promise<ContractArtifact> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/reviewed-final-pdf`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ attachmentId }),
@@ -139,5 +136,20 @@ export class ContractExecutionClient {
     });
     if (!response.ok) throw await apiError(response);
     return validateArtifact(asRecord(await response.json()).artifact);
+  }
+
+  static async setManualSignStatus(contractId: string, signed: boolean): Promise<{ contract: Contract; artifact: ContractArtifact | null; signed: boolean }> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/sign-status`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ signed }),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (typeof payload.signed !== 'boolean') throw new Error('Invalid contract sign status payload');
+    return {
+      contract: validateContract(payload.contract),
+      artifact: payload.artifact === null ? null : validateArtifact(payload.artifact),
+      signed: payload.signed,
+    };
   }
 }

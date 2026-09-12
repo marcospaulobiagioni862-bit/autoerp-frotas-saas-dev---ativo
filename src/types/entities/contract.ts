@@ -45,7 +45,7 @@ export interface ContractTemplate {
 }
 
 export type ContractArtifactType = 'GENERATED_PDF' | 'GENERATED_DOCX' | 'REVIEWED_FINAL_PDF' | 'SIGNED_EVIDENCE';
-export type ContractSignatureMethod = 'SIGNED_PDF_UPLOAD' | 'GOV_BR' | 'NOTARY';
+export type ContractSignatureMethod = 'MANUAL_CONFIRMATION' | 'SIGNED_PDF_UPLOAD' | 'GOV_BR' | 'NOTARY';
 
 export interface ContractArtifact {
   id: string;
