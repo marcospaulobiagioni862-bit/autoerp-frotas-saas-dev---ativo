@@ -253,6 +253,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           return { item: existing, reused: true };
         }
         const expectedType = String(row.document_type || '').toUpperCase();
+        if (expectedType === 'ATPV_E') throw new ConflictError('ATPV-e deve ser anexada ao veículo existente e não pode criar um novo veículo.');
         if (String(row.status) !== 'APPROVED' || !row.attachment_id || !row.approved_extraction_id ||
           String(row.approved_extraction_id) !== String(row.extraction_id) || String(row.attachment_id) !== String(row.extraction_attachment_id) ||
           String(row.extraction_status) !== 'APPROVED' || String(row.detected_document_type || '').toUpperCase().replace(/[-/ ]/g, '_') !== expectedType) throw new ConflictError();
