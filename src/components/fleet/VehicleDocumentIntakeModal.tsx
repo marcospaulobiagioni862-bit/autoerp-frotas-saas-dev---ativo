@@ -227,7 +227,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
 
       {!intakeId&&<div className="space-y-3">
         <Select label="Tipo de documento" value={documentType} onChange={e=>setDocumentType(e.target.value as VehicleIntakeDocumentType)} options={[
-          {value:'CRLV',label:'CRLV'},{value:'CRV',label:'CRV'},{value:'ATPV_E',label:'ATPV-e'},
+          {value:'CRLV',label:'CRLV'},{value:'CRV',label:'CRV'},
         ]}/>
         <Button onClick={()=>void start()} disabled={busy} className="gap-2"><Sparkles className="h-4 w-4"/>{busy?'Preparando...':'Começar leitura com IA'}</Button>
       </div>}
