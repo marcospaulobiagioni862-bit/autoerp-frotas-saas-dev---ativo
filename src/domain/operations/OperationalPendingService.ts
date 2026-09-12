@@ -102,6 +102,9 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
   const vehicleMap = new Map(vehicles.map(v => [v.id, v]));
   const driverMap = new Map(drivers.map(d => [d.id, d]));
   const contractMap = new Map(contracts.map(c => [c.id, c]));
+  const activeContractVehicleIds = new Set(contracts.filter(c => c.status === ContractStatus.ACTIVE).map(c => c.vehicleId));
+  const isOperationallyRented = (vehicle?: Vehicle): boolean =>
+    Boolean(vehicle && (vehicle.status === VehicleStatus.RENTED || activeContractVehicleIds.has(vehicle.id)));
 
   // 1. VEHICLES
   vehicles.forEach(v => {
@@ -439,74 +442,102 @@ export function generateOperationalPendings(data: OperationalPendingInput = {}):
   // 7. INSURANCES
   insurances.forEach(ins => {
     const veh = vehicleMap.get(ins.vehicleId);
-    if (ins.endDate) {
-      if (ins.endDate < todayStr || ins.status === DocumentStatus.EXPIRED) {
-        const days = getDaysDiff(ins.endDate);
-        addPending({
-          type: 'INSURANCE',
-          category: 'Seguros',
-          priority: 'P1',
-          severity: 'CRITICAL',
-          title: `Seguro Vencido: Veículo ${veh?.plate || 'N/A'}`,
-          description: `A apólice de seguro ${ins.policyNumber} (${ins.insuranceCompany}) venceu em ${ins.endDate} (${days} dias atrás).`,
-          entity: 'Insurance',
-          entityId: ins.id,
-          vehiclePlate: veh?.plate,
-          dueDate: ins.endDate,
-          overdueDays: days,
-          status: 'OPEN',
-          origin: 'Gestão de Seguros',
-          actionRecommended: 'Renovar apólice de seguro imediatamente',
-          destinationTab: 'compliance',
-          companyId: ins.companyId || targetCompanyId,
-          timestamp: new Date().toISOString(),
-        });
-      } else {
-        const targetTime = new Date(ins.endDate).getTime();
-        const diffDays = Math.floor((targetTime - todayTime) / (1000 * 60 * 60 * 24));
-        if (diffDays >= 0 && diffDays <= 15) {
-          addPending({
-            type: 'INSURANCE',
-            category: 'Seguros',
-            priority: 'P2',
-            severity: 'WARNING',
-            title: `Seguro Próximo do Vencimiento: Veículo ${veh?.plate || 'N/A'}`,
-            description: `A apólice ${ins.policyNumber} vence em ${diffDays} dia(s) (${ins.endDate}).`,
-            entity: 'Insurance',
-            entityId: ins.id,
-            vehiclePlate: veh?.plate,
-            dueDate: ins.endDate,
-            overdueDays: 0,
-            status: 'OPEN',
-            origin: 'Gestão de Seguros',
-            actionRecommended: 'Cotar renovação de seguro com corretor',
-            destinationTab: 'compliance',
-            companyId: ins.companyId || targetCompanyId,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
+    if (!ins.endDate) return;
+    if (ins.endDate < todayStr || ins.status === DocumentStatus.EXPIRED) {
+      const days = getDaysDiff(ins.endDate);
+      const operational = isOperationallyRented(veh);
+      const available = veh?.status === VehicleStatus.AVAILABLE;
+      addPending({
+        type: 'INSURANCE',
+        category: 'Seguros',
+        priority: operational ? 'P0' : available ? 'P2' : 'P1',
+        severity: operational ? 'CRITICAL' : available ? 'WARNING' : 'CRITICAL',
+        title: `Seguro Vencido: Veículo ${veh?.plate || 'N/A'}`,
+        description: operational
+          ? `A apólice de seguro ${ins.policyNumber} (${ins.insuranceCompany}) venceu em ${ins.endDate} (${days} dias atrás) e o veículo está alugado/possui contrato ativo.`
+          : `A apólice de seguro ${ins.policyNumber} (${ins.insuranceCompany}) venceu em ${ins.endDate} (${days} dias atrás).`,
+        entity: 'Insurance',
+        entityId: ins.id,
+        vehiclePlate: veh?.plate,
+        dueDate: ins.endDate,
+        overdueDays: days,
+        status: 'OPEN',
+        origin: 'Gestão de Seguros',
+        actionRecommended: operational ? 'Regularizar o seguro imediatamente; o veículo está em operação' : 'Regularizar o seguro antes da próxima locação',
+        destinationTab: 'compliance',
+        companyId: ins.companyId || targetCompanyId,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    const targetTime = new Date(ins.endDate).getTime();
+    const diffDays = Math.floor((targetTime - todayTime) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0 && diffDays <= 15) {
+      addPending({
+        type: 'INSURANCE',
+        category: 'Seguros',
+        priority: 'P2',
+        severity: 'WARNING',
+        title: `Seguro Próximo do Vencimento: Veículo ${veh?.plate || 'N/A'}`,
+        description: `A apólice ${ins.policyNumber} vence em ${diffDays} dia(s) (${ins.endDate}).`,
+        entity: 'Insurance',
+        entityId: ins.id,
+        vehiclePlate: veh?.plate,
+        dueDate: ins.endDate,
+        overdueDays: 0,
+        status: 'OPEN',
+        origin: 'Gestão de Seguros',
+        actionRecommended: 'Cotar renovação de seguro com corretor',
+        destinationTab: 'compliance',
+        companyId: ins.companyId || targetCompanyId,
+        timestamp: new Date().toISOString(),
+      });
     }
   });
 
-  // 8. TRACKERS
+  // 8. MISSING INSURANCE AND TRACKERS
   vehicles.forEach(v => {
+    const operational = isOperationallyRented(v);
+    const relevant = operational || v.status === VehicleStatus.AVAILABLE;
+    if (!relevant) return;
+    const validInsurance = insurances.some(ins => ins.vehicleId === v.id && ins.endDate >= todayStr && ins.status === 'ACTIVE');
+    const hasExpiredInsuranceAlert = insurances.some(ins => ins.vehicleId === v.id && (ins.endDate < todayStr || ins.status === DocumentStatus.EXPIRED));
+    if (!validInsurance && !hasExpiredInsuranceAlert) {
+      addPending({
+        type: 'INSURANCE',
+        category: 'Seguros',
+        priority: operational ? 'P0' : 'P2',
+        severity: operational ? 'CRITICAL' : 'WARNING',
+        title: `Veículo sem Seguro Ativo: ${v.plate}`,
+        description: operational ? `O veículo ${v.plate} está alugado ou possui contrato ativo e não possui seguro ativo/válido cadastrado.` : `O veículo ${v.plate} está disponível, mas não possui seguro ativo/válido cadastrado. A regularização é necessária antes da próxima locação.`,
+        entity: 'Insurance',
+        entityId: v.id,
+        vehiclePlate: v.plate,
+        overdueDays: 0,
+        status: 'OPEN',
+        origin: 'Gestão de Seguros',
+        actionRecommended: operational ? 'Cadastrar ou regularizar seguro imediatamente' : 'Cadastrar ou regularizar seguro antes da próxima locação',
+        destinationTab: 'compliance',
+        companyId: v.companyId || targetCompanyId,
+        timestamp: new Date().toISOString(),
+      });
+    }
     const hasTracker = trackers.some(tr => tr.vehicleId === v.id && tr.status === 'ACTIVE');
-    if (!hasTracker && v.status === VehicleStatus.AVAILABLE) {
+    if (!hasTracker) {
       addPending({
         type: 'TRACKER',
         category: 'Rastreadores',
-        priority: 'P2',
-        severity: 'WARNING',
+        priority: operational ? 'P0' : 'P2',
+        severity: operational ? 'CRITICAL' : 'WARNING',
         title: `Veículo sem Rastreador Ativo: ${v.plate}`,
-        description: `O veículo ${v.plate} está disponível na frota mas não possui rastreador ativo cadastrado.`,
+        description: operational ? `O veículo ${v.plate} está alugado ou possui contrato ativo, mas não possui rastreador ativo cadastrado.` : `O veículo ${v.plate} está disponível na frota, mas não possui rastreador ativo cadastrado. A regularização é necessária antes da próxima locação.`,
         entity: 'Tracker',
         entityId: v.id,
         vehiclePlate: v.plate,
         overdueDays: 0,
         status: 'OPEN',
         origin: 'Monitoramento & Telemetria',
-        actionRecommended: 'Instalar ou ativar rastreador no veículo',
+        actionRecommended: operational ? 'Instalar ou ativar rastreador imediatamente' : 'Instalar ou ativar rastreador antes da próxima locação',
         destinationTab: 'fleet',
         companyId: v.companyId || targetCompanyId,
         timestamp: new Date().toISOString(),
