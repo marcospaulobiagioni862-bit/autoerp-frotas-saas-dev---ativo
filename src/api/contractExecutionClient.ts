@@ -1,4 +1,5 @@
 import type { Contract, ContractArtifact, ContractSignatureMethod, FileAttachment } from '../types/entities';
+import { runIdempotentMutation } from './idempotentMutation';
 
 export class ContractExecutionApiError extends Error {
   constructor(public readonly status: number, message: string, public readonly code?: string) {
@@ -66,6 +67,22 @@ async function apiError(response: Response): Promise<ContractExecutionApiError> 
   return new ContractExecutionApiError(response.status, message, code);
 }
 
+async function generatedRequest(contractId: string, action: 'generate-pdf' | 'generate-docx' | 'generate-pdf-from-docx') {
+  return runIdempotentMutation(`contract:${contractId}:${action}`, async (token) => {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/${action}`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json', 'x-idempotency-key': token },
+      body: '{}',
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return {
+      artifact: validateArtifact(payload.artifact),
+      attachment: validateAttachment(payload.attachment),
+      contract: validateContract(payload.contract),
+    };
+  });
+}
+
 export class ContractExecutionClient {
   static async listArtifacts(contractId: string): Promise<ContractArtifact[]> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/artifacts`, { credentials: 'include' });
@@ -76,45 +93,15 @@ export class ContractExecutionClient {
   }
 
   static async generatePdf(contractId: string, _legacyTemplateId?: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
-    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-pdf`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
-    if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
-    return {
-      artifact: validateArtifact(payload.artifact),
-      attachment: validateAttachment(payload.attachment),
-      contract: validateContract(payload.contract),
-    };
+    return generatedRequest(contractId, 'generate-pdf');
   }
 
   static async generatePdfFromDocx(contractId: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
-    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-pdf-from-docx`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
-    if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
-    return {
-      artifact: validateArtifact(payload.artifact),
-      attachment: validateAttachment(payload.attachment),
-      contract: validateContract(payload.contract),
-    };
+    return generatedRequest(contractId, 'generate-pdf-from-docx');
   }
 
   static async generateDocx(contractId: string, _legacyTemplateId?: string): Promise<{ artifact: ContractArtifact; attachment: FileAttachment; contract: Contract }> {
-    const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/generate-docx`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
-    if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
-    return {
-      artifact: validateArtifact(payload.artifact),
-      attachment: validateAttachment(payload.attachment),
-      contract: validateContract(payload.contract),
-    };
+    return generatedRequest(contractId, 'generate-docx');
   }
 
   static async registerReviewedFinalPdf(contractId: string, attachmentId: string): Promise<ContractArtifact> {
