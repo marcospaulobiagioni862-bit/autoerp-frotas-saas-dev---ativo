@@ -6,7 +6,7 @@ import { canManuallyTransitionVehicleStatus } from '../domain/fleet/vehicleStatu
 import { AuditAction, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 
-type VehicleLifecycleAction = 'SOLD' | 'ARCHIVED';
+type VehicleLifecycleAction = 'SOLD' | 'ARCHIVED' | 'RESTORED';
 
 class VehicleLifecycleValidationError extends Error {}
 class VehicleLifecycleConflictError extends Error {}
@@ -233,6 +233,78 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
           item: updated,
           lifecycle: { id: lifecycleId, action, effectiveDate: saleDate, reason, disposalType, saleValue, buyerName, buyerDocument, finalKm, notes, createdAt: now },
         };
+      });
+      res.status(201).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/fleet/vehicles/:id/restore', async (req: Request, res: Response) => {
+    const principal = requireWritePrincipal(req, res);
+    if (!principal) return;
+
+    let restoreDate: string;
+    let reason: string;
+    try {
+      restoreDate = requiredDate(req.body?.restoreDate, 'restoreDate');
+      reason = requiredText(req.body?.reason, 'reason');
+    } catch (error) {
+      sendError(res, error);
+      return;
+    }
+
+    try {
+      const result = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const vehicleRepo = txContext.getVehicleRepo();
+        const existing = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!existing) throw new VehicleLifecycleNotFoundError();
+        if (existing.status !== VehicleStatus.SOLD || existing.isArchived) {
+          throw new VehicleLifecycleConflictError('Only a sold, non-archived vehicle can return to stock');
+        }
+
+        const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);
+        const hasBlockingMaintenance = await txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, '');
+        const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
+        if (hasCurrentBinding || hasBlockingMaintenance) {
+          throw new VehicleLifecycleConflictError('Vehicle reentry blocked by current operational bindings');
+        }
+
+        const now = new Date().toISOString();
+        const updated = await vehicleRepo.updateForCompany(principal.companyId, existing.id, {
+          status: VehicleStatus.AVAILABLE,
+          isArchived: false,
+          updatedAt: now,
+        });
+        if (!updated) throw new VehicleLifecycleNotFoundError();
+
+        const lifecycleId = randomUUID();
+        const action: VehicleLifecycleAction = 'RESTORED';
+        const raw = txContext.getRawTransaction();
+        await raw.execute(sql`
+          INSERT INTO vehicle_lifecycle_events (
+            id, company_id, vehicle_id, action, effective_date, reason, created_by, created_at
+          ) VALUES (
+            ${lifecycleId}, ${principal.companyId}, ${existing.id}, ${action}, ${restoreDate}, ${reason}, ${principal.userId}, ${now}
+          )
+        `);
+
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: existing.id,
+          action: AuditAction.UPDATE,
+          previousState: JSON.stringify({ status: existing.status, isArchived: existing.isArchived }),
+          newState: JSON.stringify({
+            status: VehicleStatus.AVAILABLE,
+            isArchived: false,
+            restoreDate,
+            reason,
+            lifecycleEventId: lifecycleId,
+            restoredVehicleId: existing.id,
+          }),
+          userId: principal.userId, userName: principal.name, timestamp: now,
+        });
+
+        return { item: updated, lifecycle: { id: lifecycleId, action, effectiveDate: restoreDate, reason, createdAt: now } };
       });
       res.status(201).json(result);
     } catch (error) {
