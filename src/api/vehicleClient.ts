@@ -145,9 +145,14 @@ export interface VehicleArchiveInput {
   reason: string;
 }
 
+export interface VehicleRestoreInput {
+  restoreDate: string;
+  reason: string;
+}
+
 export interface VehicleLifecycleEvent {
   id: string;
-  action: 'SOLD' | 'ARCHIVED';
+  action: 'SOLD' | 'ARCHIVED' | 'RESTORED';
   effectiveDate: string;
   reason: string;
   disposalType?: string;
@@ -170,6 +175,11 @@ export interface VehicleArchiveResult {
   lifecycle: VehicleLifecycleEvent;
 }
 
+export interface VehicleRestoreResult {
+  item: Vehicle;
+  lifecycle: VehicleLifecycleEvent;
+}
+
 export interface VehicleLifecycleHistoryResult {
   item: Vehicle;
   lifecycle: VehicleLifecycleEvent[];
@@ -179,7 +189,7 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
   const item = asRecord(value);
   if (
     typeof item.id !== 'string' ||
-    (item.action !== 'SOLD' && item.action !== 'ARCHIVED') ||
+    (item.action !== 'SOLD' && item.action !== 'ARCHIVED' && item.action !== 'RESTORED') ||
     typeof item.effectiveDate !== 'string' ||
     typeof item.reason !== 'string' ||
     typeof item.createdAt !== 'string'
@@ -318,6 +328,15 @@ export class VehicleClient {
 
   static async archive(id: string, input: VehicleArchiveInput): Promise<VehicleArchiveResult> {
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/archive`, {
+      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    return { item: validateVehicle(payload.item), lifecycle: validateLifecycle(payload.lifecycle) };
+  }
+
+  static async restore(id: string, input: VehicleRestoreInput): Promise<VehicleRestoreResult> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/restore`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
     if (!response.ok) throw await apiError(response);
