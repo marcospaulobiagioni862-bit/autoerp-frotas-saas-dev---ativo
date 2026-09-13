@@ -15,4 +15,12 @@ assert(routes.includes("signatureMethod: 'MANUAL_CONFIRMATION'"), 'manual confir
 assert(routes.includes("event: 'MANUAL_SIGN_STATUS'"), 'manual confirmation must create a server-side audit event');
 assert(client.includes('setManualSignStatus'), 'client must use the simple sign-status endpoint');
 
+assert(panel.includes('ContractTemplateClient.get(contract.templateId)'), 'execution panel must load the persisted linked template');
+assert(panel.includes('getMoveFlexApprovedContractMaster(template.templateKey)'), 'execution panel must preserve approved master generation');
+assert(panel.includes('ContractExecutionClient.generateDocx(contract.id)'), 'file-backed custom templates must generate DOCX');
+assert(panel.includes('ContractExecutionClient.generatePdf(contract.id)'), 'markdown and approved masters must generate PDF');
+assert(panel.includes('modelo já vinculado ao contrato'), 'panel must describe the canonical linked-model flow');
+assert(!panel.includes('modelo padrão já vinculado'), 'panel must not imply only two standard models are allowed');
+assert(!panel.includes('Nenhum modelo padrão vinculado'), 'panel must not imply only standard models are valid');
+
 console.log('contract simple sign status regression: ok');
