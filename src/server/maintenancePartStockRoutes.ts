@@ -27,4 +27,8 @@ export function registerMaintenancePartStockRoutes(app:Express):void{
     const result=await MaintenancePartStockAuthority.move(p,req.params.id,{movementType,quantity:Number(x.quantity),reason:x.reason===undefined?undefined:String(x.reason),idempotencyKey:String(x.idempotencyKey||'')});
     res.status(201).json(result);
   }catch(error){send(res,error);}});
+  app.post('/api/maintenance/parts/:id/movements/:movementId/reverse',async(req,res)=>{const p=actor(req,res,true);if(!p)return;try{
+    const x=body(req),allowed=new Set(['reason']);if(Object.keys(x).some(key=>!allowed.has(key)))throw new MaintenanceValidationError('Invalid payload');
+    res.status(201).json(await MaintenancePartStockAuthority.reverse(p,req.params.id,req.params.movementId,x.reason));
+  }catch(error){send(res,error);}});
 }
