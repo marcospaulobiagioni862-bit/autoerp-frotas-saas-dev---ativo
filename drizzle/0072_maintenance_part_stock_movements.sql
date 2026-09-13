@@ -56,6 +56,50 @@ FROM parts p
 WHERE p.current_stock > 0
 ON CONFLICT (company_id,idempotency_key) DO NOTHING;
 
+-- Validate catalog stock while the OS item is selected/persisted. This does not
+-- reserve stock; the completion trigger below is still the physical authority.
+CREATE OR REPLACE FUNCTION validate_work_order_part_stock_selection()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  available numeric(12,3);
+  part_status text;
+  requested numeric(12,3);
+BEGIN
+  IF NEW.part_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT current_stock,status INTO available,part_status
+  FROM parts
+  WHERE company_id=NEW.company_id AND id=NEW.part_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PART_NOT_FOUND:%', NEW.part_id USING ERRCODE='P0001';
+  END IF;
+  IF part_status <> 'ACTIVE' THEN
+    RAISE EXCEPTION 'PART_ARCHIVED:%', NEW.part_id USING ERRCODE='P0001';
+  END IF;
+
+  SELECT COALESCE(SUM(quantity),0) + NEW.quantity INTO requested
+  FROM work_order_parts
+  WHERE company_id=NEW.company_id
+    AND work_order_id=NEW.work_order_id
+    AND part_id=NEW.part_id
+    AND (TG_OP <> 'UPDATE' OR id <> NEW.id);
+  IF requested > available THEN
+    RAISE EXCEPTION 'INSUFFICIENT_PART_STOCK:%', NEW.part_id USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_validate_work_order_part_stock_selection ON work_order_parts;
+CREATE TRIGGER trg_validate_work_order_part_stock_selection
+BEFORE INSERT OR UPDATE OF part_id,quantity ON work_order_parts
+FOR EACH ROW
+EXECUTE FUNCTION validate_work_order_part_stock_selection();
+
 -- Physical consumption occurs only at the COMPLETED transition. A cancelled OS
 -- that never completes therefore never consumes stock. Quantity is aggregated
 -- by part to remain correct even if legacy data contains duplicate part lines.
