@@ -14,12 +14,14 @@ expect(migration.includes('CREATE TABLE IF NOT EXISTS part_stock_movements'),'mo
 expect(migration.includes('UNIQUE(company_id,idempotency_key)'),'idempotency constraint missing');
 expect(migration.includes('ENABLE ROW LEVEL SECURITY')&&migration.includes('tenant_isolation_part_stock_movements'),'tenant RLS missing');
 expect(migration.includes("movement_type IN ('ENTRY','USE_WORK_ORDER','ADJUSTMENT_IN','ADJUSTMENT_OUT','RETURN','LOSS','REVERSAL')"),'movement types incomplete');
+expect(migration.includes('validate_work_order_part_stock_selection')&&migration.includes('BEFORE INSERT OR UPDATE OF part_id,quantity'),'server-side stock validation at OS selection missing');
 expect(migration.includes('consume_work_order_parts_on_completion')&&migration.includes("NEW.status = 'COMPLETED'"),'OS completion stock hook missing');
 expect(migration.includes('INSUFFICIENT_PART_STOCK')&&migration.includes('PART_ARCHIVED'),'stock guards missing');
 expect(migration.includes('SUM(wop.quantity)'),'duplicate part aggregation missing');
 expect(authority.includes('findByIdForCompanyWithLock')&&authority.includes('next<0'),'manual stock locking/negative guard missing');
-expect(authority.includes("['ADJUSTMENT_IN','ADJUSTMENT_OUT','LOSS']")&&authority.includes('Motivo obrigatório'),'reason rule missing');
-expect(routes.includes("GET")===false && routes.includes("/api/maintenance/parts/:id/movements"),'stock routes missing');
+expect(authority.includes("type==='ADJUSTMENT_IN'||type==='ADJUSTMENT_OUT'||type==='LOSS'")&&authority.includes('Motivo obrigatório'),'reason rule missing');
+expect(authority.includes('static reverse(')&&authority.includes("key=`reverse:${movementId}`")&&authority.includes("movementType==='REVERSAL'"),'auditable idempotent reversal missing');
+expect(routes.includes('/api/maintenance/parts/:id/movements')&&routes.includes('/:movementId/reverse'),'stock routes missing');
 expect(archiveRoutes.includes('registerMaintenancePartStockRoutes(app)'),'stock routes not composed into maintenance API');
 expect(client.includes('listPartMovements')&&client.includes('movePartStock'),'stock client missing');
 console.log('maintenancePartStockRegression: ok');
