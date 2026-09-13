@@ -12,7 +12,7 @@ export interface Maintenance {
   accountPayableId?: string; receiptUrls?: string[]; notes?: string; createdAt: string; updatedAt: string;
 }
 
-export type WorkOrderStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'WAITING_APPROVAL' | 'COMPLETED' | 'CANCELLED';
+export type WorkOrderStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_PARTS' | 'WAITING_APPROVAL' | 'COMPLETED' | 'CANCELLED' | 'ARCHIVED';
 export interface WorkOrderPartItem { id:string; partId?:string; description:string; quantity:number; unitCost:number; totalCost:number; }
 export interface WorkOrderServiceItem { id:string; serviceId?:string; description:string; quantity:number; unitCost:number; totalCost:number; }
 export interface WorkOrderLaborItem { id:string; description:string; hours:number; hourlyRate:number; totalCost:number; }

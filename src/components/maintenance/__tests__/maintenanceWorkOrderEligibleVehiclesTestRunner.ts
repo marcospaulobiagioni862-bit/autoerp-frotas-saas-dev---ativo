@@ -78,8 +78,9 @@ assert.match(
 );
 
 assert.match(source, /useState<WorkOrderView>\('ACTIVE'\)/, 'maintenance must default to the current operational work-order queue');
-assert.match(source, /workOrderView==='ACTIVE'&&!historicalVehicle&&!\['COMPLETED','CANCELLED'\]\.includes\(wo\.status\)/, 'default queue must omit closed orders and orders from historical vehicles');
-assert.match(source, /<option value="HISTORICAL">Veículos vendidos\/baixados<\/option>/, 'historical vehicle work orders must remain explicitly searchable');
+assert.match(source, /workOrderView==='ACTIVE'&&!archived&&!\['COMPLETED','CANCELLED','ARCHIVED'\]\.includes\(wo\.status\)/, 'default queue must omit closed, archived, and historical-vehicle orders');
+assert.match(source, /workOrderView==='ARCHIVED'&&archived/, 'archived view must include explicitly archived work orders and orders from historical vehicles');
+assert.match(source, /<option value="ARCHIVED">Arquivadas<\/option>/, 'archived work orders must remain explicitly searchable');
 assert.match(source, /<option value="ALL">Todas<\/option>/, 'operators must retain access to the complete work-order history');
 assert.match(source, /setVehicleLifecycle\(Object\.fromEntries\(veh\.map/, 'historical filtering must derive vehicle lifecycle from the authorized vehicle payload');
 
