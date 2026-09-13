@@ -20,6 +20,7 @@ function send(res:Response,error:unknown):void{
 }
 function body(req:Request):Record<string,unknown>{if(!req.body||typeof req.body!=='object'||Array.isArray(req.body))throw new MaintenanceValidationError('Invalid payload');return req.body as Record<string,unknown>;}
 export function registerMaintenancePartStockRoutes(app:Express):void{
+  app.get('/api/maintenance/parts-stock-summary',async(req,res)=>{const p=actor(req,res,false);if(!p)return;try{res.json({items:await MaintenancePartStockAuthority.summary(p.companyId)});}catch(error){send(res,error);}});
   app.get('/api/maintenance/parts/:id/movements',async(req,res)=>{const p=actor(req,res,false);if(!p)return;try{res.json({items:await MaintenancePartStockAuthority.list(p.companyId,req.params.id)});}catch(error){send(res,error);}});
   app.post('/api/maintenance/parts/:id/movements',async(req,res)=>{const p=actor(req,res,true);if(!p)return;try{
     const x=body(req),allowed=new Set(['movementType','quantity','reason','idempotencyKey']);if(Object.keys(x).some(key=>!allowed.has(key)))throw new MaintenanceValidationError('Invalid payload');
