@@ -1,6 +1,6 @@
 export type VehicleDocumentIntakeStatus =
   | 'DRAFT' | 'DOCUMENT_UPLOADED' | 'EXTRACTING' | 'REVIEW_REQUIRED' | 'APPROVED' | 'CONSUMED' | 'FAILED' | 'ARCHIVED';
-export type VehicleIntakeDocumentType = 'CRLV' | 'CRV';
+export type VehicleIntakeDocumentType = 'CRLV' | 'CRV' | 'ATPV_E';
 
 export interface VehicleDocumentAiExtraction {
   id:string;
@@ -52,7 +52,7 @@ function record(value: unknown): Record<string, unknown> {
 function validate(value: unknown): VehicleDocumentIntake {
   const item = record(value);
   const statuses = new Set(['DRAFT','DOCUMENT_UPLOADED','EXTRACTING','REVIEW_REQUIRED','APPROVED','CONSUMED','FAILED','ARCHIVED']);
-  const types = new Set(['CRLV','CRV']);
+  const types = new Set(['CRLV','CRV','ATPV_E']);
   for (const key of ['id','companyId','createdBy','status','idempotencyKey','documentType','expiresAt','createdAt','updatedAt']) {
     if (typeof item[key] !== 'string') throw new Error('Invalid vehicle document intake payload');
   }
@@ -61,7 +61,7 @@ function validate(value: unknown): VehicleDocumentIntake {
 }
 function validateApprovedDraft(value: unknown): ApprovedVehicleDocumentDraft {
   const draft = record(value);
-  const types = new Set(['CRLV','CRV']);
+  const types = new Set(['CRLV','CRV','ATPV_E']);
   if (typeof draft.documentType !== 'string' || !types.has(draft.documentType)) throw new Error('Invalid approved vehicle document draft');
   const fields = record(draft.fields);
   const allowed = new Set(['plate','renavam','chassis','brand','model','manufactureYear','modelYear','fuel','ownerName']);
@@ -76,6 +76,7 @@ async function errorMessage(response: Response): Promise<string> {
 }
 export class VehicleDocumentIntakeClient {
   static async create(idempotencyKey: string, documentType: VehicleIntakeDocumentType): Promise<VehicleDocumentIntake> {
+    if (documentType === 'ATPV_E') throw new Error('ATPV-e não participa do fluxo de criação de veículo');
     const response = await fetch('/api/vehicle-document-intakes', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ idempotencyKey, documentType }),
