@@ -12,9 +12,16 @@ export interface PartStockMovement {
 }
 export interface MovePartStockInput { movementType:PartStockManualMovementType; quantity:number; reason?:string; idempotencyKey:string; }
 
+const MANUAL_TYPES:readonly PartStockManualMovementType[]=['ENTRY','ADJUSTMENT_IN','ADJUSTMENT_OUT','RETURN','LOSS'];
+const ALL_TYPES:readonly PartStockMovement['movementType'][]=[...MANUAL_TYPES,'USE_WORK_ORDER','REVERSAL'];
 const rows=(result:any):any[]=>Array.isArray(result?.rows)?result.rows:[];
+function parseMovementType(value:unknown):PartStockMovement['movementType']{
+  const type=String(value) as PartStockMovement['movementType'];
+  if(!ALL_TYPES.includes(type))throw new Error('Invalid stock movement type');
+  return type;
+}
 const movement=(row:any):PartStockMovement=>({
-  id:String(row.id),companyId:String(row.company_id),partId:String(row.part_id),movementType:String(row.movement_type) as PartStockMovement['movementType'],quantityDelta:Number(row.quantity_delta),balanceAfter:Number(row.balance_after),
+  id:String(row.id),companyId:String(row.company_id),partId:String(row.part_id),movementType:parseMovementType(row.movement_type),quantityDelta:Number(row.quantity_delta),balanceAfter:Number(row.balance_after),
   workOrderId:row.work_order_id?String(row.work_order_id):undefined,vehicleId:row.vehicle_id?String(row.vehicle_id):undefined,reason:row.reason?String(row.reason):undefined,reversedMovementId:row.reversed_movement_id?String(row.reversed_movement_id):undefined,
   idempotencyKey:String(row.idempotency_key),userId:String(row.user_id),userName:String(row.user_name),createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at),
 });
@@ -40,9 +47,10 @@ export class MaintenancePartStockAuthority {
     }
     const part=await tx.getPartRepo().findByIdForCompanyWithLock(p.companyId,partId);if(!part)throw new MaintenanceNotFoundError('Peça não encontrada');
     if(part.status!=='ACTIVE')throw new MaintenanceConflictError('Peça arquivada não aceita movimentação');
-    const type=input.movementType;if(!['ENTRY','ADJUSTMENT_IN','ADJUSTMENT_OUT','RETURN','LOSS'].includes(type))throw new MaintenanceValidationError('Invalid movement type');
+    const type:PartStockManualMovementType=input.movementType;
+    if(!MANUAL_TYPES.includes(type))throw new MaintenanceValidationError('Invalid movement type');
     const q=quantity(input.quantity),positive=type==='ENTRY'||type==='ADJUSTMENT_IN'||type==='RETURN',delta=positive?q:-q;
-    if(['ADJUSTMENT_IN','ADJUSTMENT_OUT','LOSS'].includes(type)&&!String(input.reason||'').trim())throw new MaintenanceValidationError('Motivo obrigatório');
+    if((type==='ADJUSTMENT_IN'||type==='ADJUSTMENT_OUT'||type==='LOSS')&&!String(input.reason||'').trim())throw new MaintenanceValidationError('Motivo obrigatório');
     const next=Number(part.currentStock)+delta;if(next<0)throw new MaintenanceConflictError('Estoque insuficiente para movimentação');
     const reason=input.reason===undefined?undefined:text(input.reason,'reason',500),now=new Date().toISOString(),id=randomUUID();
     const updated=await tx.getPartRepo().updateForCompany(p.companyId,partId,{...part,currentStock:next,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Peça não encontrada');
@@ -54,21 +62,4 @@ export class MaintenancePartStockAuthority {
     await tx.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'PartStockMovement',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify(created),userId:p.userId,userName:p.name,timestamp:now});
     return {part:updated,movement:created};
   }); }
-
-  static consumeForWorkOrder(tx:any,p:AuthenticatedPrincipal,workOrder:any):Promise<void>{
-    const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Maintenance persistence unavailable');
-    for(const item of workOrder.parts||[]){
-      if(!item.partId)continue;
-      const key=`work-order-use:${workOrder.id}:${item.id}`;
-      const existing=rows(await raw.execute(sql`SELECT id FROM part_stock_movements WHERE company_id=${p.companyId} AND idempotency_key=${key} LIMIT 1`))[0];if(existing)continue;
-      const part=await tx.getPartRepo().findByIdForCompanyWithLock(p.companyId,item.partId);if(!part)throw new MaintenanceNotFoundError('Peça não encontrada');if(part.status!=='ACTIVE')throw new MaintenanceConflictError('Peça arquivada não pode ser consumida');
-      const q=quantity(item.quantity),next=Number(part.currentStock)-q;if(next<0)throw new MaintenanceConflictError(`Estoque insuficiente para ${part.name}`);
-      const now=new Date().toISOString();const updated=await tx.getPartRepo().updateForCompany(p.companyId,part.id,{...part,currentStock:next,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Peça não encontrada');
-      const id=randomUUID();const inserted=rows(await raw.execute(sql`
-        INSERT INTO part_stock_movements (id,company_id,part_id,movement_type,quantity_delta,balance_after,work_order_id,vehicle_id,reason,idempotency_key,user_id,user_name,created_at)
-        VALUES (${id},${p.companyId},${part.id},'USE_WORK_ORDER',${String(-q)},${String(next)},${workOrder.id},${workOrder.vehicleId},'Consumo confirmado na conclusão da OS',${key},${p.userId},${p.name},${now}) RETURNING *
-      `))[0];
-      await tx.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'PartStockMovement',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify(movement(inserted)),userId:p.userId,userName:p.name,timestamp:now});
-    }
-  }
 }
