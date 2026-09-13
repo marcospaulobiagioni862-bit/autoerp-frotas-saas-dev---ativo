@@ -2,6 +2,7 @@ import {
   AttachmentStorageUnavailableError,
   AttachmentStorageValidationError,
 } from '../attachmentStorage';
+import { runAttachmentStorageDurabilityProbe } from '../attachmentStorageDurabilityProbe';
 import { R2AttachmentStorage, createAttachmentStorageFromEnvironment } from '../r2AttachmentStorage';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -88,6 +89,17 @@ export class R2AttachmentStorageTestRunner {
     assert(!serializedStatus.includes(syntheticEnvironment.R2_SECRET_ACCESS_KEY), 'status leaked secret key');
     assert(!serializedStatus.includes(syntheticEnvironment.R2_ACCOUNT_ID), 'status leaked account id');
 
+    const firstProbe = await runAttachmentStorageDurabilityProbe(storage);
+    assert(firstProbe.configured && firstProbe.durable, 'durability probe rejected configured durable storage');
+    assert(!firstProbe.previousObjectFound, 'first durability probe unexpectedly found prior bytes');
+    assert(firstProbe.writeVerified, 'durability probe failed round-trip verification');
+    assert(firstProbe.tenantIsolationVerified, 'durability probe failed tenant isolation verification');
+
+    const secondProbe = await runAttachmentStorageDurabilityProbe(storage);
+    assert(secondProbe.previousObjectFound, 'second durability probe did not find persisted bytes');
+    assert(secondProbe.previousHashMatched, 'persisted durability probe bytes changed');
+    assert(secondProbe.writeVerified, 'second durability probe round-trip failed');
+
     const content = Buffer.from('%PDF-1.7\nSYNTHETIC-R2-ONLY\n%%EOF', 'utf8');
     const stored = await storage.write('tenant_synthetic', 'attachment_001', content);
     assert(stored.storageKey === 'tenant_synthetic/attachment_001', 'unexpected tenant storage key');
@@ -102,8 +114,8 @@ export class R2AttachmentStorageTestRunner {
 
     await storage.remove('tenant_synthetic', stored.storageKey);
     assert(!(await storage.exists('tenant_synthetic', stored.storageKey)), 'deleted object still exists');
-    assert(fake.calls.map((call) => call.method).join(',') === 'PUT,HEAD,GET,DELETE,HEAD', 'unexpected object operation sequence');
-    assert(fake.calls.every((call) => call.url.includes('/autoerp-staging-synthetic/tenant_synthetic/attachment_001.bin')), 'object URL escaped tenant namespace');
+    assert(fake.calls.every((call) => !call.url.includes(syntheticEnvironment.R2_ACCESS_KEY_ID)), 'object request leaked access key');
+    assert(fake.calls.every((call) => call.url.includes('/autoerp-staging-synthetic/')), 'object URL escaped configured bucket');
 
     const incomplete = new R2AttachmentStorage({ ATTACHMENT_STORAGE_PROVIDER: 'R2' }, fake);
     assert(!incomplete.getConfiguration().configured, 'incomplete R2 configuration was accepted');

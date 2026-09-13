@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
+import { runAttachmentStorageDurabilityProbe } from './attachmentStorageDurabilityProbe';
 import { inspectDocumentAiRuntimeMode } from './documentAiObservability';
 import { registerContractSimpleSignRoutes } from './contractSimpleSignRoutes';
 import { registerContractFinanceReconcileRoutes } from './contractFinanceReconcileRoutes';
@@ -38,6 +39,16 @@ function resolveBuildIdentity(env: NodeJS.ProcessEnv): BuildIdentity {
 export function registerOpsHealthRoutes(app: Express): void {
   registerContractSimpleSignRoutes(app);
   registerContractFinanceReconcileRoutes(app);
+
+  const attachmentStorage = createAttachmentStorageFromEnvironment(process.env);
+  void runAttachmentStorageDurabilityProbe(attachmentStorage)
+    .then((result) => {
+      console.log('AUTOERP_ATTACHMENT_STORAGE_DURABILITY_PROBE', JSON.stringify(result));
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : 'unknown storage probe error';
+      console.error('AUTOERP_ATTACHMENT_STORAGE_DURABILITY_PROBE_FAILURE', message);
+    });
 
   app.get('/api/ops/health', async (req: Request, res: Response) => {
     const principal = req.principal;
