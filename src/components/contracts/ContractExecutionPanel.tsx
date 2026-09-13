@@ -91,8 +91,12 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   };
 
   const generateOfficial = () => {
-    if (!contract.templateId || !template) {
+    if (!contract.templateId) {
       setError('Este contrato não possui um modelo válido vinculado. Edite o contrato antes de gerar o documento.');
+      return;
+    }
+    if (!template) {
+      setError('O modelo vinculado ainda não está disponível para geração. Reabra o contrato e tente novamente.');
       return;
     }
     const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
