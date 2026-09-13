@@ -8,7 +8,7 @@ export class MaintenanceApiError extends Error {
 }
 
 type JsonRecord = Record<string, unknown>;
-const WORK_ORDER_STATUSES = new Set<WorkOrderStatus>(['OPEN','IN_PROGRESS','WAITING_PARTS','WAITING_APPROVAL','COMPLETED','CANCELLED']);
+const WORK_ORDER_STATUSES = new Set<WorkOrderStatus>(['OPEN','IN_PROGRESS','WAITING_PARTS','WAITING_APPROVAL','COMPLETED','CANCELLED','ARCHIVED']);
 function asRecord(value: unknown): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid maintenance API response');
   return value as JsonRecord;
@@ -96,6 +96,7 @@ export class MaintenanceClient {
   static async startWorkOrder(id:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/start`,json('POST',{}))).item); }
   static async completeWorkOrder(id:string,input:WorkOrderCompleteRequest):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/complete`,json('POST',input))).item); }
   static async cancelWorkOrder(id:string,reason:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/cancel`,json('POST',{reason}))).item); }
+  static async archiveWorkOrder(id:string,reason:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/archive`,json('POST',{reason}))).item); }
   static async listSuppliers():Promise<Supplier[]>{ return list(await request('/api/maintenance/suppliers'),validateSupplier); }
   static async createSupplier(input:SupplierCreateRequest):Promise<Supplier>{ return validateSupplier((await request('/api/maintenance/suppliers',json('POST',input))).item); }
   static async updateSupplier(id:string,input:Partial<SupplierCreateRequest>&{status?:'ACTIVE'|'INACTIVE'}):Promise<Supplier>{ return validateSupplier((await request(`/api/maintenance/suppliers/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
