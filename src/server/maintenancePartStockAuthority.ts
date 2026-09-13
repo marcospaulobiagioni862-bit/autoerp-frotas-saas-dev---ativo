@@ -38,7 +38,8 @@ export class MaintenancePartStockAuthority {
 
   static move(p:AuthenticatedPrincipal,partId:string,input:MovePartStockInput):Promise<{part:any;movement:PartStockMovement}> { return UnitOfWork.run(p.companyId,async tx=>{
     const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Maintenance persistence unavailable');
-    const existingRows=rows(await raw.execute(sql`SELECT * FROM part_stock_movements WHERE company_id=${p.companyId} AND idempotency_key=${text(input.idempotencyKey,'idempotencyKey',200)} LIMIT 1`));
+    const idempotencyKey=text(input.idempotencyKey,'idempotencyKey',200);
+    const existingRows=rows(await raw.execute(sql`SELECT * FROM part_stock_movements WHERE company_id=${p.companyId} AND idempotency_key=${idempotencyKey} LIMIT 1`));
     if(existingRows[0]){
       const existing=movement(existingRows[0]);
       if(existing.partId!==partId)throw new MaintenanceConflictError('Chave de idempotência já usada em outra peça');
@@ -56,10 +57,36 @@ export class MaintenancePartStockAuthority {
     const updated=await tx.getPartRepo().updateForCompany(p.companyId,partId,{...part,currentStock:next,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Peça não encontrada');
     const inserted=rows(await raw.execute(sql`
       INSERT INTO part_stock_movements (id,company_id,part_id,movement_type,quantity_delta,balance_after,reason,idempotency_key,user_id,user_name,created_at)
-      VALUES (${id},${p.companyId},${partId},${type},${String(delta)},${String(next)},${reason||null},${input.idempotencyKey.trim()},${p.userId},${p.name},${now}) RETURNING *
+      VALUES (${id},${p.companyId},${partId},${type},${String(delta)},${String(next)},${reason||null},${idempotencyKey},${p.userId},${p.name},${now}) RETURNING *
     `))[0];
     const created=movement(inserted);
     await tx.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'PartStockMovement',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify(created),userId:p.userId,userName:p.name,timestamp:now});
+    return {part:updated,movement:created};
+  }); }
+
+  static reverse(p:AuthenticatedPrincipal,partId:string,movementId:string,reasonValue:unknown):Promise<{part:any;movement:PartStockMovement}> { return UnitOfWork.run(p.companyId,async tx=>{
+    const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Maintenance persistence unavailable');
+    const reason=text(reasonValue,'reason',500),key=`reverse:${movementId}`;
+    const existingReverse=rows(await raw.execute(sql`SELECT * FROM part_stock_movements WHERE company_id=${p.companyId} AND idempotency_key=${key} LIMIT 1`))[0];
+    if(existingReverse){
+      const existing=movement(existingReverse);if(existing.partId!==partId)throw new MaintenanceConflictError('Estorno pertence a outra peça');
+      const current=await tx.getPartRepo().findByIdForCompany(p.companyId,partId);if(!current)throw new MaintenanceNotFoundError('Peça não encontrada');
+      return {part:current,movement:existing};
+    }
+    const originalRow=rows(await raw.execute(sql`SELECT * FROM part_stock_movements WHERE company_id=${p.companyId} AND part_id=${partId} AND id=${movementId} LIMIT 1`))[0];
+    if(!originalRow)throw new MaintenanceNotFoundError('Movimento não encontrado');
+    const original=movement(originalRow);if(original.movementType==='REVERSAL')throw new MaintenanceConflictError('Movimento de estorno não pode ser estornado novamente');
+    const alreadyReversed=rows(await raw.execute(sql`SELECT id FROM part_stock_movements WHERE company_id=${p.companyId} AND reversed_movement_id=${movementId} LIMIT 1`))[0];if(alreadyReversed)throw new MaintenanceConflictError('Movimento já estornado');
+    const part=await tx.getPartRepo().findByIdForCompanyWithLock(p.companyId,partId);if(!part)throw new MaintenanceNotFoundError('Peça não encontrada');
+    const delta=-original.quantityDelta,next=Number(part.currentStock)+delta;if(next<0)throw new MaintenanceConflictError('Estorno deixaria estoque negativo');
+    const now=new Date().toISOString(),id=randomUUID();
+    const updated=await tx.getPartRepo().updateForCompany(p.companyId,partId,{...part,currentStock:next,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Peça não encontrada');
+    const inserted=rows(await raw.execute(sql`
+      INSERT INTO part_stock_movements (id,company_id,part_id,movement_type,quantity_delta,balance_after,work_order_id,vehicle_id,reason,reversed_movement_id,idempotency_key,user_id,user_name,created_at)
+      VALUES (${id},${p.companyId},${partId},'REVERSAL',${String(delta)},${String(next)},${original.workOrderId||null},${original.vehicleId||null},${reason},${movementId},${key},${p.userId},${p.name},${now}) RETURNING *
+    `))[0];
+    const created=movement(inserted);
+    await tx.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'PartStockMovement',entityId:id,action:AuditAction.CREATE,previousState:JSON.stringify(original),newState:JSON.stringify(created),userId:p.userId,userName:p.name,timestamp:now});
     return {part:updated,movement:created};
   }); }
 }
