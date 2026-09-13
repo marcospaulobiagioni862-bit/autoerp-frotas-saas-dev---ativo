@@ -29,6 +29,12 @@ const text=(value:unknown,field:string,max:number):string=>{const result=typeof 
 const quantity=(value:unknown):number=>{const n=Number(value);if(!Number.isFinite(n)||n<=0)throw new MaintenanceValidationError('Invalid quantity');return n;};
 
 export class MaintenancePartStockAuthority {
+  static summary(companyId:string):Promise<PartStockMovement[]> { return UnitOfWork.run(companyId,async tx=>{
+    const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Maintenance persistence unavailable');
+    const result=await raw.execute(sql`SELECT DISTINCT ON (part_id) * FROM part_stock_movements WHERE company_id=${companyId} ORDER BY part_id,created_at DESC,id DESC`);
+    return rows(result).map(movement);
+  }); }
+
   static list(companyId:string,partId:string):Promise<PartStockMovement[]> { return UnitOfWork.run(companyId,async tx=>{
     const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Maintenance persistence unavailable');
     const part=await tx.getPartRepo().findByIdForCompany(companyId,partId);if(!part)throw new MaintenanceNotFoundError('Peça não encontrada');
