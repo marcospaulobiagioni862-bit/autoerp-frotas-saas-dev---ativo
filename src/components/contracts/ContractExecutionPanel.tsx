@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
-import type { Contract, ContractArtifact } from '../../types/entities';
+import { ContractTemplateClient } from '../../api/contractTemplateClient';
+import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
+import type { Contract, ContractArtifact, ContractTemplate } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { Badge, Button, Card } from '../ui';
 
@@ -25,6 +27,7 @@ const signatureMethodLabel = (method?: ContractArtifact['signatureMethod']): str
 export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ contract, incomeCategoryId, onChanged, focusOnOpen = false }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [artifacts, setArtifacts] = useState<ContractArtifact[]>([]);
+  const [template, setTemplate] = useState<ContractTemplate | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -45,7 +48,12 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
 
   const load = async () => {
     try {
-      setArtifacts(await ContractExecutionClient.listArtifacts(contract.id));
+      const [nextArtifacts, nextTemplate] = await Promise.all([
+        ContractExecutionClient.listArtifacts(contract.id),
+        contract.templateId ? ContractTemplateClient.get(contract.templateId) : Promise.resolve(null),
+      ]);
+      setArtifacts(nextArtifacts);
+      setTemplate(nextTemplate);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Erro ao carregar execução do contrato.');
     }
@@ -54,6 +62,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   useEffect(() => {
     setError(null);
     setSuccess(null);
+    setTemplate(null);
     void load();
   }, [contract.id, contract.templateId]);
 
@@ -82,13 +91,21 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
   };
 
   const generateOfficial = () => {
-    if (!contract.templateId) {
-      setError('Este contrato não possui um dos modelos padrão vinculado. Edite o contrato antes de gerar o documento.');
+    if (!contract.templateId || !template) {
+      setError('Este contrato não possui um modelo válido vinculado. Edite o contrato antes de gerar o documento.');
       return;
     }
+    const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+    const fileBackedCustomTemplate = !approvedMaster && !template.contentMarkdown.trim();
     void run(async () => {
+      if (fileBackedCustomTemplate) {
+        await ContractExecutionClient.generateDocx(contract.id);
+        return;
+      }
       await ContractExecutionClient.generatePdf(contract.id);
-    }, 'PDF oficial gerado a partir do modelo padrão vinculado ao contrato.');
+    }, fileBackedCustomTemplate
+      ? 'DOCX preenchido gerado a partir do modelo vinculado ao contrato.'
+      : 'PDF oficial gerado a partir do modelo vinculado ao contrato.');
   };
 
   const openAttachment = (attachmentId: string) => {
@@ -128,7 +145,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-slate-500">
-            O documento é gerado exclusivamente a partir do modelo padrão já vinculado ao contrato. Depois da assinatura externa, basta confirmar o status no ERP.
+            O documento é gerado a partir do modelo já vinculado ao contrato. Depois da assinatura externa, basta confirmar o status no ERP.
           </p>
         </div>
         <Badge variant={signed ? 'success' : generated ? 'warning' : 'neutral'}>
@@ -145,7 +162,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
           <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/50">
             <b>Modelo vinculado ao contrato</b>
             <div className="mt-1 text-slate-500">
-              {contract.templateId ? 'Definido no cadastro do contrato e protegido pelo servidor.' : 'Nenhum modelo padrão vinculado.'}
+              {contract.templateId ? 'Definido no cadastro do contrato e protegido pelo servidor.' : 'Nenhum modelo vinculado.'}
             </div>
           </div>
           {generated ? (
@@ -170,7 +187,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
             <p className="text-xs text-slate-500">Nenhum documento oficial foi gerado para este contrato.</p>
           )}
           {canGenerate && (
-            <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!contract.templateId}>
+            <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!contract.templateId || !template}>
               {generated ? <RefreshCw className="w-4 h-4" /> : <FileText className="w-4 h-4" />}{generated ? 'Regenerar documento' : 'Gerar documento'}
             </Button>
           )}
