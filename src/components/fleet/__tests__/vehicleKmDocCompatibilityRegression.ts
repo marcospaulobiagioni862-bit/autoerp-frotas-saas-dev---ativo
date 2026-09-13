@@ -21,7 +21,7 @@ assert.ok(modalSource.includes("document.documentElement.style.overflow = 'hidde
 assert.ok(modalSource.includes("if (appMain) appMain.style.overflow = 'hidden'"), 'modal must lock app main scroll');
 
 assert.ok(!intakeModalSource.includes("{value:'ATPV_E',label:'ATPV-e'}"), 'ATPV-e must not appear in vehicle creation document selector');
-assert.ok(intakeClientSource.includes("VehicleIntakeDocumentType = 'CRLV' | 'CRV'"), 'creation intake client must exclude ATPV-e');
+assert.ok(intakeClientSource.includes("if (documentType === 'ATPV_E') throw new Error('ATPV-e não participa do fluxo de criação de veículo')"), 'creation intake client must fail closed for ATPV-e while preserving historical payload compatibility');
 assert.ok(crlvRouteSource.includes('assertReviewedCrlvMatchesVehicle(existing, extraction.proposedFields, extraction.corrections)'), 'server must compare approved CRLV identity with the opened vehicle before applying fields');
 
 const vehicle = {
