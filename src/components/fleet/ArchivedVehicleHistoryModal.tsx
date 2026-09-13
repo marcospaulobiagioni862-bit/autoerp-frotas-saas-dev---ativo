@@ -20,6 +20,7 @@ interface ArchivedVehicleHistoryModalProps {
 type Tab = 'overview' | 'driver' | 'km' | 'maintenance' | 'tickets' | 'documents' | 'financial' | 'lifecycle';
 
 const dateBR = (value?: string) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR') : '-';
+const lifecycleLabel = (action: VehicleLifecycleEvent['action']) => action === 'SOLD' ? 'Venda' : action === 'RESTORED' ? 'Retorno ao estoque' : 'Arquivamento';
 
 export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalProps> = ({ isOpen, onClose, vehicleId }) => {
   const [summary, setSummary] = useState<VehicleDetailedSummary | null>(null);
@@ -69,7 +70,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
       isOpen={isOpen}
       onClose={onClose}
       title={vehicle ? `Histórico somente leitura — ${vehicle.plate} (${vehicle.brand} ${vehicle.model})` : 'Histórico do veículo'}
-      subtitle="Visualização somente leitura. Venda ou arquivamento não apagam vínculos, documentos nem histórico operacional."
+      subtitle="Visualização somente leitura. Venda, reentrada ou arquivamento não apagam vínculos, documentos nem histórico operacional."
       maxWidth="4xl"
     >
       {loading ? (
@@ -121,7 +122,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
             <div className="space-y-2 text-xs">
               {lifecycle.length === 0 ? <p className="p-5 border rounded-xl text-slate-500 text-center">Nenhum evento de ciclo de vida registrado.</p> : lifecycle.map((event) => (
                 <div key={event.id} className="p-3 border rounded-xl">
-                  <div className="flex justify-between gap-3"><strong>{event.action === 'SOLD' ? 'Venda' : 'Arquivamento'}</strong><span>{dateBR(event.effectiveDate)}</span></div>
+                  <div className="flex justify-between gap-3"><strong>{lifecycleLabel(event.action)}</strong><span>{dateBR(event.effectiveDate)}</span></div>
                   <p className="mt-1">Motivo: {event.reason}</p>
                   {event.saleValue !== undefined && <p>Valor: {formatCurrencyBRL(event.saleValue)}</p>}
                   {event.finalKm !== undefined && <p>KM final: {event.finalKm.toLocaleString('pt-BR')} KM</p>}
