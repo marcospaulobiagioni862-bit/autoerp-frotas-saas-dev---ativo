@@ -99,6 +99,7 @@ export class VehicleLegacyDetailsBridge {
     const totalRevenue=receivables.filter(item=>item.status===ObligationStatus.PAID).reduce((sum,item)=>sum+item.paidAmount,0);
     const totalExpenses=payables.filter(item=>item.status===ObligationStatus.PAID).reduce((sum,item)=>sum+item.paidAmount,0);
     const netProfit=totalRevenue-totalExpenses,profitMargin=totalRevenue>0?(netProfit/totalRevenue)*100:0;
+    const visibleKmRecords=kmRecords.filter((record,index,records)=>index===0||record.kmValue!==records[index-1].kmValue);
 
     return {
       vehicle,
@@ -110,7 +111,7 @@ export class VehicleLegacyDetailsBridge {
       documents,
       insurances,
       trackers,
-      kmRecords:[...kmRecords],
+      kmRecords:visibleKmRecords,
       historyLogs,
       financialSummary:{totalRevenue,totalExpenses,netProfit,profitMargin},
     };
