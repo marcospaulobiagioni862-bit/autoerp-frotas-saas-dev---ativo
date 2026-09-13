@@ -92,18 +92,49 @@ function normalizedYear(value: string | number, field: string): number {
   return year;
 }
 
-export function buildVehicleChangesFromReviewedCrlv(
-  proposedFields: unknown,
-  corrections: unknown,
-  selectedFields: readonly VehicleCrlvField[],
-): Partial<Vehicle> {
+function reviewedSource(proposedFields: unknown, corrections: unknown): Record<string, unknown> {
   const proposed = proposedFields && typeof proposedFields === 'object' && !Array.isArray(proposedFields)
     ? proposedFields as Record<string, unknown>
     : {};
   const reviewedCorrections = corrections && typeof corrections === 'object' && !Array.isArray(corrections)
     ? corrections as Record<string, unknown>
     : {};
-  const source = { ...proposed, ...reviewedCorrections };
+  return { ...proposed, ...reviewedCorrections };
+}
+
+export function assertReviewedCrlvMatchesVehicle(
+  vehicle: Pick<Vehicle, 'plate' | 'renavam' | 'chassis'>,
+  proposedFields: unknown,
+  corrections: unknown,
+): void {
+  const source = reviewedSource(proposedFields, corrections);
+  const checks: Array<[string, string, string]> = [];
+
+  if (source.plate !== undefined && source.plate !== null && String(source.plate).trim()) {
+    checks.push(['placa', normalizedPlate(source.plate as string | number), normalizedPlate(vehicle.plate)]);
+  }
+  if (source.renavam !== undefined && source.renavam !== null && String(source.renavam).trim() && vehicle.renavam) {
+    checks.push(['RENAVAM', normalizedRenavam(source.renavam as string | number), normalizedRenavam(vehicle.renavam)]);
+  }
+  if (source.chassis !== undefined && source.chassis !== null && String(source.chassis).trim() && vehicle.chassis) {
+    checks.push(['chassi', normalizedChassis(source.chassis as string | number), normalizedChassis(vehicle.chassis)]);
+  }
+
+  if (checks.length === 0) {
+    throw new VehicleCrlvApplyValidationError('CRLV aprovado sem identificador compatível com o veículo aberto');
+  }
+  const mismatch = checks.find(([, reviewed, current]) => reviewed !== current);
+  if (mismatch) {
+    throw new VehicleCrlvApplyValidationError(`CRLV incompatível com o veículo aberto: ${mismatch[0]} divergente`);
+  }
+}
+
+export function buildVehicleChangesFromReviewedCrlv(
+  proposedFields: unknown,
+  corrections: unknown,
+  selectedFields: readonly VehicleCrlvField[],
+): Partial<Vehicle> {
+  const source = reviewedSource(proposedFields, corrections);
   const changes: Partial<Vehicle> = {};
 
   for (const field of selectedFields) {
