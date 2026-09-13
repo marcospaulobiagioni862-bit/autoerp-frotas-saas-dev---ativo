@@ -1,60 +1,72 @@
-import React, { useEffect, useState } from 'react';
-import { AccountReceivable } from '../../types/entities';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { AccountReceivable, Driver, Vehicle } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { FinanceMasterDataClient } from '../../api/financeMasterDataClient';
+import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
-import {
-  TrendingUp,
-  Search,
-  Filter,
-  RefreshCw,
-  X,
-  Plus,
-} from 'lucide-react';
-import { AttachmentModal } from '../documents/AttachmentModal';
+import { roundCurrency } from '../../shared/utils/currency';
+import { TrendingUp, Search, Filter, RefreshCw, X, Plus } from 'lucide-react';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
-import { FolderOpen } from 'lucide-react';
-import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer, Select } from '../ui';
+import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer } from '../ui';
 
 interface ReceivablesViewProps {
   onOpenReceiptModal: (receivable: AccountReceivable) => void;
   onOpenRenegotiationModal: (receivables: AccountReceivable[]) => void;
 }
 
-export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
-  onOpenReceiptModal,
-  onOpenRenegotiationModal,
-}) => {
+const OTHER_CATEGORY = '__OTHER_DIVERSE__';
+
+function installmentPreview(total: number, count: number, firstDueDate: string): Array<{ number: number; dueDate: string; amount: number }> {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isInteger(count) || count < 1 || !firstDueDate) return [];
+  const baseAmount = roundCurrency(total / count);
+  return Array.from({ length: count }, (_, index) => {
+    const number = index + 1;
+    const due = new Date(firstDueDate);
+    if (number > 1) due.setMonth(due.getMonth() + index);
+    const amount = number === count ? roundCurrency(total - baseAmount * (count - 1)) : baseAmount;
+    return { number, dueDate: due.toISOString().slice(0, 10), amount };
+  });
+}
+
+function formatMoney(value: number): string {
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptModal, onOpenRenegotiationModal }) => {
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [detailsTarget, setDetailsTarget] = useState<AccountReceivable | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
 
-  // Manual Creation State
-  const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
-  const [description, setDescription] = useState<string>('');
-  const [totalAmount, setTotalAmount] = useState<string>('');
-  const [dueDate, setDueDate] = useState<string>('');
-  const [competenceDate, setCompetenceDate] = useState<string>('');
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [installmentsCount, setInstallmentsCount] = useState<string>('1');
-  const [driverId, setDriverId] = useState<string>('');
-  const [vehicleId, setVehicleId] = useState<string>('');
-  const [contractId, setContractId] = useState<string>('');
-  const [createLoading, setCreateLoading] = useState<boolean>(false);
-
-  // Cancellation confirm dialog state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [description, setDescription] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [competenceDate, setCompetenceDate] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [otherCategoryName, setOtherCategoryName] = useState('');
+  const [installmentsCount, setInstallmentsCount] = useState('1');
+  const [driverId, setDriverId] = useState('');
+  const [vehicleId, setVehicleId] = useState('');
+  const [contractId, setContractId] = useState('');
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [manualOptionsLoading, setManualOptionsLoading] = useState(false);
+  const [manualOptionsError, setManualOptionsError] = useState<string | null>(null);
+  const [createLoading, setCreateLoading] = useState(false);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadReceivables();
-  }, []);
+  const preview = useMemo(
+    () => installmentPreview(Number(totalAmount), Math.max(1, Number.parseInt(installmentsCount, 10) || 1), dueDate),
+    [totalAmount, installmentsCount, dueDate]
+  );
 
   const loadReceivables = async () => {
     setLoading(true);
@@ -65,12 +77,13 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
       ]);
       const incomeCategories = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
       setCategories(incomeCategories);
-      setCategoryId((current) => incomeCategories.some((category) => category.id === current) ? current : (incomeCategories[0]?.id || ''));
+      setCategoryId((current) => current === OTHER_CATEGORY || incomeCategories.some((category) => category.id === current)
+        ? current
+        : (incomeCategories[0]?.id || ''));
       setReceivables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
       if (isAuthenticationExpiredError(err)) return;
-      const message = err instanceof Error ? err.message : 'Erro ao carregar contas a receber.';
-      alert(message);
+      alert(err instanceof Error ? err.message : 'Erro ao carregar contas a receber.');
       setReceivables([]);
       setCategories([]);
       setCategoryId('');
@@ -79,44 +92,98 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
     }
   };
 
-  const handleCreateReceivable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+  useEffect(() => { void loadReceivables(); }, []);
+
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    let active = true;
+    setManualOptionsLoading(true);
+    setManualOptionsError(null);
+    Promise.all([DriverClient.list(), VehicleClient.list()])
+      .then(([driverList, vehicleList]) => {
+        if (!active) return;
+        setDrivers(driverList.filter((item) => !item.isArchived).sort((a, b) => a.fullName.localeCompare(b.fullName, 'pt-BR')));
+        setVehicles(vehicleList.filter((item) => !item.isArchived).sort((a, b) => a.plate.localeCompare(b.plate, 'pt-BR')));
+      })
+      .catch((err) => {
+        if (!active || isAuthenticationExpiredError(err)) return;
+        setDrivers([]);
+        setVehicles([]);
+        setManualOptionsError(err instanceof Error ? err.message : 'Não foi possível carregar motoristas e veículos cadastrados.');
+      })
+      .finally(() => { if (active) setManualOptionsLoading(false); });
+    return () => { active = false; };
+  }, [isCreateOpen]);
+
+  const resolveCategoryId = async (): Promise<string> => {
+    if (categoryId !== OTHER_CATEGORY) return categoryId;
+    const name = otherCategoryName.trim();
+    if (!name) throw new Error('Informe qual é a categoria em Outros / Diversos.');
+    const existing = categories.find((category) => category.name.trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
+    if (existing) return existing.id;
+    await FinanceMasterDataClient.createCategory({ name, type: 'INCOME' });
+    const masterData = await FinanceMasterDataClient.list();
+    const created = masterData.categories.find((category) =>
+      category.active && (category.type === 'INCOME' || category.type === 'BOTH') &&
+      category.name.trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR')
+    );
+    if (!created) throw new Error('A categoria foi solicitada, mas não pôde ser confirmada pela autoridade financeira.');
+    const refreshed = masterData.categories
+      .filter((category) => category.active && (category.type === 'INCOME' || category.type === 'BOTH'))
+      .map((category) => ({ id: category.id, name: category.name, type: category.type } as TrafficTicketFinancialCategory));
+    setCategories(refreshed);
+    return created.id;
+  };
+
+  const resetCreateForm = () => {
+    setDescription('');
+    setTotalAmount('');
+    setDueDate('');
+    setCompetenceDate('');
+    setInstallmentsCount('1');
+    setDriverId('');
+    setVehicleId('');
+    setContractId('');
+    setOtherCategoryName('');
+    setCategoryId(categories[0]?.id || '');
+    setManualOptionsError(null);
+  };
+
+  const handleCreateReceivable = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const total = Number(totalAmount);
+    const installments = Math.max(1, Number.parseInt(installmentsCount, 10) || 1);
+    if (!description.trim() || !Number.isFinite(total) || total <= 0 || !dueDate || !categoryId) {
+      alert('Preencha descrição, valor maior que zero, vencimento e categoria.');
+      return;
+    }
+    if (installments > 120) {
+      alert('A quantidade de parcelas deve estar entre 1 e 120.');
       return;
     }
     setCreateLoading(true);
     try {
+      const effectiveCategoryId = await resolveCategoryId();
       await FinanceObligationClient.createReceivable({
         originType: OriginType.MANUAL,
-        originId: 'manual-' + Date.now(),
-        categoryId,
-        description,
-        totalAmount: parseFloat(totalAmount),
+        originId: `manual-${Date.now()}`,
+        categoryId: effectiveCategoryId,
+        description: description.trim(),
+        totalAmount: total,
         dueDate,
         competenceDate: competenceDate || dueDate,
-        installmentsCount: parseInt(installmentsCount) || 1,
-        driverId: driverId.trim() || undefined,
-        vehicleId: vehicleId.trim() || undefined,
+        installmentsCount: installments,
+        driverId: driverId || undefined,
+        vehicleId: vehicleId || undefined,
         contractId: contractId.trim() || undefined,
       });
-      setActionMessage('Novo título a receber criado com sucesso!');
+      setActionMessage(installments > 1 ? `${installments} parcelas a receber criadas com sucesso.` : 'Novo título a receber criado com sucesso.');
       setIsCreateOpen(false);
-      // Reset form
-      setDescription('');
-      setTotalAmount('');
-      setDueDate('');
-      setCompetenceDate('');
-      setCategoryId(categories[0]?.id || '');
-      setInstallmentsCount('1');
-      setDriverId('');
-      setVehicleId('');
-      setContractId('');
-      // Reload
+      resetCreateForm();
       await loadReceivables();
-    } catch (err: any) {
+    } catch (err) {
       if (isAuthenticationExpiredError(err)) return;
-      alert(err.message || 'Erro ao criar título a receber.');
+      alert(err instanceof Error ? err.message : 'Erro ao criar título a receber.');
     } finally {
       setCreateLoading(false);
     }
@@ -125,361 +192,102 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({
   const confirmCancel = async () => {
     if (!cancelTargetId) return;
     try {
-      const item = receivables.find((r) => r.id === cancelTargetId);
-      if (!item) {
-        alert('Título a receber não encontrado na lista atual.');
-        setCancelTargetId(null);
-        return;
-      }
+      const item = receivables.find((receivable) => receivable.id === cancelTargetId);
+      if (!item) throw new Error('Título a receber não encontrado na lista atual.');
       await FinanceObligationClient.cancelReceivable(cancelTargetId, 'Cancelamento via interface');
       setActionMessage('Título a receber cancelado com sucesso.');
       setCancelTargetId(null);
-      loadReceivables();
-    } catch (err: any) {
+      await loadReceivables();
+    } catch (err) {
       if (isAuthenticationExpiredError(err)) return;
-      alert(err.message || 'Erro ao cancelar título');
+      alert(err instanceof Error ? err.message : 'Erro ao cancelar título.');
       setCancelTargetId(null);
     }
   };
 
-  const toggleSelect = (id: string) => {
-    if (selectedIds.includes(id)) {
-      setSelectedIds(selectedIds.filter((item) => item !== id));
-    } else {
-      setSelectedIds([...selectedIds, id]);
-    }
-  };
-
-  const filtered = receivables.filter((r) => {
-    const matchesSearch =
-      r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.driverId && r.driverId.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (r.vehicleId && r.vehicleId.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const toggleSelect = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const selectedReceivables = receivables.filter((item) => selectedIds.includes(item.id));
+  const filtered = receivables.filter((item) => {
+    const needle = searchTerm.toLowerCase();
+    const matchesSearch = item.description.toLowerCase().includes(needle) || item.driverId?.toLowerCase().includes(needle) || item.vehicleId?.toLowerCase().includes(needle);
+    return Boolean(matchesSearch) && (statusFilter === 'ALL' || item.status === statusFilter);
   });
-
-  const selectedReceivables = receivables.filter((r) => selectedIds.includes(r.id));
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-emerald-600" />
-            Contas a Receber (Receivables)
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Gestão de mensalidades, cobranças de motoristas e cauções a receber.
-          </p>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2"><TrendingUp className="w-6 h-6 text-emerald-600" />Contas a Receber</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Gestão de mensalidades, cobranças de motoristas e cauções a receber.</p>
         </div>
-
         <div className="flex gap-2">
-          {selectedIds.length > 0 && (
-            <Button
-              onClick={() => onOpenRenegotiationModal(selectedReceivables)}
-              variant="warning"
-              size="sm"
-              icon={<RefreshCw className="w-4 h-4" />}
-            >
-              Renegociar Selecionados ({selectedIds.length})
-            </Button>
-          )}
-
-          <Button
-            onClick={() => setIsCreateOpen(true)}
-            variant="primary"
-            size="sm"
-            icon={<Plus className="w-4 h-4" />}
-            className="!bg-emerald-600 hover:!bg-emerald-700 !text-white font-semibold"
-          >
-            Novo Recebível Manual
-          </Button>
+          {selectedIds.length > 0 && <Button onClick={() => onOpenRenegotiationModal(selectedReceivables)} variant="warning" size="sm" icon={<RefreshCw className="w-4 h-4" />}>Renegociar Selecionados ({selectedIds.length})</Button>}
+          <Button onClick={() => setIsCreateOpen(true)} variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} className="!bg-emerald-600 hover:!bg-emerald-700 !text-white font-semibold">Novo Recebível Manual</Button>
         </div>
       </div>
 
-      {actionMessage && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
-          <span>{actionMessage}</span>
-          <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-slate-500 hover:text-slate-700">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {actionMessage && <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between"><span>{actionMessage}</span><button onClick={() => setActionMessage(null)} className="p-1 font-bold text-slate-500 hover:text-slate-700"><X className="w-4 h-4" /></button></div>}
 
-      {/* Filters */}
       <Card padding="sm">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="w-full sm:w-80">
-            <Input
-              type="text"
-              placeholder="Buscar por descrição, motorista, veículo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-slate-400" />}
-            />
-          </div>
-
+          <div className="w-full sm:w-80"><Input type="text" placeholder="Buscar por descrição, motorista, veículo..." value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />} /></div>
           <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />
-            {['ALL', ObligationStatus.PENDING, ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  statusFilter === st
-                    ? 'bg-emerald-600 text-white font-semibold shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {st === 'ALL'
-                  ? 'Todos'
-                  : st === ObligationStatus.PENDING
-                  ? 'Pendentes'
-                  : st === ObligationStatus.PAID
-                  ? 'Pagas'
-                  : st === ObligationStatus.CANCELLED
-                  ? 'Canceladas'
-                  : 'Renegociadas'}
-              </button>
-            ))}
+            {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED].map((status) => <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ${statusFilter === status ? 'bg-emerald-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>{status === 'ALL' ? 'Todos' : status}</button>)}
           </div>
         </div>
       </Card>
 
-      {/* Table */}
       <Card padding="none">
-        {loading ? (
-          <div className="p-6 space-y-3">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  <th className="p-3.5 w-10 text-center">#</th>
-                  <th className="p-3.5">Descrição / Origem</th>
-                  <th className="p-3.5">Vencimento</th>
-                  <th className="p-3.5">Valor Original</th>
-                  <th className="p-3.5">Saldo Restante</th>
-                  <th className="p-3.5 text-center">Status</th>
-                  <th className="p-3.5 text-right">Ações Operacionais</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {filtered.map((item) => {
-                  const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID;
-                  const isPaid = item.status === ObligationStatus.PAID;
-                  const isOverdue = isPending && item.dueDate < new Date().toISOString().split('T')[0];
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(item.id)}
-                          onChange={() => toggleSelect(item.id)}
-                          disabled={!isPending}
-                          className="rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:opacity-40"
-                        />
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{item.description}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          Origem: {item.originType} • Chave: {item.idempotencyKey}
-                        </div>
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums">
-                        {item.dueDate}
-                        {isOverdue && (
-                          <span className="block text-[10px] text-red-600 dark:text-red-400 font-bold">EM ATRASO</span>
-                        )}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-semibold">
-                        R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-bold text-emerald-700 dark:text-emerald-400">
-                        R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <Badge
-                          variant={
-                            isPaid
-                              ? 'success'
-                              : isPending
-                              ? isOverdue
-                                ? 'danger'
-                                : 'warning'
-                              : 'neutral'
-                          }
-                        >
-                          {item.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3.5 text-right space-x-2">
-                        <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>
-                          Detalhes
-                        </Button>
-                        {isPending && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => onOpenReceiptModal(item)}
-                            className="!bg-emerald-600 hover:!bg-emerald-700 !text-white"
-                          >
-                            Liquidar (Receber)
-                          </Button>
-                        )}
-
-                        {isPending && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setCancelTargetId(item.id)}
-                            className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                          >
-                            Cancelar
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        {loading ? <div className="p-6 space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div> : (
+          <div className="overflow-x-auto"><table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800"><tr><th className="p-3.5 w-10 text-center">#</th><th className="p-3.5">Descrição / Origem</th><th className="p-3.5">Vencimento</th><th className="p-3.5">Valor Original</th><th className="p-3.5">Saldo Restante</th><th className="p-3.5 text-center">Status</th><th className="p-3.5 text-right">Ações Operacionais</th></tr></thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+              {filtered.map((item) => {
+                const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID;
+                const isPaid = item.status === ObligationStatus.PAID;
+                const isOverdue = isPending && item.dueDate < new Date().toISOString().split('T')[0];
+                return <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                  <td className="p-3.5 text-center"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} disabled={!isPending} /></td>
+                  <td className="p-3.5"><div className="font-semibold text-slate-900 dark:text-slate-100">{item.description}</div><div className="text-[11px] text-slate-400 font-mono">Origem: {item.originType} • Chave: {item.idempotencyKey}</div></td>
+                  <td className="p-3.5 font-mono">{item.dueDate}{isOverdue && <span className="block text-[10px] text-red-600 font-bold">EM ATRASO</span>}</td>
+                  <td className="p-3.5 font-mono font-semibold">R$ {formatMoney(item.originalAmount)}</td>
+                  <td className="p-3.5 font-mono font-bold text-emerald-700 dark:text-emerald-400">R$ {formatMoney(item.balanceAmount)}</td>
+                  <td className="p-3.5 text-center"><Badge variant={isPaid ? 'success' : isPending ? (isOverdue ? 'danger' : 'warning') : 'neutral'}>{item.status}</Badge></td>
+                  <td className="p-3.5 text-right space-x-2"><Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>Detalhes</Button>{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item)}>Liquidar (Receber)</Button>}{isPending && <Button size="sm" variant="ghost" onClick={() => setCancelTargetId(item.id)}>Cancelar</Button>}</td>
+                </tr>;
+              })}
+            </tbody>
+          </table></div>
         )}
       </Card>
 
-      <ConfirmDialog
-        isOpen={!!cancelTargetId}
-        title="Cancelar Título a Receber"
-        message="Deseja realmente cancelar este título a receber? Esta operação será auditada e processada no servidor."
-        confirmText="Confirmar Cancelamento"
-        confirmVariant="danger"
-        onConfirm={confirmCancel}
-        onCancel={() => setCancelTargetId(null)}
-      />
+      <ConfirmDialog isOpen={!!cancelTargetId} title="Cancelar Título a Receber" message="Deseja realmente cancelar este título a receber? Esta operação será auditada e processada no servidor." confirmText="Confirmar Cancelamento" confirmVariant="danger" onConfirm={confirmCancel} onCancel={() => setCancelTargetId(null)} />
 
-      {/* MODAL DE CRIAÇÃO MANUAL */}
-      {isCreateOpen && (
-        <ModalContainer
-          isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
-          title="Emitir Título a Receber (Receivable Manual)"
-          maxWidth="max-w-lg"
-        >
-          <form onSubmit={handleCreateReceivable} className="space-y-4">
-            <Input
-              label="Descrição do Título *"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Mensalidade Avulsa, Cobrança de Sinistro..."
-              required
-            />
+      {isCreateOpen && <ModalContainer isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Emitir Título a Receber Manual" maxWidth="max-w-2xl">
+        <form onSubmit={handleCreateReceivable} className="space-y-4">
+          {manualOptionsError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{manualOptionsError}</div>}
+          <Input label="Descrição do Título *" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex: Mensalidade avulsa, cobrança de sinistro..." required />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Valor Total (R$) *" type="number" min="0.01" step="0.01" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} required /><Input label="Primeiro vencimento *" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Data de Competência" type="date" value={competenceDate} onChange={(event) => setCompetenceDate(event.target.value)} /><Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(event) => setInstallmentsCount(event.target.value)} /></div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Valor Total (R$) *"
-                type="number"
-                step="0.01"
-                value={totalAmount}
-                onChange={(e) => setTotalAmount(e.target.value)}
-                placeholder="0.00"
-                required
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-500 block">Motorista do cadastro (opcional)</label><select value={driverId} onChange={(event) => setDriverId(event.target.value)} disabled={manualOptionsLoading} className="control w-full"><option value="">Sem motorista</option>{drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName} • CPF {driver.cpf}</option>)}</select></div>
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-500 block">Veículo do cadastro (opcional)</label><select value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} disabled={manualOptionsLoading} className="control w-full"><option value="">Sem veículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} • {vehicle.brand} {vehicle.model}</option>)}</select></div>
+          </div>
 
-              <Input
-                label="Vencimento *"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                required
-              />
-            </div>
+          <Input label="Contrato ID (opcional, somente quando já conhecido)" value={contractId} onChange={(event) => setContractId(event.target.value)} placeholder="Deixe em branco para cobrança avulsa" />
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Data de Competência"
-                type="date"
-                value={competenceDate}
-                onChange={(e) => setCompetenceDate(e.target.value)}
-                placeholder="Opcional"
-              />
+          <div className="space-y-1"><label className="text-xs font-semibold text-slate-500 block">Categoria *</label><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="control w-full" required><option value="">Selecione uma categoria de receita</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}<option value={OTHER_CATEGORY}>Outros / Diversos…</option></select></div>
+          {categoryId === OTHER_CATEGORY && <Input label="Qual categoria? *" value={otherCategoryName} onChange={(event) => setOtherCategoryName(event.target.value)} placeholder="Ex: Avaria, taxa administrativa, outros" required />}
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 block">Categoria *</label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
-                  required
-                >
-                  <option value="">Selecione uma categoria de receita</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          {preview.length > 1 && <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 text-xs font-semibold">Prévia das parcelas</div><div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">{preview.map((item) => <div key={item.number} className="flex items-center justify-between px-3 py-2 text-xs"><span>Parcela {item.number}/{preview.length} • vencimento {item.dueDate}</span><b>R$ {formatMoney(item.amount)}</b></div>)}</div><div className="px-3 py-2 text-[11px] text-slate-500">Soma: R$ {formatMoney(preview.reduce((sum, item) => roundCurrency(sum + item.amount), 0))}. As parcelas seguintes usam periodicidade mensal, igual à autoridade financeira atual.</div></div>}
 
-            <div className="grid grid-cols-3 gap-3">
-              <Input
-                label="Parcelas"
-                type="number"
-                min="1"
-                value={installmentsCount}
-                onChange={(e) => setInstallmentsCount(e.target.value)}
-              />
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button><Button type="submit" variant="primary" isLoading={createLoading} disabled={manualOptionsLoading}>Emitir Título</Button></div>
+        </form>
+      </ModalContainer>}
 
-              <Input
-                label="Motorista ID (Opcional)"
-                value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
-                placeholder="Ex: drv-1"
-              />
-
-              <Input
-                label="Veículo ID (Opcional)"
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                placeholder="Ex: veh-1"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-emerald-600 hover:!bg-emerald-700 !text-white">
-                Emitir Título
-              </Button>
-            </div>
-          </form>
-        </ModalContainer>
-      )}
-
-      <FinancialObligationDetailsModal
-        obligation={detailsTarget}
-        type="RECEIVABLE"
-        onClose={() => setDetailsTarget(null)}
-      />
-
-      {attachmentEntity && (
-        <AttachmentModal
-          isOpen={!!attachmentEntity}
-          onClose={() => setAttachmentEntity(null)}
-          entityType="FinancialReceivable"
-          entityId={attachmentEntity.id}
-          documentType="FINANCIAL_DOCUMENT"
-          title={`Anexos: ${attachmentEntity.description}`}
-        />
-      )}
+      <FinancialObligationDetailsModal obligation={detailsTarget} type="RECEIVABLE" onClose={() => setDetailsTarget(null)} />
     </div>
   );
 };
-
