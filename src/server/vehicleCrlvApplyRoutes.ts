@@ -6,6 +6,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import {
+  assertReviewedCrlvMatchesVehicle,
   buildVehicleChangesFromReviewedCrlv,
   parseVehicleCrlvSelectedFields,
   VehicleCrlvApplyValidationError,
@@ -74,7 +75,8 @@ function parseMaintenanceHandoffBody(value: unknown): { workOrderId: string; att
 
 function sendError(res: Response, error: unknown): void {
   if (error instanceof VehicleCrlvApplyValidationError) {
-    res.status(400).json({ error: 'Invalid CRLV apply request' });
+    const identityMismatch = error.message.startsWith('CRLV incompatível') || error.message.startsWith('CRLV aprovado sem identificador');
+    res.status(identityMismatch ? 409 : 400).json({ error: identityMismatch ? error.message : 'Invalid CRLV apply request' });
     return;
   }
   if (error instanceof VehicleCrlvNotFoundError) {
@@ -224,6 +226,8 @@ export function registerVehicleCrlvApplyRoutes(app: Express): void {
           eq(fileAttachments.isArchived, false),
         )).limit(1);
         if (!attachmentRows[0]) throw new VehicleCrlvNotFoundError();
+
+        assertReviewedCrlvMatchesVehicle(existing, extraction.proposedFields, extraction.corrections);
 
         const changes = buildVehicleChangesFromReviewedCrlv(
           extraction.proposedFields,

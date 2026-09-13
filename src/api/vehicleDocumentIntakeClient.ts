@@ -76,6 +76,7 @@ async function errorMessage(response: Response): Promise<string> {
 }
 export class VehicleDocumentIntakeClient {
   static async create(idempotencyKey: string, documentType: VehicleIntakeDocumentType): Promise<VehicleDocumentIntake> {
+    if (documentType === 'ATPV_E') throw new Error('ATPV-e não participa do fluxo de criação de veículo');
     const response = await fetch('/api/vehicle-document-intakes', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ idempotencyKey, documentType }),
