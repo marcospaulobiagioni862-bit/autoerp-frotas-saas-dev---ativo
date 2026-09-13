@@ -1,10 +1,13 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
-import { ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
+import { classifyContractTemplateSource, CONTRACT_TEMPLATE_PLACEHOLDERS, ContractTemplatePolicyError, validateContractTemplateContent } from '../domain/contracts/contractTemplatePolicy';
+import { renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
+import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
+import type { ContractTemplate } from '../types/entities';
 import {
   MOVEFLEX_APPROVED_CONTRACT_MASTERS,
   MOVEFLEX_DEFAULT_TEMPLATE_KEY,
@@ -168,6 +171,26 @@ function sendError(res: Response, error: unknown): void {
   res.status(500).json({ error: 'Contract template operation failed' });
 }
 
+async function operationalTemplate(tx: any, template: ContractTemplate) {
+  const attachments = template.contentMarkdown.trim() ? [] : await tx.getAttachmentRepo().findByEntity(template.companyId, 'ContractTemplate', template.id);
+  const classified = classifyContractTemplateSource(template, attachments);
+  let generationMode = classified?.mode ?? null;
+  if (classified?.source) {
+    try {
+      const storage = createAttachmentStorageFromEnvironment();
+      if (classified.source.storageProvider !== storage.provider) throw new Error('Source storage mismatch');
+      const bytes = await storage.read(template.companyId, classified.source.storageKey!);
+      if (bytes.length !== classified.source.fileSize || createHash('sha256').update(bytes).digest('hex') !== classified.source.checksum) throw new Error('Source checksum mismatch');
+      if (classified.mode === 'DOCX') {
+        renderContractDocxPackage(bytes, Object.fromEntries([...CONTRACT_TEMPLATE_PLACEHOLDERS].map((key) => [key, 'validation'])));
+      }
+    } catch {
+      generationMode = null;
+    }
+  }
+  return { ...template, generationMode };
+}
+
 export function registerContractTemplateRoutes(app: Express): void {
   app.post('/api/contract-templates/ensure-moveflex-default', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
@@ -285,19 +308,12 @@ export function registerContractTemplateRoutes(app: Express): void {
           (includeArchived || !item.isArchived)
         );
 
-        // Operational selectors use the default activeOnly=true list. Approved
-        // MoveFlex standards are exposed there only when the currently linked
-        // file is byte-for-byte the approved master. Management screens ask for
-        // activeOnly=false and still see invalid/legacy sources so they can be
-        // repaired without deleting history.
-        if (!activeOnly) return base;
-
-        const operational: typeof base = [];
+        // Both surfaces receive the same validated generation authority.
+        // Management also retains unavailable records for repair/history.
+        const operational = [];
         for (const item of base) {
-          const master = getMoveFlexApprovedContractMaster(item.templateKey);
-          if (!master || await approvedMasterSource(tx, principal.companyId, item, master)) {
-            operational.push(item);
-          }
+          const projected = await operationalTemplate(tx, item);
+          if (!activeOnly || projected.generationMode) operational.push(projected);
         }
         return operational;
       });
@@ -311,9 +327,10 @@ export function registerContractTemplateRoutes(app: Express): void {
     const principal = requirePrincipal(req, res, 'VIEW_CONTRACT_TEMPLATE');
     if (!principal) return;
     try {
-      const item = await UnitOfWork.run(principal.companyId, async (tx) =>
-        await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, req.params.id)
-      );
+      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, req.params.id);
+        return template ? operationalTemplate(tx, template) : undefined;
+      });
       if (!item || item.isArchived) throw new TemplateNotFoundError();
       res.json({ item });
     } catch (error) {

@@ -3,7 +3,7 @@ import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
-import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
+import { contractTemplateGenerationMode } from '../../domain/contracts/contractTemplatePolicy';
 import type { Contract, ContractArtifact, ContractTemplate } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { Badge, Button, Card } from '../ui';
@@ -99,8 +99,12 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       setError('O modelo vinculado ainda não está disponível para geração. Reabra o contrato e tente novamente.');
       return;
     }
-    const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
-    const fileBackedCustomTemplate = !approvedMaster && !template.contentMarkdown.trim();
+    const mode = contractTemplateGenerationMode(template);
+    if (!mode) {
+      setError('O modelo vinculado não possui fonte operacional válida.');
+      return;
+    }
+    const fileBackedCustomTemplate = mode === 'DOCX';
     void run(async () => {
       if (fileBackedCustomTemplate) {
         await ContractExecutionClient.generateDocx(contract.id);

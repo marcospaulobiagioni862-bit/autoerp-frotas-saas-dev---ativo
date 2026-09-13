@@ -92,8 +92,8 @@ assert.match(executionRoutes, /'driver\.pixKey': snapshot\.driver\.pixKey/, 'PIX
 
 assert.match(executionRoutes, /brandModel: \[vehicle\.brand, vehicle\.model, vehicle\.version\]/, 'contract snapshot must derive full vehicle display name');
 assert.match(executionRoutes, /yearDisplay: `\$\{vehicle\.yearFabrication\}\/\$\{vehicle\.yearModel\}`/, 'contract snapshot must derive fabrication/model year');
-assert.match(contractForm, /const SAVED_CONTRACT_KEY = \/\^modelo-contrato-/, 'new contract selector must use only the saved sequential template family');
-assert.match(contractForm, /savedTemplates = templateList[\s\S]*savedContractNumber\(item\.templateKey\) !== undefined/, 'new contract must filter technical and legacy templates out of the selector');
+assert.match(contractForm, /const SAVED_CONTRACT_KEY = \/\^modelo-contrato-/, 'sequential template labels must remain compatible');
+assert.match(contractForm, /savedTemplates = templateList[\s\S]*contractTemplateGenerationMode\(item\) !== null/, 'new contract must use validated operational sources rather than a key family');
 assert.match(contractForm, /templateId: '', notes: ''/, 'new contract must require the user to explicitly choose which saved contract model to use');
 assert.match(executionPanel, /if \(!contract\.templateId\)/, 'contract execution must require the model already persisted on the contract');
 assert.doesNotMatch(executionPanel, /ContractTemplateClient\.list\(\)/, 'contract execution must not reload or replace the model selected during contract creation');
@@ -104,7 +104,7 @@ assert.match(contractForm, /Existem informações não salvas\. Deseja sair sem 
 assert.match(contractForm, /onClose=\{requestClose\}/, 'contract modal X must use guarded close handler');
 assert.match(contractForm, /onClick=\{requestClose\}>Cancelar/, 'contract cancel action must use guarded close handler');
 assert.match(templateClient, /ensure-moveflex-default/, 'template client must expose the idempotent MoveFlex default endpoint');
-assert.match(contractForm, /if \(selectedTemplate\.contentMarkdown\.trim\(\)\)/, 'saved text templates must generate PDF directly');
+assert.match(contractForm, /contractTemplateGenerationMode\(selectedTemplate\) === 'PDF'/, 'approved masters and text templates must use server-authorized PDF routing');
 assert.match(contractForm, /ContractExecutionClient\.generatePdf\(savedContract\.id, selectedTemplate\.id\)/, 'saved text contract must generate its PDF automatically after save');
 assert.match(contractForm, /ContractExecutionClient\.generateDocx\(savedContract\.id, selectedTemplate\.id\)/, 'custom DOCX templates must retain their separate DOCX flow');
 assert.doesNotMatch(contractForm, /generatePdfFromDocx/, 'new DOCX-backed contract must not reflow the official Word layout into the legacy server PDF');
@@ -175,8 +175,9 @@ assert.match(templateModal, /AttachmentClient\.archive\(uploadedApprovedSource\.
 assert.match(templateModal, /Este modelo oficial não possui edição textual no ERP/, 'official file-backed masters must not pretend to support ERP text editing');
 assert.match(templateRoutes, /nextSavedContractKey/, 'server must allocate sequential saved contract keys');
 assert.match(templateRoutes, /pg_advisory_xact_lock/, 'saved contract sequence must be protected by a transaction-scoped advisory lock');
-assert.match(templateRoutes, /if \(!activeOnly\) return base/, 'management listing must retain invalid standards for repair');
-assert.match(templateRoutes, /await approvedMasterSource\(tx, principal\.companyId, item, master\)/, 'operational listing must require the exact approved standard source');
+assert.match(templateRoutes, /if \(!activeOnly \|\| projected\.generationMode\) operational\.push\(projected\)/, 'management listing must retain invalid standards for repair');
+assert.match(templateRoutes, /await operationalTemplate\(tx, item\)/, 'both catalogs must use validated source projection');
+assert.match(templatePolicy, /item\.sha256 === source\.checksum && item\.fileSize === source\.fileSize/, 'approved sources must match pinned checksum and size');
 assert.doesNotMatch(executionPanel, /availableIds\.has\(current\)/, 'execution panel must not maintain a second template availability state');
 assert.match(executionPanel, /Modelo vinculado ao contrato/, 'execution UI must show that the official model is bound to the contract');
 assert.match(contractForm, /Contrato \$\{String\(number\)\.padStart\(2, '0'\)\}/, 'contract form must show saved templates as Contrato 01, 02, 03...');
