@@ -7,6 +7,8 @@ function rowsOf(result: any): any[] {
   return Array.isArray(result?.rows) ? result.rows : [];
 }
 
+const AUTO_CONTRACT_NUMBER_PLACEHOLDER = /^CNT-\d{8}-[0-9A-F]{8}$/;
+
 export class PostgresContractRepository implements ITransactionContractRepository {
   constructor(private readonly tx: any) {}
 
@@ -182,6 +184,19 @@ export class PostgresContractRepository implements ITransactionContractRepositor
   }
 
   async create(item: Contract): Promise<Contract> {
+    let contractNumber = item.contractNumber;
+    if (AUTO_CONTRACT_NUMBER_PLACEHOLDER.test(contractNumber)) {
+      await this.tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`contract-number:${item.companyId}`}))`);
+      const sequenceResult = await this.tx.execute(sql`
+        SELECT COALESCE(MAX((substring(contract_number from '^CNT-([0-9]+)$'))::bigint), 0)::bigint AS max_sequence
+        FROM contracts
+        WHERE company_id = ${item.companyId}
+          AND contract_number ~ '^CNT-[0-9]+$'
+      `);
+      const current = BigInt(String(rowsOf(sequenceResult)[0]?.max_sequence ?? 0));
+      contractNumber = `CNT-${(current + 1n).toString().padStart(6, '0')}`;
+    }
+
     await this.tx.execute(sql`
       INSERT INTO contracts (
         id, company_id, driver_id, vehicle_id, status,
@@ -192,7 +207,7 @@ export class PostgresContractRepository implements ITransactionContractRepositor
         notes, is_archived, created_at, updated_at
       ) VALUES (
         ${item.id}, ${item.companyId}, ${item.driverId}, ${item.vehicleId}, ${item.status},
-        ${item.contractNumber}, ${item.startDate}, ${item.endDate || null}, ${item.rentalAmount}, ${item.billingPeriodicity},
+        ${contractNumber}, ${item.startDate}, ${item.endDate || null}, ${item.rentalAmount}, ${item.billingPeriodicity},
         ${item.billingDueDayOfWeek ?? 1}, ${item.billingDueDayOfMonth ?? 1},
         ${item.securityDepositAmount}, ${item.securityDepositId || null}, ${item.franchiseKm}, ${item.excessKmRate},
         ${item.paymentMethodId || null}, ${item.templateId || null}, ${item.generatedPdfUrl || null}, ${item.signedContractUrl || null}, ${item.signatureRequired ?? true},
