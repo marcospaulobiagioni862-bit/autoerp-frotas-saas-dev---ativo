@@ -23,16 +23,16 @@ const SAVED_CONTRACT_KEY = /^modelo-contrato-(\d+)$/;
 
 function savedContractNumber(templateKey: string): number | undefined {
   const match = SAVED_CONTRACT_KEY.exec(templateKey);
-  if (!match) return undefined;
+  if (!match) return Number.MAX_SAFE_INTEGER;
   const value = Number(match[1]);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
+  return Number.isInteger(value) && value > 0 ? value : Number.MAX_SAFE_INTEGER;
 }
 
 function contractTemplateOptionLabel(item: ContractTemplate): string {
-  const number = savedContractNumber(item.templateKey);
-  return number
-    ? `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`
-    : `${item.title} • v${item.versionNumber} • Histórico`;
+  const match = SAVED_CONTRACT_KEY.exec(item.templateKey);
+  if (!match) return `${item.title} • v${item.versionNumber}`;
+  const number = Number(match[1]);
+  return `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`;
 }
 
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
