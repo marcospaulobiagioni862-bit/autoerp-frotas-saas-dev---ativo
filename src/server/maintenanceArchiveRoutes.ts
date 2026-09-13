@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import { MaintenanceArchiveAuthority } from './maintenanceArchiveAuthority';
+import { registerMaintenancePartStockRoutes } from './maintenancePartStockRoutes';
 import { MaintenanceConflictError, MaintenanceNotFoundError, MaintenanceValidationError } from './maintenanceAuthority';
 
 type MutableRequest = Request & { principal?: AuthenticatedPrincipal };
@@ -27,6 +28,7 @@ function send(res: Response, error: unknown): void {
 }
 
 export function registerMaintenanceArchiveRoutes(app: Express): void {
+  registerMaintenancePartStockRoutes(app);
   app.post('/api/maintenance/work-orders/:id/archive', async (req, res) => {
     const principal = actor(req, res);
     if (!principal) return;
