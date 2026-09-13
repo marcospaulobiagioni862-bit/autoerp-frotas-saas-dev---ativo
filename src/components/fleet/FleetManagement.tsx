@@ -2,12 +2,13 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
-import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive } from 'lucide-react';
+import { Car, Search, Filter, Plus, Gauge, Eye, Edit, Sparkles, Archive, RotateCcw } from 'lucide-react';
 import { Card, Badge, Input, Select, Button, Skeleton, ConfirmDialog, PageHeader } from '../ui';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { VehicleSaleModal } from './VehicleSaleModal';
 import { VehicleArchiveModal } from './VehicleArchiveModal';
+import { VehicleRestoreModal } from './VehicleRestoreModal';
 import { ArchivedVehicleHistoryModal } from './ArchivedVehicleHistoryModal';
 import {
   VEHICLE_STATUS_FILTERS,
@@ -40,6 +41,7 @@ export const FleetManagement: React.FC = () => {
   const [isKmBatchOpen, setIsKmBatchOpen] = useState<boolean>(false);
   const [vehicleForSale, setVehicleForSale] = useState<Vehicle | null>(null);
   const [vehicleForArchive, setVehicleForArchive] = useState<Vehicle | null>(null);
+  const [vehicleForRestore, setVehicleForRestore] = useState<Vehicle | null>(null);
 
   const [vehicleForStatusChange, setVehicleForStatusChange] = useState<Vehicle | null>(null);
   const [targetStatus, setTargetStatus] = useState<VehicleStatus | null>(null);
@@ -124,7 +126,7 @@ export const FleetManagement: React.FC = () => {
       <PageHeader
         title={showArchived ? 'Veículos Arquivados' : 'Veículos'}
         description={showArchived
-          ? 'Histórico preservado da frota fora da operação, disponível somente para consulta'
+          ? 'Histórico preservado da frota fora da operação; veículos vendidos podem retornar ao estoque por ação explícita e auditável'
           : 'Cadastro, disponibilidade, odômetros, manutenções e ciclo de vida operacional da frota'}
         breadcrumb="Operação • Gestão de Frota"
         primaryAction={showArchived ? undefined : {
@@ -160,7 +162,7 @@ export const FleetManagement: React.FC = () => {
 
       {showArchived && (
         <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">
-          {totalCount} veículo(s) vendido(s) ou arquivado(s). Esta área é somente leitura; o histórico não foi apagado.
+          {totalCount} veículo(s) vendido(s) ou arquivado(s). O histórico é preservado; apenas veículos vendidos e ainda não arquivados podem retornar ao estoque.
         </div>
       )}
 
@@ -188,7 +190,7 @@ export const FleetManagement: React.FC = () => {
         <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
           <Car className="w-12 h-12 text-slate-300 mx-auto mb-3"/>
           <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{showArchived ? 'Nenhum veículo vendido ou arquivado' : 'Nenhum veículo encontrado'}</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">{showArchived ? 'Veículos vendidos ou arquivados aparecem aqui somente para consulta, sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">{showArchived ? 'Veículos vendidos ou arquivados aparecem aqui sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,10 +220,13 @@ export const FleetManagement: React.FC = () => {
                   <div className="flex items-center justify-between gap-2"><span className="font-semibold text-slate-700 dark:text-slate-300">{isReadOnlyTerminal ? 'Histórico do veículo' : 'Ações do veículo'}</span><span className="text-[10px] text-slate-400">O histórico não será apagado.</span></div>
 
                   {isReadOnlyTerminal ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
                         <Eye className="w-3.5 h-3.5"/> Abrir histórico somente leitura
                       </button>
+                      {vehicle.status === VehicleStatus.SOLD && !vehicle.isArchived && (
+                        <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo vendido ao estoque" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-900"><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque</button>
+                      )}
                       {!showArchived && vehicle.status === VehicleStatus.SOLD && canArchive && (
                         <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300 rounded-lg border border-rose-200 dark:border-rose-900"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>
                       )}
@@ -297,6 +302,7 @@ export const FleetManagement: React.FC = () => {
 
       {vehicleForSale&&<VehicleSaleModal isOpen vehicle={vehicleForSale} onClose={() => setVehicleForSale(null)} onSuccess={loadVehicles}/>} 
       {vehicleForArchive&&<VehicleArchiveModal isOpen vehicle={vehicleForArchive} onClose={() => setVehicleForArchive(null)} onSuccess={loadVehicles}/>} 
+      {vehicleForRestore&&<VehicleRestoreModal isOpen vehicle={vehicleForRestore} onClose={() => setVehicleForRestore(null)} onSuccess={loadVehicles}/>} 
       {readOnlyVehicleIdForHistory&&<ArchivedVehicleHistoryModal isOpen vehicleId={readOnlyVehicleIdForHistory} onClose={() => setReadOnlyVehicleIdForHistory(null)}/>} 
 
       <ConfirmDialog
