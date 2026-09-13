@@ -97,6 +97,7 @@ export interface WorkOrderCreateRequest {
 export interface WorkOrderCompleteRequest { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; }
 export type SupplierCreateRequest = Omit<Supplier,'id'|'companyId'|'status'|'createdAt'|'updatedAt'|'bankInfo'>;
 export type PartCreateRequest = Omit<Part,'id'|'companyId'|'status'|'createdAt'|'updatedAt'>;
+export type PartUpdateRequest = Partial<Omit<PartCreateRequest,'currentStock'>> & {status?:'ACTIVE'|'INACTIVE'};
 
 export class MaintenanceClient {
   static async listWorkOrders(filters?:{vehicleId?:string}):Promise<WorkOrder[]> {
@@ -113,7 +114,8 @@ export class MaintenanceClient {
   static async updateSupplier(id:string,input:Partial<SupplierCreateRequest>&{status?:'ACTIVE'|'INACTIVE'}):Promise<Supplier>{ return validateSupplier((await request(`/api/maintenance/suppliers/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
   static async listParts():Promise<Part[]>{ return list(await request('/api/maintenance/parts'),validatePart); }
   static async createPart(input:PartCreateRequest):Promise<Part>{ return validatePart((await request('/api/maintenance/parts',json('POST',input))).item); }
-  static async updatePart(id:string,input:Partial<PartCreateRequest>&{status?:'ACTIVE'|'INACTIVE'}):Promise<Part>{ return validatePart((await request(`/api/maintenance/parts/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
+  static async updatePart(id:string,input:PartUpdateRequest):Promise<Part>{ return validatePart((await request(`/api/maintenance/parts/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
   static async listPartMovements(id:string):Promise<PartStockMovement[]>{return list(await request(`/api/maintenance/parts/${encodeURIComponent(id)}/movements`),validatePartStockMovement);}
   static async movePartStock(id:string,input:{movementType:PartStockManualMovementType;quantity:number;reason?:string;idempotencyKey:string}):Promise<{part:Part;movement:PartStockMovement}>{const payload=await request(`/api/maintenance/parts/${encodeURIComponent(id)}/movements`,json('POST',input));return{part:validatePart(payload.part),movement:validatePartStockMovement(payload.movement)};}
+  static async reversePartStock(id:string,movementId:string,reason:string):Promise<{part:Part;movement:PartStockMovement}>{const payload=await request(`/api/maintenance/parts/${encodeURIComponent(id)}/movements/${encodeURIComponent(movementId)}/reverse`,json('POST',{reason}));return{part:validatePart(payload.part),movement:validatePartStockMovement(payload.movement)};}
 }
