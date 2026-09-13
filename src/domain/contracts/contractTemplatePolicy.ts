@@ -1,3 +1,35 @@
+import type { ContractTemplate, FileAttachment } from '../../types/entities';
+import { getMoveFlexApprovedContractMaster, MOVEFLEX_APPROVED_CONTRACT_MASTERS } from './moveflexApprovedContractMaster';
+
+export type ContractGenerationMode = 'PDF' | 'DOCX';
+
+// Read the server's source validation result; absence must fail closed.
+export function contractTemplateGenerationMode(template: ContractTemplate): ContractGenerationMode | null {
+  const mode = (template as ContractTemplate & { generationMode?: unknown }).generationMode;
+  return template.isCurrent && template.isActive && !template.isArchived && (mode === 'PDF' || mode === 'DOCX') ? mode : null;
+}
+
+export function classifyContractTemplateSource(template: ContractTemplate, attachments: FileAttachment[]) {
+  if (!template.isCurrent || !template.isActive || template.isArchived) return null;
+  const keyedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+  if (template.contentMarkdown.trim()) {
+    if (keyedMaster) return null;
+    try { validateContractTemplateContent(template.contentMarkdown); } catch { return null; }
+    return { mode: 'PDF' as const, master: undefined, source: undefined };
+  }
+  const sources = attachments.filter((item) => !item.isArchived && item.entityType === 'ContractTemplate' &&
+    item.companyId === template.companyId && item.entityId === template.id &&
+    item.documentType === 'CONTRACT_TEMPLATE_SOURCE' && item.contentState === 'AVAILABLE');
+  if (sources.length !== 1) return null;
+  const source = sources[0];
+  if (source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      !source.storageKey || !source.checksum || !source.fileSize) return null;
+  // Imports with a sequential key still represent the same immutable master.
+  const master = MOVEFLEX_APPROVED_CONTRACT_MASTERS.find((item) => item.sha256 === source.checksum && item.fileSize === source.fileSize);
+  if (keyedMaster && master?.sha256 !== keyedMaster.sha256) return null;
+  return { mode: master ? 'PDF' as const : 'DOCX' as const, master, source };
+}
+
 const PLACEHOLDER_PATTERN = /{{\s*([a-zA-Z0-9.]+)\s*}}/g;
 
 export const CONTRACT_TEMPLATE_PLACEHOLDERS = new Set([

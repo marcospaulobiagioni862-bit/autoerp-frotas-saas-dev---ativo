@@ -8,7 +8,7 @@ import { companies } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction, ContractStatus, ObligationStatus, OriginType } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
-import { renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
+import { classifyContractTemplateSource, renderContractTemplate, ContractTemplatePolicyError } from '../domain/contracts/contractTemplatePolicy';
 import { extractContractDocxPlainText, renderContractDocxPackage } from '../domain/contracts/contractDocxPackageRenderer';
 import {
   getMoveFlexVisualFixedMissingFields,
@@ -757,28 +757,10 @@ export function registerContractExecutionRoutes(app: Express): void {
         const template = await tx.getContractTemplateRepo().findByIdForCompany(principal.companyId, requestedTemplateId);
         if (!template || template.isArchived) throw new ExecutionNotFoundError();
         if (!template.isCurrent || !template.isActive) throw new ExecutionConflictError();
-        const approvedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
-        let source: any | undefined;
-        if (approvedMaster) {
-          if (template.contentMarkdown.trim()) throw new ExecutionConflictError();
-          const attachments = await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
-          const sources = attachments.filter((item) =>
-            !item.isArchived &&
-            item.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
-            item.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
-            item.contentState === 'AVAILABLE' &&
-            item.storageProvider === storage.provider &&
-            Boolean(item.storageKey)
-          );
-          if (
-            sources.length !== 1 ||
-            sources[0].checksum !== approvedMaster.sha256 ||
-            sources[0].fileSize !== approvedMaster.fileSize
-          ) throw new ExecutionConflictError();
-          source = sources[0];
-        } else if (!template.contentMarkdown.trim()) {
-          throw new ExecutionConflictError();
-        }
+        const attachments = template.contentMarkdown.trim() ? [] : await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
+        const classified = classifyContractTemplateSource(template, attachments);
+        if (classified?.mode !== 'PDF' || (classified.source && classified.source.storageProvider !== storage.provider)) throw new ExecutionConflictError();
+        const { master: approvedMaster, source } = classified;
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
@@ -810,7 +792,7 @@ export function registerContractExecutionRoutes(app: Express): void {
       let visualPageCount: number | undefined;
       let pdf: Buffer;
       if (prepared.approvedMaster) {
-        const missingFields = getMoveFlexVisualFixedMissingFields(prepared.template.templateKey, templateValues);
+        const missingFields = getMoveFlexVisualFixedMissingFields(prepared.approvedMaster.templateKey, templateValues);
         if (missingFields.length) throw new ExecutionRequiredDataError(missingFields);
         if (!prepared.source?.storageKey) throw new ExecutionConflictError();
         const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey);
@@ -821,7 +803,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           sourceChecksum !== prepared.source.checksum ||
           sourceBytes.length !== prepared.source.fileSize
         ) throw new ExecutionValidationError('Invalid VISUAL_FIXO master source');
-        const visual = await renderMoveFlexVisualFixedPdf(sourceBytes, prepared.template.templateKey, templateValues);
+        const visual = await renderMoveFlexVisualFixedPdf(sourceBytes, prepared.approvedMaster.templateKey, templateValues);
         pdf = visual.bytes;
         filledKeys = visual.filledKeys;
         visualPageCount = visual.pageCount;
@@ -852,7 +834,8 @@ export function registerContractExecutionRoutes(app: Express): void {
           tx, principal.companyId, vehicle.id
         );
         if (!sameSnapshotTerms(snapshot, contract, driver, vehicle, vehicleInsurance, vehicleTracker, template)) throw new ExecutionConflictError();
-        const currentApprovedMaster = getMoveFlexApprovedContractMaster(template.templateKey);
+        const currentSources = template.contentMarkdown.trim() ? [] : await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
+        const currentApprovedMaster = classifyContractTemplateSource(template, currentSources)?.master;
         if (prepared.approvedMaster) {
           if (
             !currentApprovedMaster ||
@@ -1013,7 +996,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           item.storageProvider === storage.provider &&
           Boolean(item.storageKey)
         );
-        if (sources.length !== 1) throw new ExecutionConflictError();
+        if (sources.length !== 1 || classifyContractTemplateSource(template, attachments)?.mode !== 'DOCX') throw new ExecutionConflictError();
         return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0] };
       });
 

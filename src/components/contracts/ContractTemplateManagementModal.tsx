@@ -3,6 +3,7 @@ import { Archive, Download, Edit3, FilePlus2, FileText, Save, Upload } from 'luc
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractTemplateClient, type ContractTemplateSourceMode } from '../../api/contractTemplateClient';
 import { getMoveFlexApprovedContractMaster } from '../../domain/contracts/moveflexApprovedContractMaster';
+import { contractTemplateGenerationMode } from '../../domain/contracts/contractTemplatePolicy';
 import type { ContractTemplate, FileAttachment } from '../../types/entities';
 import { Badge, Button, Input, ModalContainer } from '../ui';
 
@@ -76,7 +77,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
 
   const savedTemplates = useMemo(
     () => templates
-      .filter((item) => item.isCurrent && !item.isArchived && savedContractNumber(item.templateKey) !== undefined)
+      .filter((item) => item.isCurrent && !item.isArchived && !getMoveFlexApprovedContractMaster(item.templateKey))
       .sort((a, b) => (savedContractNumber(a.templateKey) || 0) - (savedContractNumber(b.templateKey) || 0)),
     [templates]
   );
@@ -338,12 +339,12 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                         <div className="mt-1 text-[11px] text-slate-500">Arquivo mestre: {master.fileName}</div>
                       </div>
                       <div className="flex gap-1">
-                        <Badge variant={item.isActive ? 'success' : 'warning'}>{item.isActive ? 'Disponível' : 'Arquivo pendente'}</Badge>
+                        <Badge variant={contractTemplateGenerationMode(item) ? 'success' : 'warning'}>{contractTemplateGenerationMode(item) ? 'Disponível • PDF' : 'Arquivo pendente'}</Badge>
                         <Badge variant="neutral">v{item.versionNumber}</Badge>
                       </div>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {item.isActive ? (
+                      {contractTemplateGenerationMode(item) ? (
                         <>
                           <Button size="sm" variant="ghost" onClick={() => void openSource(item)}>
                             <FileText className="h-4 w-4" />Abrir
@@ -396,7 +397,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                           </div>
                         </div>
                         <div className="flex gap-1">
-                          <Badge variant={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Disponível' : 'Em preparação'}</Badge>
+                          <Badge variant={contractTemplateGenerationMode(item) ? 'success' : 'neutral'}>{contractTemplateGenerationMode(item) ? `Disponível • ${contractTemplateGenerationMode(item)}` : 'Em preparação'}</Badge>
                           <Badge variant="neutral">v{item.versionNumber}</Badge>
                         </div>
                       </div>

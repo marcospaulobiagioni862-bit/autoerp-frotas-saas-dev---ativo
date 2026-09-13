@@ -10,6 +10,7 @@ import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import type { Contract, ContractTemplate, Driver, Vehicle } from '../../types/entities';
 import { DriverStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 import { isContractBlocking } from '../../domain/operations/fleetOperationalState';
+import { contractTemplateGenerationMode } from '../../domain/contracts/contractTemplatePolicy';
 
 interface ContractFormModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ function contractTemplateOptionLabel(item: ContractTemplate): string {
   const number = savedContractNumber(item.templateKey);
   return number
     ? `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`
-    : `${item.title} • v${item.versionNumber} • Histórico`;
+    : `${item.title} • v${item.versionNumber}`;
 }
 
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -102,7 +103,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
         );
         const savedTemplates = templateList
-          .filter((item) => savedContractNumber(item.templateKey) !== undefined)
+          .filter((item) => contractTemplateGenerationMode(item) !== null)
           .sort((a, b) => (savedContractNumber(a.templateKey) || 0) - (savedContractNumber(b.templateKey) || 0));
         const currentHistoricalTemplate = contractToEdit?.templateId
           ? templateList.find((item) => item.id === contractToEdit.templateId)
@@ -113,38 +114,40 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         setVehicles(validVehicles);
         setDrivers(validDrivers);
         setTemplates(selectableTemplates);
-        if (contractToEdit) {
-          setForm({
-            contractNumber: contractToEdit.contractNumber,
-            vehicleId: contractToEdit.vehicleId,
-            driverId: contractToEdit.driverId,
-            startDate: contractToEdit.startDate,
-            endDate: contractToEdit.endDate || '',
-            rentalAmount: String(contractToEdit.rentalAmount),
-            billingPeriodicity: contractToEdit.billingPeriodicity,
-            billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
-            billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
-            securityDepositAmount: String(contractToEdit.securityDepositAmount),
-            franchiseKm: String(contractToEdit.franchiseKm),
-            excessKmRate: String(contractToEdit.excessKmRate),
-            paymentMethodId: contractToEdit.paymentMethodId || '',
-            templateId: contractToEdit.templateId || '',
-            notes: contractToEdit.notes || '',
-          });
-        } else {
-          if (savedTemplates.length === 0) {
-            setError('Nenhum contrato salvo está disponível. Abra Modelos de Contrato, crie ou importe um modelo e salve antes de cadastrar o contrato do motorista.');
-          }
-          setForm({
-            contractNumber: '', vehicleId: '', driverId: '',
-            startDate: '', endDate: '', rentalAmount: '',
-            billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
-            securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
-          });
+        if (!contractToEdit && savedTemplates.length === 0) {
+          setError('Nenhum contrato salvo está disponível. Abra Modelos de Contrato, crie ou importe um modelo e salve antes de cadastrar o contrato do motorista.');
         }
       })
       .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
       .finally(() => { if (active) setLoadingOptions(false); });
+    // Initialize once when opening/switching the contract, not when requests
+    // finish: date and amount inputs remain editable while options are loading.
+    if (contractToEdit) {
+      setForm({
+        contractNumber: contractToEdit.contractNumber,
+        vehicleId: contractToEdit.vehicleId,
+        driverId: contractToEdit.driverId,
+        startDate: contractToEdit.startDate,
+        endDate: contractToEdit.endDate || '',
+        rentalAmount: String(contractToEdit.rentalAmount),
+        billingPeriodicity: contractToEdit.billingPeriodicity,
+        billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
+        billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
+        securityDepositAmount: String(contractToEdit.securityDepositAmount),
+        franchiseKm: String(contractToEdit.franchiseKm),
+        excessKmRate: String(contractToEdit.excessKmRate),
+        paymentMethodId: contractToEdit.paymentMethodId || '',
+        templateId: contractToEdit.templateId || '',
+        notes: contractToEdit.notes || '',
+      });
+    } else {
+      setForm({
+        contractNumber: '', vehicleId: '', driverId: '',
+        startDate: '', endDate: '', rentalAmount: '',
+        billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
+        securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
+      });
+    }
     return () => { active = false; };
   }, [isOpen, contractToEdit, companyId]);
 
@@ -234,10 +237,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         const selectedTemplate = templates.find((item) => item.id === form.templateId);
         if (selectedTemplate) {
           try {
-            if (selectedTemplate.contentMarkdown.trim()) {
+            if (contractTemplateGenerationMode(selectedTemplate) === 'PDF') {
               completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
-            } else {
+            } else if (contractTemplateGenerationMode(selectedTemplate) === 'DOCX') {
               completedContract = (await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id)).contract;
+            } else {
+              throw new Error('O modelo não possui fonte operacional válida.');
             }
           } catch (generationError) {
             warnings.push(`Contrato salvo, mas o documento oficial automático não foi gerado: ${generationError instanceof Error ? generationError.message : 'falha na geração'}.`);
