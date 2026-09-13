@@ -55,3 +55,69 @@ SELECT
 FROM parts p
 WHERE p.current_stock > 0
 ON CONFLICT (company_id,idempotency_key) DO NOTHING;
+
+-- The physical consumption point is the OPEN/IN_PROGRESS -> COMPLETED business
+-- transition. Cancellation before completion therefore never changes stock.
+CREATE OR REPLACE FUNCTION consume_work_order_parts_on_completion()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  item record;
+  next_balance numeric(12,3);
+  movement_key text;
+BEGIN
+  IF NEW.status <> 'COMPLETED' OR OLD.status = 'COMPLETED' THEN
+    RETURN NEW;
+  END IF;
+
+  FOR item IN
+    SELECT wop.id,wop.part_id,wop.quantity,p.current_stock,p.status,p.name
+    FROM work_order_parts wop
+    JOIN parts p ON p.id=wop.part_id AND p.company_id=wop.company_id
+    WHERE wop.company_id=NEW.company_id
+      AND wop.work_order_id=NEW.id
+      AND wop.part_id IS NOT NULL
+    ORDER BY wop.id
+    FOR UPDATE OF p
+  LOOP
+    movement_key := 'work-order-use:' || NEW.id || ':' || item.id;
+    IF EXISTS (
+      SELECT 1 FROM part_stock_movements
+      WHERE company_id=NEW.company_id AND idempotency_key=movement_key
+    ) THEN
+      CONTINUE;
+    END IF;
+    IF item.status <> 'ACTIVE' THEN
+      RAISE EXCEPTION 'PART_ARCHIVED:%', item.part_id USING ERRCODE='P0001';
+    END IF;
+    IF item.current_stock < item.quantity THEN
+      RAISE EXCEPTION 'INSUFFICIENT_PART_STOCK:%', item.part_id USING ERRCODE='P0001';
+    END IF;
+
+    next_balance := item.current_stock - item.quantity;
+    UPDATE parts
+       SET current_stock=next_balance,updated_at=now()
+     WHERE company_id=NEW.company_id AND id=item.part_id;
+
+    INSERT INTO part_stock_movements (
+      id,company_id,part_id,movement_type,quantity_delta,balance_after,
+      work_order_id,vehicle_id,reason,idempotency_key,user_id,user_name,created_at
+    ) VALUES (
+      'stock-use-' || item.id,
+      NEW.company_id,item.part_id,'USE_WORK_ORDER',-item.quantity,next_balance,
+      NEW.id,NEW.vehicle_id,'Consumo confirmado na conclusão da OS',movement_key,
+      COALESCE(NEW.created_by,'SYSTEM'),'Conclusão da OS',now()
+    ) ON CONFLICT (company_id,idempotency_key) DO NOTHING;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_consume_work_order_parts_on_completion ON work_orders;
+CREATE TRIGGER trg_consume_work_order_parts_on_completion
+BEFORE UPDATE OF status ON work_orders
+FOR EACH ROW
+WHEN (NEW.status = 'COMPLETED' AND OLD.status IS DISTINCT FROM 'COMPLETED')
+EXECUTE FUNCTION consume_work_order_parts_on_completion();
