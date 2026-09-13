@@ -1,0 +1,78 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { MaintenanceClient, type PartStockManualMovementType, type PartStockMovement } from '../../api/maintenanceClient';
+import type { Part } from '../../types/entities';
+import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { Badge, Button, Card, Input } from '../ui';
+
+interface Props {
+  parts: Part[];
+  onRefresh: () => Promise<void> | void;
+  onNewPart: () => void;
+}
+
+type StockState='ACTIVE'|'LOW'|'EMPTY'|'ARCHIVED';
+const MOVEMENT_LABEL:Record<PartStockMovement['movementType'],string>={
+  ENTRY:'Entrada',USE_WORK_ORDER:'Uso em OS',ADJUSTMENT_IN:'Ajuste +',ADJUSTMENT_OUT:'Ajuste -',RETURN:'Devolução',LOSS:'Perda/Descarte',REVERSAL:'Estorno',
+};
+function stockState(part:Part):StockState{
+  if(part.status==='INACTIVE')return'ARCHIVED';
+  if(part.currentStock<=0)return'EMPTY';
+  if(part.currentStock<=part.minimumStock)return'LOW';
+  return'ACTIVE';
+}
+function stateBadge(part:Part){
+  const state=stockState(part);
+  if(state==='ARCHIVED')return <Badge variant="neutral">Arquivado</Badge>;
+  if(state==='EMPTY')return <Badge variant="danger">Sem estoque</Badge>;
+  if(state==='LOW')return <Badge variant="warning">Baixo estoque</Badge>;
+  return <Badge variant="success">Ativo</Badge>;
+}
+function dateTime(value:string){return new Date(value).toLocaleString('pt-BR');}
+
+export const PartStockCatalog:React.FC<Props>=({parts,onRefresh,onNewPart})=>{
+  const [summary,setSummary]=useState<Record<string,PartStockMovement>>({});
+  const [movementTarget,setMovementTarget]=useState<Part|null>(null);
+  const [movementType,setMovementType]=useState<PartStockManualMovementType>('ENTRY');
+  const [quantity,setQuantity]=useState('1');
+  const [reason,setReason]=useState('');
+  const [historyTarget,setHistoryTarget]=useState<Part|null>(null);
+  const [history,setHistory]=useState<PartStockMovement[]>([]);
+  const [historyLoading,setHistoryLoading]=useState(false);
+  const [editTarget,setEditTarget]=useState<Part|null>(null);
+  const [editName,setEditName]=useState('');
+  const [editCost,setEditCost]=useState('');
+  const [editMinimum,setEditMinimum]=useState('');
+  const [reverseTarget,setReverseTarget]=useState<PartStockMovement|null>(null);
+  const [reverseReason,setReverseReason]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState<string|null>(null);
+
+  const refreshSummary=async()=>{
+    try{const items=await MaintenanceClient.listPartStockSummary();setSummary(Object.fromEntries(items.map(item=>[item.partId,item])));}catch{setSummary({});}
+  };
+  useEffect(()=>{void refreshSummary();},[parts.map(part=>`${part.id}:${part.currentStock}:${part.status}`).join('|')]);
+  const reversedIds=useMemo(()=>new Set(history.map(item=>item.reversedMovementId).filter((value):value is string=>Boolean(value))),[history]);
+
+  const perform=async(action:()=>Promise<void>)=>{setBusy(true);setError(null);try{await action();await onRefresh();await refreshSummary();}catch(err){setError(err instanceof Error?err.message:'Operação de estoque falhou.');}finally{setBusy(false);}};
+  const openMovement=(part:Part)=>{setMovementTarget(part);setMovementType('ENTRY');setQuantity('1');setReason('');setError(null);};
+  const submitMovement=async(event:React.FormEvent)=>{event.preventDefault();if(!movementTarget)return;const qty=Number(quantity);if(!Number.isFinite(qty)||qty<=0){setError('Informe uma quantidade válida.');return;}const needsReason=['ADJUSTMENT_IN','ADJUSTMENT_OUT','LOSS'].includes(movementType);if(needsReason&&!reason.trim()){setError('Informe o motivo desta movimentação.');return;}await perform(async()=>{await MaintenanceClient.movePartStock(movementTarget.id,{movementType,quantity:qty,reason:reason.trim()||undefined,idempotencyKey:`manual:${movementTarget.id}:${crypto.randomUUID()}`});setMovementTarget(null);});};
+  const openHistory=async(part:Part)=>{setHistoryTarget(part);setHistory([]);setHistoryLoading(true);setError(null);try{setHistory(await MaintenanceClient.listPartMovements(part.id));}catch(err){setError(err instanceof Error?err.message:'Falha ao carregar histórico.');}finally{setHistoryLoading(false);}};
+  const openEdit=(part:Part)=>{setEditTarget(part);setEditName(part.name);setEditCost(String(part.currentCost));setEditMinimum(String(part.minimumStock));setError(null);};
+  const submitEdit=async(event:React.FormEvent)=>{event.preventDefault();if(!editTarget)return;const cost=Number(editCost),minimum=Number(editMinimum);if(!editName.trim()||!Number.isFinite(cost)||cost<0||!Number.isFinite(minimum)||minimum<0){setError('Revise nome, custo e estoque mínimo.');return;}await perform(async()=>{await MaintenanceClient.updatePart(editTarget.id,{name:editName.trim(),currentCost:cost,minimumStock:minimum});setEditTarget(null);});};
+  const toggleArchive=(part:Part)=>void perform(async()=>{await MaintenanceClient.updatePart(part.id,{status:part.status==='ACTIVE'?'INACTIVE':'ACTIVE'});});
+  const submitReverse=async(event:React.FormEvent)=>{event.preventDefault();if(!historyTarget||!reverseTarget)return;if(!reverseReason.trim()){setError('Informe o motivo do estorno.');return;}await perform(async()=>{await MaintenanceClient.reversePartStock(historyTarget.id,reverseTarget.id,reverseReason.trim());setHistory(await MaintenanceClient.listPartMovements(historyTarget.id));setReverseTarget(null);setReverseReason('');});};
+
+  return <div className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Catálogo de peças</h3><p className="text-[11px] text-slate-500">Saldo físico por movimentações auditáveis. Uso em OS é baixado somente na conclusão.</p></div><Button size="sm" onClick={onNewPart}>Nova peça</Button></div>
+    {error&&<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
+    <Card padding="none"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Código</th><th className="p-3 text-left">Peça</th><th className="p-3 text-left">Custo</th><th className="p-3 text-left">Saldo</th><th className="p-3 text-left">Mínimo</th><th className="p-3 text-left">Status</th><th className="p-3 text-left">Última movimentação</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{parts.map(part=>{const last=summary[part.id];return <tr key={part.id} className="border-t"><td className="p-3 font-mono">{part.code}</td><td className="p-3"><strong>{part.name}</strong></td><td className="p-3 font-mono">{formatCurrencyBRL(part.currentCost)}</td><td className="p-3 font-mono">{part.currentStock} {part.unit}</td><td className="p-3 font-mono">{part.minimumStock} {part.unit}</td><td className="p-3">{stateBadge(part)}</td><td className="p-3">{last?<><div>{MOVEMENT_LABEL[last.movementType]} {last.quantityDelta>0?'+':''}{last.quantityDelta}</div><div className="text-[10px] text-slate-500">{dateTime(last.createdAt)}</div></>:<span className="text-slate-400">Sem movimento</span>}</td><td className="p-3"><div className="flex flex-wrap justify-end gap-1"><Button size="sm" variant="outline" disabled={busy||part.status!=='ACTIVE'} onClick={()=>openMovement(part)}>Movimentar estoque</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void openHistory(part)}>Ver histórico</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>openEdit(part)}>Editar cadastro</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>toggleArchive(part)}>{part.status==='ACTIVE'?'Arquivar':'Desarquivar'}</Button></div></td></tr>;})}</tbody></table></div></Card>
+
+    {movementTarget&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><Card className="w-full max-w-md"><form onSubmit={submitMovement} className="space-y-3"><h3 className="font-bold">Movimentar estoque — {movementTarget.name}</h3><p className="text-xs text-slate-500">Saldo atual: {movementTarget.currentStock} {movementTarget.unit}</p><select aria-label="Tipo de movimentação" className="w-full rounded-lg border p-2 bg-white dark:bg-slate-900" value={movementType} onChange={event=>setMovementType(event.target.value as PartStockManualMovementType)}><option value="ENTRY">Entrada</option><option value="ADJUSTMENT_IN">Ajuste +</option><option value="ADJUSTMENT_OUT">Ajuste -</option><option value="RETURN">Devolução</option><option value="LOSS">Perda / descarte</option></select><Input type="number" min="0.001" step="0.001" value={quantity} onChange={event=>setQuantity(event.target.value)} placeholder="Quantidade" required/><label className="block text-xs font-semibold">Motivo / referência<textarea className="mt-1 min-h-20 w-full rounded-lg border p-2 bg-white dark:bg-slate-900" value={reason} onChange={event=>setReason(event.target.value)} placeholder="Obrigatório para ajustes e perdas"/></label><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setMovementTarget(null)}>Cancelar</Button><Button type="submit" isLoading={busy}>Registrar movimento</Button></div></form></Card></div>}
+
+    {historyTarget&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><Card className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden"><div className="flex items-center justify-between gap-2 border-b pb-3"><div><h3 className="font-bold">Histórico — {historyTarget.name}</h3><p className="text-xs text-slate-500">Saldo atual: {historyTarget.currentStock} {historyTarget.unit}</p></div><Button variant="ghost" onClick={()=>{setHistoryTarget(null);setReverseTarget(null);}}>Fechar</Button></div><div className="min-h-0 flex-1 overflow-y-auto py-3">{historyLoading?<p className="p-4 text-xs text-slate-500">Carregando...</p>:history.length===0?<p className="p-4 text-xs text-slate-500">Nenhuma movimentação registrada.</p>:<div className="divide-y dark:divide-slate-800">{history.map(item=><div key={item.id} className="grid gap-2 p-3 text-xs sm:grid-cols-[130px_90px_90px_1fr_auto]"><div><strong>{MOVEMENT_LABEL[item.movementType]}</strong><div className="text-[10px] text-slate-500">{dateTime(item.createdAt)}</div></div><div className={item.quantityDelta>=0?'font-mono':'font-mono'}>{item.quantityDelta>0?'+':''}{item.quantityDelta}</div><div className="font-mono">Saldo {item.balanceAfter}</div><div><div>{item.reason||'Sem observação'}</div><div className="text-[10px] text-slate-500">Usuário: {item.userName}{item.workOrderId?` • OS ${item.workOrderId}`:''}{item.vehicleId?` • Veículo ${item.vehicleId}`:''}</div></div><div>{item.movementType!=='REVERSAL'&&!reversedIds.has(item.id)&&<Button size="sm" variant="ghost" disabled={busy} onClick={()=>{setReverseTarget(item);setReverseReason('');}}>Estornar</Button>}</div></div>)}</div>}</div></Card></div>}
+
+    {editTarget&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4"><Card className="w-full max-w-md"><form onSubmit={submitEdit} className="space-y-3"><h3 className="font-bold">Editar cadastro — {editTarget.code}</h3><Input value={editName} onChange={event=>setEditName(event.target.value)} placeholder="Nome" required/><Input type="number" min="0" step="0.01" value={editCost} onChange={event=>setEditCost(event.target.value)} placeholder="Custo atual" required/><Input type="number" min="0" step="0.001" value={editMinimum} onChange={event=>setEditMinimum(event.target.value)} placeholder="Estoque mínimo" required/><p className="text-[11px] text-slate-500">O saldo atual não é editável aqui. Use Movimentar estoque para preservar a trilha.</p><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setEditTarget(null)}>Cancelar</Button><Button type="submit" isLoading={busy}>Salvar cadastro</Button></div></form></Card></div>}
+
+    {reverseTarget&&historyTarget&&<div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4"><Card className="w-full max-w-md"><form onSubmit={submitReverse} className="space-y-3"><h3 className="font-bold">Estornar movimento</h3><p className="text-xs text-slate-500">{MOVEMENT_LABEL[reverseTarget.movementType]} de {reverseTarget.quantityDelta>0?'+':''}{reverseTarget.quantityDelta}. O estorno cria um novo movimento; o original não é apagado.</p><label className="block text-xs font-semibold">Motivo<textarea className="mt-1 min-h-20 w-full rounded-lg border p-2 bg-white dark:bg-slate-900" value={reverseReason} onChange={event=>setReverseReason(event.target.value)} required autoFocus/></label><div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={()=>setReverseTarget(null)}>Cancelar</Button><Button type="submit" variant="outline" isLoading={busy}>Confirmar estorno</Button></div></form></Card></div>}
+  </div>;
+};
