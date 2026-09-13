@@ -7,6 +7,12 @@ export class MaintenanceApiError extends Error {
   }
 }
 
+export type PartStockManualMovementType='ENTRY'|'ADJUSTMENT_IN'|'ADJUSTMENT_OUT'|'RETURN'|'LOSS';
+export interface PartStockMovement {
+  id:string; companyId:string; partId:string; movementType:PartStockManualMovementType|'USE_WORK_ORDER'|'REVERSAL'; quantityDelta:number; balanceAfter:number;
+  workOrderId?:string; vehicleId?:string; reason?:string; reversedMovementId?:string; idempotencyKey:string; userId:string; userName:string; createdAt:string;
+}
+
 type JsonRecord = Record<string, unknown>;
 const WORK_ORDER_STATUSES = new Set<WorkOrderStatus>(['OPEN','IN_PROGRESS','WAITING_PARTS','WAITING_APPROVAL','COMPLETED','CANCELLED','ARCHIVED']);
 function asRecord(value: unknown): JsonRecord {
@@ -64,6 +70,11 @@ function validatePart(value: unknown): Part {
   const item = asRecord(value); const status=text(item.status,'status'); if(status!=='ACTIVE'&&status!=='INACTIVE') throw new Error('Invalid part status');
   return { id:text(item.id,'id'), companyId:text(item.companyId,'companyId'), code:text(item.code,'code'), name:text(item.name,'name'), description:optionalString(item.description), manufacturer:optionalString(item.manufacturer), category:text(item.category,'category'), unit:text(item.unit,'unit'), currentCost:finite(item.currentCost,'currentCost'), minimumStock:finite(item.minimumStock,'minimumStock'), currentStock:finite(item.currentStock,'currentStock'), status, createdAt:text(item.createdAt,'createdAt'), updatedAt:text(item.updatedAt,'updatedAt') };
 }
+function validatePartStockMovement(value:unknown):PartStockMovement{
+  const item=asRecord(value),movementType=text(item.movementType,'movementType') as PartStockMovement['movementType'];
+  if(!['ENTRY','USE_WORK_ORDER','ADJUSTMENT_IN','ADJUSTMENT_OUT','RETURN','LOSS','REVERSAL'].includes(movementType))throw new Error('Invalid part stock movement');
+  return{id:text(item.id,'id'),companyId:text(item.companyId,'companyId'),partId:text(item.partId,'partId'),movementType,quantityDelta:finite(item.quantityDelta,'quantityDelta'),balanceAfter:finite(item.balanceAfter,'balanceAfter'),workOrderId:optionalString(item.workOrderId),vehicleId:optionalString(item.vehicleId),reason:optionalString(item.reason),reversedMovementId:optionalString(item.reversedMovementId),idempotencyKey:text(item.idempotencyKey,'idempotencyKey'),userId:text(item.userId,'userId'),userName:text(item.userName,'userName'),createdAt:text(item.createdAt,'createdAt')};
+}
 async function request(path: string, init?: RequestInit): Promise<JsonRecord> {
   const response = await fetch(path, { ...init, credentials:'include' });
   if (!response.ok) {
@@ -103,4 +114,6 @@ export class MaintenanceClient {
   static async listParts():Promise<Part[]>{ return list(await request('/api/maintenance/parts'),validatePart); }
   static async createPart(input:PartCreateRequest):Promise<Part>{ return validatePart((await request('/api/maintenance/parts',json('POST',input))).item); }
   static async updatePart(id:string,input:Partial<PartCreateRequest>&{status?:'ACTIVE'|'INACTIVE'}):Promise<Part>{ return validatePart((await request(`/api/maintenance/parts/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
+  static async listPartMovements(id:string):Promise<PartStockMovement[]>{return list(await request(`/api/maintenance/parts/${encodeURIComponent(id)}/movements`),validatePartStockMovement);}
+  static async movePartStock(id:string,input:{movementType:PartStockManualMovementType;quantity:number;reason?:string;idempotencyKey:string}):Promise<{part:Part;movement:PartStockMovement}>{const payload=await request(`/api/maintenance/parts/${encodeURIComponent(id)}/movements`,json('POST',input));return{part:validatePart(payload.part),movement:validatePartStockMovement(payload.movement)};}
 }
