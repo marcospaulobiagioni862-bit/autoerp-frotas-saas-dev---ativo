@@ -31,11 +31,12 @@ jobs:
         run: |
           set -euo pipefail
           grep -F 'WHERE effective_to IS NULL' drizzle/0068_maintenance_rule_history.sql
-          grep -F 'CREATE UNIQUE INDEX uq_maintenance_rule_scope_open' drizzle/0068_maintenance_rule_history.sql
+          grep -F 'CREATE UNIQUE INDEX IF NOT EXISTS uq_maintenance_rule_open_scope' drizzle/0068_maintenance_rule_history.sql
           grep -F 'effective_to=${previousDate(today)}' src/server/maintenanceRuleAuthority.ts
           grep -F 'listActiveMaintenanceRules' src/server/maintenancePreventiveAuthority.ts
           grep -F 'resolveMaintenanceRule' src/server/maintenancePreventiveAuthority.ts
-          grep -F 'findEffectiveMaintenanceRule' src/server/maintenancePreventiveAlerts.ts
+          grep -F 'listActiveMaintenanceRules' src/server/maintenancePreventiveAlerts.ts
+          grep -F 'resolveMaintenanceRule' src/server/maintenancePreventiveAlerts.ts
           echo 'Maintenance rule history/hierarchy source invariants: PASS'
       - name: TypeScript gate
         run: npm run lint
