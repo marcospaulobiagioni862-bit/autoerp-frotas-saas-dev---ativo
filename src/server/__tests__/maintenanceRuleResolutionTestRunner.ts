@@ -26,3 +26,6 @@ export function runMaintenanceRuleResolutionChecks():void{
   const none=resolveMaintenanceRule([],{vehicleId:'v2',maintenanceType:'BRAKES'});
   assert(none===undefined,'missing rules must preserve internal projection defaults');
 }
+
+runMaintenanceRuleResolutionChecks();
+console.log('Maintenance rule hierarchy regression: PASS');
