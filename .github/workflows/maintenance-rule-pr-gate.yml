@@ -1,0 +1,44 @@
+name: Maintenance Rule PR Gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/server/maintenanceRuleAuthority.ts'
+      - 'src/server/maintenancePreventiveAuthority.ts'
+      - 'src/server/maintenancePreventiveAlerts.ts'
+      - 'src/server/__tests__/maintenanceRuleResolutionTestRunner.ts'
+      - 'drizzle/0068_maintenance_rule_history.sql'
+      - '.github/workflows/maintenance-rule-pr-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  maintenance-rule-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false
+      - name: Maintenance rule hierarchy regression
+        run: npx tsx src/server/__tests__/maintenanceRuleResolutionTestRunner.ts
+      - name: Maintenance rule history source invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'WHERE effective_to IS NULL' drizzle/0068_maintenance_rule_history.sql
+          grep -F 'CREATE UNIQUE INDEX IF NOT EXISTS uq_maintenance_rule_open_scope' drizzle/0068_maintenance_rule_history.sql
+          grep -F 'effective_to=${previousDate(today)}' src/server/maintenanceRuleAuthority.ts
+          grep -F 'listActiveMaintenanceRules' src/server/maintenancePreventiveAuthority.ts
+          grep -F 'resolveMaintenanceRule' src/server/maintenancePreventiveAuthority.ts
+          grep -F 'listActiveMaintenanceRules' src/server/maintenancePreventiveAlerts.ts
+          grep -F 'resolveMaintenanceRule' src/server/maintenancePreventiveAlerts.ts
+          echo 'Maintenance rule history/hierarchy source invariants: PASS'
+      - name: TypeScript gate
+        run: npm run lint
+      - name: Production build gate
+        run: npm run build
