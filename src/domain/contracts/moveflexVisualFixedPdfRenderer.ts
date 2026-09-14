@@ -14,6 +14,7 @@ interface Overlay {
   fieldKey: string;
   required?: boolean;
   fontSize?: number;
+  minFontSize?: number;
   maxWidth?: number;
   eraseWidth?: number;
 }
@@ -73,22 +74,22 @@ function commonCompanyAndDriver01(): Overlay[] {
     { page: 0, x: 217, y: 408, fieldKey: 'company.legalRepresentative.name', value: (v) => val(v, 'company.legalRepresentative.name'), maxWidth: 290 },
     { page: 0, x: 122, y: 429, fieldKey: 'company.legalRepresentative.cpf', value: (v) => val(v, 'company.legalRepresentative.cpf'), maxWidth: 385 },
 
-    { page: 0, x: 184, y: 511, fieldKey: 'driver.name', required: true, value: (v) => val(v, 'driver.name'), maxWidth: 340 },
-    { page: 0, x: 110, y: 531, fieldKey: 'driver.cpf', required: true, value: (v) => val(v, 'driver.cpf'), maxWidth: 400 },
-    { page: 0, x: 103, y: 551, fieldKey: 'driver.rg', value: (v) => val(v, 'driver.rg'), maxWidth: 395 },
-    { page: 0, x: 126, y: 572, fieldKey: 'driver.cnh', required: true, value: (v) => val(v, 'driver.cnh'), maxWidth: 380 },
-    { page: 0, x: 142, y: 592, fieldKey: 'driver.cnhCategory', required: true, value: (v) => val(v, 'driver.cnhCategory'), maxWidth: 365 },
-    { page: 0, x: 185, y: 613, fieldKey: 'driver.cnhExpiration', required: true, value: (v) => dateBr(val(v, 'driver.cnhExpiration')), maxWidth: 320 },
-    { page: 0, x: 211, y: 634, fieldKey: 'driver.birthDate', required: true, value: (v) => dateBr(val(v, 'driver.birthDate')), maxWidth: 295 },
-    { page: 0, x: 153, y: 654, fieldKey: 'driver.maritalStatus', value: (v) => val(v, 'driver.maritalStatus'), maxWidth: 350 },
-    { page: 0, x: 137, y: 674, fieldKey: 'driver.profession', value: (v) => val(v, 'driver.profession'), maxWidth: 365 },
-    { page: 0, x: 211, y: 695, fieldKey: 'driver.address.full', required: true, value: (v) => val(v, 'driver.address.full'), maxWidth: 300 },
-    { page: 0, x: 141, y: 715, fieldKey: 'driver.address.cityState', required: true, value: (v) => cityState(v, 'driver.address'), maxWidth: 375 },
-    { page: 0, x: 106, y: 735, fieldKey: 'driver.address.zipCode', required: true, value: (v) => val(v, 'driver.address.zipCode'), maxWidth: 400 },
-    { page: 0, x: 136, y: 756, fieldKey: 'driver.phone', required: true, value: (v) => val(v, 'driver.phone'), maxWidth: 370 },
-    { page: 0, x: 121, y: 776, fieldKey: 'driver.email', value: (v) => val(v, 'driver.email'), maxWidth: 385 },
-    { page: 0, x: 170, y: 796, fieldKey: 'driver.motherName', value: (v) => val(v, 'driver.motherName'), maxWidth: 345 },
-    { page: 0, x: 145, y: 816, fieldKey: 'driver.pixKey', value: (v) => val(v, 'driver.pixKey'), maxWidth: 365 },
+    { page: 0, x: 184, y: 531, fieldKey: 'driver.name', required: true, value: (v) => val(v, 'driver.name'), maxWidth: 340 },
+    { page: 0, x: 110, y: 551, fieldKey: 'driver.cpf', required: true, value: (v) => val(v, 'driver.cpf'), maxWidth: 400 },
+    { page: 0, x: 103, y: 572, fieldKey: 'driver.rg', value: (v) => val(v, 'driver.rg'), maxWidth: 395 },
+    { page: 0, x: 126, y: 592, fieldKey: 'driver.cnh', required: true, value: (v) => val(v, 'driver.cnh'), maxWidth: 380 },
+    { page: 0, x: 142, y: 613, fieldKey: 'driver.cnhCategory', required: true, value: (v) => val(v, 'driver.cnhCategory'), maxWidth: 365 },
+    { page: 0, x: 185, y: 634, fieldKey: 'driver.cnhExpiration', required: true, value: (v) => dateBr(val(v, 'driver.cnhExpiration')), maxWidth: 320 },
+    { page: 0, x: 211, y: 654, fieldKey: 'driver.birthDate', required: true, value: (v) => dateBr(val(v, 'driver.birthDate')), maxWidth: 295 },
+    { page: 0, x: 153, y: 674, fieldKey: 'driver.maritalStatus', value: (v) => val(v, 'driver.maritalStatus'), maxWidth: 350 },
+    { page: 0, x: 137, y: 695, fieldKey: 'driver.profession', value: (v) => val(v, 'driver.profession'), maxWidth: 365 },
+    { page: 0, x: 211, y: 715, fieldKey: 'driver.address.full', required: true, value: (v) => val(v, 'driver.address.full'), maxWidth: 300, minFontSize: 4.4 },
+    { page: 0, x: 141, y: 735, fieldKey: 'driver.address.cityState', required: true, value: (v) => cityState(v, 'driver.address'), maxWidth: 375 },
+    { page: 0, x: 106, y: 756, fieldKey: 'driver.address.zipCode', required: true, value: (v) => val(v, 'driver.address.zipCode'), maxWidth: 400 },
+    { page: 0, x: 136, y: 776, fieldKey: 'driver.phone', required: true, value: (v) => val(v, 'driver.phone'), maxWidth: 370 },
+    { page: 0, x: 121, y: 796, fieldKey: 'driver.email', value: (v) => val(v, 'driver.email'), maxWidth: 385 },
+    { page: 0, x: 170, y: 816, fieldKey: 'driver.motherName', value: (v) => val(v, 'driver.motherName'), maxWidth: 345 },
+    { page: 0, x: 145, y: 837, fieldKey: 'driver.pixKey', value: (v) => val(v, 'driver.pixKey'), maxWidth: 365 },
 
     { page: 0, x: 118, y: 950, fieldKey: 'vehicle.brand', required: true, value: (v) => val(v, 'vehicle.brand'), maxWidth: 395 },
     { page: 0, x: 121, y: 971, fieldKey: 'vehicle.model', required: true, value: (v) => val(v, 'vehicle.model'), maxWidth: 390 },
@@ -109,10 +110,10 @@ function commonCompanyAndDriver01(): Overlay[] {
     { page: 1, x: 108, y: 441, fieldKey: 'contract.billingDue', value: (v) => first(v, 'contract.billingDueDayOfWeekLabel', 'contract.billingDueDayOfMonth'), maxWidth: 210 },
     { page: 1, x: 96, y: 611, fieldKey: 'contract.securityDepositAmount', value: (v) => moneyAmount(v, 'contract.securityDepositAmount'), maxWidth: 380 },
 
-    { page: 3, x: 289, y: 559, fieldKey: 'company.address.forum', required: true, value: (v) => cityState(v, 'company.address'), maxWidth: 220 },
-    { page: 3, x: 123, y: 866, fieldKey: 'company.address.city.signature', required: true, value: (v) => val(v, 'company.address.city'), maxWidth: 180 },
-    { page: 3, x: 145, y: 929, fieldKey: 'company.document.signature', required: true, value: (v) => val(v, 'company.document'), maxWidth: 235 },
-    { page: 3, x: 111, y: 970, fieldKey: 'driver.cpf.signature', required: true, value: (v) => val(v, 'driver.cpf'), maxWidth: 255 },
+    { page: 3, x: 289, y: 580, fieldKey: 'company.address.forum', required: true, value: (v) => cityState(v, 'company.address'), maxWidth: 220 },
+    { page: 3, x: 123, y: 887, fieldKey: 'company.address.city.signature', required: true, value: (v) => val(v, 'company.address.city'), maxWidth: 180 },
+    { page: 3, x: 145, y: 950, fieldKey: 'company.document.signature', required: true, value: (v) => val(v, 'company.document'), maxWidth: 235 },
+    { page: 3, x: 111, y: 991, fieldKey: 'driver.cpf.signature', required: true, value: (v) => val(v, 'driver.cpf'), maxWidth: 255 },
   ];
 }
 
@@ -149,9 +150,9 @@ function overlaysFor(templateKey: string): Overlay[] {
   throw new ContractDocxTemplateError('Unknown MoveFlex VISUAL_FIXO template key');
 }
 
-function fittedSize(font: PDFFont, text: string, preferred: number, maxWidthPt: number): number {
+function fittedSize(font: PDFFont, text: string, preferred: number, maxWidthPt: number, minSize = 5.2): number {
   let size = preferred;
-  while (size > 5.2 && font.widthOfTextAtSize(text, size) > maxWidthPt) size -= 0.2;
+  while (size > minSize && font.widthOfTextAtSize(text, size) > maxWidthPt) size -= 0.2;
   return size;
 }
 
@@ -160,7 +161,7 @@ function drawOverlay(page: PDFPage, font: PDFFont, overlay: Overlay, text: strin
   const baselineY = PDF_HEIGHT - overlay.y * SCALE_Y;
   const preferred = overlay.fontSize || 7.1;
   const maxWidthPt = (overlay.maxWidth || 300) * SCALE_X;
-  const size = fittedSize(font, text, preferred, maxWidthPt);
+  const size = fittedSize(font, text, preferred, maxWidthPt, overlay.minFontSize);
 
   if (overlay.eraseWidth) {
     page.drawRectangle({
