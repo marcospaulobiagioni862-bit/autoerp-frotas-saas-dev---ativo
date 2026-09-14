@@ -48,6 +48,29 @@ const validProvider: DocumentAiProvider = {
   },
 };
 
+async function expectOnlyAllowedField(
+  documentType: string,
+  allowedKey: string,
+  allowedValue: string | number,
+  irrelevantNullKey: string,
+): Promise<void> {
+  const proposal = await processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType,
+        fields: { [allowedKey]: allowedValue, [irrelevantNullKey]: null },
+        confidence: { [allowedKey]: 0.99 },
+        raw: {},
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+
+  assert(proposal.proposedFields[allowedKey] === allowedValue, `${documentType} allowed field must remain`);
+  assert(!(irrelevantNullKey in proposal.proposedFields), `${documentType} irrelevant null field must be discarded`);
+  assert(Object.keys(proposal.proposedFields).length === 1, `${documentType} must emit only the allowed field`);
+}
+
 async function run(): Promise<void> {
   const proposal = await processDocumentAiBytes(validProvider, {
     content: bytes,
@@ -106,6 +129,21 @@ async function run(): Promise<void> {
   assert(!('issueDate' in partialCnh.proposedFields), 'missing CNH issue date must not be invented');
   assert(!('rg' in partialCnh.fieldConfidence), 'discarded null field must not require synthetic confidence');
 
+  const cnhNullWithZeroConfidence = await processDocumentAiBytes({
+    ...validProvider,
+    async extract() {
+      return {
+        documentType: 'CNH',
+        fields: { name: 'MOTORISTA ZERO', rg: null },
+        confidence: { name: 0.99, rg: 0 },
+        raw: {},
+      };
+    },
+  }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
+  assert(cnhNullWithZeroConfidence.proposedFields.name === 'MOTORISTA ZERO', 'CNH useful field must remain');
+  assert(!('rg' in cnhNullWithZeroConfidence.proposedFields), 'own null field with zero confidence must be discarded');
+  assert(!('rg' in cnhNullWithZeroConfidence.fieldConfidence), 'discarded own null field must not retain confidence');
+
   const crlvWithNull = await processDocumentAiBytes({
     ...validProvider,
     async extract() {
@@ -119,6 +157,13 @@ async function run(): Promise<void> {
   }, { content: bytes, mimeType: 'application/pdf', expectedChecksum: checksum });
   assert(crlvWithNull.proposedFields.plate === 'ABC1D23', 'CRLV valid field must remain');
   assert(!('renavam' in crlvWithNull.proposedFields), 'CRLV null field must be discarded consistently');
+
+  await expectOnlyAllowedField('CRLV', 'plate', 'ABC1D23', 'taxYear');
+  await expectOnlyAllowedField('IPVA', 'taxYear', 2026, 'contractNumber');
+  await expectOnlyAllowedField('TRAFFIC_TICKET', 'noticeNumber', 'AIT-REG-1', 'premiumAmount');
+  await expectOnlyAllowedField('CONTRACT', 'contractNumber', 'CTR-REG-1', 'odometer');
+  await expectOnlyAllowedField('INSURANCE', 'policyNumber', 'POL-REG-1', 'taxYear');
+  await expectOnlyAllowedField('MAINTENANCE', 'supplierName', 'OFICINA REGRESSAO', 'contractNumber');
 
   const trafficTicket = await processDocumentAiBytes({
     ...validProvider,
