@@ -10,6 +10,7 @@ import { registerAttachmentRoutes } from '../attachmentRoutes';
 import { registerContractRoutes } from '../contractRoutes';
 import { registerContractTemplateRoutes } from '../contractTemplateRoutes';
 import { registerContractExecutionRoutes } from '../contractExecutionRoutes';
+import { registerContractSimpleSignRoutes } from '../contractSimpleSignRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 import { RecurringFrequency, VehicleStatus } from '../../types/enums';
 
@@ -173,6 +174,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
     });
     registerContractTemplateRoutes(app);
     registerContractExecutionRoutes(app);
+    registerContractSimpleSignRoutes(app);
     registerAttachmentRoutes(app);
     registerContractRoutes(app);
 
@@ -307,13 +309,12 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const generated = await json(response);
       assert(generated.artifact.artifactType === 'GENERATED_PDF' && /^[0-9a-f]{64}$/.test(generated.artifact.snapshotHash), 'generated artifact invalid');
       assert(generated.attachment.mimeType === 'application/pdf' && generated.attachment.storageProvider === 'SERVER_FS', 'generated attachment invalid');
-      assert(Array.isArray(generated.receivables) && generated.receivables.length === 1, 'PDF generation must create the first rental receivable');
-      const generatedReceivableId = generated.receivables[0].id;
+      assert(Array.isArray(generated.receivables) && generated.receivables.length === 0, 'PDF generation must not create a receivable before signature');
       row = await scalar(sql`
         SELECT count(*)::int AS count, min(status) AS status, min(original_amount)::numeric AS amount
         FROM account_receivables WHERE contract_id=${contract.id}
       `);
-      assert(Number(row?.count) === 1 && row?.status === 'PENDING' && Number(row?.amount) === 800, 'generated contract receivable mismatch');
+      assert(Number(row?.count) === 0, 'document generation created a receivable');
 
       response = await request(`/api/attachments/${generated.attachment.id}/content`, {}, adminA);
       assert(response.status === 200, `generated PDF content expected 200, got ${response.status}`);
@@ -335,7 +336,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       `);
       assert(Number(row?.count) === 0, 'mismatched browser templateId created a DOCX artifact');
       row = await scalar(sql`SELECT count(*)::int AS count, min(id) AS id FROM account_receivables WHERE contract_id=${contract.id} AND status<>'CANCELLED'`);
-      assert(Number(row?.count) === 1 && row?.id === generatedReceivableId, 'rejected DOCX generation mutated the rental receivable');
+      assert(Number(row?.count) === 0, 'rejected DOCX generation created a rental receivable');
       const currentPdf = await scalar(sql`
         SELECT is_current, is_archived FROM contract_artifacts WHERE id=${generated.artifact.id}
       `);
@@ -425,7 +426,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       assert(activated.item.status === 'ACTIVE' && activated.receivables.length === 2, 'signed activation result mismatch');
       const activatedRent = activated.receivables.find((item: any) => item.originType === 'CONTRACT_RENT');
       const activatedDeposit = activated.receivables.find((item: any) => item.originType === 'SECURITY_DEPOSIT');
-      assert(activatedRent?.id === generatedReceivableId, 'activation must reuse the receivable created at document generation');
+      assert(activatedRent?.competenceDate === new Date().toISOString().slice(0,10), 'activation must bill from signature');
       assert(Number(activatedDeposit?.originalAmount) === 1000, 'activation must create the agreed security-deposit receivable');
       row = await scalar(sql`
         SELECT
@@ -452,7 +453,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 201, `cancel fixture PDF generation expected 201, got ${response.status}`);
       row = await scalar(sql`SELECT count(*)::int AS count, min(status) AS status FROM account_receivables WHERE contract_id=${cancellable.id}`);
-      assert(Number(row?.count) === 1 && row?.status === 'PENDING', 'cancel fixture did not create pending receivable');
+      assert(Number(row?.count) === 0, 'unsigned document created a pending receivable');
 
       // Simulate a contract whose official document predates the document-generation receivable rule.
       await db.execute(sql`DELETE FROM account_receivables WHERE contract_id=${cancellable.id}`);
@@ -470,6 +471,10 @@ export class ContractExecutionAuthorityIntegrationRunner {
       }, adminA);
       assert(response.status === 400, `legacy reconciliation authority-field injection expected 400, got ${response.status}`);
 
+      response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminA);
+      assert(response.status === 409, `unsigned reconciliation expected 409, got ${response.status}`);
+      response = await request(`/api/contracts/${cancellable.id}/sign-status`, { method: 'POST', body: JSON.stringify({signed:true}) }, adminA);
+      assert(response.status === 201, `manual signature expected 201, got ${response.status}`);
       response = await request(`/api/contracts/${cancellable.id}/reconcile-initial-receivable`, { method: 'POST', body: '{}' }, adminA);
       assert(response.status === 201, `legacy reconciliation expected 201, got ${response.status}`);
       const reconciledReceivable = (await json(response)).receivable;
@@ -507,7 +512,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
         assert(saved?.signatureRequired === false, 'legacy signatureRequired fixture failed');
       });
       response = await request(`/api/contracts/${legacy.id}/activate`, { method: 'POST', body: '{}' }, adminA);
-      assert(response.status === 200, `legacy signatureRequired=false activation expected 200, got ${response.status}`);
+      assert(response.status === 409, `unsigned legacy signatureRequired=false activation expected 409, got ${response.status}`);
 
       console.log('SECURITY-2I4C_CONTRACT_EXECUTION_INTEGRATION_PASS');
     } finally {

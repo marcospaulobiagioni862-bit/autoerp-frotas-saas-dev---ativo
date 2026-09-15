@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response as ExpressRespo
 import { createServer } from 'node:http';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
+import { seedContractSignedFixture } from './contractSignedFixture';
 import { registerContractRoutes } from '../contractRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 import { ContractStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
@@ -32,6 +33,7 @@ async function scalar(query: any): Promise<any> {
 
 async function markLegacyContract(contractId: string): Promise<void> {
   await db.execute(sql`UPDATE contracts SET signature_required = false WHERE id = ${contractId}`);
+  await seedContractSignedFixture(contractId);
 }
 
 export class ContractAuthorityIntegrationRunner {

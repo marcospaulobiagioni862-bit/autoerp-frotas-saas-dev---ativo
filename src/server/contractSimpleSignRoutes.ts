@@ -79,7 +79,8 @@ export function registerContractSimpleSignRoutes(app: Express): void {
             id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
             action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name,
             previousState: JSON.stringify({ signed: false }),
-            newState: JSON.stringify({ event: 'MANUAL_SIGN_STATUS', signed: true, sourceArtifactId: source.id }),
+            newState: JSON.stringify({ event: 'MANUAL_SIGN_STATUS', signed: true, sourceArtifactId: source.id,
+              plannedStartDate: contract.startDate, signedAt: now, effectiveStartDate: now.slice(0, 10) }),
             timestamp: now,
           });
           return { kind: 'OK' as const, contract: saved, artifact, signed: true, replayed: false };

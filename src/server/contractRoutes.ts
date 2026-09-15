@@ -17,6 +17,8 @@ import {
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
 import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
+import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
+import { contractConflictResponse } from './contractConflictResponse';
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -182,8 +184,9 @@ function sendContractError(res: Response, error: unknown): void {
     res.status(400).json({ error: 'Invalid contract request' });
     return;
   }
-  if (error instanceof ContractConflictError || isUniqueViolation(error)) {
-    res.status(409).json({ error: 'Contract conflict' });
+  if (error instanceof ContractConflictError || error instanceof ContractSignatureRequiredError || isUniqueViolation(error) ||
+      (error instanceof Error && error.message === 'Contract financial reconciliation conflict')) {
+    res.status(409).json(contractConflictResponse(error instanceof Error ? error.message : undefined));
     return;
   }
   if (error instanceof ContractNotFoundError) {
@@ -200,7 +203,7 @@ function sendContractError(res: Response, error: unknown): void {
     return;
   }
   if (message.includes('período financeiro') || message.includes('Período')) {
-    res.status(409).json({ error: 'Contract financial conflict' });
+    res.status(409).json(contractConflictResponse('Financial period closed'));
     return;
   }
   console.error('AUTOERP_CONTRACT_AUTHORITY_FAILURE', error);
@@ -476,36 +479,18 @@ export function registerContractRoutes(app: Express): void {
         if (contract.status === ContractStatus.ACTIVE) {
           const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, contract.vehicleId);
           if (vehicle?.currentContractId === contract.id && vehicle.currentDriverId === contract.driverId) {
-            return { item: contract, receivables: [] };
+            return { item: contract, receivables: await ensureInitialContractReceivable(contract, principal, tx) };
           }
           throw new ContractConflictError('Active contract binding mismatch');
         }
         if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
           throw new ContractConflictError('Contract lifecycle does not allow activation');
         }
-        if (contract.signatureRequired) {
-          const generatedPdf = await tx.getContractArtifactRepo().findCurrentForContract(
-            principal.companyId, contract.id, 'GENERATED_PDF', true
-          );
-          const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
-            principal.companyId, contract.id, 'GENERATED_DOCX', true
-          );
-          const generated = generatedDocx || generatedPdf;
-          const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(
-            principal.companyId, contract.id, 'REVIEWED_FINAL_PDF', true
-          );
-          const signed = await tx.getContractArtifactRepo().findCurrentForContract(
-            principal.companyId, contract.id, 'SIGNED_EVIDENCE', true
-          );
-          const expectedSource = reviewed || generated;
-          if (!generated || !signed || !expectedSource || signed.sourceArtifactId !== expectedSource.id) {
-            throw new ContractConflictError('Signed contract evidence required');
-          }
-        }
+        const period = await requireContractEffectivePeriod(contract, tx);
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
-        validateDateRange(contract.startDate, contract.endDate);
+        validateDateRange(period.effectiveStartDate, contract.endDate);
         const today = new Date().toISOString().slice(0, 10);
-        if (contract.startDate > today) {
+        if (period.effectiveStartDate > today) {
           throw new ContractConflictError('Contract period has not started');
         }
         if (contract.endDate && contract.endDate < today) {
@@ -516,8 +501,10 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
         if (!driver) throw new ContractNotFoundError();
         ensureVehicleEligible(vehicle);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, contract.startDate, tx);
-        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, contract.startDate, tx))) {
+        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx);
+        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, today, tx);
+        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx)) ||
+            !(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, today, tx))) {
           throw new ContractConflictError('Vehicle insurance unavailable');
         }
         ensureDriverEligible(driver);
@@ -545,7 +532,7 @@ export function registerContractRoutes(app: Express): void {
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: active.id,
-          action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(active),
+          action: AuditAction.UPDATE, previousState: auditState(contract), newState: JSON.stringify({ ...active, ...period }),
           userId: principal.userId, userName: principal.name, timestamp: now,
         });
         return { item: active, receivables };
@@ -619,9 +606,10 @@ export function registerContractRoutes(app: Express): void {
           throw new ContractConflictError('Contract lifecycle does not allow resume');
         }
 
-        validateDateRange(contract.startDate, contract.endDate);
+        const period = await requireContractEffectivePeriod(contract, tx);
+        validateDateRange(period.effectiveStartDate, contract.endDate);
         const today = new Date().toISOString().slice(0, 10);
-        if (contract.startDate > today) throw new ContractConflictError('Contract period has not started');
+        if (period.effectiveStartDate > today) throw new ContractConflictError('Contract period has not started');
         if (contract.endDate && contract.endDate < today) throw new ContractConflictError('Contract period already ended');
 
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
@@ -643,6 +631,7 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
+        await ensureInitialContractReceivable(saved, principal, tx);
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
@@ -673,7 +662,8 @@ export function registerContractRoutes(app: Express): void {
         if (contract.status !== ContractStatus.ACTIVE) {
           throw new ContractConflictError('Contract lifecycle does not allow close');
         }
-        if (closeDate < contract.startDate) throw new ContractConflictError('Close date precedes contract start');
+        const period = await requireContractEffectivePeriod(contract, tx);
+        if (closeDate < period.effectiveStartDate) throw new ContractConflictError('Close date precedes contract start');
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
         if (vehicle.currentContractId !== contract.id || vehicle.currentDriverId !== contract.driverId) {
@@ -803,7 +793,8 @@ export function registerContractRoutes(app: Express): void {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status !== ContractStatus.ACTIVE) throw new ContractConflictError('Contract must be active');
-        if (competenceDate < contract.startDate) {
+        const period = await requireContractEffectivePeriod(contract, tx);
+        if (competenceDate < period.effectiveStartDate) {
           throw new ContractConflictError('Billing competence precedes contract start');
         }
         if (contract.endDate && competenceDate > contract.endDate) {
@@ -817,6 +808,10 @@ export function registerContractRoutes(app: Express): void {
           throw new ContractConflictError('Contract binding mismatch');
         }
         ensureDriverEligible(driver);
+        if (competenceDate === period.effectiveStartDate) {
+          return (await ensureInitialContractReceivable(contract, principal, tx))
+            .filter(item => item.originType === OriginType.CONTRACT_RENT);
+        }
         return await ReceivableService.create({
           companyId: principal.companyId,
           originType: OriginType.CONTRACT_RENT,

@@ -80,7 +80,7 @@ assert.match(financeAuthority, /OriginType\.KM_EXCESS/);
 assert.match(financeAuthority, /contract\.securityDepositAmount/);
 assert.match(financeAuthority, /contract\.franchiseKm/);
 assert.match(financeAuthority, /contract\.excessKmRate/);
-assert.match(financeAuthority, /originId:`\$\{contract\.id\}:deposit`/);
+assert.match(financeAuthority, /`\$\{contract\.id\}:deposit`/);
 assert.match(financeAuthority, /originId:`\$\{contract\.id\}:close`/);
 assert.match(reconcileRoutes, /ContractStatus\.CLOSED/);
 assert.match(reconcileRoutes, /findByContractId\(contract\.id\)/);

@@ -9,6 +9,7 @@ import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { ITransactionContext } from './ITransactionContext';
 import { assertFinancialCategoryForObligation } from './FinancialCategoryAuthority';
+import { requireContractEffectivePeriod } from '../contracts/contractEffectivePeriod';
 
 export interface CreateReceivableParams {
   companyId: string;
@@ -32,18 +33,20 @@ async function assertContractRentCompetenceWithinContract(
   params: CreateReceivableParams,
   txContext?: ITransactionContext
 ): Promise<void> {
-  if (params.originType !== OriginType.CONTRACT_RENT || !txContext) return;
+  if (![OriginType.CONTRACT_RENT, OriginType.SECURITY_DEPOSIT, OriginType.KM_EXCESS].includes(params.originType)) return;
+  if (!txContext) throw new Error('Autoridade contratual transacional indisponível para cobrança');
   if (!params.contractId) {
     throw new Error('Autoridade contratual indisponível para cobrança de aluguel');
   }
 
-  const contract = await txContext.getContractRepo().findByIdForCompany(params.companyId, params.contractId);
+  const contract = await txContext.getContractRepo().findByIdForCompanyWithLock(params.companyId, params.contractId);
   if (!contract || contract.isArchived) {
     throw new Error('Contrato indisponível para cobrança de aluguel');
   }
 
   const competenceDate = params.competenceDate || params.dueDate;
-  if (competenceDate < contract.startDate || (contract.endDate && competenceDate > contract.endDate)) {
+  const period = await requireContractEffectivePeriod(contract, txContext);
+  if (competenceDate < period.effectiveStartDate || (contract.endDate && competenceDate > contract.endDate)) {
     throw new Error('Período contratual inválido para cobrança');
   }
 }

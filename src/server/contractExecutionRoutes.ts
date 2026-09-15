@@ -38,6 +38,8 @@ import {
 } from './contractVehicleTrackerSnapshot';
 import { contractVehicleTrackerTemplateValues } from './contractVehicleTrackerTemplateValues';
 import { ensureInitialContractReceivable } from './contractFinanceAuthority';
+import { ContractSignatureRequiredError, contractTimestampUtc } from '../domain/contracts/contractEffectivePeriod';
+import { contractConflictResponse } from './contractConflictResponse';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE' | 'RECONCILE_CONTRACT_FINANCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
@@ -465,7 +467,7 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const document = await PDFDocument.create();
   const font = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
-  const logo = await document.embedJpg(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64'));
+  const logo = await document.embedJpg(Uint8Array.from(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64')));
   const pageWidth = 595.28;
   const pageHeight = 841.89;
   const margin = 48;
@@ -635,8 +637,13 @@ function sendError(res: Response, error: unknown): void {
     res.status(404).json({ error: 'Not found' });
     return;
   }
-  if (error instanceof ExecutionConflictError) {
-    res.status(409).json({ error: 'Contract execution conflict' });
+  if (error instanceof ExecutionConflictError || error instanceof ContractSignatureRequiredError ||
+      (error instanceof Error && error.message === 'Contract financial reconciliation conflict')) {
+    res.status(409).json(contractConflictResponse(error instanceof Error ? error.message : undefined));
+    return;
+  }
+  if (error instanceof Error && (error.message.includes('período financeiro') || error.message.includes('Período'))) {
+    res.status(409).json(contractConflictResponse('Financial period closed'));
     return;
   }
   if (error instanceof AttachmentStorageUnavailableError) {
@@ -696,16 +703,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         );
         if (!hasOfficialArtifact) throw new ExecutionConflictError();
 
-        const existingReceivables = await tx.getReceivableRepo().findByContractId(contract.id);
-        const currentReceivable = existingReceivables.find((receivable) =>
-          receivable.companyId === principal.companyId &&
-          receivable.originType === OriginType.CONTRACT_RENT &&
-          receivable.status !== ObligationStatus.CANCELLED
-        );
-        if (currentReceivable) {
-          return { receivable: currentReceivable, reused: true };
-        }
-
+        const existingIds = new Set((await tx.getReceivableRepo().findByContractId(contract.id)).map(item => item.id));
         const createdReceivables = await ensureInitialContractReceivable(contract, principal, tx);
         const receivable = createdReceivables.find((item) =>
           item.companyId === principal.companyId &&
@@ -713,6 +711,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           item.status !== ObligationStatus.CANCELLED
         );
         if (!receivable) throw new ExecutionConflictError();
+        if (existingIds.has(receivable.id)) return { receivable, reused: true };
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(),
@@ -924,7 +923,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!updatedContract) throw new ExecutionConflictError();
-        const receivables = await ensureInitialContractReceivable(updatedContract, principal, tx);
+        const receivables: never[] = [];
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
@@ -1038,11 +1037,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         return { artifact, attachment, contract: prepared.contract };
       });
       if (replay) {
-        const receivables = await UnitOfWork.run(principal.companyId, async (tx) => {
-          const current = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, replay.contract.id);
-          if (!current || current.isArchived) throw new ExecutionConflictError();
-          return ensureInitialContractReceivable(current, principal, tx);
-        });
+        const receivables: never[] = [];
         res.status(200).json({ ...replay, receivables });
         return;
       }
@@ -1153,7 +1148,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!updatedContract) throw new ExecutionConflictError();
-        const receivables = await ensureInitialContractReceivable(updatedContract, principal, tx);
+        const receivables: never[] = [];
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
@@ -1443,7 +1438,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (!generated) throw new ExecutionConflictError();
         const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'REVIEWED_FINAL_PDF');
         const source = reviewed || generated;
-        if (new Date(signedAt).getTime() < new Date(source.createdAt).getTime()) throw new ExecutionConflictError();
+        if (new Date(signedAt).getTime() < contractTimestampUtc(source.createdAt)) throw new ExecutionConflictError();
         const currentSigned = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (currentSigned) throw new ExecutionConflictError();
         const attachment = await tx.getAttachmentRepo().findByIdForCompany(principal.companyId, attachmentId);
@@ -1510,7 +1505,8 @@ export function registerContractExecutionRoutes(app: Express): void {
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'ContractArtifact', entityId: artifact.id,
           action: AuditAction.CREATE, userId: principal.userId, userName: principal.name,
-          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: source.id, checksum, signatureMethod }),
+          newState: JSON.stringify({ event: 'REGISTER_SIGNED_PDF_EVIDENCE', contractId: contract.id, sourceArtifactId: source.id, checksum, signatureMethod,
+            plannedStartDate: contract.startDate, signedAt, effectiveStartDate: new Date(signedAt).toISOString().slice(0, 10) }),
           timestamp: now,
         });
         return { artifact, attachment, contract: updatedContract };

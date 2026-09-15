@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response as ExpressRespo
 import { createServer } from 'node:http';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
+import { seedContractSignedFixture } from './contractSignedFixture';
 import { ContractStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 import type { AuthenticatedPrincipal } from '../auth';
 import { registerContractRoutes } from '../contractRoutes';
@@ -169,6 +170,7 @@ export async function runContractSuspendRegression(): Promise<void> {
     assert(response.status === 201, `suspend ACTIVE fixture create expected 201, got ${response.status}`);
     const activeCandidate = (await json(response)).item;
     await db.execute(sql`UPDATE contracts SET signature_required=false WHERE id=${activeCandidate.id}`);
+    await seedContractSignedFixture(activeCandidate.id);
 
     response = await request(`/api/contracts/${encodeURIComponent(activeCandidate.id)}/activate`, {
       method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }),
