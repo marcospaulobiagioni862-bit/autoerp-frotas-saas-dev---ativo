@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
+import { seedContractSignedFixture } from './contractSignedFixture';
 import { RecurringAuthorityService } from '../recurringAuthority';
 import { ReceivableService } from '../../domain/finance/ReceivableService';
 import { UnitOfWork } from '../../db/uow';
@@ -79,6 +80,7 @@ async function seed(): Promise<void> {
 }
 
 async function testContractTriggerAndExactlyOnce(): Promise<void> {
+  await seedContractSignedFixture(contractA);
   await db.execute(sql`UPDATE contracts SET status='ACTIVE', updated_at=NOW() WHERE id=${contractA}`);
   let rule = await one(sql`
     SELECT id, status, active, next_generation_date::text AS next_generation_date, category_id
@@ -297,6 +299,13 @@ export class RecurringAuthorityIntegrationRunner {
     await testDocumentAlertDedupAndVersioning();
     await testRlsNonSuperuser();
   }
+}
+
+/** Billing-only entry point for the isolated PGlite runner; PostgreSQL RLS stays in CI. */
+export async function runRecurringContractBillingRegression(): Promise<void> {
+  await seed();
+  await testContractTriggerAndExactlyOnce();
+  await testDocumentAlertDedupAndVersioning();
 }
 
 if (process.argv[1]?.includes('recurringAuthorityIntegration')) {

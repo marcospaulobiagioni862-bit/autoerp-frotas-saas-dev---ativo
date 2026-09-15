@@ -169,7 +169,9 @@ async function failureAfterInsertRollsBackAndRetryConverges(): Promise<void> {
       RETURN NEW;
     END;
     $$;
-    DROP TRIGGER IF EXISTS trg_finance_r13_fail_rule_advance ON recurring_rules;
+  `));
+  await db.execute(sql`DROP TRIGGER IF EXISTS trg_finance_r13_fail_rule_advance ON recurring_rules`);
+  await db.execute(sql.raw(`
     CREATE TRIGGER trg_finance_r13_fail_rule_advance
     BEFORE UPDATE ON recurring_rules
     FOR EACH ROW EXECUTE FUNCTION finance_r13_fail_rule_advance();
@@ -196,7 +198,8 @@ async function failureAfterInsertRollsBackAndRetryConverges(): Promise<void> {
     `);
     assert(run?.status === 'FAILED', `failed occurrence run was not persisted as FAILED (${run?.status})`);
   } finally {
-    await db.execute(sql.raw(`DROP TRIGGER IF EXISTS trg_finance_r13_fail_rule_advance ON recurring_rules; DROP FUNCTION IF EXISTS finance_r13_fail_rule_advance();`));
+    await db.execute(sql`DROP TRIGGER IF EXISTS trg_finance_r13_fail_rule_advance ON recurring_rules`);
+    await db.execute(sql`DROP FUNCTION IF EXISTS finance_r13_fail_rule_advance()`);
   }
 
   const retry = await RecurringAuthorityService.processTenant(companyA, '2026-06-01', 'finance-r13-rollback-retry');
@@ -285,7 +288,7 @@ async function foreignTenantOriginCannotGenerateMoney(): Promise<void> {
   assert(foreignTracker?.company_id === companyB && foreignTracker?.status === 'ACTIVE', 'foreign tenant tracker was mutated');
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
   await catchUpCreatesEveryPeriodExactlyOnce();
   await failureAfterInsertRollsBackAndRetryConverges();
@@ -295,7 +298,7 @@ async function run(): Promise<void> {
   console.log('FINANCE-R13 authoritative recurring billing integration: PASS');
 }
 
-run().then(() => process.exit(0)).catch((error) => {
+if (process.argv[1]?.includes('financeRecurringAuthorityIntegration')) run().then(() => process.exit(0)).catch((error) => {
   console.error(error);
   process.exit(1);
 });

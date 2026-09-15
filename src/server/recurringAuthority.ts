@@ -10,6 +10,7 @@ import { AuditAction, ContractStatus, OriginType, RecurringFrequency } from '../
 import type { AuthenticatedPrincipal } from './auth';
 import { advanceNextGenerationDate, calculatePeriodRef } from '../domain/finance/RecurringSchedule';
 import { materializeInsuranceAlerts } from './insuranceAlerts';
+import { requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
 
 export type RecurringRuleStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED' | 'COMPLETED';
 export type RecurringRunStatus = 'CLAIMED' | 'SUCCEEDED' | 'SKIPPED' | 'FAILED';
@@ -135,7 +136,7 @@ async function validateRuleReferences(txContext:any,rawTx:any,companyId:string,i
     if(!contract||contract.isArchived)throw new Error('Contrato não encontrado');
     if(input.vehicleId&&contract.vehicleId!==input.vehicleId)throw new Error('Contrato e veículo divergentes');
     if(input.driverId&&contract.driverId!==input.driverId)throw new Error('Contrato e motorista divergentes');
-    const contractStart=dateOnly(contract.startDate),contractEnd=dateOnly(contract.endDate);
+    const contractStart=(await requireContractEffectivePeriod(contract,txContext)).effectiveStartDate,contractEnd=dateOnly(contract.endDate);
     if(contractStart&&input.startDate&&input.startDate<contractStart)throw new Error('Regra recorrente inicia antes do contrato');
     if(contractEnd&&input.startDate&&input.startDate>contractEnd)throw new Error('Regra recorrente inicia após o término do contrato');
     if(contractEnd&&input.endDate&&input.endDate>contractEnd)throw new Error('Regra recorrente termina após o contrato');

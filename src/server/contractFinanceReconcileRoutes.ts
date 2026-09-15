@@ -6,6 +6,8 @@ import { roundCurrency } from '../shared/utils/currency';
 import { AuditAction, ContractStatus, ObligationStatus, OriginType } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureContractCloseReceivables } from './contractFinanceAuthority';
+import { ContractSignatureRequiredError } from '../domain/contracts/contractEffectivePeriod';
+import { contractConflictResponse } from './contractConflictResponse';
 
 const RECONCILE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','OPERATIONAL','FINANCIAL']);
 
@@ -21,6 +23,7 @@ function principal(req:Request,res:Response):AuthenticatedPrincipal|null{
 }
 
 function sendError(res:Response,error:unknown):void{
+  if(error instanceof ContractSignatureRequiredError){res.status(409).json(contractConflictResponse(error.message));return;}
   const message=error instanceof Error?error.message:'';
   if(message==='Contract finance reconciliation unavailable'){res.status(409).json({error:'Contract finance reconciliation unavailable'});return;}
   if(message.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}
@@ -56,7 +59,7 @@ export function registerContractFinanceReconcileRoutes(app:Express):void{
         const receivable=receivables.find((candidate)=>
           candidate.companyId===actor.companyId&&
           candidate.originType===OriginType.SECURITY_DEPOSIT&&
-          candidate.originId===`${contract.id}:deposit`&&
+          (candidate.originId===`${contract.id}:deposit`||candidate.originId.startsWith(`${contract.id}:deposit:signature:`))&&
           candidate.status!==ObligationStatus.CANCELLED
         );
         if(!receivable)return null;
