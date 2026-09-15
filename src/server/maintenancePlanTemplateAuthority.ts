@@ -1,3 +1,4 @@
+import { matchesMaintenanceTemplate, validateTemplateApplicability, type MaintenanceTemplateApplicability, type MaintenanceTemplateApplicabilityInput } from '../domain/maintenance/maintenanceTemplateApplicability';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
@@ -12,14 +13,14 @@ export class MaintenanceTemplateConflictError extends Error{}
 export type MaintenanceTemplateCategory='ENGINE'|'COOLING'|'BRAKES'|'TIRES_WHEELS'|'SUSPENSION_STEERING'|'TRANSMISSION'|'ELECTRICAL'|'AIR_CONDITIONING'|'SAFETY'|'GENERAL';
 export type MaintenanceTemplateAction='REPLACE'|'INSPECT'|'TEST'|'MEASURE'|'LUBRICATE'|'SERVICE';
 
-export interface MaintenancePlanTemplate {
+export interface MaintenancePlanTemplate extends MaintenanceTemplateApplicability {
   id:string;companyId:string;code:string;name:string;maintenanceType:string;category:MaintenanceTemplateCategory;actionType:MaintenanceTemplateAction;intervalKm?:number;intervalDays?:number;
   priority:MaintenancePlanPriority;estimatedCost?:number;active:boolean;notes?:string;createdBy:string;createdAt:string;updatedAt:string;
 }
-export interface CreateMaintenancePlanTemplateInput {
+export interface CreateMaintenancePlanTemplateInput extends MaintenanceTemplateApplicabilityInput {
   name:string;category?:MaintenanceTemplateCategory;actionType?:MaintenanceTemplateAction;intervalKm?:number;intervalDays?:number;priority?:MaintenancePlanPriority;estimatedCost?:number;active?:boolean;notes?:string;
 }
-export interface UpdateMaintenancePlanTemplateInput {
+export interface UpdateMaintenancePlanTemplateInput extends MaintenanceTemplateApplicabilityInput {
   name?:string;category?:MaintenanceTemplateCategory;actionType?:MaintenanceTemplateAction;intervalKm?:number|null;intervalDays?:number|null;priority?:MaintenancePlanPriority;estimatedCost?:number|null;active?:boolean;notes?:string|null;
 }
 
@@ -89,7 +90,7 @@ const opt=(v:unknown):string|undefined=>v===null||v===undefined||v===''?undefine
 const num=(v:unknown):number|undefined=>v===null||v===undefined||v===''?undefined:Number(v);
 const iso=(v:unknown):string=>v instanceof Date?v.toISOString():typeof v==='string'?v:new Date(String(v)).toISOString();
 const dateOnly=(v:unknown):string=>v instanceof Date?v.toISOString().slice(0,10):String(v).slice(0,10);
-function mapTemplate(r:any):MaintenancePlanTemplate{return{id:String(r.id),companyId:String(r.company_id),code:String(r.code),name:String(r.name),maintenanceType:String(r.maintenance_type),category:String(r.category) as MaintenanceTemplateCategory,actionType:String(r.action_type) as MaintenanceTemplateAction,intervalKm:num(r.interval_km),intervalDays:num(r.interval_days),priority:String(r.priority) as MaintenancePlanPriority,estimatedCost:num(r.estimated_cost),active:Boolean(r.active),notes:opt(r.notes),createdBy:String(r.created_by),createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)};}
+function mapTemplate(r:any):MaintenancePlanTemplate{return{manufacturer:opt(r.manufacturer),model:opt(r.model),yearFrom:num(r.year_from),yearTo:num(r.year_to),engine:opt(r.engine),kmMin:num(r.km_min),kmMax:num(r.km_max),id:String(r.id),companyId:String(r.company_id),code:String(r.code),name:String(r.name),maintenanceType:String(r.maintenance_type),category:String(r.category) as MaintenanceTemplateCategory,actionType:String(r.action_type) as MaintenanceTemplateAction,intervalKm:num(r.interval_km),intervalDays:num(r.interval_days),priority:String(r.priority) as MaintenancePlanPriority,estimatedCost:num(r.estimated_cost),active:Boolean(r.active),notes:opt(r.notes),createdBy:String(r.created_by),createdAt:iso(r.created_at),updatedAt:iso(r.updated_at)};}
 function cleanText(v:string|undefined,current:string,max=300):string{if(v===undefined)return current;const s=v.trim();if(!s||s.length>max)throw new MaintenanceTemplateValidationError('Texto inválido');return s;}
 function interval(v:number|null|undefined,current:number|undefined):number|undefined{if(v===undefined)return current;if(v===null)return undefined;if(!Number.isInteger(v)||v<=0)throw new MaintenanceTemplateValidationError('Intervalo inválido');return v;}
 function cost(v:number|null|undefined,current:number|undefined):number|undefined{if(v===undefined)return current;if(v===null)return undefined;if(!Number.isFinite(v)||v<0)throw new MaintenanceTemplateValidationError('Custo estimado inválido');return Math.round((v+Number.EPSILON)*100)/100;}
@@ -97,6 +98,10 @@ function priority(v:MaintenancePlanPriority|undefined,current:MaintenancePlanPri
 function category(v:MaintenanceTemplateCategory|undefined,current:MaintenanceTemplateCategory):MaintenanceTemplateCategory{if(v===undefined)return current;if(!['ENGINE','COOLING','BRAKES','TIRES_WHEELS','SUSPENSION_STEERING','TRANSMISSION','ELECTRICAL','AIR_CONDITIONING','SAFETY','GENERAL'].includes(v))throw new MaintenanceTemplateValidationError('Categoria inválida');return v;}
 function actionType(v:MaintenanceTemplateAction|undefined,current:MaintenanceTemplateAction):MaintenanceTemplateAction{if(v===undefined)return current;if(!['REPLACE','INSPECT','TEST','MEASURE','LUBRICATE','SERVICE'].includes(v))throw new MaintenanceTemplateValidationError('Ação inválida');return v;}
 function codeFromName(name:string):string{const normalized=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80);if(!normalized)throw new MaintenanceTemplateValidationError('Nome inválido');return normalized;}
+
+function applicability(input:MaintenanceTemplateApplicabilityInput,current:MaintenanceTemplateApplicability={}):MaintenanceTemplateApplicability{
+  try{return validateTemplateApplicability(input,current);}catch{throw new MaintenanceTemplateValidationError('Critérios de aplicabilidade inválidos');}
+}
 
 async function ensureCatalog(context:any,p:AuthenticatedPrincipal):Promise<void>{
   const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
@@ -114,22 +119,27 @@ async function listInContext(context:any,p:AuthenticatedPrincipal):Promise<Maint
 }
 async function applyToVehicleInContext(context:any,p:AuthenticatedPrincipal,vehicle:Pick<Vehicle,'id'|'currentKm'>,templateId?:string):Promise<number>{
   await ensureCatalog(context,p);const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
+  // Resolve canonical data within the same transaction, including newly created vehicles.
+  const canonical=await context.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,vehicle.id);
+  if(!canonical||canonical.isArchived||['SOLD','ARCHIVED'].includes(canonical.status))throw new MaintenanceTemplateNotFoundError('Veículo indisponível');
+  // Vehicle has no authoritative engine field: never infer it from version or notes.
+  const matchVehicle={companyId:canonical.companyId,brand:canonical.brand,model:canonical.model,yearModel:canonical.yearModel,currentKm:canonical.currentKm};
   const templateRows=templateId
     ? rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND id=${templateId} AND active=true LIMIT 1`))
     : rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND active=true ORDER BY code`));
   if(templateId&&templateRows.length===0)throw new MaintenanceTemplateNotFoundError('Plano padrão não encontrado ou inativo');
-  const templates=templateRows.map(mapTemplate);
+  const templates=templateRows.map(mapTemplate).filter(t=>matchesMaintenanceTemplate(p.companyId,t,matchVehicle));
   const now=new Date().toISOString(),baseDate=now.slice(0,10);let created=0;
   for(const t of templates){
-    const nextKm=t.intervalKm===undefined?undefined:vehicle.currentKm+t.intervalKm;
+    const nextKm=t.intervalKm===undefined?undefined:canonical.currentKm+t.intervalKm;
     const nextDate=t.intervalDays===undefined?undefined:new Date(Date.parse(baseDate+'T00:00:00Z')+t.intervalDays*86400000).toISOString().slice(0,10);
     const id=randomUUID();
     const r=await tx.execute(sql`INSERT INTO maintenance_plans(id,company_id,vehicle_id,template_id,name,maintenance_type,interval_km,interval_days,last_execution_km,last_execution_date,next_due_km,next_due_date,priority,estimated_cost,status,notes,cycle_sequence,created_by,created_at,updated_at)
-      VALUES(${id},${p.companyId},${vehicle.id},${t.id},${t.name},${t.maintenanceType},${t.intervalKm??null},${t.intervalDays??null},${vehicle.currentKm},${baseDate},${nextKm??null},${nextDate??null},${t.priority},${t.estimatedCost??null},'ACTIVE',${t.notes??null},0,${p.userId},${now},${now})
+      VALUES(${id},${p.companyId},${vehicle.id},${t.id},${t.name},${t.maintenanceType},${t.intervalKm??null},${t.intervalDays??null},${canonical.currentKm},${baseDate},${nextKm??null},${nextDate??null},${t.priority},${t.estimatedCost??null},'ACTIVE',${t.notes??null},0,${p.userId},${now},${now})
       ON CONFLICT(company_id,vehicle_id,template_id) WHERE template_id IS NOT NULL DO NOTHING RETURNING id`);
     if(rows(r)[0]){
       created++;
-      await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlan',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify({event:templateId?'APPLIED_FROM_SELECTED_TEMPLATE':'APPLIED_FROM_GLOBAL_TEMPLATE',templateId:t.id,vehicleId:vehicle.id,currentKm:vehicle.currentKm,nextDueKm:nextKm,nextDueDate:nextDate}),userId:p.userId,userName:p.name,timestamp:now});
+      await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlan',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify({event:templateId?'APPLIED_FROM_SELECTED_TEMPLATE':'APPLIED_FROM_GLOBAL_TEMPLATE',templateId:t.id,vehicleId:vehicle.id,currentKm:canonical.currentKm,nextDueKm:nextKm,nextDueDate:nextDate}),userId:p.userId,userName:p.name,timestamp:now});
     }
   }
   return created;
@@ -140,11 +150,12 @@ export class MaintenancePlanTemplateAuthority {
     await ensureCatalog(context,p);const tx=context.getRawTransaction?.();if(!tx)throw new Error('Maintenance template persistence unavailable');
     const name=cleanText(input.name,'',200),code=codeFromName(name),intervalKm=interval(input.intervalKm,undefined),intervalDays=interval(input.intervalDays,undefined),active=Boolean(input.active);
     if(active&&intervalKm===undefined&&intervalDays===undefined)throw new MaintenanceTemplateValidationError('Plano ativo exige intervalo por KM ou tempo');
+    const criteria=applicability(input);
     const now=new Date().toISOString(),id=randomUUID(),priorityValue=priority(input.priority,'MEDIUM'),categoryValue=category(input.category,'GENERAL'),actionValue=actionType(input.actionType,'INSPECT'),estimatedCost=cost(input.estimatedCost,undefined),notes=input.notes?.trim()||undefined;
     const exists=rows(await tx.execute(sql`SELECT id FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND code=${code} LIMIT 1`))[0];
     if(exists)throw new MaintenanceTemplateConflictError('Já existe item com este nome');
-    const row=rows(await tx.execute(sql`INSERT INTO maintenance_plan_templates(id,company_id,code,name,maintenance_type,category,action_type,interval_km,interval_days,priority,estimated_cost,active,notes,created_by,created_at,updated_at)
-      VALUES(${id},${p.companyId},${code},${name},${code},${categoryValue},${actionValue},${intervalKm??null},${intervalDays??null},${priorityValue},${estimatedCost??null},${active},${notes??null},${p.userId},${now},${now}) RETURNING *`))[0];
+    const row=rows(await tx.execute(sql`INSERT INTO maintenance_plan_templates(id,company_id,code,name,maintenance_type,category,action_type,interval_km,interval_days,priority,estimated_cost,active,notes,created_by,created_at,updated_at,manufacturer,model,year_from,year_to,engine,km_min,km_max)
+      VALUES(${id},${p.companyId},${code},${name},${code},${categoryValue},${actionValue},${intervalKm??null},${intervalDays??null},${priorityValue},${estimatedCost??null},${active},${notes??null},${p.userId},${now},${now},${criteria.manufacturer??null},${criteria.model??null},${criteria.yearFrom??null},${criteria.yearTo??null},${criteria.engine??null},${criteria.kmMin??null},${criteria.kmMax??null}) RETURNING *`))[0];
     const saved=mapTemplate(row);await context.getAuditLogRepo().create({id:randomUUID(),companyId:p.companyId,entityName:'MaintenancePlanTemplate',entityId:id,action:AuditAction.CREATE,newState:JSON.stringify(saved),userId:p.userId,userName:p.name,timestamp:now});
     return saved;
   });}
@@ -154,12 +165,13 @@ export class MaintenancePlanTemplateAuthority {
     const beforeRow=rows(await tx.execute(sql`SELECT * FROM maintenance_plan_templates WHERE company_id=${p.companyId} AND id=${id} FOR UPDATE`))[0];if(!beforeRow)throw new MaintenanceTemplateNotFoundError('Plano padrão não encontrado');
     const before=mapTemplate(beforeRow),intervalKm=interval(input.intervalKm,before.intervalKm),intervalDays=interval(input.intervalDays,before.intervalDays),active=input.active===undefined?before.active:Boolean(input.active);
     if(active&&intervalKm===undefined&&intervalDays===undefined)throw new MaintenanceTemplateValidationError('Plano ativo exige intervalo por KM ou tempo');
-    const next={...before,name:cleanText(input.name,before.name),category:category(input.category,before.category),actionType:actionType(input.actionType,before.actionType),intervalKm,intervalDays,priority:priority(input.priority,before.priority),estimatedCost:cost(input.estimatedCost,before.estimatedCost),active,notes:input.notes===undefined?before.notes:input.notes===null?undefined:input.notes.trim()||undefined,updatedAt:new Date().toISOString()};
-    const savedRow=rows(await tx.execute(sql`UPDATE maintenance_plan_templates SET name=${next.name},category=${next.category},action_type=${next.actionType},interval_km=${next.intervalKm??null},interval_days=${next.intervalDays??null},priority=${next.priority},estimated_cost=${next.estimatedCost??null},active=${next.active},notes=${next.notes??null},updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND id=${id} RETURNING *`))[0];
+    const next={...before,...applicability(input,before),name:cleanText(input.name,before.name),category:category(input.category,before.category),actionType:actionType(input.actionType,before.actionType),intervalKm,intervalDays,priority:priority(input.priority,before.priority),estimatedCost:cost(input.estimatedCost,before.estimatedCost),active,notes:input.notes===undefined?before.notes:input.notes===null?undefined:input.notes.trim()||undefined,updatedAt:new Date().toISOString()};
+    const savedRow=rows(await tx.execute(sql`UPDATE maintenance_plan_templates SET manufacturer=${next.manufacturer??null},model=${next.model??null},year_from=${next.yearFrom??null},year_to=${next.yearTo??null},engine=${next.engine??null},km_min=${next.kmMin??null},km_max=${next.kmMax??null},name=${next.name},category=${next.category},action_type=${next.actionType},interval_km=${next.intervalKm??null},interval_days=${next.intervalDays??null},priority=${next.priority},estimated_cost=${next.estimatedCost??null},active=${next.active},notes=${next.notes??null},updated_at=${next.updatedAt} WHERE company_id=${p.companyId} AND id=${id} RETURNING *`))[0];
     if(!savedRow)throw new MaintenanceTemplateNotFoundError('Plano padrão não encontrado');
     if(next.active){
-      const plans=rows(await tx.execute(sql`SELECT p.id,p.last_execution_km,p.last_execution_date,v.current_km FROM maintenance_plans p JOIN vehicles v ON v.company_id=p.company_id AND v.id=p.vehicle_id WHERE p.company_id=${p.companyId} AND p.template_id=${id} AND p.status<>'COMPLETED'`));
+      const plans=rows(await tx.execute(sql`SELECT p.id,p.last_execution_km,p.last_execution_date,v.current_km,v.company_id,v.brand,v.model,v.year_model FROM maintenance_plans p JOIN vehicles v ON v.company_id=p.company_id AND v.id=p.vehicle_id WHERE p.company_id=${p.companyId} AND p.template_id=${id} AND p.status<>'COMPLETED'`));
       for(const plan of plans){
+        if(!matchesMaintenanceTemplate(p.companyId,next,{companyId:String(plan.company_id),brand:plan.brand,model:plan.model,yearModel:Number(plan.year_model),currentKm:Number(plan.current_km)}))continue;
         const baseKm=plan.last_execution_km===null||plan.last_execution_km===undefined?Number(plan.current_km):Number(plan.last_execution_km);
         const baseDate=plan.last_execution_date?dateOnly(plan.last_execution_date):next.updatedAt.slice(0,10);
         const nextKm=next.intervalKm===undefined?null:baseKm+next.intervalKm;
