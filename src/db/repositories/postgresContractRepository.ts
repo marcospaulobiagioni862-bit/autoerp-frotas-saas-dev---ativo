@@ -34,6 +34,7 @@ export class PostgresContractRepository implements ITransactionContractRepositor
       templateId: row.template_id || undefined,
       generatedPdfUrl: row.generated_pdf_url || undefined,
       signedContractUrl: row.signed_contract_url || undefined,
+      hasSignedEvidence: row.has_signed_evidence,
       signatureRequired: Boolean(row.signature_required),
       notes: row.notes || undefined,
       isArchived: Boolean(row.is_archived),
@@ -70,9 +71,15 @@ export class PostgresContractRepository implements ITransactionContractRepositor
 
   async findAllByCompany(companyId: string): Promise<Contract[]> {
     const result = await this.tx.execute(sql`
-      SELECT * FROM contracts
-      WHERE company_id = ${companyId}
-      ORDER BY created_at DESC, id DESC
+      SELECT c.*, EXISTS (
+        SELECT 1 FROM contract_artifacts a
+        WHERE a.company_id = c.company_id AND a.contract_id = c.id
+          AND a.artifact_type = 'SIGNED_EVIDENCE'
+          AND a.is_current = true AND a.is_archived = false
+      ) AS has_signed_evidence
+      FROM contracts c
+      WHERE c.company_id = ${companyId}
+      ORDER BY c.created_at DESC, c.id DESC
     `);
     return rowsOf(result).map((row) => this.map(row));
   }

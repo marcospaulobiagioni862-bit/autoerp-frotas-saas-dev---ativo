@@ -43,6 +43,7 @@ function validateContract(value: unknown): Contract {
     typeof item.franchiseKm !== 'number' || !Number.isFinite(item.franchiseKm) ||
     typeof item.excessKmRate !== 'number' || !Number.isFinite(item.excessKmRate) ||
     typeof item.signatureRequired !== 'boolean' ||
+    (item.hasSignedEvidence !== undefined && typeof item.hasSignedEvidence !== 'boolean') ||
     typeof item.isArchived !== 'boolean' ||
     typeof item.createdAt !== 'string' ||
     typeof item.updatedAt !== 'string'

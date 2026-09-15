@@ -21,6 +21,8 @@ export interface Contract {
   templateId?: string;
   generatedPdfUrl?: string;
   signedContractUrl?: string;
+  /** Read-only list projection of current, non-archived SIGNED_EVIDENCE. */
+  hasSignedEvidence?: boolean;
   signatureRequired?: boolean;
   notes?: string;
   isArchived: boolean;
