@@ -28,6 +28,13 @@ export class FleetComplianceService {
     return diffDays<0?DocumentStatus.EXPIRED:diffDays<=30?DocumentStatus.EXPIRING_SOON:DocumentStatus.VALID;
   }
 
+  static isCrlvSituationValid(situacao?: string, expirationDate?: string): boolean {
+    const isSituationOk = !situacao || situacao === 'Em dia' || situacao === 'Regular' || situacao === 'VALID';
+    if (!expirationDate) return isSituationOk;
+    const today = new Date().toISOString().slice(0, 10);
+    return isSituationOk && expirationDate >= today;
+  }
+
   static async createDocument(params:CreateVehicleDocumentParams):Promise<VehicleDocument>{
     if(!params.vehicleId)throw new Error('Veículo é obrigatório para o documento');if(!params.documentType)throw new Error('Tipo de documento é obrigatório');if(!params.expirationDate)throw new Error('Data de vencimento é obrigatória');
     const now=new Date().toISOString();const doc:VehicleDocument={id:generateUUID(),companyId:params.companyId,vehicleId:params.vehicleId,documentType:params.documentType,documentNumber:params.documentNumber,issueDate:params.issueDate,expirationDate:params.expirationDate,status:this.calculateDocumentStatus(params.expirationDate),cost:params.cost||0,fileUrl:params.fileUrl,notes:params.notes,createdAt:now,updatedAt:now};
