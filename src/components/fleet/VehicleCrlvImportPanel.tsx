@@ -6,6 +6,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiExtraction } from '../../api/documentAiClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Vehicle } from '../../types/entities';
+import { FleetComplianceService } from '../../domain/services/FleetComplianceService';
 
 interface VehicleCrlvImportPanelProps {
   vehicleId: string;
@@ -78,7 +79,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
     Promise.all([
       VehicleClient.get(vehicleId),
       AttachmentClient.list({ entityType: 'Vehicle', entityId: vehicleId }),
-      DocumentAiClient.list('APPROVED'),
+      DocumentAiClient.list(),
     ])
       .then(([currentVehicle, attachments, approvedExtractions]) => {
         if (cancelled) return;
@@ -88,11 +89,10 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         const crlvAttachmentIds = new Set(activeCrlvAttachments.map((attachment) => attachment.id));
         const matching = approvedExtractions
           .filter((extraction) =>
-            extraction.status === 'APPROVED' &&
-            extraction.detectedDocumentType === 'CRLV' &&
-            crlvAttachmentIds.has(extraction.attachmentId),
+            crlvAttachmentIds.has(extraction.attachmentId) &&
+            FleetComplianceService.isCrlvExtractionEligible(extraction, currentVehicle),
           )
-          .sort((a, b) => Date.parse(b.approvedAt || b.updatedAt) - Date.parse(a.approvedAt || a.updatedAt));
+          .sort((a, b) => Date.parse(b.approvedAt || b.createdAt || b.updatedAt) - Date.parse(a.approvedAt || a.createdAt || a.updatedAt));
 
         setVehicle(currentVehicle);
         setHasCrlvAttachment(activeCrlvAttachments.length > 0);
@@ -178,9 +178,9 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
       const result = await VehicleClient.applyApprovedCrlv(vehicleId, approvedExtraction.id, fields);
       setVehicle(result.item);
       setSelectedFields(new Set());
-      setApplyNotice(`${result.appliedFields.length} campo(s) copiado(s) do CRLV aprovado para o cadastro do veículo.`);
+      setApplyNotice(`${result.appliedFields.length} campo(s) copiado(s) do CRLV para o cadastro do veículo.`);
     } catch (error) {
-      setReviewError(error instanceof Error ? error.message : 'Não foi possível copiar os dados aprovados do CRLV.');
+      setReviewError(error instanceof Error ? error.message : 'Não foi possível copiar os dados do CRLV.');
     } finally {
       setApplying(false);
     }
@@ -202,7 +202,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         <div>
           <h4 className="font-bold text-blue-900">Importar CRLV</h4>
           <p className="mt-1 text-[11px] text-blue-800">
-            Envie o CRLV como documento do veículo. O arquivo original será preservado e a extração pela IA continuará como proposta para revisão humana; nenhum dado do veículo é alterado automaticamente.
+            Envie o CRLV como documento do veículo. O arquivo original será preservado e os dados extraídos pela IA podem ser aplicados ao cadastro do veículo.
           </p>
         </div>
       </div>
@@ -217,7 +217,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         </div>
         <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600 sm:grid-cols-4">
           <span>{stepCrlvSent ? '✓' : '○'} CRLV enviado</span>
-          <span>{stepReviewed ? '✓' : '○'} Revisão humana</span>
+          <span>{stepReviewed ? '✓' : '○'} Leitura IA concluída</span>
           <span>{stepApplied ? '✓' : '○'} Dados aplicados</span>
           <span>{stepCompletion ? '✓' : '○'} Campos essenciais</span>
         </div>
@@ -235,8 +235,8 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
 
       <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-3">
         <div>
-          <h5 className="font-bold text-slate-900">Revisão do CRLV aprovado</h5>
-          <p className="text-[11px] text-slate-500">Compare o cadastro atual com os valores aprovados na revisão humana antes de qualquer aplicação.</p>
+          <h5 className="font-bold text-slate-900">Dados do CRLV extraído</h5>
+          <p className="text-[11px] text-slate-500">Compare o cadastro atual com os valores lidos pela IA do CRLV antes de aplicar ao veículo.</p>
         </div>
 
         {loadingReview ? (
@@ -244,7 +244,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         ) : reviewError ? (
           <p className="text-xs text-red-600">{reviewError}</p>
         ) : !vehicle || !approvedExtraction ? (
-          <p className="text-xs text-amber-700">Nenhum CRLV aprovado para este veículo. Faça a extração e conclua a revisão humana primeiro.</p>
+          <p className="text-xs text-amber-700">Nenhum CRLV extraído para este veículo. Envie o documento do CRLV para realizar a leitura dos dados.</p>
         ) : (
           <>
             <div className="overflow-x-auto rounded-lg border">
@@ -290,7 +290,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 onClick={applyAllApproved}
                 className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
               >
-                {applying ? 'Copiando...' : `Copiar todos os dados aprovados (${selectableApprovedFields.length})`}
+                {applying ? 'Copiando...' : `Copiar todos os dados extraídos (${selectableApprovedFields.length})`}
               </button>
               <button
                 type="button"
@@ -301,7 +301,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 {applying ? 'Copiando...' : `Copiar selecionados (${selectedFields.size})`}
               </button>
             </div>
-            <p className="text-[11px] text-slate-500">Como na CNH, os dados aprovados podem ser copiados para o cadastro. O servidor relê o CRLV aprovado e aplica somente os campos autorizados; os valores não são enviados pelo navegador.</p>
+            <p className="text-[11px] text-slate-500">Os dados lidos do CRLV podem ser copiados para o cadastro do veículo. O servidor relê o CRLV e aplica somente os campos autorizados.</p>
             {applyNotice && <p className="text-xs font-medium text-emerald-700">{applyNotice}</p>}
           </>
         )}

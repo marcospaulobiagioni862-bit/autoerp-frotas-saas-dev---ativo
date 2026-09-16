@@ -16,6 +16,7 @@ import {
 import { DOCUMENT_AI_MAX_ATTEMPTS } from './documentAiQueue';
 import { configuredDocumentAiStorageProvider, isDocumentAiAttachmentEligible } from './documentAiAttachmentPolicy';
 import { createDocumentAiAttachmentStatusSnapshot, createDocumentAiObservabilitySnapshot } from './documentAiObservability';
+import { dispatchDocumentAiExtractionFromEnvironment } from './documentAiRuntime';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -284,6 +285,10 @@ export function registerDocumentAiRoutes(app: Express): void {
         }
         return { item: existing, created: false };
       });
+      if (result.created && result.item) {
+        void dispatchDocumentAiExtractionFromEnvironment(principal.companyId, result.item.id, 'doc-ai-inline')
+          .catch((err) => console.error('AUTOERP_DOCUMENT_AI_INLINE_DISPATCH_FAILURE', err));
+      }
       res.status(result.created ? 201 : 200).json(result);
     } catch (error) {
       sendError(res, error);

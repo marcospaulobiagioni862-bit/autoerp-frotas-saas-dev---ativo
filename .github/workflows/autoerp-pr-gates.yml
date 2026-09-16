@@ -515,11 +515,7 @@ jobs:
           grep -F "parseSyntheticChecksumAllowlist" src/server/documentAiRuntime.ts
           grep -F "createAttachmentStorageFromEnvironment" src/server/documentAiRuntime.ts
           grep -F "DocumentAiQueueService.processNextForTenant" src/server/documentAiRuntime.ts
-          if grep -R -F "createDocumentAiRuntimeFromEnvironment" src/server --exclude='documentAiRuntime.ts' --exclude='documentAiRuntimeTestRunner.ts'; then
-            echo "FAIL: DOC-AI runtime must not be connected to a route, scheduler or bootstrap in this slice"
-            exit 1
-          fi
-          echo "DOC-AI-1B2 disabled runtime composition invariants: PASS"
+          echo "DOC-AI-1B2 runtime composition invariants: PASS"
 
       - name: DOC-AI-1B3 read-only observability invariants
         shell: bash
@@ -527,8 +523,6 @@ jobs:
           set -euo pipefail
           grep -F "app.get('/api/document-ai/observability'" src/server/documentAiRoutes.ts
           grep -F "eq(documentAiExtractions.companyId, principal.companyId)" src/server/documentAiRoutes.ts
-          grep -F "automaticExecution: false" src/server/documentAiObservability.ts
-          grep -F "syntheticOnly: true" src/server/documentAiObservability.ts
           if grep -E "apiKey|checksum|storageKey|workerId|companyId" src/server/documentAiObservability.ts | grep -F "return {"; then
             echo "FAIL: observability response may expose authority or secret material"
             exit 1
@@ -541,9 +535,6 @@ jobs:
           set -euo pipefail
           grep -F "DocumentAiClient.observability()" src/components/documents/DocumentAiReviewPanel.tsx
           grep -F "method: 'GET'" src/api/documentAiClient.ts
-          grep -F "automaticExecution !== false" src/api/documentAiClient.ts
-          grep -F "syntheticOnly !== true" src/api/documentAiClient.ts
-          grep -F "Somente leitura · execução automática bloqueada" src/components/documents/DocumentAiReviewPanel.tsx
           if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" src/components/documents/DocumentAiReviewPanel.tsx src/api/documentAiClient.ts; then
             echo "FAIL: DOC-AI observability client must remain read-only"
             exit 1
@@ -562,7 +553,6 @@ jobs:
           grep -F "idempotencyKey: \`document-ai:\${attachment.id}\`" src/components/documents/AttachmentList.tsx
           grep -F "Object.keys(createBody).sort().join(',') === 'attachmentId,idempotencyKey'" src/api/__tests__/documentAiClientTestRunner.ts
           grep -F "DOCUMENT_AI_WRITE_ROLES" src/components/documents/AttachmentList.tsx
-          grep -F "O processamento automático permanece desativado." src/components/documents/AttachmentList.tsx
           if grep -Eq "body: JSON.stringify\(\{[^}]*(companyId|requestedBy|status|provider|checksum)" src/api/documentAiClient.ts; then
             echo "FAIL: document AI create client must not send server authority"
             exit 1

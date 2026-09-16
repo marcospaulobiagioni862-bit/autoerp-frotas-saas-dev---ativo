@@ -4,6 +4,7 @@ import {
   buildVehicleChangesFromReviewedCrlv,
   parseVehicleCrlvSelectedFields,
 } from '../../../server/vehicleCrlvApplyAuthority';
+import { FleetComplianceService } from '../../../domain/services/FleetComplianceService';
 
 const source = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
 const vehicleDetailsBridgeSource = readFileSync(new URL('../../../domain/services/VehicleLegacyDetailsBridge.ts', import.meta.url), 'utf8');
@@ -61,9 +62,16 @@ assert.ok(source.includes("setMaintenanceType('ALL')"), 'clearing filters must a
 assert.ok(source.includes('<AttachmentList entityType="MaintenanceWorkOrder" entityId={m.id}/>'), 'internal work-order history must expose authorized invoice and part evidence');
 assert.ok(source.includes("printMaintenanceHistory('INTERNAL')") && source.includes("printMaintenanceHistory('SALE')"), 'internal and sale maintenance reports must remain separate');
 
-assert.ok(crlvSource.includes("DocumentAiClient.list('APPROVED')"), 'CRLV comparison must use approved extractions only');
+assert.ok(crlvSource.includes("FleetComplianceService.isCrlvExtractionEligible"), 'CRLV comparison must use shared CRLV extraction eligibility predicate');
 assert.ok(crlvSource.includes("attachment.documentType === 'CRLV'"), 'CRLV comparison must be restricted to vehicle CRLV attachments');
-assert.ok(crlvSource.includes("extraction.detectedDocumentType === 'CRLV'"), 'CRLV comparison must reject another detected document type');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'APPROVED', detectedDocumentType: 'CRLV' }), true, 'APPROVED CRLV extraction must be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'COMPLETED', detectedDocumentType: 'CRLV', proposedFields: { plate: 'ABC1D23' } }), true, 'COMPLETED CRLV extraction must be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'PENDING' }), false, 'PENDING extraction must not be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'PROCESSING' }), false, 'PROCESSING extraction must not be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'FAILED' }), false, 'FAILED extraction must not be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'REJECTED' }), false, 'REJECTED extraction must not be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'REVIEW_REQUIRED' }), false, 'REVIEW_REQUIRED without fields must not be eligible');
+assert.equal(FleetComplianceService.isCrlvExtractionEligible({ status: 'REVIEW_REQUIRED', detectedDocumentType: 'CRLV', proposedFields: { plate: 'XYZ9K99' } }, { plate: 'ABC1D23' }), false, 'REVIEW_REQUIRED with plate mismatch must not be eligible');
 assert.ok(crlvSource.includes('...(approvedExtraction.corrections || {})'), 'human corrections must override provider proposals in the comparison');
 assert.ok(crlvSource.includes('Valor atual') && crlvSource.includes('Valor lido'), 'CRLV review must show current versus reviewed values');
 assert.ok(crlvSource.includes('type="checkbox"'), 'review fields must support explicit operator selection');
@@ -106,7 +114,7 @@ assert.throws(() => buildVehicleChangesFromReviewedCrlv({ chassis: 'ABC' }, {}, 
 
 for (const invariant of [
   "eq(documentAiExtractions.companyId, principal.companyId)",
-  "extraction.status !== 'APPROVED'",
+  "VALID_APPLY_STATUSES.has(extraction.status)",
   "extraction.detectedDocumentType !== 'CRLV'",
   "eq(fileAttachments.entityType, 'Vehicle')",
   'eq(fileAttachments.entityId, existing.id)',
