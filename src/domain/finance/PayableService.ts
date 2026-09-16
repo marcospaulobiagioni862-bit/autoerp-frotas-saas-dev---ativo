@@ -9,6 +9,7 @@ import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { ITransactionContext } from './ITransactionContext';
 import { assertFinancialCategoryForObligation } from './FinancialCategoryAuthority';
+import { sql } from 'drizzle-orm';
 
 export interface CreatePayableParams {
   companyId: string;
@@ -52,10 +53,49 @@ export class PayableService {
       await assertFinancialCategoryForObligation(params.companyId, categoryId, 'PAYABLE', txContext);
     }
 
-    const installments = Math.max(1, params.installmentsCount || 1);
-    const baseAmount = roundCurrency(params.totalAmount / installments);
+    const installments = params.installmentsCount ?? 1;
+    if (!Number.isFinite(params.totalAmount) || params.totalAmount <= 0 || roundCurrency(params.totalAmount) !== params.totalAmount) {
+      throw new Error('Total deve ser positivo e expresso em centavos');
+    }
+    const totalCents = Math.round(params.totalAmount * 100);
+    if (!Number.isSafeInteger(totalCents) || !Number.isInteger(installments) || installments < 1 || installments > 120 || totalCents < installments) {
+      throw new Error('Quantidade de parcelas inválida (1–120, mínimo de um centavo por parcela)');
+    }
+    if (!params.companyId || !params.originId || !params.description?.trim()) throw new Error('Tenant, origem e descrição obrigatórios');
+    for (const reference of [params.supplierId, params.vehicleId, params.driverId, params.contractId]) {
+      if (reference !== undefined && (typeof reference !== 'string' || !reference.trim())) throw new Error('Referência inválida');
+    }
+    if (params.idempotencyKey !== undefined && (typeof params.idempotencyKey !== 'string' || !params.idempotencyKey.trim() || params.idempotencyKey.length > 200)) throw new Error('Chave de idempotência inválida');
+    if (params.recurrenceDaysInterval !== undefined && (!Number.isInteger(params.recurrenceDaysInterval) || params.recurrenceDaysInterval < 1 || params.recurrenceDaysInterval > 366)) throw new Error('Intervalo de parcelas inválido');
+    for (const date of [params.dueDate, params.competenceDate ?? params.dueDate]) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) throw new Error('Data inválida');
+    }
+    if (txContext) {
+      const raw = txContext.getRawTransaction?.();
+      if (!raw) throw new Error('Autoridade de referências indisponível');
+      const tenant = await raw.execute(sql`SELECT id FROM companies WHERE id = ${params.companyId}`);
+      if (!tenant.rows?.length) throw new Error('Tenant inválido');
+      if (params.supplierId) {
+        const supplier = await raw.execute(sql`SELECT id FROM suppliers WHERE company_id = ${params.companyId} AND id = ${params.supplierId}`);
+        if (!supplier.rows?.length) throw new Error('Fornecedor não encontrado no tenant');
+      }
+      if (params.vehicleId && !await txContext.getVehicleRepo().findByIdForCompany(params.companyId, params.vehicleId)) throw new Error('Veículo não encontrado no tenant');
+      if (params.driverId && !await txContext.getDriverRepo().findByIdForCompany(params.companyId, params.driverId)) throw new Error('Motorista não encontrado no tenant');
+      if (params.contractId) {
+        const contract = await txContext.getContractRepo().findByIdForCompany(params.companyId, params.contractId);
+        if (!contract) throw new Error('Contrato não encontrado no tenant');
+        if ((params.vehicleId && contract.vehicleId !== params.vehicleId) || (params.driverId && contract.driverId !== params.driverId)) throw new Error('Referências incompatíveis com contrato');
+      }
+      // Serialize the complete command across server processes before looking up installments.
+      const commandKey = JSON.stringify([params.companyId, params.idempotencyKey?.trim() ?? params.originId, params.originType]);
+      await raw.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${commandKey}, 0))`);
+    } else if (params.supplierId || params.vehicleId || params.driverId || params.contractId) {
+      throw new Error('Autoridade de referências indisponível');
+    }
+    const roundedBase = roundCurrency(params.totalAmount / installments);
+    const baseAmount = installments === 1 ? roundedBase : Math.min(roundedBase, Math.floor((totalCents - 1) / (installments - 1)) / 100);
     const createdList: AccountPayable[] = [];
-    const groupId = installments > 1 ? generateUUID() : undefined;
+    let groupId = installments > 1 ? generateUUID() : undefined;
 
     for (let i = 1; i <= installments; i++) {
       const amountForThisInstallment = i === installments
@@ -74,7 +114,7 @@ export class PayableService {
       await FinancialPeriodService.assertDateOpen(params.companyId, periodRef, txContext);
       await FinancialPeriodService.assertDateOpen(params.companyId, calculatedDueDate, txContext);
 
-      const idempotencyKey = params.idempotencyKey || IdempotencyService.buildKey(
+      const idempotencyKey = params.idempotencyKey ? JSON.stringify([params.companyId, 'PAYABLE', params.idempotencyKey.trim(), i]) : IdempotencyService.buildKey(
         params.originType,
         params.originId,
         i,
@@ -95,10 +135,18 @@ export class PayableService {
           if (!existing) {
             existing = await txContext.getPayableRepo().findByIdempotencyKey(legacyKey);
           }
+          if (!existing && params.idempotencyKey) {
+            existing = await txContext.getPayableRepo().findByIdempotencyKey(params.idempotencyKey.trim());
+            if (existing && installments > 1) throw new Error('Parcelamento com chave literal legada exige reconciliação antes de retry');
+          }
         } else {
           existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, idempotencyKey);
           if (!existing) {
             existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, legacyKey);
+          }
+          if (!existing && params.idempotencyKey) {
+            existing = await this.repo.findByIdempotencyKeyForCompany(params.companyId, params.idempotencyKey.trim());
+            if (existing && installments > 1) throw new Error('Parcelamento com chave literal legada exige reconciliação antes de retry');
           }
         }
 
@@ -106,6 +154,16 @@ export class PayableService {
           if (existing.companyId !== params.companyId) {
             throw new Error('Acesso negado: Conta a Pagar idempotente pertence a outro tenant');
           }
+          const expectedDescription = installments > 1 ? `${params.description} (${i}/${installments})` : params.description;
+          const referenceKeys = ['supplierId', 'vehicleId', 'driverId', 'contractId'] as const;
+          if (existing.originType !== params.originType || existing.originId !== params.originId ||
+              existing.categoryId !== categoryId || existing.description !== expectedDescription ||
+              Number(existing.originalAmount) !== amountForThisInstallment || existing.totalInstallments !== installments ||
+              existing.dueDate.slice(0, 10) !== calculatedDueDate || existing.competenceDate.slice(0, 10) !== periodRef ||
+              referenceKeys.some(key => (existing![key] || '') !== (params[key] || ''))) {
+            throw new Error('Conflito de idempotência: comando de criação alterado');
+          }
+          if (existing.installmentGroupId) groupId = existing.installmentGroupId;
           return existing;
         }
 

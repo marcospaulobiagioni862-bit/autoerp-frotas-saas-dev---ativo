@@ -152,7 +152,7 @@ function receivableCommand(
   }, tx));
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
 
   // PAYABLE baseline: two concurrent copies of the same logical command converge.
@@ -277,4 +277,4 @@ async function run(): Promise<void> {
   console.log('FINANCE-R17/R18 payable + receivable renegotiation PostgreSQL integration: PASS');
 }
 
-run().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
+if (process.env.FINANCE_ISOLATED_RUNNER !== 'true') run().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });

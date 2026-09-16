@@ -895,6 +895,7 @@ jobs:
           npx tsx src/server/__tests__/financeRecurringAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeBankReconciliationAuthorityIntegration.ts
           npx tsx src/server/__tests__/financePayableRenegotiationAuthorityIntegration.ts
+          npx tsx src/server/__tests__/financeIsolatedLocalRunner.ts ./payablesIntegrityRegression.ts
           npx tsx src/server/__tests__/financeMasterDataAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeCashFlowAuthorityIntegration.ts
       - name: Finance domain regressions

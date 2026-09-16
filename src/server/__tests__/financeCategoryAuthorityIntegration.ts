@@ -54,7 +54,7 @@ async function seed(): Promise<void> {
   `);
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
 
   await UnitOfWork.run(companyA, async (tx) => {
@@ -130,7 +130,7 @@ async function run(): Promise<void> {
   console.log('FINANCE-R2 category authority integration PASS');
 }
 
-run().catch((error) => {
+if (process.env.FINANCE_ISOLATED_RUNNER !== 'true') run().catch((error) => {
   console.error(error);
   process.exit(1);
 });

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { AccountPayable } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { createManualPayable } from '../../api/manualPayableCommand';
+import { useAuth } from '../../hooks/useAuth';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
@@ -44,6 +46,7 @@ const statusLabel = (status: string): string => {
 };
 
 export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }) => {
+  const { user } = useAuth();
   const [payables, setPayables] = useState<AccountPayable[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -106,15 +109,13 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     }
     setCreateLoading(true);
     try {
-      await FinanceObligationClient.createPayable({
-        originType: OriginType.MANUAL,
-        originId: 'manual-' + Date.now(),
+      await createManualPayable(user?.companyId || '', {
         categoryId,
         description,
         totalAmount: parseFloat(totalAmount),
         dueDate,
         competenceDate: competenceDate || dueDate,
-        installmentsCount: parseInt(installmentsCount) || 1,
+        installmentsCount: Number(installmentsCount),
         supplierId: supplierId.trim() || undefined,
         driverId: driverId.trim() || undefined,
         vehicleId: vehicleId.trim() || undefined,
@@ -284,7 +285,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   <tr><td colSpan={6} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
                 )}
                 {filtered.map((item) => {
-                  const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID;
+                  const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID || item.status === ObligationStatus.OVERDUE;
                   const isPaid = item.status === ObligationStatus.PAID;
                   const isOverdue = isPending && item.dueDate < new Date().toISOString().split('T')[0];
 
