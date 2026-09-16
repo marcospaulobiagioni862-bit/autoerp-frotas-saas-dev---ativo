@@ -108,13 +108,13 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     const all=await DocumentAiClient.list();
     const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;
     setExtraction(current);
-    if(current?.status==='REVIEW_REQUIRED'){
+    if(current&&(current.status==='REVIEW_REQUIRED'||current.status==='APPROVED')){
       const initial:Record<string,string>={};
       for(const key of FIELD_KEYS){
-        const value=current.proposedFields[key];
+        const value=current.corrections?.[key] ?? current.proposedFields[key];
         if(typeof value==='string'||typeof value==='number') initial[key]=String(value);
       }
-      setCorrections(initial);
+      setCorrections(cur=>Object.keys(cur).length>0?cur:initial);
     }
     return current;
   };
@@ -139,10 +139,10 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     }
     setBusy(true);setError(null);
     try{
-      const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Revisão humana do cadastro inicial do veículo'});
+      const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections,notes:'Cadastro inicial do veículo por documento com IA'});
       setExtraction(reviewed);
       if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhum veículo foi criado.');return;}
-      setMessage('Dados do documento aprovados. Complete agora os dados operacionais e financeiros obrigatórios antes de criar o veículo.');
+      setMessage('Dados do documento confirmados. Complete agora os dados operacionais e financeiros obrigatórios antes de criar o veículo.');
     }catch(e){setError(e instanceof Error?e.message:'Falha na revisão.');}
     finally{setBusy(false);}
   };
@@ -178,6 +178,11 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
         return;
       }
 
+      if(extraction&&extraction.status!=='APPROVED'){
+        const reviewed=await DocumentAiClient.review(extraction.id,{decision:'APPROVE',corrections,notes:'Cadastro inicial do veículo por documento com IA'});
+        setExtraction(reviewed);
+      }
+
       const result=await VehicleDocumentIntakeClient.materialize(intakeId,{
         color:completion.color.trim(),category:completion.category,currentKm,acquisitionValue,currentValue,rentalValueBase,
         version:completion.version.trim()||undefined,nextMaintenanceKm,notes:completion.notes.trim()||undefined,
@@ -192,8 +197,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     }finally{materializingRef.current=false;setBusy(false);}
   };
 
-  const canEdit=extraction?.status==='REVIEW_REQUIRED';
-  const approved=extraction?.status==='APPROVED';
+  const isReady=extraction&&(extraction.status==='APPROVED'||extraction.status==='REVIEW_REQUIRED');
   const failed=extraction?.status==='FAILED';
   const progress=analysisProgress(extraction?.status||null);
   const analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
@@ -222,7 +226,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   return <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl" title="Cadastrar veículo por documento com IA">
     <div className="space-y-4">
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-        <strong>Fluxo com revisão humana:</strong> a IA apenas propõe os dados. O veículo só é criado depois da sua aprovação explícita.
+        <strong>Assistente de cadastro por IA:</strong> a IA apenas propõe os dados do documento. Confira e complete os dados operacionais e financeiros para criar o veículo.
       </div>
 
       {!intakeId&&<div className="space-y-3">
@@ -301,21 +305,15 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
           </div>
         </div>}
 
-        {canEdit&&<div className="space-y-3">
-          <p className="text-xs text-slate-500">Confira e corrija os campos abaixo antes de aprovar.</p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {FIELD_KEYS.map(key=><Input key={key} label={FIELD_LABELS[key]} value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:e.target.value}))}/>)}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={()=>void review('APPROVE')} disabled={busy||checkingIdentity||Boolean(identityCheck?.exists)} className="gap-2"><CheckCircle2 className="h-4 w-4"/>{identityCheck?.exists?'Cadastro já existe':'Aprovar dados'}</Button>
-            <Button variant="outline" onClick={()=>void review('REJECT')} disabled={busy}>Rejeitar leitura</Button>
-          </div>
-        </div>}
-
-        {approved&&<div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
-          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4"/><strong>Dados do documento aprovados</strong></div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 text-xs">
-            {FIELD_KEYS.map(key=>{const identifierError=identifierErrors[key as IdentifierField];return <div key={key} className={identifierError?'rounded-lg border border-red-500 bg-red-50 p-2 text-red-700 dark:bg-red-950/30 dark:text-red-300':'p-2'}><span className={identifierError?'font-semibold':'text-slate-500'}>{FIELD_LABELS[key]}</span><div className="font-semibold">{corrections[key]||'—'}</div>{identifierError&&<div className="mt-1 text-[11px]">{identifierError}</div>}</div>;})}
+        {isReady&&<div className="space-y-4">
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+            <div><strong className="text-sm">Dados extraídos do documento</strong><p className="text-xs text-slate-500">Confira e ajuste se necessário antes de concluir o cadastro.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {FIELD_KEYS.map(key=><Input key={key} label={FIELD_LABELS[key]} value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:e.target.value}))}/>)}
+            </div>
+            {extraction?.status==='REVIEW_REQUIRED'&&<div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={()=>void review('REJECT')} disabled={busy}>Rejeitar leitura</Button>
+            </div>}
           </div>
 
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">

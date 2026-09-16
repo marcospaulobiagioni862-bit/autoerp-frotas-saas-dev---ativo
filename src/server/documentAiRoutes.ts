@@ -558,16 +558,19 @@ export function registerDocumentAiRoutes(app: Express): void {
           const samePayload =
             stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
             (current.reviewNotes ?? null) === input.notes;
-          if (!samePayload) throw new DocumentAiConflictError();
-          await syncDocumentIntakeHumanReview(context, principal, {
-            id: current.id,
-            attachmentId: current.attachmentId,
-            status: targetStatus,
-            detectedDocumentType: current.detectedDocumentType,
-          }, new Date().toISOString());
-          return { item: current, idempotent: true };
+          if (samePayload) {
+            await syncDocumentIntakeHumanReview(context, principal, {
+              id: current.id,
+              attachmentId: current.attachmentId,
+              status: targetStatus,
+              detectedDocumentType: current.detectedDocumentType,
+            }, new Date().toISOString());
+            return { item: current, idempotent: true };
+          }
         }
-        if (current.status !== 'REVIEW_REQUIRED') throw new DocumentAiConflictError();
+
+        const validReviewStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
+        if (!validReviewStatuses.has(current.status)) throw new DocumentAiConflictError();
 
         const now = new Date().toISOString();
         const updatedRows = await tx.update(documentAiExtractions).set({
@@ -581,7 +584,6 @@ export function registerDocumentAiRoutes(app: Express): void {
         }).where(and(
           eq(documentAiExtractions.companyId, principal.companyId),
           eq(documentAiExtractions.id, id),
-          eq(documentAiExtractions.status, 'REVIEW_REQUIRED'),
         )).returning();
         const updated = updatedRows[0];
         if (!updated) throw new DocumentAiConflictError();

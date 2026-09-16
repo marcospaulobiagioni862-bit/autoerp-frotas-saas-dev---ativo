@@ -52,10 +52,24 @@ export async function syncVehicleDocumentIntakeHumanReview(
   if(extraction.status==='APPROVED' && detected!==expectedType) throw new VehicleDocumentIntakeReviewSyncError('DOCUMENT_TYPE_MISMATCH');
 
   if(String(intake.status)===target){
-    if(target==='APPROVED' && String(intake.approved_extraction_id||'')!==extraction.id) throw new VehicleDocumentIntakeReviewSyncError('APPROVED_EXTRACTION_MISMATCH');
+    if(target==='APPROVED' && String(intake.approved_extraction_id||'')!==extraction.id){
+      const updateApproved=await tx.execute(sql`
+        UPDATE vehicle_document_intakes
+        SET approved_extraction_id=${extraction.id},updated_at=${now}
+        WHERE company_id=${principal.companyId}
+          AND id=${intakeId}
+          AND attachment_id=${extraction.attachmentId}
+          AND created_by=${principal.userId}
+          AND archived_at IS NULL AND consumed_at IS NULL
+        RETURNING id
+      `);
+      if(rows(updateApproved).length!==1) throw new VehicleDocumentIntakeReviewSyncError('APPROVED_EXTRACTION_MISMATCH');
+    }
     return true;
   }
-  if(String(intake.status)!=='REVIEW_REQUIRED') throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
+
+  const validIntakeStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+  if(!validIntakeStatuses.has(String(intake.status))) throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
 
   const approvedExtractionId=target==='APPROVED'?extraction.id:null;
   const update=await tx.execute(sql`
@@ -65,7 +79,7 @@ export async function syncVehicleDocumentIntakeHumanReview(
       AND id=${intakeId}
       AND attachment_id=${extraction.attachmentId}
       AND created_by=${principal.userId}
-      AND status='REVIEW_REQUIRED'
+      AND status IN ('REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED')
       AND archived_at IS NULL AND consumed_at IS NULL
     RETURNING id
   `);

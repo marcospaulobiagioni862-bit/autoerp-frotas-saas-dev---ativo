@@ -42,14 +42,16 @@ export function resolveDriverDocumentIntakeReviewTransition(input: {
       }
       return { status: 'APPROVED', approvedExtractionId: input.extractionId };
     }
-    if (input.intakeStatus !== 'REVIEW_REQUIRED') {
+    const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+    if (!validStatuses.has(input.intakeStatus)) {
       throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
     }
     return { status: 'APPROVED', approvedExtractionId: input.extractionId };
   }
 
   if (input.intakeStatus === 'FAILED') return { status: 'FAILED', approvedExtractionId: null };
-  if (input.intakeStatus !== 'REVIEW_REQUIRED') {
+  const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+  if (!validStatuses.has(input.intakeStatus)) {
     throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
   }
   return { status: 'FAILED', approvedExtractionId: null };
