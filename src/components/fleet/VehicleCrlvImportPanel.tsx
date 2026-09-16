@@ -6,6 +6,7 @@ import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiExtraction } from '../../api/documentAiClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { Vehicle } from '../../types/entities';
+import { FleetComplianceService } from '../../domain/services/FleetComplianceService';
 
 interface VehicleCrlvImportPanelProps {
   vehicleId: string;
@@ -86,12 +87,10 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           (attachment) => !attachment.isArchived && attachment.documentType === 'CRLV',
         );
         const crlvAttachmentIds = new Set(activeCrlvAttachments.map((attachment) => attachment.id));
-        const VALID_STATUSES = new Set(['APPROVED', 'COMPLETED', 'REVIEW_REQUIRED']);
         const matching = approvedExtractions
           .filter((extraction) =>
-            VALID_STATUSES.has(extraction.status) &&
-            extraction.detectedDocumentType === 'CRLV' &&
-            crlvAttachmentIds.has(extraction.attachmentId),
+            crlvAttachmentIds.has(extraction.attachmentId) &&
+            FleetComplianceService.isCrlvExtractionEligible(extraction, currentVehicle),
           )
           .sort((a, b) => Date.parse(b.approvedAt || b.createdAt || b.updatedAt) - Date.parse(a.approvedAt || a.createdAt || a.updatedAt));
 

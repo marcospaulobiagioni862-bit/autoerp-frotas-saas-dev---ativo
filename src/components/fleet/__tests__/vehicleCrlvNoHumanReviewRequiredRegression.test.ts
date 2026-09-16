@@ -31,8 +31,8 @@ export function runVehicleCrlvNoHumanReviewRequiredRegression(): void {
     'CRLV panel must fetch extractions without forcing status=APPROVED query filter',
   );
   assert.ok(
-    panelSource.includes("VALID_STATUSES = new Set(['APPROVED', 'COMPLETED', 'REVIEW_REQUIRED'])"),
-    'CRLV panel must accept completed AI extractions',
+    panelSource.includes('FleetComplianceService.isCrlvExtractionEligible'),
+    'CRLV panel must accept completed AI extractions via FleetComplianceService.isCrlvExtractionEligible',
   );
 
   // 3. A rota do servidor (/api/fleet/vehicles/:id/crlv-apply) deve aceitar aplicar dados de extrações válidas concluídas pela IA

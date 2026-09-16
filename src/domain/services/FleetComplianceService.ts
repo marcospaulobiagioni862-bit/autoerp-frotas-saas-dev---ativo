@@ -35,6 +35,74 @@ export class FleetComplianceService {
     return isSituationOk && expirationDate >= today;
   }
 
+  static isCrlvExtractionEligible(
+    extraction: {
+      status: string;
+      detectedDocumentType?: string | null;
+      proposedFields?: Record<string, unknown> | null;
+      corrections?: Record<string, unknown> | null;
+      fieldConfidence?: Record<string, unknown> | null;
+      failureCode?: string | null;
+    } | null | undefined,
+    targetVehicle?: { plate?: string | null; renavam?: string | null; chassis?: string | null } | null,
+  ): boolean {
+    if (!extraction) return false;
+    const status = String(extraction.status || '').toUpperCase();
+
+    if (['PENDING', 'PROCESSING', 'FAILED', 'REJECTED'].includes(status)) {
+      return false;
+    }
+
+    if (extraction.detectedDocumentType && extraction.detectedDocumentType !== 'CRLV') {
+      return false;
+    }
+
+    const fields: Record<string, unknown> = {
+      ...(extraction.proposedFields || {}),
+      ...(extraction.corrections || {}),
+    };
+
+    if (status === 'REVIEW_REQUIRED') {
+      const hasIdentifier = Boolean(
+        (typeof fields.plate === 'string' && fields.plate.trim()) ||
+        (typeof fields.renavam === 'string' && fields.renavam.trim()) ||
+        (typeof fields.chassis === 'string' && fields.chassis.trim())
+      );
+      if (!hasIdentifier) return false;
+
+      if (extraction.fieldConfidence && typeof extraction.fieldConfidence === 'object') {
+        const confidences = Object.values(extraction.fieldConfidence as Record<string, number>);
+        if (confidences.some((val) => typeof val === 'number' && val < 0.6)) {
+          return false;
+        }
+      }
+    }
+
+    if (!['APPROVED', 'COMPLETED', 'REVIEW_REQUIRED'].includes(status)) {
+      return false;
+    }
+
+    if (targetVehicle) {
+      if (targetVehicle.plate && fields.plate && typeof fields.plate === 'string') {
+        const cleanTarget = targetVehicle.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const cleanExtracted = fields.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (cleanTarget && cleanExtracted && cleanTarget !== cleanExtracted) return false;
+      }
+      if (targetVehicle.renavam && fields.renavam && typeof fields.renavam === 'string') {
+        const cleanTarget = targetVehicle.renavam.replace(/\D/g, '');
+        const cleanExtracted = fields.renavam.replace(/\D/g, '');
+        if (cleanTarget && cleanExtracted && cleanTarget !== cleanExtracted) return false;
+      }
+      if (targetVehicle.chassis && fields.chassis && typeof fields.chassis === 'string') {
+        const cleanTarget = targetVehicle.chassis.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const cleanExtracted = fields.chassis.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (cleanTarget && cleanExtracted && cleanTarget !== cleanExtracted) return false;
+      }
+    }
+
+    return true;
+  }
+
   static async createDocument(params:CreateVehicleDocumentParams):Promise<VehicleDocument>{
     if(!params.vehicleId)throw new Error('Veículo é obrigatório para o documento');if(!params.documentType)throw new Error('Tipo de documento é obrigatório');if(!params.expirationDate)throw new Error('Data de vencimento é obrigatória');
     const now=new Date().toISOString();const doc:VehicleDocument={id:generateUUID(),companyId:params.companyId,vehicleId:params.vehicleId,documentType:params.documentType,documentNumber:params.documentNumber,issueDate:params.issueDate,expirationDate:params.expirationDate,status:this.calculateDocumentStatus(params.expirationDate),cost:params.cost||0,fileUrl:params.fileUrl,notes:params.notes,createdAt:now,updatedAt:now};

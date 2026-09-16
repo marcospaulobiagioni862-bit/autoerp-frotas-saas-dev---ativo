@@ -11,7 +11,7 @@ assert(panelSource.includes('dados extraídos pela IA podem ser aplicados'), 'CR
 assert(panelSource.includes('<AttachmentList entityType="Vehicle" entityId={vehicleId} />'), 'CRLV import must reuse the authorized attachment/Document AI surface');
 assert(panelSource.includes("DocumentAiClient.list()"), 'comparison must fetch document-ai extractions without restricting to APPROVED only');
 assert(panelSource.includes("attachment.documentType === 'CRLV'"), 'comparison must restrict attachments to CRLV');
-assert(panelSource.includes("extraction.detectedDocumentType === 'CRLV'"), 'comparison must restrict extractions to CRLV');
+assert(panelSource.includes("FleetComplianceService.isCrlvExtractionEligible"), 'comparison must restrict extractions to CRLV using shared eligibility predicate');
 assert(panelSource.includes('...(approvedExtraction.corrections || {})'), 'corrections must override proposed CRLV values');
 assert(panelSource.includes('Valor atual'), 'comparison must show the current vehicle value');
 assert(panelSource.includes('Valor lido'), 'comparison must show the reviewed CRLV value');
