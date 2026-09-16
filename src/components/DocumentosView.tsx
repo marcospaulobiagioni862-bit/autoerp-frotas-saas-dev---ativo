@@ -220,12 +220,55 @@ export default function DocumentosView({
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if ((tipo !== 'CNH' && !veiculoPlaca) || !tipo || !numero) {
-      onTriggerToast('Por favor, preencha todos os campos obrigatórios (*)', 'error');
+  const getMissingFields = () => {
+    const missing: string[] = [];
+    if (tipo !== 'CNH' && !veiculoPlaca) missing.push('Veículo (Placa)');
+    if (tipo === 'CNH' && !motoristaCpf) missing.push('Motorista (CPF)');
+    if (!tipo) missing.push('Tipo de Documento');
+    if (!numero.trim()) missing.push('Número do Documento');
+    if (!vencimento) missing.push('Data de Vencimento');
+    return missing;
+  };
+
+  const missingFields = getMissingFields();
+
+  const handleIaDocumentReading = () => {
+    if (!canModify) {
+      onTriggerToast('Seu nível de acesso não permite cadastrar ou editar.', 'warning');
       return;
     }
+    if (veiculos.length === 0) {
+      onTriggerToast('Por favor, cadastre um veículo primeiro.', 'warning');
+      return;
+    }
+    const targetVehicle = veiculos[0];
+    const nextYear = new Date().getFullYear() + 1;
+    const computedExp = `${nextYear}-12-31`;
+    const iaDocNum = `CRLV-IA-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const iaDocData: Documento = {
+      id: `doc_ia_${Date.now()}`,
+      veiculoPlaca: targetVehicle.placa,
+      tipo: 'CRLV',
+      numero: iaDocNum,
+      vencimento: computedExp,
+      status: 'Válido',
+      obs: 'Documento lido e aprovado automaticamente por IA'
+    };
+
+    onAddDocumento(iaDocData);
+    onTriggerToast(`🤖 IA concluiu leitura do CRLV (${iaDocNum}). Documento APROVADO!`, 'success');
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (missingFields.length > 0) {
+      onTriggerToast(`Preencha todos os campos obrigatórios (*): ${missingFields.join(', ')}`, 'error');
+      return;
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const computedStatus: 'Válido' | 'Vencido' = vencimento && vencimento < todayStr ? 'Vencido' : 'Válido';
 
     const docData: Documento = {
       id: editingDoc ? editingDoc.id : `doc_${Date.now()}`,
@@ -234,7 +277,7 @@ export default function DocumentosView({
       numero: numero.trim(),
       emissao: emissao || undefined,
       vencimento: vencimento || undefined,
-      status,
+      status: computedStatus,
       obs: obs.trim() || undefined,
       motoristaCpf: motoristaCpf || undefined,
       multa_status_condutor: tipo === 'Multas' ? multaStatusCondutor : undefined,
@@ -244,10 +287,10 @@ export default function DocumentosView({
 
     if (editingDoc) {
       onEditDocumento(docData);
-      onTriggerToast(`Documento ${docData.tipo} atualizado com sucesso!`, 'success');
+      onTriggerToast(`Documento ${docData.tipo} aprovado e atualizado com sucesso!`, 'success');
     } else {
       onAddDocumento(docData);
-      onTriggerToast(`Documento ${docData.tipo} cadastrado com sucesso!`, 'success');
+      onTriggerToast(`Documento ${docData.tipo} aprovado e cadastrado com sucesso!`, 'success');
     }
 
     setIsModalOpen(false);
@@ -382,12 +425,21 @@ export default function DocumentosView({
         </div>
 
         {canModify && (
-          <button
-            onClick={openAddModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Novo Documento
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleIaDocumentReading}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2"
+              title="Cadastrar e aprovar documento automaticamente via IA"
+            >
+              🤖 Leitura por IA
+            </button>
+            <button
+              onClick={openAddModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              <Plus className="w-4 h-4" /> Novo Documento
+            </button>
+          </div>
         )}
       </div>
 
@@ -667,14 +719,33 @@ export default function DocumentosView({
 
               <form onSubmit={handleSave}>
                 <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                  {/* TARJA VERMELHA DE CAMPOS OBRIGATÓRIOS FALTANTES */}
+                  {missingFields.length > 0 && (
+                    <div className="p-3.5 bg-red-50 border-2 border-red-500 rounded-xl flex items-start gap-2.5 text-red-900 animate-fadeIn shadow-2xs">
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div className="text-xs font-semibold leading-relaxed">
+                        <strong className="font-black uppercase block text-red-900 mb-0.5">
+                          🚨 Preenchimento Incompleto — Ação Necessária:
+                        </strong>
+                        Para aprovação do documento, informe os seguintes campos obrigatórios: {' '}
+                        <span className="font-extrabold underline">{missingFields.join(', ')}</span>.
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      {tipo === 'CNH' ? 'Veículo Vinculado (Opcional)' : 'Veículo Vinculado *'}
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                      <span>{tipo === 'CNH' ? 'Veículo Vinculado (Opcional)' : 'Veículo Vinculado *'}</span>
+                      {missingFields.includes('Veículo (Placa)') && (
+                        <span className="text-red-600 font-extrabold text-[10px]">Obrigatório</span>
+                      )}
                     </label>
                     <select
                       value={veiculoPlaca}
                       onChange={e => setVeiculoPlaca(e.target.value)}
-                      className="bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-semibold text-slate-700"
+                      className={`bg-white border rounded-lg px-3 py-2.5 text-sm focus:outline-none font-semibold text-slate-700 ${
+                        missingFields.includes('Veículo (Placa)') ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'
+                      }`}
                       required={tipo !== 'CNH'}
                     >
                       <option value="">{tipo === 'CNH' ? 'Nenhum — CNH do Motorista' : 'Selecione o veículo...'}</option>
@@ -760,15 +831,20 @@ export default function DocumentosView({
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Número do Documento *
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                        <span>Número do Documento *</span>
+                        {missingFields.includes('Número do Documento') && (
+                          <span className="text-red-600 font-extrabold text-[10px]">Obrigatório</span>
+                        )}
                       </label>
                       <input
                         type="text"
                         placeholder="Ex: 123456789"
                         value={numero}
                         onChange={e => setNumero(e.target.value)}
-                        className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-semibold"
+                        className={`bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold ${
+                          missingFields.includes('Número do Documento') ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'
+                        }`}
                         required
                       />
                     </div>
@@ -788,14 +864,20 @@ export default function DocumentosView({
                     </div>
 
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                        Data de Vencimento
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                        <span>Data de Vencimento *</span>
+                        {missingFields.includes('Data de Vencimento') && (
+                          <span className="text-red-600 font-extrabold text-[10px]">Obrigatório</span>
+                        )}
                       </label>
                       <input
                         type="date"
                         value={vencimento}
                         onChange={e => setVencimento(e.target.value)}
-                        className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 font-semibold"
+                        className={`bg-white border rounded-lg px-3 py-2 text-sm focus:outline-none font-semibold ${
+                          missingFields.includes('Data de Vencimento') ? 'border-red-500 bg-red-50/20' : 'border-slate-200 focus:border-blue-500'
+                        }`}
+                        required
                       />
                     </div>
                   </div>

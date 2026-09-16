@@ -377,10 +377,18 @@ export default function ContratosView({
 
     // 1. Documento (CRLV, IPVA, Vistoria)
     const docIssues: string[] = [];
-    if (v.crlv_vencimento && v.crlv_vencimento < todayStr) {
-      docIssues.push(`CRLV vencido em ${v.crlv_vencimento.split('-').reverse().join('/')}`);
-    } else if (v.crlv_situacao === 'Vencido') {
-      docIssues.push(`CRLV com Situação: Vencido`);
+    const crlvDoc = (documentos || []).find(d => d.veiculoPlaca === v.placa && d.tipo === 'CRLV');
+    const isCrlvDocValid = crlvDoc && crlvDoc.status === 'Válido';
+    const isVehicleCrlvValid = (v.crlv_situacao === 'Em dia' || v.crlv_situacao === 'Regular' || (!v.crlv_situacao && !!v.crlv_vencimento)) && (!v.crlv_vencimento || v.crlv_vencimento >= todayStr);
+
+    if (!isCrlvDocValid && !isVehicleCrlvValid) {
+      if (v.crlv_vencimento && v.crlv_vencimento < todayStr) {
+        docIssues.push(`CRLV vencido em ${v.crlv_vencimento.split('-').reverse().join('/')}`);
+      } else if (crlvDoc && crlvDoc.status === 'Vencido') {
+        docIssues.push(`CRLV vencido em ${crlvDoc.vencimento ? crlvDoc.vencimento.split('-').reverse().join('/') : 'data passada'}`);
+      } else {
+        docIssues.push(`CRLV pendente ou com situação irregular`);
+      }
     }
     if (v.ipva_vencimento && v.ipva_vencimento < todayStr) {
       docIssues.push(`IPVA vencido em ${v.ipva_vencimento.split('-').reverse().join('/')}`);

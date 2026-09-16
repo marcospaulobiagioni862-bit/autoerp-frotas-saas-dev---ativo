@@ -472,8 +472,9 @@ export default function App() {
       veiculos.forEach(v => {
         // 1. CRLV Sync
         const crlvIdx = updatedDocs.findIndex(d => d.veiculoPlaca === v.placa && d.tipo === 'CRLV' && !d.id.startsWith('doc_anexo_'));
-        const crlvExpired = v.crlv_vencimento ? new Date(v.crlv_vencimento + 'T00:00:00') < new Date() : true;
-        const crlvStatus = v.crlv_situacao === 'Regular' && !crlvExpired ? 'Válido' : 'Vencido';
+        const crlvExpired = v.crlv_vencimento ? new Date(v.crlv_vencimento + 'T00:00:00') < new Date() : false;
+        const isCrlvValid = (v.crlv_situacao === 'Regular' || v.crlv_situacao === 'Em dia' || (!v.crlv_situacao && !!v.crlv_vencimento)) && !crlvExpired;
+        const crlvStatus = isCrlvValid ? 'Válido' : 'Vencido';
         const crlvNum = v.renavam || 'CRLV-' + v.placa;
         if (crlvIdx > -1) {
           const current = updatedDocs[crlvIdx];
