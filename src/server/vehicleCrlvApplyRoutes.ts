@@ -208,11 +208,11 @@ export function registerVehicleCrlvApplyRoutes(app: Express): void {
           eq(documentAiExtractions.id, body.extractionId),
         )).limit(1);
         const extraction = extractionRows[0];
+        const VALID_APPLY_STATUSES = new Set(['APPROVED', 'COMPLETED', 'REVIEW_REQUIRED']);
         if (
           !extraction ||
-          extraction.status !== 'APPROVED' ||
-          extraction.detectedDocumentType !== 'CRLV' ||
-          !extraction.approvedAt
+          !VALID_APPLY_STATUSES.has(extraction.status) ||
+          extraction.detectedDocumentType !== 'CRLV'
         ) {
           throw new VehicleCrlvNotFoundError();
         }

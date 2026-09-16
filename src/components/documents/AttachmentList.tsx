@@ -224,7 +224,7 @@ export function AttachmentList({
       });
       setDocumentAiMessage({
         kind: 'success',
-        text: 'Extração registrada na fila. O processamento automático permanece desativado.',
+        text: 'Extração registrada na fila de processamento documental.',
       });
       onDocumentAiRequested?.();
     } catch (err: unknown) {
