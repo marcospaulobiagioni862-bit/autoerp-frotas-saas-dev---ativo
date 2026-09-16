@@ -1,0 +1,301 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", sans-serif;
+  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, monospace;
+
+  /* Premium Slate and Cobalt Color Accents */
+  --color-primary-50: #f0f7ff;
+  --color-primary-100: #e0effe;
+  --color-primary-200: #bae0fd;
+  --color-primary-300: #7cc7fc;
+  --color-primary-400: #38a9fa;
+  --color-primary-500: #0e8ef2;
+  --color-primary-600: #026fcd;
+  --color-primary-700: #0359a4;
+  --color-primary-800: #074c87;
+  --color-primary-900: #0b4071;
+  --color-primary-950: #07294a;
+}
+
+/* Global resets for elegant, modern, high-contrast look */
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc; /* Sleek slate body bg */
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Elegant display headings */
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display) !important;
+  letter-spacing: -0.025em;
+}
+
+/* Instantly polish all tables to be neat, well-divided, elegant */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+}
+
+thead {
+  background-color: #f8fafc !important;
+}
+
+thead tr {
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+th {
+  padding: 12px 16px !important;
+  font-family: var(--font-display);
+  font-weight: 700 !important;
+  font-size: 10px !important;
+  color: #475569 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.07em !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  text-align: center !important;
+}
+
+th .flex {
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center !important;
+}
+
+td {
+  padding: 14px 16px !important;
+  font-size: 13px !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  vertical-align: middle;
+  line-height: 1.5;
+  transition: all 0.15s ease;
+  text-align: center !important;
+}
+
+td:not([colspan]) .flex, 
+td:not([colspan]) div[class*="space-x"],
+td:not([colspan]) .space-x-1.5,
+td:not([colspan]) .space-x-1 {
+  justify-content: center !important;
+  align-items: center !important;
+  text-align: center !important;
+}
+
+td:not([colspan]) > div {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Force centering of custom text alignment utilities in columns to keep complete harmony */
+td:not([colspan]) .text-left,
+td:not([colspan]) .text-right,
+th .text-left,
+th .text-right {
+  text-align: center !important;
+}
+
+tbody tr {
+  background-color: #ffffff;
+  transition: all 0.15s ease;
+}
+
+tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* Highlight plates, CPF, and financial values using beautiful monospace */
+.font-mono,
+[class*="font-mono"],
+td span[class*="font-mono"] {
+  font-family: var(--font-mono) !important;
+  letter-spacing: -0.02em;
+}
+
+/* Add vertical dividers to table columns when requested */
+.columns-divided td, 
+.columns-divided th {
+  border-right: 1px solid #f1f5f9 !important;
+}
+
+.columns-divided td:last-child, 
+.columns-divided th:last-child {
+  border-right: none !important;
+}
+
+/* Beautiful modern Inputs and Fields */
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+input[type="tel"],
+select,
+textarea {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  color: #1e293b !important;
+  font-weight: 500 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #3b82f6 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Styled action buttons */
+button {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Customized Pill Status Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+}
+
+/* General Layout tweaks */
+header {
+  background-color: rgba(244, 243, 239, 0.8) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Eye-care soothing background for the whole application layout and main content */
+div#root:nth-of-type(1) > div:nth-of-type(1),
+div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > main:nth-of-type(1) {
+  background-color: #f4f3ef !important; /* Premium Warm Linen: ultra-soft on the eyes, blocks blue light glare, high visual comfort */
+}
+
+/* Print and PDF Export Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 10mm;
+  }
+
+  body, html {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  div#root:nth-of-type(1) > div:nth-of-type(1),
+  div#root:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > main:nth-of-type(1) {
+    background-color: #ffffff !important;
+  }
+
+  /* Hide navigation, sidebar, action buttons, modals, toasts, inputs */
+  .no-print,
+  aside,
+  header,
+  .no-print-container,
+  button:not(.print-keep),
+  input[type="search"],
+  select:not(.print-keep),
+  [role="dialog"]:not(.print-modal) {
+    display: none !important;
+  }
+
+  /* Reset main container layout to full printable width */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .flex-1 {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  /* Format cards, tables, containers for high-contrast PDF printing */
+  .bg-slate-900,
+  .bg-slate-800 {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  .text-white {
+    color: #0f172a !important;
+  }
+
+  .text-slate-400,
+  .text-slate-300 {
+    color: #475569 !important;
+  }
+
+  /* Prevent page breaks inside cards, rows, and widgets */
+  .rounded-xl,
+  .rounded-2xl,
+  tr,
+  table,
+  .shadow-sm,
+  .shadow-md {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    box-shadow: none !important;
+  }
+
+  table {
+    width: 100% !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  th, td {
+    padding: 6px 8px !important;
+    font-size: 9pt !important;
+  }
+}

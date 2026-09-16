@@ -1,0 +1,121 @@
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Building2, RefreshCw, Sun, Moon, Menu } from 'lucide-react';
+
+interface HeaderProps {
+  testStatus: { passed: number; total: number; failed: number } | null;
+  onOpenTestRunner: () => void;
+  onResetSeedData: () => void;
+  onToggleMobileSidebar?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  testStatus,
+  onOpenTestRunner,
+  onResetSeedData,
+  onToggleMobileSidebar,
+}) => {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    return document.documentElement.classList.contains('dark');
+  });
+
+  const toggleDarkMode = () => {
+    if (document.documentElement.classList.contains('dark')) {
+      document.documentElement.classList.remove('dark');
+      setIsDark(false);
+    } else {
+      document.documentElement.classList.add('dark');
+      setIsDark(true);
+    }
+  };
+
+  return (
+    <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
+      <div className="flex items-center gap-3 sm:gap-4">
+        {onToggleMobileSidebar && (
+          <button
+            onClick={onToggleMobileSidebar}
+            aria-label="Abrir menu de navegação"
+            className="p-2 md:hidden text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-sm shrink-0">
+            AE
+          </div>
+          <div>
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
+              <span>AutoERP</span>
+              <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                Fase 2 UI/UX
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:flex items-center gap-1">
+              <Building2 className="w-3 h-3 text-slate-400" /> AutoERP Locadora de Veículos Ltda
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Test Engine Baseline Badge */}
+        <button
+          onClick={onOpenTestRunner}
+          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            testStatus && testStatus.failed === 0
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+              : 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800'
+          }`}
+          title="Clique para abrir a suíte de auditoria do motor financeiro"
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="hidden md:inline">
+            Motor Financeiro:{' '}
+            <strong className="font-bold">
+              {testStatus ? `${testStatus.passed}/${testStatus.total} Testes OK` : 'Carregando...'}
+            </strong>
+          </span>
+          <span className="md:hidden font-bold">
+            {testStatus ? `${testStatus.passed}/${testStatus.total}` : '...'}
+          </span>
+        </button>
+
+        {/* Reset Database Seed Button */}
+        <button
+          onClick={onResetSeedData}
+          className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+          title="Reiniciar e Recarregar Dados de Teste da Frota/Financeiro"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span className="hidden lg:inline">Reset Seed</span>
+        </button>
+
+        {/* Dark/Light mode toggle */}
+        <button
+          onClick={toggleDarkMode}
+          aria-label={isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
+          className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          title={isDark ? 'Tema Claro' : 'Tema Escuro'}
+        >
+          {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+        </button>
+
+        <div className="h-6 w-px bg-slate-200 dark:border-slate-800 dark:bg-slate-800 mx-0.5 hidden sm:block" />
+
+        {/* User profile */}
+        <div className="flex items-center gap-2 pl-1">
+          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-600 shrink-0">
+            CS
+          </div>
+          <div className="hidden xl:block text-left">
+            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-none">Carlos Silva</p>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">Gestor de Operações</span>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+

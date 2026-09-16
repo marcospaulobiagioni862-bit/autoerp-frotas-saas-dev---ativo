@@ -1,0 +1,263 @@
+import {
+  SecurityDepositRepository,
+  SecurityDepositMovementRepository,
+  FinancialTransactionRepository,
+  FinancialAccountRepository,
+  AccountReceivableRepository,
+} from '../../persistence/repositories/localRepositories';
+import { SecurityDeposit, SecurityDepositMovement, FinancialTransaction } from '../../types/entities';
+import { SecurityDepositStatus, SecurityDepositMovementType, TransactionType, AuditAction, ObligationStatus } from '../../types/enums';
+import { roundCurrency } from '../../shared/utils/currency';
+import { generateUUID } from '../../shared/utils/uuid';
+import { AuditLogger } from '../../shared/utils/auditLogger';
+
+export class DepositService {
+  private static depositRepo = new SecurityDepositRepository();
+  private static depositMovementRepo = new SecurityDepositMovementRepository();
+  private static transactionRepo = new FinancialTransactionRepository();
+  private static accountRepo = new FinancialAccountRepository();
+  private static recRepo = new AccountReceivableRepository();
+
+  public static async receiveSecurityDeposit(
+    companyId: string,
+    contractId: string,
+    driverId: string,
+    vehicleId: string,
+    amount: number,
+    financialAccountId: string,
+    paymentMethodId: string,
+    userId: string,
+    userName: string
+  ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+    let deposit = await this.depositRepo.findByContractId(contractId);
+
+    if (!deposit) {
+      deposit = await this.depositRepo.create({
+        id: generateUUID(),
+        companyId,
+        contractId,
+        driverId,
+        vehicleId,
+        originalAmount: amount,
+        receivedAmount: 0,
+        usedAmount: 0,
+        returnedAmount: 0,
+        status: SecurityDepositStatus.PENDING,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const previousState = { ...deposit };
+
+    // Register financial receipt transaction
+    const tx: FinancialTransaction = {
+      id: generateUUID(),
+      companyId,
+      financialAccountId,
+      type: TransactionType.INCOME,
+      amount,
+      paymentMethodId,
+      transactionDate: new Date().toISOString().split('T')[0],
+      competenceDate: new Date().toISOString().split('T')[0],
+      description: `Recebimento de Caução (Contrato: ${contractId})`,
+      isReversed: false,
+      vehicleId,
+      driverId,
+      createdById: userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const savedTx = await this.transactionRepo.create(tx);
+    await this.accountRepo.updateBalance(financialAccountId, amount);
+
+    const newReceived = roundCurrency(deposit.receivedAmount + amount);
+    const newStatus = newReceived >= deposit.originalAmount ? SecurityDepositStatus.RECEIVED : SecurityDepositStatus.PENDING;
+
+    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+      receivedAmount: newReceived,
+      status: newStatus,
+      receivedAt: new Date().toISOString(),
+    });
+
+    const movement = await this.depositMovementRepo.create({
+      id: generateUUID(),
+      securityDepositId: deposit.id,
+      companyId,
+      type: SecurityDepositMovementType.RECEIPT,
+      amount,
+      date: new Date().toISOString(),
+      financialTransactionId: savedTx.id,
+      description: 'Recebimento inicial de caução',
+      createdById: userId,
+      createdAt: new Date().toISOString(),
+    });
+
+    await AuditLogger.logAction(
+      companyId,
+      'SecurityDeposit',
+      deposit.id,
+      AuditAction.RECEIVE,
+      userId,
+      userName,
+      previousState,
+      updatedDeposit
+    );
+
+    return { deposit: updatedDeposit, movement };
+  }
+
+  public static async returnSecurityDeposit(
+    companyId: string,
+    depositId: string,
+    returnAmount: number,
+    financialAccountId: string,
+    paymentMethodId: string,
+    notes: string,
+    userId: string,
+    userName: string
+  ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+    const deposit = await this.depositRepo.findById(depositId);
+    if (!deposit) throw new Error('Caução não encontrada');
+
+    const availableToReturn = deposit.receivedAmount - deposit.usedAmount - deposit.returnedAmount;
+    if (returnAmount > availableToReturn) {
+      throw new Error(`Valor de devolução excede o saldo disponível de caução (R$ ${availableToReturn.toFixed(2)})`);
+    }
+
+    const previousState = { ...deposit };
+
+    // Register financial payout transaction
+    const tx: FinancialTransaction = {
+      id: generateUUID(),
+      companyId,
+      financialAccountId,
+      type: TransactionType.EXPENSE,
+      amount: returnAmount,
+      paymentMethodId,
+      transactionDate: new Date().toISOString().split('T')[0],
+      competenceDate: new Date().toISOString().split('T')[0],
+      description: `Devolução de Caução (Motorista: ${deposit.driverId})`,
+      isReversed: false,
+      vehicleId: deposit.vehicleId,
+      driverId: deposit.driverId,
+      createdById: userId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const savedTx = await this.transactionRepo.create(tx);
+    await this.accountRepo.updateBalance(financialAccountId, -returnAmount);
+
+    const newReturned = roundCurrency(deposit.returnedAmount + returnAmount);
+    const newStatus = (newReturned + deposit.usedAmount) >= deposit.receivedAmount 
+      ? SecurityDepositStatus.RETURNED 
+      : SecurityDepositStatus.PARTIALLY_USED;
+
+    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+      returnedAmount: newReturned,
+      status: newStatus,
+      returnedAt: new Date().toISOString(),
+      notes,
+    });
+
+    const movement = await this.depositMovementRepo.create({
+      id: generateUUID(),
+      securityDepositId: deposit.id,
+      companyId,
+      type: SecurityDepositMovementType.RETURN,
+      amount: returnAmount,
+      date: new Date().toISOString(),
+      financialTransactionId: savedTx.id,
+      description: `Devolução ao motorista: ${notes}`,
+      createdById: userId,
+      createdAt: new Date().toISOString(),
+    });
+
+    await AuditLogger.logAction(
+      companyId,
+      'SecurityDeposit',
+      deposit.id,
+      AuditAction.UPDATE,
+      userId,
+      userName,
+      previousState,
+      updatedDeposit
+    );
+
+    return { deposit: updatedDeposit, movement };
+  }
+
+  public static async compensateSecurityDeposit(
+    companyId: string,
+    depositId: string,
+    compensationAmount: number,
+    receivableId: string,
+    notes: string,
+    userId: string,
+    userName: string
+  ): Promise<{ deposit: SecurityDeposit; movement: SecurityDepositMovement }> {
+    const deposit = await this.depositRepo.findById(depositId);
+    if (!deposit) throw new Error('Caução não encontrada');
+
+    const availableToUse = deposit.receivedAmount - deposit.usedAmount - deposit.returnedAmount;
+    if (compensationAmount > availableToUse) {
+      throw new Error(`Valor de compensação excede o saldo disponível de caução (R$ ${availableToUse.toFixed(2)})`);
+    }
+
+    const previousState = { ...deposit };
+
+    const newUsed = roundCurrency(deposit.usedAmount + compensationAmount);
+    const isFullyUsed = (newUsed + deposit.returnedAmount) >= deposit.receivedAmount;
+    const newStatus = isFullyUsed ? SecurityDepositStatus.USED : SecurityDepositStatus.PARTIALLY_USED;
+
+    const updatedDeposit = await this.depositRepo.update(deposit.id, {
+      usedAmount: newUsed,
+      status: newStatus,
+      notes: notes ? `${deposit.notes || ''} | ${notes}` : deposit.notes,
+    });
+
+    const movement = await this.depositMovementRepo.create({
+      id: generateUUID(),
+      securityDepositId: deposit.id,
+      companyId,
+      type: SecurityDepositMovementType.COMPENSATION,
+      amount: compensationAmount,
+      date: new Date().toISOString(),
+      receivableId,
+      description: `Compensação de débito: ${notes}`,
+      createdById: userId,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Settle associated receivable via compensation without creating duplicate bank cash movement
+    if (receivableId) {
+      const receivable = await this.recRepo.findById(receivableId);
+      if (receivable && receivable.companyId === companyId) {
+        const effectivePaid = roundCurrency(receivable.paidAmount + compensationAmount);
+        const balanceAmount = roundCurrency(Math.max(0, receivable.updatedAmount - effectivePaid));
+        const recStatus = balanceAmount <= 0.01 ? ObligationStatus.PAID : ObligationStatus.PARTIALLY_PAID;
+        await this.recRepo.update(receivable.id, {
+          paidAmount: effectivePaid,
+          balanceAmount,
+          status: recStatus,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    await AuditLogger.logAction(
+      companyId,
+      'SecurityDeposit',
+      deposit.id,
+      AuditAction.UPDATE,
+      userId,
+      userName,
+      previousState,
+      updatedDeposit
+    );
+
+    return { deposit: updatedDeposit, movement };
+  }
+}
