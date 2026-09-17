@@ -554,22 +554,26 @@ export function registerDocumentAiRoutes(app: Express): void {
         if (!current) throw new DocumentAiNotFoundError();
 
         const targetStatus = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-        if (current.status === targetStatus) {
-          const samePayload =
-            stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
-            (current.reviewNotes ?? null) === input.notes;
-          if (samePayload) {
-            await syncDocumentIntakeHumanReview(context, principal, {
-              id: current.id,
-              attachmentId: current.attachmentId,
-              status: targetStatus,
-              detectedDocumentType: current.detectedDocumentType,
-            }, new Date().toISOString());
-            return { item: current, idempotent: true };
+
+        if (current.status === 'APPROVED' || current.status === 'REJECTED') {
+          if (current.status === targetStatus) {
+            const samePayload =
+              stableJson(current.corrections ?? {}) === stableJson(input.corrections) &&
+              (current.reviewNotes ?? null) === input.notes;
+            if (samePayload) {
+              await syncDocumentIntakeHumanReview(context, principal, {
+                id: current.id,
+                attachmentId: current.attachmentId,
+                status: targetStatus,
+                detectedDocumentType: current.detectedDocumentType,
+              }, new Date().toISOString());
+              return { item: current, idempotent: true };
+            }
           }
+          throw new DocumentAiConflictError();
         }
 
-        const validReviewStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
+        const validReviewStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED']);
         if (!validReviewStatuses.has(current.status)) throw new DocumentAiConflictError();
 
         const now = new Date().toISOString();

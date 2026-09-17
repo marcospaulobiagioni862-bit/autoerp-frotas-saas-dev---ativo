@@ -68,7 +68,7 @@ export async function syncVehicleDocumentIntakeHumanReview(
     return true;
   }
 
-  const validIntakeStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+  const validIntakeStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
   if(!validIntakeStatuses.has(String(intake.status))) throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
 
   const approvedExtractionId=target==='APPROVED'?extraction.id:null;
@@ -79,7 +79,7 @@ export async function syncVehicleDocumentIntakeHumanReview(
       AND id=${intakeId}
       AND attachment_id=${extraction.attachmentId}
       AND created_by=${principal.userId}
-      AND status IN ('REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED')
+      AND status IN ('REVIEW_REQUIRED', 'COMPLETED', 'APPROVED')
       AND archived_at IS NULL AND consumed_at IS NULL
     RETURNING id
   `);

@@ -42,7 +42,7 @@ export function resolveDriverDocumentIntakeReviewTransition(input: {
       }
       return { status: 'APPROVED', approvedExtractionId: input.extractionId };
     }
-    const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+    const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
     if (!validStatuses.has(input.intakeStatus)) {
       throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
     }
@@ -50,7 +50,7 @@ export function resolveDriverDocumentIntakeReviewTransition(input: {
   }
 
   if (input.intakeStatus === 'FAILED') return { status: 'FAILED', approvedExtractionId: null };
-  const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED', 'EXTRACTING', 'DOCUMENT_UPLOADED']);
+  const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
   if (!validStatuses.has(input.intakeStatus)) {
     throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
   }
@@ -126,7 +126,7 @@ export async function syncDriverDocumentIntakeHumanReview(
       AND id = ${intakeId}
       AND attachment_id = ${extraction.attachmentId}
       AND created_by = ${principal.userId}
-      AND status = 'REVIEW_REQUIRED'
+      AND status IN ('REVIEW_REQUIRED', 'COMPLETED', 'APPROVED')
       AND archived_at IS NULL
       AND consumed_at IS NULL
     RETURNING id

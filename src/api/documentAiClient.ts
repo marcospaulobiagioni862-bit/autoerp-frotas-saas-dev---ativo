@@ -2,6 +2,7 @@ export type DocumentAiStatus =
   | 'PENDING'
   | 'PROCESSING'
   | 'REVIEW_REQUIRED'
+  | 'COMPLETED'
   | 'APPROVED'
   | 'REJECTED'
   | 'FAILED';
@@ -73,6 +74,14 @@ export interface DocumentAiExtractionHistoryItem {
   updatedAt: string;
 }
 
+export type DocumentAiObservabilityStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'REVIEW_REQUIRED'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'FAILED';
+
 export interface DocumentAiObservability {
   runtime: {
     mode: DocumentAiRuntimeMode;
@@ -80,7 +89,7 @@ export interface DocumentAiObservability {
     syntheticOnly: true;
     automaticExecution: false;
   };
-  counts: Record<DocumentAiStatus, number> & { total: number };
+  counts: Record<DocumentAiObservabilityStatus, number> & { total: number };
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -163,9 +172,9 @@ export function parseDocumentAiExtraction(value: unknown): DocumentAiExtraction 
   };
 }
 
-const OBSERVABILITY_STATUSES: readonly DocumentAiStatus[] = [
+const OBSERVABILITY_STATUSES = [
   'PENDING', 'PROCESSING', 'REVIEW_REQUIRED', 'APPROVED', 'REJECTED', 'FAILED',
-];
+] as const;
 
 export function parseDocumentAiObservability(value: unknown): DocumentAiObservability {
   const payload = exactRecord(value, ['runtime', 'counts']);

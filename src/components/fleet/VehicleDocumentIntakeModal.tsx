@@ -29,7 +29,7 @@ function normalizedIdentifier(value:unknown):string{
 function analysisProgress(status:DocumentAiExtraction['status']|null):number{
   if(status==='PENDING')return 50;
   if(status==='PROCESSING')return 70;
-  if(status==='REVIEW_REQUIRED'||status==='APPROVED'||status==='REJECTED'||status==='FAILED')return 100;
+  if(status==='REVIEW_REQUIRED'||status==='COMPLETED'||status==='APPROVED'||status==='REJECTED'||status==='FAILED')return 100;
   return 45;
 }
 
@@ -57,7 +57,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
   useEffect(()=>{if(!isOpen||!attachmentId)return;const status=extraction?.status;if(status&&!['PENDING','PROCESSING'].includes(status))return;const timer=window.setInterval(()=>{if(!busy)void refresh();},4000);return()=>window.clearInterval(timer);},[isOpen,attachmentId,extraction?.status,busy]);
 
   useEffect(()=>{
-    if(!isOpen||!extraction||!['REVIEW_REQUIRED','APPROVED'].includes(extraction.status)){
+    if(!isOpen||!extraction||!['REVIEW_REQUIRED','COMPLETED','APPROVED'].includes(extraction.status)){
       setIdentityCheck(null);
       return;
     }
@@ -108,7 +108,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     const all=await DocumentAiClient.list();
     const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;
     setExtraction(current);
-    if(current&&(current.status==='REVIEW_REQUIRED'||current.status==='APPROVED')){
+    if(current&&(current.status==='REVIEW_REQUIRED'||current.status==='COMPLETED'||current.status==='APPROVED')){
       const initial:Record<string,string>={};
       for(const key of FIELD_KEYS){
         const value=current.corrections?.[key] ?? current.proposedFields[key];
@@ -163,9 +163,15 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     if(nextMaintenanceKm!==undefined&&(!Number.isFinite(nextMaintenanceKm)||nextMaintenanceKm<currentKm))fieldErrors.nextMaintenanceKm='Deve ser igual ou maior que o KM atual.';
     setCompletionErrors(fieldErrors);
     if(Object.keys(fieldErrors).length){setError('Corrija os campos destacados em vermelho antes de criar o veículo.');return;}
+
+    const plate=normalizedIdentifier(corrections.plate),renavam=normalizedIdentifier(corrections.renavam),chassis=normalizedIdentifier(corrections.chassis);
+    if(!plate||!renavam||!chassis){
+      setError('O documento precisa conter Placa, RENAVAM e Chassi válidos para prosseguir com o cadastro.');
+      return;
+    }
+
     materializingRef.current=true;setBusy(true);setError(null);setIdentifierErrors({});
     try{
-      const plate=normalizedIdentifier(corrections.plate),renavam=normalizedIdentifier(corrections.renavam),chassis=normalizedIdentifier(corrections.chassis);
       const latestIdentity=await VehicleClient.checkIdentity({plate,renavam,chassis});
       setIdentityCheck(latestIdentity);
       if(latestIdentity.exists&&latestIdentity.item){
@@ -197,7 +203,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
     }finally{materializingRef.current=false;setBusy(false);}
   };
 
-  const isReady=extraction&&(extraction.status==='APPROVED'||extraction.status==='REVIEW_REQUIRED');
+  const isReady=extraction&&(extraction.status==='APPROVED'||extraction.status==='COMPLETED'||extraction.status==='REVIEW_REQUIRED');
   const failed=extraction?.status==='FAILED';
   const progress=analysisProgress(extraction?.status||null);
   const analysisInProgress=!extraction||extraction.status==='PENDING'||extraction.status==='PROCESSING';
