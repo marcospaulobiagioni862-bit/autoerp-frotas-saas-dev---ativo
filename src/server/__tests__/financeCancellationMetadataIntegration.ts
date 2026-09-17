@@ -96,7 +96,7 @@ function cancelPayable(id: string, reason: string) {
   ));
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
 
   const ar = await cancelReceivable('r20-rec-manual','  Cliente desistiu do acordo  ');
@@ -150,4 +150,4 @@ async function run(): Promise<void> {
   console.log('FINANCE-R20 cancellation metadata PostgreSQL integration: PASS');
 }
 
-run().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });
+if (process.env.FINANCE_ISOLATED_RUNNER !== 'true') run().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });

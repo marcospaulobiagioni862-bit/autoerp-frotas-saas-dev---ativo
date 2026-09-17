@@ -223,7 +223,7 @@ async function auditCount(originalId: string): Promise<number> {
   return Number(row?.count || 0);
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
 
   const over = await Promise.allSettled([
@@ -323,7 +323,7 @@ async function run(): Promise<void> {
   console.log('FINANCE-R18 reversal concurrency/idempotency integration PASS');
 }
 
-run().catch((error) => {
+if (process.env.FINANCE_ISOLATED_RUNNER !== 'true') run().catch((error) => {
   console.error(error);
   process.exit(1);
 });

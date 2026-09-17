@@ -358,7 +358,7 @@ export class SettlementService {
     const balanceAmount = roundCurrency(Math.max(0, updatedAmount - effectivePaid));
 
     let newStatus = ObligationStatus.PARTIALLY_PAID;
-    if (balanceAmount <= 0.01) {
+    if (balanceAmount === 0) {
       newStatus = ObligationStatus.PAID;
     }
 

@@ -13,6 +13,7 @@ import { FinancialPeriodService } from './src/domain/finance/FinancialPeriodServ
 import { FinancialAuthorizationService } from './src/domain/finance/FinancialAuthorizationService';
 import { UnitOfWork } from './src/db/uow';
 import { AccountingRegime, AuditAction } from './src/types/enums';
+import { manualPayableOrigin } from './src/server/manualPayableAuthority';
 import { hasDriverHealthPermission } from './src/shared/security/driverHealthAuthorization';
 import { registerVehicleRoutes } from './src/server/vehicleRoutes';
 import { requestCorrelationMiddleware } from './src/server/requestCorrelation';
@@ -1082,13 +1083,14 @@ async function startServer() {
     if (!principal) return;
 
     try {
+      const originType = manualPayableOrigin(req.body?.originType);
       const items = await UnitOfWork.run(
         principal.companyId,
         async (txContext) =>
           await PayableService.create(
             {
               companyId: principal.companyId,
-              originType: req.body?.originType,
+              originType,
               originId: req.body?.originId,
               vehicleId: req.body?.vehicleId,
               supplierId: req.body?.supplierId,

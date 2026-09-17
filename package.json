@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:payables-integrity": "tsx src/server/__tests__/financeIsolatedLocalRunner.ts ./payablesIntegrityRegression.ts",
     "test:contract-signature-effective": "tsx src/server/__tests__/contractSignatureEffectiveLocalRunner.ts ./contractSignatureEffectiveRegression.ts",
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.mjs",

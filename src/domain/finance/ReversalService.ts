@@ -244,6 +244,9 @@ export class ReversalService {
     // Lock the linked obligation before accounts. Settlement uses obligation -> account,
     // so keeping the same order avoids an account/obligation deadlock.
     const linked = await this.lockLinkedObligation(companyId, originalTx, txContext);
+    if (linked.payable?.renegotiationId && linked.payable.status === ObligationStatus.CANCELLED) {
+      throw new Error('Estorno bloqueado: título original renegociado exige reconciliação dos substitutos');
+    }
     let linkedCardPayment: any | null = null;
     if (originalTx.type === TransactionType.TRANSFER && txContext?.findCreditCardStatementPaymentForUpdate) {
       linkedCardPayment = await txContext.findCreditCardStatementPaymentForUpdate(originalTx.id);

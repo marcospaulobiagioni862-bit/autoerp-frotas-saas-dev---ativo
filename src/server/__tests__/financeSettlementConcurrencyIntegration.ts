@@ -261,7 +261,7 @@ async function testSettlementVsCancellationPayment(): Promise<void> {
   }
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   await seed();
   await testConcurrentOverpaymentReceipt();
   await testConcurrentExactReceipt();
@@ -275,7 +275,7 @@ async function run(): Promise<void> {
   console.log('FINANCE-R21 settlement concurrency/idempotency integration PASS');
 }
 
-run().catch((error) => {
+if (process.env.FINANCE_ISOLATED_RUNNER !== 'true') run().catch((error) => {
   console.error(error);
   process.exit(1);
 });
