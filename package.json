@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:contract-signature-effective": "tsx src/server/__tests__/contractSignatureEffectiveLocalRunner.ts ./contractSignatureEffectiveRegression.ts",
+    "test:v2-contract-core": "tsx src/domain/contracts/__tests__/v2ContractEffectivePeriodRegression.ts",
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=esm --packages=external --sourcemap --outfile=dist/server.mjs",
     "preview": "vite preview",
