@@ -69,6 +69,19 @@ export async function run() {
   const originalFetch = globalThis.fetch, originalNow = Date.now; const bodies:any[]=[];
   globalThis.fetch = async (_url,init) => { const body=JSON.parse(String(init?.body)); bodies.push(body); if(bodies.length===1) throw new Error('Response lost'); return new Response(JSON.stringify({items:[{...exact,dueDate:'2026-10-15',competenceDate:'2026-10-15'}]}),{status:200}); };
   try { const input={categoryId:'ap-expense',description:'UI retry',totalAmount:10,dueDate:'2026-10-15'}; await assert.rejects(createManualPayable(companyId, input),/lost/); Date.now = () => originalNow() + 86_400_000; await createManualPayable(companyId, input); assert.deepEqual(bodies[0],bodies[1]); await createManualPayable(companyId, input); assert.notEqual(bodies[1].idempotencyKey,bodies[2].idempotencyKey); } finally {globalThis.fetch=originalFetch; Date.now=originalNow;}
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const sharedBodies: any[] = [];
+  globalThis.fetch = async (_url, init) => { sharedBodies.push(JSON.parse(String(init?.body))); await gate; return new Response(JSON.stringify({items:[{...exact,dueDate:'2026-10-15',competenceDate:'2026-10-15'}]}),{status:200}); };
+  try {
+    const input = {categoryId:'ap-expense',description:'UI concurrent',totalAmount:10,dueDate:'2026-10-15'};
+    const first = createManualPayable(companyId,input), second = createManualPayable(companyId,input);
+    assert.equal(sharedBodies.length,1); release(); await Promise.all([first,second]);
+    sharedBodies.length = 0;
+    await Promise.all([createManualPayable(companyId,input),createManualPayable('ap-integrity-b',input)]);
+    assert.equal(sharedBodies.length,2);
+    assert.notEqual(sharedBodies[0].idempotencyKey,sharedBodies[1].idempotencyKey);
+  } finally { release(); globalThis.fetch = originalFetch; }
   for (const origin of [OriginType.MAINTENANCE, OriginType.RENEGOTIATION, undefined, 'UNKNOWN']) assert.throws(()=>manualPayableOrigin(origin),/não autorizada/);
   assert.equal(manualPayableOrigin(OriginType.MANUAL),OriginType.MANUAL);
   const server=readFileSync('server.ts','utf8'); assert.ok(server.includes('const originType = manualPayableOrigin(req.body?.originType)'));

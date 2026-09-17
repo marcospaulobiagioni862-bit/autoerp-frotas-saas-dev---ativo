@@ -274,7 +274,10 @@ export class PostgresAccountPayableRepository extends PostgresBaseRepository<any
   constructor(tx: any, companyId: string) { super(accountPayables, tx, companyId); }
 
   async findByIdempotencyKey(key: string): Promise<any | null> {
-    const results = await this.tx.select().from(this.tableName).where(eq(this.tableName.idempotencyKey, key));
+    const results = await this.tx.select().from(this.tableName).where(and(
+      eq(this.tableName.companyId, this.companyId),
+      eq(this.tableName.idempotencyKey, key)
+    ));
     return results[0] || null;
   }
   async findByVehicleId(vehicleId: string): Promise<any[]> { return await this.tx.select().from(this.tableName).where(eq(this.tableName.vehicleId, vehicleId)); /* Adjust if actual vehicleId col */ }
