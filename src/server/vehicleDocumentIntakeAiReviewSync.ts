@@ -51,11 +51,18 @@ export async function syncVehicleDocumentIntakeHumanReview(
   const target=extraction.status==='APPROVED'?'APPROVED':'FAILED';
   if(extraction.status==='APPROVED' && detected!==expectedType) throw new VehicleDocumentIntakeReviewSyncError('DOCUMENT_TYPE_MISMATCH');
 
-  if(String(intake.status)===target){
-    if(target==='APPROVED' && String(intake.approved_extraction_id||'')!==extraction.id) throw new VehicleDocumentIntakeReviewSyncError('APPROVED_EXTRACTION_MISMATCH');
-    return true;
+  if(String(intake.status)==='APPROVED'){
+    if(target==='APPROVED'){
+      if(String(intake.approved_extraction_id||'')===extraction.id){
+        return true;
+      }
+      throw new VehicleDocumentIntakeReviewSyncError('APPROVED_EXTRACTION_MISMATCH');
+    }
+    throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
   }
-  if(String(intake.status)!=='REVIEW_REQUIRED') throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
+
+  const validIntakeStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED']);
+  if(!validIntakeStatuses.has(String(intake.status))) throw new VehicleDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
 
   const approvedExtractionId=target==='APPROVED'?extraction.id:null;
   const update=await tx.execute(sql`
@@ -65,7 +72,7 @@ export async function syncVehicleDocumentIntakeHumanReview(
       AND id=${intakeId}
       AND attachment_id=${extraction.attachmentId}
       AND created_by=${principal.userId}
-      AND status='REVIEW_REQUIRED'
+      AND status IN ('REVIEW_REQUIRED', 'COMPLETED')
       AND archived_at IS NULL AND consumed_at IS NULL
     RETURNING id
   `);
@@ -74,7 +81,7 @@ export async function syncVehicleDocumentIntakeHumanReview(
   await context.getAuditLogRepo().create({
     id:randomUUID(),companyId:principal.companyId,entityName:'VehicleDocumentIntake',entityId:intakeId,
     action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,timestamp:now,
-    previousState:JSON.stringify({event:'DOC_AI_HUMAN_REVIEW',status:'REVIEW_REQUIRED'}),
+    previousState:JSON.stringify({event:'DOC_AI_HUMAN_REVIEW',status:String(intake.status)}),
     newState:JSON.stringify({event:'DOC_AI_HUMAN_REVIEW',status:target,extractionId:extraction.id,approvedExtractionId,reviewedBy:principal.userId,businessMutationApplied:false}),
   });
   return true;

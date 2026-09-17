@@ -203,6 +203,7 @@ const DOCUMENT_AI_REVIEW_PRIORITY: Readonly<Record<DocumentAiAttachmentStatus['s
   FAILED: 1,
   PROCESSING: 2,
   PENDING: 3,
+  COMPLETED: 4,
   REJECTED: 5,
   APPROVED: 6,
 };
