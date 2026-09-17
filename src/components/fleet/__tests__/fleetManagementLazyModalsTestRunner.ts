@@ -101,7 +101,7 @@ assert.match(formSource, /if \(vehicleToEdit\) \{[\s\S]*yearFabrication: vehicle
 
 assert.match(intakeSource, /useRef\(false\)/, 'vehicle materialization must use a synchronous duplicate-submit lock');
 assert.match(intakeSource, /VehicleClient\.checkIdentity\(\{plate,renavam,chassis\}\)/, 'vehicle intake must preflight plate, RENAVAM and chassis against the server authority');
-assert.match(intakeSource, /\['REVIEW_REQUIRED','APPROVED'\]\.includes\(extraction\.status\)/, 'identity preflight must start as soon as AI identifiers are available for human review');
+assert.match(intakeSource, /\['REVIEW_REQUIRED','(?:COMPLETED',')?APPROVED'\]\.includes\(extraction\.status\)/, 'identity preflight must start as soon as AI identifiers are available for human review');
 assert.match(intakeSource, /Veículo já cadastrado no ERP/, 'identity conflict must be visible before completing the vehicle form');
 assert.match(intakeSource, /Vendidos \/ Arquivados — histórico/, 'identity conflict must tell the user when the existing vehicle is historical');
 assert.match(intakeSource, /Abrir cadastro existente/, 'identity conflict must provide a direct action to the existing record');
