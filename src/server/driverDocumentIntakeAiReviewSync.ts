@@ -32,17 +32,21 @@ export function resolveDriverDocumentIntakeReviewTransition(input: {
 }): { status: 'APPROVED' | 'FAILED'; approvedExtractionId: string | null } | null {
   if (input.entityType !== 'DriverDocumentIntake') return null;
 
-  if (input.extractionStatus === 'APPROVED') {
-    if (String(input.detectedDocumentType || '').toUpperCase() !== 'CNH') {
-      throw new DriverDocumentIntakeReviewSyncError('INTAKE_APPROVAL_REQUIRES_CNH');
-    }
-    if (input.intakeStatus === 'APPROVED') {
+  if (input.intakeStatus === 'APPROVED') {
+    if (input.extractionStatus === 'APPROVED') {
       if (input.approvedExtractionId !== input.extractionId) {
         throw new DriverDocumentIntakeReviewSyncError('APPROVED_EXTRACTION_MISMATCH');
       }
       return { status: 'APPROVED', approvedExtractionId: input.extractionId };
     }
-    const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
+    throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
+  }
+
+  if (input.extractionStatus === 'APPROVED') {
+    if (String(input.detectedDocumentType || '').toUpperCase() !== 'CNH') {
+      throw new DriverDocumentIntakeReviewSyncError('INTAKE_APPROVAL_REQUIRES_CNH');
+    }
+    const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED']);
     if (!validStatuses.has(input.intakeStatus)) {
       throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
     }
@@ -50,7 +54,7 @@ export function resolveDriverDocumentIntakeReviewTransition(input: {
   }
 
   if (input.intakeStatus === 'FAILED') return { status: 'FAILED', approvedExtractionId: null };
-  const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED', 'APPROVED']);
+  const validStatuses = new Set(['REVIEW_REQUIRED', 'COMPLETED']);
   if (!validStatuses.has(input.intakeStatus)) {
     throw new DriverDocumentIntakeReviewSyncError('INTAKE_STATE_MISMATCH');
   }
@@ -126,7 +130,7 @@ export async function syncDriverDocumentIntakeHumanReview(
       AND id = ${intakeId}
       AND attachment_id = ${extraction.attachmentId}
       AND created_by = ${principal.userId}
-      AND status IN ('REVIEW_REQUIRED', 'COMPLETED', 'APPROVED')
+      AND status IN ('REVIEW_REQUIRED', 'COMPLETED')
       AND archived_at IS NULL
       AND consumed_at IS NULL
     RETURNING id
@@ -141,7 +145,7 @@ export async function syncDriverDocumentIntakeHumanReview(
     entityName: 'DriverDocumentIntake',
     entityId: intakeId,
     action: AuditAction.UPDATE,
-    previousState: JSON.stringify({ event: 'DOC_AI_HUMAN_REVIEW', status: 'REVIEW_REQUIRED' }),
+    previousState: JSON.stringify({ event: 'DOC_AI_HUMAN_REVIEW', status: String(intake.status) }),
     newState: JSON.stringify({
       event: 'DOC_AI_HUMAN_REVIEW',
       status: transition.status,

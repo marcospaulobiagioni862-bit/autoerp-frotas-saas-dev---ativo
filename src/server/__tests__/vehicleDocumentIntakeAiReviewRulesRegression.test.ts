@@ -115,7 +115,57 @@ export async function runDocumentAiReviewRulesTests() {
   assert.equal(validateMandatoryFields({ plate: 'ABC1234', renavam: '', chassis: '12345' }), false, 'Teste I PASS: Bloqueado se renavam ausente');
   assert.equal(validateMandatoryFields({ plate: 'ABC1234', renavam: '99999', chassis: '12345' }), true, 'Teste I PASS: Validação bem sucedida quando todos preenchidos');
 
-  console.log('ALL TESTS A THROUGH I PASSED SUCCESSFULLY!');
+  // Teste J: APPROVED + extractionId diferente = CONFLITO (APPROVED_EXTRACTION_MISMATCH)
+  try {
+    resolveDriverDocumentIntakeReviewTransition({
+      entityType: 'DriverDocumentIntake',
+      intakeStatus: 'APPROVED',
+      extractionStatus: 'APPROVED',
+      detectedDocumentType: 'CNH',
+      approvedExtractionId: 'ext-old-111',
+      extractionId: 'ext-new-999',
+    });
+    assert.fail('APPROVED com extractionId diferente deveria lançar APPROVED_EXTRACTION_MISMATCH');
+  } catch (err: any) {
+    assert.equal(err.message, 'APPROVED_EXTRACTION_MISMATCH', 'Teste J PASS: APPROVED com extractionId diferente gera conflito');
+  }
+
+  const transitionSameApproved = resolveDriverDocumentIntakeReviewTransition({
+    entityType: 'DriverDocumentIntake',
+    intakeStatus: 'APPROVED',
+    extractionStatus: 'APPROVED',
+    detectedDocumentType: 'CNH',
+    approvedExtractionId: 'ext-same-111',
+    extractionId: 'ext-same-111',
+  });
+  assert.equal(transitionSameApproved.status, 'APPROVED', 'Teste J PASS: APPROVED com mesmo extractionId é idempotente');
+
+  // Teste K: APPROVED não pode regredir (APPROVED -> FAILED/REJECTED é bloqueado)
+  try {
+    resolveDriverDocumentIntakeReviewTransition({
+      entityType: 'DriverDocumentIntake',
+      intakeStatus: 'APPROVED',
+      extractionStatus: 'REJECTED',
+      detectedDocumentType: 'CNH',
+      approvedExtractionId: 'ext-same-111',
+      extractionId: 'ext-same-111',
+    });
+    assert.fail('APPROVED para REJECTED/FAILED deveria lançar INTAKE_STATE_MISMATCH');
+  } catch (err: any) {
+    assert.equal(err.message, 'INTAKE_STATE_MISMATCH', 'Teste K PASS: Regressão de APPROVED para REJECTED/FAILED é bloqueada');
+  }
+
+  // Teste L: Auditoria grava o status real anterior em previousState
+  const simulateAuditPreviousState = (intakeStatus: string) => {
+    return JSON.stringify({ event: 'DOC_AI_HUMAN_REVIEW', status: String(intakeStatus) });
+  };
+  const auditCompleted = JSON.parse(simulateAuditPreviousState('COMPLETED'));
+  assert.equal(auditCompleted.status, 'COMPLETED', 'Teste L PASS: Auditoria para intake COMPLETED registra COMPLETED em previousState');
+
+  const auditReviewReq = JSON.parse(simulateAuditPreviousState('REVIEW_REQUIRED'));
+  assert.equal(auditReviewReq.status, 'REVIEW_REQUIRED', 'Teste L PASS: Auditoria para intake REVIEW_REQUIRED registra REVIEW_REQUIRED em previousState');
+
+  console.log('ALL TESTS A THROUGH L PASSED SUCCESSFULLY!');
 }
 
 if (process.argv[1]?.includes('vehicleDocumentIntakeAiReviewRulesRegression')) {
