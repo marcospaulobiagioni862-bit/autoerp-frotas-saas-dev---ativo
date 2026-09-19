@@ -333,6 +333,24 @@ export function registerContractRoutes(app: Express): void {
         if (!raw) throw new Error('Contract idempotency authority unavailable');
         await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${principal.companyId}:contract-create:${idempotencyKey}`})))`);
 
+        const replayMarker = `[V2-IDEMPOTENCY:${idempotencyKey}]`;
+        const replayRows = await raw.execute(sql`
+          SELECT id FROM contracts
+          WHERE company_id=${principal.companyId}
+            AND notes LIKE ${`%${replayMarker}%`}
+            AND is_archived=false
+          ORDER BY created_at DESC
+          LIMIT 1
+        `);
+        const replayId = Array.isArray((replayRows as any)?.rows) ? (replayRows as any).rows[0]?.id : undefined;
+        if (replayId) {
+          const existing = await tx.getContractRepo().findByIdForCompany(principal.companyId, String(replayId));
+          if (existing) {
+            const receivables = await tx.getReceivableRepo().findByContractId(existing.id);
+            return { item: existing, receivables };
+          }
+        }
+
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
@@ -376,7 +394,7 @@ export function registerContractRoutes(app: Express): void {
           paymentMethodId: optionalText(body.paymentMethodId),
           templateId: requestedTemplateId,
           signatureRequired: true,
-          notes: optionalText(body.notes),
+          notes: [optionalText(body.notes), `[V2-IDEMPOTENCY:${idempotencyKey}]`].filter(Boolean).join('\n'),
           isArchived: false,
           createdAt: now,
           updatedAt: now,
