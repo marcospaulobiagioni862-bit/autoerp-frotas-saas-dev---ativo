@@ -490,9 +490,6 @@ export function registerContractRoutes(app: Express): void {
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
         validateDateRange(period.effectiveStartDate, contract.endDate);
         const today = new Date().toISOString().slice(0, 10);
-        if (period.effectiveStartDate > today) {
-          throw new ContractConflictError('Contract period has not started');
-        }
         if (contract.endDate && contract.endDate < today) {
           throw new ContractConflictError('Contract period already ended');
         }
@@ -500,14 +497,14 @@ export function registerContractRoutes(app: Express): void {
         if (!vehicle) throw new ContractNotFoundError();
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
         if (!driver) throw new ContractNotFoundError();
+
+        // V2: only operational exclusivity is a hard gate. Documentation,
+        // insurance and CNH compliance remain visible as warnings and must not
+        // strand a saved contract in DRAFT.
         ensureVehicleEligible(vehicle);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, today, tx);
-        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx)) ||
-            !(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, today, tx))) {
-          throw new ContractConflictError('Vehicle insurance unavailable');
+        if (driver.isArchived || driver.status !== DriverStatus.ACTIVE) {
+          throw new ContractConflictError('Driver unavailable');
         }
-        ensureDriverEligible(driver);
 
         const vehicleConflict = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, contract.vehicleId, contract.id);
         const driverConflict = await tx.getContractRepo().findBlockingByDriver(principal.companyId, contract.driverId, contract.id);
