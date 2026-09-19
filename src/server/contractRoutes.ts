@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
@@ -320,7 +321,18 @@ export function registerContractRoutes(app: Express): void {
       const requestedNumber = normalizeContractNumber(body.contractNumber);
       const requestedTemplateId = optionalText(body.templateId);
 
+      const idempotencyKey = typeof req.headers['x-idempotency-key'] === 'string'
+        ? req.headers['x-idempotency-key'].trim()
+        : '';
+      if (!idempotencyKey || idempotencyKey.length > 200) {
+        throw new ContractValidationError('Missing idempotency key');
+      }
+
       const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const raw = tx.getRawTransaction?.();
+        if (!raw) throw new Error('Contract idempotency authority unavailable');
+        await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${principal.companyId}:contract-create:${idempotencyKey}`})))`);
+
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
