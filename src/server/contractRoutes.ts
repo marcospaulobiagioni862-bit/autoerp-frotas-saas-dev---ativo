@@ -320,7 +320,7 @@ export function registerContractRoutes(app: Express): void {
       const requestedNumber = normalizeContractNumber(body.contractNumber);
       const requestedTemplateId = optionalText(body.templateId);
 
-      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
@@ -353,7 +353,7 @@ export function registerContractRoutes(app: Express): void {
           vehicleId,
           startDate,
           endDate,
-          status: ContractStatus.DRAFT,
+          status: ContractStatus.ACTIVE,
           rentalAmount,
           billingPeriodicity,
           billingDueDayOfWeek,
@@ -369,14 +369,24 @@ export function registerContractRoutes(app: Express): void {
           createdAt: now,
           updatedAt: now,
         });
+        const boundVehicle = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
+          status: VehicleStatus.RENTED,
+          currentDriverId: driverId,
+          currentContractId: created.id,
+          updatedAt: now,
+        });
+        if (!boundVehicle) throw new ContractNotFoundError();
+
+        const receivables = await ensureInitialContractReceivable(created, principal, tx);
+
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: created.id,
           action: AuditAction.CREATE, newState: auditState(created), userId: principal.userId,
           userName: principal.name, timestamp: now,
         });
-        return created;
+        return { item: created, receivables };
       });
-      res.status(201).json({ item });
+      res.status(201).json(result);
     } catch (error) {
       sendContractError(res, error);
     }
