@@ -123,19 +123,13 @@ export class ContractClient {
   }
 
   static async create(input: ContractCreateInput): Promise<Contract> {
-    const created = await runIdempotentMutation(`contract:create:${JSON.stringify(input)}`, (token) =>
+    return runIdempotentMutation(`contract:create:${JSON.stringify(input)}`, (token) =>
       requestItem('/api/contracts', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-idempotency-key': token },
         body: JSON.stringify(input),
       })
     );
-
-    // V2: salvar deve concluir o vínculo operacional e gerar o CR inicial na
-    // mesma ação percebida pelo operador. Assinatura permanece evidência.
-    if (created.status === ContractStatus.ACTIVE) return created;
-    const activated = await this.activate(created.id, '');
-    return activated.item;
   }
 
   static async update(id: string, input: ContractUpdateInput): Promise<Contract> {
