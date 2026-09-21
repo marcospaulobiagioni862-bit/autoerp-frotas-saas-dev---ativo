@@ -14,6 +14,7 @@
     "test:recurring": "tsx src/domain/finance/__tests__/recurringScheduleTestRunner.ts",
     "test:maintenance-client": "tsx src/api/__tests__/maintenancePreventiveClientTestRunner.ts",
     "test:contract-billing-client": "tsx src/api/__tests__/contractBillingDayClientTestRunner.ts",
+    "test:api-payload-normalization": "tsx src/api/__tests__/apiPayloadNormalizationRegression.ts",
     "test:audit-wave-a": "tsx src/domain/operations/__tests__/erpWaveASourceOfTruthTestRunner.ts && tsx src/server/__tests__/contractSimpleSignStatusRegression.ts && tsx src/server/__tests__/contractIdempotencyRegression.ts && tsx src/server/__tests__/contractFinancialCrDefaultsRegression.ts && tsx src/server/__tests__/contractSequentialNumberRegression.ts && tsx src/components/finance/__tests__/manualReceivablesUiRegression.ts && tsx src/server/__tests__/maintenanceWorkOrderArchiveRegression.ts && tsx src/components/fleet/__tests__/vehicleKmDocCompatibilityRegression.ts && tsx src/server/__tests__/maintenancePartStockRegression.ts",
     "test:audit-wave-a-activation": "tsx src/domain/operations/__tests__/erpWaveAActivationFinanceIntegration.ts",
     "start": "node dist/server.mjs",
