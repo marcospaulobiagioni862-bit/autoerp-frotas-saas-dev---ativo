@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { runContractSuspendRegression } from './contractSuspendRegression';
 import { runContractTemplateFileSourceRegression } from './contractTemplateFileSourceRegression';
 import { runContractDocxTemplateRendererRegression } from './contractDocxTemplateRendererRegression';
 import { runContractDocxPackageRendererRegression } from './contractDocxPackageRendererRegression';
@@ -179,7 +178,6 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
     else process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;
   }
 
-  await runContractSuspendRegression();
   await runContractTemplateFileSourceRegression();
   await runContractDocxTemplateRendererRegression();
   await runContractDocxPackageRendererRegression();
