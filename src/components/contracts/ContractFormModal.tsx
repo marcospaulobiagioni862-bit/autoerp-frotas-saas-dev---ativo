@@ -234,7 +234,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       onClose();
       onSuccess({
         contract: completedContract,
-        openPdfSignature: !contractToEdit,
+        openPdfSignature: false,
         warning: warnings.length ? warnings.join(' ') : undefined,
       });
     } catch (caught) {
