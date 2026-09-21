@@ -98,18 +98,18 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
               <span>AutoERP</span>
               <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                Server Authority
+                V2 Preview
               </span>
             </h1>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:flex items-center gap-1">
               <Building2 className="w-3 h-3 text-slate-400" />
-              <span>{authMode === 'server-session' ? 'Sessão autenticada do servidor' : 'Ambiente de desenvolvimento'}</span>
+              <span>{authMode === 'server-session' ? 'Ambiente isolado para revisão' : 'Ambiente de desenvolvimento'}</span>
               {authMode === 'server-session' && (
                 <span
                   className={buildIdentity?.commitSha ? 'font-mono text-emerald-600 dark:text-emerald-400' : 'font-medium text-amber-600 dark:text-amber-400'}
                   title={buildIdentity?.commitSha || 'O ambiente implantado ainda não expôs o SHA do commit.'}
                 >
-                  · {buildIdentity?.environment || 'verificando'} · {buildIdentity?.commitSha ? buildIdentity.commitSha.slice(0, 7) : 'SHA ?'}
+                  · preview isolado · {buildIdentity?.commitSha ? buildIdentity.commitSha.slice(0, 7) : 'SHA ?'}
                 </span>
               )}
             </p>
