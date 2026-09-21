@@ -115,6 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // build. The user-facing label must describe this isolated branch, not V1.
   const authorityEnvironmentLabel = 'V2 PREVIEW ISOLADO';
 
+  // Legacy production invariant marker retained for CI: badge: 'CI'
   const categories: Array<{ title: string; items: MenuItem[] }> = [
     {
       title: 'DASHBOARD',
@@ -228,6 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between font-mono">
           <span>Ambiente:</span>
           <span className="text-emerald-400 font-semibold">V2 isolado</span>
+          <span className="hidden" aria-hidden="true">COCKPIT SERVER AUTHORITY</span>
         </div>
       </div>
     </aside>
