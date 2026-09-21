@@ -111,13 +111,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => { cancelled = true; };
   }, [authMode]);
 
-  const authorityEnvironmentLabel = runtimeEnvironment === 'staging'
-    ? 'STAGING SERVER AUTHORITY'
-    : runtimeEnvironment === 'production'
-      ? 'PRODUCTION SERVER AUTHORITY'
-      : runtimeEnvironment === 'development'
-        ? 'DEVELOPMENT SERVER AUTHORITY'
-        : 'SERVER AUTHORITY';
+  // V2 preview: the runtime can report "production" because Render runs an optimized
+  // build. The user-facing label must describe this isolated branch, not V1.
+  const authorityEnvironmentLabel = 'V2 PREVIEW ISOLADO';
 
   const categories: Array<{ title: string; items: MenuItem[] }> = [
     {
@@ -130,9 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'fleet', label: 'Veículos', icon: Car },
         { id: 'drivers', label: 'Motoristas', icon: Users },
         { id: 'contracts', label: 'Contratos', icon: FileText },
-        { id: 'maintenance', label: 'Manutenção', icon: Wrench },
-        { id: 'trafficTickets', label: 'Multas', icon: AlertTriangle },
-        { id: 'compliance', label: 'Compliance da Frota', icon: ShieldCheck },
+
       ],
     },
     {
@@ -141,14 +135,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'finance-overview', label: 'Dashboard Financeiro', icon: LayoutDashboard },
         {
           id: 'receivables',
-          label: 'Contas a Receber',
+          label: 'CR → Recebimento',
           icon: TrendingUp,
           badge: pendingReceivablesCount > 0 ? pendingReceivablesCount : undefined,
           badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
         },
         {
           id: 'payables',
-          label: 'Contas a Pagar',
+          label: 'Despesa → CP → Pagamento',
           icon: CreditCard,
           badge: pendingPayablesCount > 0 ? pendingPayablesCount : undefined,
           badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
@@ -156,35 +150,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'transactions', label: 'Movimentações', icon: ArrowRightLeft },
         { id: 'cashflow', label: 'Fluxo de Caixa', icon: Banknote },
         { id: 'dre', label: 'Relatórios Financeiros', icon: PieChart },
-      ],
-    },
-    {
-      title: 'GESTÃO OPERACIONAL',
-      items: [
-        { id: 'operacao-diaria', label: 'Operação Diária', icon: Calendar },
-        { id: 'ciclo-locacao', label: 'Ciclo de Locação', icon: Activity },
-        { id: 'central-controle', label: 'Central de Controle', icon: ShieldCheck },
-        { id: 'documentos', label: 'Central de Documentos', icon: FolderOpen },
-        {
-          id: 'pendencias',
-          label: 'Documentos e Alertas',
-          icon: BellRing,
-          badge: pendingPendingsCount > 0 ? pendingPendingsCount : undefined,
-          badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300',
-        },
-        { id: 'relatorios', label: 'Relatórios Gerenciais', icon: TrendingUp },
-      ],
-    },
-    {
-      title: 'VALIDAÇÃO',
-      items: [
-        {
-          id: 'tests',
-          label: 'Validação Técnica',
-          icon: ShieldCheck,
-          badge: 'CI',
-          badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/80 dark:text-indigo-300',
-        },
       ],
     },
   ];
@@ -255,22 +220,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ))}
 
-        <div className="space-y-1 border-t border-slate-800/60 pt-3">
-          <button
-            onClick={() => setIsAuthorityExpanded((value) => !value)}
-            className="w-full flex items-center justify-between text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1 hover:text-slate-300"
-          >
-            <span>COCKPIT SERVER AUTHORITY</span>
-            {isAuthorityExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          </button>
-          {isAuthorityExpanded && <div className="space-y-0.5 mt-1 pl-1">{authorityItems.map(renderItem)}</div>}
-        </div>
+        {/* V2 preview intentionally hides the legacy COCKPIT SERVER AUTHORITY.
+            Technical/admin screens remain in code but are outside this visual review. */}
       </nav>
 
       <div className="shrink-0 p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
         <div className="flex items-center justify-between font-mono">
-          <span>Confiança:</span>
-          <span className="text-emerald-400 font-semibold">Server-side</span>
+          <span>Ambiente:</span>
+          <span className="text-emerald-400 font-semibold">V2 isolado</span>
         </div>
       </div>
     </aside>
