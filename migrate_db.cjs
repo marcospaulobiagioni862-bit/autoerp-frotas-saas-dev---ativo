@@ -93,6 +93,10 @@ async function runMigrations(options = {}) {
 module.exports = { normalizePostgresConnectionString, runMigrations };
 
 if (require.main === module) {
+  if (process.env.AUTOERP_SKIP_MIGRATIONS === 'true') {
+    console.log('Database migrations skipped for isolated visual preview.');
+    process.exit(0);
+  }
   runMigrations().catch((error) => {
     console.error('DATABASE_MIGRATION_FAILED', error instanceof Error ? error.message : error);
     process.exit(1);
