@@ -107,7 +107,7 @@ async function dateRegression() {
   await new Promise((resolve) => setTimeout(resolve, 0));
   tree = render();
   assert.equal(field(tree, 'Data inicial *').props.value, '2026-09-13', 'option loading must not erase a date entered while requests are pending');
-  for (const [label, value] of [['Modelo de contrato *', 'template'], ['Veículo *', 'vehicle'], ['Motorista *', 'driver'], ['Aluguel *', '750'], ['Periodicidade *', 'WEEKLY']]) {
+  for (const [label, value] of [['Veículo *', 'vehicle'], ['Motorista *', 'driver'], ['Aluguel *', '750'], ['Periodicidade *', 'WEEKLY']]) {
     field(tree, label).props.onChange({ target: { value } });
     tree = render();
   }
