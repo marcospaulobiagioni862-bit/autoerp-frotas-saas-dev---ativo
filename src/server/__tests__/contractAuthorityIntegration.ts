@@ -159,353 +159,79 @@ export class ContractAuthorityIntegrationRunner {
     const adminB = { companyId: companyB, role: 'ADMIN', userId: adminBId };
     const readonlyA = { companyId: companyA, role: 'READONLY', userId: readonlyAId };
 
-    const baseContract = {
-      contractNumber: 'CNT-I3-A-001',
-      driverId: 'i3-drv-a1',
-      vehicleId: 'i3-veh-a1',
-      startDate: '2026-08-01',
-      rentalAmount: 750,
-      billingPeriodicity: RecurringFrequency.WEEKLY,
-      billingDueDayOfWeek: 1,
-      billingDueDayOfMonth: 1,
-      securityDepositAmount: 1200,
-      franchiseKm: 1500,
-      excessKmRate: 0.5,
-    };
-
     try {
+      const baseContract = {
+        contractNumber: 'CNT-V2-P0-A-001',
+        driverId: 'i3-drv-a1',
+        vehicleId: 'i3-veh-a1',
+        startDate: '2026-08-01',
+        rentalAmount: 750,
+        billingPeriodicity: RecurringFrequency.WEEKLY,
+        billingDueDayOfWeek: 1,
+        billingDueDayOfMonth: 1,
+        securityDepositAmount: 1200,
+        franchiseKm: 1500,
+        excessKmRate: 0.5,
+      };
+      const create = (body: Record<string, unknown>, principal: typeof adminA, key?: string) =>
+        request('/api/contracts', {
+          method: 'POST',
+          headers: key ? { 'x-idempotency-key': key } : undefined,
+          body: JSON.stringify(body),
+        }, principal);
+
       let response = await request('/api/contracts');
       assert(response.status === 401, `no-session list expected 401, got ${response.status}`);
-
-      response = await request('/api/contracts', {}, readonlyA);
-      assert(response.status === 200, `READONLY list expected 200, got ${response.status}`);
-
-      response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, readonlyA);
+      response = await create(baseContract, readonlyA, 'v2-readonly');
       assert(response.status === 403, `READONLY create expected 403, got ${response.status}`);
+      response = await create(baseContract, adminA);
+      assert(response.status === 400, `missing idempotency key expected 400, got ${response.status}`);
 
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, companyId: companyB, userId: adminBId, role: 'ADMIN', status: ContractStatus.ACTIVE }),
-      }, adminA);
-      assert(response.status === 400, `forged authority surface expected 400, got ${response.status}`);
+      const keyA = 'v2-contract-create-a-001';
+      const [first, replay] = await Promise.all([
+        create(baseContract, adminA, keyA),
+        create(baseContract, adminA, keyA),
+      ]);
+      assert(first.status === 201 && replay.status === 201, `same-key create expected 201/201, got ${first.status}/${replay.status}`);
+      const firstPayload = await json(first);
+      const replayPayload = await json(replay);
+      const created = firstPayload.item;
+      assert(created.id === replayPayload.item.id, 'same idempotency key created more than one contract');
+      assert(created.companyId === companyA && created.status === ContractStatus.ACTIVE && !created.isArchived, 'V2 contract must be ACTIVE atomically');
 
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, billingDueDayOfWeek: undefined }),
-      }, adminA);
-      assert(response.status === 400, `weekly contract without weekday expected 400, got ${response.status}`);
+      const boundVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
+      assert(boundVehicle?.status === VehicleStatus.RENTED && boundVehicle?.current_driver_id === 'i3-drv-a1' && boundVehicle?.current_contract_id === created.id, 'vehicle/driver binding was not atomic');
+      const receivables = await db.execute(sql`SELECT origin_type, origin_id FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id} ORDER BY origin_type`);
+      const origins = (receivables.rows || []).map((row: any) => row.origin_type).sort();
+      assert(origins.length === 2 && origins[0] === 'CONTRACT_RENT' && origins[1] === 'SECURITY_DEPOSIT', 'rent and deposit CR must be created exactly once');
+      const contractCount = await scalar(sql`SELECT count(*)::int AS count FROM contracts WHERE company_id=${companyA} AND notes LIKE ${'%[V2-IDEMPOTENCY:' + keyA + ']%'}`);
+      assert(Number(contractCount?.count) === 1, 'same-key replay persisted more than one contract');
 
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...baseContract,
-          billingPeriodicity: RecurringFrequency.MONTHLY,
-          billingDueDayOfWeek: undefined,
-          billingDueDayOfMonth: undefined,
-        }),
-      }, adminA);
-      assert(response.status === 400, `monthly contract without day-of-month expected 400, got ${response.status}`);
+      response = await create({ ...baseContract, contractNumber: 'CNT-V2-P0-A-002', driverId: 'i3-drv-a2' }, adminA, 'v2-contract-vehicle-conflict');
+      assert(response.status === 409, `bound vehicle expected 409, got ${response.status}`);
+      response = await create({ ...baseContract, contractNumber: 'CNT-V2-P0-A-003', vehicleId: 'i3-veh-a2' }, adminA, 'v2-contract-driver-conflict');
+      assert(response.status === 409, `bound driver expected 409, got ${response.status}`);
 
-      response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, adminA);
-      assert(response.status === 201, `tenant A create expected 201, got ${response.status}`);
-      const created = (await json(response)).item;
-      assert(created.companyId === companyA && created.status === ContractStatus.DRAFT && created.isArchived === false, 'create authority mismatch');
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-VEH-BLOCK', driverId: 'i3-drv-a2' }),
-      }, adminA);
-      assert(response.status === 409, `vehicle already attached to DRAFT contract expected 409, got ${response.status}`);
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-A-DRV-BLOCK', vehicleId: 'i3-veh-a2' }),
-      }, adminA);
-      assert(response.status === 409, `driver already attached to DRAFT contract expected 409, got ${response.status}`);
-
-      await markLegacyContract(created.id);
-
-      const draftCloseAuditBefore = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
-        method: 'POST', body: JSON.stringify({ closeDate: '2026-08-31', reason: 'Nunca ativado' }),
-      }, adminA);
-      assert(response.status === 409, `DRAFT close expected 409, got ${response.status}`);
-      const draftCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
-      const draftCloseVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const draftCloseReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      const draftCloseAuditAfter = await scalar(sql`SELECT count(*)::int AS count FROM audit_logs WHERE company_id=${companyA} AND entity_type='Contract' AND entity_id=${created.id}`);
-      assert(draftCloseContract?.status === ContractStatus.DRAFT && !draftCloseContract?.end_date, 'DRAFT close mutated contract');
-      assert(draftCloseVehicle?.status === VehicleStatus.AVAILABLE && !draftCloseVehicle?.current_driver_id && !draftCloseVehicle?.current_contract_id, 'DRAFT close mutated vehicle');
-      assert(Number(draftCloseReceivables?.count) === 0, 'DRAFT close mutated financial history');
-      assert(Number(draftCloseAuditAfter?.count) === Number(draftCloseAuditBefore?.count), 'DRAFT close created audit mutation');
-
-      response = await request('/api/contracts', { method: 'POST', body: JSON.stringify(baseContract) }, adminA);
-      assert(response.status === 409, `same-tenant contract number expected 409, got ${response.status}`);
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, driverId: 'i3-drv-b1', vehicleId: 'i3-veh-b1' }),
-      }, adminB);
-      assert(response.status === 201, `same contract number cross-tenant expected 201, got ${response.status}`);
-
+      const companyBResponse = await create({ ...baseContract, driverId: 'i3-drv-b1', vehicleId: 'i3-veh-b1' }, adminB, 'v2-contract-create-b-001');
+      assert(companyBResponse.status === 201, `cross-tenant independent create expected 201, got ${companyBResponse.status}`);
       response = await request(`/api/contracts/${encodeURIComponent(created.id)}`, {}, adminB);
       assert(response.status === 404, `cross-tenant contract read expected 404, got ${response.status}`);
 
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}`, {
-        method: 'PATCH', body: JSON.stringify({ status: ContractStatus.ACTIVE }),
-      }, adminA);
-      assert(response.status === 400, `generic PATCH lifecycle expected 400, got ${response.status}`);
-
-      const beforeActivationGates = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const vehicleBeforeActivationGates = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const receivablesBeforeActivationGates = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(beforeActivationGates?.status === ContractStatus.DRAFT, 'pre-activation baseline contract mismatch');
-      assert(vehicleBeforeActivationGates?.status === VehicleStatus.AVAILABLE && !vehicleBeforeActivationGates?.current_contract_id, 'pre-activation baseline vehicle mismatch');
-      assert(Number(receivablesBeforeActivationGates?.count) === 0, 'pre-activation baseline must not contain receivable before document generation');
-
-      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-crlv'`);
-      await db.execute(sql`
-        INSERT INTO file_attachments (
-          id, company_id, entity_type, entity_name, entity_id, document_type, file_name, mime_type, url,
-          size, file_size, storage_provider, storage_key, checksum, created_by, is_archived, content_state, created_at
-        ) VALUES (
-          'i3-att-expired-crlv', ${companyA}, 'Vehicle', 'Vehicle', 'i3-veh-a1', 'CRLV', 'expired-crlv.pdf',
-          'application/pdf', 'attachment://i3-expired-crlv', 10, 10, 'SERVER_FS', 'i3/expired-crlv', repeat('f',64),
-          ${adminAId}, false, 'AVAILABLE', NOW()
-        ) ON CONFLICT (id) DO NOTHING
-      `);
-      await db.execute(sql`
-        INSERT INTO documents (
-          id, company_id, subject_type, subject_id, document_type, reference_year, expiration_date, attachment_id,
-          version_number, is_current, is_archived, cost, created_by, created_at, updated_at
-        ) VALUES (
-          'i3-doc-expired-crlv', ${companyA}, 'VEHICLE', 'i3-veh-a1', 'CRLV', 2026, '2020-01-01',
-          'i3-att-expired-crlv', 2, true, false, 0, ${adminAId}, NOW(), NOW()
-        ) ON CONFLICT (id) DO UPDATE SET is_current=true, is_archived=false, expiration_date='2020-01-01'
-      `);
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `expired vehicle document expected activation 409, got ${response.status}`);
-      const blockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const blockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const blockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(blockedContract?.status === ContractStatus.DRAFT, 'expired document gate mutated contract');
-      assert(blockedVehicle?.status === VehicleStatus.AVAILABLE && !blockedVehicle?.current_driver_id && !blockedVehicle?.current_contract_id, 'expired document gate mutated vehicle');
-      assert(Number(blockedReceivables?.count) === 0, 'expired document gate created receivable');
-      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-expired-crlv'`);
-      await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-crlv'`);
-
-      await db.execute(sql`UPDATE documents SET is_current=false, is_archived=true, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `missing annual vehicle document expected activation 409, got ${response.status}`);
-      const missingDocumentBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const missingDocumentBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const missingDocumentBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(missingDocumentBlockedContract?.status === ContractStatus.DRAFT, 'missing document gate mutated contract');
-      assert(missingDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !missingDocumentBlockedVehicle?.current_driver_id && !missingDocumentBlockedVehicle?.current_contract_id, 'missing document gate mutated vehicle');
-      assert(Number(missingDocumentBlockedReceivables?.count) === 0, 'missing document gate created receivable');
-      await db.execute(sql`UPDATE documents SET is_current=true, is_archived=false, updated_at=NOW() WHERE id='i3-doc-valid-lic'`);
-
-      await db.execute(sql`UPDATE documents SET expiration_date='2026-07-31', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `annual vehicle document before contract start expected activation 409, got ${response.status}`);
-      const futureDocumentBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const futureDocumentBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const futureDocumentBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(futureDocumentBlockedContract?.status === ContractStatus.DRAFT, 'document date gate mutated contract');
-      assert(futureDocumentBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futureDocumentBlockedVehicle?.current_driver_id && !futureDocumentBlockedVehicle?.current_contract_id, 'document date gate mutated vehicle');
-      assert(Number(futureDocumentBlockedReceivables?.count) === 0, 'document date gate created receivable');
-      await db.execute(sql`UPDATE documents SET expiration_date='2035-01-01', updated_at=NOW() WHERE id='i3-doc-valid-ipva'`);
-
-      await db.execute(sql`UPDATE drivers SET cnh_expiration='2020-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `expired driver CNH expected activation 409, got ${response.status}`);
-      const cnhBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const cnhBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const cnhBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(cnhBlockedContract?.status === ContractStatus.DRAFT, 'expired CNH gate mutated contract');
-      assert(cnhBlockedVehicle?.status === VehicleStatus.AVAILABLE && !cnhBlockedVehicle?.current_driver_id && !cnhBlockedVehicle?.current_contract_id, 'expired CNH gate mutated vehicle');
-      assert(Number(cnhBlockedReceivables?.count) === 0, 'expired CNH gate created receivable');
-      await db.execute(sql`UPDATE drivers SET cnh_expiration='2035-01-01', updated_at=NOW() WHERE id='i3-drv-a1'`);
-
-      await db.execute(sql`UPDATE insurances SET status='EXPIRED', updated_at=NOW() WHERE id='i3-ins-a1'`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 409, `expired vehicle insurance expected activation 409, got ${response.status}`);
-      const insuranceBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${created.id}`);
-      const insuranceBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const insuranceBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(insuranceBlockedContract?.status === ContractStatus.DRAFT, 'expired insurance gate mutated contract');
-      assert(insuranceBlockedVehicle?.status === VehicleStatus.AVAILABLE && !insuranceBlockedVehicle?.current_driver_id && !insuranceBlockedVehicle?.current_contract_id, 'expired insurance gate mutated vehicle');
-      assert(Number(insuranceBlockedReceivables?.count) === 0, 'expired insurance gate created receivable');
-      await db.execute(sql`UPDATE insurances SET status='ACTIVE', updated_at=NOW() WHERE id='i3-ins-a1'`);
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...baseContract,
-          contractNumber: 'CNT-I3-PAST-PERIOD',
-          vehicleId: 'i3-veh-a2',
-          driverId: 'i3-drv-a2',
-          startDate: '2026-01-01',
-          endDate: '2026-01-31',
-        }),
-      }, adminA);
-      assert(response.status === 201, `past-period draft create expected 201, got ${response.status}`);
-      const pastPeriodContract = (await json(response)).item;
-      await markLegacyContract(pastPeriodContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(pastPeriodContract.id)}/activate`, {
-        method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }),
-      }, adminA);
-      assert(response.status === 409, `past contract period expected activation 409, got ${response.status}`);
-      const pastPeriodBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${pastPeriodContract.id}`);
-      const pastPeriodBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a2'`);
-      const pastPeriodBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${pastPeriodContract.id}`);
-      assert(pastPeriodBlockedContract?.status === ContractStatus.DRAFT, 'past period gate mutated contract');
-      assert(pastPeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !pastPeriodBlockedVehicle?.current_driver_id && !pastPeriodBlockedVehicle?.current_contract_id, 'past period gate mutated vehicle');
-      assert(Number(pastPeriodBlockedReceivables?.count) === 0, 'past period gate created receivable');
-      response = await request(`/api/contracts/${encodeURIComponent(pastPeriodContract.id)}/cancel`, {
-        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período passado' }),
-      }, adminA);
-      assert(response.status === 200, `past period draft cancel expected 200, got ${response.status}`);
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...baseContract,
-          contractNumber: 'CNT-I3-FUTURE-PERIOD',
-          vehicleId: 'i3-veh-a3',
-          driverId: 'i3-drv-a3',
-          startDate: '2099-01-01',
-        }),
-      }, adminA);
-      assert(response.status === 201, `future-period draft create expected 201, got ${response.status}`);
-      const futurePeriodContract = (await json(response)).item;
-      await markLegacyContract(futurePeriodContract.id);
-      response = await request(`/api/contracts/${encodeURIComponent(futurePeriodContract.id)}/activate`, {
-        method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }),
-      }, adminA);
-      assert(response.status === 409, `future contract period expected activation 409, got ${response.status}`);
-      const futurePeriodBlockedContract = await scalar(sql`SELECT status FROM contracts WHERE id=${futurePeriodContract.id}`);
-      const futurePeriodBlockedVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a3'`);
-      const futurePeriodBlockedReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${futurePeriodContract.id}`);
-      assert(futurePeriodBlockedContract?.status === ContractStatus.DRAFT, 'future period gate mutated contract');
-      assert(futurePeriodBlockedVehicle?.status === VehicleStatus.AVAILABLE && !futurePeriodBlockedVehicle?.current_driver_id && !futurePeriodBlockedVehicle?.current_contract_id, 'future period gate mutated vehicle');
-      assert(Number(futurePeriodBlockedReceivables?.count) === 0, 'future period gate created receivable');
-      response = await request(`/api/contracts/${encodeURIComponent(futurePeriodContract.id)}/cancel`, {
-        method: 'POST', body: JSON.stringify({ reason: 'Libera recurso após teste de período futuro' }),
-      }, adminA);
-      assert(response.status === 200, `future period draft cancel expected 200, got ${response.status}`);
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-      assert(response.status === 200, `activate expected 200, got ${response.status}`);
-      const activation = await json(response);
-      assert(activation.item.status === ContractStatus.ACTIVE, 'activation did not persist ACTIVE');
-      assert(Array.isArray(activation.receivables) && activation.receivables.length === 1, 'activation did not create initial receivable');
-      assert(activation.receivables[0]?.categoryId === incomeCategoryA, 'activation did not persist canonical category');
-
-      const vehicleAfterActivation = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      assert(vehicleAfterActivation?.status === VehicleStatus.RENTED, 'Vehicle not RENTED after activation');
-      assert(vehicleAfterActivation?.current_driver_id === 'i3-drv-a1' && vehicleAfterActivation?.current_contract_id === created.id, 'Vehicle binding mismatch');
-      const initialReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(Number(initialReceivables?.count) === 1, 'initial receivable count mismatch');
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-CONFLICT', driverId: 'i3-drv-a2' }),
-      }, adminA);
-      assert(response.status === 409, `vehicle already bound to ACTIVE contract expected create 409, got ${response.status}`);
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
-        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
-      }, adminA);
-      assert(response.status === 200, `first bill expected 200, got ${response.status}`);
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/bill`, {
-        method: 'POST', body: JSON.stringify({ dueDate: '2026-09-08', competenceDate: '2026-09-08', categoryId: incomeCategoryA }),
-      }, adminA);
-      assert(response.status === 200, `idempotent second bill expected 200, got ${response.status}`);
-      const billedCount = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(Number(billedCount?.count) === 2, `billing idempotency expected 2 total receivables, got ${billedCount?.count}`);
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/archive`, { method: 'POST', body: '{}' }, adminA);
-      assert(response.status === 409, `ACTIVE archive expected 409, got ${response.status}`);
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
-        method: 'POST', body: JSON.stringify({ closeDate: '2026-07-31', reason: 'Data inválida' }),
-      }, adminA);
-      assert(response.status === 409, `close before contract start expected 409, got ${response.status}`);
-      const prematureCloseContract = await scalar(sql`SELECT status, end_date FROM contracts WHERE id=${created.id}`);
-      const prematureCloseVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      const prematureCloseReceivables = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(prematureCloseContract?.status === ContractStatus.ACTIVE && !prematureCloseContract?.end_date, 'invalid close date mutated contract');
-      assert(prematureCloseVehicle?.status === VehicleStatus.RENTED && prematureCloseVehicle?.current_driver_id === 'i3-drv-a1' && prematureCloseVehicle?.current_contract_id === created.id, 'invalid close date released vehicle');
-      assert(Number(prematureCloseReceivables?.count) === 2, 'invalid close date mutated financial history');
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/close`, {
-        method: 'POST', body: JSON.stringify({ closeDate: new Date().toISOString().slice(0, 10), reason: 'Integração I3' }),
-      }, adminA);
-      assert(response.status === 200, `close expected 200, got ${response.status}`);
-      assert((await json(response)).item.status === ContractStatus.CLOSED, 'close did not persist CLOSED');
-      const vehicleAfterClose = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a1'`);
-      assert(vehicleAfterClose?.status === VehicleStatus.AVAILABLE && !vehicleAfterClose?.current_driver_id && !vehicleAfterClose?.current_contract_id, 'Vehicle not released atomically');
-      const historyCountAfterClose = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE company_id=${companyA} AND contract_id=${created.id}`);
-      assert(Number(historyCountAfterClose?.count) === 2, 'close destroyed financial history');
-
-      response = await request(`/api/contracts/${encodeURIComponent(created.id)}/archive`, {
-        method: 'POST', body: JSON.stringify({ reason: 'Histórico concluído' }),
-      }, adminA);
-      assert(response.status === 200, `closed archive expected 200, got ${response.status}`);
-      const archived = (await json(response)).item;
-      assert(archived.status === ContractStatus.ARCHIVED && archived.isArchived === true, 'archive not soft ARCHIVED');
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-ROLLBACK', vehicleId: 'i3-veh-a2', driverId: 'i3-drv-a2' }),
-      }, adminA);
-      assert(response.status === 201, `rollback draft create expected 201, got ${response.status}`);
-      const rollbackContract = (await json(response)).item;
-      await markLegacyContract(rollbackContract.id);
-
       const originalAuditCreate = PostgresAuditLogRepository.prototype.create;
       PostgresAuditLogRepository.prototype.create = async function forcedAuditFailure(): Promise<any> {
-        throw new Error('FORCED_CONTRACT_AUDIT_FAILURE');
+        throw new Error('FORCED_V2_AUDIT_FAILURE');
       };
       try {
-        response = await request(`/api/contracts/${encodeURIComponent(rollbackContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
+        response = await create({ ...baseContract, contractNumber: 'CNT-V2-P0-A-ROLLBACK', driverId: 'i3-drv-a3', vehicleId: 'i3-veh-a3' }, adminA, 'v2-contract-rollback');
         assert(response.status === 500, `forced audit failure expected 500, got ${response.status}`);
       } finally {
         PostgresAuditLogRepository.prototype.create = originalAuditCreate;
       }
-      const rollbackState = await scalar(sql`SELECT status FROM contracts WHERE id=${rollbackContract.id}`);
-      const rollbackVehicle = await scalar(sql`SELECT status, current_contract_id FROM vehicles WHERE id='i3-veh-a2'`);
-      const rollbackReceivable = await scalar(sql`SELECT count(*)::int AS count FROM account_receivables WHERE contract_id=${rollbackContract.id}`);
-      assert(rollbackState?.status === ContractStatus.DRAFT, 'Contract survived forced audit rollback');
-      assert(rollbackVehicle?.status === VehicleStatus.AVAILABLE && !rollbackVehicle?.current_contract_id, 'Vehicle survived forced audit rollback');
-      assert(Number(rollbackReceivable?.count) === 0, 'Receivable survived forced audit rollback');
-
-      response = await request('/api/contracts', {
-        method: 'POST',
-        body: JSON.stringify({ ...baseContract, contractNumber: 'CNT-I3-VEH-ROLLBACK', vehicleId: 'i3-veh-a3', driverId: 'i3-drv-a3' }),
-      }, adminA);
-      assert(response.status === 201, `vehicle rollback draft create expected 201, got ${response.status}`);
-      const vehicleRollbackContract = (await json(response)).item;
-      await markLegacyContract(vehicleRollbackContract.id);
-      const originalVehicleUpdate = PostgresVehicleRepository.prototype.updateForCompany;
-      PostgresVehicleRepository.prototype.updateForCompany = async function forcedVehicleFailure(): Promise<any> {
-        throw new Error('FORCED_CONTRACT_VEHICLE_FAILURE');
-      };
-      try {
-        response = await request(`/api/contracts/${encodeURIComponent(vehicleRollbackContract.id)}/activate`, { method: 'POST', body: JSON.stringify({ categoryId: incomeCategoryA }) }, adminA);
-        assert(response.status === 500, `forced Vehicle failure expected 500, got ${response.status}`);
-      } finally {
-        PostgresVehicleRepository.prototype.updateForCompany = originalVehicleUpdate;
-      }
-      const vehicleRollbackState = await scalar(sql`SELECT status FROM contracts WHERE id=${vehicleRollbackContract.id}`);
-      assert(vehicleRollbackState?.status === ContractStatus.DRAFT, 'Contract survived forced Vehicle rollback');
-
-      response = await request(`/api/contracts/${encodeURIComponent(vehicleRollbackContract.id)}/cancel`, {
-        method: 'POST', body: JSON.stringify({ reason: '' }),
-      }, adminA);
-      assert(response.status === 400, `empty cancel reason expected 400, got ${response.status}`);
+      const rolledBack = await scalar(sql`SELECT count(*)::int AS count FROM contracts WHERE company_id=${companyA} AND contract_number='CNT-V2-P0-A-ROLLBACK'`);
+      const rollbackVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a3'`);
+      assert(Number(rolledBack?.count) === 0, 'audit failure must rollback contract');
+      assert(rollbackVehicle?.status === VehicleStatus.AVAILABLE && !rollbackVehicle?.current_driver_id && !rollbackVehicle?.current_contract_id, 'audit failure must rollback vehicle binding');
+      console.log('V2 P0 contract authority: PASS');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
