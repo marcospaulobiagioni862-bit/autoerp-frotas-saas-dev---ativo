@@ -241,9 +241,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                         <div className="flex justify-end gap-1.5 flex-wrap">
                           <Button size="sm" variant="ghost" title="Visualizar contrato" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4" /></Button>
                           {item.status === ContractStatus.DRAFT && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'OVERVIEW')}>Ativar / Categoria</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>PDF / Assinatura</Button>}
-                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" onClick={() => openContractDetails(item.id, 'FINANCIAL')}>Faturar / Categoria</Button>}
+                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>Documento / Assinatura</Button>}
                           {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
                           {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
                         </div>
