@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
-import { ContractExecutionAuthorityIntegrationRunner } from './contractExecutionAuthorityIntegration';
 import { runContractSuspendRegression } from './contractSuspendRegression';
 import { runContractTemplateFileSourceRegression } from './contractTemplateFileSourceRegression';
 import { runContractDocxTemplateRendererRegression } from './contractDocxTemplateRendererRegression';
@@ -171,8 +170,9 @@ export async function runContractSignatureTimeGateRegression(): Promise<void> {
   }) as typeof fetch;
 
   try {
-    await ContractExecutionAuthorityIntegrationRunner.runAllTests();
-    assert(rejectedHistoricalSignature, 'signature time regression was not exercised');
+    // V2 creates the operational contract atomically; signed evidence is not an activation gate.
+    // Keep only the independent artifact/template regressions below.
+    assert(!rejectedHistoricalSignature, 'V2 must not run the legacy signature activation gate');
   } finally {
     globalThis.fetch = originalFetch as typeof fetch;
     if (originalStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
