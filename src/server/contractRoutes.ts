@@ -355,6 +355,9 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
+        // V2 operational minimum: warnings about documents/insurance do not block creation.
+        if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
+        if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
         const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
         const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);
         if (vehicleBinding) throw new ContractConflictError('Vehicle already bound to another contract');
