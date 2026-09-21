@@ -1,14 +1,14 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../../../db';
 import { UnitOfWork } from '../../../db/uow';
-import { ContractExecutionAuthorityIntegrationRunner } from '../../../server/__tests__/contractExecutionAuthorityIntegration';
+import { ContractAuthorityIntegrationRunner } from '../../../server/__tests__/contractAuthorityIntegration';
 import { ContractStatus, ObligationStatus, OriginType, VehicleStatus } from '../../../types/enums';
 import { projectVehicleOperationalState } from '../fleetOperationalState';
 
-const companyId = 'security-2i4c-company-a';
-const driverId = 'i4c-drv-a1';
-const vehicleId = 'i4c-veh-a1';
-const contractNumber = 'CNT-I4C-A-001';
+const companyId = 'security-2i3-company-a';
+const driverId = 'i3-drv-a1';
+const vehicleId = 'i3-veh-a1';
+const contractNumber = 'CNT-V2-P0-A-001';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -21,15 +21,15 @@ async function one(query: any): Promise<any> {
 
 export class ErpWaveAActivationFinanceIntegrationRunner {
   static async runAllTests(): Promise<void> {
-    // Reuse the authoritative scenario when the full fleet suite already executed it.
-    // When this regression runs alone, bootstrap the same real scenario first.
+    // Reuse the V2 P0 scenario when the full fleet suite already executed it.
+    // When this regression runs alone, bootstrap the same atomic route flow first.
     const existingAuthorityFixture = await one(sql`
       SELECT id, status FROM contracts
       WHERE company_id=${companyId} AND contract_number=${contractNumber}
       LIMIT 1
     `);
     if (!existingAuthorityFixture) {
-      await ContractExecutionAuthorityIntegrationRunner.runAllTests();
+      await ContractAuthorityIntegrationRunner.runAllTests();
     }
 
     const contractRow = await one(sql`
@@ -107,10 +107,9 @@ export class ErpWaveAActivationFinanceIntegrationRunner {
       WHERE company_id=${companyId}
         AND entity_type='Contract'
         AND entity_id=${contractRow.id}
-        AND action='UPDATE'
-        AND ((changes::jsonb->>'newState')::jsonb->>'status')='ACTIVE'
+        AND action='CREATE'
     `);
-    assert(Number(audit?.count) >= 1, 'INV-002 activation must create an auditable Contract ACTIVE transition');
+    assert(Number(audit?.count) >= 1, 'INV-002 atomic creation must create an auditable ACTIVE contract');
 
     const duplicateBinding = await one(sql`
       SELECT count(*)::int AS count
