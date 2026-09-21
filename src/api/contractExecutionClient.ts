@@ -29,7 +29,7 @@ function validateArtifact(value: unknown): ContractArtifact {
 }
 
 function validateAttachment(value: unknown): FileAttachment {
-  const item = asApiRecord(value, 'contract execution');
+  const item = normalizeNumericFields(asApiRecord(value, 'contract execution contract'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.entityType !== 'string' ||
     typeof item.entityId !== 'string' || typeof item.fileName !== 'string' || typeof item.fileSize !== 'number' ||
