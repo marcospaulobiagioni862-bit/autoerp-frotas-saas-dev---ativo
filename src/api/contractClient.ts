@@ -51,7 +51,7 @@ function validateContract(value: unknown): Contract {
 }
 
 function validateReceivable(value: unknown): AccountReceivable {
-  const item = asRecord(value);
+  const item = normalizeNumericFields(asApiRecord(value, 'Contract receivable'), ['originalAmount', 'discountAmount', 'fineAmount', 'interestAmount', 'updatedAmount', 'paidAmount', 'balanceAmount']);
   if (
     typeof item.id !== 'string' ||
     typeof item.companyId !== 'string' ||
