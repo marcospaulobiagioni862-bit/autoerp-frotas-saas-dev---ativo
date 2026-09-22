@@ -62,13 +62,13 @@ assert.doesNotMatch(
 
 assert.match(source, /Ações do veículo/, 'vehicle cards must expose an explicit lifecycle action area');
 assert.match(source, /Histórico do veículo/, 'terminal vehicles must expose the read-only history action area');
-assert.match(source, />O histórico não será apagado\.</, 'lifecycle actions must explain history preservation');
+assert.doesNotMatch(source, /<span[^>]*>O histórico não será apagado\.<\/span>/, 'fleet cards must not repeat history-preservation copy on every row');
 assert.match(
   source,
   /handleStatusChangeClick\(vehicle, VehicleStatus\.INACTIVE\)/,
   'out-of-use action must reuse the authoritative INACTIVE status transition',
 );
-assert.match(source, />\s*Fora de uso\s*</, 'out-of-use action must be visible without the generic status selector');
+assert.match(source, />Colocar fora de uso<\/button>/, 'out-of-use action must remain available in the contextual actions menu');
 assert.match(
   source,
   /nextValue === '__SELL__'[\s\S]*setVehicleForSale\(vehicle\)/,
