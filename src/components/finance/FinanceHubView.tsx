@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote, ShieldAlert, Landmark } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
 const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
@@ -37,23 +37,17 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
 
   const subTabs = [
     { id: 'overview' as const, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'receivables' as const, label: 'Contas a Receber', icon: TrendingUp },
-    { id: 'payables' as const, label: 'Contas a Pagar', icon: CreditCard },
+    { id: 'receivables' as const, label: 'CR → Recebimento', icon: TrendingUp },
+    { id: 'payables' as const, label: 'Despesa → CP → Pagamento', icon: CreditCard },
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
-    { id: 'delinquency' as const, label: 'Inadimplência', icon: ShieldAlert },
-    { id: 'reconciliation' as const, label: 'Conciliação Bancária', icon: Landmark },
-    { id: 'cards' as const, label: 'Cartões / Faturas', icon: CreditCard },
-    { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
-    { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
-    { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
   ];
 
   return (
     <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Financeiro"
-        description="Contas, movimentações, períodos contábeis, fluxo de caixa e visão financeira consolidada"
+        description="Contas a receber, contas a pagar, movimentações e fluxo de caixa"
         breadcrumb="Gestão Financeira & Motor de Pagamentos"
       />
 
