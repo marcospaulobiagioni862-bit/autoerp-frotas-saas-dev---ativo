@@ -2,6 +2,10 @@ import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useState } from 'react';
 import type { AccountPayable, AccountReceivable, FinancialTransaction } from '../../types/entities';
 import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { ContractClient } from '../../api/contractClient';
+import { MaintenanceClient } from '../../api/maintenanceClient';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { Badge, Button, ModalContainer, Skeleton } from '../ui';
 
@@ -20,6 +24,41 @@ const currency = (value: number) =>
 const dateLabel = (value?: string) =>
   value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR') : '—';
 
+const statusLabel = (status: string): string => ({
+  PENDING: 'Em aberto',
+  PARTIALLY_PAID: 'Pago parcialmente',
+  PAID: 'Pago',
+  OVERDUE: 'Vencido',
+  CANCELLED: 'Cancelado',
+  RENEGOTIATED: 'Renegociado',
+  WRITTEN_OFF: 'Baixado',
+}[status] || status);
+
+const originLabel = (origin: string): string => ({
+  CONTRACT_RENT: 'Aluguel de contrato',
+  CONTRACT_FINE: 'Cobrança contratual',
+  KM_EXCESS: 'KM excedente',
+  SECURITY_DEPOSIT: 'Caução',
+  TRAFFIC_TICKET_DRIVER: 'Multa do motorista',
+  TRAFFIC_TICKET_COMPANY: 'Multa da empresa',
+  TRAFFIC_TICKET_NIC: 'Multa NIC',
+  MAINTENANCE: 'Manutenção',
+  INSURANCE: 'Seguro',
+  TRACKER: 'Rastreador',
+  DOCUMENTATION: 'Documentação',
+  FINANCING: 'Financiamento',
+  ADMINISTRATIVE: 'Administrativo',
+  MANUAL: 'Lançamento manual',
+  RENEGOTIATION: 'Renegociação',
+}[origin] || origin.replaceAll('_', ' '));
+
+const transactionTypeLabel = (type: string): string => ({
+  INCOME: 'Entrada',
+  EXPENSE: 'Saída',
+  TRANSFER: 'Transferência',
+  REVERSAL: 'Estorno',
+}[type] || type);
+
 export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetailsModalProps> = ({
   obligation,
   type,
@@ -28,6 +67,58 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [linkedEntities, setLinkedEntities] = useState<Array<[string, string]>>([]);
+
+  useEffect(() => {
+    let active = true;
+    if (!obligation) {
+      setLinkedEntities([]);
+      return () => { active = false; };
+    }
+
+    const tasks: Array<Promise<[string, string] | null>> = [];
+    if (obligation.driverId) {
+      tasks.push(DriverClient.list().then((items) => {
+        const item = items.find((entry) => entry.id === obligation.driverId);
+        return item ? ['Motorista', item.fullName] : null;
+      }));
+    }
+    if (obligation.vehicleId) {
+      tasks.push(VehicleClient.list().then((items) => {
+        const item = items.find((entry) => entry.id === obligation.vehicleId);
+        return item ? ['Veículo', `${item.plate} • ${item.brand} ${item.model}`] : null;
+      }));
+    }
+    if (obligation.contractId) {
+      tasks.push(ContractClient.list().then((items) => {
+        const item = items.find((entry) => entry.id === obligation.contractId);
+        return item ? ['Contrato', item.contractNumber] : null;
+      }));
+    }
+    const supplierId = 'supplierId' in obligation ? obligation.supplierId : undefined;
+    if (supplierId) {
+      tasks.push(MaintenanceClient.listSuppliers().then((items) => {
+        const item = items.find((entry) => entry.id === supplierId);
+        return item ? ['Fornecedor', item.name] : null;
+      }));
+    }
+
+    if (tasks.length === 0) {
+      setLinkedEntities([]);
+      return () => { active = false; };
+    }
+
+    void Promise.allSettled(tasks).then((results) => {
+      if (!active) return;
+      const resolved = results
+        .filter((result): result is PromiseFulfilledResult<[string, string] | null> => result.status === 'fulfilled')
+        .map((result) => result.value)
+        .filter((item): item is [string, string] => Boolean(item));
+      setLinkedEntities(resolved);
+    });
+
+    return () => { active = false; };
+  }, [obligation]);
 
   useEffect(() => {
     let active = true;
@@ -81,13 +172,6 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
     ['Saldo atual', obligation.balanceAmount],
   ] as const;
 
-  const linkedEntities = [
-    ['Motorista', obligation.driverId],
-    ['Veículo', obligation.vehicleId],
-    ['Contrato', obligation.contractId],
-    ['Fornecedor', 'supplierId' in obligation ? obligation.supplierId : undefined],
-  ].filter((entry): entry is [string, string] => Boolean(entry[1]));
-
   return (
     <ModalContainer
       isOpen={Boolean(obligation)}
@@ -103,24 +187,24 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
               <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {obligation.description}
               </h3>
-              <p className="text-[11px] font-mono text-slate-500">ID: {obligation.id}</p>
+              <p className="text-[11px] text-slate-500">{type === 'RECEIVABLE' ? 'Cobrança' : 'Obrigação'} financeira</p>
             </div>
             <Badge variant={obligation.status === 'PAID' ? 'success' : obligation.status === 'CANCELLED' ? 'neutral' : 'warning'}>
-              {obligation.status}
+              {statusLabel(String(obligation.status))}
             </Badge>
           </div>
           <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50 sm:grid-cols-4">
             <div><dt className="text-slate-500">Vencimento</dt><dd className="font-semibold">{dateLabel(obligation.dueDate)}</dd></div>
             <div><dt className="text-slate-500">Competência</dt><dd className="font-semibold">{dateLabel(obligation.competenceDate)}</dd></div>
-            <div><dt className="text-slate-500">Origem</dt><dd className="font-semibold">{obligation.originType}</dd></div>
-            <div><dt className="text-slate-500">ID da origem</dt><dd className="truncate font-mono">{obligation.originId}</dd></div>
+            <div><dt className="text-slate-500">Origem</dt><dd className="font-semibold">{originLabel(String(obligation.originType))}</dd></div>
+            <div><dt className="text-slate-500">Parcela</dt><dd className="font-semibold">{obligation.installmentNumber && obligation.totalInstallments ? `${obligation.installmentNumber}/${obligation.totalInstallments}` : 'Única'}</dd></div>
           </dl>
           {linkedEntities.length > 0 && (
             <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
               {linkedEntities.map(([label, value]) => (
                 <div key={label} className="flex gap-2">
                   <dt className="text-slate-500">{label}:</dt>
-                  <dd className="font-mono text-slate-700 dark:text-slate-300">{value}</dd>
+                  <dd className="font-semibold text-slate-700 dark:text-slate-300">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -163,15 +247,13 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
                       <td className="p-3 font-mono">{dateLabel(transaction.transactionDate)}</td>
                       <td className="p-3">
                         <Badge variant={transaction.type === 'REVERSAL' || transaction.isReversed ? 'warning' : 'neutral'}>
-                          {transaction.type}
+                          {transactionTypeLabel(String(transaction.type))}
                         </Badge>
-                        {transaction.isReversed && <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-400">ESTORNADA</span>}
+                        {transaction.isReversed && <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-400">Estornada</span>}
                       </td>
                       <td className="p-3">
                         <div>{transaction.description}</div>
-                        <div className="text-[10px] font-mono text-slate-400">
-                          {transaction.id}{transaction.reversalTransactionId ? ` • vínculo: ${transaction.reversalTransactionId}` : ''}
-                        </div>
+                        {transaction.reversalTransactionId && <div className="text-[10px] text-slate-400">Estorno relacionado</div>}
                       </td>
                       <td className="p-3 text-right font-mono font-semibold tabular-nums">{currency(transaction.amount)}</td>
                     </tr>
