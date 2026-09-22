@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, Building2, Sun, Moon, Menu } from 'lucide-react';
+import { Building2, Sun, Moon, Menu } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
 import type { NotificationItem } from '../../api/notificationClient';
@@ -38,8 +38,6 @@ function roleLabel(role: string): string {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  testStatus,
-  onOpenTestRunner,
   onToggleMobileSidebar,
   onResolveNotification,
 }) => {
@@ -70,12 +68,6 @@ export const Header: React.FC<HeaderProps> = ({
       setIsDark(true);
     }
   };
-
-  const gateClasses = !testStatus
-    ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800'
-    : testStatus.failed === 0
-      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
-      : 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800';
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
@@ -118,22 +110,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <button
-          onClick={onOpenTestRunner}
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 ${gateClasses}`}
-          title="Abrir informações sobre os gates técnicos autoritativos"
-        >
-          <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="hidden md:inline">
-            <strong className="font-bold">
-              {testStatus ? `${testStatus.passed}/${testStatus.total} Testes OK` : 'Gates: GitHub Actions'}
-            </strong>
-          </span>
-          <span className="md:hidden font-bold">
-            {testStatus ? `${testStatus.passed}/${testStatus.total}` : 'CI'}
-          </span>
-        </button>
-
         <NotificationBell onResolve={onResolveNotification} />
 
         <button
