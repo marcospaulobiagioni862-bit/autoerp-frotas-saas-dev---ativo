@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Button } from '../ui';
-import { TrendingUp, CreditCard, ArrowRightLeft, PieChart, ShieldAlert, ArrowRight, Wallet } from 'lucide-react';
+import { Card } from '../ui';
+import { TrendingUp, CreditCard, ArrowRight, Wallet, AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { FinanceOverviewClient } from '../../api/financeOverviewClient';
+import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { FinanceTransactionClient } from '../../api/financeTransactionClient';
+import { ObligationStatus, TransactionType } from '../../types/enums';
 
 interface FinanceOverviewViewProps {
   onSelectSubTab: (tab: 'overview' | 'receivables' | 'payables' | 'transactions' | 'dre') => void;
@@ -12,159 +15,118 @@ export const FinanceOverviewView: React.FC<FinanceOverviewViewProps> = ({ onSele
   const [totalReceivable, setTotalReceivable] = useState(0);
   const [totalPayable, setTotalPayable] = useState(0);
   const [totalBalance, setTotalBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [receivableCount, setReceivableCount] = useState(0);
+  const [payableCount, setPayableCount] = useState(0);
+  const [overdueReceivable, setOverdueReceivable] = useState(0);
+  const [overduePayable, setOverduePayable] = useState(0);
+  const [receivedInPeriod, setReceivedInPeriod] = useState(0);
+  const [paidInPeriod, setPaidInPeriod] = useState(0);
 
   useEffect(() => {
-    loadSummary();
+    void loadSummary();
   }, []);
 
   const loadSummary = async () => {
     try {
-      const summary = await FinanceOverviewClient.getOverview();
+      const [summary, receivables, payables, transactions] = await Promise.all([
+        FinanceOverviewClient.getOverview(),
+        FinanceObligationClient.listReceivables(),
+        FinanceObligationClient.listPayables(),
+        FinanceTransactionClient.listTransactions(),
+      ]);
+      const today = new Date().toISOString().slice(0, 10);
+      const currentMonth = today.slice(0, 7);
+      const openStatuses = new Set([ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE]);
+      const openReceivables = receivables.filter((item) => openStatuses.has(item.status) && item.balanceAmount > 0);
+      const openPayables = payables.filter((item) => openStatuses.has(item.status) && item.balanceAmount > 0);
+
       setTotalReceivable(summary.totalReceivable);
       setTotalPayable(summary.totalPayable);
       setTotalBalance(summary.totalBalance);
+      setReceivableCount(openReceivables.length);
+      setPayableCount(openPayables.length);
+      setOverdueReceivable(openReceivables.filter((item) => item.dueDate < today).reduce((sum, item) => sum + item.balanceAmount, 0));
+      setOverduePayable(openPayables.filter((item) => item.dueDate < today).reduce((sum, item) => sum + item.balanceAmount, 0));
+      setReceivedInPeriod(transactions
+        .filter((item) => !item.isReversed && item.type === TransactionType.INCOME && item.transactionDate.startsWith(currentMonth))
+        .reduce((sum, item) => sum + item.amount, 0));
+      setPaidInPeriod(transactions
+        .filter((item) => !item.isReversed && item.type === TransactionType.EXPENSE && item.transactionDate.startsWith(currentMonth))
+        .reduce((sum, item) => sum + item.amount, 0));
     } catch (err) {
       console.error('Erro ao carregar resumo financeiro:', err);
       setTotalReceivable(0);
       setTotalPayable(0);
       setTotalBalance(0);
-    } finally {
-      setLoading(false);
+      setReceivableCount(0);
+      setPayableCount(0);
+      setOverdueReceivable(0);
+      setOverduePayable(0);
+      setReceivedInPeriod(0);
+      setPaidInPeriod(0);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card padding="md" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Saldo Consolidado Bancário</span>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">
-                {formatCurrencyBRL(totalBalance)}
-              </h3>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Saldo disponível</span>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{formatCurrencyBRL(totalBalance)}</h3>
             </div>
-            <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400">
-              <Wallet className="w-6 h-6" />
-            </div>
+            <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400"><Wallet className="w-6 h-6" /></div>
           </div>
           <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Contas Correntes & Caixas</span>
-            <button
-              onClick={() => onSelectSubTab('transactions')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-            >
-              Ver Movimentações <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <span className="text-xs text-slate-500">Contas e caixas cadastrados</span>
+            <button onClick={() => onSelectSubTab('transactions')} className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">Movimentações <ArrowRight className="w-3.5 h-3.5" /></button>
           </div>
         </Card>
 
         <Card padding="md" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">Contas a Receber (Pendente)</span>
-              <h3 className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-1 font-mono">
-                {formatCurrencyBRL(totalReceivable)}
-              </h3>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">CR em aberto</span>
+              <h3 className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-1 font-mono">{formatCurrencyBRL(totalReceivable)}</h3>
+              <span className="mt-1 block text-[11px] text-slate-500">{receivableCount} título(s) em aberto</span>
             </div>
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-6 h-6" />
-            </div>
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"><TrendingUp className="w-6 h-6" /></div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Aluguéis & Taxas a liquidar</span>
-            <button
-              onClick={() => onSelectSubTab('receivables')}
-              className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-            >
-              Gerenciar Recebíveis <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button onClick={() => onSelectSubTab('receivables')} className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 w-full text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center justify-between">CR → Recebimento <ArrowRight className="w-3.5 h-3.5" /></button>
         </Card>
 
         <Card padding="md" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">Contas a Pagar (Pendente)</span>
-              <h3 className="text-2xl font-black text-amber-700 dark:text-amber-300 mt-1 font-mono">
-                {formatCurrencyBRL(totalPayable)}
-              </h3>
+              <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">CP em aberto</span>
+              <h3 className="text-2xl font-black text-amber-700 dark:text-amber-300 mt-1 font-mono">{formatCurrencyBRL(totalPayable)}</h3>
+              <span className="mt-1 block text-[11px] text-slate-500">{payableCount} título(s) em aberto</span>
             </div>
-            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
-              <CreditCard className="w-6 h-6" />
-            </div>
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400"><CreditCard className="w-6 h-6" /></div>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Fornecedores, Manutenção & Despesas</span>
-            <button
-              onClick={() => onSelectSubTab('payables')}
-              className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"
-            >
-              Gerenciar Pagáveis <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          <button onClick={() => onSelectSubTab('payables')} className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 w-full text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center justify-between">Despesa → CP → Pagamento <ArrowRight className="w-3.5 h-3.5" /></button>
+        </Card>
+
+        <Card padding="md" className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-3">
+              <div><span className="text-[11px] font-semibold uppercase text-slate-500">CR vencido</span><p className="font-mono font-black text-rose-600">{formatCurrencyBRL(overdueReceivable)}</p></div>
+              <div><span className="text-[11px] font-semibold uppercase text-slate-500">CP vencido</span><p className="font-mono font-black text-rose-600">{formatCurrencyBRL(overduePayable)}</p></div>
+            </div>
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600 dark:text-rose-400"><AlertTriangle className="w-6 h-6" /></div>
           </div>
         </Card>
       </div>
 
-      {/* Quick Navigation Cards */}
-      <Card padding="md" className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Módulos de Gestão Financeira</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div
-            onClick={() => onSelectSubTab('receivables')}
-            className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group bg-slate-50/50 dark:bg-slate-950/50"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-              <h4 className="font-semibold text-sm text-slate-900 dark:text-white group-hover:text-blue-600">Contas a Receber</h4>
-            </div>
-            <p className="text-xs text-slate-500">Controle de recebimentos de faturas, baixas parciais e inadimplência.</p>
-          </div>
-
-          <div
-            onClick={() => onSelectSubTab('payables')}
-            className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group bg-slate-50/50 dark:bg-slate-950/50"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-600">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <h4 className="font-semibold text-sm text-slate-900 dark:text-white group-hover:text-blue-600">Contas a Pagar</h4>
-            </div>
-            <p className="text-xs text-slate-500">Gestão de obrigações, pagamentos a fornecedores e centros de custo.</p>
-          </div>
-
-          <div
-            onClick={() => onSelectSubTab('transactions')}
-            className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group bg-slate-50/50 dark:bg-slate-950/50"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600">
-                <ArrowRightLeft className="w-5 h-5" />
-              </div>
-              <h4 className="font-semibold text-sm text-slate-900 dark:text-white group-hover:text-blue-600">Movimentações & Caixa</h4>
-            </div>
-            <p className="text-xs text-slate-500">Fluxo de caixa, transferências entre contas e extrato consolidado.</p>
-          </div>
-
-          <div
-            onClick={() => onSelectSubTab('dre')}
-            className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all cursor-pointer group bg-slate-50/50 dark:bg-slate-950/50"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600">
-                <PieChart className="w-5 h-5" />
-              </div>
-              <h4 className="font-semibold text-sm text-slate-900 dark:text-white group-hover:text-blue-600">DRE / Relatórios</h4>
-            </div>
-            <p className="text-xs text-slate-500">Demonstrativo do resultado do exercício e relatórios gerenciais.</p>
-          </div>
-        </div>
-      </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card padding="sm">
+          <div className="flex items-center justify-between"><div><span className="text-[11px] font-semibold uppercase text-slate-500">Recebido no mês</span><p className="mt-1 font-mono text-lg font-black text-emerald-700 dark:text-emerald-300">{formatCurrencyBRL(receivedInPeriod)}</p></div><CircleDollarSign className="w-5 h-5 text-emerald-600" /></div>
+        </Card>
+        <Card padding="sm">
+          <div className="flex items-center justify-between"><div><span className="text-[11px] font-semibold uppercase text-slate-500">Pago no mês</span><p className="mt-1 font-mono text-lg font-black text-amber-700 dark:text-amber-300">{formatCurrencyBRL(paidInPeriod)}</p></div><CircleDollarSign className="w-5 h-5 text-amber-600" /></div>
+        </Card>
+      </div>
     </div>
   );
 };
