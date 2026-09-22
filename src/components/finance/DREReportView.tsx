@@ -152,6 +152,7 @@ export const DREReportView: React.FC = () => {
           <button type="button" onClick={() => applyPreset('YEAR')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Ano atual</button>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs">
+          <span className="font-semibold text-slate-500">Personalizado</span>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             <span className="font-semibold text-slate-700 dark:text-slate-300">Período de Análise:</span>

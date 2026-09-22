@@ -195,7 +195,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
             <div className="lg:col-span-2">
               <Input
                 type="text"
-                placeholder="Buscar descrição ou qualquer vínculo..."
+                placeholder="Buscar descrição ou origem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 icon={<Search className="w-4 h-4 text-slate-400" />}

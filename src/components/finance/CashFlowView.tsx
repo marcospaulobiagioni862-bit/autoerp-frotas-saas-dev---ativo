@@ -96,6 +96,7 @@ export const CashFlowView: React.FC = () => {
             <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">90 dias</button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="font-semibold text-slate-500">Personalizado</span>
             <CalendarRange className="w-4 h-4 text-slate-400" />
             <label className="text-slate-500">De</label>
             <input
@@ -159,7 +160,7 @@ export const CashFlowView: React.FC = () => {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">A receber no período</span>
               <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-emerald-700 dark:text-emerald-400'}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
@@ -171,6 +172,10 @@ export const CashFlowView: React.FC = () => {
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-600">Saldo projetado</span>
               <strong className="mt-1 block font-mono text-lg text-blue-700 dark:text-blue-300">{formatCurrencyBRL(projectedClosing)}</strong>
+            </Card>
+            <Card padding="sm">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Resultado projetado</span>
+              <strong className="mt-1 block font-mono text-lg text-slate-900 dark:text-slate-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
             </Card>
           </div>
 
