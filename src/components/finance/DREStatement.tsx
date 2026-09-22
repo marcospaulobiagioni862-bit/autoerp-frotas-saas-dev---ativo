@@ -29,7 +29,7 @@ export function DREStatement({ report: dreReport }: { report: DREReport }) {
           <div className="pl-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-400 border-l-2 border-indigo-200 dark:border-indigo-800">
             <div className="flex justify-between"><span>Manutenções & Peças:</span><span className="font-mono">R$ {(dreReport.breakdown?.maintenanceCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
             <div className="flex justify-between"><span>Seguros da Frota:</span><span className="font-mono">R$ {(dreReport.breakdown?.insuranceCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-            <div className="flex justify-between"><span>Rastreamento & Telemetria:</span><span className="font-mono">R$ {(dreReport.breakdown?.trackerCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between"><span>Rastreamento:</span><span className="font-mono">R$ {(dreReport.breakdown?.trackerCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
             <div className="flex justify-between"><span>Multas de Trânsito:</span><span className="font-mono">R$ {(dreReport.breakdown?.trafficTicketCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
             <div className="flex justify-between"><span>Outros custos e despesas:</span><span className="font-mono">R$ {(dreReport.breakdown?.otherCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
           </div>
