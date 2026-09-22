@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { FinancialTransaction } from '../../types/entities';
+import type { FinancialTransaction } from '../../types/entities';
+import { formatDateBR } from '../../shared/utils/date';
 import { TransactionType } from '../../types/enums';
 import {
   FinanceTransactionClient,
@@ -23,6 +24,27 @@ import {
 
 interface TransactionsViewProps {
   onOpenTransferModal: () => void;
+}
+
+function transactionTypeLabel(type: TransactionType): string {
+  switch (type) {
+    case TransactionType.INCOME: return 'Entrada';
+    case TransactionType.EXPENSE: return 'Saída';
+    case TransactionType.TRANSFER: return 'Transferência';
+    case TransactionType.REVERSAL: return 'Estorno';
+    default: return String(type);
+  }
+}
+
+function accountTypeLabel(type: string): string {
+  switch (type) {
+    case 'CASH': return 'Caixa';
+    case 'BANK': return 'Banco';
+    case 'DIGITAL_ACCOUNT': return 'Conta digital';
+    case 'CREDIT_CARD': return 'Cartão';
+    case 'INVESTMENT': return 'Investimento';
+    default: return 'Conta';
+  }
 }
 
 export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransferModal }) => {
@@ -111,20 +133,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <ArrowRightLeft className="w-6 h-6 text-blue-600" />
-            Extrato Unificado & Contas Financeiras
+            Movimentações
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Eventos financeiros efetivamente realizados (INCOME, EXPENSE, TRANSFER, REVERSAL).
+            Entradas, saídas, transferências e estornos efetivamente realizados.
           </p>
         </div>
 
         <Button
           onClick={onOpenTransferModal}
-          variant="primary"
+          variant="secondary"
           size="sm"
           icon={<ArrowRightLeft className="w-4 h-4" />}
         >
-          Transferência Entre Contas
+          Transferência entre contas
         </Button>
       </div>
 
@@ -146,7 +168,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                    {acc.name} ({acc.type})
+                    {acc.name} • {accountTypeLabel(acc.type)}
                   </span>
                   <h3
                     className={`text-xl font-black mt-1 font-mono tabular-nums ${
@@ -194,7 +216,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
               onChange={(e) => setLinkFilter(e.target.value as TransactionLinkFilter)}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
             >
-              <option value="ALL">Todos os vínculos</option>
+              <option value="ALL">Todos os vínculos financeiros</option>
               <option value="RECEIVABLE">Contas a receber</option>
               <option value="PAYABLE">Contas a pagar</option>
               <option value="UNLINKED">Sem título vinculado</option>
@@ -217,7 +239,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
-                  {type === 'ALL' ? 'Todos' : type}
+                  {type === 'ALL' ? 'Todos' : transactionTypeLabel(type as TransactionType)}
                 </button>
               ))}
             </div>
@@ -247,11 +269,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                 <tr>
-                  <th className="p-3.5">Data / ID</th>
-                  <th className="p-3.5">Descrição / Regime</th>
+                  <th className="p-3.5">Data</th>
+                  <th className="p-3.5">Descrição / Origem</th>
                   <th className="p-3.5">Tipo</th>
                   <th className="p-3.5 text-right">Valor (R$)</th>
-                  <th className="p-3.5 text-center">Estornado?</th>
+                  <th className="p-3.5 text-center">Situação</th>
                   <th className="p-3.5 text-right">Ação</th>
                 </tr>
               </thead>
@@ -270,19 +292,16 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                       }`}
                     >
                       <td className="p-3.5">
-                        <div className="font-mono tabular-nums font-semibold">{tx.transactionDate}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{tx.id}</div>
+                        <div className="font-mono tabular-nums font-semibold">{formatDateBR(tx.transactionDate)}</div>
                       </td>
                       <td className="p-3.5">
                         <div className="font-semibold text-slate-900 dark:text-slate-100">{tx.description}</div>
                         <div className="text-[10px] text-slate-400">
-                          Competência: {tx.competenceDate} • Conta: {tx.financialAccountId}
+                          Competência: {formatDateBR(tx.competenceDate)} • Conta: {accounts.find((account) => account.id === tx.financialAccountId)?.name || 'Conta não identificada'}
+                          {isTransfer && tx.destinationAccountId ? ` → ${accounts.find((account) => account.id === tx.destinationAccountId)?.name || 'Conta destino'}` : ''}
                         </div>
-                        <div className="text-[10px] font-mono text-slate-400">
-                          {tx.receivableId && <>AR: {tx.receivableId}</>}
-                          {tx.payableId && <>AP: {tx.payableId}</>}
-                          {!tx.receivableId && !tx.payableId && <>Sem título vinculado</>}
-                          {tx.reversalTransactionId && <> • Estorno: {tx.reversalTransactionId}</>}
+                        <div className="text-[10px] text-slate-400">
+                          {tx.receivableId ? 'Origem: Conta a receber' : tx.payableId ? 'Origem: Conta a pagar' : isTransfer ? 'Origem: Transferência interna' : isReversal ? 'Origem: Estorno' : 'Origem: Movimento avulso'}
                         </div>
                       </td>
                       <td className="p-3.5">
@@ -297,7 +316,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                               : 'warning'
                           }
                         >
-                          {tx.type}
+                          {transactionTypeLabel(tx.type)}
                         </Badge>
                       </td>
                       <td
@@ -313,11 +332,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                         {tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-3.5 text-center">
-                        {tx.isReversed ? (
-                          <span className="text-red-600 dark:text-red-400 font-bold text-[10px]">SIM</span>
-                        ) : (
-                          <span className="text-slate-400 text-[10px]">NÃO</span>
-                        )}
+                        <Badge variant={tx.isReversed ? 'danger' : 'success'}>{tx.isReversed ? 'Estornada' : 'Efetivada'}</Badge>
                       </td>
                       <td className="p-3.5 text-right">
                         {!tx.isReversed && !isReversal && (
