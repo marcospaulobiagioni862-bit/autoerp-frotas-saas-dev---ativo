@@ -30,6 +30,7 @@ export const FleetManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<'PLATE' | 'MODEL' | 'KM' | 'STATUS'>('PLATE');
   const [loading, setLoading] = useState<boolean>(true);
 
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -79,6 +80,11 @@ export const FleetManagement: React.FC = () => {
     const matchesStatus = vehicleMatchesStatusFilter(v.status, statusFilter);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
+  }).sort((a, b) => {
+    if (sortOption === 'MODEL') return `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`, 'pt-BR');
+    if (sortOption === 'KM') return a.currentKm - b.currentKm;
+    if (sortOption === 'STATUS') return vehicleStatusLabel(a.status).localeCompare(vehicleStatusLabel(b.status), 'pt-BR');
+    return a.plate.localeCompare(b.plate, 'pt-BR');
   });
 
   const totalCount = vehicles.length;
@@ -179,6 +185,14 @@ export const FleetManagement: React.FC = () => {
             ))}
             <div className="w-52 shrink-0">
               <Select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} options={[{ value: 'ALL', label: 'Todas as categorias' }, ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))]}/>
+            </div>
+            <div className="w-44 shrink-0">
+              <Select aria-label="Ordenar veículos" value={sortOption} onChange={(event) => setSortOption(event.target.value as typeof sortOption)} options={[
+                { value: 'PLATE', label: 'Ordenar: placa' },
+                { value: 'MODEL', label: 'Ordenar: modelo' },
+                { value: 'KM', label: 'Ordenar: KM' },
+                { value: 'STATUS', label: 'Ordenar: status' },
+              ]}/>
             </div>
           </div>
         </div>
