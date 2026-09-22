@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote, PieChart } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
 const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
@@ -37,18 +37,19 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
 
   const subTabs = [
     { id: 'overview' as const, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'receivables' as const, label: 'CR → Recebimento', icon: TrendingUp },
-    { id: 'payables' as const, label: 'Despesa → CP → Pagamento', icon: CreditCard },
+    { id: 'receivables' as const, label: 'Contas a Receber', icon: TrendingUp },
+    { id: 'payables' as const, label: 'Contas a Pagar', icon: CreditCard },
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
+    { id: 'dre' as const, label: 'Relatórios / Rentabilidade', icon: PieChart },
   ];
 
   return (
     <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Financeiro"
-        description="Contas a receber, contas a pagar, movimentações e fluxo de caixa"
-        breadcrumb="Gestão Financeira & Motor de Pagamentos"
+        description="Contas a receber e pagar, movimentações, fluxo de caixa e relatórios"
+        breadcrumb="Financeiro"
       />
 
       <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
