@@ -76,6 +76,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<'NAME' | 'CNH_EXPIRY' | 'STATUS'>('NAME');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [isCnhIntakeOpen, setIsCnhIntakeOpen] = useState(false);
@@ -162,8 +163,12 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
       if (statusFilter === 'WITH_VEHICLE') return !!driver.currentVehicleId;
       if (statusFilter === 'WITHOUT_VEHICLE') return !driver.currentVehicleId;
       return true;
+    }).sort((a, b) => {
+      if (sortOption === 'CNH_EXPIRY') return a.cnhExpiration.localeCompare(b.cnhExpiration);
+      if (sortOption === 'STATUS') return String(a.status).localeCompare(String(b.status), 'pt-BR');
+      return a.fullName.localeCompare(b.fullName, 'pt-BR');
     });
-  }, [drivers, searchTerm, statusFilter]);
+  }, [drivers, searchTerm, statusFilter, sortOption]);
 
   const handleOpenCreate = () => {
     setEditingDriver(null);
@@ -333,6 +338,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             <option value="CNH_EXPIRED">CNH Vencida</option>
             <option value="WITH_VEHICLE">Com Veículo Alocado</option>
             <option value="WITHOUT_VEHICLE">Sem Veículo Alocado</option>
+          </Select>
+        </div>
+        <div className="w-full sm:w-52">
+          <Select value={sortOption} onChange={(event) => setSortOption(event.target.value as typeof sortOption)}>
+            <option value="NAME">Ordenar: nome</option>
+            <option value="CNH_EXPIRY">Ordenar: validade CNH</option>
+            <option value="STATUS">Ordenar: status</option>
           </Select>
         </div>
       </Card>
