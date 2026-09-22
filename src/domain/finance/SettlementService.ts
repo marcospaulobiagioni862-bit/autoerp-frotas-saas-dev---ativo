@@ -13,6 +13,7 @@ import { AuditLogger } from '../../shared/utils/auditLogger';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { resolveAuthoritativeTrafficTicketDiscount } from './TrafficTicketSettlementDiscount';
+import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from './payableInstallmentOrder';
 
 export interface SettlementParams {
   companyId: string;
@@ -56,7 +57,7 @@ export class SettlementService {
       !txContext.findFinancialAccountByIdWithLock ||
       !txContext.findFinancialTransactionByIdempotencyKey ||
       (kind === 'RECEIVABLE' && !txContext.findReceivableByIdWithLock) ||
-      (kind === 'PAYABLE' && !txContext.findPayableByIdWithLock)
+      (kind === 'PAYABLE' && (!txContext.findPayableByIdWithLock || !txContext.findPreviousPayableInstallmentsForUpdate))
     ) {
       throw new Error('Autoridade transacional de liquidação indisponível');
     }
@@ -330,13 +331,21 @@ export class SettlementService {
       }
     }
 
-    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
-    await this.getLockedAccount(params, txContext);
-    await this.validatePaymentMethod(params, txContext);
-
     if (payable.status === ObligationStatus.PAID || payable.status === ObligationStatus.CANCELLED) {
       throw new Error(`Título em status ${payable.status} não aceita pagamento`);
     }
+
+    if (payable.installmentGroupId && payable.installmentNumber && payable.installmentNumber > 1) {
+      const previous = txContext
+        ? await txContext.findPreviousPayableInstallmentsForUpdate!(payable.installmentGroupId, payable.installmentNumber)
+        : await this.payableRepo.findAllForCompany(params.companyId);
+      const blocking = firstUnpaidPreviousInstallment(payable, previous);
+      if (blocking) throw new Error(payableInstallmentOrderMessage(blocking));
+    }
+
+    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
+    await this.getLockedAccount(params, txContext);
+    await this.validatePaymentMethod(params, txContext);
 
     const fine = params.fineAmount || 0;
     const interest = params.interestAmount || 0;

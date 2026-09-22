@@ -14,6 +14,7 @@ import { AttachmentModal } from '../documents/AttachmentModal';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { FolderOpen } from 'lucide-react';
 import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog } from '../ui';
+import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from '../../domain/finance/payableInstallmentOrder';
 
 interface PayablesViewProps {
   onOpenPaymentModal: (payable: AccountPayable) => void;
@@ -310,6 +311,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                 )}
                 {filtered.map((item) => {
                   const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
+                  const blockingInstallment = firstUnpaidPreviousInstallment(item, payables);
                   const isPaid = item.status === ObligationStatus.PAID;
                   const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < today;
                   const supplierName = item.supplierId ? suppliers.find((entry) => entry.id === item.supplierId)?.name : undefined;
@@ -365,10 +367,13 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                       </td>
                       <td className="p-3.5 text-right">
                         <div className="flex justify-end gap-2">
-                          {isPending && (
+                          {isPending && !blockingInstallment && (
                             <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(item)} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold">
                               Pagar
                             </Button>
+                          )}
+                          {isPending && blockingInstallment && (
+                            <span className="text-xs font-semibold text-amber-700" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
                           )}
                           <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>Detalhes</Button>
                           {isPending && (

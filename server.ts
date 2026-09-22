@@ -86,6 +86,10 @@ function sendFinanceCommandError(res: Response, error: unknown): void {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
+  if (message.startsWith('Quite primeiro a parcela ')) {
+    res.status(409).json({ error: message, code: 'PAYABLE_INSTALLMENT_ORDER' });
+    return;
+  }
   if (message.includes('não encontrada') || message.includes('não encontrado')) {
     res.status(404).json({ error: 'Not found' });
     return;

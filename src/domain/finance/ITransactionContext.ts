@@ -249,6 +249,8 @@ export interface ITransactionContext {
   findReceivableByIdWithLock?(id: string): Promise<AccountReceivable | null>;
   /** Server-only settlement capability: tenant-scoped row lock for Accounts Payable. */
   findPayableByIdWithLock?(id: string): Promise<AccountPayable | null>;
+  /** Tenant-scoped row locks on earlier installments, ordered before settlement. */
+  findPreviousPayableInstallmentsForUpdate?(groupId: string, installmentNumber: number): Promise<AccountPayable[]>;
   /** Server-only settlement/reversal capability: tenant-scoped row lock for Financial Accounts. */
   findFinancialAccountByIdWithLock?(id: string): Promise<FinancialAccount | null>;
   /** Server-only reversal capability: tenant-scoped row lock for the original Financial Transaction. */

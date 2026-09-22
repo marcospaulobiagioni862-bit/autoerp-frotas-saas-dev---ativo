@@ -33,7 +33,7 @@ import {
   financialAccounts,
   financialTransactions,
 } from './schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 
 export interface UnitOfWorkOptions {
   financialPeriodLock?: 'SHARED' | 'EXCLUSIVE';
@@ -102,6 +102,11 @@ export class UnitOfWork {
             .where(and(eq(accountPayables.companyId,companyId),eq(accountPayables.id,id)))
             .for('update').limit(1);
           return rows[0]||null;
+        },
+        findPreviousPayableInstallmentsForUpdate:async(groupId:string,installmentNumber:number)=>{
+          return await tx.select().from(accountPayables)
+            .where(and(eq(accountPayables.companyId,companyId),eq(accountPayables.installmentGroupId,groupId),lt(accountPayables.installmentNumber,installmentNumber)))
+            .orderBy(accountPayables.installmentNumber).for('update');
         },
         findFinancialAccountByIdWithLock:async(id:string)=>{
           const rows=await tx.select().from(financialAccounts)
