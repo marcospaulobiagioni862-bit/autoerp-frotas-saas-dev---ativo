@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote, PieChart } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote, PieChart, Settings } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
 const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
@@ -42,6 +42,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
     { id: 'dre' as const, label: 'Relatórios / Rentabilidade', icon: PieChart },
+    { id: 'settings' as const, label: 'Configurações', icon: Settings },
   ];
 
   return (
