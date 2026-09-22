@@ -49,7 +49,8 @@ const view = fs.readFileSync('src/components/finance/TransactionsView.tsx', 'utf
 assert.match(view, /filterFinancialTransactions\(transactions, filters\)/);
 assert.match(view, /setAccountFilter\('ALL'\)/);
 assert.match(view, /setLinkFilter\('ALL'\)/);
-assert.match(view, /AR: \{tx\.receivableId\}/);
-assert.match(view, /AP: \{tx\.payableId\}/);
+assert.match(view, /Origem: Conta a receber/);
+assert.match(view, /Origem: Conta a pagar/);
+assert.doesNotMatch(view, /AR: \{tx\.receivableId\}|AP: \{tx\.payableId\}/);
 assert.doesNotMatch(fs.readFileSync('src/components/finance/transactionFilters.ts', 'utf8'), /fetch\(|companyId|localRepositories/);
 console.log('FINANCE-UX-1D transaction filters regression: PASS');
