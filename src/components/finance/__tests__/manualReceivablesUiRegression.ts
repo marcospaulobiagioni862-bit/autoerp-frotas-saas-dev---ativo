@@ -9,8 +9,8 @@ const source = readFileSync(resolve(process.cwd(), 'src/components/finance/Recei
 
 assert(source.includes('DriverClient.list()'), 'manual receivable must load registered drivers');
 assert(source.includes('VehicleClient.list()'), 'manual receivable must load registered vehicles');
-assert(source.includes('Motorista do cadastro'), 'manual receivable must expose driver by registration');
-assert(source.includes('Veículo do cadastro'), 'manual receivable must expose vehicle by registration');
+assert(source.includes('Motorista / responsável'), 'manual receivable must expose driver by registration');
+assert(source.includes('Veículo vinculado'), 'manual receivable must expose vehicle by registration');
 assert(source.includes('Outros / Diversos'), 'manual receivable must expose Other/Diverse category');
 assert(source.includes('FinanceMasterDataClient.createCategory'), 'Other/Diverse must use server-side finance category authority');
 assert(source.includes('Prévia das parcelas'), 'manual receivable must show installment preview');
