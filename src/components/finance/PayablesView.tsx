@@ -224,12 +224,12 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
 
         <Button
           onClick={() => setIsCreateOpen(true)}
-          variant="primary"
+          variant="outline"
           size="sm"
           icon={<Plus className="w-4 h-4" />}
-          className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold"
+          className="font-semibold"
         >
-          Nova Despesa
+          Lançamento manual excepcional
         </Button>
       </div>
 
@@ -405,7 +405,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         <ModalContainer
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          title="Nova despesa"
+          title="Lançamento manual excepcional"
           maxWidth="max-w-2xl"
         >
           <form onSubmit={handleCreatePayable} className="space-y-4">

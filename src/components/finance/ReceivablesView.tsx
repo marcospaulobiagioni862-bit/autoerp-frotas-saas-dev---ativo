@@ -41,7 +41,7 @@ function statusLabel(status: ObligationStatus, overdue: boolean): string {
   if (overdue && [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(status)) return 'Vencido';
   switch (status) {
     case ObligationStatus.PENDING: return 'Em aberto';
-    case ObligationStatus.PARTIALLY_PAID: return 'Parcialmente recebido';
+    case ObligationStatus.PARTIALLY_PAID: return 'Pago parcialmente';
     case ObligationStatus.PAID: return 'Pago';
     case ObligationStatus.CANCELLED: return 'Cancelado';
     case ObligationStatus.RENEGOTIATED: return 'Renegociado';
@@ -267,7 +267,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
             {[
               ['ALL', 'Todos'],
               [ObligationStatus.PENDING, 'Em aberto'],
-              [ObligationStatus.PARTIALLY_PAID, 'Parcialmente recebidos'],
+              [ObligationStatus.PARTIALLY_PAID, 'Pagos parcialmente'],
               ['OVERDUE_VIEW', 'Vencidos'],
               [ObligationStatus.PAID, 'Pagos'],
               [ObligationStatus.CANCELLED, 'Cancelados'],
