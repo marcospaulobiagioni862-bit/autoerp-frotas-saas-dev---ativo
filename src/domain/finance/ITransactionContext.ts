@@ -231,6 +231,7 @@ export interface ITransactionContext {
   getKmRecordRepo(): ITransactionKmRecordRepository;
   getReceivableRepo(): ITransactionReceivableRepository;
   getPayableRepo(): ITransactionPayableRepository;
+  getFinancialCategories?(): Promise<import('../../types/entities').FinancialCategory[]>;
   getTransactionRepo(): ITransactionFinancialTransactionRepository;
   getAccountRepo(): ITransactionFinancialAccountRepository;
   getPaymentMethodRepo?(): ITransactionPaymentMethodRepository;

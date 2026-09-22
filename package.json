@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:dre": "tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts && tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts && tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts",
     "test:contract-signature-effective": "tsx src/server/__tests__/contractSignatureEffectiveLocalRunner.ts ./contractSignatureEffectiveRegression.ts",
     "test:v2-contract-core": "tsx src/domain/contracts/__tests__/v2ContractEffectivePeriodRegression.ts",
     "dev": "tsx server.ts",

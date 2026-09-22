@@ -3,10 +3,11 @@ import {
   AccountReceivableRepository,
   AccountPayableRepository,
   FinancialTransactionRepository,
+  FinancialCategoryRepository,
 } from '../../persistence/repositories/localRepositories';
 import { AccountingRegime, TransactionType, ObligationStatus, OriginType } from '../../types/enums';
 import { DREReport, DREItem } from '../../types/reports';
-import { AccountPayable } from '../../types/entities';
+import { AccountPayable, FinancialCategory } from '../../types/entities';
 import { roundCurrency } from '../../shared/utils/currency';
 
 type DRECostBreakdown = {
@@ -14,18 +15,30 @@ type DRECostBreakdown = {
   insuranceCosts: number;
   trackerCosts: number;
   trafficTicketCosts: number;
+  otherCosts: number;
 };
 
 export class DREService {
   private static recRepo = new AccountReceivableRepository();
   private static payRepo = new AccountPayableRepository();
   private static txRepo = new FinancialTransactionRepository();
+  private static categoryRepo = new FinancialCategoryRepository();
 
   private static addExpenseToBreakdown(
     breakdown: DRECostBreakdown,
     originType: OriginType | string | undefined,
-    amount: number
+    amount: number,
+    category?: FinancialCategory
   ): void {
+    if (category) {
+      const name = category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (/multa|infracao/.test(name)) breakdown.trafficTicketCosts += amount;
+      else if (/manutencao|peca|oficina/.test(name)) breakdown.maintenanceCosts += amount;
+      else if (/seguro/.test(name)) breakdown.insuranceCosts += amount;
+      else if (/rastrea|telemetria/.test(name)) breakdown.trackerCosts += amount;
+      else breakdown.otherCosts += amount;
+      return;
+    }
     switch (originType) {
       case OriginType.MAINTENANCE:
         breakdown.maintenanceCosts += amount;
@@ -41,7 +54,7 @@ export class DREService {
         breakdown.trafficTicketCosts += amount;
         break;
       default:
-        // Other expenses remain in directCosts, but are not fabricated into named buckets.
+        breakdown.otherCosts += amount;
         break;
     }
   }
@@ -67,7 +80,13 @@ export class DREService {
       insuranceCosts: 0,
       trackerCosts: 0,
       trafficTicketCosts: 0,
+      otherCosts: 0,
     };
+
+    const categories = txContext?.getFinancialCategories
+      ? await txContext.getFinancialCategories()
+      : txContext ? [] : await this.categoryRepo.findAllForCompany(companyId);
+    const categoriesById = new Map(categories.filter((item) => item.companyId === companyId).map((item) => [item.id, item]));
 
     const dateKey = (value?: string) => (value || '').slice(0, 10);
 
@@ -119,7 +138,7 @@ export class DREService {
           Number(p.fineAmount || 0) -
           Number(p.interestAmount || 0)
         );
-        this.addExpenseToBreakdown(breakdown, p.originType, amount);
+        this.addExpenseToBreakdown(breakdown, p.originType, amount, categoriesById.get(p.categoryId));
       }
     } else {
       // CASH REGIME
@@ -155,9 +174,7 @@ export class DREService {
         } else if (t.type === TransactionType.EXPENSE) {
           directCostsAmount += amount;
           const payable = t.payableId ? payablesById.get(t.payableId) : undefined;
-          if (payable) {
-            this.addExpenseToBreakdown(breakdown, payable.originType, amount);
-          }
+          this.addExpenseToBreakdown(breakdown, payable?.originType, amount, payable ? categoriesById.get(payable.categoryId) : undefined);
         }
       }
     }
@@ -196,6 +213,7 @@ export class DREService {
         insuranceCosts: roundCurrency(breakdown.insuranceCosts),
         trackerCosts: roundCurrency(breakdown.trackerCosts),
         trafficTicketCosts: roundCurrency(breakdown.trafficTicketCosts),
+        otherCosts: roundCurrency(breakdown.otherCosts),
       },
     };
   }

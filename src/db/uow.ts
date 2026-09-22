@@ -32,6 +32,7 @@ import {
   accountReceivables,
   financialAccounts,
   financialTransactions,
+  financialCategories,
 } from './schema';
 import { and, eq, lt, sql } from 'drizzle-orm';
 
@@ -68,6 +69,7 @@ export class UnitOfWork {
         getKmRecordRepo:()=>new PostgresKmRecordRepository(tx),
         getReceivableRepo:()=>new PostgresAccountReceivableRepository(tx,companyId),
         getPayableRepo:()=>new PostgresAccountPayableRepository(tx,companyId),
+        getFinancialCategories:async()=>await tx.select().from(financialCategories).where(eq(financialCategories.companyId,companyId)),
         getTransactionRepo:()=>new PostgresFinancialTransactionRepository(tx,companyId),
         getAccountRepo:()=>new PostgresFinancialAccountRepository(tx,companyId),
         getPaymentMethodRepo:()=>new PostgresPaymentMethodRepository(tx,companyId),
