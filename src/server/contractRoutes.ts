@@ -97,7 +97,25 @@ async function generateContractNumber(companyId: string, raw: any): Promise<stri
     SELECT COALESCE(
       MAX(
         CASE
-          WHEN contract_number ~ '^CNT-[0-9]{6}
+          WHEN contract_number LIKE 'CNT-%'
+            AND length(contract_number) = 10
+            AND substring(contract_number from 5) ~ '^[0-9]{6}$'
+          THEN substring(contract_number from 5)::integer
+          ELSE 0
+        END
+      ),
+      0
+    ) AS max_number
+    FROM contracts
+    WHERE company_id=${companyId}
+  `);
+  const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+  const current = Number(rows[0]?.max_number ?? 0);
+  if (!Number.isInteger(current) || current < 0 || current >= 999999) {
+    throw new ContractConflictError('Contract numbering exhausted');
+  }
+  return `CNT-${String(current + 1).padStart(6, '0')}`;
+}
 
 function normalizeDate(value: unknown, field: string): string {
   const date = typeof value === 'string' ? value.trim() : '';
