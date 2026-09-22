@@ -21,7 +21,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
-  const [amount, setAmount] = useState<number>(0);
+  const [amount, setAmount] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
@@ -30,7 +30,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
   useEffect(() => {
     if (receivable) {
-      setAmount(receivable.balanceAmount || receivable.updatedAmount);
+      setAmount(String(receivable.balanceAmount || receivable.updatedAmount));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
@@ -57,12 +57,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) {
+    const paymentAmount = Number(amount);
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
     }
-    if (amount > receivable.balanceAmount) {
-      setError(`O valor inserido (R$ ${amount.toFixed(2)}) é maior que o saldo restante da obrigação (R$ ${receivable.balanceAmount.toFixed(2)}).`);
+    if (paymentAmount > receivable.balanceAmount) {
+      setError(`O valor inserido (R$ ${paymentAmount.toFixed(2)}) é maior que o saldo restante da obrigação (R$ ${receivable.balanceAmount.toFixed(2)}).`);
       return;
     }
 
@@ -72,7 +73,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
       await FinanceSettlementClient.registerReceipt(receivable.id, {
         financialAccountId: selectedAccountId,
-        paymentAmount: amount,
+        paymentAmount,
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
@@ -143,7 +144,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               type="number"
               step="0.01"
               value={amount}
-              onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); rotateCommandKey(); }}
+              onChange={(e) => { setAmount(e.target.value); rotateCommandKey(); }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
