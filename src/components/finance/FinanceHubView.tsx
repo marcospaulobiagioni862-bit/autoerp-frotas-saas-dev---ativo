@@ -19,6 +19,7 @@ const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(
 type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'cards' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
+  refreshVersion?: number;
   initialSubTab?: FinanceSubTab;
   onOpenReceiptModal: (rec: AccountReceivable) => void;
   onOpenPaymentModal: (pay: AccountPayable) => void;
@@ -28,6 +29,7 @@ interface FinanceHubViewProps {
 
 export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   initialSubTab = 'overview',
+  refreshVersion = 0,
   onOpenReceiptModal,
   onOpenPaymentModal,
   onOpenTransferModal,
@@ -76,7 +78,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
 
       <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
-          <div className="mt-6 min-w-0">
+          <div key={refreshVersion} className="mt-6 min-w-0">
         {activeSubTab === 'overview' && (
           <FinanceOverviewView onSelectSubTab={(tab) => setActiveSubTab(tab)} />
         )}

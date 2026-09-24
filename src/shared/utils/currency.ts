@@ -29,6 +29,19 @@ export function parseCurrencyInput(value: string): number {
   return isNaN(num) ? 0 : roundCurrency(num);
 }
 
+/** Editable decimal draft: keep empty input and cents, without forcing a leading zero. */
+export function normalizeCurrencyDraft(value: string): string | null {
+  const draft = value.trim();
+  if (!/^\d*(?:[.,]\d{0,2})?$/.test(draft)) return null;
+  return draft.replace(/^0+(?=\d)/, '').replace('.', ',');
+}
+
+export function parseCurrencyDraft(value: string): number {
+  const draft = normalizeCurrencyDraft(value);
+  if (draft === null || !/\d/.test(draft)) return NaN;
+  return Number(draft.replace(',', '.'));
+}
+
 /**
  * Calculates late payment interest and fines based on explicit rates.
  * @param originalAmount Original obligation value

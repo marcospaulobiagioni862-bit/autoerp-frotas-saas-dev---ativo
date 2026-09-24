@@ -890,6 +890,8 @@ jobs:
       - name: Finance domain regressions
         if: matrix.suite == 'finance'
         run: |
+          npm run test:v2-settlement-domain
+          npm run test:v2-settlement-ui
           npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
           npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
           npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts

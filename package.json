@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:v2-settlement-domain": "tsx src/domain/finance/__tests__/settlementResidualRegression.ts",
+    "test:v2-settlement-ui": "tsx src/components/modals/__tests__/settlementUiRegression.tsx",
     "test:dre": "tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts && tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts && tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts",
     "test:contract-signature-effective": "tsx src/server/__tests__/contractSignatureEffectiveLocalRunner.ts ./contractSignatureEffectiveRegression.ts",
     "test:v2-contract-core": "tsx src/domain/contracts/__tests__/v2ContractEffectivePeriodRegression.ts",
@@ -42,6 +44,7 @@
     "aws4fetch": "^1.0.20"
   },
   "devDependencies": {
+    "react-test-renderer": "19.2.8",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",

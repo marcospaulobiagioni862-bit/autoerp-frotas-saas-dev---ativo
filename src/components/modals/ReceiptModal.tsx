@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import {
@@ -26,11 +28,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (receivable) {
-      setAmount(String(receivable.balanceAmount || receivable.updatedAmount));
+      setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
@@ -57,18 +61,32 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const paymentAmount = Number(amount);
+    const paymentAmount = parseCurrencyDraft(amount);
+    if (submittingRef.current || confirmOpen) return;
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
     }
     if (paymentAmount > receivable.balanceAmount) {
-      setError(`O valor inserido (R$ ${paymentAmount.toFixed(2)}) é maior que o saldo restante da obrigação (R$ ${receivable.balanceAmount.toFixed(2)}).`);
+      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o saldo restante (${formatCurrencyBRL(receivable.balanceAmount)}).`);
       return;
     }
 
+    if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
+        !methods.some(method => method.id === selectedMethodId && method.active)) {
+      setError('Selecione uma conta financeira e um meio de pagamento ativos.');
+      return;
+    }
+    setError(null);
+    setConfirmOpen(true);
+  };
+
+  const confirmSettlement = async () => {
+    if (submittingRef.current || !confirmOpen) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    const paymentAmount = parseCurrencyDraft(amount);
     try {
-      setIsSubmitting(true);
       setError(null);
 
       await FinanceSettlementClient.registerReceipt(receivable.id, {
@@ -80,15 +98,19 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         idempotencyKey,
       });
 
-      onSuccess();
-      onClose();
     } catch (err: any) {
+      submittingRef.current = false;
+      setConfirmOpen(false);
       // Preserve the same command key on an ambiguous/network failure. A retry
       // with unchanged fields therefore converges to the first committed result.
       setError(err.message || 'Erro ao registrar o recebimento.');
+      return;
     } finally {
       setIsSubmitting(false);
     }
+    // A read-model refresh failure must never turn a committed settlement into a retry.
+    onSuccess();
+    onClose();
   };
 
   return (
@@ -105,7 +127,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </p>
           </div>
           <button
-            onClick={(event)=>requestGuardedClose(event,onClose)}
+            disabled={isSubmitting || confirmOpen}
+            onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -113,6 +136,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -141,10 +165,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               Valor a Receber (R$) *
             </label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
+              aria-label="Valor a Receber (R$)"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); rotateCommandKey(); }}
+              onChange={(e) => {
+                const draft = normalizeCurrencyDraft(e.target.value);
+                if (draft !== null && draft !== amount) { setAmount(draft); rotateCommandKey(); }
+              }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
@@ -220,7 +248,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={(event)=>requestGuardedClose(event,onClose)}
+              onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancelar
@@ -233,7 +261,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               {isSubmitting ? 'Processando...' : 'Confirmar Recebimento'}
             </button>
           </div>
+          </fieldset>
         </form>
+        <ConfirmDialog
+          isOpen={confirmOpen}
+          title="Confirmar Recebimento"
+          variant="primary"
+          confirmText={isSubmitting ? 'Processando...' : 'Confirmar Recebimento'}
+          isLoading={isSubmitting}
+          onCancel={() => { if (!submittingRef.current) setConfirmOpen(false); }}
+          onConfirm={confirmSettlement}
+        >
+          <dl className="space-y-2">
+            <div><dt>Título / origem</dt><dd>{receivable.description} • {receivable.originType}</dd></div>
+            <div><dt>Valor</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Conta financeira de destino</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
+            <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
+          </dl>
+        </ConfirmDialog>
       </div>
     </div>
   );
