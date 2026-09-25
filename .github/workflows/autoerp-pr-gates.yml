@@ -846,6 +846,7 @@ jobs:
         if: matrix.suite == 'fleet'
         run: |
           npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
+          npx tsx src/components/fleet/__tests__/vehicleDetailsPresentationTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
           npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
           npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
@@ -890,6 +891,7 @@ jobs:
       - name: Finance domain regressions
         if: matrix.suite == 'finance'
         run: |
+          npx tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts
           npm run test:v2-settlement-domain
           npm run test:v2-settlement-ui
           npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
