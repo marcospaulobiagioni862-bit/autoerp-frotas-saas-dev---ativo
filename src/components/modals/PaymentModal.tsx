@@ -178,6 +178,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             />
           </div>
 
+          {(accounts.length === 0 || methods.length === 0) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+              Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o pagamento.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
@@ -251,7 +257,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
               className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
