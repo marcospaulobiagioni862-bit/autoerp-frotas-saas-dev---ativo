@@ -6,7 +6,7 @@ import {
   FinancialAccountRepository,
 } from '../../persistence/repositories/localRepositories';
 import { AccountReceivable, AccountPayable, FinancialTransaction, FinancialAccount } from '../../types/entities';
-import { ObligationStatus, TransactionType, AuditAction } from '../../types/enums';
+import { ObligationStatus, TransactionType, AuditAction, OriginType, SecurityDepositStatus, SecurityDepositMovementType } from '../../types/enums';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -128,6 +128,90 @@ export class SettlementService {
     return account;
   }
 
+  private static async syncSecurityDepositReceipt(
+    receivable: AccountReceivable,
+    transaction: FinancialTransaction,
+    paymentAmount: number,
+    params: SettlementParams,
+    txContext?: ITransactionContext
+  ): Promise<void> {
+    if (receivable.originType !== OriginType.SECURITY_DEPOSIT) return;
+    if (!txContext || !receivable.contractId) {
+      throw new Error('Autoridade transacional da caução indisponível');
+    }
+
+    const depositRepo = txContext.getSecurityDepositRepo();
+    const movementRepo = txContext.getSecurityDepositMovementRepo();
+    const existingMovement = await movementRepo.findByFinancialTransactionId(transaction.id);
+    if (existingMovement) return;
+
+    await depositRepo.lockContract(params.companyId, receivable.contractId);
+    const contract = await txContext.getContractRepo().findByIdForCompanyWithLock(params.companyId, receivable.contractId);
+    if (!contract || contract.isArchived) throw new Error('Contrato da caução não encontrado');
+
+    const originalAmount = roundCurrency(Number(contract.securityDepositAmount));
+    if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+      throw new Error('Contrato não possui caução válida');
+    }
+
+    const now = new Date().toISOString();
+    let deposit = await depositRepo.findByContractId(receivable.contractId);
+    if (!deposit) {
+      deposit = await depositRepo.create({
+        id: generateUUID(),
+        companyId: params.companyId,
+        contractId: contract.id,
+        driverId: contract.driverId,
+        vehicleId: contract.vehicleId,
+        originalAmount,
+        receivedAmount: 0,
+        usedAmount: 0,
+        returnedAmount: 0,
+        status: SecurityDepositStatus.PENDING,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    if (deposit.companyId !== params.companyId || roundCurrency(Number(deposit.originalAmount)) !== originalAmount) {
+      throw new Error('Caução vinculada diverge do contrato');
+    }
+
+    const previousState = { ...deposit };
+    const receivedAmount = roundCurrency(Number(deposit.receivedAmount) + paymentAmount);
+    if (receivedAmount > originalAmount) throw new Error('Recebimento da caução excede o valor previsto');
+
+    const updatedDeposit = await depositRepo.update(deposit.id, {
+      receivedAmount,
+      status: receivedAmount >= originalAmount ? SecurityDepositStatus.RECEIVED : SecurityDepositStatus.PENDING,
+      receivedAt: now,
+      updatedAt: now,
+    });
+    await movementRepo.create({
+      id: generateUUID(),
+      securityDepositId: deposit.id,
+      companyId: params.companyId,
+      type: SecurityDepositMovementType.RECEIPT,
+      amount: paymentAmount,
+      date: now,
+      financialTransactionId: transaction.id,
+      receivableId: receivable.id,
+      description: 'Recebimento de caução via Conta a Receber',
+      createdById: params.userId,
+      createdAt: now,
+    });
+    await AuditLogger.logAction(
+      params.companyId,
+      'SecurityDeposit',
+      deposit.id,
+      AuditAction.RECEIVE,
+      params.userId,
+      params.userName,
+      previousState,
+      updatedDeposit,
+      txContext
+    );
+  }
+
   public static async registerReceipt(params: SettlementParams, txContext?: ITransactionContext): Promise<{
     receivable: AccountReceivable;
     transaction: FinancialTransaction;
@@ -175,6 +259,7 @@ export class SettlementService {
           competenceDate,
           description
         );
+        await this.syncSecurityDepositReceipt(receivable, existing, params.paymentAmount, params, txContext);
         return { receivable, transaction: existing };
       }
     }
@@ -268,6 +353,7 @@ export class SettlementService {
         updatedReceivable,
         txContext
       );
+      await this.syncSecurityDepositReceipt(receivable, savedTransaction, params.paymentAmount, params, txContext);
 
       return { receivable: updatedReceivable, transaction: savedTransaction };
     } catch (error) {
