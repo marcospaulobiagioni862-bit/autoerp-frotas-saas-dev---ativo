@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { SettlementService } from '../SettlementService';
+import { DepositService } from '../DepositService';
 import { ObligationStatus, OriginType } from '../../../types/enums';
 import type { ITransactionContext } from '../ITransactionContext';
 
@@ -16,8 +17,16 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
   };
   const account = { id: 'account-a', companyId: 'tenant-a', status: 'ACTIVE', currentBalance: 1000 };
   const method = { id: 'method-a', companyId: 'tenant-a', active: true };
-  const transactions: any[] = [], audits: any[] = [];
-  const repo = { update: async (_id: string, data: any) => (obligation = { ...obligation, ...data }) };
+  const transactions: any[] = [], audits: any[] = [], depositMovements: any[] = [];
+  let deposit: any = null;
+  const contract = {
+    id: 'contract-a', companyId: 'tenant-a', driverId: 'driver-a', vehicleId: 'vehicle-a',
+    securityDepositAmount: 100, isArchived: false,
+  };
+  const repo = {
+    update: async (_id: string, data: any) => (obligation = { ...obligation, ...data }),
+    findByContractId: async (_id: string) => [obligation],
+  };
   const tx = {
     getUserRepo: () => ({ findById: async () => ({ id: 'admin-a', companyId: 'tenant-a', active: true, role: 'ADMIN' }) }),
     getFinancialPeriodRepo: () => ({ findAll: async () => [] }),
@@ -32,6 +41,20 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
     getTransactionRepo: () => ({ create: async (value: any) => { transactions.push(value); return value; } }),
     getAccountRepo: () => ({ updateBalance: async (_id: string, delta: number) => { account.currentBalance += delta; } }),
     getAuditLogRepo: () => ({ create: async (value: any) => { audits.push(value); return value; } }),
+    getContractRepo: () => ({
+      findByIdForCompanyWithLock: async (_companyId: string, id: string) => id === contract.id ? contract : null,
+      findByIdForCompany: async (_companyId: string, id: string) => id === contract.id ? contract : null,
+    }),
+    getSecurityDepositRepo: () => ({
+      lockContract: async () => undefined,
+      findByContractId: async () => deposit,
+      create: async (value: any) => (deposit = value),
+      update: async (_id: string, value: any) => (deposit = { ...deposit, ...value }),
+    }),
+    getSecurityDepositMovementRepo: () => ({
+      findByFinancialTransactionId: async (transactionId: string) => depositMovements.find((item) => item.financialTransactionId === transactionId) || null,
+      create: async (value: any) => { depositMovements.push(value); return value; },
+    }),
   } as unknown as ITransactionContext;
   const settle = (paymentAmount: number, idempotencyKey: string) => {
     const params = { companyId: 'tenant-a', obligationId: obligation.id, financialAccountId: account.id,
@@ -39,7 +62,7 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
       userId: 'admin-a', userName: 'Admin' };
     return kind === 'receipt' ? SettlementService.registerReceipt(params, tx) : SettlementService.registerPayment(params, tx);
   };
-  return { get obligation() { return obligation; }, account, method, transactions, audits, settle };
+  return { get obligation() { return obligation; }, get deposit() { return deposit; }, account, method, transactions, audits, depositMovements, settle, tx, contract };
 }
 
 for (const kind of ['receipt', 'payment'] as const) {
@@ -95,5 +118,25 @@ for (const origin of [OriginType.CONTRACT_RENT, OriginType.SECURITY_DEPOSIT]) {
   assert.equal(f.obligation.contractId, 'contract-a');
   assert.equal(f.obligation.originType, origin);
   assert.equal(f.obligation.originId, 'origin-a');
+  if (origin === OriginType.SECURITY_DEPOSIT) {
+    assert.equal(f.deposit.receivedAmount, 100);
+    assert.equal(f.depositMovements.length, 1);
+    assert.equal(f.depositMovements[0].financialTransactionId, movement.id);
+    assert.equal(f.depositMovements[0].receivableId, f.obligation.id);
+    await f.settle(100, 'receipt');
+    assert.equal(f.depositMovements.length, 1, 'retry cannot duplicate deposit ledger movement');
+  }
   console.log(`PASS traceability: transaction -> receivable -> ${origin} / contract-a`);
+}
+
+{
+  const f = fixture('receipt', OriginType.SECURITY_DEPOSIT);
+  f.obligation.paidAmount = 100;
+  f.obligation.balanceAmount = 0;
+  f.obligation.status = ObligationStatus.PAID;
+  const derived = await DepositService.getSecurityDepositByContract('tenant-a', 'contract-a', 'admin-a', f.tx);
+  assert.equal(derived?.receivedAmount, 100);
+  assert.equal(derived?.status, 'RECEIVED');
+  assert.match(String(derived?.id), /^derived-contract-a$/);
+  console.log('PASS historical reconciliation: paid deposit receivable is read as received without duplicate cash');
 }
