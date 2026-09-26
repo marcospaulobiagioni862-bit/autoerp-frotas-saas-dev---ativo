@@ -11,7 +11,7 @@ export class ContractExecutionApiError extends Error {
 
 
 function validateArtifact(value: unknown): ContractArtifact {
-  const item = normalizeNumericFields(asApiRecord(value, 'contract execution contract'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
+  const item = asApiRecord(value, 'contract artifact');
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractId !== 'string' ||
     (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'GENERATED_DOCX' && item.artifactType !== 'REVIEWED_FINAL_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
@@ -29,7 +29,7 @@ function validateArtifact(value: unknown): ContractArtifact {
 }
 
 function validateAttachment(value: unknown): FileAttachment {
-  const item = normalizeNumericFields(asApiRecord(value, 'contract execution contract'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
+  const item = normalizeNumericFields(asApiRecord(value, 'contract execution attachment'), ['fileSize']);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.entityType !== 'string' ||
     typeof item.entityId !== 'string' || typeof item.fileName !== 'string' || typeof item.fileSize !== 'number' ||
@@ -40,7 +40,7 @@ function validateAttachment(value: unknown): FileAttachment {
 }
 
 function validateContract(value: unknown): Contract {
-  const item = asApiRecord(value, 'contract execution');
+  const item = normalizeNumericFields(asApiRecord(value, 'contract execution'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractNumber !== 'string' ||
     typeof item.driverId !== 'string' || typeof item.vehicleId !== 'string' || typeof item.status !== 'string' ||
