@@ -12,5 +12,8 @@ const modal = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url
 assert.match(modal, /vehicleContractStartDate\(summary\.activeContract\.startDate\)/);
 assert.match(modal, /<strong>\{vehicleContractStatus\(summary\.activeContract\.status\)\}<\/strong>/);
 assert.match(modal, /vehicleDisplayName\(vehicle\.brand, vehicle\.model, vehicle\.version\)/);
+assert.match(modal, /bg-slate-50 rounded-xl border dark:border-slate-700 dark:bg-slate-900/);
+assert.match(modal, /bg-slate-50 space-y-3 dark:border-slate-700 dark:bg-slate-900/);
+assert.match(modal, /bg-blue-50 rounded-xl space-y-3 dark:border-blue-800 dark:bg-blue-950\/40/);
 
 console.log('Vehicle details presentation: OK');
