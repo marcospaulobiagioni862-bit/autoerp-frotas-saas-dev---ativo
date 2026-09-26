@@ -687,6 +687,7 @@ jobs:
         run: |
           npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
           npx tsx src/components/contracts/__tests__/moveflexBaseContractPdfTestRunner.ts
+          npx tsx src/api/__tests__/contractExecutionClientTestRunner.ts
 
       - name: Company profile contract authority regression
         run: npx tsx src/components/admin/__tests__/companyProfileContractAuthorityTestRunner.ts
