@@ -136,13 +136,13 @@ export class VehicleCategoryAuthorityIntegrationRunner {
 
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}/km-records`, {
         method: 'POST',
-        body: JSON.stringify({ kmValue: 100, readingType: 'PERIODIC', notes: 'KM igual não deve gravar' }),
+        body: JSON.stringify({ kmValue: 100, readingType: 'PERIODIC', notes: 'Conferência sem avanço' }),
       });
-      assert(response.status === 400, `equal KM single update expected 400, got ${response.status}`);
+      assert(response.status === 201, `equal KM single confirmation expected 201, got ${response.status}`);
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}/km-records`);
       assert(response.status === 200, `KM history expected 200, got ${response.status}`);
       const initialHistory = (await json(response)).items;
-      assert(Array.isArray(initialHistory) && initialHistory.length === 1, 'equal KM single update created a duplicate visible KM record');
+      assert(Array.isArray(initialHistory) && initialHistory.length === 2, 'history must preserve initial reading and equal confirmation');
 
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`, {
         method: 'PATCH',
@@ -182,13 +182,13 @@ export class VehicleCategoryAuthorityIntegrationRunner {
         body: JSON.stringify({
           entries: [
             { vehicleId: created.id, kmValue: 200, notes: 'Leitura semanal' },
-            { vehicleId: batchVehicle.id, kmValue: 150, notes: 'KM igual não deve gravar' },
+            { vehicleId: batchVehicle.id, kmValue: 150, notes: 'Conferência sem avanço' },
           ],
         }),
       });
-      assert(response.status === 400, `equal KM batch expected 400, got ${response.status}`);
+      assert(response.status === 201, `equal KM batch expected 201, got ${response.status}`);
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`);
-      assert((await json(response)).item.currentKm === 100, 'equal KM batch partially updated the first vehicle');
+      assert((await json(response)).item.currentKm === 200, 'mixed batch must advance the first vehicle');
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(batchVehicle.id)}`);
       assert((await json(response)).item.currentKm === 150, 'equal KM batch mutated the equal-KM vehicle');
 
@@ -203,7 +203,7 @@ export class VehicleCategoryAuthorityIntegrationRunner {
       });
       assert(response.status === 400, `regressive KM batch expected 400, got ${response.status}`);
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(created.id)}`);
-      assert((await json(response)).item.currentKm === 100, 'invalid KM batch partially updated the first vehicle');
+      assert((await json(response)).item.currentKm === 200, 'invalid KM batch must preserve previously committed KM');
       response = await request(`/api/fleet/vehicles/${encodeURIComponent(batchVehicle.id)}`);
       assert((await json(response)).item.currentKm === 150, 'invalid KM batch mutated the regressive vehicle');
 
@@ -228,6 +228,8 @@ export class VehicleCategoryAuthorityIntegrationRunner {
     }
   }
 }
+
+export const runVehicleCategoryIntegration = () => VehicleCategoryAuthorityIntegrationRunner.runAllTests();
 
 if (process.argv[1]?.includes('vehicleCategoryAuthorityIntegration')) {
   VehicleCategoryAuthorityIntegrationRunner.runAllTests()

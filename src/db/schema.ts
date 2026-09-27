@@ -113,7 +113,6 @@ export const vehicleKmRecords = pgTable('vehicle_km_records', {
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
   idxCompanyVehicleDate: index('idx_vehicle_km_company_vehicle_date').on(t.companyId, t.vehicleId, t.recordDate, t.createdAt),
-  unqExactReading: unique('uq_vehicle_km_exact_reading').on(t.companyId, t.vehicleId, t.kmValue, t.readingType, t.recordDate),
 }));
 
 export const drivers = pgTable('drivers', {

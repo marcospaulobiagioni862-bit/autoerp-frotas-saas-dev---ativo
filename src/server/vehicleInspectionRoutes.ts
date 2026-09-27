@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { and, desc, eq } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
+import { recordVehicleKm, VehicleKmError } from './vehicleKmAuthority';
 import { vehicleInspections } from '../db/schema';
 import { AuditAction, VehicleStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
@@ -84,6 +85,7 @@ function item(row:any){
   };
 }
 function sendError(res:Response,error:unknown){
+  if(error instanceof VehicleKmError){res.status(error.kind==='NOT_FOUND'?404:400).json({error:error.message});return;}
   if(error instanceof ValidationError){res.status(400).json({error:'Invalid vehicle inspection request'});return;}
   if(error instanceof ForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof NotFoundError){res.status(404).json({error:'Not found'});return;}
@@ -120,7 +122,6 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         const vehicle=await context.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,req.params.id);
         if(!vehicle||vehicle.isArchived) throw new NotFoundError();
         if(vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED) throw new ValidationError();
-        if(odometer<vehicle.currentKm) throw new ValidationError();
         const driverId=optionalText(req.body?.driverId,120)||vehicle.currentDriverId||undefined;
         const contractId=optionalText(req.body?.contractId,120)||vehicle.currentContractId||undefined;
         if(driverId){
@@ -143,14 +144,11 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         }).returning();
         const created=rows[0];if(!created) throw new Error('Inspection create failed');
 
-        if(odometer>vehicle.currentKm){
-          await context.getKmRecordRepo().create({
-            id:randomUUID(),companyId:principal.companyId,vehicleId:vehicle.id,driverId,contractId,
-            kmValue:odometer,recordDate:now.slice(0,10),readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT',
-            notes:`Vistoria de ${type==='ENTRY'?'entrada':'saída'}`,createdAt:now,
-          });
-          await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{currentKm:odometer,updatedAt:now});
-        }
+        await recordVehicleKm(context,principal.companyId,{
+          vehicleId:vehicle.id,driverId,contractId,
+          kmValue:odometer,recordDate:now.slice(0,10),readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT',
+          notes:`Vistoria de ${type==='ENTRY'?'entrada':'saída'}`,
+        });
 
         if(result==='BLOCKED_FOR_RENTAL'&&vehicle.status!==VehicleStatus.BLOCKED){
           await context.getVehicleRepo().updateForCompany(principal.companyId,vehicle.id,{status:VehicleStatus.BLOCKED,updatedAt:now});
