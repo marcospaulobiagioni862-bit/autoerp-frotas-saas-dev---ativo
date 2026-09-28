@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { fixedDailyInterest } from '../domain/finance/dailyLateInterest';
 import { UnitOfWork } from '../db/uow';
 import { FinancialPeriodService } from '../domain/finance/FinancialPeriodService';
 import { FinancialAuthorizationService } from '../domain/finance/FinancialAuthorizationService';
@@ -22,6 +23,7 @@ export interface LateChargeRule {
   gracePeriodDays: number;
   finePercent: number;
   dailyInterestPercent: number;
+  dailyInterestAmount?: number | null;
   active: boolean;
   createdBy: string;
   updatedBy: string;
@@ -33,6 +35,7 @@ export interface LateChargeRuleInput {
   gracePeriodDays: number;
   finePercent: number;
   dailyInterestPercent: number;
+  dailyInterestAmount?: number | null;
   active: boolean;
 }
 
@@ -86,6 +89,7 @@ type RuleRow = {
   gracePeriodDays: string | number;
   finePercent: string | number;
   dailyInterestPercent: string | number;
+  dailyInterestAmount?: string | number | null;
   active: boolean;
   createdBy: string;
   updatedBy: string;
@@ -163,6 +167,7 @@ function normalizeRuleInput(input: LateChargeRuleInput): LateChargeRuleInput {
     gracePeriodDays,
     finePercent: normalizePercent(input.finePercent, 'Percentual de multa', 100, 4),
     dailyInterestPercent: normalizePercent(input.dailyInterestPercent, 'Percentual diário de juros', 10, 6),
+    dailyInterestAmount: input.dailyInterestAmount == null ? null : normalizePercent(input.dailyInterestAmount, 'Juros fixo diário', 9999999999.99, 2),
     active: input.active,
   };
 }
@@ -186,6 +191,7 @@ function mapRule(row: RuleRow): LateChargeRule {
     gracePeriodDays: Number(row.gracePeriodDays),
     finePercent: Number(row.finePercent),
     dailyInterestPercent: Number(row.dailyInterestPercent),
+    dailyInterestAmount: row.dailyInterestAmount == null ? null : Number(row.dailyInterestAmount),
     active: row.active === true,
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
@@ -201,7 +207,7 @@ async function listRulesForCompany(tx: any, companyId: string): Promise<LateChar
       obligation_type AS "obligationType",
       grace_period_days AS "gracePeriodDays",
       fine_percent AS "finePercent",
-      daily_interest_percent AS "dailyInterestPercent",
+      daily_interest_percent AS "dailyInterestPercent", daily_interest_amount AS "dailyInterestAmount",
       active,
       created_by AS "createdBy",
       updated_by AS "updatedBy",
@@ -223,7 +229,7 @@ async function requireActiveRule(tx: any, companyId: string, type: OverdueObliga
       obligation_type AS "obligationType",
       grace_period_days AS "gracePeriodDays",
       fine_percent AS "finePercent",
-      daily_interest_percent AS "dailyInterestPercent",
+      daily_interest_percent AS "dailyInterestPercent", daily_interest_amount AS "dailyInterestAmount",
       active,
       created_by AS "createdBy",
       updated_by AS "updatedBy",
@@ -349,8 +355,9 @@ async function processType(
     // authoritative adjustment in updatedAmount until a future business rule says otherwise.
     const outstandingPrincipal = roundCurrency(Math.max(0, originalAmount - paidAmount));
     const chargeable = daysOverdue > rule.gracePeriodDays;
-    const fineAmount = chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
-    const interestAmount = chargeable
+    const fixedMode = rule.dailyInterestAmount != null;
+    const fineAmount = fixedMode ? numberValue(row.fineAmount) : chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
+    const interestAmount = fixedMode ? numberValue(row.interestAmount) : chargeable
       ? roundCurrency(outstandingPrincipal * (rule.dailyInterestPercent / 100) * daysOverdue)
       : 0;
     const updatedAmount = roundCurrency(Math.max(0, originalAmount + fineAmount + interestAmount - discountAmount));
@@ -432,7 +439,7 @@ export class FinanceOverdueAuthority {
         SELECT id,
           company_id AS "companyId", obligation_type AS "obligationType",
           grace_period_days AS "gracePeriodDays", fine_percent AS "finePercent",
-          daily_interest_percent AS "dailyInterestPercent", active,
+          daily_interest_percent AS "dailyInterestPercent", daily_interest_amount AS "dailyInterestAmount", active,
           created_by AS "createdBy", updated_by AS "updatedBy",
           created_at::text AS "createdAt", updated_at::text AS "updatedAt"
         FROM finance_late_charge_rules
@@ -447,24 +454,25 @@ export class FinanceOverdueAuthority {
 
       const savedResult = await tx.execute(sql`
         INSERT INTO finance_late_charge_rules(
-          id,company_id,obligation_type,grace_period_days,fine_percent,daily_interest_percent,
+          id,company_id,obligation_type,grace_period_days,fine_percent,daily_interest_percent,daily_interest_amount,
           active,created_by,updated_by,created_at,updated_at
         ) VALUES (
           ${id},${actor.companyId},${type},${ruleInput.gracePeriodDays},${ruleInput.finePercent},
-          ${ruleInput.dailyInterestPercent},${ruleInput.active},${existing?.createdBy || actor.userId},
+          ${ruleInput.dailyInterestPercent},${ruleInput.dailyInterestAmount ?? null},${ruleInput.active},${existing?.createdBy || actor.userId},
           ${actor.userId},${existing?.createdAt || now},${now}
         )
         ON CONFLICT (company_id, obligation_type) DO UPDATE SET
           grace_period_days=EXCLUDED.grace_period_days,
           fine_percent=EXCLUDED.fine_percent,
           daily_interest_percent=EXCLUDED.daily_interest_percent,
+          daily_interest_amount=EXCLUDED.daily_interest_amount,
           active=EXCLUDED.active,
           updated_by=EXCLUDED.updated_by,
           updated_at=EXCLUDED.updated_at
         RETURNING id,
           company_id AS "companyId", obligation_type AS "obligationType",
           grace_period_days AS "gracePeriodDays", fine_percent AS "finePercent",
-          daily_interest_percent AS "dailyInterestPercent", active,
+          daily_interest_percent AS "dailyInterestPercent", daily_interest_amount AS "dailyInterestAmount", active,
           created_by AS "createdBy", updated_by AS "updatedBy",
           created_at::text AS "createdAt", updated_at::text AS "updatedAt"
       `);

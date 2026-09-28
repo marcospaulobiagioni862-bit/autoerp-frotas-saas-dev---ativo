@@ -13,11 +13,15 @@ export interface SettlementPaymentMethodOption {
 }
 
 export interface SettlementOptions {
+  fixedDailyInterest?: { RECEIVABLE: number | null; PAYABLE: number | null };
   accounts: SettlementAccountOption[];
   paymentMethods: SettlementPaymentMethodOption[];
 }
 
 export interface SettlementCommandInput {
+  interestAmount?: number;
+  fineAmount?: number;
+  discountAmount?: number;
   financialAccountId: string;
   paymentMethodId: string;
   paymentAmount: number;
@@ -96,6 +100,12 @@ function postJson(body: SettlementCommandInput): RequestInit {
   };
 }
 
+function normalizeDailyInterest(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error('Invalid daily interest configuration');
+  return value;
+}
+
 export class FinanceSettlementClient {
   static async getOptions(): Promise<SettlementOptions> {
     const payload = asRecord(await requestJson('/api/finance/settlement-options'));
@@ -103,6 +113,10 @@ export class FinanceSettlementClient {
       throw new Error('Invalid settlement options response');
     }
     return {
+      fixedDailyInterest: payload.fixedDailyInterest == null ? undefined : {
+        RECEIVABLE: normalizeDailyInterest(asRecord(payload.fixedDailyInterest).RECEIVABLE),
+        PAYABLE: normalizeDailyInterest(asRecord(payload.fixedDailyInterest).PAYABLE),
+      },
       accounts: payload.accounts.map(normalizeAccount),
       paymentMethods: payload.paymentMethods.map(normalizePaymentMethod),
     };

@@ -1,5 +1,5 @@
-import { isNotNull } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb } from 'drizzle-orm/pg-core';
+import { isNotNull, sql } from 'drizzle-orm';
+import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -155,6 +155,36 @@ export const driverHealthProfiles = pgTable('driver_health_profiles', {
   idx_company: index('idx_driver_health_profiles_company').on(t.companyId),
   idx_driver: index('idx_driver_health_profiles_driver').on(t.driverId),
 }));
+
+// Existing table from 0023; 0075 adds only the nullable fixed daily amount.
+export const financeLateChargeRules = pgTable('finance_late_charge_rules', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  obligationType: text('obligation_type').notNull(),
+  gracePeriodDays: integer('grace_period_days').notNull(),
+  finePercent: numeric('fine_percent', { precision: 7, scale: 4 }).notNull(),
+  dailyInterestPercent: numeric('daily_interest_percent', { precision: 9, scale: 6 }).notNull(),
+  dailyInterestAmount: numeric('daily_interest_amount', { precision: 12, scale: 2 }),
+  active: boolean('active').notNull().default(true),
+  createdBy: text('created_by').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, t => ({
+  companyType: unique('finance_late_charge_rules_company_type_unique').on(t.companyId, t.obligationType),
+  companyFk: foreignKey({ name: 'finance_late_charge_rules_company_fk', columns: [t.companyId], foreignColumns: [companies.id] }),
+  companyActive: index('idx_finance_late_charge_rules_company_active').on(t.companyId, t.obligationType, t.active),
+  typeCheck: check('finance_late_charge_rules_obligation_type_check', sql`${t.obligationType} IN ('RECEIVABLE','PAYABLE')`),
+  graceCheck: check('finance_late_charge_rules_grace_period_days_check', sql`${t.gracePeriodDays} BETWEEN 0 AND 365`),
+  fineCheck: check('finance_late_charge_rules_fine_percent_check', sql`${t.finePercent} BETWEEN 0 AND 100`),
+  percentCheck: check('finance_late_charge_rules_daily_interest_percent_check', sql`${t.dailyInterestPercent} BETWEEN 0 AND 10`),
+  amountCheck: check('finance_late_charge_rules_daily_interest_amount_check', sql`${t.dailyInterestAmount} >= 0`),
+  tenantPolicy: pgPolicy('finance_late_charge_rules_tenant_policy', {
+    for: 'all',
+    using: sql`${t.companyId} = nullif(current_setting('app.current_tenant', true), '')`,
+    withCheck: sql`${t.companyId} = nullif(current_setting('app.current_tenant', true), '')`,
+  }),
+})).enableRLS();
 
 export const contracts = pgTable('contracts', {
   id: text('id').primaryKey(),

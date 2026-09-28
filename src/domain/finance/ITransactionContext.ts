@@ -226,6 +226,8 @@ export interface ITransactionContractArtifactRepository {
 export type TrustedSystemActor = 'RECURRING';
 
 export interface ITransactionContext {
+  findFixedDailyInterest?(kind: 'RECEIVABLE' | 'PAYABLE'): Promise<number | null>;
+  findSettlementComposition?(transactionId: string): Promise<import('./settlementComposition').SettlementComposition | null>;
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
   getKmRecordRepo(): ITransactionKmRecordRepository;

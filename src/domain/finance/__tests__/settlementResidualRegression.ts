@@ -38,6 +38,10 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
     findPreviousPayableInstallmentsForUpdate: async () => [],
     findFinancialAccountByIdWithLock: async () => account,
     findFinancialTransactionByIdempotencyKey: async (key: string) => transactions.find(t => t.idempotencyKey === key),
+    findSettlementComposition: async (id: string) => {
+      const entry = audits.find(a => a.entityName === 'FinancialSettlement' && a.entityId === id);
+      return entry ? JSON.parse(entry.newState) : null;
+    },
     getTransactionRepo: () => ({ create: async (value: any) => { transactions.push(value); return value; } }),
     getAccountRepo: () => ({ updateBalance: async (_id: string, delta: number) => { account.currentBalance += delta; } }),
     getAuditLogRepo: () => ({ create: async (value: any) => { audits.push(value); return value; } }),
@@ -83,7 +87,9 @@ for (const kind of ['receipt', 'payment'] as const) {
   assert.equal(f.obligation.updatedAmount, 100);
   await f.settle(.01, 'final');
   assert.equal(f.transactions.length, 2);
-  assert.equal(f.audits.length, 2, 'only committed commands are audited');
+  assert.equal(f.audits.length, 4, 'two committed commands each require title history and transaction composition; retry/rejection add none');
+  assert.equal(f.audits.filter(a => a.entityName !== 'FinancialSettlement').length, 2);
+  assert.deepEqual(f.audits.filter(a => a.entityName === 'FinancialSettlement').map(a => a.entityId), f.transactions.map(t => t.id));
   assert.equal(f.account.currentBalance, kind === 'receipt' ? 1100 : 900);
   await assert.rejects(f.settle(.01, 'extra'), /não aceita/);
 

@@ -1,3 +1,4 @@
+import { reverseSettlementState, settlementState } from './settlementComposition';
 import { ITransactionContext } from './ITransactionContext';
 import {
   FinancialTransactionRepository,
@@ -244,6 +245,17 @@ export class ReversalService {
     // Lock the linked obligation before accounts. Settlement uses obligation -> account,
     // so keeping the same order avoids an account/obligation deadlock.
     const linked = await this.lockLinkedObligation(companyId, originalTx, txContext);
+    const obligation = linked.receivable || linked.payable;
+    let restoredSettlement: ReturnType<typeof reverseSettlementState> | null = null;
+    if (obligation && (originalTx.type === TransactionType.INCOME || originalTx.type === TransactionType.EXPENSE)) {
+      const composition = await txContext?.findSettlementComposition?.(originalTx.id);
+      if (composition) {
+        if (composition.obligationId !== obligation.id || roundCurrency(composition.movementAmount) !== originalAmount) throw new Error('Auditoria não corresponde à transação original');
+        restoredSettlement = reverseSettlementState(settlementState(obligation), composition, normalizedReversalAmount, reversedAmount);
+      } else if (Number(obligation.interestAmount) || Number(obligation.fineAmount) || Number(obligation.discountAmount)) {
+        throw new Error('Baixa histórica sem composição comprovável: estorno de ajustes bloqueado');
+      }
+    }
     let linkedCardPayment: any | null = null;
     if (originalTx.type === TransactionType.TRANSFER && txContext?.findCreditCardStatementPaymentForUpdate) {
       linkedCardPayment = await txContext.findCreditCardStatementPaymentForUpdate(originalTx.id);
@@ -357,12 +369,14 @@ export class ReversalService {
           paidAmount: state.newPaid,
           balanceAmount: state.newBalance,
           status: state.newStatus,
+          ...(restoredSettlement || {}),
         });
       } else {
         await this.receivableRepo.updateForCompany(receivable.id, companyId, {
           paidAmount: state.newPaid,
           balanceAmount: state.newBalance,
           status: state.newStatus,
+          ...(restoredSettlement || {}),
         });
       }
     } else if (linked.payable) {
@@ -377,12 +391,14 @@ export class ReversalService {
           paidAmount: state.newPaid,
           balanceAmount: state.newBalance,
           status: state.newStatus,
+          ...(restoredSettlement || {}),
         });
       } else {
         await this.payableRepo.updateForCompany(payable.id, companyId, {
           paidAmount: state.newPaid,
           balanceAmount: state.newBalance,
           status: state.newStatus,
+          ...(restoredSettlement || {}),
         });
       }
     }

@@ -872,6 +872,8 @@ jobs:
       - name: Finance authority regressions
         if: matrix.suite == 'finance'
         run: |
+          npx tsx src/server/__tests__/fixedDailyInterestIntegration.ts
+          npx tsx src/components/modals/__tests__/fixedDailyInterestUiRegression.tsx
           npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts

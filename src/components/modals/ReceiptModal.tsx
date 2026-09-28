@@ -1,3 +1,4 @@
+import { SettlementLateInterest, settlementQuote, settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
@@ -24,7 +25,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
+  const [dailyInterest, setDailyInterest] = useState<number | null>(null);
+  const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -34,6 +37,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
   useEffect(() => {
     if (receivable) {
+      amountEdited.current = false;
+      setDailyInterest(null);
       setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
@@ -46,6 +51,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const loadOptions = async () => {
     try {
       const options = await FinanceSettlementClient.getOptions();
+      setDailyInterest(options.fixedDailyInterest?.RECEIVABLE ?? null);
       setAccounts(options.accounts);
       setMethods(options.paymentMethods);
       if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
@@ -57,6 +63,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     }
   };
 
+  const quote = settlementQuote(receivable, paymentDate, dailyInterest);
+  const settlementTotal = quote?.totalAmount ?? receivable?.balanceAmount ?? 0;
+  useEffect(() => {
+    if (!amountEdited.current && receivable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
+  }, [settlementTotal, receivable]);
+
   if (!isOpen || !receivable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,8 +79,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       setError('O valor a receber deve ser maior que zero.');
       return;
     }
-    if (paymentAmount > receivable.balanceAmount) {
-      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o saldo restante (${formatCurrencyBRL(receivable.balanceAmount)}).`);
+    if (paymentAmount > settlementTotal) {
+      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o saldo restante (${formatCurrencyBRL(settlementTotal)}).`);
       return;
     }
 
@@ -92,6 +104,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       await FinanceSettlementClient.registerReceipt(receivable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount,
+        ...(quote ? { interestAmount: quote.additionalInterest } : {}),
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
@@ -160,6 +173,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
           </div>
 
+          <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Valor a Receber (R$) *
@@ -171,14 +185,14 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               value={amount}
               onChange={(e) => {
                 const draft = normalizeCurrencyDraft(e.target.value);
-                if (draft !== null && draft !== amount) { setAmount(draft); rotateCommandKey(); }
+                if (draft !== null && draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
               }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
             <span className="text-[11px] text-slate-500 mt-1 block">
               Permite liquidação parcial se o valor for menor que R${' '}
-              {receivable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              {settlementTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
 

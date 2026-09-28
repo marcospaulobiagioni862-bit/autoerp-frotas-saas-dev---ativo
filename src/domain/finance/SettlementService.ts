@@ -1,3 +1,5 @@
+import { fixedSettlementQuote } from './dailyLateInterest';
+import { requestedAdjustments, settlementState, type SettlementComposition } from './settlementComposition';
 import { ITransactionContext } from './ITransactionContext';
 import {
   AccountReceivableRepository,
@@ -89,6 +91,35 @@ export class SettlementService {
     if (!matches) {
       throw new Error('Chave de idempotência reutilizada com comando de liquidação diferente');
     }
+  }
+
+  private static async checkRetryAdjustments(existing: FinancialTransaction, params: SettlementParams, tx: ITransactionContext) {
+    const requested = requestedAdjustments(params);
+    const evidence = await tx.findSettlementComposition?.(existing.id);
+    if (evidence) {
+      const interest = requested.interestAmount ?? evidence.applied.interestAmount;
+      if (requested.fineAmount !== evidence.requested.fineAmount || requested.discountAmount !== evidence.requested.discountAmount || interest !== evidence.applied.interestAmount) throw new Error('Chave de idempotência reutilizada com ajustes diferentes');
+    } else if (requested.fineAmount || requested.interestAmount || requested.discountAmount) {
+      throw new Error('Composição histórica da liquidação indisponível para validar retry com ajustes');
+    }
+  }
+
+  private static async appliedAdjustments(params: SettlementParams, obligation: AccountReceivable | AccountPayable, kind: 'RECEIVABLE' | 'PAYABLE', tx?: ITransactionContext) {
+    const requested = requestedAdjustments(params);
+    const daily = await tx?.findFixedDailyInterest?.(kind);
+    const interestAmount = daily == null ? requested.interestAmount ?? 0 : fixedSettlementQuote(obligation, params.paymentDate, daily).additionalInterest;
+    if (daily != null && requested.interestAmount != null && requested.interestAmount !== interestAmount) throw new Error('Juros divergem do cálculo autoritativo; atualize a liquidação');
+    return { fineAmount: requested.fineAmount, interestAmount, discountAmount: requested.discountAmount };
+  }
+
+  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; discountAmount: number}, tx?: ITransactionContext) {
+    const composition: SettlementComposition = {
+      version: 1, transactionId: transaction.id, obligationId: params.obligationId,
+      requested: requestedAdjustments(params), applied, movementAmount: params.paymentAmount,
+      balanceReduction: roundCurrency(params.paymentAmount - applied.fineAmount - applied.interestAmount + applied.discountAmount),
+      before: settlementState(before), after: settlementState(after),
+    };
+    await AuditLogger.logAction(params.companyId, 'FinancialSettlement', transaction.id, AuditAction.CREATE, params.userId, params.userName, undefined, composition, tx);
   }
 
   private static async validatePaymentMethod(params: SettlementParams, txContext?: ITransactionContext): Promise<void> {
@@ -251,6 +282,7 @@ export class SettlementService {
     if (txContext && idempotencyKey) {
       const existing = await txContext.findFinancialTransactionByIdempotencyKey!(idempotencyKey);
       if (existing) {
+        await this.checkRetryAdjustments(existing, params, txContext);
         this.assertRetryMatches(
           existing,
           params,
@@ -272,9 +304,8 @@ export class SettlementService {
       throw new Error(`Título em status ${receivable.status} não aceita recebimento`);
     }
 
-    const fine = params.fineAmount || 0;
-    const interest = params.interestAmount || 0;
-    const discount = params.discountAmount || 0;
+    const applied = await this.appliedAdjustments(params, receivable, 'RECEIVABLE', txContext);
+    const { fineAmount: fine, interestAmount: interest, discountAmount: discount } = applied;
 
     const newFineAmount = Number(receivable.fineAmount) + fine;
     const newInterestAmount = Number(receivable.interestAmount) + interest;
@@ -353,6 +384,7 @@ export class SettlementService {
         updatedReceivable,
         txContext
       );
+      await this.auditComposition(params, previousState, updatedReceivable, savedTransaction, applied, txContext);
       await this.syncSecurityDepositReceipt(receivable, savedTransaction, params.paymentAmount, params, txContext);
 
       return { receivable: updatedReceivable, transaction: savedTransaction };
@@ -405,6 +437,7 @@ export class SettlementService {
     if (txContext && idempotencyKey) {
       const existing = await txContext.findFinancialTransactionByIdempotencyKey!(idempotencyKey);
       if (existing) {
+        await this.checkRetryAdjustments(existing, params, txContext);
         this.assertRetryMatches(
           existing,
           params,
@@ -433,9 +466,9 @@ export class SettlementService {
     await this.getLockedAccount(params, txContext);
     await this.validatePaymentMethod(params, txContext);
 
-    const fine = params.fineAmount || 0;
-    const interest = params.interestAmount || 0;
-    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, params, txContext);
+    const applied = await this.appliedAdjustments(params, payable, 'PAYABLE', txContext);
+    const { fineAmount: fine, interestAmount: interest } = applied;
+    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, { ...params, interestAmount: interest }, txContext);
 
     const newFineAmount = Number(payable.fineAmount) + fine;
     const newInterestAmount = Number(payable.interestAmount) + interest;
@@ -516,6 +549,7 @@ export class SettlementService {
         txContext
       );
 
+      await this.auditComposition(params, previousState, updatedPayable, savedTransaction, { ...applied, discountAmount: discount }, txContext);
       return { payable: updatedPayable, transaction: savedTransaction };
     } catch (error) {
       if (!txContext) {

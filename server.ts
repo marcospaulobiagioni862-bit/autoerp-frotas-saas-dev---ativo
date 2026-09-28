@@ -913,6 +913,10 @@ async function startServer() {
         const accounts = await accountRepo.findAll();
         const paymentMethods = await paymentMethodRepo.findAll();
         return {
+          fixedDailyInterest: {
+            RECEIVABLE: await txContext.findFixedDailyInterest('RECEIVABLE'),
+            PAYABLE: await txContext.findFixedDailyInterest('PAYABLE'),
+          },
           accounts: accounts.filter((item: any) => item.status === 'ACTIVE'),
           paymentMethods: paymentMethods.filter((item: any) => item.active !== false),
         };
@@ -938,6 +942,9 @@ async function startServer() {
               financialAccountId: req.body?.financialAccountId,
               paymentMethodId: req.body?.paymentMethodId,
               paymentAmount: Number(req.body?.paymentAmount),
+              interestAmount: req.body?.interestAmount === undefined ? undefined : Number(req.body.interestAmount),
+              fineAmount: req.body?.fineAmount === undefined ? undefined : Number(req.body.fineAmount),
+              discountAmount: req.body?.discountAmount === undefined ? undefined : Number(req.body.discountAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
               idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',
@@ -969,6 +976,9 @@ async function startServer() {
               financialAccountId: req.body?.financialAccountId,
               paymentMethodId: req.body?.paymentMethodId,
               paymentAmount: Number(req.body?.paymentAmount),
+              interestAmount: req.body?.interestAmount === undefined ? undefined : Number(req.body.interestAmount),
+              fineAmount: req.body?.fineAmount === undefined ? undefined : Number(req.body.fineAmount),
+              discountAmount: req.body?.discountAmount === undefined ? undefined : Number(req.body.discountAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
               idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',

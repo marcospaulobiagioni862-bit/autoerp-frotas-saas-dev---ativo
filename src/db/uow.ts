@@ -64,6 +64,20 @@ export class UnitOfWork {
       await tx.execute(sql`SELECT set_config('app.current_tenant', ${companyId}, true)`);
       await applyFinancialPeriodLock(tx,companyId,options?.financialPeriodLock);
       const txContext:any={
+        findFixedDailyInterest: async (kind: 'RECEIVABLE' | 'PAYABLE') => {
+          const result = await tx.execute(sql`SELECT daily_interest_amount FROM finance_late_charge_rules WHERE company_id=${companyId} AND obligation_type=${kind} AND active=true FOR SHARE`);
+          const value = result.rows?.[0]?.daily_interest_amount;
+          return value == null ? null : Number(value);
+        },
+        findSettlementComposition: async (transactionId: string) => {
+          const result = await tx.execute(sql`SELECT changes FROM audit_logs WHERE company_id=${companyId} AND entity_type='FinancialSettlement' AND entity_id=${transactionId}`);
+          if (!result.rows?.length) return null;
+          if (result.rows.length !== 1) throw new Error('Auditoria da liquidação ambígua');
+          const changes = typeof result.rows[0].changes === 'string' ? JSON.parse(result.rows[0].changes) : result.rows[0].changes;
+          const value = typeof changes.newState === 'string' ? JSON.parse(changes.newState) : changes.newState;
+          if (value?.version !== 1 || value.transactionId !== transactionId) throw new Error('Composição da liquidação inválida');
+          return value;
+        },
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
         getKmRecordRepo:()=>new PostgresKmRecordRepository(tx),
