@@ -823,7 +823,6 @@ jobs:
       - name: Core authority regressions
         if: matrix.suite == 'core'
         run: |
-          npx tsx src/server/__tests__/vehicleKmAuthorityIntegration.ts
           npx tsx src/server/__tests__/runtimeReadModelAuthority.ts
           npx tsx src/server/__tests__/productionTrustBoundary.ts
           npx tsx src/server/__tests__/tenantProfileAuthorityIntegration.ts
@@ -847,6 +846,7 @@ jobs:
       - name: Fleet domain regressions
         if: matrix.suite == 'fleet'
         run: |
+          npx tsx src/server/__tests__/vehicleKmAuthorityIntegration.ts
           npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
           npx tsx src/components/fleet/__tests__/vehicleDetailsPresentationTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
