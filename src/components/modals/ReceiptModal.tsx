@@ -26,7 +26,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
-  const [dailyInterest, setDailyInterest] = useState<number | null>(null);
+  const [dailyInterest, setDailyInterest] = useState<string>('0,00');
   const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
@@ -38,7 +38,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   useEffect(() => {
     if (receivable) {
       amountEdited.current = false;
-      setDailyInterest(null);
+      setDailyInterest('0,00');
       setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
@@ -51,7 +51,6 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const loadOptions = async () => {
     try {
       const options = await FinanceSettlementClient.getOptions();
-      setDailyInterest(options.fixedDailyInterest?.RECEIVABLE ?? null);
       setAccounts(options.accounts);
       setMethods(options.paymentMethods);
       if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
@@ -63,7 +62,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     }
   };
 
-  const quote = settlementQuote(receivable, paymentDate, dailyInterest);
+  const quote = settlementQuote(receivable, paymentDate, parseCurrencyDraft(dailyInterest));
   const settlementTotal = quote?.totalAmount ?? receivable?.balanceAmount ?? 0;
   useEffect(() => {
     if (!amountEdited.current && receivable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
@@ -75,6 +74,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     e.preventDefault();
     const paymentAmount = parseCurrencyDraft(amount);
     if (submittingRef.current || confirmOpen) return;
+    if (!Number.isFinite(parseCurrencyDraft(dailyInterest))) { setError('Diária inválida'); return; }
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
@@ -104,7 +104,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       await FinanceSettlementClient.registerReceipt(receivable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount,
-        ...(quote ? { interestAmount: quote.additionalInterest } : {}),
+        dailyInterestAmount: parseCurrencyDraft(dailyInterest),
+          ...(quote ? { interestAmount: quote.additionalInterest } : {}),
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Recebimento de título via portal operacional',
@@ -173,6 +174,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
           </div>
 
+          <label>Valor da diária de atraso (R$)
+            <input aria-label="Diária de atraso (R$)" type="text" value={dailyInterest} onChange={e => { const draft = normalizeCurrencyDraft(e.target.value); if (draft !== null) { setDailyInterest(draft); rotateCommandKey(); } }} />
+          </label>
           <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">

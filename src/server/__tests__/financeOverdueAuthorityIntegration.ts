@@ -272,8 +272,8 @@ async function payableNotDuePaidCancelledAndClosedPeriod(): Promise<void> {
 
   const overdueRow = await payable(overdue);
   assert(overdueRow.status === 'OVERDUE', 'overdue payable status was not persisted');
-  money(overdueRow.fine_amount, 3, 'payable fine must use remaining principal');
-  money(overdueRow.interest_amount, 1.5, 'payable interest must use remaining principal');
+  money(overdueRow.fine_amount, 0, 'CP must not accrue a global fine');
+  money(overdueRow.interest_amount, 0, 'CP must not accrue global interest');
 
   const futureRow = await payable(future);
   money(futureRow.fine_amount, 0, 'not-yet-due payable received fine');
@@ -364,17 +364,17 @@ async function r11TrafficTicketInteraction(): Promise<void> {
 
   const processed = await payable(overduePayableId);
   assert(processed.status === 'OVERDUE', 'unpaid traffic ticket was not marked overdue');
-  money(processed.fine_amount, 4, 'R12 did not persist overdue ticket fine');
-  money(processed.interest_amount, 1, 'R12 did not persist overdue ticket interest');
+  money(processed.fine_amount, 0, 'CP must not accrue a global fine');
+  money(processed.interest_amount, 0, 'CP must not accrue global interest');
   money(processed.discount_amount, 0, 'R12 manufactured an expired traffic-ticket discount');
-  money(processed.updated_amount, 205, 'R12 overdue ticket total is incorrect');
+  money(processed.updated_amount, 200, 'CP original debt must be preserved');
 
   const beforeBalance = await accountBalance();
   const expiredSettlement = await UnitOfWork.run(
     companyA,
     async (tx) => SettlementService.registerPayment({
       companyId: companyA, obligationId: overduePayableId, financialAccountId: financialAccountA,
-      paymentMethodId: paymentMethodA, paymentAmount: 205, paymentDate: '2026-08-25',
+      paymentMethodId: paymentMethodA, paymentAmount: 205, settleRemainingBalance: true, paymentDate: '2026-08-25',
       idempotencyKey: `r12-expired-payment-${suffix}`, userId: adminA, userName: actorA.name,
     }, tx),
     { financialPeriodLock: 'SHARED' }

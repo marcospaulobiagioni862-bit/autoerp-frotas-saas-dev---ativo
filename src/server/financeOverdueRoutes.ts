@@ -74,7 +74,7 @@ export function parseOverdueProcessRequest(body: unknown): {
 }
 
 export function parseLateChargeRuleRequest(body: unknown): LateChargeRuleInput {
-  const allowed = new Set(['gracePeriodDays', 'finePercent', 'dailyInterestPercent', 'dailyInterestAmount', 'active']);
+  const allowed = new Set(['gracePeriodDays', 'finePercent', 'dailyInterestPercent', 'active']);
   if (!hasOnlyKeys(body, allowed)) throw new FinanceOverdueValidationError();
   const input = body as Record<string, unknown>;
   const gracePeriodDays = finiteNumber(input.gracePeriodDays);
@@ -84,7 +84,6 @@ export function parseLateChargeRuleRequest(body: unknown): LateChargeRuleInput {
     gracePeriodDays,
     finePercent: finiteNumber(input.finePercent),
     dailyInterestPercent: finiteNumber(input.dailyInterestPercent),
-    dailyInterestAmount: input.dailyInterestAmount == null ? null : finiteNumber(input.dailyInterestAmount),
     active: input.active,
   };
 }

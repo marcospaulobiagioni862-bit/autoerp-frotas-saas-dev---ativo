@@ -64,11 +64,6 @@ export class UnitOfWork {
       await tx.execute(sql`SELECT set_config('app.current_tenant', ${companyId}, true)`);
       await applyFinancialPeriodLock(tx,companyId,options?.financialPeriodLock);
       const txContext:any={
-        findFixedDailyInterest: async (kind: 'RECEIVABLE' | 'PAYABLE') => {
-          const result = await tx.execute(sql`SELECT daily_interest_amount FROM finance_late_charge_rules WHERE company_id=${companyId} AND obligation_type=${kind} AND active=true FOR SHARE`);
-          const value = result.rows?.[0]?.daily_interest_amount;
-          return value == null ? null : Number(value);
-        },
         findSettlementComposition: async (transactionId: string) => {
           const result = await tx.execute(sql`SELECT changes FROM audit_logs WHERE company_id=${companyId} AND entity_type='FinancialSettlement' AND entity_id=${transactionId}`);
           if (!result.rows?.length) return null;

@@ -1,4 +1,4 @@
-import { SettlementLateInterest, settlementQuote, settlementLocalDate } from './SettlementLateInterest';
+import { settlementQuote, settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
@@ -26,7 +26,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
-  const [dailyInterest, setDailyInterest] = useState<number | null>(null);
   const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
@@ -38,7 +37,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   useEffect(() => {
     if (payable) {
       amountEdited.current = false;
-      setDailyInterest(null);
       setAmount(payable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
@@ -51,7 +49,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const loadOptions = async () => {
     try {
       const options = await FinanceSettlementClient.getOptions();
-      setDailyInterest(options.fixedDailyInterest?.PAYABLE ?? null);
       setAccounts(options.accounts);
       setMethods(options.paymentMethods);
       if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
@@ -63,7 +60,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
     }
   };
 
-  const quote = settlementQuote(payable, paymentDate, dailyInterest);
+  const quote = settlementQuote(payable, paymentDate, 0);
   const settlementTotal = quote?.totalAmount ?? payable?.balanceAmount ?? 0;
   useEffect(() => {
     if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
@@ -79,11 +76,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
       setError('O valor a pagar deve ser maior que zero.');
       return;
     }
-    if (paymentAmount > settlementTotal) {
-      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o saldo restante (${formatCurrencyBRL(settlementTotal)}).`);
-      return;
-    }
-
     if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
         !methods.some(method => method.id === selectedMethodId && method.active)) {
       setError('Selecione uma conta financeira e um meio de pagamento ativos.');
@@ -104,7 +96,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
       await FinanceSettlementClient.registerPayment(payable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount,
-        ...(quote ? { interestAmount: quote.additionalInterest } : {}),
+        settleRemainingBalance: paymentAmount >= payable.balanceAmount,
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Pagamento efetuado via portal operacional',
@@ -173,10 +165,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </div>
           </div>
 
-          <SettlementLateInterest quote={quote} balanceAmount={payable.balanceAmount} hasPreviousAdjustments={Boolean(payable.interestAmount || payable.fineAmount || payable.discountAmount)} dueDate={payable.dueDate} kind="pagar" />
+          <dl aria-label="Composição do pagamento">
+            <div>Dias de atraso: {quote?.daysOverdue ?? 0}</div>
+            <div>{payable.interestAmount || payable.fineAmount || payable.discountAmount ? 'Saldo liquidado (inclui ajustes anteriores)' : 'Principal liquidado'}: {formatCurrencyBRL(Math.min(parseCurrencyDraft(amount) || 0, payable.balanceAmount))}</div>
+            <div>Juros/acréscimos: {formatCurrencyBRL(Math.max(0, (parseCurrencyDraft(amount) || 0) - payable.balanceAmount))}</div>
+            <div>Valor efetivamente pago: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
+          </dl>
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor a Pagar (R$) *
+              Valor Efetivamente Pago (R$) *
             </label>
             <input
               type="text"
