@@ -127,7 +127,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'fleet', label: 'Veículos', icon: Car },
         { id: 'drivers', label: 'Motoristas', icon: Users },
         { id: 'contracts', label: 'Contratos', icon: FileText },
-
+        { id: 'maintenance', label: 'Manutenção', icon: Wrench },
+        { id: 'trafficTickets', label: 'Multas', icon: AlertTriangle },
+        { id: 'documentos', label: 'Documentos', icon: FolderOpen },
       ],
     },
     {
