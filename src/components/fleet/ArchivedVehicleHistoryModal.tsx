@@ -21,6 +21,21 @@ type Tab = 'overview' | 'driver' | 'km' | 'maintenance' | 'tickets' | 'documents
 
 const dateBR = (value?: string) => value ? new Date(`${value.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR') : '-';
 const lifecycleLabel = (action: VehicleLifecycleEvent['action']) => action === 'SOLD' ? 'Venda' : action === 'RESTORED' ? 'Retorno ao estoque' : 'Arquivamento';
+const contractStatusLabel = (value?: string) => ({
+  DRAFT: 'Rascunho', AWAITING_SIGNATURE: 'Aguardando assinatura', ACTIVE: 'Ativo', SUSPENDED: 'Suspenso',
+  FINISHED: 'Finalizado', CLOSED: 'Encerrado', CANCELLED: 'Cancelado', ARCHIVED: 'Arquivado',
+}[String(value || '')] || 'Não informado');
+const kmTypeLabel = (value?: string) => ({
+  CHECK_IN: 'Entrada', CHECK_OUT: 'Saída', PERIODIC: 'Periódica', MAINTENANCE: 'Manutenção',
+}[String(value || '')] || 'Outro');
+const maintenanceTypeLabel = (value?: string) => ({
+  PREVENTIVE: 'Preventiva', CORRECTIVE: 'Corretiva', REVISION: 'Revisão', OIL_CHANGE: 'Troca de óleo',
+  TIRES: 'Pneus', BRAKES: 'Freios', SUSPENSION: 'Suspensão', ELECTRICAL: 'Elétrica', BODYWORK: 'Funilaria', OTHER: 'Outro',
+}[String(value || '')] || 'Outro');
+const ticketStatusLabel = (value?: string) => ({
+  PENDING_IDENTIFICATION: 'Aguardando identificação', IDENTIFIED: 'Identificada', CHARGED_DRIVER: 'Cobrança gerada ao motorista',
+  COMPANY_PAYABLE_CREATED: 'Conta a pagar criada', PAID_BY_COMPANY: 'Pago pela empresa', APPEALED: 'Em recurso', CANCELLED: 'Cancelada',
+}[String(value || '')] || 'Não informado');
 
 export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalProps> = ({ isOpen, onClose, vehicleId }) => {
   const [summary, setSummary] = useState<VehicleDetailedSummary | null>(null);
@@ -121,13 +136,25 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
           {activeTab === 'lifecycle' && (
             <div className="space-y-2 text-xs">
               {lifecycle.length === 0 ? <p className="p-5 border rounded-xl text-slate-500 text-center">Nenhum evento de ciclo de vida registrado.</p> : lifecycle.map((event) => (
-                <div key={event.id} className="p-3 border rounded-xl">
+                <div key={event.id} className="p-4 border rounded-xl space-y-2">
                   <div className="flex justify-between gap-3"><strong>{lifecycleLabel(event.action)}</strong><span>{dateBR(event.effectiveDate)}</span></div>
-                  <p className="mt-1">Motivo: {event.reason}</p>
-                  {event.saleValue !== undefined && <p>Valor: {formatCurrencyBRL(event.saleValue)}</p>}
-                  {event.finalKm !== undefined && <p>KM final: {event.finalKm.toLocaleString('pt-BR')} KM</p>}
-                  {event.buyerName && <p>Comprador: {event.buyerName}</p>}
-                  {event.notes && <p className="text-slate-500 mt-1">{event.notes}</p>}
+                  {event.action === 'SOLD' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+                      <p><strong>Tipo da baixa:</strong> {event.disposalType || 'Venda'}</p>
+                      <p><strong>Valor da venda:</strong> {event.saleValue !== undefined ? formatCurrencyBRL(event.saleValue) : '-'}</p>
+                      <p><strong>KM na venda:</strong> {event.finalKm !== undefined ? `${event.finalKm.toLocaleString('pt-BR')} KM` : '-'}</p>
+                      <p><strong>Motivo:</strong> {event.reason}</p>
+                      <p><strong>Comprador:</strong> {event.buyerName || 'Não informado'}</p>
+                      <p><strong>CPF/CNPJ do comprador:</strong> {event.buyerDocument || 'Não informado'}</p>
+                      <p className="sm:col-span-2"><strong>Registrado por:</strong> {event.createdByName || event.createdBy || 'Não identificado'}</p>
+                      {event.notes && <p className="sm:col-span-2 text-slate-500"><strong>Observações:</strong> {event.notes}</p>}
+                    </div>
+                  ) : (
+                    <>
+                      <p>Motivo: {event.reason}</p>
+                      <p className="text-slate-500">Registrado por: {event.createdByName || event.createdBy || 'Não identificado'}</p>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -136,20 +163,20 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
           {activeTab === 'driver' && (
             <div className="space-y-3 text-xs">
               <div className="p-4 border rounded-xl"><h4 className="font-bold mb-2">Último vínculo visível</h4>{summary.driver ? <><p>Motorista: <strong>{summary.driver.name}</strong></p><p>CPF: <strong className="font-mono">{summary.driver.cpf}</strong></p><p>CNH: <strong className="font-mono">{summary.driver.cnhNumber}</strong></p></> : <p className="text-slate-500">Sem motorista atualmente vinculado.</p>}</div>
-              <div className="p-4 border rounded-xl"><h4 className="font-bold mb-2">Contrato</h4>{summary.activeContract ? <><p>Número: <strong>{summary.activeContract.contractNumber}</strong></p><p>Status: <strong>{summary.activeContract.status}</strong></p><p>Início: <strong>{dateBR(summary.activeContract.startDate)}</strong></p></> : <p className="text-slate-500">Sem contrato ativo.</p>}</div>
+              <div className="p-4 border rounded-xl"><h4 className="font-bold mb-2">Contrato</h4>{summary.activeContract ? <><p>Número: <strong>{summary.activeContract.contractNumber}</strong></p><p>Status: <strong>{contractStatusLabel(summary.activeContract.status)}</strong></p><p>Início: <strong>{dateBR(summary.activeContract.startDate)}</strong></p></> : <p className="text-slate-500">Sem contrato ativo.</p>}</div>
             </div>
           )}
 
           {activeTab === 'km' && (
-            <div className="overflow-x-auto border rounded-xl text-xs"><table className="w-full text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-2.5">Data</th><th className="p-2.5">Leitura</th><th className="p-2.5">Tipo</th><th className="p-2.5">Observação</th></tr></thead><tbody>{summary.kmRecords.map((row) => <tr key={row.id} className="border-b"><td className="p-2.5">{dateBR(row.recordDate)}</td><td className="p-2.5 font-mono font-bold">{row.kmValue.toLocaleString('pt-BR')} KM</td><td className="p-2.5">{row.readingType}</td><td className="p-2.5 text-slate-500">{row.notes || '-'}</td></tr>)}</tbody></table></div>
+            <div className="overflow-x-auto border rounded-xl text-xs"><table className="w-full text-left"><thead className="bg-slate-50 border-b"><tr><th className="p-2.5">Data</th><th className="p-2.5">Leitura</th><th className="p-2.5">Tipo</th><th className="p-2.5">Observação</th></tr></thead><tbody>{summary.kmRecords.map((row) => <tr key={row.id} className="border-b"><td className="p-2.5">{dateBR(row.recordDate)}</td><td className="p-2.5 font-mono font-bold">{row.kmValue.toLocaleString('pt-BR')} KM</td><td className="p-2.5">{kmTypeLabel(row.readingType)}</td><td className="p-2.5 text-slate-500">{row.notes || '-'}</td></tr>)}</tbody></table></div>
           )}
 
           {activeTab === 'maintenance' && (
-            <div className="space-y-2 text-xs">{summary.maintenances.length === 0 ? <p className="p-5 border rounded-xl text-center text-slate-500">Nenhuma manutenção registrada.</p> : summary.maintenances.map((m: any) => <div key={m.id} className="p-3 border rounded-xl flex justify-between gap-3"><div><strong>{m.type}</strong><p className="text-slate-500">{m.description}</p><p>{dateBR(m.startDate)} • {m.kmAtMaintenance?.toLocaleString('pt-BR') || '-'} KM</p></div><strong className="font-mono">{formatCurrencyBRL(m.totalCost || 0)}</strong></div>)}</div>
+            <div className="space-y-2 text-xs">{summary.maintenances.length === 0 ? <p className="p-5 border rounded-xl text-center text-slate-500">Nenhuma manutenção registrada.</p> : summary.maintenances.map((m: any) => <div key={m.id} className="p-3 border rounded-xl flex justify-between gap-3"><div><strong>{maintenanceTypeLabel(m.type)}</strong><p className="text-slate-500">{m.description}</p><p>{dateBR(m.startDate)} • {m.kmAtMaintenance?.toLocaleString('pt-BR') || '-'} KM</p></div><strong className="font-mono">{formatCurrencyBRL(m.totalCost || 0)}</strong></div>)}</div>
           )}
 
           {activeTab === 'tickets' && (
-            <div className="space-y-2 text-xs">{summary.trafficTickets.length === 0 ? <p className="p-5 border rounded-xl text-center text-slate-500">Nenhuma multa registrada.</p> : summary.trafficTickets.map((ticket: any) => <div key={ticket.id} className="p-3 border rounded-xl flex justify-between gap-3"><div><strong className="font-mono">{ticket.noticeNumber}</strong><p>{ticket.description}</p><p className="text-slate-500">{dateBR(ticket.ticketDate)} • {ticket.status}</p></div><strong className="font-mono">{formatCurrencyBRL(ticket.amount || 0)}</strong></div>)}</div>
+            <div className="space-y-2 text-xs">{summary.trafficTickets.length === 0 ? <p className="p-5 border rounded-xl text-center text-slate-500">Nenhuma multa registrada.</p> : summary.trafficTickets.map((ticket: any) => <div key={ticket.id} className="p-3 border rounded-xl flex justify-between gap-3"><div><strong className="font-mono">{ticket.noticeNumber}</strong><p>{ticket.description}</p><p className="text-slate-500">{dateBR(ticket.ticketDate)} • {ticketStatusLabel(ticket.status)}</p></div><strong className="font-mono">{formatCurrencyBRL(ticket.amount || 0)}</strong></div>)}</div>
           )}
 
           {activeTab === 'documents' && (
