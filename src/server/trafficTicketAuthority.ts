@@ -192,11 +192,14 @@ export class TrafficTicketAuthorityService {
       const repo=tx.getTrafficTicketRepo();const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,input.vehicleId);if(!vehicle||vehicle.isArchived)throw new TrafficTicketNotFoundError('Veículo não encontrado');
       if(await repo.findByAutoNumber(principal.companyId,autoNumber))throw new TrafficTicketConflictError('Auto de infração já cadastrado');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
-      const resolved=await resolveContract(rawTx,principal.companyId,input.vehicleId,input.infractionDate,input.contractId,input.driverId);
-      let driverId=input.driverId,contractId=input.contractId;
-      if(!contractId&&resolved.contractId)contractId=resolved.contractId;
-      if(input.responsibility===TicketResponsibility.DRIVER&&!driverId&&resolved.driverId)driverId=resolved.driverId;
-      if(input.responsibility===TicketResponsibility.DRIVER&&!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
+      let driverId: string|undefined;
+      let contractId: string|undefined;
+      if(input.responsibility===TicketResponsibility.DRIVER){
+        const resolved=await resolveContract(rawTx,principal.companyId,input.vehicleId,input.infractionDate,input.contractId,input.driverId);
+        driverId=input.driverId||resolved.driverId;
+        contractId=input.contractId||resolved.contractId;
+        if(!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
+      }
       await validateCategory(rawTx,principal.companyId,input.baseExpenseCategoryId,'EXPENSE');
       if(input.responsibility===TicketResponsibility.DRIVER)await validateCategory(rawTx,principal.companyId,input.driverIncomeCategoryId!,'INCOME');
       const nicCategory=input.nicExpenseCategoryId||input.baseExpenseCategoryId;
