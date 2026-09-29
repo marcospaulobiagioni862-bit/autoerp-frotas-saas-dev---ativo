@@ -35,7 +35,6 @@ import {
 import { DriverClient } from '../../api/driverClient';
 import {
   WhatsappClient,
-  type WhatsappConsent,
   type WhatsappOutboxItem,
   type WhatsappTaskProposal,
   type WhatsappObservabilitySummary,
@@ -171,7 +170,6 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
 
-  const [whatsappConsent, setWhatsappConsent] = useState<WhatsappConsent | null>(null);
   const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
   const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
   const [whatsappObservability, setWhatsappObservability] = useState<WhatsappObservabilitySummary | null>(null);
@@ -230,18 +228,16 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setWhatsappLoading(true);
     setWhatsappError(null);
     try {
-      const [consent, outbox, taskProposals, observability] = await Promise.all([
-        WhatsappClient.getConsent(driverId),
+      const [outbox, taskProposals, observability] = await Promise.all([
         WhatsappClient.listForDriver(driverId),
         WhatsappClient.listTaskProposalsForDriver(driverId),
         WhatsappClient.getObservability(whatsappWindowDays),
       ]);
-      setWhatsappConsent(consent);
       setWhatsappOutbox(outbox);
       setWhatsappTaskProposals(taskProposals);
       setWhatsappObservability(observability);
     } catch (err: unknown) {
-      setWhatsappError(err instanceof Error ? err.message : 'Erro ao carregar a autoridade de WhatsApp.');
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao carregar as comunicações de WhatsApp.');
     } finally {
       setWhatsappLoading(false);
     }
@@ -252,7 +248,6 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setActiveTab('overview');
     setShowDocumentArchive(false);
     setIsHealthUnlocked(false);
-    setWhatsappConsent(null);
     setWhatsappOutbox([]);
     setWhatsappTaskProposals([]);
     setWhatsappObservability(null);
@@ -376,25 +371,8 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     }
   };
 
-  const handleWhatsappConsent = async (decision: 'GRANT' | 'REVOKE') => {
-    if (!driverId) return;
-    const prompt = decision === 'GRANT'
-      ? 'Confirma que o motorista autorizou o uso deste número para comunicações de WhatsApp?'
-      : 'Revogar o consentimento e cancelar todas as solicitações ainda retidas?';
-    if (!confirm(prompt)) return;
-    setWhatsappLoading(true);
-    setWhatsappError(null);
-    try {
-      await WhatsappClient.decideConsent(driverId, decision);
-      await loadWhatsappData();
-    } catch (err: unknown) {
-      setWhatsappError(err instanceof Error ? err.message : 'Erro ao registrar a decisão de consentimento.');
-      setWhatsappLoading(false);
-    }
-  };
-
   const handlePrepareCnhReminder = async () => {
-    if (!driverId || whatsappConsent?.status !== 'GRANTED') return;
+    if (!driverId) return;
     if (!confirm('Preparar o lembrete de vencimento da CNH? O provedor está desativado e nenhuma mensagem será enviada.')) return;
     setWhatsappLoading(true);
     setWhatsappError(null);
@@ -740,7 +718,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 {whatsappObservability ? (
                   <>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <Card className="p-3"><span className="block text-xs text-slate-400">Outbox</span><strong>{whatsappObservability.outbox.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.outbox.heldProviderDisabled} retidas • {whatsappObservability.outbox.cancelled} canceladas</p></Card>
+                      <Card className="p-3"><span className="block text-xs text-slate-400">Fila de envio</span><strong>{whatsappObservability.outbox.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.outbox.heldProviderDisabled} retidas • {whatsappObservability.outbox.cancelled} canceladas</p></Card>
                       <Card className="p-3"><span className="block text-xs text-slate-400">Eventos</span><strong>{whatsappObservability.webhookEvents.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.webhookEvents.repliesReceived} respostas classificadas</p></Card>
                       <Card className="p-3"><span className="block text-xs text-slate-400">Propostas</span><strong>{whatsappObservability.taskProposals.total}</strong><p className="text-[11px] text-slate-500">{whatsappObservability.taskProposals.pending} aguardando revisão</p></Card>
                     </div>
@@ -753,35 +731,11 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 )}
               </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-bold">Consentimento</h3>
-                    <Badge variant={whatsappConsent?.status === 'GRANTED' ? 'success' : whatsappConsent?.status === 'REVOKED' ? 'danger' : 'neutral'}>
-                      {whatsappConsent?.status === 'GRANTED' ? 'Autorizado' : whatsappConsent?.status === 'REVOKED' ? 'Revogado' : 'Não registrado'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-500">Número verificado pelo servidor: {whatsappConsent?.phoneMasked || 'disponível somente após decisão'}</p>
-                  <p className="text-xs text-slate-500">A decisão deve refletir uma autorização real do motorista. O navegador não escolhe empresa, telefone ou conteúdo.</p>
-                  <div className="flex flex-wrap gap-2">
-                    {whatsappConsent?.status !== 'GRANTED' && (
-                      <Button size="sm" onClick={() => handleWhatsappConsent('GRANT')} isLoading={whatsappLoading}>Registrar consentimento</Button>
-                    )}
-                    {whatsappConsent?.status === 'GRANTED' && (
-                      <Button size="sm" variant="danger" onClick={() => handleWhatsappConsent('REVOKE')} isLoading={whatsappLoading}>Revogar e cancelar pendências</Button>
-                    )}
-                  </div>
-                </Card>
-
-                <Card className="p-4 space-y-3">
-                  <h3 className="text-sm font-bold">Lembrete de vencimento da CNH</h3>
-                  <p className="text-xs text-slate-500">Template fixo, com nome e validade derivados do PostgreSQL pelo servidor. Nenhum texto livre é aceito.</p>
-                  <Button size="sm" variant="outline" disabled={whatsappConsent?.status !== 'GRANTED' || whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
-                  {whatsappConsent?.status !== 'GRANTED' && (
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">É necessário consentimento vigente para preparar a solicitação.</p>
-                  )}
-                </Card>
-              </div>
+              <Card className="p-4 space-y-3">
+                <h3 className="text-sm font-bold">Lembrete de vencimento da CNH</h3>
+                <p className="text-xs text-slate-500">Modelo fixo, com nome e validade derivados do cadastro pelo servidor. O ERP não exige registro de consentimento para preparar a comunicação.</p>
+                <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
+              </Card>
 
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
