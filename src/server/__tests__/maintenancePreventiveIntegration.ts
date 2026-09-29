@@ -42,7 +42,10 @@ async function multiPlanExecution(){
   const wo=await MaintenanceAuthorityService.createWorkOrder(admin,{number:'OS-J2-MULTI-001',vehicleId:vehicleA,entryKm:10100,description:'Preventivas antecipadas múltiplas'});
   await MaintenanceAuthorityService.startWorkOrder(admin,wo.id);
   await MaintenancePreventiveAuthority.linkWorkOrder(admin,planLegacy.id,wo.id);
-  const completed=await MaintenanceAuthorityService.completeWorkOrder(admin,wo.id,{exitKm:10200,preventivePlanIds:[planA.id,planB.id]});
+  let earlyRejected=false;
+  try{await MaintenanceAuthorityService.completeWorkOrder(admin,wo.id,{exitKm:10200,preventivePlanIds:[planA.id,planB.id]});}catch{earlyRejected=true;}
+  assert(earlyRejected,'early preventive execution without justification was accepted');
+  const completed=await MaintenanceAuthorityService.completeWorkOrder(admin,wo.id,{exitKm:10200,preventivePlanIds:[planA.id,planB.id],preventiveExecutionReasons:{[planA.id]:'Troca antecipada por condição observada',[planB.id]:'Substituição conjunta preventiva'}});
   assert(completed.status==='COMPLETED','multi preventive OS did not complete');
   const afterA=await one(sql`SELECT cycle_sequence,last_execution_km,next_due_km,last_work_order_id FROM maintenance_plans WHERE id=${planA.id}`);
   const afterB=await one(sql`SELECT cycle_sequence,last_execution_km,next_due_km,last_work_order_id FROM maintenance_plans WHERE id=${planB.id}`);
@@ -50,9 +53,9 @@ async function multiPlanExecution(){
   assert(Number(afterA.cycle_sequence)===Number(beforeA.cycle_sequence)+1&&Number(afterA.last_execution_km)===10200&&Number(afterA.next_due_km)===15200&&afterA.last_work_order_id===wo.id,'first selected preventive item did not advance from real execution KM');
   assert(Number(afterB.cycle_sequence)===Number(beforeB.cycle_sequence)+1&&Number(afterB.last_execution_km)===10200&&Number(afterB.next_due_km)===17200&&afterB.last_work_order_id===wo.id,'second selected preventive item did not advance from real execution KM');
   assert(Number(afterLegacy.cycle_sequence)===Number(beforeLegacy.cycle_sequence)&&Number(afterLegacy.next_due_km)===Number(beforeLegacy.next_due_km)&&afterLegacy.last_work_order_id!==wo.id,'unselected legacy-linked preventive item advanced unexpectedly');
-  const executions=rows(await db.execute(sql`SELECT maintenance_plan_id,execution_kind,execution_km FROM maintenance_work_order_plan_executions WHERE company_id=${companyA} AND work_order_id=${wo.id} ORDER BY maintenance_plan_id`));
+  const executions=rows(await db.execute(sql`SELECT maintenance_plan_id,execution_kind,execution_km,early_reason FROM maintenance_work_order_plan_executions WHERE company_id=${companyA} AND work_order_id=${wo.id} ORDER BY maintenance_plan_id`));
   assert(executions.length===2,'multi preventive execution did not persist exactly two authoritative items');
-  assert(executions.every((item:any)=>item.execution_kind==='PREVENTIVA_ANTECIPADA'&&Number(item.execution_km)===10200),'early preventive execution classification/KM is wrong');
+  assert(executions.every((item:any)=>item.execution_kind==='PREVENTIVA_ANTECIPADA'&&Number(item.execution_km)===10200&&String(item.early_reason||'').trim().length>0),'early preventive execution classification/KM is wrong');
   await MaintenanceAuthorityService.completeWorkOrder(admin,wo.id,{exitKm:10200,preventivePlanIds:[planA.id,planB.id]});
   assert(Number((await one(sql`SELECT count(*)::int count FROM maintenance_work_order_plan_executions WHERE company_id=${companyA} AND work_order_id=${wo.id}`)).count)===2,'retry duplicated preventive execution items');
   assert(Number((await one(sql`SELECT cycle_sequence FROM maintenance_plans WHERE id=${planA.id}`)).cycle_sequence)===Number(beforeA.cycle_sequence)+1,'retry advanced selected preventive plan twice');
