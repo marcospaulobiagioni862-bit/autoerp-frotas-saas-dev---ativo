@@ -48,7 +48,7 @@ async function seed(): Promise<void> {
   `);
   await db.execute(sql`
     INSERT INTO vehicles(id,company_id,plate,renavam,status,current_km,created_at,updated_at)
-    VALUES(${vehicleId},${companyId},${`R${suffix.slice(0, 6).toUpperCase()}`},${`REN-${suffix}`},'AVAILABLE',1000,NOW(),NOW())
+    VALUES(${vehicleId},${companyId},'ABC1D23',${`REN-${suffix}`},'AVAILABLE',1000,NOW(),NOW())
   `);
   await db.execute(sql`
     INSERT INTO financial_categories(id,company_id,name,type,active,created_at,updated_at)
