@@ -146,6 +146,8 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
                       <p><strong>Motivo:</strong> {event.reason}</p>
                       <p><strong>Comprador:</strong> {event.buyerName || 'Não informado'}</p>
                       <p><strong>CPF/CNPJ do comprador:</strong> {event.buyerDocument || 'Não informado'}</p>
+                      <p><strong>Telefone do comprador:</strong> {event.buyerPhone || 'Não informado'}</p>
+                      <p><strong>E-mail do comprador:</strong> {event.buyerEmail || 'Não informado'}</p>
                       <p className="sm:col-span-2"><strong>Registrado por:</strong> {event.createdByName || event.createdBy || 'Não identificado'}</p>
                       {event.notes && <p className="sm:col-span-2 text-slate-500"><strong>Observações:</strong> {event.notes}</p>}
                     </div>
