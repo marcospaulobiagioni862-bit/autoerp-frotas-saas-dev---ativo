@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
-import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import type { FileAttachment } from '../../types/entities/audit';
@@ -9,19 +8,12 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { AttachmentList } from './AttachmentList';
-import { DocumentAiReviewPanel } from './DocumentAiReviewPanel';
 import {
-  createDocumentAiStatusCounts,
   createDocumentCenterActiveFilters,
   createDocumentCenterResultSummary,
   DOCUMENT_CENTER_DEFAULT_FILTERS,
-  getDocumentAiActionRequiredSelection,
   hasActiveDocumentCenterFilters,
-  matchesDocumentAiStatusFilter,
   resetDocumentCenterFilter,
-  sortDocumentAiAttachments,
-  type DocumentAiStatusFilter,
-  type DocumentAiStatusSort,
   type DocumentCenterFilterKey,
   type DocumentCenterFilterState,
 } from './documentAiStatusFilter';
@@ -60,11 +52,6 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
   const [searchTerm, setSearchTerm] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.searchTerm);
   const [entityTypeFilter, setEntityTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
   const [documentTypeFilter, setDocumentTypeFilter] = useState(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
-  const [extractionStatusFilter, setExtractionStatusFilter] = useState<DocumentAiStatusFilter>(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
-  const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST');
-  const [documentAiRefreshKey, setDocumentAiRefreshKey] = useState(0);
-  const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
-  const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
   const [driverNamesById, setDriverNamesById] = useState<Record<string, string>>({});
   const [vehicleLabelsById, setVehicleLabelsById] = useState<Record<string, string>>({});
   const [validityFilter, setValidityFilter] = useState<DocumentValidityFilter>('ALL');
@@ -73,9 +60,8 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     setLoading(true);
     setError(null);
     try {
-      const [attachmentsResult, statusesResult, driversResult, vehiclesResult] = await Promise.allSettled([
+      const [attachmentsResult, driversResult, vehiclesResult] = await Promise.allSettled([
         AttachmentClient.list(),
-        DocumentAiClient.attachmentStatuses(),
         DriverClient.list(),
         VehicleClient.list(),
       ]);
@@ -94,15 +80,6 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
       } else {
         setVehicleLabelsById({});
       }
-      if (statusesResult.status === 'fulfilled') {
-        setAttachmentStatuses(Object.fromEntries(statusesResult.value.map((item) => [item.attachmentId, item])));
-        setAttachmentStatusesUnavailable(false);
-      } else {
-        setAttachmentStatuses({});
-        setAttachmentStatusesUnavailable(true);
-        setExtractionStatusFilter('ALL');
-        setExtractionSort('ATTACHMENT_NEWEST');
-      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar documentos.');
     } finally {
@@ -119,13 +96,15 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     setSearchTerm(focusFileName);
     setEntityTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.entityType);
     setDocumentTypeFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.documentType);
-    setExtractionStatusFilter(DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter);
-    setExtractionSort(DOCUMENT_CENTER_DEFAULT_FILTERS.sort);
     onFocusConsumed?.();
   }, [focusFileName, onFocusConsumed]);
 
-  const availableAttachmentCount = attachments.filter((attachment) => !attachment.isArchived).length;
-  const baseFilteredAttachments = attachments.filter((att) => {
+  const INTERNAL_DOCUMENT_ENTITY_TYPES = new Set(['DriverDocumentIntake','VehicleDocumentIntake','TrafficTicketDocumentIntake']);
+  const libraryAttachments = attachments.filter((attachment) =>
+    !attachment.isArchived && !INTERNAL_DOCUMENT_ENTITY_TYPES.has(String(attachment.entityType || ''))
+  );
+  const availableAttachmentCount = libraryAttachments.length;
+  const baseFilteredAttachments = libraryAttachments.filter((att) => {
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       att.fileName.toLowerCase().includes(term) ||
@@ -138,37 +117,12 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     const matchesValidity = matchesValidityFilter(att.expirationDate, validityFilter);
     return matchesSearch && matchesEntity && matchesDoc && matchesValidity && !att.isArchived;
   });
-  const extractionStatusCounts = createDocumentAiStatusCounts(
-    baseFilteredAttachments.map((attachment) => attachment.id),
-    attachmentStatuses,
-    attachmentStatusesUnavailable,
-  );
-  const statusFilteredAttachments = baseFilteredAttachments.filter((attachment) =>
-    matchesDocumentAiStatusFilter(
-      attachment.id,
-      extractionStatusFilter,
-      attachmentStatuses,
-      attachmentStatusesUnavailable,
-    ),
-  );
-  const filteredAttachments = sortDocumentAiAttachments<FileAttachment>(
-    statusFilteredAttachments,
-    extractionSort,
-    attachmentStatuses,
-  );
-  const statusCountLabel = (count: number | null) => count === null ? '—' : String(count);
-  const actionRequiredSelection = getDocumentAiActionRequiredSelection(attachmentStatusesUnavailable);
-  const focusActionRequired = () => {
-    if (!actionRequiredSelection) return;
-    setExtractionStatusFilter(actionRequiredSelection.statusFilter);
-    setExtractionSort(actionRequiredSelection.sort);
-  };
   const currentFilters: DocumentCenterFilterState = {
     searchTerm,
     entityType: entityTypeFilter,
     documentType: documentTypeFilter,
-    statusFilter: extractionStatusFilter,
-    sort: extractionSort,
+    statusFilter: DOCUMENT_CENTER_DEFAULT_FILTERS.statusFilter,
+    sort: DOCUMENT_CENTER_DEFAULT_FILTERS.sort,
   };
   const activeFilters = createDocumentCenterActiveFilters(currentFilters);
   const filtersActive = hasActiveDocumentCenterFilters(currentFilters) || validityFilter !== 'ALL';
@@ -200,7 +154,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Central de Documentos</h1>
-          <p className="text-sm text-gray-500 mt-1">Gerencie os anexos server-side do sistema em um só lugar.</p>
+          <p className="text-sm text-gray-500 mt-1">Consulte os documentos salvos no ERP em um só lugar.</p>
         </div>
       </div>
 
@@ -216,18 +170,10 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
             >
               Limpar filtros
             </button>
-            <button
-              type="button"
-              onClick={focusActionRequired}
-              disabled={!actionRequiredSelection}
-              className="rounded-md border border-amber-500 px-3 py-1.5 text-sm font-medium text-amber-700 enabled:hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
-            >
-              Priorizar ações necessárias
-            </button>
           </div>
         </div>
         <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
               <div className="relative">
@@ -250,24 +196,6 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado da Extração</label>
-              <Select
-                value={extractionStatusFilter}
-                onChange={(event) => setExtractionStatusFilter(event.target.value as DocumentAiStatusFilter)}
-                disabled={attachmentStatusesUnavailable}
-              >
-                <option value="ALL">Todos os Estados ({statusCountLabel(extractionStatusCounts.ALL)})</option>
-                <option value="NONE">Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})</option>
-                <option value="ACTION_REQUIRED">Ação necessária ({statusCountLabel(extractionStatusCounts.ACTION_REQUIRED)})</option>
-                <option value="PENDING">Na fila ({statusCountLabel(extractionStatusCounts.PENDING)})</option>
-                <option value="PROCESSING">Processando ({statusCountLabel(extractionStatusCounts.PROCESSING)})</option>
-                <option value="REVIEW_REQUIRED">Revisão necessária ({statusCountLabel(extractionStatusCounts.REVIEW_REQUIRED)})</option>
-                <option value="APPROVED">Aprovada ({statusCountLabel(extractionStatusCounts.APPROVED)})</option>
-                <option value="REJECTED">Rejeitada ({statusCountLabel(extractionStatusCounts.REJECTED)})</option>
-                <option value="FAILED">Falhou ({statusCountLabel(extractionStatusCounts.FAILED)})</option>
-              </Select>
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validade</label>
               <Select value={validityFilter} onChange={(event) => setValidityFilter(event.target.value as DocumentValidityFilter)}>
                 <option value="ALL">Todas as validades</option>
@@ -276,19 +204,6 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
                 <option value="DUE_15">Vence entre 8 e 15 dias</option>
                 <option value="VALID">Mais de 15 dias</option>
                 <option value="NO_EXPIRATION">Sem validade informada</option>
-              </Select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ordenação</label>
-              <Select
-                value={extractionSort}
-                onChange={(event) => setExtractionSort(event.target.value as DocumentAiStatusSort)}
-                disabled={attachmentStatusesUnavailable}
-              >
-                <option value="ATTACHMENT_NEWEST">Anexo mais recente</option>
-                <option value="REVIEW_PRIORITY">Prioridade de triagem</option>
-                <option value="EXTRACTION_UPDATED_DESC">Extração atualizada recentemente</option>
-                <option value="EXTRACTION_UPDATED_ASC">Extração atualizada há mais tempo</option>
               </Select>
             </div>
           </div>
@@ -310,14 +225,6 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
             </div>
           ) : null}
         </div>
-      </Card>
-
-      <Card>
-        <div className="p-4 border-b">
-          <h2 className="font-semibold text-lg">Revisão assistida por IA</h2>
-          <p className="text-sm text-gray-500 mt-1">Confira propostas e confiança antes de registrar aprovação ou rejeição.</p>
-        </div>
-        <DocumentAiReviewPanel refreshKey={documentAiRefreshKey} />
       </Card>
 
       <Card>
@@ -345,12 +252,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
             <AttachmentList
               attachments={filteredAttachments}
               onRefresh={() => void fetchDocuments()}
-              attachmentStatuses={attachmentStatuses}
-              attachmentStatusesUnavailable={attachmentStatusesUnavailable}
-              onDocumentAiRequested={() => {
-                setDocumentAiRefreshKey((current) => current + 1);
-                void fetchDocuments();
-              }}
+              showDocumentAiControls={false}
             />
           )}
         </div>
