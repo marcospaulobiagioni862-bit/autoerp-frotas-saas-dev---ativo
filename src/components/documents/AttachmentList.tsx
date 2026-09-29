@@ -20,6 +20,7 @@ interface AttachmentListProps {
   protectLatestDriverCnh?: boolean;
   showProtectedDriverCnh?: boolean;
   excludeAttachmentIds?: string[];
+  showDocumentAiControls?: boolean;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -60,6 +61,7 @@ export function AttachmentList({
   protectLatestDriverCnh = false,
   showProtectedDriverCnh = false,
   excludeAttachmentIds = [],
+  showDocumentAiControls = true,
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -311,12 +313,12 @@ export function AttachmentList({
           {error} Os anexos já carregados continuam disponíveis abaixo.
         </div>
       )}
-      {attachmentStatusesUnavailable && (
+      {showDocumentAiControls && attachmentStatusesUnavailable && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           Estados de extração temporariamente indisponíveis. Os documentos continuam acessíveis.
         </div>
       )}
-      {documentAiMessage && (
+      {showDocumentAiControls && documentAiMessage && (
         <div className={`rounded-md border p-3 text-sm ${
           documentAiMessage.kind === 'success'
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
@@ -335,7 +337,7 @@ export function AttachmentList({
           {visibleAttachments.map((att) => {
             const contentAvailable = hasAvailableContent(att);
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
-            const extractionStatus = attachmentStatuses[att.id];
+            const extractionStatus = showDocumentAiControls ? attachmentStatuses[att.id] : undefined;
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
             const expirationBadge = expirationLabel(att.expirationDate);
             return (
@@ -365,13 +367,13 @@ export function AttachmentList({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-1 sm:ml-4 sm:flex-shrink-0">
-                  {extractionStatus && (
+                  {showDocumentAiControls && extractionStatus && (
                     <Button variant="ghost" size="sm" onClick={() => void handleExtractionHistory(att.id)} title="Histórico sanitizado da extração">
                       <History className="h-4 w-4" />
                       <span className="sr-only">Histórico sanitizado da extração</span>
                     </Button>
                   )}
-                  {canRequestDocumentAi && documentAiEligible && !extractionStatus && (
+                  {showDocumentAiControls && canRequestDocumentAi && documentAiEligible && !extractionStatus && (
                     <Button variant="ghost" size="sm" onClick={() => void handleExtractionRequest(att)} isLoading={requestingExtractionId === att.id} disabled={requestingExtractionId !== null} title="Solicitar extração assistida">
                       <Bot className="h-4 w-4" />
                       <span className="sr-only">Solicitar extração assistida</span>
