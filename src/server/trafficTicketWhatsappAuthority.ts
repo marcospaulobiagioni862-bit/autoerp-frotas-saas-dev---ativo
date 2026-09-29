@@ -64,15 +64,6 @@ export class TrafficTicketWhatsappAuthorityService {
       `))[0];
       if(!driver||driver.is_archived===true||String(driver.status)==='ARCHIVED')throw new TrafficTicketNotFoundError('Motorista não encontrado');
       const phone=normalizeBrazilPhone(driver.whatsapp||driver.phone);
-      const consent=rows(await tx.execute(sql`
-        SELECT status,phone_e164,granted_at
-        FROM whatsapp_consents
-        WHERE company_id=${principal.companyId} AND driver_id=${String(ticket.driver_id)}
-        LIMIT 1
-        FOR SHARE
-      `))[0];
-      if(!consent||String(consent.status)!=='GRANTED'||String(consent.phone_e164)!==phone)throw new TrafficTicketWhatsappConsentRequiredError('Current WhatsApp consent required');
-
       const template=rows(await tx.execute(sql`
         SELECT version,parameter_keys
         FROM whatsapp_template_catalog
@@ -97,7 +88,7 @@ export class TrafficTicketWhatsappAuthorityService {
         points:String(ticket.points??0),amount,dueDate:String(ticket.due_date).slice(0,10),
         indicationDeadline:indication?.indication_deadline?String(indication.indication_deadline).slice(0,10):'não informado',
       };
-      const material=JSON.stringify({companyId:principal.companyId,ticketId,driverId:String(ticket.driver_id),phone,templateKey:TEMPLATE_KEY,templateVersion:version,parameters,consentGrantedAt:String(consent.granted_at||'')});
+      const material=JSON.stringify({companyId:principal.companyId,ticketId,driverId:String(ticket.driver_id),phone,templateKey:TEMPLATE_KEY,templateVersion:version,parameters,dispatchPolicy:'ERP_DIRECT_NO_INTERNAL_CONSENT'});
       const idempotencyKey=createHash('sha256').update(material).digest('hex'),outboxId=`wao_${idempotencyKey.slice(0,32)}`,now=new Date().toISOString();
       const inserted=rows(await tx.execute(sql`
         INSERT INTO whatsapp_outbox(
