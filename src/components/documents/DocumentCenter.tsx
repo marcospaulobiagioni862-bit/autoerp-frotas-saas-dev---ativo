@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
+import { DocumentAiClient } from '../../api/documentAiClient';
 import { DriverClient } from '../../api/driverClient';
 import { InsuranceClient } from '../../api/insuranceClient';
 import { MaintenanceClient } from '../../api/maintenanceClient';
@@ -54,6 +55,8 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     setLoading(true);
     setError(null);
     try {
+      // Technical AI status remains internal to the ERP and is intentionally not rendered in this user-facing library.
+      void DocumentAiClient.attachmentStatuses().catch(() => undefined);
       const [attachmentsResult, vehiclesResult, driversResult, ticketsResult, workOrdersResult, insurancesResult, trackersResult, contractsResult] =
         await Promise.allSettled([
           AttachmentClient.list(),
