@@ -71,7 +71,9 @@ assert.match(intakeModalSource, /activeDrivers\.map/, 'AI intake must limit manu
 assert.match(intakeModalSource, /setContractId\(selected&&selected===suggestions\?\.driver\?\.id\?suggestions\?\.contract\?\.id\|\|''\:''\)/, 'manual driver selection must clear a non-matching contract instead of inventing a link');
 
 assert.match(intakeAuthoritySource, /UPPER\(regexp_replace\(plate,'\[\^A-Za-z0-9\]','','g'\)\)=\$\{plate\}/, 'AI intake must resolve vehicles by exact normalized plate');
-assert.match(intakeAuthoritySource, /matchingVehicles\.length!==1\|\|String\(matchingVehicles\[0\]\.id\)!==vehicleId/, 'materialization must reject absent, duplicate or mismatched vehicle identity');
+assert.match(intakeAuthoritySource, /if\(matchingVehicles\.length>1\)throw new ConflictError\(\)/, 'materialization must reject duplicate normalized vehicle matches');
+assert.match(intakeAuthoritySource, /if\(!confirmUnregisteredVehicle\)throw new ConflictError\(\)/, 'unregistered plate materialization must require explicit human confirmation');
+assert.match(intakeModalSource, /Salvar mesmo assim, mantendo apenas a placa como referência/, 'AI intake must offer explicit save-by-plate confirmation for unregistered vehicles');
 assert.match(intakeAuthoritySource, /contractMatches\.length===1\?contractMatches\[0\]:undefined/, 'AI intake must derive a contract only when exactly one contract covers the infraction date');
 assert.match(intakeAuthoritySource, /requestedDriverId\|\|\(exactContract\?\.driver_id\?String\(exactContract\.driver_id\):undefined\)/, 'driver responsibility may use an explicitly selected driver when no unique contract is available');
 assert.match(intakeAuthoritySource, /is_archived=false AND status='ACTIVE'/, 'manual driver selection must be verified as active in the tenant');
