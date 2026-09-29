@@ -39,6 +39,29 @@ function isUserFile(item: FileAttachment): boolean {
     && !INTERNAL_ENTITY_TYPES.has(String(item.entityType || ''));
 }
 
+function documentVersionKey(item: FileAttachment): string {
+  const entityType = String(item.entityType || item.entityName || 'UNKNOWN').trim().toUpperCase();
+  const entityId = String(item.entityId || 'UNKNOWN').trim();
+  const declaredType = String(item.documentType || '').trim().toUpperCase();
+  const logicalType = declaredType || `FILE:${item.fileName.trim().toLocaleLowerCase('pt-BR')}`;
+  return `${entityType}|${entityId}|${logicalType}`;
+}
+
+function latestTwoDocumentVersions(items: FileAttachment[]): FileAttachment[] {
+  const sorted = [...items].sort((a, b) => {
+    const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return byDate !== 0 ? byDate : b.id.localeCompare(a.id);
+  });
+  const counts = new Map<string, number>();
+  return sorted.filter((item) => {
+    const key = documentVersionKey(item);
+    const current = counts.get(key) || 0;
+    if (current >= 2) return false;
+    counts.set(key, current + 1);
+    return true;
+  });
+}
+
 export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCenterProps = {}) {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [vehicles, setVehicles] = useState<Array<{ id: string; plate: string; brand: string; model: string; version?: string }>>([]);
@@ -70,8 +93,9 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
         ]);
 
       if (attachmentsResult.status === 'rejected') throw attachmentsResult.reason;
-      const nextAttachments = attachmentsResult.value.filter(isUserFile)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const nextAttachments = latestTwoDocumentVersions(
+        attachmentsResult.value.filter(isUserFile),
+      );
       setAttachments(nextAttachments);
 
       const nextVehicles = vehiclesResult.status === 'fulfilled' ? vehiclesResult.value : [];
@@ -183,7 +207,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Central de Documentos</h1>
-        <p className="mt-1 text-sm text-gray-500">Biblioteca dos arquivos salvos no ERP.</p>
+        <p className="mt-1 text-sm text-gray-500">Biblioteca dos arquivos salvos no ERP. Exibe a versão atual e a anterior de cada documento.</p>
       </div>
 
       <Card>
