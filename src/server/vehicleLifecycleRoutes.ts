@@ -83,29 +83,32 @@ function requiredKm(value: unknown): number {
 
 function sendError(res: Response, error: unknown): void {
   if (error instanceof VehicleLifecycleValidationError) {
-    res.status(400).json({ error: 'Invalid vehicle lifecycle request' });
+    res.status(400).json({ error: 'Solicitação de ciclo de vida do veículo inválida' });
     return;
   }
   if (error instanceof VehicleLifecycleConflictError) {
-    res.status(409).json({ error: 'Vehicle lifecycle conflict' });
+    res.status(409).json({ error: error.message || 'Conflito no ciclo de vida do veículo' });
     return;
   }
   if (error instanceof VehicleLifecycleNotFoundError) {
-    res.status(404).json({ error: 'Not found' });
+    res.status(404).json({ error: 'Veículo não encontrado' });
     return;
   }
   console.error('AUTOERP_VEHICLE_LIFECYCLE_FAILURE', error);
-  res.status(500).json({ error: 'Vehicle lifecycle operation failed' });
+  res.status(500).json({ error: 'Falha ao processar o ciclo de vida do veículo' });
 }
 
 async function loadLifecycleRows(txContext: any, companyId: string, vehicleId: string) {
   const raw = txContext.getRawTransaction();
   const result: any = await raw.execute(sql`
-    SELECT id, action, effective_date, reason, disposal_type, sale_value,
-           buyer_name, buyer_document, final_km, notes, created_by, created_at
-    FROM vehicle_lifecycle_events
-    WHERE company_id=${companyId} AND vehicle_id=${vehicleId}
-    ORDER BY created_at DESC, id DESC
+    SELECT event.id, event.action, event.effective_date, event.reason, event.disposal_type, event.sale_value,
+           event.buyer_name, event.buyer_document, event.final_km, event.notes, event.created_by,
+           creator.name AS created_by_name, event.created_at
+    FROM vehicle_lifecycle_events event
+    LEFT JOIN users creator
+      ON creator.company_id=event.company_id AND creator.id=event.created_by
+    WHERE event.company_id=${companyId} AND event.vehicle_id=${vehicleId}
+    ORDER BY event.created_at DESC, event.id DESC
   `);
   return (result.rows || []).map((row: any) => ({
     id: String(row.id),
@@ -119,6 +122,7 @@ async function loadLifecycleRows(txContext: any, companyId: string, vehicleId: s
     finalKm: row.final_km == null ? undefined : Number(row.final_km),
     notes: row.notes == null ? undefined : String(row.notes),
     createdBy: String(row.created_by),
+    createdByName: row.created_by_name == null ? undefined : String(row.created_by_name),
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }
