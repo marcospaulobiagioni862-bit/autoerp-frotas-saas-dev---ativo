@@ -41,7 +41,7 @@ export class MaintenancePreventiveClient{
   static async updatePlan(id:string,input:UpdateMaintenancePlanInput){return plan((await request(`/api/maintenance/plans/${encodeURIComponent(id)}`,json('PATCH',input))).item);}
   static async pausePlan(id:string){return plan((await request(`/api/maintenance/plans/${encodeURIComponent(id)}/pause`,json('POST',{}))).item);}
   static async resumePlan(id:string){return plan((await request(`/api/maintenance/plans/${encodeURIComponent(id)}/resume`,json('POST',{}))).item);}
-  static async linkWorkOrder(planId:string,workOrderId:string,earlyReason?:string){await request(`/api/maintenance/plans/${encodeURIComponent(planId)}/link-work-order`,json('POST',{workOrderId,earlyReason}));}
+  static async linkWorkOrder(planId:string,workOrderId:string){await request(`/api/maintenance/plans/${encodeURIComponent(planId)}/link-work-order`,json('POST',{workOrderId}));}
   static async listOilChanges(vehicleId?:string){return list(await request(`/api/maintenance/oil-changes${q(vehicleId)}`),oil);}
   static async createOilChange(input:CreateOilChangeInput){return oil((await request('/api/maintenance/oil-changes',json('POST',input))).item);}
   static async listTires(vehicleId?:string){return list(await request(`/api/maintenance/tires${q(vehicleId)}`),tire);}
