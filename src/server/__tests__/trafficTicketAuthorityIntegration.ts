@@ -74,6 +74,11 @@ async function atomicityAndRules():Promise<string>{
 
   const company=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY',TicketResponsibility.COMPANY));
   assert(company.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&Boolean(company.item.payableId)&&!company.item.receivableId&&!company.item.nicPayableId,'COMPANY aggregate mismatch');
+  assert(!company.item.driverId&&!company.item.contractId,'COMPANY responsibility must never persist driver/contract linkage');
+  const external=await TrafficTicketAuthorityService.create(admin,input('M-EXTERNAL',TicketResponsibility.COMPANY,{vehicleId:undefined,vehiclePlate:'EXT1A23'}));
+  assert(!external.item.vehicleId&&external.item.vehiclePlate==='EXT1A23'&&Boolean(external.item.payableId)&&!external.item.receivableId&&!external.item.nicPayableId,'external plate COMPANY ticket must create only base AP without fleet vehicle');
+  const externalPayable=await one(sql`SELECT vehicle_id,origin_type FROM account_payables WHERE id=${external.item.payableId}`);
+  assert(externalPayable.vehicle_id===null&&externalPayable.origin_type==='TRAFFIC_TICKET_COMPANY','external plate payable must not invent a fleet vehicle');
   assert(!company.item.driverId,'COMPANY responsibility must never persist driver_id');
   let companyDriverRejected=false;
   try{await TrafficTicketAuthorityService.create(admin,input('M-COMPANY-DRIVER',TicketResponsibility.COMPANY,{driverId:driverA}));}
