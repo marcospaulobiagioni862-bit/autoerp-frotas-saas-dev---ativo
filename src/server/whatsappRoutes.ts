@@ -419,22 +419,7 @@ export function registerWhatsappRoutes(app: Express): void {
           `))[0];
         }
 
-        let cancelledCount = 0;
-        if (nextStatus === 'REVOKED') {
-          const cancelled = rows(await tx.execute(sql`
-            UPDATE whatsapp_outbox
-            SET status = 'CANCELLED',
-                cancelled_by = ${principal.userId},
-                cancellation_reason = 'CONSENT_REVOKED',
-                cancelled_at = ${now},
-                updated_at = ${now}
-            WHERE company_id = ${principal.companyId}
-              AND driver_id = ${driverId}
-              AND status = 'HELD_PROVIDER_DISABLED'
-            RETURNING id
-          `));
-          cancelledCount = cancelled.length;
-        }
+        const cancelledCount = 0; // Consent is informational only; it never cancels ERP outbox items.
 
         if (stateChanged || cancelledCount > 0) {
           await context.getAuditLogRepo().create({
@@ -476,14 +461,6 @@ export function registerWhatsappRoutes(app: Express): void {
         const tx = context.getRawTransaction();
         const driver = await loadDriver(tx, principal.companyId, driverId, true);
         const phone = normalizeBrazilPhone(driver.whatsapp || driver.phone);
-        const consent = rows(await tx.execute(sql`
-          SELECT * FROM whatsapp_consents
-          WHERE company_id = ${principal.companyId} AND driver_id = ${driverId}
-          FOR UPDATE
-        `))[0];
-        if (!consent || consent.status !== 'GRANTED' || consent.phone_e164 !== phone) {
-          throw new WhatsappConsentRequiredError();
-        }
         const driverName = String(driver.name || '').trim();
         const cnhExpiration = String(driver.cnh_expiration || '').slice(0, 10);
         if (!driverName || !/^\d{4}-\d{2}-\d{2}$/.test(cnhExpiration)) throw new WhatsappValidationError();
@@ -493,8 +470,6 @@ export function registerWhatsappRoutes(app: Express): void {
           throw new Error('WhatsApp template parameter schema mismatch');
         }
         const templateVersion = template.version;
-        const consentGrantedAt = asIso(consent.granted_at);
-        if (!consentGrantedAt) throw new WhatsappConsentRequiredError();
         const material = JSON.stringify({
           companyId: principal.companyId,
           driverId,
@@ -502,7 +477,7 @@ export function registerWhatsappRoutes(app: Express): void {
           templateKey: TEMPLATE_KEY,
           templateVersion,
           parameters,
-          consentGrantedAt,
+          dispatchPolicy: 'ERP_DIRECT_NO_INTERNAL_CONSENT',
         });
         const idempotencyKey = createHash('sha256').update(material).digest('hex');
         const id = `wao_${idempotencyKey.slice(0, 32)}`;
