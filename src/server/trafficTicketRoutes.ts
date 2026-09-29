@@ -51,7 +51,7 @@ export function registerTrafficTicketRoutes(app:Express):void{
   app.post('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(hasProtected(req.body))throw new TrafficTicketValidationError();
     const input:CreateTrafficTicketAuthorityInput={
-      vehicleId:text(req.body?.vehicleId,200),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),
+      vehicleId:optionalText(req.body?.vehicleId,200),vehiclePlate:optionalText(req.body?.vehiclePlate,20),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),
       autoNumber:text(req.body?.autoNumber,160),organName:text(req.body?.organName,200),infractionCode:text(req.body?.infractionCode,120),
       description:text(req.body?.description,2000),infractionDate:date(req.body?.infractionDate,true)!,infractionTime:optionalText(req.body?.infractionTime,5),infractionLocation:optionalText(req.body?.infractionLocation,500),dueDate:date(req.body?.dueDate,true)!,
       discountDueDate:date(req.body?.discountDueDate,false),originalAmount:amount(req.body?.originalAmount,true)!,
