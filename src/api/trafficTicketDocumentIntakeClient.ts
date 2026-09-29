@@ -18,7 +18,7 @@ export interface TrafficTicketIntakeSuggestions {
   plate?:string;vehicle?:{id:string;plate:string;brand:string;model:string};contract?:{id:string;number:string};driver?:{id:string;name:string};ambiguous:boolean;
 }
 export interface MaterializeTrafficTicketIntakeInput {
-  vehicleId:string;driverId?:string;contractId?:string;responsibility:TicketResponsibility;
+  vehicleId?:string;confirmUnregisteredVehicle?:boolean;driverId?:string;contractId?:string;responsibility:TicketResponsibility;
   baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;nicAmount?:number;notes?:string;
 }
 export interface MaterializedTrafficTicketIntake {ticketId:string;reused:boolean;}
