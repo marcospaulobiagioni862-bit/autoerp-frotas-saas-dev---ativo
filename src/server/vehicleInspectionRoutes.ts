@@ -52,6 +52,19 @@ function technicalChecklist(value:unknown):Record<string,string>{
   if(!TECHNICAL_KEYS.every(k=>TECHNICAL_STATUSES.has(String(item[k]||'')))) throw new ValidationError();
   return Object.fromEntries(TECHNICAL_KEYS.map(k=>[k,String(item[k])]));
 }
+function equipmentSnapshot(value:unknown):Record<string,string>{
+  if(!value||typeof value!=='object'||Array.isArray(value)) throw new ValidationError();
+  const item=value as Record<string,unknown>;
+  const snapshot={
+    tireBrand:optionalText(item.tireBrand,120),
+    tireModel:optionalText(item.tireModel,120),
+    tireMeasure:optionalText(item.tireMeasure,120),
+    batteryBrand:optionalText(item.batteryBrand,120),
+    batteryModel:optionalText(item.batteryModel,120),
+  };
+  if(!snapshot.tireBrand||!snapshot.tireModel||!snapshot.tireMeasure||!snapshot.batteryBrand||!snapshot.batteryModel) throw new ValidationError();
+  return snapshot as Record<string,string>;
+}
 function deriveInspectionResult(items:Record<string,string>):string{
   for(const key of TECHNICAL_KEYS){
     if(items[key]==='FAILED'&&CRITICAL_TECHNICAL_KEYS.has(key)) return 'BLOCKED_FOR_RENTAL';
@@ -60,8 +73,8 @@ function deriveInspectionResult(items:Record<string,string>):string{
   if(TECHNICAL_KEYS.some(key=>items[key]==='ATTENTION')) return 'APPROVED_WITH_RESERVATIONS';
   return 'APPROVED';
 }
-function inspectionChecklistPayload(legacy:Record<string,boolean>,technical:Record<string,string>,result:string):Record<string,unknown>{
-  return {...legacy,technical,result};
+function inspectionChecklistPayload(legacy:Record<string,boolean>,technical:Record<string,string>,result:string,equipment:Record<string,string>):Record<string,unknown>{
+  return {...legacy,technical,result,equipment};
 }
 function optionalText(value:unknown,max=2000):string|undefined{
   if(value===undefined||value===null||value==='') return undefined;
@@ -75,22 +88,32 @@ function item(row:any){
     ? Object.fromEntries(TECHNICAL_KEYS.map(k=>[k,TECHNICAL_STATUSES.has(String((technicalRaw as Record<string,unknown>)[k]||''))?String((technicalRaw as Record<string,unknown>)[k]):'NOT_APPLICABLE']))
     : undefined;
   const result=INSPECTION_RESULTS.has(String(stored.result||''))?String(stored.result):undefined;
+  const equipmentRaw=stored.equipment;
+  const equipmentSnapshot=(equipmentRaw&&typeof equipmentRaw==='object'&&!Array.isArray(equipmentRaw))
+    ? {
+        tireBrand:String((equipmentRaw as Record<string,unknown>).tireBrand||''),
+        tireModel:String((equipmentRaw as Record<string,unknown>).tireModel||''),
+        tireMeasure:String((equipmentRaw as Record<string,unknown>).tireMeasure||''),
+        batteryBrand:String((equipmentRaw as Record<string,unknown>).batteryBrand||''),
+        batteryModel:String((equipmentRaw as Record<string,unknown>).batteryModel||''),
+      }
+    : undefined;
   return {
     id:String(row.id),companyId:String(row.companyId),vehicleId:String(row.vehicleId),
     driverId:row.driverId||undefined,contractId:row.contractId||undefined,
     inspectionType:String(row.inspectionType),inspectionDate:String(row.inspectionDate),
     odometer:Number(row.odometer),fuelLevel:Number(row.fuelLevel),
-    checklist:legacy,technicalChecklist:technical,result,notes:row.notes||undefined,
+    checklist:legacy,technicalChecklist:technical,equipmentSnapshot,result,notes:row.notes||undefined,
     createdBy:String(row.createdBy),createdAt:String(row.createdAt),updatedAt:String(row.updatedAt),
   };
 }
 function sendError(res:Response,error:unknown){
   if(error instanceof VehicleKmError){res.status(error.kind==='NOT_FOUND'?404:400).json({error:error.message});return;}
-  if(error instanceof ValidationError){res.status(400).json({error:'Invalid vehicle inspection request'});return;}
-  if(error instanceof ForbiddenError){res.status(403).json({error:'Forbidden'});return;}
-  if(error instanceof NotFoundError){res.status(404).json({error:'Not found'});return;}
+  if(error instanceof ValidationError){res.status(400).json({error:'Dados da vistoria inválidos'});return;}
+  if(error instanceof ForbiddenError){res.status(403).json({error:'Acesso negado'});return;}
+  if(error instanceof NotFoundError){res.status(404).json({error:'Registro não encontrado'});return;}
   console.error('AUTOERP_VEHICLE_INSPECTION_FAILURE',error);
-  res.status(500).json({error:'Vehicle inspection operation failed'});
+  res.status(500).json({error:'Falha ao processar a vistoria do veículo'});
 }
 
 export function registerVehicleInspectionRoutes(app:Express):void{
@@ -133,13 +156,14 @@ export function registerVehicleInspectionRoutes(app:Express):void{
           if(!contract||contract.vehicleId!==vehicle.id) throw new ValidationError();
         }
         const technical=technicalChecklist(req.body?.technicalChecklist);
+        const equipment=equipmentSnapshot(req.body?.equipmentSnapshot);
         const result=deriveInspectionResult(technical);
         const now=new Date().toISOString();
         const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
         const rows=await tx.insert(vehicleInspections).values({
           id:randomUUID(),companyId:principal.companyId,vehicleId:vehicle.id,driverId,contractId,
           inspectionType:type,inspectionDate:now,odometer,fuelLevel,
-          checklist:inspectionChecklistPayload(checklist(req.body?.checklist),technical,result),
+          checklist:inspectionChecklistPayload(checklist(req.body?.checklist),technical,result,equipment),
           notes:optionalText(req.body?.notes),createdBy:principal.userId,createdAt:now,updatedAt:now,
         }).returning();
         const created=rows[0];if(!created) throw new Error('Inspection create failed');
@@ -163,7 +187,7 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         await context.getAuditLogRepo().create({
           id:randomUUID(),companyId:principal.companyId,entityName:'VehicleInspection',entityId:created.id,
           action:AuditAction.CREATE,userId:principal.userId,userName:principal.name,timestamp:now,
-          newState:JSON.stringify({event:'CREATE',vehicleId:vehicle.id,inspectionType:type,odometer,fuelLevel,driverId,contractId,result}),
+          newState:JSON.stringify({event:'CREATE',vehicleId:vehicle.id,inspectionType:type,odometer,fuelLevel,driverId,contractId,result,equipmentSnapshot:equipment}),
         });
         return created;
       });
