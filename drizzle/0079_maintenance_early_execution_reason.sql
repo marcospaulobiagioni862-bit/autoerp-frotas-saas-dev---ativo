@@ -1,4 +1,4 @@
--- V2: preserve why a preventive work order was linked before the configured KM/date was reached.
-ALTER TABLE work_orders
-  ADD COLUMN IF NOT EXISTS maintenance_early_execution boolean NOT NULL DEFAULT false,
-  ADD COLUMN IF NOT EXISTS maintenance_early_reason text;
+-- V2: preserve the justification for a preventive item executed before its configured KM/date.
+-- Historical PREVENTIVA_ANTECIPADA rows remain valid even when they predate this field.
+ALTER TABLE maintenance_work_order_plan_executions
+  ADD COLUMN IF NOT EXISTS early_reason text;
