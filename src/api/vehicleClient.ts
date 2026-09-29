@@ -138,6 +138,8 @@ export interface VehicleSaleInput {
   notes: string;
   buyerName: string;
   buyerDocument: string;
+  buyerPhone?: string;
+  buyerEmail?: string;
 }
 
 export interface VehicleArchiveInput {
@@ -159,6 +161,8 @@ export interface VehicleLifecycleEvent {
   saleValue?: number;
   buyerName?: string;
   buyerDocument?: string;
+  buyerPhone?: string;
+  buyerEmail?: string;
   finalKm?: number;
   notes?: string;
   createdBy?: string;
@@ -209,6 +213,8 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
   if (item.finalKm !== undefined && !Number.isInteger(item.finalKm)) throw new Error('Invalid vehicle lifecycle payload');
   if (item.buyerName !== undefined && typeof item.buyerName !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.buyerDocument !== undefined && typeof item.buyerDocument !== 'string') throw new Error('Invalid vehicle lifecycle payload');
+  if (item.buyerPhone !== undefined && typeof item.buyerPhone !== 'string') throw new Error('Invalid vehicle lifecycle payload');
+  if (item.buyerEmail !== undefined && typeof item.buyerEmail !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.notes !== undefined && typeof item.notes !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.createdBy !== undefined && typeof item.createdBy !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.createdByName !== undefined && typeof item.createdByName !== 'string') throw new Error('Invalid vehicle lifecycle payload');
