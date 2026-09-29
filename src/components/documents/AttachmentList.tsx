@@ -21,6 +21,8 @@ interface AttachmentListProps {
   showProtectedDriverCnh?: boolean;
   excludeAttachmentIds?: string[];
   showDocumentAiControls?: boolean;
+  showExpirationState?: boolean;
+  contextLabels?: Record<string, string>;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
@@ -62,6 +64,8 @@ export function AttachmentList({
   showProtectedDriverCnh = false,
   excludeAttachmentIds = [],
   showDocumentAiControls = true,
+  showExpirationState = true,
+  contextLabels = {},
 }: AttachmentListProps) {
   const { user } = useAuth();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
@@ -339,13 +343,15 @@ export function AttachmentList({
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             const extractionStatus = showDocumentAiControls ? attachmentStatuses[att.id] : undefined;
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
-            const expirationBadge = expirationLabel(att.expirationDate);
+            const expirationBadge = showExpirationState ? expirationLabel(att.expirationDate) : null;
+            const contextLabel = contextLabels[att.id];
             return (
               <li key={att.id} className="p-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <div className="flex min-w-0 items-center space-x-3 truncate">
                   <File className="h-5 w-5 text-gray-400 flex-shrink-0" />
                   <div className="truncate">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{att.fileName}</p>
+                    {contextLabel && <p className="mt-0.5 truncate text-xs text-gray-500">{contextLabel}</p>}
                     <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span className="text-xs text-gray-500">{att.documentType || 'Documento'}</span>
                       <span className="text-xs text-gray-400">·</span>
