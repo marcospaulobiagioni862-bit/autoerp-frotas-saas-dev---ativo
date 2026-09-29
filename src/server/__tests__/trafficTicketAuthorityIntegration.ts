@@ -79,6 +79,13 @@ async function atomicityAndRules():Promise<string>{
   assert(!external.item.vehicleId&&external.item.vehiclePlate==='EXT1A23'&&Boolean(external.item.payableId)&&!external.item.receivableId&&!external.item.nicPayableId,'external plate COMPANY ticket must create only base AP without fleet vehicle');
   const externalPayable=await one(sql`SELECT vehicle_id,origin_type FROM account_payables WHERE id=${external.item.payableId}`);
   assert(externalPayable.vehicle_id===null&&externalPayable.origin_type==='TRAFFIC_TICKET_COMPANY','external plate payable must not invent a fleet vehicle');
+  const externalDriver=await TrafficTicketAuthorityService.create(admin,input('M-EXT-DRIVER-SWITCH',TicketResponsibility.DRIVER,{vehicleId:undefined,vehiclePlate:'EXT1A24',driverId:driverA,driverIncomeCategoryId:incomeA}));
+  const externalDriverReceivableId=externalDriver.item.receivableId!;
+  assert(Boolean(externalDriverReceivableId)&&!externalDriver.item.contractId,'external plate driver responsibility must allow manual driver without contract');
+  const switchedToCompany=await TrafficTicketAuthorityService.changeResponsibility(admin,externalDriver.item.id,{responsibility:TicketResponsibility.COMPANY});
+  assert(switchedToCompany.item.responsibility===TicketResponsibility.COMPANY&&switchedToCompany.item.status===TicketStatus.COMPANY_PAYABLE_CREATED&&!switchedToCompany.item.driverId&&!switchedToCompany.item.contractId&&!switchedToCompany.item.receivableId,'DRIVER to COMPANY transition did not remove driver billing');
+  const cancelledExternalReceivable=await one(sql`SELECT status,paid_amount FROM account_receivables WHERE id=${externalDriverReceivableId}`);
+  assert(cancelledExternalReceivable.status==='CANCELLED'&&Number(cancelledExternalReceivable.paid_amount)===0,'unpaid driver receivable must be cancelled when MoveFlex assumes the fine');
   assert(!company.item.driverId,'COMPANY responsibility must never persist driver_id');
   let companyDriverRejected=false;
   try{await TrafficTicketAuthorityService.create(admin,input('M-COMPANY-DRIVER',TicketResponsibility.COMPANY,{driverId:driverA}));}
