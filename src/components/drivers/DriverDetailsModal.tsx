@@ -89,6 +89,25 @@ const DRIVER_AUDIT_FIELD_LABELS: Record<string, string> = {
   notes: 'Observações',
 };
 
+const DRIVER_STATUS_LABELS:Record<string,string>={
+  ACTIVE:'Ativo',INACTIVE:'Inativo',PENDING:'Pendente',PENDING_DOCS:'Documentação pendente',BLOCKED:'Bloqueado',ARCHIVED:'Arquivado',
+};
+const SECURITY_DEPOSIT_STATUS_LABELS:Record<string,string>={
+  PENDING:'Pendente',RECEIVED:'Recebida',PARTIALLY_USED:'Utilizada parcialmente',USED:'Utilizada',RETURNED:'Devolvida',PARTIALLY_RETURNED:'Devolvida parcialmente',REVERSED:'Estornada',
+};
+const COMMUNICATION_TYPE_LABELS:Record<string,string>={
+  RENT_CHARGE:'Cobrança de locação',DUE_REMINDER:'Lembrete de vencimento',TICKET_ALERT:'Aviso de multa',MAINTENANCE_ALERT:'Aviso de manutenção',CUSTOM:'Mensagem personalizada',
+};
+const COMMUNICATION_STATUS_LABELS:Record<string,string>={
+  DRAFT:'Rascunho',OPENED_IN_WHATSAPP:'Aberta no WhatsApp',MANUALLY_CONFIRMED_SENT:'Envio confirmado manualmente',
+};
+const AUDIT_ACTION_LABELS:Record<string,string>={
+  CREATE:'Criação',UPDATE:'Atualização',PAY:'Pagamento',RECEIVE:'Recebimento',PARTIAL_PAYMENT:'Pagamento parcial',
+  REVERSE:'Estorno',PARTIAL_REVERSE:'Estorno parcial',CANCEL:'Cancelamento',RENEGOTIATE:'Renegociação',
+  ARCHIVE:'Arquivamento',RESTORE:'Restauração',DELETE:'Exclusão',
+};
+const driverStatusText=(value:unknown)=>DRIVER_STATUS_LABELS[String(value||'')]||'Não informado';
+
 function parseAuditState(value?: string): Record<string, unknown> | null {
   if (!value) return null;
   try {
@@ -112,7 +131,7 @@ function auditChangeSummary(previousState?: string, newState?: string): { fields
     changed.includes('status') &&
     typeof previousStatus === 'string' &&
     typeof nextStatus === 'string'
-      ? `${previousStatus} → ${nextStatus}`
+      ? `${driverStatusText(previousStatus)} → ${driverStatusText(nextStatus)}`
       : undefined;
   return { fields, statusTransition };
 }
@@ -669,7 +688,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               </div>
               <h4 className="text-xs font-bold uppercase text-slate-400">Cauções</h4>
               {summary.securityDeposits.length === 0 ? <p className="text-xs text-slate-400">Nenhuma caução registrada.</p> : summary.securityDeposits.map((deposit) => (
-                <Card key={deposit.id} className="p-3 flex justify-between text-xs"><span>Status: {deposit.status}</span><strong>{formatCurrencyBRL(Number(deposit.amount || 0))}</strong></Card>
+                <Card key={deposit.id} className="p-3 flex justify-between text-xs"><span>Status: {SECURITY_DEPOSIT_STATUS_LABELS[String(deposit.status)]||'Não informado'}</span><strong>{formatCurrencyBRL(Number(deposit.amount || 0))}</strong></Card>
               ))}
             </div>
           )}
@@ -813,9 +832,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                   <p className="text-xs text-slate-500">Somente leitura. Confirmações manuais e abertura direta do WhatsApp foram desativadas nesta tela.</p>
                   {summary.communicationLogs.map((log) => (
                     <div key={log.id} className="p-2 border rounded-lg text-xs">
-                      <strong>{log.type}</strong>
+                      <strong>{COMMUNICATION_TYPE_LABELS[log.type]||'Comunicação'}</strong>
                       <p className="text-slate-500">{log.message}</p>
-                      <span className="text-[10px]">{new Date(log.dateTime).toLocaleString('pt-BR')} • {log.status}</span>
+                      <span className="text-[10px]">{new Date(log.dateTime).toLocaleString('pt-BR')} • {COMMUNICATION_STATUS_LABELS[log.status]||'Status não informado'}</span>
                     </div>
                   ))}
                 </Card>
@@ -855,7 +874,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 return (
                   <Card key={log.id} className="p-3 text-xs space-y-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong className="text-emerald-600">{log.action}</strong>
+                      <strong className="text-emerald-600">{AUDIT_ACTION_LABELS[String(log.action)]||'Evento'}</strong>
                       <span className="text-slate-400">{new Date(log.timestamp || log.createdAt).toLocaleString('pt-BR')}</span>
                     </div>
                     <p className="text-slate-600 dark:text-slate-300">Responsável: <strong>{log.userName || 'Usuário não identificado'}</strong></p>
