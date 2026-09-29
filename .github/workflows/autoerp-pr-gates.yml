@@ -277,11 +277,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "WhatsappClient.decideConsent" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "O ERP não exige registro de consentimento para preparar a comunicação." src/components/drivers/DriverDetailsModal.tsx
           grep -F "Preparar lembrete — sem enviar" src/components/drivers/DriverDetailsModal.tsx
           grep -F "providerCallApplied: false" src/api/whatsappClient.ts
+          grep -F "ERP_DIRECT_NO_INTERNAL_CONSENT" src/server/whatsappRoutes.ts src/server/trafficTicketWhatsappAuthority.ts
+          if grep -Fq "WhatsappClient.decideConsent" src/components/drivers/DriverDetailsModal.tsx; then
+            echo "FAIL: driver UI must not require internal consent registration"
+            exit 1
+          fi
           if grep -Fq "wa.me/" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must not bypass consent/outbox through wa.me"
+            echo "FAIL: driver UI must not bypass the auditable outbox through wa.me"
             exit 1
           fi
           if grep -Fq "window.open" src/components/drivers/DriverDetailsModal.tsx; then
