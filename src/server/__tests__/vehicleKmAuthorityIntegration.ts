@@ -78,7 +78,19 @@ try {
   console.log('PASS KM terminal guards, tenant isolation and atomic mixed batch');
 
   const technicalChecklist = Object.fromEntries(['tires','glassMirrors','bodyPaint','interior','dashboard','lighting','brakes','suspension','steering','engine','transmission','safety'].map(key => [key, 'OK']));
-  const inspection = (odometer: number) => post(`/api/fleet/vehicles/${id}/inspections`, { inspectionType: 'ENTRY', odometer, fuelLevel: 50, technicalChecklist });
+  const inspection = (odometer: number) => post(`/api/fleet/vehicles/${id}/inspections`, {
+    inspectionType: 'ENTRY',
+    odometer,
+    fuelLevel: 50,
+    technicalChecklist,
+    equipmentSnapshot: {
+      tireBrand: 'Test',
+      tireModel: 'Road',
+      tireMeasure: '195/55 R15',
+      batteryBrand: 'Test',
+      batteryModel: '60Ah',
+    },
+  });
   baseline = await count();
   for (const km of [101, 101, 102]) assert.equal((await inspection(km)).status, 201);
   assert.equal(await count(), baseline + 3);
