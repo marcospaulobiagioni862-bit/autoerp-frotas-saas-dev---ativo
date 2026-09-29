@@ -138,7 +138,6 @@ export class WhatsappAuthorityIntegrationRunner {
       await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
         await tx.execute(sql`DELETE FROM whatsapp_outbox WHERE company_id=${companyA} AND id=${directWithoutConsent.item.id}`);
-        await tx.execute(sql`DELETE FROM audit_logs WHERE company_id=${companyA} AND entity_type='WhatsappOutbox' AND entity_id=${directWithoutConsent.item.id}`);
       });
 
       response = await request(`/api/whatsapp/consents/${driverAId}`, {
@@ -241,7 +240,7 @@ export class WhatsappAuthorityIntegrationRunner {
             AND entity_type IN ('WhatsappConsent', 'WhatsappOutbox')
         `));
       });
-      assert.equal(auditRows.length, 3, 'grant, held outbox, and revoke must each emit one audit event');
+      assert.equal(auditRows.length, 4, 'direct outbox, grant, held outbox, and revoke must each emit one audit event');
       for (const row of auditRows) {
         const changes = typeof row.changes === 'string' ? JSON.parse(row.changes) : row.changes;
         const next = typeof changes.newState === 'string' ? JSON.parse(changes.newState) : changes.newState;
