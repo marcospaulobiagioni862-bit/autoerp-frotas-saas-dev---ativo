@@ -15,6 +15,10 @@ assert.match(modal, /if \(!buyerName\.trim\(\)\)/, 'sale modal must block empty 
 assert.match(modal, /if \(!buyerDocument\.trim\(\)\)/, 'sale modal must block empty buyer document');
 assert.match(client, /buyerName: string;/, 'sale client contract must require buyerName');
 assert.match(client, /buyerDocument: string;/, 'sale client contract must require buyerDocument');
+assert.match(client, /buyerPhone\?: string;/, 'sale client contract must accept optional buyerPhone');
+assert.match(client, /buyerEmail\?: string;/, 'sale client contract must accept optional buyerEmail');
+assert.match(modal, /label="Telefone do comprador"/, 'sale modal must collect optional buyer phone');
+assert.match(modal, /label="E-mail do comprador"/, 'sale modal must collect optional buyer email');
 assert.match(routes, /buyerName = requiredText\(req\.body\?\.buyerName, 'buyerName'\)/, 'server must require buyerName');
 assert.match(routes, /buyerDocument = requiredText\(req\.body\?\.buyerDocument, 'buyerDocument'\)/, 'server must require buyerDocument');
 assert.doesNotMatch(routes, /const buyerName = optionalText\(req\.body\?\.buyerName\)/, 'server must not accept optional buyer name');
@@ -45,6 +49,9 @@ assert.match(
 );
 
 assert.match(historyModal, /CPF\/CNPJ do comprador:/, 'sold vehicle history must display buyer document');
+assert.match(historyModal, /Telefone do comprador:/, 'sold vehicle history must display buyer phone');
+assert.match(historyModal, /E-mail do comprador:/, 'sold vehicle history must display buyer email');
+assert.match(routes, /buyer_phone, buyer_email/, 'sale lifecycle persistence must include buyer contact columns');
 assert.match(historyModal, /Valor da venda:/, 'sold vehicle history must display sale value');
 assert.match(historyModal, /KM na venda:/, 'sold vehicle history must display final sale km');
 assert.match(historyModal, /Tipo da baixa:/, 'sold vehicle history must display disposal type');
