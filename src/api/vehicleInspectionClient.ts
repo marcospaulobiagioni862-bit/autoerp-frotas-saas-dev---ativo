@@ -37,6 +37,12 @@ function validate(value:unknown):VehicleInspection{
     !item.checklist||typeof item.checklist!=='object'||Array.isArray(item.checklist)||
     typeof item.createdBy!=='string'||typeof item.createdAt!=='string'||typeof item.updatedAt!=='string'
   )throw new Error('Invalid vehicle inspection payload');
+  if(item.equipmentSnapshot!==undefined){
+    const equipment=record(item.equipmentSnapshot);
+    for(const key of ['tireBrand','tireModel','tireMeasure','batteryBrand','batteryModel'] as const){
+      if(typeof equipment[key]!=='string'||!String(equipment[key]).trim())throw new Error('Invalid vehicle inspection equipment snapshot');
+    }
+  }
   return item as unknown as VehicleInspection;
 }
 async function fail(response:Response):Promise<Error>{
