@@ -94,7 +94,7 @@ export interface WorkOrderCreateRequest {
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
   financialComponents?:Array<{kind:'PARTS'|'SERVICES'|'LABOR';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface WorkOrderCompleteRequest { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; }
+export interface WorkOrderCompleteRequest { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; preventiveExecutionReasons?:Record<string,string>; }
 export type SupplierCreateRequest = Omit<Supplier,'id'|'companyId'|'status'|'createdAt'|'updatedAt'|'bankInfo'>;
 export type PartCreateRequest = Omit<Part,'id'|'companyId'|'status'|'createdAt'|'updatedAt'>;
 export type PartUpdateRequest = Partial<Omit<PartCreateRequest,'currentStock'>> & {status?:'ACTIVE'|'INACTIVE'};
