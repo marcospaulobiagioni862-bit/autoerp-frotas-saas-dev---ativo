@@ -3,7 +3,8 @@ import { TicketResponsibility, TicketStatus } from '../enums';
 export interface TrafficTicket {
   id: string;
   companyId: string;
-  vehicleId: string;
+  vehicleId: string; // empty when the plate is not registered in fleet
+  vehiclePlate?: string;
   driverId?: string;
   contractId?: string;
   autoNumber: string;
