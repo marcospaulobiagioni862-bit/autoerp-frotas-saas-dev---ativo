@@ -121,6 +121,9 @@ async function contractResolutionAndVehiclePending():Promise<void>{
     INSERT INTO contracts(id,company_id,driver_id,vehicle_id,status,contract_number,start_date,end_date,rental_amount,billing_periodicity,billing_due_day_of_week,billing_due_day_of_month,security_deposit_amount,franchise_km,excess_km_rate,signature_required,is_archived,created_at,updated_at)
     VALUES(${contractId},${companyA},${driverA},${vehicleA},'CLOSED','CTR-RESOLVED','2026-07-15','2026-08-15',1000,'WEEKLY',1,1,0,0,0,true,false,NOW(),NOW()) ON CONFLICT(id) DO NOTHING
   `);
+  const companyWithoutContract=await TrafficTicketAuthorityService.create(admin,input('M-COMPANY-NO-CONTRACT-LINK',TicketResponsibility.COMPANY));
+  assert(!companyWithoutContract.item.contractId&&!companyWithoutContract.item.driverId&&Boolean(companyWithoutContract.item.payableId)&&!companyWithoutContract.item.receivableId&&!companyWithoutContract.item.nicPayableId,'COMPANY must create only base AP and ignore resolvable contract/driver');
+
   const resolved=await TrafficTicketAuthorityService.create(admin,input('M-RESOLVED',TicketResponsibility.DRIVER,{driverIncomeCategoryId:incomeA}));
   assert(resolved.item.contractId===contractId&&resolved.item.driverId===driverA,'single contract covering infraction date was not resolved');
   const alert=await one(sql`SELECT description FROM operational_tasks WHERE company_id=${companyA} AND source_type='TRAFFIC_TICKET' AND source_id=${resolved.item.id} AND category='FINE'`);
