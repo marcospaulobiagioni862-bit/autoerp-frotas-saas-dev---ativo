@@ -162,6 +162,7 @@ export interface VehicleLifecycleEvent {
   finalKm?: number;
   notes?: string;
   createdBy?: string;
+  createdByName?: string;
   createdAt: string;
 }
 
@@ -210,6 +211,7 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
   if (item.buyerDocument !== undefined && typeof item.buyerDocument !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.notes !== undefined && typeof item.notes !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   if (item.createdBy !== undefined && typeof item.createdBy !== 'string') throw new Error('Invalid vehicle lifecycle payload');
+  if (item.createdByName !== undefined && typeof item.createdByName !== 'string') throw new Error('Invalid vehicle lifecycle payload');
   return item as unknown as VehicleLifecycleEvent;
 }
 
