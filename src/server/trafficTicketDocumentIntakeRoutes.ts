@@ -30,7 +30,7 @@ const DRAFT_FIELDS=new Set([
   'dueDate','discountDueDate','amount','discountAmount','points',
 ]);
 const MATERIALIZE_KEYS=new Set([
-  'vehicleId','driverId','contractId','responsibility','baseExpenseCategoryId','driverIncomeCategoryId','nicExpenseCategoryId','nicAmount','notes',
+  'vehicleId','confirmUnregisteredVehicle','driverId','contractId','responsibility','baseExpenseCategoryId','driverIncomeCategoryId','nicExpenseCategoryId','nicAmount','notes',
 ]);
 
 class ValidationError extends Error {}
@@ -240,7 +240,9 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
     const principal=requirePrincipal(req,res,true);if(!principal)return;
     try{
       const intakeId=String(req.params.id||'').trim();if(!intakeId)throw new ValidationError();
-      const body=exactMaterializeBody(req.body),vehicleId=bodyText(body,'vehicleId',true,200)!,responsibility=bodyResponsibility(body);
+      const body=exactMaterializeBody(req.body),requestedVehicleId=bodyText(body,'vehicleId',false,200),responsibility=bodyResponsibility(body);
+      if(body.confirmUnregisteredVehicle!==undefined&&typeof body.confirmUnregisteredVehicle!=='boolean')throw new ValidationError();
+      const confirmUnregisteredVehicle=body.confirmUnregisteredVehicle===true;
       const result=await UnitOfWork.run(principal.companyId,async context=>{
         const tx=context.getRawTransaction?.();if(!tx)throw new Error('Raw tenant transaction unavailable');
         const locked:any=await tx.execute(sql`
@@ -248,8 +250,8 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
             extraction.status AS extraction_status,extraction.detected_document_type,extraction.proposed_fields,extraction.corrections,
             attachment.entity_type AS attachment_entity_type,attachment.entity_id AS attachment_entity_id,attachment.is_archived AS attachment_archived
           FROM traffic_ticket_document_intakes intake
-          LEFT JOIN document_ai_extractions extraction ON extraction.company_id=intake.company_id AND extraction.id=intake.approved_extraction_id
-          LEFT JOIN file_attachments attachment ON attachment.company_id=intake.company_id AND attachment.id=intake.attachment_id
+          JOIN document_ai_extractions extraction ON extraction.company_id=intake.company_id AND extraction.id=intake.approved_extraction_id
+          JOIN file_attachments attachment ON attachment.company_id=intake.company_id AND attachment.id=intake.attachment_id
           WHERE intake.company_id=${principal.companyId} AND intake.id=${intakeId} AND intake.created_by=${principal.userId}
           LIMIT 1 FOR UPDATE OF intake,attachment
         `);
@@ -272,28 +274,38 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
           LIMIT 2 FOR UPDATE
         `);
         const matchingVehicles=Array.isArray(vehicleCheck.rows)?vehicleCheck.rows:[];
-        if(matchingVehicles.length!==1||String(matchingVehicles[0].id)!==vehicleId)throw new ConflictError();
-        const vehicle=matchingVehicles[0];
-        if(normalizedPlate(String(vehicle.plate||''))!==plate)throw new ConflictError();
+        if(matchingVehicles.length>1)throw new ConflictError();
+        let vehicleId:string|undefined;
+        if(matchingVehicles.length===1){
+          vehicleId=String(matchingVehicles[0].id);
+          if(requestedVehicleId&&requestedVehicleId!==vehicleId)throw new ConflictError();
+          if(normalizedPlate(String(matchingVehicles[0].plate||''))!==plate)throw new ConflictError();
+        }else{
+          if(requestedVehicleId)throw new ConflictError();
+          if(!confirmUnregisteredVehicle)throw new ConflictError();
+        }
 
         const requestedDriverId=bodyText(body,'driverId',false,200);
         const requestedContractId=bodyText(body,'contractId',false,200);
         if(responsibility!==TicketResponsibility.DRIVER&&requestedDriverId)throw new ValidationError();
 
-        const contractResult:any=await tx.execute(sql`
-          SELECT contract.id,contract.driver_id
-          FROM contracts contract
-          WHERE contract.company_id=${principal.companyId}
-            AND contract.vehicle_id=${vehicleId}
-            AND contract.is_archived=false
-            AND contract.status NOT IN ('DRAFT','AWAITING_SIGNATURE','CANCELLED','ARCHIVED')
-            AND contract.start_date<=${infractionDate}
-            AND (contract.end_date IS NULL OR contract.end_date>=${infractionDate})
-          ORDER BY contract.start_date DESC,contract.id
-          LIMIT 2
-        `);
-        const contractMatches=Array.isArray(contractResult.rows)?contractResult.rows:[];
-        const exactContract=contractMatches.length===1?contractMatches[0]:undefined;
+        let exactContract:any=undefined;
+        if(vehicleId&&responsibility===TicketResponsibility.DRIVER){
+          const contractResult:any=await tx.execute(sql`
+            SELECT contract.id,contract.driver_id
+            FROM contracts contract
+            WHERE contract.company_id=${principal.companyId}
+              AND contract.vehicle_id=${vehicleId}
+              AND contract.is_archived=false
+              AND contract.status NOT IN ('DRAFT','AWAITING_SIGNATURE','CANCELLED','ARCHIVED')
+              AND contract.start_date<=${infractionDate}
+              AND (contract.end_date IS NULL OR contract.end_date>=${infractionDate})
+            ORDER BY contract.start_date DESC,contract.id
+            LIMIT 2
+          `);
+          const contractMatches=Array.isArray(contractResult.rows)?contractResult.rows:[];
+          exactContract=contractMatches.length===1?contractMatches[0]:undefined;
+        }
         if(requestedContractId&&(!exactContract||String(exactContract.id)!==requestedContractId))throw new ConflictError();
         const driverId=responsibility===TicketResponsibility.DRIVER?(requestedDriverId||(exactContract?.driver_id?String(exactContract.driver_id):undefined)):undefined;
         if(responsibility===TicketResponsibility.DRIVER){
@@ -307,7 +319,7 @@ export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
         }
         const contractId=exactContract&&String(exactContract.driver_id)===driverId?String(exactContract.id):undefined;
         const input:CreateTrafficTicketAuthorityInput={
-          vehicleId,driverId,contractId,
+          vehicleId,vehiclePlate:plate,driverId,contractId,
           autoNumber:requiredText(fields,'noticeNumber',160),organName:requiredText(fields,'organName',200),infractionCode:requiredText(fields,'infractionCode',120),
           description:requiredText(fields,'description',2000),infractionDate,infractionTime:optionalText(fields,'infractionTime',5),
           infractionLocation:optionalText(fields,'infractionLocation',500),dueDate:requiredDate(fields,'dueDate'),discountDueDate:optionalDate(fields,'discountDueDate'),
