@@ -11,7 +11,6 @@ export interface WhatsappDispatchPolicy {
 export type WhatsappDispatchDecision =
   | 'PROVIDER_DISABLED'
   | 'CANCELLED'
-  | 'CONSENT_REQUIRED'
   | 'ATTEMPTS_EXHAUSTED'
   | 'RETRY_WAIT'
   | 'RATE_LIMITED'
@@ -20,7 +19,6 @@ export type WhatsappDispatchDecision =
 export interface WhatsappDispatchCandidate {
   id: string;
   status: 'HELD_PROVIDER_DISABLED' | 'CANCELLED';
-  consentStatus: 'GRANTED' | 'REVOKED';
   attemptCount: number;
   lastAttemptAt: string | null;
   createdAt: string;
@@ -132,9 +130,6 @@ export function planWhatsappDispatch(
     validateCandidate(candidate);
     if (candidate.status === 'CANCELLED') {
       return { itemId: candidate.id, decision: 'CANCELLED', nextAttemptAt: null };
-    }
-    if (candidate.consentStatus !== 'GRANTED') {
-      return { itemId: candidate.id, decision: 'CONSENT_REQUIRED', nextAttemptAt: null };
     }
     if (candidate.attemptCount >= policy.maxAttempts) {
       return { itemId: candidate.id, decision: 'ATTEMPTS_EXHAUSTED', nextAttemptAt: null };
