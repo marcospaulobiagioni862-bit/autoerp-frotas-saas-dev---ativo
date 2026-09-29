@@ -7,7 +7,7 @@ import {
   type CreateTrafficTicketAuthorityInput,type UpdateTrafficTicketAuthorityInput,
 } from './trafficTicketAuthority';
 import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
-import { TrafficTicketWhatsappAuthorityService,TrafficTicketWhatsappConsentRequiredError } from './trafficTicketWhatsappAuthority';
+import { TrafficTicketWhatsappAuthorityService } from './trafficTicketWhatsappAuthority';
 import { TrafficTicketVehicleOperationalAuthorityService } from './trafficTicketVehicleOperationalAuthority';
 import { registerTrafficTicketDocumentIntakeRoutes } from './trafficTicketDocumentIntakeRoutes';
 import { registerTrafficTicketDocumentIntakeUploadRoutes } from './trafficTicketDocumentIntakeUploadRoutes';
@@ -30,12 +30,12 @@ function indicationStatus(value:unknown):TrafficTicketDriverIndicationStatus{con
 function isUnique(error:unknown):boolean{let current:any=error;for(let i=0;i<6&&current;i++,current=current.cause)if(current.code==='23505')return true;return false;}
 function sendError(res:Response,error:unknown):void{
   const message=error instanceof Error?error.message:'';
-  if(error instanceof TrafficTicketValidationError){res.status(400).json({error:'Invalid traffic ticket request'});return;}
-  if(error instanceof TrafficTicketForbiddenError||message.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}
-  if(error instanceof TrafficTicketNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}
-  if(error instanceof TrafficTicketWhatsappConsentRequiredError){res.status(409).json({error:'Current WhatsApp consent required'});return;}
-  if(error instanceof TrafficTicketConflictError||isUnique(error)||message.includes('Não é possível cancelar')||message.includes('já se encontra')||message.includes('período financeiro')){res.status(409).json({error:'Traffic ticket conflict'});return;}
-  console.error('AUTOERP_TRAFFIC_TICKET_API_FAILURE',error);res.status(500).json({error:'Traffic ticket operation failed'});
+  if(error instanceof TrafficTicketValidationError){res.status(400).json({error:'Solicitação de multa inválida'});return;}
+  if(error instanceof TrafficTicketForbiddenError||message.startsWith('Acesso negado:')){res.status(403).json({error:'Acesso negado'});return;}
+  if(error instanceof TrafficTicketNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Registro não encontrado'});return;}
+  if(message.includes('Não é possível cancelar')||message.includes('já se encontra')||message.includes('período financeiro')){res.status(409).json({error:message});return;}
+  if(error instanceof TrafficTicketConflictError||isUnique(error)){res.status(409).json({error:message||'Conflito ao atualizar a multa'});return;}
+  console.error('AUTOERP_TRAFFIC_TICKET_API_FAILURE',error);res.status(500).json({error:'Falha ao processar a multa'});
 }
 
 export function registerTrafficTicketRoutes(app:Express):void{
