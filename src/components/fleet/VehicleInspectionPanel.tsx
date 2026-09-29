@@ -62,6 +62,8 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
   const[odometer,setOdometer]=useState(String(currentKm));
   const[fuelLevel,setFuelLevel]=useState('100');
   const[notes,setNotes]=useState('');
+  const[tireBrand,setTireBrand]=useState(''),[tireModel,setTireModel]=useState(''),[tireMeasure,setTireMeasure]=useState('');
+  const[batteryBrand,setBatteryBrand]=useState(''),[batteryModel,setBatteryModel]=useState('');
   const[checklist,setChecklist]=useState<VehicleInspectionChecklist>(emptyChecklist());
   const[technicalChecklist,setTechnicalChecklist]=useState<Partial<Record<VehicleInspectionTechnicalKey,VehicleInspectionItemStatus>>>({});
   const[loading,setLoading]=useState(false);
@@ -82,12 +84,15 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
       if(!Number.isInteger(km)||km<currentKm)throw new Error('A KM da vistoria não pode ser menor que a KM atual do veículo.');
       if(!Number.isInteger(fuel)||fuel<0||fuel>100)throw new Error('Informe combustível entre 0% e 100%.');
       if(!resultPreview)throw new Error('Avalie todos os itens da vistoria técnica antes de salvar.');
+      if(!tireBrand.trim()||!tireModel.trim()||!tireMeasure.trim()||!batteryBrand.trim()||!batteryModel.trim())throw new Error('Informe marca, modelo e medida dos pneus e marca/modelo da bateria.');
       const item=await VehicleInspectionClient.create(vehicleId,{
         inspectionType:type,odometer:km,fuelLevel:fuel,checklist,
         technicalChecklist:technicalChecklist as VehicleInspectionTechnicalChecklist,
+        equipmentSnapshot:{tireBrand:tireBrand.trim(),tireModel:tireModel.trim(),tireMeasure:tireMeasure.trim(),batteryBrand:batteryBrand.trim(),batteryModel:batteryModel.trim()},
         notes:notes.trim()||undefined,
       });
       setItems(current=>[item,...current]);setExpanded(item.id);setNotes('');setChecklist(emptyChecklist());setTechnicalChecklist({});
+      setTireBrand('');setTireModel('');setTireMeasure('');setBatteryBrand('');setBatteryModel('');
     }catch(e){setError(e instanceof Error?e.message:'Falha ao criar vistoria.');}
     finally{setLoading(false);}
   };
@@ -104,6 +109,16 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
       <div className="grid gap-3 sm:grid-cols-2">
         <Input label="Quilometragem" type="number" value={odometer} onChange={e=>setOdometer(e.target.value)}/>
         <Input label="Combustível (%)" type="number" min="0" max="100" value={fuelLevel} onChange={e=>setFuelLevel(e.target.value)}/>
+      </div>
+      <div className="rounded-xl border p-3 space-y-3">
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Pneus e bateria — estado na vistoria</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Input label="Marca dos pneus *" value={tireBrand} onChange={e=>setTireBrand(e.target.value)}/>
+          <Input label="Modelo dos pneus *" value={tireModel} onChange={e=>setTireModel(e.target.value)}/>
+          <Input label="Medida / dimensões dos pneus *" value={tireMeasure} onChange={e=>setTireMeasure(e.target.value)} placeholder="Ex.: 195/55 R15"/>
+          <Input label="Marca da bateria *" value={batteryBrand} onChange={e=>setBatteryBrand(e.target.value)}/>
+          <Input label="Modelo da bateria *" value={batteryModel} onChange={e=>setBatteryModel(e.target.value)}/>
+        </div>
       </div>
       <div>
         <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Checklist ({checked}/{ITEMS.length})</p>
@@ -151,6 +166,7 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
         </button>
         {expanded===item.id&&<div className="space-y-3 border-t pt-3">
           <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{item.checklist[key]?'OK':'Não'}</strong></div>)}</div>
+          {item.equipmentSnapshot&&<div className="rounded-lg border p-3 text-xs"><p className="mb-2 font-semibold">Pneus e bateria registrados</p><div className="grid gap-1 sm:grid-cols-2"><p><strong>Pneus:</strong> {item.equipmentSnapshot.tireBrand} {item.equipmentSnapshot.tireModel} — {item.equipmentSnapshot.tireMeasure}</p><p><strong>Bateria:</strong> {item.equipmentSnapshot.batteryBrand} {item.equipmentSnapshot.batteryModel}</p></div></div>}
           {item.technicalChecklist&&<div className="space-y-2"><p className="text-xs font-semibold">Resultado técnico: {resultLabel(item.result)}</p><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{TECHNICAL_ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{TECHNICAL_OPTIONS.find(option=>option.value===item.technicalChecklist?.[key])?.label||'—'}</strong></div>)}</div></div>}
           {item.notes&&<p className="text-xs text-slate-600 dark:text-slate-300">{item.notes}</p>}
           <div className="rounded-lg border p-3 space-y-3">
