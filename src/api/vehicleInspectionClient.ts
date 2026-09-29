@@ -5,6 +5,9 @@ export type VehicleInspectionTechnicalKey=
   'tires'|'glassMirrors'|'bodyPaint'|'interior'|'dashboard'|'lighting'|
   'brakes'|'suspension'|'steering'|'engine'|'transmission'|'safety';
 export type VehicleInspectionTechnicalChecklist=Record<VehicleInspectionTechnicalKey,VehicleInspectionItemStatus>;
+export interface VehicleInspectionEquipmentSnapshot{
+  tireBrand:string;tireModel:string;tireMeasure:string;batteryBrand:string;batteryModel:string;
+}
 
 export interface VehicleInspectionChecklist{
   keyMain:boolean;keySpare:boolean;crlvPrinted:boolean;phoneHolder:boolean;jack:boolean;triangle:boolean;
@@ -13,12 +16,12 @@ export interface VehicleInspectionChecklist{
 export interface VehicleInspection{
   id:string;companyId:string;vehicleId:string;driverId?:string;contractId?:string;
   inspectionType:VehicleInspectionType;inspectionDate:string;odometer:number;fuelLevel:number;
-  checklist:VehicleInspectionChecklist;technicalChecklist?:VehicleInspectionTechnicalChecklist;result?:VehicleInspectionResult;
+  checklist:VehicleInspectionChecklist;technicalChecklist?:VehicleInspectionTechnicalChecklist;equipmentSnapshot?:VehicleInspectionEquipmentSnapshot;result?:VehicleInspectionResult;
   notes?:string;createdBy:string;createdAt:string;updatedAt:string;
 }
 export interface VehicleInspectionCreateInput{
   inspectionType:VehicleInspectionType;odometer:number;fuelLevel:number;checklist:VehicleInspectionChecklist;
-  technicalChecklist:VehicleInspectionTechnicalChecklist;notes?:string;driverId?:string;contractId?:string;
+  technicalChecklist:VehicleInspectionTechnicalChecklist;equipmentSnapshot:VehicleInspectionEquipmentSnapshot;notes?:string;driverId?:string;contractId?:string;
 }
 
 function record(value:unknown):Record<string,unknown>{
