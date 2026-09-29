@@ -82,8 +82,7 @@ export const vehicles = pgTable('vehicles', {
 export const vehicleInspections = pgTable('vehicle_inspections', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
-  vehicleId: text('vehicle_id'),
-  vehiclePlate: text('vehicle_plate'),
+  vehicleId: text('vehicle_id').notNull(),
   driverId: text('driver_id'),
   contractId: text('contract_id'),
   inspectionType: text('inspection_type').notNull(),
