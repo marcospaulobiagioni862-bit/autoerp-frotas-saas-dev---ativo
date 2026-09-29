@@ -25,6 +25,20 @@ interface AttachmentListProps {
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const DOCUMENT_AI_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 
+function expirationLabel(expirationDate?: string): { text: string; className: string } | null {
+  if (!expirationDate) return null;
+  const expiration = Date.parse(`${expirationDate}T00:00:00Z`);
+  if (!Number.isFinite(expiration)) return null;
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const days = Math.round((expiration - today) / 86_400_000);
+  const dateLabel = new Date(`${expirationDate}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+  if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (days <= 7) return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (days <= 15) return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
+  return { text: `Válido · ${dateLabel}`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+}
+
 function extractionStatusLabel(status: DocumentAiAttachmentStatus['status']): { text: string; className: string } {
   if (status === 'PENDING') return { text: 'Na fila', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
   if (status === 'PROCESSING') return { text: 'Processando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' };
@@ -323,6 +337,7 @@ export function AttachmentList({
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             const extractionStatus = attachmentStatuses[att.id];
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
+            const expirationBadge = expirationLabel(att.expirationDate);
             return (
               <li key={att.id} className="p-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <div className="flex min-w-0 items-center space-x-3 truncate">
@@ -336,6 +351,11 @@ export function AttachmentList({
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
                       {!contentAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                      {expirationBadge && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${expirationBadge.className}`}>
+                          {expirationBadge.text}
+                        </span>
+                      )}
                       {extractionBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${extractionBadge.className}`}>
                           {extractionBadge.text}
