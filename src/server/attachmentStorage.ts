@@ -72,6 +72,14 @@ function resolvedFile(root: string, storageKey: string): string {
   return filePath;
 }
 
+function readableRoots(): string[] {
+  const root = configuredRoot();
+  const compatibilityRoot = path.basename(root).toLowerCase() === 'attachments'
+    ? path.dirname(root)
+    : path.join(root, 'attachments');
+  return Array.from(new Set([root, path.resolve(compatibilityRoot)]));
+}
+
 export interface StoredAttachmentBytes {
   storageKey: string;
   checksum: string;
@@ -137,31 +145,33 @@ export class ServerAttachmentStorage implements AttachmentByteStorage {
   async read(companyId: string, storageKey: string): Promise<Buffer> {
     const company = safeSegment(companyId, 'companyId');
     if (!storageKey.startsWith(`${company}/`)) throw new AttachmentStorageNotFoundError('Attachment not found');
-    const filePath = resolvedFile(configuredRoot(), storageKey);
-    try {
-      return await readFile(filePath);
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') throw new AttachmentStorageNotFoundError('Attachment content not found');
-      throw error;
+    for (const root of readableRoots()) {
+      try {
+        return await readFile(resolvedFile(root, storageKey));
+      } catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
     }
+    throw new AttachmentStorageNotFoundError('Attachment content not found');
   }
 
   async remove(companyId: string, storageKey: string): Promise<void> {
     const company = safeSegment(companyId, 'companyId');
     if (!storageKey.startsWith(`${company}/`)) throw new AttachmentStorageValidationError('Invalid storage ownership');
-    const filePath = resolvedFile(configuredRoot(), storageKey);
-    await rm(filePath, { force: true });
+    await Promise.all(readableRoots().map((root) => rm(resolvedFile(root, storageKey), { force: true })));
   }
 
   async exists(companyId: string, storageKey: string): Promise<boolean> {
     const company = safeSegment(companyId, 'companyId');
     if (!storageKey.startsWith(`${company}/`)) return false;
-    try {
-      const info = await stat(resolvedFile(configuredRoot(), storageKey));
-      return info.isFile();
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') return false;
-      throw error;
+    for (const root of readableRoots()) {
+      try {
+        const info = await stat(resolvedFile(root, storageKey));
+        if (info.isFile()) return true;
+      } catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
     }
+    return false;
   }
 }
