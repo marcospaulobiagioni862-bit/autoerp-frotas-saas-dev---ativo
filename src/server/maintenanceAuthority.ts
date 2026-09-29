@@ -19,7 +19,7 @@ export interface CreateWorkOrderInput {
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
   financialComponents?:Array<{kind:'PARTS'|'SERVICES'|'LABOR';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; }
+export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; preventiveExecutionReasons?:Record<string,string>; }
 export interface CreateSupplierInput { name:string; tradeName?:string; document:string; phone?:string; email?:string; address?:string; category:string; notes?:string; }
 export interface UpdateSupplierInput { name?:string; tradeName?:string|null; document?:string; phone?:string|null; email?:string|null; address?:string|null; category?:string; status?:Supplier['status']; notes?:string|null; }
 export interface CreatePartInput { code:string; name:string; description?:string; manufacturer?:string; category:string; unit:string; currentCost:number; minimumStock:number; currentStock:number; }
@@ -174,6 +174,9 @@ export class MaintenanceAuthorityService {
       ?Array.from(new Set((input.preventivePlanIds||[]).map(value=>reqText(value,'preventivePlanId',200))))
       :[];
     if(preventivePlanIds.length>100)throw new MaintenanceValidationError('Muitos itens preventivos selecionados');
+    const preventiveExecutionReasons=input.preventiveExecutionReasons||{};
+    if(!preventiveExecutionReasons||typeof preventiveExecutionReasons!=='object'||Array.isArray(preventiveExecutionReasons))throw new MaintenanceValidationError('Justificativas preventivas inválidas');
+    for(const planId of Object.keys(preventiveExecutionReasons))if(!preventivePlanIds.includes(planId))throw new MaintenanceValidationError('Justificativa informada para item preventivo não selecionado');
     const raw=tx.getRawTransaction?.();if(explicitPreventiveSelection&&!raw)throw new Error('Maintenance persistence unavailable');
     const selectedPlans:any[]=[];
     if(explicitPreventiveSelection){
@@ -201,7 +204,7 @@ export class MaintenanceAuthorityService {
       }
       throw error;
     }
-    const preventiveExecutions:Array<{planId:string;executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'}>=[];
+    const preventiveExecutions:Array<{planId:string;executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA';earlyReason?:string}>=[];
     if(explicitPreventiveSelection){
       await raw.execute(sql`UPDATE work_orders SET preventive_plan_selection_applied=true,updated_at=${now} WHERE company_id=${p.companyId} AND id=${id}`);
       for(const plan of selectedPlans){
@@ -211,9 +214,10 @@ export class MaintenanceAuthorityService {
         const beforeKmDue=dueKm===undefined||exitKm<dueKm;
         const beforeDateDue=dueDate===undefined||completionDate<dueDate;
         const executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'=hasDue&&beforeKmDue&&beforeDateDue?'PREVENTIVA_ANTECIPADA':'SCHEDULED';
+        const earlyReason=executionKind==='PREVENTIVA_ANTECIPADA'?reqText(preventiveExecutionReasons[String(plan.id)],'preventiveExecutionReason',1000):undefined;
         const executionId=randomUUID();
-        const inserted=rows(await raw.execute(sql`INSERT INTO maintenance_work_order_plan_executions(id,company_id,work_order_id,maintenance_plan_id,execution_kind,execution_km,execution_date,created_by,created_at)
-          VALUES(${executionId},${p.companyId},${id},${String(plan.id)},${executionKind},${exitKm},${completionDate},${p.userId},${now})
+        const inserted=rows(await raw.execute(sql`INSERT INTO maintenance_work_order_plan_executions(id,company_id,work_order_id,maintenance_plan_id,execution_kind,execution_km,execution_date,early_reason,created_by,created_at)
+          VALUES(${executionId},${p.companyId},${id},${String(plan.id)},${executionKind},${exitKm},${completionDate},${earlyReason??null},${p.userId},${now})
           ON CONFLICT(company_id,work_order_id,maintenance_plan_id) DO NOTHING RETURNING id`))[0];
         if(!inserted)continue;
         const updatedPlan=rows(await raw.execute(sql`UPDATE maintenance_plans
@@ -227,8 +231,8 @@ export class MaintenanceAuthorityService {
           WHERE company_id=${p.companyId} AND id=${String(plan.id)} AND vehicle_id=${before.vehicleId} AND status='ACTIVE'
           RETURNING id,cycle_sequence,next_due_km,next_due_date,last_execution_km,last_execution_date,last_work_order_id`))[0];
         if(!updatedPlan)throw new MaintenanceConflictError('Falha ao avançar item preventivo');
-        preventiveExecutions.push({planId:String(plan.id),executionKind});
-        await audit(tx,p,'MaintenancePlan',String(plan.id),AuditAction.UPDATE,plan,{event:executionKind,workOrderId:id,executionKm:exitKm,executionDate:completionDate,cycleSequence:Number(updatedPlan.cycle_sequence),nextDueKm:updatedPlan.next_due_km===null?undefined:Number(updatedPlan.next_due_km),nextDueDate:updatedPlan.next_due_date===null?undefined:String(updatedPlan.next_due_date).slice(0,10)},now);
+        preventiveExecutions.push({planId:String(plan.id),executionKind,earlyReason});
+        await audit(tx,p,'MaintenancePlan',String(plan.id),AuditAction.UPDATE,plan,{event:executionKind,workOrderId:id,executionKm:exitKm,executionDate:completionDate,earlyReason,cycleSequence:Number(updatedPlan.cycle_sequence),nextDueKm:updatedPlan.next_due_km===null?undefined:Number(updatedPlan.next_due_km),nextDueDate:updatedPlan.next_due_date===null?undefined:String(updatedPlan.next_due_date).slice(0,10)},now);
       }
     }
 
