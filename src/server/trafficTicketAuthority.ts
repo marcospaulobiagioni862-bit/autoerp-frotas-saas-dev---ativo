@@ -40,7 +40,7 @@ function round(value:number):number{return Math.round((value+Number.EPSILON)*100
 function normalizeAuto(value:string):string{return value.trim().toUpperCase().replace(/\s+/g,' ');}
 function normalizePlate(value?:string):string|undefined{
   const plate=value?.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-  return plate&&/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(plate)?plate:undefined;
+  return plate&&plate.length>=5&&plate.length<=10?plate:undefined;
 }
 function assertWrite(principal:AuthenticatedPrincipal):void{
   const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
