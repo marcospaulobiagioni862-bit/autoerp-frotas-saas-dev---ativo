@@ -74,6 +74,18 @@ function reviewCorrections(input:Record<string,string>):Record<string,string>{
   }
   return output;
 }
+function trafficTicketReviewError(input:Record<string,string>):string|undefined{
+  const required:[string,string][]=[
+    ['plate','placa'],['noticeNumber','auto de infração'],['organName','órgão'],['infractionCode','código'],
+    ['description','descrição'],['infractionDate','data da infração'],['dueDate','vencimento'],['amount','valor original'],
+  ];
+  const missing=required.filter(([key])=>!String(input[key]||'').trim()).map(([,label])=>label);
+  if(missing.length)return `Preencha antes de aprovar: ${missing.join(', ')}.`;
+  if(!moneyNumber(input.amount))return 'Informe um valor original válido para a multa.';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dateInputValue(input.infractionDate)))return 'Informe uma data da infração válida.';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dateInputValue(input.dueDate)))return 'Informe um vencimento válido.';
+  return undefined;
+}
 function failureMessage(code:string|null|undefined):string{
   if(code==='PROVIDER_RATE_LIMITED')return 'O provedor de IA atingiu o limite temporário. Aguarde e tente novamente mais tarde.';
   if(code==='PROVIDER_DISABLED')return 'O provedor de IA está desativado neste ambiente.';
@@ -111,7 +123,7 @@ export function TrafficTicketDocumentIntakeModal({isOpen,onClose,onCreated}:{isO
   const start=async()=>{setBusy(true);setError(null);try{const intake=await TrafficTicketDocumentIntakeClient.create(`traffic-ticket-ui-${crypto.randomUUID()}`);setIntakeId(intake.id);setMessage('Pré-cadastro criado. Envie o auto ou notificação para leitura.');}catch(e){setError(e instanceof Error?e.message:'Falha ao iniciar leitura.');}finally{setBusy(false);}};
   const refresh=async()=>{if(!attachmentId)return null;const all=await DocumentAiClient.list();const current=all.filter(x=>x.attachmentId===attachmentId).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))[0]||null;setExtraction(current);if(current?.status==='REVIEW_REQUIRED'){const initial:Record<string,string>={};for(const key of FIELD_KEYS){const raw=current.proposedFields[key];initial[key]=MONEY_FIELD_KEYS.has(key)?moneyDisplay(raw):DATE_FIELD_KEYS.has(key)?dateInputValue(raw):valueText(raw);}setCorrections(initial);setMessage('Leitura concluída. Confira os dados extraídos antes de aprovar.');}else if(current?.status==='FAILED'){setMessage(null);setError(failureMessage(current.failureCode));}return current;};
   const upload=async(file:File)=>{if(!intakeId)return;if(!ALLOWED_TYPES.has(file.type)||file.size===0||file.size>MAX_BYTES){setError('Envie PDF, JPG, PNG ou WEBP com até 15 MB.');return;}setBusy(true);setError(null);setMessage('Enviando documento e solicitando leitura...');try{const attachment=await TrafficTicketDocumentIntakeClient.upload(intakeId,file);setAttachmentId(attachment.id);await TrafficTicketDocumentIntakeClient.analyze(intakeId);setMessage('Leitura solicitada. Use Atualizar análise para consultar o resultado.');await refresh();}catch(e){setError(e instanceof Error?e.message:'Falha ao enviar/analisar documento.');}finally{setBusy(false);}};
-  const review=async(decision:'APPROVE'|'REJECT')=>{if(!extraction||!intakeId)return;setBusy(true);setError(null);try{const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections:reviewCorrections(corrections),notes:'Revisão humana do auto de infração'});setExtraction(reviewed);if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhuma multa ou obrigação financeira foi criada.');return;}const [approved,suggested,c,driverList]=await Promise.all([TrafficTicketDocumentIntakeClient.getApprovedDraft(intakeId),TrafficTicketDocumentIntakeClient.getSuggestions(intakeId),TrafficTicketClient.categories(),DriverClient.list()]);setDraft(approved);setSuggestions(suggested);setCategories(c);setDrivers(driverList);setVehicleId(suggested.vehicle?.id||'');setContractId(suggested.contract?.id||'');setDriverId(suggested.driver?.id||'');const normalized=(value:string)=>value.trim().toLocaleLowerCase('pt-BR');
+  const review=async(decision:'APPROVE'|'REJECT')=>{if(!extraction||!intakeId)return;if(decision==='APPROVE'){const validationError=trafficTicketReviewError(corrections);if(validationError){setError(validationError);return;}}setBusy(true);setError(null);try{const reviewed=await DocumentAiClient.review(extraction.id,{decision,corrections:reviewCorrections(corrections),notes:'Revisão humana do auto de infração'});setExtraction(reviewed);if(decision==='REJECT'){setMessage('Leitura rejeitada. Nenhuma multa ou obrigação financeira foi criada.');return;}const [approved,suggested,c,driverList]=await Promise.all([TrafficTicketDocumentIntakeClient.getApprovedDraft(intakeId),TrafficTicketDocumentIntakeClient.getSuggestions(intakeId),TrafficTicketClient.categories(),DriverClient.list()]);setDraft(approved);setSuggestions(suggested);setCategories(c);setDrivers(driverList);setVehicleId(suggested.vehicle?.id||'');setContractId(suggested.contract?.id||'');setDriverId(suggested.driver?.id||'');const normalized=(value:string)=>value.trim().toLocaleLowerCase('pt-BR');
       const fineExpense=c.find(x=>normalized(x.name)==='multas de trânsito'&&(x.type==='EXPENSE'||x.type==='BOTH'))
         ||c.find(x=>normalized(x.name).includes('multa')&&(x.type==='EXPENSE'||x.type==='BOTH'));
       const fineIncome=c.find(x=>normalized(x.name)==='multas de trânsito'&&(x.type==='INCOME'||x.type==='BOTH'))
