@@ -6,6 +6,7 @@ const restoreModal = readFileSync(new URL('../VehicleRestoreModal.tsx', import.m
 const fleet = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const routes = readFileSync(new URL('../../../server/vehicleLifecycleRoutes.ts', import.meta.url), 'utf8');
+const historyModal = readFileSync(new URL('../ArchivedVehicleHistoryModal.tsx', import.meta.url), 'utf8');
 const lifecycleMigration = readFileSync(new URL('../../../../drizzle/0053_vehicle_lifecycle_events.sql', import.meta.url), 'utf8');
 
 assert.match(modal, /label="Comprador \*" required/, 'buyer name must be required in the sale modal');
@@ -42,6 +43,14 @@ assert.match(
   /item\.buyerDocument !== undefined && typeof item\.buyerDocument !== 'string'/,
   'history must still reject malformed non-string buyerDocument'
 );
+
+assert.match(historyModal, /CPF\/CNPJ do comprador:/, 'sold vehicle history must display buyer document');
+assert.match(historyModal, /Valor da venda:/, 'sold vehicle history must display sale value');
+assert.match(historyModal, /KM na venda:/, 'sold vehicle history must display final sale km');
+assert.match(historyModal, /Tipo da baixa:/, 'sold vehicle history must display disposal type');
+assert.match(historyModal, /Registrado por:/, 'sold vehicle history must display the sale author');
+assert.match(routes, /creator\.name AS created_by_name/, 'lifecycle read model must resolve the author name server-side');
+assert.match(client, /createdByName\?: string;/, 'lifecycle client must expose the resolved author name');
 
 // Reentry is a dedicated audited lifecycle action. Generic SOLD -> AVAILABLE remains blocked elsewhere.
 assert.match(lifecycleMigration, /'RESTORED'/, 'existing lifecycle schema must already allow RESTORED without a new migration');
