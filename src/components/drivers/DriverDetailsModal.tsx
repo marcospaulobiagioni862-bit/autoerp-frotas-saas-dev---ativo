@@ -202,13 +202,16 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     setError(null);
     try {
       const coreDriver = await DriverClient.get(driverId);
-      const supplemental = await bridge.getSupplementalSummary(coreDriver);
-      supplemental.documents = await DocumentClient.list({
-        subjectType: 'DRIVER',
-        subjectId: coreDriver.id,
-        currentOnly: true,
-        includeArchived: false,
-      });
+      const [supplemental, documents] = await Promise.all([
+        bridge.getSupplementalSummary(coreDriver),
+        DocumentClient.list({
+          subjectType: 'DRIVER',
+          subjectId: coreDriver.id,
+          currentOnly: true,
+          includeArchived: false,
+        }),
+      ]);
+      supplemental.documents = documents;
       const linkedVehicleId = coreDriver.currentVehicleId || supplemental.currentContract?.vehicleId;
       if (linkedVehicleId) {
         const vehicle = await VehicleClient.get(linkedVehicleId);
