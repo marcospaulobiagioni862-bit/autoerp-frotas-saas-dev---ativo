@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus } from '../../api/documentAiClient';
 import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
 import type { FileAttachment } from '../../types/entities/audit';
 import { Search, X } from 'lucide-react';
 import { Card } from '../ui/Card';
@@ -25,6 +26,28 @@ import {
   type DocumentCenterFilterState,
 } from './documentAiStatusFilter';
 
+type DocumentValidityFilter = 'ALL' | 'EXPIRED' | 'DUE_7' | 'DUE_15' | 'VALID' | 'NO_EXPIRATION';
+
+function daysToExpiration(expirationDate?: string): number | undefined {
+  if (!expirationDate) return undefined;
+  const expiration = Date.parse(`${expirationDate}T00:00:00Z`);
+  if (!Number.isFinite(expiration)) return undefined;
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.round((expiration - today) / 86_400_000);
+}
+
+function matchesValidityFilter(expirationDate: string | undefined, filter: DocumentValidityFilter): boolean {
+  if (filter === 'ALL') return true;
+  const days = daysToExpiration(expirationDate);
+  if (filter === 'NO_EXPIRATION') return days === undefined;
+  if (days === undefined) return false;
+  if (filter === 'EXPIRED') return days < 0;
+  if (filter === 'DUE_7') return days >= 0 && days <= 7;
+  if (filter === 'DUE_15') return days >= 8 && days <= 15;
+  return days > 15;
+}
+
 interface DocumentCenterProps {
   focusFileName?: string;
   onFocusConsumed?: () => void;
@@ -43,15 +66,18 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
   const [attachmentStatuses, setAttachmentStatuses] = useState<Record<string, DocumentAiAttachmentStatus>>({});
   const [attachmentStatusesUnavailable, setAttachmentStatusesUnavailable] = useState(false);
   const [driverNamesById, setDriverNamesById] = useState<Record<string, string>>({});
+  const [vehicleLabelsById, setVehicleLabelsById] = useState<Record<string, string>>({});
+  const [validityFilter, setValidityFilter] = useState<DocumentValidityFilter>('ALL');
 
   const fetchDocuments = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [attachmentsResult, statusesResult, driversResult] = await Promise.allSettled([
+      const [attachmentsResult, statusesResult, driversResult, vehiclesResult] = await Promise.allSettled([
         AttachmentClient.list(),
         DocumentAiClient.attachmentStatuses(),
         DriverClient.list(),
+        VehicleClient.list(),
       ]);
       if (attachmentsResult.status === 'rejected') throw attachmentsResult.reason;
       setAttachments(attachmentsResult.value.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -59,6 +85,14 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
         setDriverNamesById(Object.fromEntries(driversResult.value.map((driver) => [driver.id, driver.fullName])));
       } else {
         setDriverNamesById({});
+      }
+      if (vehiclesResult.status === 'fulfilled') {
+        setVehicleLabelsById(Object.fromEntries(vehiclesResult.value.map((vehicle) => [
+          vehicle.id,
+          `${vehicle.plate} ${vehicle.brand} ${vehicle.model} ${vehicle.version || ''}`.trim(),
+        ])));
+      } else {
+        setVehicleLabelsById({});
       }
       if (statusesResult.status === 'fulfilled') {
         setAttachmentStatuses(Object.fromEntries(statusesResult.value.map((item) => [item.attachmentId, item])));
@@ -97,10 +131,12 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
       att.fileName.toLowerCase().includes(term) ||
       (att.description || '').toLowerCase().includes(term) ||
       att.entityId.toLowerCase().includes(term) ||
-      (driverNamesById[att.entityId] || '').toLowerCase().includes(term);
+      (driverNamesById[att.entityId] || '').toLowerCase().includes(term) ||
+      (vehicleLabelsById[att.entityId] || '').toLowerCase().includes(term);
     const matchesEntity = entityTypeFilter === 'ALL' || att.entityType === entityTypeFilter;
     const matchesDoc = documentTypeFilter === 'ALL' || att.documentType === documentTypeFilter;
-    return matchesSearch && matchesEntity && matchesDoc && !att.isArchived;
+    const matchesValidity = matchesValidityFilter(att.expirationDate, validityFilter);
+    return matchesSearch && matchesEntity && matchesDoc && matchesValidity && !att.isArchived;
   });
   const extractionStatusCounts = createDocumentAiStatusCounts(
     baseFilteredAttachments.map((attachment) => attachment.id),
@@ -135,7 +171,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     sort: extractionSort,
   };
   const activeFilters = createDocumentCenterActiveFilters(currentFilters);
-  const filtersActive = hasActiveDocumentCenterFilters(currentFilters);
+  const filtersActive = hasActiveDocumentCenterFilters(currentFilters) || validityFilter !== 'ALL';
   const applyFilterState = (filters: DocumentCenterFilterState) => {
     setSearchTerm(filters.searchTerm);
     setEntityTypeFilter(filters.entityType);
@@ -145,6 +181,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
   };
   const clearFilters = () => {
     applyFilterState(DOCUMENT_CENTER_DEFAULT_FILTERS);
+    setValidityFilter('ALL');
   };
   const removeActiveFilter = (key: DocumentCenterFilterKey) => {
     applyFilterState(resetDocumentCenterFilter(currentFilters, key));
@@ -190,12 +227,12 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
           </div>
         </div>
         <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input placeholder="Nome do motorista, arquivo ou ID..." className="pl-9" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+                <Input placeholder="Placa, veículo, motorista, arquivo ou ID..." className="pl-9" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
               </div>
             </div>
             <div>
@@ -228,6 +265,17 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
                 <option value="APPROVED">Aprovada ({statusCountLabel(extractionStatusCounts.APPROVED)})</option>
                 <option value="REJECTED">Rejeitada ({statusCountLabel(extractionStatusCounts.REJECTED)})</option>
                 <option value="FAILED">Falhou ({statusCountLabel(extractionStatusCounts.FAILED)})</option>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Validade</label>
+              <Select value={validityFilter} onChange={(event) => setValidityFilter(event.target.value as DocumentValidityFilter)}>
+                <option value="ALL">Todas as validades</option>
+                <option value="EXPIRED">Vencidos</option>
+                <option value="DUE_7">Vence em até 7 dias</option>
+                <option value="DUE_15">Vence entre 8 e 15 dias</option>
+                <option value="VALID">Mais de 15 dias</option>
+                <option value="NO_EXPIRATION">Sem validade informada</option>
               </Select>
             </div>
             <div>
