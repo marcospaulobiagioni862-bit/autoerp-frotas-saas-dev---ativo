@@ -583,69 +583,62 @@ jobs:
           fi
           echo "DOC-AI-1B6 sanitized attachment status invariants: PASS"
 
-      - name: DOC-AI-1B7 client-side status filter invariants
+      - name: DOC-AI-1B7 hidden technical status invariants
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "matchesDocumentAiStatusFilter(" src/components/documents/DocumentCenter.tsx
-          grep -F "setExtractionStatusFilter('ALL')" src/components/documents/DocumentCenter.tsx
-          grep -F '<option value="NONE">Sem extração (' src/components/documents/DocumentCenter.tsx
-          grep -F "if (filter === 'ALL' || statusesUnavailable) return true;" src/components/documents/documentAiStatusFilter.ts
           grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
-          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
-            echo "FAIL: local status filter must not fetch or consume protected authority"
+          grep -F "showDocumentAiControls={false}" src/components/documents/DocumentCenter.tsx
+          grep -F "INTERNAL_ENTITY_TYPES" src/components/documents/DocumentCenter.tsx
+          grep -F "item.contentState === 'AVAILABLE'" src/components/documents/DocumentCenter.tsx
+          if grep -Eq "Estado da Extração|Sem extração \(|Prioridade de triagem|Ação necessária \(|Revisão assistida por IA" src/components/documents/DocumentCenter.tsx; then
+            echo "FAIL: user-facing document library must not expose Document AI technical state"
             exit 1
           fi
-          echo "DOC-AI-1B7 client-side status filter invariants: PASS"
+          echo "DOC-AI-1B7 hidden technical status invariants: PASS"
 
-      - name: DOC-AI-1B8 sanitized status count invariants
+      - name: DOC-AI-1B8 sanitized status count authority invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "createDocumentAiStatusCounts(" src/components/documents/documentAiStatusFilter.ts
-          grep -F "baseFilteredAttachments.map((attachment) => attachment.id)" src/components/documents/DocumentCenter.tsx
           grep -F "NONE: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F "Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})" src/components/documents/DocumentCenter.tsx
           grep -F "unavailable status data must never be represented as zero" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
             echo "FAIL: local status counts must not fetch or consume protected authority"
             exit 1
           fi
-          echo "DOC-AI-1B8 sanitized status count invariants: PASS"
+          echo "DOC-AI-1B8 sanitized status count authority invariants: PASS"
 
-      - name: DOC-AI-1B9 local triage sorting invariants
+      - name: DOC-AI-1B9 internal triage sorting invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "export function sortDocumentAiAttachments<" src/components/documents/documentAiStatusFilter.ts
-          grep -F "const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
-          grep -F "setExtractionSort('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
           grep -F "REVIEW_REQUIRED: 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F '<option value="REVIEW_PRIORITY">Prioridade de triagem</option>' src/components/documents/DocumentCenter.tsx
           grep -F "sorting must not mutate authorized input data" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -E "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" >/dev/null; then
-            echo "FAIL: local triage sorting must not fetch or consume protected authority"
+            echo "FAIL: internal triage sorting must not fetch or consume protected authority"
             exit 1
           fi
-          echo "DOC-AI-1B9 local triage sorting invariants: PASS"
+          echo "DOC-AI-1B9 internal triage sorting invariants: PASS"
 
-      - name: DOC-AI-1B10 consolidated action filter invariants
+      - name: DOC-AI-1B10 internal action filter invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "'ACTION_REQUIRED'," src/components/documents/documentAiStatusFilter.ts
           grep -F "current?.status === 'REVIEW_REQUIRED' || current?.status === 'FAILED'" src/components/documents/documentAiStatusFilter.ts
           grep -F "ACTION_REQUIRED: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F '<option value="ACTION_REQUIRED">Ação necessária (' src/components/documents/DocumentCenter.tsx
           grep -F "matchesDocumentAiStatusFilter('review', 'ACTION_REQUIRED', statuses, false), true" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "matchesDocumentAiStatusFilter('pending', 'ACTION_REQUIRED', statuses, false), false" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "ACTION_REQUIRED: 2" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "ACTION_REQUIRED: null" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
-          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -E "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" >/dev/null; then
-            echo "FAIL: consolidated action filter must not fetch or consume protected authority"
+          if grep -Eq "ACTION_REQUIRED|Revisão assistida por IA|Prioridade de triagem" src/components/documents/DocumentCenter.tsx; then
+            echo "FAIL: internal Document AI triage must remain hidden from the user document library"
             exit 1
           fi
-          echo "DOC-AI-1B10 consolidated action filter invariants: PASS"
+          echo "DOC-AI-1B10 internal action filter invariants: PASS"
 
       - name: TypeScript gate
         run: npm run lint
