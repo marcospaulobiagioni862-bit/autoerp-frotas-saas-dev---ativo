@@ -526,7 +526,8 @@ export const maintenance = pgTable('maintenance', {
 export const trafficTickets = pgTable('traffic_tickets', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
-  vehicleId: text('vehicle_id').notNull(),
+  vehicleId: text('vehicle_id'),
+  vehiclePlate: text('vehicle_plate'),
   driverId: text('driver_id'),
   autoNumber: text('auto_number').notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
