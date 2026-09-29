@@ -266,8 +266,11 @@ export class TrafficTicketAuthorityService {
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
-      const resolved=current.vehicleId?await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,input.contractId,input.driverId):{};
-      let driverId=input.driverId,contractId=current.vehicleId?(input.contractId||resolved.contractId):undefined;
+      const resolved=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId
+        ?await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,input.contractId,input.driverId)
+        :{};
+      let driverId=input.responsibility===TicketResponsibility.DRIVER?input.driverId:undefined;
+      let contractId=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId?(input.contractId||resolved.contractId):undefined;
       if(input.responsibility===TicketResponsibility.DRIVER&&!driverId&&resolved.driverId)driverId=resolved.driverId;
       if(input.responsibility===TicketResponsibility.DRIVER&&!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
       if(current.responsibility===input.responsibility&&current.driverId===driverId)return (await TrafficTicketAuthorityService.getDetails(principal.companyId,id))!;
