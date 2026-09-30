@@ -299,7 +299,9 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                 <tr>
                   <th className="p-3.5">Descrição / Origem</th>
                   <th className="p-3.5">Vencimento</th>
-                  <th className="p-3.5">Valor Original</th>
+                  <th className="p-3.5">Despesa Total</th>
+                  <th className="p-3.5">Parcela</th>
+                  <th className="p-3.5">Valor da Parcela</th>
                   <th className="p-3.5">Saldo a Pagar</th>
                   <th className="p-3.5 text-center">Status</th>
                   <th className="p-3.5 text-right">Ação Operacional</th>
@@ -307,7 +309,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
                 )}
                 {filtered.map((item) => {
                   const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
@@ -324,13 +326,19 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                     driverName && `Responsável: ${driverName}`,
                     contractNumber && `Contrato: ${contractNumber}`,
                   ].filter(Boolean);
+                  const groupedInstallments = item.installmentGroupId
+                    ? payables.filter((entry) => entry.installmentGroupId === item.installmentGroupId)
+                    : [item];
+                  const expenseTotal = groupedInstallments.reduce((sum, entry) => sum + Number(entry.originalAmount), 0);
+                  const installmentLabel = item.installmentNumber && item.totalInstallments
+                    ? `${item.installmentNumber}/${item.totalInstallments}`
+                    : 'Única';
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5">
                         <div className="font-semibold text-slate-900 dark:text-slate-100">
                           {item.description}
-                          {item.installmentNumber && item.totalInstallments ? <span className="ml-1 text-slate-500 font-normal">• Parcela {item.installmentNumber}/{item.totalInstallments}</span> : null}
                         </div>
                         <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
                           <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
@@ -343,6 +351,12 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                         {isOverdue && (
                           <span className="block text-[10px] text-red-600 dark:text-red-400 font-bold">EM ATRASO</span>
                         )}
+                      </td>
+                      <td className="p-3.5 font-mono tabular-nums font-semibold">
+                        R$ {expenseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 font-mono tabular-nums font-semibold">
+                        {installmentLabel}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-semibold">
                         R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
