@@ -1,4 +1,4 @@
-import { settlementQuote, settlementLocalDate } from './SettlementLateInterest';
+import { settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
@@ -25,6 +25,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
+  const [interestAmount, setInterestAmount] = useState<string>('0,00');
+  const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
   const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
   const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
@@ -37,6 +39,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   useEffect(() => {
     if (payable) {
       amountEdited.current = false;
+      setInterestAmount('0,00');
+      setAdditionalAmount('0,00');
       setAmount(payable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
@@ -60,8 +64,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
     }
   };
 
-  const quote = settlementQuote(payable, paymentDate, 0);
-  const settlementTotal = quote?.totalAmount ?? payable?.balanceAmount ?? 0;
+  const interestValue = parseCurrencyDraft(interestAmount);
+  const additionalValue = parseCurrencyDraft(additionalAmount);
+  const settlementTotal = (payable?.balanceAmount ?? 0) + interestValue + additionalValue;
   useEffect(() => {
     if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
   }, [settlementTotal, payable]);
@@ -72,8 +77,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
     e.preventDefault();
     const paymentAmount = parseCurrencyDraft(amount);
     if (submittingRef.current || confirmOpen) return;
+    if (!Number.isFinite(interestValue)) { setError('Juros inválidos'); return; }
+    if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a pagar deve ser maior que zero.');
+      return;
+    }
+    if (paymentAmount > settlementTotal) {
+      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o total previsto (${formatCurrencyBRL(settlementTotal)}).`);
       return;
     }
     if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
@@ -96,7 +107,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
       await FinanceSettlementClient.registerPayment(payable.id, {
         financialAccountId: selectedAccountId,
         paymentAmount,
-        settleRemainingBalance: paymentAmount >= payable.balanceAmount,
+        settleRemainingBalance: paymentAmount >= settlementTotal,
+        interestAmount: interestValue,
+        additionalAmount: additionalValue,
         paymentDate,
         paymentMethodId: selectedMethodId,
         description: notes || 'Pagamento efetuado via portal operacional',
@@ -166,11 +179,42 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           </div>
 
           <dl aria-label="Composição do pagamento">
-            <div>Dias de atraso: {quote?.daysOverdue ?? 0}</div>
-            <div>{payable.interestAmount || payable.fineAmount || payable.discountAmount ? 'Saldo liquidado (inclui ajustes anteriores)' : 'Principal liquidado'}: {formatCurrencyBRL(Math.min(parseCurrencyDraft(amount) || 0, payable.balanceAmount))}</div>
-            <div>Juros/acréscimos: {formatCurrencyBRL(Math.max(0, (parseCurrencyDraft(amount) || 0) - payable.balanceAmount))}</div>
+            <div>{payable.interestAmount || payable.fineAmount || payable.additionalAmount || payable.discountAmount ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo atual'}: {formatCurrencyBRL(payable.balanceAmount)}</div>
+            <div>Juros desta baixa: {formatCurrencyBRL(interestValue)}</div>
+            <div>Acréscimo: {formatCurrencyBRL(additionalValue)}</div>
+            <div>Total previsto: {formatCurrencyBRL(settlementTotal)}</div>
             <div>Valor efetivamente pago: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
           </dl>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Juros (R$)
+              <input
+                aria-label="Juros (R$)"
+                type="text"
+                inputMode="decimal"
+                value={interestAmount}
+                onChange={e => {
+                  const draft = normalizeCurrencyDraft(e.target.value);
+                  if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
+                }}
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Acréscimo (R$)
+              <input
+                aria-label="Acréscimo (R$)"
+                type="text"
+                inputMode="decimal"
+                value={additionalAmount}
+                onChange={e => {
+                  const draft = normalizeCurrencyDraft(e.target.value);
+                  if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
+                }}
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+              />
+            </label>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Valor Efetivamente Pago (R$) *
@@ -288,6 +332,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           <dl className="space-y-2">
             <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
             <div><dt>Valor</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
+            <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
             <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
           </dl>
