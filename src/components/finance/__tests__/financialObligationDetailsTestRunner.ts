@@ -23,6 +23,7 @@ for (const field of [
   'discountAmount',
   'fineAmount',
   'interestAmount',
+  'additionalAmount',
   'updatedAmount',
   'paidAmount',
   'balanceAmount',
@@ -43,7 +44,11 @@ assert.match(payables, /Filtrar contas a pagar por origem/);
 assert.match(payables, /Todas as origens/);
 assert.match(payables, /originLabel\(String\(item\.originType\)\)/);
 assert.match(payables, /Categoria:/);
-assert.match(payables, /Parcela \{item\.installmentNumber\}\/\{item\.totalInstallments\}/);
+assert.match(payables, /Despesa Total/);
+assert.match(payables, /Valor da Parcela/);
+assert.match(payables, /item\.installmentGroupId/);
+assert.match(payables, /entry\.installmentGroupId === item\.installmentGroupId/);
+assert.match(payables, /\`\$\{item\.installmentNumber\}\/\$\{item\.totalInstallments\}\`/);
 assert.match(payables, /statusLabel\(String\(item\.status\)\)/);
 assert.match(payables, /Nenhuma conta a pagar encontrada para os filtros atuais/);
 console.log('FINANCE-UX-1C obligation details regression: PASS');
