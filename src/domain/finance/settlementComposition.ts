@@ -54,14 +54,17 @@ export function settlementState(value: any): SettlementState {
   };
 }
 
-/** No allocation of carried charges is inferred from aggregate paidAmount. */
-export function determinePrincipalLiquidated(before: SettlementState & {originalAmount: number}, applied: SettlementAdjustments, movementAmount: number): number {
+/** Carried charges are never guessed as principal. Ambiguous follow-up allocation is audited as null without blocking cash settlement. */
+export function determinePrincipalLiquidated(before: SettlementState & {originalAmount: number}, applied: SettlementAdjustments, movementAmount: number): number | null {
   const netAdjustments = roundCurrency(applied.fineAmount + applied.interestAmount + applied.additionalAmount - applied.discountAmount);
   const principal = roundCurrency(movementAmount - netAdjustments);
+  if (principal < 0) {
+    throw new Error('Principal liquidado indeterminável: valor da baixa não cobre os novos ajustes');
+  }
   const hasPreviousAdjustments = [before.fineAmount, before.interestAmount, before.additionalAmount, before.discountAmount].some(value => Number(value) !== 0);
-  if (!hasPreviousAdjustments && principal >= 0 && principal <= Number(before.balanceAmount)) return principal;
+  if (!hasPreviousAdjustments && principal <= Number(before.balanceAmount)) return principal;
   if (hasPreviousAdjustments && Number(before.paidAmount) === 0 && roundCurrency(movementAmount) === roundCurrency(Number(before.balanceAmount) + netAdjustments)) return Number(before.originalAmount);
-  throw new Error('Principal liquidado indeterminável: composição ambígua entre principal e encargos; baixa rejeitada');
+  return null;
 }
 
 export function reverseSettlementState(current: SettlementState, composition: SettlementComposition, amount: number, previouslyReversed: number) {
