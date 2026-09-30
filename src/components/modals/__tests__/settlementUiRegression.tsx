@@ -47,10 +47,10 @@ function deferred() {
   const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-const input = (tree: any) => tree.root.findByProps({ inputMode: 'decimal' });
+const input = (tree: any, kind: 'Receipt' | 'Payment') => tree.root.findByProps({ 'aria-label': kind === 'Receipt' ? 'Valor a Receber (R$)' : 'Valor a Pagar (R$)' });
 const confirmation = (tree: any) => tree.root.findAllByType(ConfirmDialog).find((node: any) => node.props.isOpen);
 const submit = async (tree: any) => { await act(async () => { await tree.root.findByType('form').props.onSubmit({ preventDefault() {} }); }); };
-const change = async (tree: any, value: string) => { await act(async () => { input(tree).props.onChange({ target: { value } }); }); };
+const change = async (tree: any, kind: 'Receipt' | 'Payment', value: string) => { await act(async () => { input(tree, kind).props.onChange({ target: { value } }); }); };
 
 for (const [draft, amount] of [['500,00', 500], ['300,00', 300], ['125,40', 125.4], ['0,01', .01]] as const) {
   assert.equal(parseCurrencyDraft(draft), amount);
@@ -70,18 +70,18 @@ for (const kind of ['Receipt', 'Payment'] as const) {
   FinanceSettlementClient[method] = async (id, command) => { calls.push({ id, ...command }); return pending.promise; };
   let tree: any;
   await act(async () => { tree = create(<Component {...{ [entityProp]: base } as any} isOpen onClose={() => closed++} onSuccess={() => success++} />); });
-  await change(tree, '');
-  assert.equal(input(tree).props.value, '');
+  await change(tree, kind, '');
+  assert.equal(input(tree, kind).props.value, '');
   await submit(tree);
   assert.equal(confirmation(tree), undefined, 'empty amount must not reach confirmation');
   for (const value of ['500,00', '300,00', '125,40']) {
     await change(tree, value);
-    assert.equal(input(tree).props.value, value);
+    assert.equal(input(tree, kind).props.value, value);
   }
-  await change(tree, '0500,00');
-  assert.equal(input(tree).props.value, '500,00');
-  await change(tree, '0125,40');
-  assert.equal(input(tree).props.value, '125,40');
+  await change(tree, kind, '0500,00');
+  assert.equal(input(tree, kind).props.value, '500,00');
+  await change(tree, kind, '0125,40');
+  assert.equal(input(tree, kind).props.value, '125,40');
   await submit(tree);
   assert.equal(calls.length, 0, 'opening confirmation must not mutate');
   const summary = JSON.stringify(confirmation(tree).findByType('dl').children.map((node: any) => node.findByType('dd').children));
@@ -160,7 +160,7 @@ for (const kind of ['Receipt', 'Payment'] as const) {
   const listView = () => tree.root.findByType(View);
   const action = kind === 'Receipt' ? 'onOpenReceiptModal' : 'onOpenPaymentModal';
   await act(async () => { listView().props[action]({ ...persisted }); });
-  await change(tree, '300,00');
+  await change(tree, kind, '300,00');
   await submit(tree);
   await act(async () => { await confirmation(tree).props.onConfirm(); });
   assert.equal(writes, 0);
