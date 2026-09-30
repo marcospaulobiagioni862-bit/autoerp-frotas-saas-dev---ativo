@@ -148,6 +148,20 @@ for (const origin of [OriginType.CONTRACT_RENT, OriginType.SECURITY_DEPOSIT]) {
 }
 
 for (const kind of ['receipt', 'payment'] as const) {
+  const partial = fixture(kind);
+  const first = await partial.settle(50, 'adjusted-partial', { interestAmount: 10, additionalAmount: 5 });
+  assert.equal(partial.obligation.updatedAmount, 115);
+  assert.equal(partial.obligation.paidAmount, 50);
+  assert.equal(partial.obligation.balanceAmount, 65);
+  const firstComposition = await (partial.tx as any).findSettlementComposition(first.transaction.id);
+  assert.equal(firstComposition.principalLiquidated, 35);
+  const second = await partial.settle(65, 'adjusted-final');
+  assert.equal(partial.obligation.status, ObligationStatus.PAID);
+  assert.equal(partial.obligation.balanceAmount, 0);
+  const secondComposition = await (partial.tx as any).findSettlementComposition(second.transaction.id);
+  assert.equal(secondComposition.principalLiquidated, null, 'carried adjustments stay auditable without blocking a follow-up settlement');
+  console.log(`PASS ${kind}: adjusted partial can be completed without inventing carried principal allocation`);
+
   const f = fixture(kind);
   const result = await f.settle(133, 'adjusted', { fineAmount: 5, interestAmount: 24, additionalAmount: 7, discountAmount: 3 });
   assert.equal(f.obligation.originalAmount, 100);
