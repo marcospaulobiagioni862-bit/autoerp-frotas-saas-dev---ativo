@@ -75,7 +75,7 @@ for (const kind of ['Receipt', 'Payment'] as const) {
   await submit(tree);
   assert.equal(confirmation(tree), undefined, 'empty amount must not reach confirmation');
   for (const value of ['500,00', '300,00', '125,40']) {
-    await change(tree, value);
+    await change(tree, kind, value);
     assert.equal(input(tree, kind).props.value, value);
   }
   await change(tree, kind, '0500,00');
