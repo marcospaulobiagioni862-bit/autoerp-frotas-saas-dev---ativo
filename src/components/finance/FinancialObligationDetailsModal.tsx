@@ -167,6 +167,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
     ['Descontos', obligation.discountAmount],
     ['Multas', obligation.fineAmount],
     ['Juros', obligation.interestAmount],
+    ['Acréscimos', obligation.additionalAmount ?? 0],
     ['Valor atualizado', obligation.updatedAmount],
     ['Valor liquidado', obligation.paidAmount],
     ['Saldo atual', obligation.balanceAmount],
