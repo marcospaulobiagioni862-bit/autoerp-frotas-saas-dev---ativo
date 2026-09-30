@@ -123,7 +123,7 @@ export class SettlementService {
     return { fineAmount: requested.fineAmount, interestAmount, additionalAmount: requested.additionalAmount, discountAmount: requested.discountAmount };
   }
 
-  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number, tx?: ITransactionContext) {
+  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number | null, tx?: ITransactionContext) {
     const composition: SettlementComposition = {
       version: 1, transactionId: transaction.id, obligationId: params.obligationId,
       dueDate: dateKey(before.dueDate), effectiveDate: params.paymentDate,
