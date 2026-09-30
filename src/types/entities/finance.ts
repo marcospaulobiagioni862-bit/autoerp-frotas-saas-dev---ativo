@@ -96,6 +96,7 @@ export interface AccountReceivable {
   discountAmount: number;
   fineAmount: number;
   interestAmount: number;
+  additionalAmount?: number;
   updatedAmount: number; // original + fine + interest - discount
   paidAmount: number; // Sum of effective transactions
   balanceAmount: number; // updatedAmount - paidAmount
@@ -130,6 +131,7 @@ export interface AccountPayable {
   discountAmount: number;
   fineAmount: number;
   interestAmount: number;
+  additionalAmount?: number;
   updatedAmount: number;
   paidAmount: number;
   balanceAmount: number;

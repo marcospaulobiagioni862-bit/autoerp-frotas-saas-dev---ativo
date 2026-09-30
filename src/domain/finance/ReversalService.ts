@@ -252,7 +252,7 @@ export class ReversalService {
       if (composition) {
         if (composition.obligationId !== obligation.id || roundCurrency(composition.movementAmount) !== originalAmount) throw new Error('Auditoria não corresponde à transação original');
         restoredSettlement = reverseSettlementState(settlementState(obligation), composition, normalizedReversalAmount, reversedAmount);
-      } else if (Number(obligation.interestAmount) || Number(obligation.fineAmount) || Number(obligation.discountAmount)) {
+      } else if (Number(obligation.interestAmount) || Number(obligation.fineAmount) || Number(obligation.additionalAmount ?? 0) || Number(obligation.discountAmount)) {
         throw new Error('Baixa histórica sem composição comprovável: estorno de ajustes bloqueado');
       }
     }

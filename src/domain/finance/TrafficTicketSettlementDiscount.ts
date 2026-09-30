@@ -9,6 +9,7 @@ export interface TrafficTicketDiscountSettlementInput {
   paymentDate: string;
   fineAmount?: number;
   interestAmount?: number;
+  additionalAmount?: number;
   discountAmount?: number;
 }
 
@@ -112,6 +113,8 @@ export async function resolveAuthoritativeTrafficTicketDiscount(
       + money(params.fineAmount)
       + money(payable.interestAmount)
       + money(params.interestAmount)
+      + money(payable.additionalAmount)
+      + money(params.additionalAmount)
       - ticketDiscount
   );
   const remainingAtDiscountTarget = roundCurrency(targetAmount - money(payable.paidAmount));

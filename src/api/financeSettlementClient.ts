@@ -21,6 +21,7 @@ export interface SettlementCommandInput {
   dailyInterestAmount?: number;
   settleRemainingBalance?: boolean;
   interestAmount?: number;
+  additionalAmount?: number;
   fineAmount?: number;
   discountAmount?: number;
   financialAccountId: string;

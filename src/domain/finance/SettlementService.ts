@@ -29,6 +29,7 @@ export interface SettlementParams {
   settleRemainingBalance?: boolean;
   fineAmount?: number;
   interestAmount?: number;
+  additionalAmount?: number;
   discountAmount?: number;
   description?: string;
   /** Logical command key. Required on the authoritative PostgreSQL/UOW path. */
@@ -101,8 +102,8 @@ export class SettlementService {
     if (evidence) {
       if (requested.dailyInterestAmount !== (evidence.requested.dailyInterestAmount ?? null) || requested.settleRemainingBalance !== (evidence.requested.settleRemainingBalance ?? false)) throw new Error('Chave de idempotência reutilizada com composição diferente');
       const interest = requested.interestAmount ?? evidence.applied.interestAmount;
-      if (requested.fineAmount !== evidence.requested.fineAmount || requested.discountAmount !== evidence.requested.discountAmount || interest !== evidence.applied.interestAmount) throw new Error('Chave de idempotência reutilizada com ajustes diferentes');
-    } else if (requested.fineAmount || requested.interestAmount || requested.discountAmount || requested.dailyInterestAmount != null || requested.settleRemainingBalance) {
+      if (requested.fineAmount !== evidence.requested.fineAmount || requested.additionalAmount !== (evidence.requested.additionalAmount ?? 0) || requested.discountAmount !== evidence.requested.discountAmount || interest !== evidence.applied.interestAmount) throw new Error('Chave de idempotência reutilizada com ajustes diferentes');
+    } else if (requested.fineAmount || requested.interestAmount || requested.additionalAmount || requested.discountAmount || requested.dailyInterestAmount != null || requested.settleRemainingBalance) {
       throw new Error('Composição histórica da liquidação indisponível para validar retry com ajustes');
     }
   }
@@ -114,15 +115,15 @@ export class SettlementService {
     if (kind === 'RECEIVABLE' && requested.settleRemainingBalance) throw new Error('Modalidade integral exclusiva de CP');
     let interestAmount = daily == null ? requested.interestAmount ?? 0 : fixedSettlementQuote(obligation, params.paymentDate, daily).additionalInterest;
     if (kind === 'PAYABLE' && requested.settleRemainingBalance) {
-      const base = roundCurrency(Number(obligation.balanceAmount) + requested.fineAmount - requested.discountAmount);
+      const base = roundCurrency(Number(obligation.balanceAmount) + requested.fineAmount + requested.additionalAmount - requested.discountAmount);
       if (params.paymentAmount < base) throw new Error('Liquidação integral inferior ao saldo');
       interestAmount = roundCurrency(params.paymentAmount - base);
     }
     if ((daily != null || requested.settleRemainingBalance) && requested.interestAmount != null && requested.interestAmount !== interestAmount) throw new Error('Juros divergem do cálculo autoritativo; atualize a liquidação');
-    return { fineAmount: requested.fineAmount, interestAmount, discountAmount: requested.discountAmount };
+    return { fineAmount: requested.fineAmount, interestAmount, additionalAmount: requested.additionalAmount, discountAmount: requested.discountAmount };
   }
 
-  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; discountAmount: number}, principalLiquidated: number, tx?: ITransactionContext) {
+  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number, tx?: ITransactionContext) {
     const composition: SettlementComposition = {
       version: 1, transactionId: transaction.id, obligationId: params.obligationId,
       dueDate: dateKey(before.dueDate), effectiveDate: params.paymentDate,
@@ -130,7 +131,7 @@ export class SettlementService {
       principalLiquidated,
       financialAccountId: params.financialAccountId, paymentMethodId: params.paymentMethodId, userId: params.userId,
       requested: requestedAdjustments(params), applied, movementAmount: params.paymentAmount,
-      balanceReduction: roundCurrency(params.paymentAmount - applied.fineAmount - applied.interestAmount + applied.discountAmount),
+      balanceReduction: roundCurrency(params.paymentAmount - applied.fineAmount - applied.interestAmount - applied.additionalAmount + applied.discountAmount),
       before: settlementState(before), after: settlementState(after),
     };
     await AuditLogger.logAction(params.companyId, 'FinancialSettlement', transaction.id, AuditAction.CREATE, params.userId, params.userName, undefined, composition, tx);
@@ -319,14 +320,15 @@ export class SettlementService {
     }
 
     const applied = await this.appliedAdjustments(params, receivable, 'RECEIVABLE', txContext);
-    const { fineAmount: fine, interestAmount: interest, discountAmount: discount } = applied;
+    const { fineAmount: fine, interestAmount: interest, additionalAmount: additional, discountAmount: discount } = applied;
 
     const newFineAmount = Number(receivable.fineAmount) + fine;
     const newInterestAmount = Number(receivable.interestAmount) + interest;
+    const newAdditionalAmount = Number(receivable.additionalAmount ?? 0) + additional;
     const newDiscountAmount = Number(receivable.discountAmount) + discount;
 
     const updatedAmount = roundCurrency(
-      Number(receivable.originalAmount) + newFineAmount + newInterestAmount - newDiscountAmount
+      Number(receivable.originalAmount) + newFineAmount + newInterestAmount + newAdditionalAmount - newDiscountAmount
     );
 
     if (params.paymentAmount > roundCurrency(updatedAmount - Number(receivable.paidAmount))) {
@@ -346,6 +348,7 @@ export class SettlementService {
     const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
+      additionalAmount: newAdditionalAmount,
       discountAmount: newDiscountAmount,
       updatedAmount,
       paidAmount: effectivePaid,
@@ -482,15 +485,16 @@ export class SettlementService {
     await this.validatePaymentMethod(params, txContext);
 
     const applied = await this.appliedAdjustments(params, payable, 'PAYABLE', txContext);
-    const { fineAmount: fine, interestAmount: interest } = applied;
-    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, { ...params, interestAmount: interest }, txContext);
+    const { fineAmount: fine, interestAmount: interest, additionalAmount: additional } = applied;
+    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, { ...params, interestAmount: interest, additionalAmount: additional }, txContext);
 
     const newFineAmount = Number(payable.fineAmount) + fine;
     const newInterestAmount = Number(payable.interestAmount) + interest;
+    const newAdditionalAmount = Number(payable.additionalAmount ?? 0) + additional;
     const newDiscountAmount = Number(payable.discountAmount) + discount;
 
     const updatedAmount = roundCurrency(
-      Number(payable.originalAmount) + newFineAmount + newInterestAmount - newDiscountAmount
+      Number(payable.originalAmount) + newFineAmount + newInterestAmount + newAdditionalAmount - newDiscountAmount
     );
 
     if (params.paymentAmount > roundCurrency(updatedAmount - Number(payable.paidAmount))) {
@@ -510,6 +514,7 @@ export class SettlementService {
     const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
+      additionalAmount: newAdditionalAmount,
       discountAmount: newDiscountAmount,
       updatedAmount,
       paidAmount: effectivePaid,

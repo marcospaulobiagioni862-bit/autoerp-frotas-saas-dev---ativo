@@ -11,7 +11,7 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
     id: `title-${kind}`, companyId: 'tenant-a', originType, originId: 'origin-a',
     contractId: kind === 'receipt' ? 'contract-a' : undefined,
     categoryId: 'category-a', description: 'P0 obligation', originalAmount: 100,
-    fineAmount: 0, interestAmount: 0, discountAmount: 0, updatedAmount: 100,
+    fineAmount: 0, interestAmount: 0, additionalAmount: 0, discountAmount: 0, updatedAmount: 100,
     paidAmount: 0, balanceAmount: 100, status: ObligationStatus.PENDING,
     competenceDate: '2026-09-01', dueDate: '2026-09-01',
   };
@@ -60,10 +60,10 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
       create: async (value: any) => { depositMovements.push(value); return value; },
     }),
   } as unknown as ITransactionContext;
-  const settle = (paymentAmount: number, idempotencyKey: string) => {
+  const settle = (paymentAmount: number, idempotencyKey: string, adjustments: Record<string, number | boolean> = {}) => {
     const params = { companyId: 'tenant-a', obligationId: obligation.id, financialAccountId: account.id,
       paymentMethodId: method.id, paymentAmount, idempotencyKey, paymentDate: '2026-09-24',
-      userId: 'admin-a', userName: 'Admin' };
+      userId: 'admin-a', userName: 'Admin', ...adjustments };
     return kind === 'receipt' ? SettlementService.registerReceipt(params, tx) : SettlementService.registerPayment(params, tx);
   };
   return { get obligation() { return obligation; }, get deposit() { return deposit; }, account, method, transactions, audits, depositMovements, settle, tx, contract };
@@ -145,4 +145,24 @@ for (const origin of [OriginType.CONTRACT_RENT, OriginType.SECURITY_DEPOSIT]) {
   assert.equal(derived?.status, 'RECEIVED');
   assert.match(String(derived?.id), /^derived-contract-a$/);
   console.log('PASS historical reconciliation: paid deposit receivable is read as received without duplicate cash');
+}
+
+for (const kind of ['receipt', 'payment'] as const) {
+  const f = fixture(kind);
+  const result = await f.settle(133, 'adjusted', { fineAmount: 5, interestAmount: 24, additionalAmount: 7, discountAmount: 3 });
+  assert.equal(f.obligation.originalAmount, 100);
+  assert.equal(f.obligation.fineAmount, 5);
+  assert.equal(f.obligation.interestAmount, 24);
+  assert.equal(f.obligation.additionalAmount, 7);
+  assert.equal(f.obligation.discountAmount, 3);
+  assert.equal(f.obligation.updatedAmount, 133);
+  assert.equal(f.obligation.paidAmount, 133);
+  assert.equal(f.obligation.balanceAmount, 0);
+  const composition = await (f.tx as any).findSettlementComposition(result.transaction.id);
+  assert.equal(composition.principalLiquidated, 100);
+  assert.deepEqual(composition.applied, { fineAmount: 5, interestAmount: 24, additionalAmount: 7, discountAmount: 3 });
+  await f.settle(133, 'adjusted', { fineAmount: 5, interestAmount: 24, additionalAmount: 7, discountAmount: 3 });
+  assert.equal(f.transactions.length, 1, 'retry cannot duplicate an adjusted settlement');
+  await assert.rejects(f.settle(133, 'adjusted', { fineAmount: 5, interestAmount: 24, additionalAmount: 8, discountAmount: 3 }), /idempotência/);
+  console.log(`PASS ${kind}: explicit fine, interest, additional amount and discount remain separated`);
 }
