@@ -25,7 +25,7 @@ for(const kind of ['Receipt','Payment'] as const) {
   FinanceSettlementClient[method] = async (_id,command) => { commands.push(command); };
   let tree: any;
   await act(async () => { tree = create(<Component {...{[entity]:title} as any} isOpen onClose={()=>{}} onSuccess={()=>{}} />); });
-  const amount = () => tree.root.findByProps({'aria-label': kind === 'Receipt' ? 'Valor a Receber (R$)' : 'Valor a Pagar (R$)'});
+  const amount = () => tree.root.findByProps({'aria-label': kind === 'Receipt' ? 'Valor recebido agora (R$)' : 'Valor a Pagar (R$)'});
   if(kind === 'Receipt') await act(async () => tree.root.findByProps({'aria-label':'Diária de atraso (R$)'}).props.onChange({target:{value:'2,00'}}));
   const date = () => tree.root.findByProps({type:'date'});
   for(const [effective,total] of [['2026-09-15','90,00'],['2026-09-16','90,00'],['2026-09-17','92,00'],['2026-09-28','114,00']]) {
@@ -63,7 +63,7 @@ for (const kind of ['Receipt','Payment'] as const) {
   const commands:any[]=[]; FinanceSettlementClient[method]=async (_id,command)=>{commands.push(command);};
   let tree:any;
   await act(async()=>{tree=create(<Component {...{[entity]:{...title,originalAmount:1300,updatedAmount:1300,paidAmount:0,balanceAmount:1300,status:'PENDING'}} as any} isOpen onClose={()=>{}} onSuccess={()=>{}}/>);});
-  const amount=()=>tree.root.findByProps({'aria-label': kind === 'Receipt' ? 'Valor a Receber (R$)' : 'Valor a Pagar (R$)'});
+  const amount=()=>tree.root.findByProps({'aria-label': kind === 'Receipt' ? 'Valor recebido agora (R$)' : 'Valor a Pagar (R$)'});
   await act(async()=>tree.root.findByProps({type:'date'}).props.onChange({target:{value:'2026-09-21'}}));
   assert.equal(amount().props.value,'1300,00');
   const interestLabel = kind === 'Receipt' ? 'Juros manual (R$)' : 'Juros (R$)';
