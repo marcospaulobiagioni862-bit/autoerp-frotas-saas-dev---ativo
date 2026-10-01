@@ -113,7 +113,15 @@ export class SettlementService {
     const daily = requested.dailyInterestAmount;
     if (kind === 'PAYABLE' && daily != null) throw new Error('CP não admite diária automática');
     if (kind === 'RECEIVABLE' && requested.settleRemainingBalance) throw new Error('Modalidade integral exclusiva de CP');
-    let interestAmount = daily == null ? requested.interestAmount ?? 0 : fixedSettlementQuote(obligation, params.paymentDate, daily).additionalInterest;
+    let interestAmount: number;
+    if (daily == null) {
+      interestAmount = requested.interestAmount ?? 0;
+    } else {
+      const previouslyAppliedDailyInterest = tx?.sumAppliedDailyInterest
+        ? await tx.sumAppliedDailyInterest(params.obligationId)
+        : Number(obligation.interestAmount || 0);
+      interestAmount = fixedSettlementQuote(obligation, params.paymentDate, daily, previouslyAppliedDailyInterest).additionalInterest;
+    }
     if (kind === 'PAYABLE' && requested.settleRemainingBalance) {
       const base = roundCurrency(Number(obligation.balanceAmount) + requested.fineAmount + requested.additionalAmount - requested.discountAmount);
       if (params.paymentAmount < base) throw new Error('Liquidação integral inferior ao saldo');
@@ -121,6 +129,24 @@ export class SettlementService {
     }
     if ((daily != null || requested.settleRemainingBalance) && requested.interestAmount != null && requested.interestAmount !== interestAmount) throw new Error('Juros divergem do cálculo autoritativo; atualize a liquidação');
     return { fineAmount: requested.fineAmount, interestAmount, additionalAmount: requested.additionalAmount, discountAmount: requested.discountAmount };
+  }
+
+  public static async quoteReceiptDailyInterest(
+    companyId: string,
+    obligationId: string,
+    effectiveDate: string,
+    dailyInterestAmount: number,
+    txContext?: ITransactionContext
+  ) {
+    if (!txContext) throw new Error('Autoridade transacional de diária indisponível');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) throw new Error('Data efetiva inválida');
+    if (!Number.isFinite(dailyInterestAmount) || dailyInterestAmount < 0) throw new Error('Diária inválida');
+    const receivable = await txContext.getReceivableRepo().findById(obligationId);
+    if (!receivable || receivable.companyId !== companyId) throw new Error('Conta a Receber não encontrada');
+    const previouslyAppliedDailyInterest = txContext.sumAppliedDailyInterest
+      ? await txContext.sumAppliedDailyInterest(obligationId)
+      : 0;
+    return fixedSettlementQuote(receivable, effectiveDate, dailyInterestAmount, previouslyAppliedDailyInterest);
   }
 
   private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number | null, tx?: ITransactionContext) {
