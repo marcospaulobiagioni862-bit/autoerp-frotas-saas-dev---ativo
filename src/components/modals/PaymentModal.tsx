@@ -195,8 +195,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             <div>{payable.interestAmount || payable.fineAmount || payable.additionalAmount || payable.discountAmount ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo atual'}: {formatCurrencyBRL(payable.balanceAmount)}</div>
             <div>Juros desta baixa: {formatCurrencyBRL(interestValue)}</div>
             <div>Acréscimo: {formatCurrencyBRL(additionalValue)}</div>
-            <div>Total previsto: {formatCurrencyBRL(settlementTotal)}</div>
-            <div>Valor efetivamente pago: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
+            <div>Valor total a pagar: {formatCurrencyBRL(settlementTotal)}</div>
+            <div>Valor pago agora: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
           </dl>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -230,7 +230,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor Efetivamente Pago (R$) *
+              Valor pago agora (R$) *
             </label>
             <input
               type="text"
@@ -254,15 +254,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Total com ajustes</span>
+                <span className="block text-slate-500">Valor total a pagar</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Pagamento</span>
+                <span className="block text-slate-500">Pago agora</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Saldo após baixa</span>
+                <span className="block text-slate-500">Saldo devedor após pagamento</span>
                 <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
               </div>
             </div>
@@ -366,7 +366,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
         >
           <dl className="space-y-2">
             <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
-            <div><dt>Valor</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Valor total a pagar</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
+            <div><dt>Valor pago agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
             <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
             <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
