@@ -9,34 +9,15 @@ import { Card, Select, Skeleton } from '../ui';
 import { DREStatement } from './DREStatement';
 import { useAuth } from '../../hooks/useAuth';
 import { VehicleProfitabilityBreakdown } from './VehicleProfitabilityBreakdown';
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function currentMonthRange(): { start: string; end: string } {
-  const now = new Date();
-  return {
-    start: isoDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))),
-    end: isoDate(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))),
-  };
-}
-
-function lastDaysRange(days: number): { start: string; end: string } {
-  const end = new Date();
-  const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - Math.max(0, days - 1));
-  return { start: isoDate(start), end: isoDate(end) };
-}
-
-function currentYearRange(): { start: string; end: string } {
-  const year = new Date().getUTCFullYear();
-  return { start: `${year}-01-01`, end: `${year}-12-31` };
-}
+import {
+  currentReportingMonthRange,
+  currentReportingYearRange,
+  lastReportingDaysRange,
+} from '../../shared/utils/reportingPeriod';
 
 export const DREReportView: React.FC = () => {
   const [regime, setRegime] = useState<AccountingRegime>(AccountingRegime.CASH);
-  const defaultRange = currentMonthRange();
+  const defaultRange = currentReportingMonthRange();
   const [startDate, setStartDate] = useState(defaultRange.start);
   const [endDate, setEndDate] = useState(defaultRange.end);
   const [dreReport, setDreReport] = useState<DREReport | null>(null);
@@ -48,7 +29,7 @@ export const DREReportView: React.FC = () => {
   const lastCompanyIdRef = useRef<string | undefined>(user?.companyId);
 
   const applyPreset = (preset: 'MONTH' | '30_DAYS' | 'YEAR') => {
-    const next = preset === 'MONTH' ? currentMonthRange() : preset === '30_DAYS' ? lastDaysRange(30) : currentYearRange();
+    const next = preset === 'MONTH' ? currentReportingMonthRange() : preset === '30_DAYS' ? lastReportingDaysRange(30) : currentReportingYearRange();
     setStartDate(next.start);
     setEndDate(next.end);
   };
