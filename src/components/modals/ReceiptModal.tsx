@@ -196,64 +196,81 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
           </div>
 
-          <label>Valor da diária de atraso (R$)
-            <input aria-label="Diária de atraso (R$)" type="text" value={dailyInterest} onChange={e => { const draft = normalizeCurrencyCentsDraft(e.target.value); if (draft !== null) { setDailyInterest(draft); if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00'); rotateCommandKey(); } }} />
-          </label>
-          <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Juros manual (R$)
-              <input
-                aria-label="Juros manual (R$)"
-                type="text"
-                inputMode="decimal"
-                value={manualInterest}
-                onChange={e => {
-                  const draft = normalizeCurrencyCentsDraft(e.target.value);
-                  if (draft !== null) {
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 space-y-3">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Composição desta baixa
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Diária de atraso (R$)
+                <input
+                  aria-label="Diária de atraso (R$)"
+                  type="text"
+                  inputMode="decimal"
+                  value={dailyInterest}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
+                    setDailyInterest(draft);
+                    if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00');
+                    rotateCommandKey();
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Juros manual (R$)
+                <input
+                  aria-label="Juros manual (R$)"
+                  type="text"
+                  inputMode="decimal"
+                  value={manualInterest}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
                     setManualInterest(draft);
                     if (parseCurrencyDraft(draft) > 0) setDailyInterest('0,00');
                     rotateCommandKey();
-                  }
-                }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Acréscimo (R$)
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Acréscimo (R$)
+                <input
+                  aria-label="Acréscimo (R$)"
+                  type="text"
+                  inputMode="decimal"
+                  value={additionalAmount}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
+                    setAdditionalAmount(draft);
+                    rotateCommandKey();
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+            </div>
+            <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Valor a Receber (R$) *
+              </label>
               <input
-                aria-label="Acréscimo (R$)"
                 type="text"
                 inputMode="decimal"
-                value={additionalAmount}
-                onChange={e => {
+                aria-label="Valor a Receber (R$)"
+                value={amount}
+                onChange={(e) => {
                   const draft = normalizeCurrencyCentsDraft(e.target.value);
-                  if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
+                  if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
                 }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                required
               />
-            </label>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor a Receber (R$) *
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              aria-label="Valor a Receber (R$)"
-              value={amount}
-              onChange={(e) => {
-                const draft = normalizeCurrencyCentsDraft(e.target.value);
-                if (draft !== null && draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
-              }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              required
-            />
-            <span className="text-[11px] text-slate-500 mt-1 block">
-              Permite liquidação parcial se o valor for menor que R${' '}
-              {settlementTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Permite liquidação parcial se o valor for menor que R 
+                {settlementTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
           </div>
 
           {(accounts.length === 0 || methods.length === 0) && (
