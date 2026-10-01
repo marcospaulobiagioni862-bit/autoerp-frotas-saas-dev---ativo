@@ -75,7 +75,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
       ]);
       setAccounts(options.accounts);
       setPaymentMethods(options.paymentMethods);
-      setTransactions(txList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      setTransactions(txList.sort((a, b) => b.transactionDate.slice(0, 10).localeCompare(a.transactionDate.slice(0, 10)) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (err) {
       setAccounts([]);
       setPaymentMethods([]);

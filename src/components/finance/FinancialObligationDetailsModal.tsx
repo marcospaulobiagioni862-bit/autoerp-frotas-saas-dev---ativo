@@ -1,3 +1,4 @@
+import { isDateOverdue } from '../../shared/utils/date';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useState } from 'react';
 import type { AccountPayable, AccountReceivable, FinancialTransaction } from '../../types/entities';
@@ -163,6 +164,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
   if (!obligation) return null;
 
   const amountRows = [
+    ...(obligation.totalAmount !== undefined ? [['Total original do parcelamento', obligation.totalAmount] as const] : []),
     ['Valor original', obligation.originalAmount],
     ['Descontos', obligation.discountAmount],
     ['Multas', obligation.fineAmount],
@@ -191,7 +193,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
               <p className="text-[11px] text-slate-500">{type === 'RECEIVABLE' ? 'Cobrança' : 'Obrigação'} financeira</p>
             </div>
             <Badge variant={obligation.status === 'PAID' ? 'success' : obligation.status === 'CANCELLED' ? 'neutral' : 'warning'}>
-              {statusLabel(String(obligation.status))}
+              {statusLabel(String(obligation.status))}{obligation.status === 'PARTIALLY_PAID' && obligation.balanceAmount > 0 && isDateOverdue(obligation.dueDate) ? ' • Vencido' : ''}
             </Badge>
           </div>
           <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50 sm:grid-cols-4">

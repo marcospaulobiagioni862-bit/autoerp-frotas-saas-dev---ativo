@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { documentTypeLabel } from '../../shared/utils/documentTypeLabel';
 import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
@@ -353,11 +354,11 @@ export function AttachmentList({
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{att.fileName}</p>
                     {contextLabel && <p className="mt-0.5 truncate text-xs text-gray-500">{contextLabel}</p>}
                     <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-500">{att.documentType || 'Documento'}</span>
+                      <span className="text-xs text-gray-500">{documentTypeLabel(att.documentType)}</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
                       <span className="text-xs text-gray-400">·</span>
-                      <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
+                      <span className="text-xs text-gray-500">Cadastrado em {new Date(att.createdAt).toLocaleDateString('pt-BR')}</span>
                       {!contentAvailable && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Arquivo indisponível no armazenamento</span>}
                       {expirationBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${expirationBadge.className}`}>

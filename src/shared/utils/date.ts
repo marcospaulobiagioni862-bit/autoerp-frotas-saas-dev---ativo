@@ -10,18 +10,19 @@ export function formatDateBR(dateString?: string): string {
 }
 
 export function getCurrentISODate(): string {
-  return new Date().toISOString().split('T')[0];
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
 export function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().split('T')[0];
 }
 
 export function addMonths(dateStr: string, months: number): string {
   const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
+  d.setUTCMonth(d.getUTCMonth() + months);
   return d.toISOString().split('T')[0];
 }
 
@@ -29,19 +30,19 @@ export function calculateNextRecurringDate(currentDateStr: string, frequency: Re
   const d = new Date(currentDateStr);
   switch (frequency) {
     case RecurringFrequency.WEEKLY:
-      d.setDate(d.getDate() + 7);
+      d.setUTCDate(d.getUTCDate() + 7);
       break;
     case RecurringFrequency.MONTHLY:
-      d.setMonth(d.getMonth() + 1);
+      d.setUTCMonth(d.getUTCMonth() + 1);
       break;
     case RecurringFrequency.QUARTERLY:
-      d.setMonth(d.getMonth() + 3);
+      d.setUTCMonth(d.getUTCMonth() + 3);
       break;
     case RecurringFrequency.SEMI_ANNUAL:
-      d.setMonth(d.getMonth() + 6);
+      d.setUTCMonth(d.getUTCMonth() + 6);
       break;
     case RecurringFrequency.ANNUAL:
-      d.setFullYear(d.getFullYear() + 1);
+      d.setUTCFullYear(d.getUTCFullYear() + 1);
       break;
   }
   return d.toISOString().split('T')[0];
@@ -56,8 +57,8 @@ export function isDateOverdue(dueDateStr: string): boolean {
 export function getDaysDiff(startDateStr: string, endDateStr: string): number {
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(0, 0, 0, 0);
   const ms = end.getTime() - start.getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }

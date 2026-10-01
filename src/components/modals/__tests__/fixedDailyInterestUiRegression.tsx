@@ -105,8 +105,8 @@ for (const kind of ['Receipt','Payment'] as const) {
   await act(async()=>tree.root.findByProps({'aria-label':'Diária de atraso (R$)'}).props.onChange({target:{value:'10,00'}}));
   await act(async()=>{ await Promise.resolve(); });
   const displayed=JSON.stringify(tree.toJSON());
-  assert(displayed.includes('2026-09-29'), 'follow-up daily period must start at last valid receipt');
-  assert(displayed.includes('2026-10-01'), 'follow-up daily period must end at the new receipt date');
+  assert(displayed.includes('29/09/2026'), 'follow-up daily period must start at last valid receipt in Brazilian format');
+  assert(displayed.includes('01/10/2026'), 'follow-up daily period must end at the new receipt date in Brazilian format');
   assert(displayed.includes('20,00'), 'two follow-up days x R$10 must add R$20');
   assert(displayed.includes('468,00'), 'R$448 balance + R$20 follow-up daily interest must total R$468');
   await act(async()=>tree.unmount());

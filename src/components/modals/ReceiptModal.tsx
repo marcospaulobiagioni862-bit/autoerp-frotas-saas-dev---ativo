@@ -1,7 +1,8 @@
+import { formatDateBR } from '../../shared/utils/date';
 import { SettlementLateInterest, settlementQuote, settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
+import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import {
@@ -30,6 +31,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [dailyInterest, setDailyInterest] = useState<string>('0,00');
   const [manualInterest, setManualInterest] = useState<string>('0,00');
   const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
+  const [fineAmount, setFineAmount] = useState('0,00');
+  const [discountAmount, setDiscountAmount] = useState('0,00');
   const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
@@ -46,6 +49,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       setDailyInterest('0,00');
       setManualInterest('0,00');
       setAdditionalAmount('0,00');
+      setFineAmount('0,00');
+      setDiscountAmount('0,00');
       setDailyQuote(null);
       setDailyQuoteLoading(false);
       setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
@@ -74,13 +79,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const dailyInterestValue = parseCurrencyDraft(dailyInterest);
   const manualInterestValue = parseCurrencyDraft(manualInterest);
   const additionalValue = parseCurrencyDraft(additionalAmount);
+  const fineValue = parseCurrencyDraft(fineAmount);
+  const discountValue = parseCurrencyDraft(discountAmount);
   const quote = dailyInterestValue > 0 ? dailyQuote : null;
   const appliedInterest = dailyInterestValue > 0 ? (quote?.additionalInterest ?? 0) : manualInterestValue;
-  const settlementTotal = (receivable?.balanceAmount ?? 0) + appliedInterest + additionalValue;
+  const settlementTotal = roundCurrency((receivable?.balanceAmount ?? 0) + appliedInterest + additionalValue + fineValue - discountValue);
   const paymentValue = parseCurrencyDraft(amount);
   const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
-  const adjustmentTotal = appliedInterest + additionalValue;
-  const projectedBalance = Math.max(0, settlementTotal - safePaymentValue);
+  const adjustmentTotal = roundCurrency(appliedInterest + additionalValue + fineValue - discountValue);
+  const projectedBalance = Math.max(0, roundCurrency(settlementTotal - safePaymentValue));
   useEffect(() => {
     let active = true;
     if (!receivable || !paymentDate || !Number.isFinite(dailyInterestValue) || dailyInterestValue <= 0) {
@@ -125,6 +132,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     if (submittingRef.current || confirmOpen) return;
     if (!Number.isFinite(dailyInterestValue)) { setError('Diária inválida'); return; }
     if (!Number.isFinite(manualInterestValue)) { setError('Juros inválidos'); return; }
+    if (!Number.isFinite(fineValue) || !Number.isFinite(discountValue) || settlementTotal < 0) { setError('Confira multa e desconto: o total não pode ser negativo.'); return; }
     if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
     if (dailyInterestValue > 0 && manualInterestValue > 0) { setError('Use juros por diária ou juros manual, não os dois ao mesmo tempo.'); return; }
     if (dailyInterestValue > 0 && (dailyQuoteLoading || !quote)) { setError('Aguarde o cálculo da diária antes de confirmar.'); return; }
@@ -161,9 +169,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           ? { dailyInterestAmount: dailyInterestValue, interestAmount: quote?.additionalInterest ?? 0 }
           : { interestAmount: manualInterestValue }),
         additionalAmount: additionalValue,
+        fineAmount: fineValue,
+        discountAmount: discountValue,
         paymentDate,
         paymentMethodId: selectedMethodId,
-        description: notes || 'Recebimento de título via portal operacional',
+        description: notes || `Recebimento • ${receivable.description}${receivable.installmentNumber ? ` • Parcela ${receivable.installmentNumber}/${receivable.totalInstallments}` : ''}`,
         idempotencyKey,
       });
 
@@ -189,7 +199,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
-              Operação de Recebimento (Receipt)
+              Registrar recebimento
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Liquidação de Conta a Receber • {receivable.description}
@@ -226,7 +236,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
             <div className="text-right">
               <span className="text-slate-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{receivable.dueDate}</span>
+              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatDateBR(receivable.dueDate)}</span>
             </div>
           </div>
 
@@ -240,7 +250,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 <input
                   aria-label="Diária de atraso (R$)"
                   type="text"
-                  inputMode="decimal"
+                  inputMode="decimal" onFocus={event => event.target.select()}
                   value={dailyInterest}
                   onChange={e => {
                     const draft = normalizeCurrencyCentsDraft(e.target.value);
@@ -256,7 +266,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 <input
                   aria-label="Juros manual (R$)"
                   type="text"
-                  inputMode="decimal"
+                  inputMode="decimal" onFocus={event => event.target.select()}
                   value={manualInterest}
                   onChange={e => {
                     const draft = normalizeCurrencyCentsDraft(e.target.value);
@@ -272,7 +282,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 <input
                   aria-label="Acréscimo (R$)"
                   type="text"
-                  inputMode="decimal"
+                  inputMode="decimal" onFocus={event => event.target.select()}
                   value={additionalAmount}
                   onChange={e => {
                     const draft = normalizeCurrencyCentsDraft(e.target.value);
@@ -294,7 +304,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               </label>
               <input
                 type="text"
-                inputMode="decimal"
+                inputMode="decimal" onFocus={event => event.target.select()}
                 aria-label="Valor recebido agora (R$)"
                 value={amount}
                 onChange={(e) => {
@@ -332,6 +342,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
           </div>
 
+
+          <div className="grid grid-cols-2 gap-3">
+            {([['Multa (R$)', fineAmount, setFineAmount], ['Desconto (R$)', discountAmount, setDiscountAmount]] as const).map(([label, value, setter]) => (
+              <label key={label} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {label}
+                <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
+                  onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg" />
+              </label>
+            ))}
+          </div>
+          <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
+            <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(receivable.originalAmount)}</dd></div>
+            <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(receivable.paidAmount)}</dd></div>
+            <div><dt>Valor atualizado antes desta baixa</dt><dd>{formatCurrencyBRL(receivable.updatedAmount)}</dd></div>
+            <div><dt>Parcela</dt><dd>{receivable.installmentNumber && receivable.totalInstallments ? `${receivable.installmentNumber}/${receivable.totalInstallments}` : 'Única'}</dd></div>
+            {receivable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(receivable.totalAmount)}</dd></div>}
+          </dl>
           {(accounts.length === 0 || methods.length === 0) && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
               Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o recebimento.
@@ -435,6 +463,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             <div><dt>Valor recebido agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
             <div><dt>Saldo devedor após recebimento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
             <div><dt>Juros desta baixa</dt><dd>{formatCurrencyBRL(appliedInterest)}</dd></div>
+            <div><dt>Multa desta baixa</dt><dd>{formatCurrencyBRL(fineValue)}</dd></div>
+            <div><dt>Desconto desta baixa</dt><dd>{formatCurrencyBRL(discountValue)}</dd></div>
             <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de destino</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
             <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>

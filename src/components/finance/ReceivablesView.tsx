@@ -6,7 +6,7 @@ import { FinanceMasterDataClient } from '../../api/financeMasterDataClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractClient } from '../../api/contractClient';
-import { formatDateBR } from '../../shared/utils/date';
+import { formatDateBR, getCurrentISODate } from '../../shared/utils/date';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { roundCurrency } from '../../shared/utils/currency';
@@ -27,7 +27,7 @@ function installmentPreview(total: number, count: number, firstDueDate: string):
   return Array.from({ length: count }, (_, index) => {
     const number = index + 1;
     const due = new Date(firstDueDate);
-    if (number > 1) due.setMonth(due.getMonth() + index);
+    if (number > 1) due.setUTCMonth(due.getUTCMonth() + index);
     const amount = number === count ? roundCurrency(total - baseAmount * (count - 1)) : baseAmount;
     return { number, dueDate: due.toISOString().slice(0, 10), amount };
   });
@@ -38,6 +38,7 @@ function formatMoney(value: number): string {
 }
 
 function statusLabel(status: ObligationStatus, overdue: boolean): string {
+  if (overdue && status === ObligationStatus.PARTIALLY_PAID) return 'Pago parcialmente • Vencido';
   if (overdue && [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(status)) return 'Vencido';
   switch (status) {
     case ObligationStatus.PENDING: return 'Em aberto';
@@ -237,12 +238,17 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
     })() : '';
     const contractNumber = item.contractId ? contracts.find((contract) => contract.id === item.contractId)?.contractNumber || '' : '';
     const matchesSearch = !needle || [item.description, driverName, vehicleLabel, contractNumber].some((value) => value.toLocaleLowerCase('pt-BR').includes(needle));
-    const overdue = item.balanceAmount > 0 && item.dueDate < new Date().toISOString().slice(0, 10) &&
+    const overdue = item.balanceAmount > 0 && item.dueDate < getCurrentISODate() &&
       ![ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED, ObligationStatus.WRITTEN_OFF].includes(item.status);
     const matchesStatus = statusFilter === 'ALL'
       || (statusFilter === 'OVERDUE_VIEW' ? overdue : item.status === statusFilter);
     return matchesSearch && matchesStatus;
   });
+
+  const withInstallmentTotal = (item: AccountReceivable) => {
+    const group = item.installmentGroupId ? receivables.filter(row => row.installmentGroupId === item.installmentGroupId) : [];
+    return group.length === item.totalInstallments ? { ...item, totalAmount: group.reduce((sum, row) => sum + row.originalAmount, 0) } : item;
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -285,7 +291,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
               {filtered.map((item) => {
                 const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
                 const isPaid = item.status === ObligationStatus.PAID;
-                const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < new Date().toISOString().split('T')[0];
+                const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < getCurrentISODate();
                 const driverName = item.driverId ? drivers.find((driver) => driver.id === item.driverId)?.fullName : undefined;
                 const vehicle = item.vehicleId ? vehicles.find((entry) => entry.id === item.vehicleId) : undefined;
                 const contractNumber = item.contractId ? contracts.find((contract) => contract.id === item.contractId)?.contractNumber : undefined;
@@ -297,7 +303,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
                   <td className="p-3.5 font-mono font-semibold">R$ {formatMoney(item.originalAmount)}</td>
                   <td className="p-3.5 font-mono font-bold text-emerald-700 dark:text-emerald-400"><span className="block">R$ {formatMoney(item.balanceAmount)}</span>{item.paidAmount > 0 && <span className="block text-[10px] font-normal text-slate-500">Recebido R$ {formatMoney(item.paidAmount)}</span>}</td>
                   <td className="p-3.5 text-center"><Badge variant={isPaid ? 'success' : isOverdue ? 'danger' : isPending ? 'warning' : 'neutral'}>{statusLabel(item.status, isOverdue)}</Badge></td>
-                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item)}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"><button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
+                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(withInstallmentTotal(item))}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"><button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
                 </tr>;
               })}
             </tbody>

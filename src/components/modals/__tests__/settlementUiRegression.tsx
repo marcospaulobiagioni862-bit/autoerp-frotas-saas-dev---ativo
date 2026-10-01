@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import React, { useState } from 'react';
-import { act, create } from 'react-test-renderer';
+import TestRenderer from 'react-test-renderer';
 import { PaymentModal } from '../PaymentModal';
 import { ReceiptModal } from '../ReceiptModal';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
@@ -18,6 +18,8 @@ import { DriverClient } from '../../../api/driverClient';
 import { VehicleClient } from '../../../api/vehicleClient';
 import { ContractClient } from '../../../api/contractClient';
 import { normalizeCurrencyCentsDraft, normalizeCurrencyDraft, parseCurrencyDraft } from '../../../shared/utils/currency';
+
+const { act, create } = TestRenderer;
 
 // React component tests, with API doubles only. No database or network connection.
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -187,6 +189,39 @@ for (const kind of ['Receipt', 'Payment'] as const) {
   assert(JSON.stringify(tree.toJSON()).includes('Movimento confirmado'));
   await act(async () => { tree.unmount(); });
   console.log(`PASS ${kind}: immediate authoritative list/status/balance/detail/history reconciliation`);
+}
+
+// The audit balance already includes historical adjustments. Apply only this
+// settlement's adjustments and reset them for the following settlement.
+for (const kind of ['Receipt', 'Payment'] as const) {
+  const Component = kind === 'Receipt' ? ReceiptModal : PaymentModal;
+  const entityProp = kind === 'Receipt' ? 'receivable' : 'payable';
+  const calls: any[] = [];
+  FinanceSettlementClient[kind === 'Receipt' ? 'registerReceipt' : 'registerPayment'] = async (_id, command) => { calls.push(command); };
+  const title = { ...base, originalAmount: 1000, interestAmount: 350, updatedAmount: 1350, paidAmount: 902, balanceAmount: 448 };
+  let tree: any;
+  await act(async () => { tree = create(<Component {...{ [entityProp]: title } as any} isOpen onClose={() => {}} onSuccess={() => {}} />); });
+  for (const [label, value] of [['Multa (R$)', '10,00'], ['Desconto (R$)', '3,00'], [kind === 'Receipt' ? 'Juros manual (R$)' : 'Juros (R$)', '5,00'], ['Acréscimo (R$)', '2,00']]) {
+    await act(async () => { tree.root.findByProps({ 'aria-label': label }).props.onChange({ target: { value } }); });
+  }
+  assert.equal(input(tree, kind).props.value, '462,00');
+  await change(tree, kind, '100,00');
+  await submit(tree);
+  await act(async () => { await confirmation(tree).props.onConfirm(); });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].fineAmount, 10);
+  assert.equal(calls[0].discountAmount, 3);
+  assert.equal(calls[0].interestAmount, 5);
+  assert.equal(calls[0].additionalAmount, 2);
+  assert.equal(calls[0].paymentAmount, 100);
+  await act(async () => { tree.unmount(); });
+  await act(async () => { tree = create(<Component {...{ [entityProp]: { ...title, balanceAmount: 362 } } as any} isOpen onClose={() => {}} onSuccess={() => {}} />); });
+  assert.equal(input(tree, kind).props.value, '362,00', 'successive settlement must not repeat historical adjustments');
+  await act(async () => { tree.root.findByProps({ 'aria-label': 'Desconto (R$)' }).props.onChange({ target: { value: '500,00' } }); });
+  await submit(tree);
+  assert.equal(confirmation(tree), undefined, 'discount cannot produce a negative obligation');
+  await act(async () => { tree.unmount(); });
+  console.log(`PASS ${kind}: audit residual, all adjustments, partial and successive settlement, excess discount`);
 }
 
 // The application's success wiring must reach the tested refresh mechanism.

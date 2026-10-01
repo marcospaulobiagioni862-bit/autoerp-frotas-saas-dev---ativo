@@ -14,6 +14,7 @@ import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { AttachmentList } from './AttachmentList';
+import { documentTypeLabel } from '../../shared/utils/documentTypeLabel';
 
 interface DocumentCenterProps {
   focusFileName?: string;
@@ -241,7 +242,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de documento</label>
             <Select value={documentTypeFilter} onChange={(event) => setDocumentTypeFilter(event.target.value)}>
               <option value="ALL">Todos</option>
-              {documentTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+              {documentTypes.map((type) => <option key={type} value={type}>{documentTypeLabel(type)}</option>)}
             </Select>
           </div>
 
@@ -292,7 +293,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
               attachments={filteredAttachments}
               onRefresh={() => void load()}
               showDocumentAiControls={false}
-              showExpirationState={false}
+              showExpirationState
               contextLabels={relations.contextByAttachment}
             />
           )}

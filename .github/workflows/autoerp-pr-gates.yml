@@ -845,6 +845,8 @@ jobs:
         if: matrix.suite == 'fleet'
         run: |
           npx tsx src/server/__tests__/vehicleKmAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleKmAuditRegression.ts
+          npm run test:maintenance-client
           npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
           npx tsx src/components/fleet/__tests__/vehicleDetailsPresentationTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
@@ -896,6 +898,8 @@ jobs:
           npx tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts
           npm run test:v2-settlement-domain
           npm run test:v2-settlement-ui
+          npx tsx src/shared/utils/__tests__/civilDateRegression.ts
+          npx tsx src/domain/finance/__tests__/auditAdjustmentReversalRegression.ts
           npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
           npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
           npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts

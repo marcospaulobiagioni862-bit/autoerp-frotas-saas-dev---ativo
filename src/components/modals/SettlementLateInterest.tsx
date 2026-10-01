@@ -1,3 +1,4 @@
+import { formatDateBR } from '../../shared/utils/date';
 import React from 'react';
 import { fixedSettlementQuote } from '../../domain/finance/dailyLateInterest';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
@@ -17,8 +18,8 @@ export function SettlementLateInterest({ quote, balanceAmount, hasPreviousAdjust
   if (!quote || quote.daysOverdue === 0) return null;
   return <dl aria-label="Composição de juros por atraso" className="rounded-lg border border-amber-200 p-3 text-xs space-y-1">
     <div>{hasPreviousAdjustments ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo principal'}: {formatCurrencyBRL(balanceAmount)}</div>
-    <div>Vencimento: {dueDate}</div>
-    <div>Período desta diária: {quote.periodStartDate} → {quote.effectiveDate}</div>
+    <div>Vencimento: {formatDateBR(dueDate)}</div>
+    <div>Período desta diária: {formatDateBR(quote.periodStartDate)} → {formatDateBR(quote.effectiveDate)}</div>
     <div>{quote.daysOverdue} diárias nesta baixa</div>
     <div>Valor por diária: {formatCurrencyBRL(quote.dailyInterestAmount)}</div>
     <div>Diárias desta baixa: {formatCurrencyBRL(quote.additionalInterest)}</div>

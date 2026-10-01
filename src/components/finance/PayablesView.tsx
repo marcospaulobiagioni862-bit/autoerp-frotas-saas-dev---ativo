@@ -6,7 +6,7 @@ import { MaintenanceClient } from '../../api/maintenanceClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { ContractClient } from '../../api/contractClient';
-import { formatDateBR } from '../../shared/utils/date';
+import { formatDateBR, getCurrentISODate } from '../../shared/utils/date';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
@@ -185,7 +185,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     }
   };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getCurrentISODate();
   const filtered = payables.filter((p) => {
     const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
     const categoryName = categories.find((category) => category.id === p.categoryId)?.name || '';
@@ -209,6 +209,11 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const originOptions: string[] = Array.from(new Set<string>(payables.map((item) => String(item.originType)))).sort((a: string, b: string) =>
     originLabel(a).localeCompare(originLabel(b), 'pt-BR')
   );
+
+  const withInstallmentTotal = (item: AccountPayable) => {
+    const group = item.installmentGroupId ? payables.filter(row => row.installmentGroupId === item.installmentGroupId) : [];
+    return group.length === item.totalInstallments ? { ...item, totalAmount: group.reduce((sum, row) => sum + row.originalAmount, 0) } : item;
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -382,14 +387,14 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                       <td className="p-3.5 text-right">
                         <div className="flex justify-end gap-2">
                           {isPending && !blockingInstallment && (
-                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(item)} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold">
+                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold">
                               Pagar
                             </Button>
                           )}
                           {isPending && blockingInstallment && (
                             <span className="text-xs font-semibold text-amber-700" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
                           )}
-                          <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>Detalhes</Button>
+                          <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
                           {isPending && (
                             <details className="relative">
                               <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>

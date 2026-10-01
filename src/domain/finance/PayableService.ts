@@ -64,9 +64,9 @@ export class PayableService {
 
       const dueDateObj = new Date(params.dueDate);
       if (i > 1 && params.recurrenceDaysInterval) {
-        dueDateObj.setDate(dueDateObj.getDate() + params.recurrenceDaysInterval * (i - 1));
+        dueDateObj.setUTCDate(dueDateObj.getUTCDate() + params.recurrenceDaysInterval * (i - 1));
       } else if (i > 1) {
-        dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
+        dueDateObj.setUTCMonth(dueDateObj.getUTCMonth() + (i - 1));
       }
       const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
       const periodRef = params.competenceDate || calculatedDueDate;
