@@ -207,6 +207,19 @@ async function assertPermanentDeleteAllowed(tx:any,principal:AuthenticatedPrinci
   }
 }
 
+async function projectStorageAvailability(storage:AttachmentByteStorage,companyId:string,items:FileAttachment[]):Promise<FileAttachment[]>{
+  return await Promise.all(items.map(async item=>{
+    if(item.isArchived||item.contentState!=='AVAILABLE')return item;
+    if(item.storageProvider!==storage.provider||!item.storageKey)return {...item,contentState:'MISSING' as const};
+    try{
+      return await storage.exists(companyId,item.storageKey)?item:{...item,contentState:'MISSING' as const};
+    }catch{
+      // A storage outage is not evidence that the object is missing.
+      return item;
+    }
+  }));
+}
+
 export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStorage=createAttachmentStorageFromEnvironment()):void{
   registerDriverDocumentIntakeRoutes(app);
   registerVehicleDocumentIntakeRoutes(app);
@@ -218,7 +231,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
   app.get('/api/attachments',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
     const entityType=typeof req.query.entityType==='string'?req.query.entityType.trim():'',entityId=typeof req.query.entityId==='string'?req.query.entityId.trim():'';
-    try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');});res.json({items});}catch(error){sendAttachmentError(res,error);}
+    try{const items=await UnitOfWork.run(principal.companyId,async tx=>{if(entityType||entityId){if(!entityType||!entityId)throw new AttachmentValidationError();await validateEntity(tx,principal,entityType,entityId,false);return await tx.getAttachmentRepo().findByEntity(principal.companyId,entityType,entityId);}const all=await tx.getAttachmentRepo().findAllByCompany(principal.companyId);return all.filter((item:FileAttachment)=>item.entityType!=='DriverDocumentIntake'&&item.entityType!=='VehicleDocumentIntake');});res.json({items:await projectStorageAvailability(storage,principal.companyId,items)});}catch(error){sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/gallery',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;
@@ -231,7 +244,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
         await validateEntity(tx,principal,entityType,entityId,false);
         return await tx.getAttachmentRepo().findEntityGallery(principal.companyId,entityType,entityId);
       });
-      res.json({items});
+      res.json({items:await projectStorageAvailability(storage,principal.companyId,items)});
     }catch(error){sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});res.json({item});}catch(error){sendAttachmentError(res,error);}});
