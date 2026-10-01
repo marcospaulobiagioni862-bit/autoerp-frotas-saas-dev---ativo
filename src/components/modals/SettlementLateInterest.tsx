@@ -18,11 +18,10 @@ export function SettlementLateInterest({ quote, balanceAmount, hasPreviousAdjust
   return <dl aria-label="Composição de juros por atraso" className="rounded-lg border border-amber-200 p-3 text-xs space-y-1">
     <div>{hasPreviousAdjustments ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo principal'}: {formatCurrencyBRL(balanceAmount)}</div>
     <div>Vencimento: {dueDate}</div>
-    <div>{quote.daysOverdue} dias em atraso</div>
-    <div>Diária de atraso: {formatCurrencyBRL(quote.dailyInterestAmount)}</div>
-    <div>Diária acumulada até a data: {formatCurrencyBRL(quote.interestAmount)}</div>
-    {quote.previouslyAppliedDailyInterest > 0 && <div>Diária já aplicada anteriormente: {formatCurrencyBRL(quote.previouslyAppliedDailyInterest)}</div>}
-    <div>Diária nova nesta baixa: {formatCurrencyBRL(quote.additionalInterest)}</div>
+    <div>Período desta diária: {quote.periodStartDate} → {quote.effectiveDate}</div>
+    <div>{quote.daysOverdue} diárias nesta baixa</div>
+    <div>Valor por diária: {formatCurrencyBRL(quote.dailyInterestAmount)}</div>
+    <div>Diárias desta baixa: {formatCurrencyBRL(quote.additionalInterest)}</div>
     <div className="font-semibold">Total a {kind}: {formatCurrencyBRL(quote.totalAmount)}</div>
   </dl>;
 }
