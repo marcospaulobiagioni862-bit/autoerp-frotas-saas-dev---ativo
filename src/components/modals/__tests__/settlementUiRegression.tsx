@@ -47,7 +47,7 @@ function deferred() {
   const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-const input = (tree: any, kind: 'Receipt' | 'Payment') => tree.root.findByProps({ 'aria-label': kind === 'Receipt' ? 'Valor a Receber (R$)' : 'Valor a Pagar (R$)' });
+const input = (tree: any, kind: 'Receipt' | 'Payment') => tree.root.findByProps({ 'aria-label': kind === 'Receipt' ? 'Valor recebido agora (R$)' : 'Valor a Pagar (R$)' });
 const confirmation = (tree: any) => tree.root.findAllByType(ConfirmDialog).find((node: any) => node.props.isOpen);
 const submit = async (tree: any) => { await act(async () => { await tree.root.findByType('form').props.onSubmit({ preventDefault() {} }); }); };
 const change = async (tree: any, kind: 'Receipt' | 'Payment', value: string) => { await act(async () => { input(tree, kind).props.onChange({ target: { value } }); }); };
@@ -204,12 +204,16 @@ for (const source of [receiptSource, paymentSource]) {
   assert.match(source, /overflow-y-auto/, 'settlement modal form must scroll internally');
   assert.match(source, /aria-label="Fechar modal"/, 'settlement modal must expose an accessible close control');
   assert.match(source, /event\.key === 'Escape'/, 'settlement modal must support Escape close');
-  for (const label of ['Saldo atual', 'Ajustes desta baixa', 'Total com ajustes', 'Saldo após baixa']) {
+  for (const label of ['Saldo atual', 'Ajustes desta baixa']) {
     assert(source.includes(label), `settlement modal must keep ${label} visible near the payment amount`);
   }
 }
-assert(receiptSource.includes('Recebimento'), 'receipt summary must label the entered receipt amount');
-assert(paymentSource.includes('Pagamento'), 'payment summary must label the entered payment amount');
+for (const label of ['Valor total a receber', 'Recebido agora', 'Saldo devedor após recebimento']) {
+  assert(receiptSource.includes(label), `receipt summary must expose ${label}`);
+}
+for (const label of ['Valor total a pagar', 'Pago agora', 'Saldo devedor após pagamento']) {
+  assert(paymentSource.includes(label), `payment summary must expose ${label}`);
+}
 console.log('V2 settlement modal viewport/close/balance-context regressions: PASS');
 
 console.log('V2 P0 settlement UI regressions: PASS');
