@@ -154,7 +154,18 @@ for (const kind of ['RECEIVABLE','PAYABLE'] as const) {
   });
   await assert.rejects(reverse(`legacy-${historical}`,114,`legacy-reverse-${historical}`),/histórica sem composição/);
   assert.deepEqual(await state(historical),historicalState);
-  if(kind === 'RECEIVABLE') await assert.rejects(settle(await createTitle(),1,'forged-interest',{interestAmount:1}),/autoritativo/);
+  if(kind === 'RECEIVABLE') {
+    operationDaily=null;
+    const manualInterest=await createTitle();
+    const manualInterestBefore=await state(manualInterest);
+    const manualInterestResult=await settle(manualInterest,1,`manual-interest-${manualInterest}`,{interestAmount:1});
+    const manualInterestAfter=await state(manualInterest);
+    assert.equal(manualInterestAfter.interestAmount,1,'manual interest remains independent from daily late charge');
+    const manualInterestEvidence=await UnitOfWork.run(companyId,async tx=>tx.findSettlementComposition(manualInterestResult.transaction.id));
+    assert.equal(manualInterestEvidence.applied.interestAmount,1);
+    await reverse(manualInterestResult.transaction.id,1,`manual-interest-reverse-${manualInterest}`);
+    assert.deepEqual(await state(manualInterest),manualInterestBefore);
+  }
   operationDaily=0;
   await rule(0); const zero=await createTitle();await settle(zero,90,`zero-${zero}`);assert.equal((await state(zero)).interestAmount,0);
 
