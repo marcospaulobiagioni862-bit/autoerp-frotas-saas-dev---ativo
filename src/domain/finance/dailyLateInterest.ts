@@ -21,18 +21,24 @@ export function fixedDailyInterest(dueDate: string, effectiveDate: string, daily
   return { daysOverdue, dailyInterestAmount: roundCurrency(dailyInterestAmount), interestAmount };
 }
 
-/** Only interest previously applied by the daily-interest rule offsets a later quote.
- * Manual/historical interest on the title is already inside balanceAmount and must not
- * suppress a new daily-interest charge.
+/** Daily-interest settlement quote.
+ * First settlement uses dueDate as period start. Follow-up settlements may pass the
+ * previous valid settlement date as periodStartDate, so already elapsed days are not
+ * charged again.
  */
 export function fixedSettlementQuote(
   obligation: {dueDate: string; balanceAmount: number},
   effectiveDate: string,
   daily: number,
-  previouslyAppliedDailyInterest = 0
+  periodStartDate?: string
 ) {
-  const calculated = fixedDailyInterest(obligation.dueDate.slice(0, 10), effectiveDate, daily);
-  const appliedDaily = roundCurrency(Math.max(0, Number(previouslyAppliedDailyInterest) || 0));
-  const additionalInterest = roundCurrency(Math.max(0, calculated.interestAmount - appliedDaily));
-  return { ...calculated, previouslyAppliedDailyInterest: appliedDaily, additionalInterest, totalAmount: roundCurrency(Number(obligation.balanceAmount) + additionalInterest) };
+  const startDate = (periodStartDate || obligation.dueDate).slice(0, 10);
+  const calculated = fixedDailyInterest(startDate, effectiveDate, daily);
+  const additionalInterest = calculated.interestAmount;
+  return {
+    ...calculated,
+    periodStartDate: startDate,
+    additionalInterest,
+    totalAmount: roundCurrency(Number(obligation.balanceAmount) + additionalInterest),
+  };
 }
