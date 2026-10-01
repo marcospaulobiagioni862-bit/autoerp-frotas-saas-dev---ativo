@@ -33,7 +33,7 @@ function expirationLabel(expirationDate?: string): { text: string; className: st
   const expiration = Date.parse(`${expirationDate}T00:00:00Z`);
   if (!Number.isFinite(expiration)) return null;
   const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const days = Math.round((expiration - today) / 86_400_000);
   const dateLabel = new Date(`${expirationDate}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
   if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
