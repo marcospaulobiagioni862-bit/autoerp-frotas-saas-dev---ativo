@@ -227,8 +227,8 @@ export type TrustedSystemActor = 'RECURRING';
 
 export interface ITransactionContext {
   findSettlementComposition?(transactionId: string): Promise<import('./settlementComposition').SettlementComposition | null>;
-  /** Sum of active, non-reversed interest previously applied by the daily-interest rule for one receivable. */
-  sumAppliedDailyInterest?(obligationId: string): Promise<number>;
+  /** Latest active receipt date for a receivable; used as the next daily-interest period start. */
+  findLastReceivableSettlementDate?(obligationId: string): Promise<string | null>;
   getDriverRepo(): ITransactionDriverRepository;
   getVehicleRepo(): ITransactionVehicleRepository;
   getKmRecordRepo(): ITransactionKmRecordRepository;
