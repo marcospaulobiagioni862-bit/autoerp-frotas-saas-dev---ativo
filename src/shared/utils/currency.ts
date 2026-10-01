@@ -43,6 +43,23 @@ export function parseCurrencyDraft(value: string): number {
 }
 
 /**
+ * Currency mask for operational money fields.
+ * Digits are treated as cents so operators do not need a decimal separator:
+ * 500 -> 5,00; 200 -> 2,00; 1000 -> 10,00.
+ * Pasted values with separators also normalize correctly (5,00 -> 5,00).
+ */
+export function normalizeCurrencyCentsDraft(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+
+  const significant = digits.replace(/^0+(?=\d)/, '');
+  const padded = significant.padStart(3, '0');
+  const integerPart = padded.slice(0, -2).replace(/^0+(?=\d)/, '') || '0';
+  const cents = padded.slice(-2);
+  return `${integerPart},${cents}`;
+}
+
+/**
  * Calculates late payment interest and fines based on explicit rates.
  * @param originalAmount Original obligation value
  * @param dueDate Due date YYYY-MM-DD
