@@ -145,7 +145,7 @@ export function AttachmentList({
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
     if (!item) {
-      alert('O conteúdo deste registro legado não está disponível no storage do servidor.');
+      alert('O arquivo está cadastrado no ERP, mas o conteúdo não está disponível no armazenamento.');
       return;
     }
     try {
@@ -358,7 +358,7 @@ export function AttachmentList({
                       <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
-                      {!contentAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                      {!contentAvailable && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Arquivo indisponível no armazenamento</span>}
                       {expirationBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${expirationBadge.className}`}>
                           {expirationBadge.text}
