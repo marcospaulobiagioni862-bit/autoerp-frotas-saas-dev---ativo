@@ -923,6 +923,33 @@ async function startServer() {
     }
   });
 
+  app.get('/api/finance/receivables/:id/daily-interest-quote', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const effectiveDate = typeof req.query.date === 'string' ? req.query.date : '';
+    const dailyInterestAmount = typeof req.query.daily === 'string' ? Number(req.query.daily) : NaN;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || !Number.isFinite(dailyInterestAmount) || dailyInterestAmount < 0) {
+      res.status(400).json({ error: 'Invalid daily interest quote request' });
+      return;
+    }
+
+    try {
+      const quote = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await SettlementService.quoteReceiptDailyInterest(
+          principal.companyId,
+          req.params.id,
+          effectiveDate,
+          dailyInterestAmount,
+          txContext
+        )
+      );
+      res.json({ quote });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
   app.post('/api/finance/receivables/:id/receipt', async (req: Request, res: Response) => {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
