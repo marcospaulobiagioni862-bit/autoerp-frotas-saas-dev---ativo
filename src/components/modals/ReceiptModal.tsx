@@ -1,7 +1,7 @@
 import { SettlementLateInterest, settlementQuote, settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
+import { formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import {
@@ -197,7 +197,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           </div>
 
           <label>Valor da diária de atraso (R$)
-            <input aria-label="Diária de atraso (R$)" type="text" value={dailyInterest} onChange={e => { const draft = normalizeCurrencyDraft(e.target.value); if (draft !== null) { setDailyInterest(draft); if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00'); rotateCommandKey(); } }} />
+            <input aria-label="Diária de atraso (R$)" type="text" value={dailyInterest} onChange={e => { const draft = normalizeCurrencyCentsDraft(e.target.value); if (draft !== null) { setDailyInterest(draft); if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00'); rotateCommandKey(); } }} />
           </label>
           <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
           <div className="grid grid-cols-2 gap-3">
@@ -209,7 +209,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 inputMode="decimal"
                 value={manualInterest}
                 onChange={e => {
-                  const draft = normalizeCurrencyDraft(e.target.value);
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) {
                     setManualInterest(draft);
                     if (parseCurrencyDraft(draft) > 0) setDailyInterest('0,00');
@@ -227,7 +227,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 inputMode="decimal"
                 value={additionalAmount}
                 onChange={e => {
-                  const draft = normalizeCurrencyDraft(e.target.value);
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
                 }}
                 className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -244,7 +244,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               aria-label="Valor a Receber (R$)"
               value={amount}
               onChange={(e) => {
-                const draft = normalizeCurrencyDraft(e.target.value);
+                const draft = normalizeCurrencyCentsDraft(e.target.value);
                 if (draft !== null && draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
               }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
