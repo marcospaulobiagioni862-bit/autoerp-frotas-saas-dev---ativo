@@ -236,6 +236,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
 
   const today = new Date().toISOString().slice(0, 10);
   const totalBilled = receivables.reduce((sum, item) => sum + item.originalAmount, 0);
+  const totalUpdated = receivables.reduce((sum, item) => sum + item.updatedAmount, 0);
   const totalPaid = receivables.reduce((sum, item) => sum + item.paidAmount, 0);
   const pending = receivables.reduce((sum, item) => sum + item.balanceAmount, 0);
   const overdue = receivables.filter((item) => item.dueDate < today && item.balanceAmount > 0 && item.status !== ObligationStatus.CANCELLED).reduce((sum, item) => sum + item.balanceAmount, 0);
@@ -281,7 +282,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
             <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} focusOnOpen={initialFocus === 'PDF_SIGNATURE'} onChanged={async () => { await load(); onRefresh(); }} />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado" value={formatCurrencyBRL(totalBilled)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado original" value={formatCurrencyBRL(totalBilled)} /><Metric label="Valor atualizado" value={formatCurrencyBRL(totalUpdated)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
             <div className="grid gap-4 md:grid-cols-2">
               <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status === 'AVAILABLE' ? 'Disponível' : vehicle.status === 'RENTED' ? 'Alugado' : vehicle.status === 'RESERVED' ? 'Reservado' : vehicle.status === 'MAINTENANCE' ? 'Manutenção' : vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
               <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><User className="w-4 h-4 text-emerald-600" />Motorista</h3>{driver ? <div className="space-y-1 text-xs text-slate-600"><p><b>{driver.fullName}</b></p><p>CPF: {driver.cpf}</p><p>CNH: {driver.cnhNumber} • {formatDateBR(driver.cnhExpiration)}</p><p>Status: {driver.status === 'ACTIVE' ? 'Ativo' : driver.status === 'INACTIVE' ? 'Inativo' : driver.status === 'BLOCKED' ? 'Bloqueado' : driver.status}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
