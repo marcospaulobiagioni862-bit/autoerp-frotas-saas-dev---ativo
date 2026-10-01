@@ -9,6 +9,7 @@ import {
   SettlementAccountOption,
   SettlementPaymentMethodOption,
   createSettlementIdempotencyKey,
+  type ReceiptDailyInterestQuote,
 } from '../../api/financeSettlementClient';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
@@ -36,6 +37,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const submittingRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dailyQuote, setDailyQuote] = useState<ReceiptDailyInterestQuote | null>(null);
+  const [dailyQuoteLoading, setDailyQuoteLoading] = useState(false);
 
   useEffect(() => {
     if (receivable) {
@@ -43,6 +46,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
       setDailyInterest('0,00');
       setManualInterest('0,00');
       setAdditionalAmount('0,00');
+      setDailyQuote(null);
+      setDailyQuoteLoading(false);
       setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
@@ -69,13 +74,37 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const dailyInterestValue = parseCurrencyDraft(dailyInterest);
   const manualInterestValue = parseCurrencyDraft(manualInterest);
   const additionalValue = parseCurrencyDraft(additionalAmount);
-  const quote = settlementQuote(receivable, paymentDate, dailyInterestValue);
+  const quote = dailyInterestValue > 0 ? dailyQuote : null;
   const appliedInterest = dailyInterestValue > 0 ? (quote?.additionalInterest ?? 0) : manualInterestValue;
   const settlementTotal = (receivable?.balanceAmount ?? 0) + appliedInterest + additionalValue;
   const paymentValue = parseCurrencyDraft(amount);
   const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
   const adjustmentTotal = appliedInterest + additionalValue;
   const projectedBalance = Math.max(0, settlementTotal - safePaymentValue);
+  useEffect(() => {
+    let active = true;
+    if (!receivable || !paymentDate || !Number.isFinite(dailyInterestValue) || dailyInterestValue <= 0) {
+      setDailyQuote(null);
+      setDailyQuoteLoading(false);
+      return () => { active = false; };
+    }
+    setDailyQuoteLoading(true);
+    void FinanceSettlementClient.getReceiptDailyInterestQuote(receivable.id, paymentDate, dailyInterestValue)
+      .then((nextQuote) => {
+        if (!active) return;
+        setDailyQuote(nextQuote);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setDailyQuote(null);
+        setError(err instanceof Error ? err.message : 'Erro ao calcular diária de atraso.');
+      })
+      .finally(() => {
+        if (active) setDailyQuoteLoading(false);
+      });
+    return () => { active = false; };
+  }, [receivable?.id, paymentDate, dailyInterestValue]);
+
   useEffect(() => {
     if (!amountEdited.current && receivable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
   }, [settlementTotal, receivable]);
@@ -98,6 +127,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     if (!Number.isFinite(manualInterestValue)) { setError('Juros inválidos'); return; }
     if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
     if (dailyInterestValue > 0 && manualInterestValue > 0) { setError('Use juros por diária ou juros manual, não os dois ao mesmo tempo.'); return; }
+    if (dailyInterestValue > 0 && (dailyQuoteLoading || !quote)) { setError('Aguarde o cálculo da diária antes de confirmar.'); return; }
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
@@ -253,7 +283,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 />
               </label>
             </div>
-            <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
+            {dailyQuoteLoading && dailyInterestValue > 0 ? (
+              <div className="rounded-lg border border-amber-200 p-3 text-xs text-slate-500">Calculando diária de atraso...</div>
+            ) : (
+              <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
+            )}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Valor recebido agora (R$) *
