@@ -117,10 +117,14 @@ export class SettlementService {
     if (daily == null) {
       interestAmount = requested.interestAmount ?? 0;
     } else {
-      const previouslyAppliedDailyInterest = tx?.sumAppliedDailyInterest
-        ? await tx.sumAppliedDailyInterest(params.obligationId)
-        : Number(obligation.interestAmount || 0);
-      interestAmount = fixedSettlementQuote(obligation, params.paymentDate, daily, previouslyAppliedDailyInterest).additionalInterest;
+      const previousSettlementDate = tx?.findLastReceivableSettlementDate
+        ? await tx.findLastReceivableSettlementDate(params.obligationId)
+        : null;
+      const periodStartDate = previousSettlementDate || dateKey(obligation.dueDate);
+      if (previousSettlementDate && dateKey(params.paymentDate) < previousSettlementDate) {
+        throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
+      }
+      interestAmount = fixedSettlementQuote(obligation, params.paymentDate, daily, periodStartDate).additionalInterest;
     }
     if (kind === 'PAYABLE' && requested.settleRemainingBalance) {
       const base = roundCurrency(Number(obligation.balanceAmount) + requested.fineAmount + requested.additionalAmount - requested.discountAmount);
@@ -143,10 +147,14 @@ export class SettlementService {
     if (!Number.isFinite(dailyInterestAmount) || dailyInterestAmount < 0) throw new Error('Diária inválida');
     const receivable = await txContext.getReceivableRepo().findById(obligationId);
     if (!receivable || receivable.companyId !== companyId) throw new Error('Conta a Receber não encontrada');
-    const previouslyAppliedDailyInterest = txContext.sumAppliedDailyInterest
-      ? await txContext.sumAppliedDailyInterest(obligationId)
-      : 0;
-    return fixedSettlementQuote(receivable, effectiveDate, dailyInterestAmount, previouslyAppliedDailyInterest);
+    const previousSettlementDate = txContext.findLastReceivableSettlementDate
+      ? await txContext.findLastReceivableSettlementDate(obligationId)
+      : null;
+    const periodStartDate = previousSettlementDate || dateKey(receivable.dueDate);
+    if (previousSettlementDate && effectiveDate < previousSettlementDate) {
+      throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
+    }
+    return fixedSettlementQuote(receivable, effectiveDate, dailyInterestAmount, periodStartDate);
   }
 
   private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number | null, tx?: ITransactionContext) {
