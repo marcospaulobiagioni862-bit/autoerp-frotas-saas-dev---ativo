@@ -34,7 +34,7 @@ const INTERNAL_ENTITY_TYPES = new Set([
 
 function isUserFile(item: FileAttachment): boolean {
   return !item.isArchived
-    && item.contentState === 'AVAILABLE'
+    && (item.contentState === 'AVAILABLE' || item.contentState === 'MISSING')
     && (item.storageProvider === 'SERVER_FS' || item.storageProvider === 'R2')
     && !INTERNAL_ENTITY_TYPES.has(String(item.entityType || ''));
 }
