@@ -72,6 +72,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const quote = settlementQuote(receivable, paymentDate, dailyInterestValue);
   const appliedInterest = dailyInterestValue > 0 ? (quote?.additionalInterest ?? 0) : manualInterestValue;
   const settlementTotal = (receivable?.balanceAmount ?? 0) + appliedInterest + additionalValue;
+  const paymentValue = parseCurrencyDraft(amount);
+  const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
+  const adjustmentTotal = appliedInterest + additionalValue;
+  const projectedBalance = Math.max(0, settlementTotal - safePaymentValue);
   useEffect(() => {
     if (!amountEdited.current && receivable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
   }, [settlementTotal, receivable]);
@@ -266,9 +270,30 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               />
+              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+                <div>
+                  <span className="block text-slate-500">Saldo atual</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(receivable.balanceAmount)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Ajustes desta baixa</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Total com ajustes</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Recebimento</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Saldo após baixa</span>
+                  <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+                </div>
+              </div>
               <span className="text-[11px] text-slate-500 mt-1 block">
-                Permite liquidação parcial se o valor for menor que R 
-                {settlementTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                Permite liquidação parcial se o valor for menor que {formatCurrencyBRL(settlementTotal)}
               </span>
             </div>
           </div>
