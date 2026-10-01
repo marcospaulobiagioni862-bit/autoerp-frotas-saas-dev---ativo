@@ -247,7 +247,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       res.json({items:await projectStorageAvailability(storage,principal.companyId,items)});
     }catch(error){sendAttachmentError(res,error);}
   });
-  app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});res.json({item});}catch(error){sendAttachmentError(res,error);}});
+  app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});const [projected]=await projectStorageAvailability(storage,principal.companyId,[item]);res.json({item:projected});}catch(error){sendAttachmentError(res,error);}});
   app.post('/api/attachments',express.raw({type:()=>true,limit:MAX_ATTACHMENT_BYTES}),async(req:Request,res:Response)=>{
     const principal=requireAttachmentPrincipal(req,res,'CREATE_ATTACHMENT');if(!principal)return;let storageKey:string|undefined;
     try{
