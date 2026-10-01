@@ -21,7 +21,8 @@ export interface ReceiptDailyInterestQuote {
   daysOverdue: number;
   dailyInterestAmount: number;
   interestAmount: number;
-  previouslyAppliedDailyInterest: number;
+  periodStartDate: string;
+  effectiveDate: string;
   additionalInterest: number;
   totalAmount: number;
 }
@@ -135,11 +136,20 @@ export class FinanceSettlementClient {
       daysOverdue: Number(row.daysOverdue),
       dailyInterestAmount: Number(row.dailyInterestAmount),
       interestAmount: Number(row.interestAmount),
-      previouslyAppliedDailyInterest: Number(row.previouslyAppliedDailyInterest ?? 0),
+      periodStartDate: typeof row.periodStartDate === 'string' ? row.periodStartDate : '',
+      effectiveDate: typeof row.effectiveDate === 'string' ? row.effectiveDate : effectiveDate,
       additionalInterest: Number(row.additionalInterest),
       totalAmount: Number(row.totalAmount),
     };
-    if (Object.values(quote).some((value) => !Number.isFinite(value))) {
+    if (
+      !Number.isFinite(quote.daysOverdue) ||
+      !Number.isFinite(quote.dailyInterestAmount) ||
+      !Number.isFinite(quote.interestAmount) ||
+      !Number.isFinite(quote.additionalInterest) ||
+      !Number.isFinite(quote.totalAmount) ||
+      !quote.periodStartDate ||
+      !quote.effectiveDate
+    ) {
       throw new Error('Invalid daily interest quote response');
     }
     return quote;
