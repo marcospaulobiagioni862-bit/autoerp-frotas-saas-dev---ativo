@@ -73,32 +73,19 @@ export class UnitOfWork {
           if (value?.version !== 1 || value.transactionId !== transactionId) throw new Error('Composição da liquidação inválida');
           return value;
         },
-        sumAppliedDailyInterest: async (obligationId: string) => {
+        findLastReceivableSettlementDate: async (obligationId: string) => {
           const result = await tx.execute(sql`
-            SELECT l.changes
-            FROM audit_logs l
-            JOIN financial_transactions ft
-              ON ft.company_id = l.company_id
-             AND ft.id = l.entity_id
-            WHERE l.company_id = ${companyId}
-              AND l.entity_type = 'FinancialSettlement'
-              AND ft.receivable_id = ${obligationId}
-              AND COALESCE(ft.is_reversed, false) = false
+            SELECT transaction_date
+            FROM financial_transactions
+            WHERE company_id = ${companyId}
+              AND receivable_id = ${obligationId}
+              AND type = 'INCOME'
+              AND COALESCE(is_reversed, false) = false
+            ORDER BY transaction_date DESC, created_at DESC
+            LIMIT 1
           `);
-          let total = 0;
-          for (const row of result.rows || []) {
-            try {
-              const changes = typeof row.changes === 'string' ? JSON.parse(row.changes) : row.changes;
-              const value = typeof changes?.newState === 'string' ? JSON.parse(changes.newState) : changes?.newState;
-              if (value?.version !== 1 || value?.obligationId !== obligationId) continue;
-              if (value?.requested?.dailyInterestAmount == null) continue;
-              const applied = Number(value?.applied?.interestAmount ?? 0);
-              if (Number.isFinite(applied) && applied > 0) total += applied;
-            } catch {
-              // Malformed unrelated audit evidence must not become money.
-            }
-          }
-          return Math.round(total * 100) / 100;
+          const value = result.rows?.[0]?.transaction_date;
+          return typeof value === 'string' ? value.slice(0, 10) : value ? String(value).slice(0, 10) : null;
         },
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
