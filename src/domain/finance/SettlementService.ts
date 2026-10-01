@@ -120,7 +120,8 @@ export class SettlementService {
       const previousSettlementDate = tx?.findLastReceivableSettlementDate
         ? await tx.findLastReceivableSettlementDate(params.obligationId)
         : null;
-      const periodStartDate = previousSettlementDate || dateKey(obligation.dueDate);
+      const dueDate = dateKey(obligation.dueDate);
+      const periodStartDate = previousSettlementDate && previousSettlementDate > dueDate ? previousSettlementDate : dueDate;
       if (previousSettlementDate && dateKey(params.paymentDate) < previousSettlementDate) {
         throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
       }
@@ -150,7 +151,8 @@ export class SettlementService {
     const previousSettlementDate = txContext.findLastReceivableSettlementDate
       ? await txContext.findLastReceivableSettlementDate(obligationId)
       : null;
-    const periodStartDate = previousSettlementDate || dateKey(receivable.dueDate);
+    const dueDate = dateKey(receivable.dueDate);
+    const periodStartDate = previousSettlementDate && previousSettlementDate > dueDate ? previousSettlementDate : dueDate;
     if (previousSettlementDate && effectiveDate < previousSettlementDate) {
       throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
     }
