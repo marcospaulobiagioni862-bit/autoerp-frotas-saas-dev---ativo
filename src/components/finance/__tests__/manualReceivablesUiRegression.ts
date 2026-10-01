@@ -6,6 +6,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const source = readFileSync(resolve(process.cwd(), 'src/components/finance/ReceivablesView.tsx'), 'utf8');
+const authority = readFileSync(resolve(process.cwd(), 'src/domain/finance/ReceivableService.ts'), 'utf8');
 
 assert(source.includes('DriverClient.list()'), 'manual receivable must load registered drivers');
 assert(source.includes('VehicleClient.list()'), 'manual receivable must load registered vehicles');
@@ -14,7 +15,8 @@ assert(source.includes('Veículo vinculado'), 'manual receivable must expose veh
 assert(source.includes('Outros / Diversos'), 'manual receivable must expose Other/Diverse category');
 assert(source.includes('FinanceMasterDataClient.createCategory'), 'Other/Diverse must use server-side finance category authority');
 assert(source.includes('Prévia das parcelas'), 'manual receivable must show installment preview');
-assert(source.includes('due.setUTCMonth'), 'installment preview must mirror monthly recurrence authority');
+assert(source.includes('due.setUTCMonth(due.getUTCMonth() + index)'), 'installment preview must use civil UTC month arithmetic');
+assert(authority.includes('dueDateObj.setUTCMonth(dueDateObj.getUTCMonth() + (i - 1))'), 'installment preview must mirror monthly recurrence authority');
 assert(source.includes('roundCurrency(total - baseAmount * (count - 1))'), 'last installment must absorb cent rounding');
 assert(!source.includes('Motorista ID (Opcional)'), 'manual technical driver id input must be removed');
 assert(!source.includes('Veículo ID (Opcional)'), 'manual technical vehicle id input must be removed');
