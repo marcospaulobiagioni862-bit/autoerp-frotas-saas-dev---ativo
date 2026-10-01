@@ -47,7 +47,7 @@ function deferred() {
   const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
-const input = (tree: any, kind: 'Receipt' | 'Payment') => tree.root.findByProps({ 'aria-label': kind === 'Receipt' ? 'Valor recebido agora (R$)' : 'Valor a Pagar (R$)' });
+const input = (tree: any, kind: 'Receipt' | 'Payment') => tree.root.findByProps({ 'aria-label': kind === 'Receipt' ? 'Valor recebido agora (R$)' : 'Valor pago agora (R$)' });
 const confirmation = (tree: any) => tree.root.findAllByType(ConfirmDialog).find((node: any) => node.props.isOpen);
 const submit = async (tree: any) => { await act(async () => { await tree.root.findByType('form').props.onSubmit({ preventDefault() {} }); }); };
 const change = async (tree: any, kind: 'Receipt' | 'Payment', value: string) => { await act(async () => { input(tree, kind).props.onChange({ target: { value } }); }); };
