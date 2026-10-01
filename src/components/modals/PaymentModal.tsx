@@ -366,8 +366,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
         >
           <dl className="space-y-2">
             <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
+            <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(payable.balanceAmount)}</dd></div>
             <div><dt>Valor total a pagar</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
             <div><dt>Valor pago agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Saldo devedor após pagamento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
             <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
             <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
