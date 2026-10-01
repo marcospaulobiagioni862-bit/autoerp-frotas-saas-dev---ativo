@@ -67,6 +67,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const interestValue = parseCurrencyDraft(interestAmount);
   const additionalValue = parseCurrencyDraft(additionalAmount);
   const settlementTotal = (payable?.balanceAmount ?? 0) + interestValue + additionalValue;
+  const paymentValue = parseCurrencyDraft(amount);
+  const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
+  const adjustmentTotal = interestValue + additionalValue;
+  const projectedBalance = Math.max(0, settlementTotal - safePaymentValue);
   useEffect(() => {
     if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
   }, [settlementTotal, payable]);
@@ -235,11 +239,33 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               value={amount}
               onChange={(e) => {
                 const draft = normalizeCurrencyCentsDraft(e.target.value);
-                if (draft !== null && draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
+                if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
               }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
+            <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+              <div>
+                <span className="block text-slate-500">Saldo atual</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(payable.balanceAmount)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Ajustes desta baixa</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Total com ajustes</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Pagamento</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Saldo após baixa</span>
+                <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+              </div>
+            </div>
           </div>
 
           {(accounts.length === 0 || methods.length === 0) && (
