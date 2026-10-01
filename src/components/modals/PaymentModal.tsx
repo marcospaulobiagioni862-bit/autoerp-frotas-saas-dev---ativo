@@ -1,7 +1,7 @@
 import { settlementLocalDate } from './SettlementLateInterest';
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { formatCurrencyBRL, normalizeCurrencyDraft, parseCurrencyDraft } from '../../shared/utils/currency';
+import { formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
 import {
@@ -203,7 +203,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                 inputMode="decimal"
                 value={interestAmount}
                 onChange={e => {
-                  const draft = normalizeCurrencyDraft(e.target.value);
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
                 }}
                 className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -217,7 +217,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                 inputMode="decimal"
                 value={additionalAmount}
                 onChange={e => {
-                  const draft = normalizeCurrencyDraft(e.target.value);
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
                 }}
                 className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
@@ -234,7 +234,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               aria-label="Valor a Pagar (R$)"
               value={amount}
               onChange={(e) => {
-                const draft = normalizeCurrencyDraft(e.target.value);
+                const draft = normalizeCurrencyCentsDraft(e.target.value);
                 if (draft !== null && draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
               }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
