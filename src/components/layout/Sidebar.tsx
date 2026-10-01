@@ -8,6 +8,7 @@ import {
   CreditCard,
   ArrowRightLeft,
   Radio,
+  ClipboardCheck,
   ChevronRight,
   X,
 } from 'lucide-react';
@@ -46,6 +47,7 @@ export type NavigationTab =
   | 'trafficTickets'
   | 'maintenance'
   | 'trackers'
+  | 'inspections'
   | 'receivables'
   | 'payables'
   | 'transactions'
@@ -85,6 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'fleet' as NavigationTab, label: 'Veículos', icon: Car, badge: null },
         { id: 'drivers' as NavigationTab, label: 'Motoristas', icon: Users, badge: null },
         { id: 'contracts' as NavigationTab, label: 'Contratos', icon: FileText, badge: null },
+        { id: 'inspections' as NavigationTab, label: 'Vistorias', icon: ClipboardCheck, badge: null },
         { id: 'trackers' as NavigationTab, label: 'Rastreador', icon: Radio, badge: null },
       ],
     },
