@@ -112,9 +112,14 @@ for (const kind of ['RECEIVABLE','PAYABLE'] as const) {
   await reverse(firstPartial.transaction.id,30,`reverse-first-${partial}`);
   const insufficient=await createTitle();
   const insufficientBefore=await state(insufficient);
-  const countsBefore=await snapshot();
-  await assert.rejects(settle(insufficient,1,`insufficient-${insufficient}`),/Principal liquidado indeterminável/);
-  assert.deepEqual(await state(insufficient),insufficientBefore);assert.deepEqual(await snapshot(),countsBefore);
+  const insufficientResult=await settle(insufficient,1,`insufficient-${insufficient}`);
+  const insufficientAfter=await state(insufficient);
+  const insufficientEvidence=await UnitOfWork.run(companyId,async tx=>tx.findSettlementComposition(insufficientResult.transaction.id));
+  assert.equal(insufficientEvidence.principalLiquidated,null,'payment below new adjustments is valid but principal allocation is indeterminate');
+  assert.equal(insufficientAfter.paidAmount,insufficientBefore.paidAmount+1);
+  assert(insufficientAfter.balanceAmount>insufficientBefore.balanceAmount,'new charges may exceed the partial cash movement and leave a higher remaining debt');
+  await reverse(insufficientResult.transaction.id,1,`insufficient-reverse-${insufficient}`);
+  assert.deepEqual(await state(insufficient),insufficientBefore);
   operationDaily=null;
   const carried=await createTitle();
   await db.execute(sql`UPDATE ${table} SET original_amount=100,interest_amount=24,updated_amount=124,paid_amount=0,balance_amount=124,status='PENDING' WHERE id=${carried}`);
