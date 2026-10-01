@@ -115,6 +115,7 @@ for (const kind of ['RECEIVABLE','PAYABLE'] as const) {
   const countsBefore=await snapshot();
   await assert.rejects(settle(insufficient,1,`insufficient-${insufficient}`),/Principal liquidado indeterminável/);
   assert.deepEqual(await state(insufficient),insufficientBefore);assert.deepEqual(await snapshot(),countsBefore);
+  operationDaily=null;
   const carried=await createTitle();
   await db.execute(sql`UPDATE ${table} SET original_amount=100,interest_amount=24,updated_amount=124,paid_amount=0,balance_amount=124,status='PENDING' WHERE id=${carried}`);
   const carriedBefore=await state(carried);
@@ -123,6 +124,21 @@ for (const kind of ['RECEIVABLE','PAYABLE'] as const) {
   assert.equal(carriedEvidence.principalLiquidated,100,'carried interest never becomes principal');
   assert.equal(carriedEvidence.applied.interestAmount,0,'carried interest is not applied twice');
   await reverse(carriedResult.transaction.id,124,`carried-reverse-${carried}`);assert.deepEqual(await state(carried),carriedBefore);
+  if (kind === 'RECEIVABLE') {
+    operationDaily=10;
+    const interval=await createTitle();
+    const firstInterval=await settle(interval,50,`interval-first-${interval}`,{paymentDate:'2026-09-20'});
+    const firstIntervalState=await state(interval);
+    assert.equal(firstIntervalState.interestAmount,40,'first daily period is due date through first receipt date');
+    const secondInterval=await settle(interval,50,`interval-second-${interval}`,{paymentDate:'2026-10-10'});
+    const secondIntervalState=await state(interval);
+    assert.equal(secondIntervalState.interestAmount,240,'follow-up adds only the 20 days since the previous valid receipt');
+    const secondIntervalEvidence=await UnitOfWork.run(companyId,async tx=>tx.findSettlementComposition(secondInterval.transaction.id));
+    assert.equal(secondIntervalEvidence.applied.interestAmount,200);
+    await reverse(secondInterval.transaction.id,50,`interval-second-reverse-${interval}`);
+    await reverse(firstInterval.transaction.id,50,`interval-first-reverse-${interval}`);
+    operationDaily=null;
+  }
   const isolated=await createTitle();
   await assert.rejects(UnitOfWork.run('fixed-daily-b', tx => SettlementService.registerReceipt({companyId:'fixed-daily-b',userId:'fixed-daily-user-b',userName:'B',obligationId:isolated,financialAccountId:'fixed-daily-account',paymentMethodId:'fixed-daily-method',paymentAmount:1,paymentDate:'2026-09-28',idempotencyKey:`cross-${isolated}`},tx)),/não encontrada/);
   const historical=await createTitle();
