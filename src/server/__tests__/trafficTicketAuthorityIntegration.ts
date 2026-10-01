@@ -55,6 +55,7 @@ async function atomicityAndRules():Promise<string>{
   setTrafficTicketTestHooksForTests({afterBasePayableCreated:()=>{throw new Error('INDUCED_M_FAILURE');}});let rolled=false;
   try{await TrafficTicketAuthorityService.create(admin,input('M-ROLLBACK',TicketResponsibility.COMPANY));}catch(error){rolled=String(error).includes('INDUCED_M_FAILURE');}finally{setTrafficTicketTestHooksForTests({});}
   let invalidTime=false;try{await TrafficTicketAuthorityService.create(admin,input('M-BAD-TIME',TicketResponsibility.COMPANY,{infractionTime:'24:61'}));}catch(error){invalidTime=String(error).includes('Horário da infração inválido');}assert(invalidTime,'invalid infraction time was accepted');
+  let discountBeforeInfraction=false;try{await TrafficTicketAuthorityService.create(admin,input('M-BAD-DISCOUNT-DATE',TicketResponsibility.COMPANY,{discountDueDate:'2026-07-31',discountedAmount:160}));}catch(error){discountBeforeInfraction=String(error).includes('Data de desconto anterior à infração');}assert(discountBeforeInfraction,'discount deadline before infraction was accepted');
   assert(rolled,'induced failure did not propagate');
   assert(Number((await one(sql`SELECT count(*)::int count FROM traffic_tickets WHERE company_id=${companyA} AND auto_number='M-ROLLBACK'`))?.count)===0,'ticket survived rollback');
   assert(Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND description LIKE 'Multa M-ROLLBACK%'`))?.count)===0,'base AP survived rollback');
