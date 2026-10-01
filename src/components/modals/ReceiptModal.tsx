@@ -256,12 +256,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Valor a Receber (R$) *
+                Valor recebido agora (R$) *
               </label>
               <input
                 type="text"
                 inputMode="decimal"
-                aria-label="Valor a Receber (R$)"
+                aria-label="Valor recebido agora (R$)"
                 value={amount}
                 onChange={(e) => {
                   const draft = normalizeCurrencyCentsDraft(e.target.value);
@@ -280,15 +280,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Total com ajustes</span>
+                  <span className="block text-slate-500">Valor total a receber</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Recebimento</span>
+                  <span className="block text-slate-500">Recebido agora</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Saldo após baixa</span>
+                  <span className="block text-slate-500">Saldo devedor após recebimento</span>
                   <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
                 </div>
               </div>
@@ -396,7 +396,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         >
           <dl className="space-y-2">
             <div><dt>Título / origem</dt><dd>{receivable.description} • {receivable.originType}</dd></div>
-            <div><dt>Valor</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Valor total a receber</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
+            <div><dt>Valor recebido agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
             <div><dt>Juros desta baixa</dt><dd>{formatCurrencyBRL(appliedInterest)}</dd></div>
             <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de destino</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
