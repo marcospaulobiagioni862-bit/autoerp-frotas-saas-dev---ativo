@@ -235,7 +235,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             <input
               type="text"
               inputMode="decimal"
-              aria-label="Valor a Pagar (R$)"
+              aria-label="Valor pago agora (R$)"
               value={amount}
               onChange={(e) => {
                 const draft = normalizeCurrencyCentsDraft(e.target.value);
