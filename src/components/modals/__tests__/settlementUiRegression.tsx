@@ -89,7 +89,7 @@ for (const kind of ['Receipt', 'Payment'] as const) {
   await submit(tree);
   assert.equal(calls.length, 0, 'opening confirmation must not mutate');
   const summary = JSON.stringify(confirmation(tree).findByType('dl').children.map((node: any) => node.findByType('dd').children));
-  for (const text of ['Título P0', 'MANUAL', '125,40', 'Conta P0', 'PIX P0']) assert(summary.includes(text), text);
+  for (const text of ['Título P0', 'MANUAL', '500,00', '125,40', '374,60', 'Conta P0', 'PIX P0']) assert(summary.includes(text), text);
   await act(async () => { confirmation(tree).props.onCancel(); });
   assert.equal(calls.length, 0, 'cancelling confirmation must not mutate');
   await submit(tree);
