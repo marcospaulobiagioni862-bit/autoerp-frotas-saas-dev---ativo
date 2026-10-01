@@ -204,7 +204,12 @@ for (const source of [receiptSource, paymentSource]) {
   assert.match(source, /overflow-y-auto/, 'settlement modal form must scroll internally');
   assert.match(source, /aria-label="Fechar modal"/, 'settlement modal must expose an accessible close control');
   assert.match(source, /event\.key === 'Escape'/, 'settlement modal must support Escape close');
+  for (const label of ['Saldo atual', 'Ajustes desta baixa', 'Total com ajustes', 'Saldo após baixa']) {
+    assert(source.includes(label), `settlement modal must keep ${label} visible near the payment amount`);
+  }
 }
-console.log('V2 settlement modal viewport/close regressions: PASS');
+assert(receiptSource.includes('Recebimento'), 'receipt summary must label the entered receipt amount');
+assert(paymentSource.includes('Pagamento'), 'payment summary must label the entered payment amount');
+console.log('V2 settlement modal viewport/close/balance-context regressions: PASS');
 
 console.log('V2 P0 settlement UI regressions: PASS');
