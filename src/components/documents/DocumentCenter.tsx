@@ -170,17 +170,18 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
     [attachments],
   );
 
-  const vehicleOptions = useMemo(() => {
-    const ids = new Set(Object.values(relations.vehicleByAttachment));
-    return vehicles.filter((vehicle) => ids.has(vehicle.id))
-      .sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, relations.vehicleByAttachment]);
+  // Filters must expose the authoritative fleet/driver lists, even when an
+  // entity has no document yet. Selecting such an entity correctly returns
+  // zero files instead of hiding the entity from the operator.
+  const vehicleOptions = useMemo(
+    () => [...vehicles].sort((a, b) => a.plate.localeCompare(b.plate)),
+    [vehicles],
+  );
 
-  const driverOptions = useMemo(() => {
-    const ids = new Set(Object.values(relations.driverByAttachment));
-    return drivers.filter((driver) => ids.has(driver.id))
-      .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [drivers, relations.driverByAttachment]);
+  const driverOptions = useMemo(
+    () => [...drivers].sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    [drivers],
+  );
 
   const filteredAttachments = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
@@ -229,7 +230,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 className="pl-9"
-                placeholder="Nome do arquivo..."
+                placeholder="Arquivo, placa ou motorista..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
