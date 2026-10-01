@@ -17,7 +17,7 @@ import { MaintenanceClient } from '../../../api/maintenanceClient';
 import { DriverClient } from '../../../api/driverClient';
 import { VehicleClient } from '../../../api/vehicleClient';
 import { ContractClient } from '../../../api/contractClient';
-import { normalizeCurrencyDraft, parseCurrencyDraft } from '../../../shared/utils/currency';
+import { normalizeCurrencyCentsDraft, normalizeCurrencyDraft, parseCurrencyDraft } from '../../../shared/utils/currency';
 
 // React component tests, with API doubles only. No database or network connection.
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -59,6 +59,10 @@ assert.equal(normalizeCurrencyDraft('0500,00'), '500,00');
 assert.equal(normalizeCurrencyDraft(''), '');
 assert.equal(normalizeCurrencyDraft('1,234'), null, 'never silently round typed fractions of a cent');
 assert(Number.isNaN(parseCurrencyDraft('')));
+assert.equal(normalizeCurrencyCentsDraft('500'), '5,00');
+assert.equal(normalizeCurrencyCentsDraft('200'), '2,00');
+assert.equal(normalizeCurrencyCentsDraft('1000'), '10,00');
+assert.equal(normalizeCurrencyCentsDraft('5,00'), '5,00');
 
 for (const kind of ['Receipt', 'Payment'] as const) {
   const method = kind === 'Receipt' ? 'registerReceipt' : 'registerPayment';
