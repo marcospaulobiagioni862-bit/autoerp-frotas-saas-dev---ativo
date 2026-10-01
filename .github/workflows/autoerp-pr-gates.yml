@@ -899,6 +899,7 @@ jobs:
           npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
           npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
           npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
+          npx tsx src/shared/utils/__tests__/reportingPeriodTestRunner.ts
           npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
           npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
           npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts
