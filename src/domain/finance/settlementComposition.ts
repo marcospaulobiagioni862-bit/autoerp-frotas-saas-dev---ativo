@@ -59,7 +59,10 @@ export function determinePrincipalLiquidated(before: SettlementState & {original
   const netAdjustments = roundCurrency(applied.fineAmount + applied.interestAmount + applied.additionalAmount - applied.discountAmount);
   const principal = roundCurrency(movementAmount - netAdjustments);
   if (principal < 0) {
-    throw new Error('Principal liquidado indeterminável: valor da baixa não cobre os novos ajustes');
+    // A partial cash movement may be smaller than newly applied charges.
+    // The payment still reduces total debt; principal allocation is simply
+    // indeterminate for audit purposes and must not block the settlement.
+    return null;
   }
   const hasPreviousAdjustments = [before.fineAmount, before.interestAmount, before.additionalAmount, before.discountAmount].some(value => Number(value) !== 0);
   if (!hasPreviousAdjustments && principal <= Number(before.balanceAmount)) return principal;
