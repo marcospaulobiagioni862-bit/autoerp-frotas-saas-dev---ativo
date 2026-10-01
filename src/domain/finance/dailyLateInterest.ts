@@ -38,6 +38,7 @@ export function fixedSettlementQuote(
   return {
     ...calculated,
     periodStartDate: startDate,
+    effectiveDate: effectiveDate.slice(0, 10),
     additionalInterest,
     totalAmount: roundCurrency(Number(obligation.balanceAmount) + additionalInterest),
   };
