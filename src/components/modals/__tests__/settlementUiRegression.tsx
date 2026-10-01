@@ -192,4 +192,15 @@ assert.match(app, /setSettlementRefreshVersion\(version=>version\+1\)/);
 assert.match(app, /<FinanceHubView refreshVersion=\{settlementRefreshVersion\}/);
 assert.match(app, /<OverviewDashboard key=\{settlementRefreshVersion\}/);
 assert.match(app, /<MaintenanceManagement key=\{settlementRefreshVersion\}/);
+
+const receiptSource = readFileSync(new URL('../ReceiptModal.tsx', import.meta.url), 'utf8');
+const paymentSource = readFileSync(new URL('../PaymentModal.tsx', import.meta.url), 'utf8');
+for (const source of [receiptSource, paymentSource]) {
+  assert.match(source, /max-h-\[96vh\]/, 'settlement modal must fit inside the viewport');
+  assert.match(source, /overflow-y-auto/, 'settlement modal form must scroll internally');
+  assert.match(source, /aria-label="Fechar modal"/, 'settlement modal must expose an accessible close control');
+  assert.match(source, /event\.key === 'Escape'/, 'settlement modal must support Escape close');
+}
+console.log('V2 settlement modal viewport/close regressions: PASS');
+
 console.log('V2 P0 settlement UI regressions: PASS');
