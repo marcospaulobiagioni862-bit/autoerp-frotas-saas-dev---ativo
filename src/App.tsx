@@ -135,7 +135,7 @@ export default function App(){
         {activeTab==='metas'&&<div className="p-4 sm:p-6"><ManagementGoalsView companyId={user.companyId}/></div>}
         {activeTab==='documentos'&&<DocumentCenter focusFileName={documentFocusFileName||undefined} onFocusConsumed={()=>setDocumentFocusFileName(null)}/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='relatorios'&&<ManagementReportsView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
-        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><TelemetrySanitizedLocationOverview/><FleetComplianceManagement/></>}
+        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='trackers'&&<FleetComplianceManagement initialTab="trackers" trackerOnly/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><TelemetrySanitizedLocationOverview/><FleetComplianceManagement/></>}
         {activeTab==='drivers'&&<div className="p-4 sm:p-6"><DriversManagement companyId={user.companyId} onSelectVehicle={()=>requestTabChange('fleet')}/></div>}
         {activeTab==='contracts'&&<ContractsManagement companyId={user.companyId}/>} {activeTab==='trafficTickets'&&<TrafficTicketsManagement companyId={user.companyId}/>} 
         {activeTab==='maintenance'&&<MaintenanceManagement key={settlementRefreshVersion} companyId={user.companyId} onOpenPaymentModal={setSelectedPayableForPayment}/>}
