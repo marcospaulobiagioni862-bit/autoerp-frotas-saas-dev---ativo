@@ -14,7 +14,7 @@ assert(source.includes('Veículo vinculado'), 'manual receivable must expose veh
 assert(source.includes('Outros / Diversos'), 'manual receivable must expose Other/Diverse category');
 assert(source.includes('FinanceMasterDataClient.createCategory'), 'Other/Diverse must use server-side finance category authority');
 assert(source.includes('Prévia das parcelas'), 'manual receivable must show installment preview');
-assert(source.includes('due.setMonth'), 'installment preview must mirror monthly recurrence authority');
+assert(source.includes('due.setUTCMonth'), 'installment preview must mirror monthly recurrence authority');
 assert(source.includes('roundCurrency(total - baseAmount * (count - 1))'), 'last installment must absorb cent rounding');
 assert(!source.includes('Motorista ID (Opcional)'), 'manual technical driver id input must be removed');
 assert(!source.includes('Veículo ID (Opcional)'), 'manual technical vehicle id input must be removed');
