@@ -18,7 +18,7 @@ if (previousTimezone == null) delete process.env.TZ; else process.env.TZ = previ
 const title: any = {id:'daily-ui',companyId:'daily-company',originType:'MANUAL',description:'Daily UI',originalAmount:100,updatedAmount:100,paidAmount:10,balanceAmount:90,fineAmount:0,interestAmount:0,additionalAmount:0,discountAmount:0,dueDate:'2026-09-16',competenceDate:'2026-09-01',status:'PARTIALLY_PAID'};
 FinanceSettlementClient.getOptions = async () => ({accounts:[{id:'daily-account',name:'Conta',type:'BANK',status:'ACTIVE',currentBalance:1000}],paymentMethods:[{id:'daily-method',name:'PIX',active:true}]});
 FinanceSettlementClient.getReceiptDailyInterestQuote = async (_id, effectiveDate, dailyInterestAmount) =>
-  fixedSettlementQuote(title, effectiveDate, dailyInterestAmount, 0);
+  fixedSettlementQuote(title, effectiveDate, dailyInterestAmount);
 
 for(const kind of ['Receipt','Payment'] as const) {
   const Component = kind === 'Receipt' ? ReceiptModal : PaymentModal;
@@ -37,7 +37,7 @@ for(const kind of ['Receipt','Payment'] as const) {
   }
   const displayed=JSON.stringify(tree.toJSON());
   for(const value of kind === 'Receipt'
-    ? ['Saldo principal','Diária de atraso','Diária acumulada até a data','Diária nova nesta baixa','Juros manual (R$)','Acréscimo (R$)','24,00','114,00']
+    ? ['Saldo principal','Período desta diária','diárias nesta baixa','Valor por diária','Diárias desta baixa','Juros manual (R$)','Acréscimo (R$)','24,00','114,00']
     : ['Saldo atual','Juros desta baixa','Acréscimo','Valor total a pagar','Valor pago agora']) assert(displayed.includes(value),value);
   await act(async () => { amount().props.onChange({target:{value:'50,00'}}); });
   await act(async () => { date().props.onChange({target:{value:'2026-09-29'}}); });
@@ -83,16 +83,32 @@ for (const kind of ['Receipt','Payment'] as const) {
   await act(async()=>tree.unmount());
 }
 {
-  const historical: any = {...title, interestAmount:350, updatedAmount:450, paidAmount:2, balanceAmount:448, dueDate:'2026-09-15'};
+  const obligation: any = {...title, originalAmount:1000, updatedAmount:1000, paidAmount:500, balanceAmount:500, dueDate:'2026-09-15'};
+  const first = fixedSettlementQuote(obligation,'2026-09-20',10);
+  assert.equal(first.periodStartDate,'2026-09-15');
+  assert.equal(first.daysOverdue,5);
+  assert.equal(first.additionalInterest,50);
+  assert.equal(first.totalAmount,550);
+
+  const followUp = fixedSettlementQuote(obligation,'2026-10-10',10,'2026-09-20');
+  assert.equal(followUp.periodStartDate,'2026-09-20');
+  assert.equal(followUp.daysOverdue,20);
+  assert.equal(followUp.additionalInterest,200);
+  assert.equal(followUp.totalAmount,700);
+
+  const historical: any = {...title, interestAmount:350, updatedAmount:1350, paidAmount:902, balanceAmount:448, dueDate:'2026-09-15'};
   FinanceSettlementClient.getReceiptDailyInterestQuote = async (_id, effectiveDate, dailyInterestAmount) =>
-    fixedSettlementQuote(historical, effectiveDate, dailyInterestAmount, 0);
+    fixedSettlementQuote(historical, effectiveDate, dailyInterestAmount, '2026-09-29');
   let tree:any;
   await act(async()=>{tree=create(<ReceiptModal receivable={historical} isOpen onClose={()=>{}} onSuccess={()=>{}}/>);});
+  await act(async()=>tree.root.findByProps({type:'date'}).props.onChange({target:{value:'2026-10-01'}}));
   await act(async()=>tree.root.findByProps({'aria-label':'Diária de atraso (R$)'}).props.onChange({target:{value:'10,00'}}));
   await act(async()=>{ await Promise.resolve(); });
   const displayed=JSON.stringify(tree.toJSON());
-  assert(displayed.includes('160,00'), 'historical manual interest must not suppress 16 x R$10 daily interest');
-  assert(displayed.includes('608,00'), 'R$448 balance + R$160 daily interest must total R$608 before other additions');
+  assert(displayed.includes('2026-09-29'), 'follow-up daily period must start at last valid receipt');
+  assert(displayed.includes('2026-10-01'), 'follow-up daily period must end at the new receipt date');
+  assert(displayed.includes('20,00'), 'two follow-up days x R$10 must add R$20');
+  assert(displayed.includes('468,00'), 'R$448 balance + R$20 follow-up daily interest must total R$468');
   await act(async()=>tree.unmount());
 }
 console.log('CR/CP interest/addition UI, daily interest, effective-date recalculation and partial amount: PASS');
