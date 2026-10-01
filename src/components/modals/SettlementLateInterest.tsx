@@ -6,9 +6,9 @@ export function settlementLocalDate(now = new Date()): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
-export function settlementQuote(obligation: {dueDate: string; balanceAmount: number} | null, date: string, daily: number | null, previouslyAppliedDailyInterest = 0) {
+export function settlementQuote(obligation: {dueDate: string; balanceAmount: number} | null, date: string, daily: number | null, periodStartDate?: string) {
   if (!obligation || daily == null || !date) return null;
-  try { return fixedSettlementQuote(obligation, date, daily, previouslyAppliedDailyInterest); } catch { return null; }
+  try { return fixedSettlementQuote(obligation, date, daily, periodStartDate); } catch { return null; }
 }
 
 export function SettlementLateInterest({ quote, balanceAmount, hasPreviousAdjustments, dueDate, kind }: {
