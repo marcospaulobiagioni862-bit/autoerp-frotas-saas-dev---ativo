@@ -71,6 +71,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
     if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
   }, [settlementTotal, payable]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen && !submittingRef.current && !confirmOpen) onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, confirmOpen, onClose]);
+
   if (!isOpen || !payable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,9 +140,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-indigo-600" />
@@ -145,6 +153,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </p>
           </div>
           <button
+            aria-label="Fechar modal"
             disabled={isSubmitting || confirmOpen}
             onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -153,7 +162,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
           <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
