@@ -17,6 +17,15 @@ export interface SettlementOptions {
   paymentMethods: SettlementPaymentMethodOption[];
 }
 
+export interface ReceiptDailyInterestQuote {
+  daysOverdue: number;
+  dailyInterestAmount: number;
+  interestAmount: number;
+  previouslyAppliedDailyInterest: number;
+  additionalInterest: number;
+  totalAmount: number;
+}
+
 export interface SettlementCommandInput {
   dailyInterestAmount?: number;
   settleRemainingBalance?: boolean;
@@ -112,6 +121,28 @@ export class FinanceSettlementClient {
       accounts: payload.accounts.map(normalizeAccount),
       paymentMethods: payload.paymentMethods.map(normalizePaymentMethod),
     };
+  }
+
+  static async getReceiptDailyInterestQuote(
+    receivableId: string,
+    effectiveDate: string,
+    dailyInterestAmount: number
+  ): Promise<ReceiptDailyInterestQuote> {
+    const params = new URLSearchParams({ date: effectiveDate, daily: String(dailyInterestAmount) });
+    const payload = asRecord(await requestJson(`/api/finance/receivables/${encodeURIComponent(receivableId)}/daily-interest-quote?${params.toString()}`));
+    const row = asRecord(payload.quote);
+    const quote: ReceiptDailyInterestQuote = {
+      daysOverdue: Number(row.daysOverdue),
+      dailyInterestAmount: Number(row.dailyInterestAmount),
+      interestAmount: Number(row.interestAmount),
+      previouslyAppliedDailyInterest: Number(row.previouslyAppliedDailyInterest ?? 0),
+      additionalInterest: Number(row.additionalInterest),
+      totalAmount: Number(row.totalAmount),
+    };
+    if (Object.values(quote).some((value) => !Number.isFinite(value))) {
+      throw new Error('Invalid daily interest quote response');
+    }
+    return quote;
   }
 
   static async registerReceipt(receivableId: string, input: SettlementCommandInput): Promise<void> {
