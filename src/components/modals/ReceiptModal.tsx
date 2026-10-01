@@ -396,8 +396,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         >
           <dl className="space-y-2">
             <div><dt>Título / origem</dt><dd>{receivable.description} • {receivable.originType}</dd></div>
+            <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(receivable.balanceAmount)}</dd></div>
             <div><dt>Valor total a receber</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
             <div><dt>Valor recebido agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Saldo devedor após recebimento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
             <div><dt>Juros desta baixa</dt><dd>{formatCurrencyBRL(appliedInterest)}</dd></div>
             <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
             <div><dt>Conta financeira de destino</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
