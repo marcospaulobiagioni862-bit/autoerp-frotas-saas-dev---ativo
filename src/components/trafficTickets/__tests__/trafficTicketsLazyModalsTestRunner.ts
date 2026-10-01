@@ -128,7 +128,7 @@ assert.match(tollSource, /source:'CSV'/, 'CSV rows must be explicitly tagged as 
 assert.match(tollSource, /for\(const row of rows\)\{const result=await TollPassageClient\.create\(row\)/, 'validated CSV rows must reuse authoritative create semantics');
 assert.match(tollSource, /Tenant, contrato, motorista e chave de idempotência continuam sob autoridade do servidor/, 'CSV UI must disclose protected server authority');
 const csvParserStart=tollSource.indexOf('function parseCsv');
-const csvParserEnd=tollSource.indexOf('\n\nexport const TollPassagesManagement',csvParserStart);
+const csvParserEnd=tollSource.indexOf('export const TollPassagesManagement',csvParserStart);
 const csvImportStart=tollSource.indexOf('const importCsv=');
 const csvImportEnd=tollSource.indexOf('return <div',csvImportStart);
 assert.ok(csvParserStart>=0&&csvParserEnd>csvParserStart&&csvImportStart>=0&&csvImportEnd>csvImportStart,'CSV write path must be identifiable');
