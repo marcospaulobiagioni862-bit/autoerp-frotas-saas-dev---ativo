@@ -73,6 +73,33 @@ export class UnitOfWork {
           if (value?.version !== 1 || value.transactionId !== transactionId) throw new Error('Composição da liquidação inválida');
           return value;
         },
+        sumAppliedDailyInterest: async (obligationId: string) => {
+          const result = await tx.execute(sql`
+            SELECT l.changes
+            FROM audit_logs l
+            JOIN financial_transactions ft
+              ON ft.company_id = l.company_id
+             AND ft.id = l.entity_id
+            WHERE l.company_id = ${companyId}
+              AND l.entity_type = 'FinancialSettlement'
+              AND ft.receivable_id = ${obligationId}
+              AND COALESCE(ft.is_reversed, false) = false
+          `);
+          let total = 0;
+          for (const row of result.rows || []) {
+            try {
+              const changes = typeof row.changes === 'string' ? JSON.parse(row.changes) : row.changes;
+              const value = typeof changes?.newState === 'string' ? JSON.parse(changes.newState) : changes?.newState;
+              if (value?.version !== 1 || value?.obligationId !== obligationId) continue;
+              if (value?.requested?.dailyInterestAmount == null) continue;
+              const applied = Number(value?.applied?.interestAmount ?? 0);
+              if (Number.isFinite(applied) && applied > 0) total += applied;
+            } catch {
+              // Malformed unrelated audit evidence must not become money.
+            }
+          }
+          return Math.round(total * 100) / 100;
+        },
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
         getKmRecordRepo:()=>new PostgresKmRecordRepository(tx),
