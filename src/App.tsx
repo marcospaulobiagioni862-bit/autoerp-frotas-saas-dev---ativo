@@ -17,21 +17,12 @@ const RentalLifecycleView=lazy(()=>import('./components/rental/RentalLifecycleVi
 const RentalControlCenterView=lazy(()=>import('./components/operations/RentalControlCenterView').then(module=>({default:module.RentalControlCenterView})));
 const OperationalIncidentCenterView=lazy(()=>import('./components/incidents/OperationalIncidentCenterView').then(module=>({default:module.OperationalIncidentCenterView})));
 const OperationalTasksView=lazy(()=>import('./components/tasks/OperationalTasksView').then(module=>({default:module.OperationalTasksView})));
-const OperationalProductivityView=lazy(()=>import('./components/productivity/OperationalProductivityView').then(module=>({default:module.OperationalProductivityView})));
 const ManagementGoalsView=lazy(()=>import('./components/goals/ManagementGoalsView').then(module=>({default:module.ManagementGoalsView})));
 const ExecutiveDashboardView=lazy(()=>import('./components/executive/ExecutiveDashboardView').then(module=>({default:module.ExecutiveDashboardView})));
 const ExecutiveOperationsCenterView=lazy(()=>import('./components/operations/ExecutiveOperationsCenterView').then(module=>({default:module.ExecutiveOperationsCenterView})));
 const DecisionManagementCenterView=lazy(()=>import('./components/decision-management/DecisionManagementCenterView').then(module=>({default:module.DecisionManagementCenterView})));
 const PerformanceManagementCenterView=lazy(()=>import('./components/performance/PerformanceManagementCenterView').then(module=>({default:module.PerformanceManagementCenterView})));
-const GovernanceCenterView=lazy(()=>import('./components/governance/GovernanceCenterView').then(module=>({default:module.GovernanceCenterView})));
-const PostGoLiveObservabilityView=lazy(()=>import('./components/observability/PostGoLiveObservabilityView').then(module=>({default:module.PostGoLiveObservabilityView})));
-const ResilienceCenterView=lazy(()=>import('./components/resilience/ResilienceCenterView').then(module=>({default:module.ResilienceCenterView})));
 const AdministrationCenterView=lazy(()=>import('./components/admin/AdministrationCenterView').then(module=>({default:module.AdministrationCenterView})));
-const SystemHealthCenterView=lazy(()=>import('./components/admin/SystemHealthCenterView').then(module=>({default:module.SystemHealthCenterView})));
-const ReleaseGovernanceCenterView=lazy(()=>import('./components/release/ReleaseGovernanceCenterView').then(module=>({default:module.ReleaseGovernanceCenterView})));
-const IncidentManagementCenterView=lazy(()=>import('./components/incident-management/IncidentManagementCenterView').then(module=>({default:module.IncidentManagementCenterView})));
-const SystemIntegrityAuditView=lazy(()=>import('./components/audit/SystemIntegrityAuditView').then(module=>({default:module.SystemIntegrityAuditView})));
-const EnterpriseConsolidationView=lazy(()=>import('./components/consolidation/EnterpriseConsolidationView').then(module=>({default:module.EnterpriseConsolidationView})));
 const OperationalWorkflowCenterView=lazy(()=>import('./components/workflow/OperationalWorkflowCenterView').then(module=>({default:module.OperationalWorkflowCenterView})));
 const OperationalExecutionCenterView=lazy(()=>import('./components/execution/OperationalExecutionCenterView').then(module=>({default:module.OperationalExecutionCenterView})));
 const FleetManagement=lazy(()=>import('./components/fleet/FleetManagement').then(module=>({default:module.FleetManagement})));
@@ -122,19 +113,13 @@ export default function App(){
         {activeTab==='performance-management'&&<PerformanceManagementCenterView/>}
         {activeTab==='decision-management'&&<DecisionManagementCenterView/>}
         {activeTab==='executive'&&<div className="p-4 sm:p-6"><ExecutiveDashboardView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/></div>}
-        {activeTab==='governance'&&<div className="p-4 sm:p-6"><GovernanceCenterView companyId={user.companyId}/></div>}
-        {activeTab==='observability'&&<PostGoLiveObservabilityView/>}{activeTab==='resilience'&&<ResilienceCenterView/>}
         {activeTab==='administration'&&<AdministrationCenterView companyId={user.companyId} currentUserId={user.userId} currentUserRole={user.role}/>} 
-        {activeTab==='release-governance'&&<ReleaseGovernanceCenterView/>}{activeTab==='incident-management'&&<IncidentManagementCenterView/>}
-        {activeTab==='system-integrity'&&<SystemIntegrityAuditView companyId={user.companyId}/>} {activeTab==='enterprise-consolidation'&&<EnterpriseConsolidationView companyId={user.companyId}/>} 
         {activeTab==='workflow-center'&&<OperationalWorkflowCenterView/>}{activeTab==='execution-center'&&<OperationalExecutionCenterView/>}
-        {activeTab==='system-health'&&<div className="p-4 sm:p-6"><SystemHealthCenterView companyId={user.companyId}/></div>}
         {activeTab==='operacao-diaria'&&<DailyOperationsView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='ciclo-locacao'&&<RentalLifecycleView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='central-controle'&&<RentalControlCenterView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='central-incidentes'&&<OperationalIncidentCenterView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='central-tarefas'&&<div className="p-4 sm:p-6"><OperationalTasksView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/></div>}
-        {activeTab==='produtividade'&&<div className="p-4 sm:p-6"><OperationalProductivityView companyId={user.companyId}/></div>}
         {activeTab==='metas'&&<div className="p-4 sm:p-6"><ManagementGoalsView companyId={user.companyId}/></div>}
         {activeTab==='documentos'&&<DocumentCenter focusFileName={documentFocusFileName||undefined} onFocusConsumed={()=>setDocumentFocusFileName(null)}/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='relatorios'&&<ManagementReportsView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
