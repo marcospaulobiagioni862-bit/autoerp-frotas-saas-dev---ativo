@@ -158,6 +158,7 @@ export class ContractAuthorityIntegrationRunner {
     const adminA = { companyId: companyA, role: 'ADMIN', userId: adminAId };
     const adminB = { companyId: companyB, role: 'ADMIN', userId: adminBId };
     const readonlyA = { companyId: companyA, role: 'READONLY', userId: readonlyAId };
+    const RealDate = Date;
 
     try {
       const baseContract = {
@@ -187,6 +188,34 @@ export class ContractAuthorityIntegrationRunner {
       response = await create(baseContract, adminA);
       assert(response.status === 400, `missing idempotency key expected 400, got ${response.status}`);
 
+      // GAP 3: UTC has advanced to October 2, but the civil date in Sao Paulo is October 1.
+      class CnhTestDate extends RealDate {
+        constructor(value?: any) { super(value === undefined ? '2026-10-02T02:30:00Z' : value); }
+        static now() { return new RealDate('2026-10-02T02:30:00Z').getTime(); }
+      }
+      globalThis.Date = CnhTestDate as DateConstructor;
+      const beforeCnh = await scalar(sql`SELECT
+        (SELECT count(*)::int FROM contracts WHERE company_id=${companyA}) AS contracts,
+        (SELECT count(*)::int FROM account_receivables WHERE company_id=${companyA}) AS receivables,
+        (SELECT count(*)::int FROM security_deposits WHERE company_id=${companyA}) AS deposits`);
+      await db.execute(sql`UPDATE drivers SET status='ACTIVE', active=true, cnh_expiration='2026-09-30' WHERE company_id=${companyA} AND id='i3-drv-a1'`);
+      const expiredDriver = await scalar(sql`SELECT status, cnh_expiration FROM drivers WHERE company_id=${companyA} AND id='i3-drv-a1'`);
+      assert(expiredDriver?.status === 'ACTIVE' && expiredDriver?.cnh_expiration === '2026-09-30', 'expired CNH fixture must retain ACTIVE status');
+      response = await create({ ...baseContract, contractNumber: 'CNT-V2-GAP3-CNH-EXPIRED' }, adminA, 'v2-contract-expired-cnh');
+      assert(response.status === 409, `expired ACTIVE driver expected 409, got ${response.status}`);
+      const expiredPayload = await json(response);
+      assert(expiredPayload?.code === 'CONTRACT_DRIVER_LICENSE_INVALID', 'expired CNH must retain the existing conflict code');
+      const afterCnh = await scalar(sql`SELECT
+        (SELECT count(*)::int FROM contracts WHERE company_id=${companyA}) AS contracts,
+        (SELECT count(*)::int FROM account_receivables WHERE company_id=${companyA}) AS receivables,
+        (SELECT count(*)::int FROM security_deposits WHERE company_id=${companyA}) AS deposits`);
+      assert(beforeCnh.contracts === afterCnh.contracts, 'expired CNH must not create a contract');
+      assert(beforeCnh.receivables === afterCnh.receivables, 'expired CNH must not create rent or deposit CR');
+      assert(beforeCnh.deposits === afterCnh.deposits, 'expired CNH must not create a security deposit');
+      const cnhVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE company_id=${companyA} AND id='i3-veh-a1'`);
+      assert(cnhVehicle?.status === VehicleStatus.AVAILABLE && !cnhVehicle.current_driver_id && !cnhVehicle.current_contract_id, 'expired CNH must leave the vehicle AVAILABLE and unbound');
+      // The same ACTIVE driver may create a contract when the CNH expires today.
+      await db.execute(sql`UPDATE drivers SET cnh_expiration='2026-10-01' WHERE company_id=${companyA} AND id='i3-drv-a1'`);
       const keyA = 'v2-contract-create-a-001';
       const [first, replay] = await Promise.all([
         create(baseContract, adminA, keyA),
@@ -196,6 +225,9 @@ export class ContractAuthorityIntegrationRunner {
       const firstPayload = await json(first);
       const replayPayload = await json(replay);
       const created = firstPayload.item;
+      globalThis.Date = RealDate;
+      await db.execute(sql`UPDATE drivers SET cnh_expiration='2035-01-01' WHERE company_id=${companyA} AND id='i3-drv-a1'`);
+      console.log('GAP 3 CNH expiration: 409 without contract/binding/finance; civil today allowed: PASS');
       assert(created.id === replayPayload.item.id, 'same idempotency key created more than one contract');
       assert(created.companyId === companyA && created.status === ContractStatus.ACTIVE && !created.isArchived, 'V2 contract must be ACTIVE atomically');
 
@@ -233,9 +265,14 @@ export class ContractAuthorityIntegrationRunner {
       assert(rollbackVehicle?.status === VehicleStatus.AVAILABLE && !rollbackVehicle?.current_driver_id && !rollbackVehicle?.current_contract_id, 'audit failure must rollback vehicle binding');
       console.log('V2 P0 contract authority: PASS');
     } finally {
+      globalThis.Date = RealDate;
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
   }
+}
+
+export async function runContractAuthorityIntegrationTests(): Promise<void> {
+  await ContractAuthorityIntegrationRunner.runAllTests();
 }
 
 if (process.argv[1]?.includes('contractAuthorityIntegration')) {

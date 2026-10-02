@@ -376,9 +376,14 @@ export function registerContractRoutes(app: Express): void {
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
-        // V2 operational minimum: warnings about documents/insurance do not block creation.
+        // Compare civil dates in the operating timezone, without parsing CNH as a timestamp.
         if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
         if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
+        const civilParts = new Intl.DateTimeFormat('en', {
+          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(new Date());
+        const today = ['year', 'month', 'day'].map(type => civilParts.find(part => part.type === type)!.value).join('-');
+        if (driver.cnhExpiration && driver.cnhExpiration < today) throw new ContractConflictError('Driver CNH invalid');
         const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
         const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);
         if (vehicleBinding) throw new ContractConflictError('Vehicle already bound to another contract');
