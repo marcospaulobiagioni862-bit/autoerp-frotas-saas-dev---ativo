@@ -28,8 +28,6 @@ const OperationalExecutionCenterView=lazy(()=>import('./components/execution/Ope
 const FleetManagement=lazy(()=>import('./components/fleet/FleetManagement').then(module=>({default:module.FleetManagement})));
 const FleetComplianceManagement=lazy(()=>import('./components/fleet/FleetComplianceManagement').then(module=>({default:module.FleetComplianceManagement})));
 const VehicleInspectionsView=lazy(()=>import('./components/fleet/VehicleInspectionsView').then(module=>({default:module.VehicleInspectionsView})));
-const TelemetryKmDivergenceOverview=lazy(()=>import('./components/fleet/TelemetryKmDivergenceOverview').then(module=>({default:module.TelemetryKmDivergenceOverview})));
-const TelemetrySanitizedLocationOverview=lazy(()=>import('./components/fleet/TelemetrySanitizedLocationOverview').then(module=>({default:module.TelemetrySanitizedLocationOverview})));
 const DriversManagement=lazy(()=>import('./components/drivers/DriversManagement').then(module=>({default:module.DriversManagement})));
 const ContractsManagement=lazy(()=>import('./components/contracts/ContractsManagement').then(module=>({default:module.ContractsManagement})));
 const TrafficTicketsManagement=lazy(()=>import('./components/trafficTickets/TrafficTicketsManagement').then(module=>({default:module.TrafficTicketsManagement})));
@@ -123,7 +121,7 @@ export default function App(){
         {activeTab==='metas'&&<div className="p-4 sm:p-6"><ManagementGoalsView companyId={user.companyId}/></div>}
         {activeTab==='documentos'&&<DocumentCenter focusFileName={documentFocusFileName||undefined} onFocusConsumed={()=>setDocumentFocusFileName(null)}/>}{activeTab==='pendencias'&&<PendingCenterView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
         {activeTab==='relatorios'&&<ManagementReportsView companyId={user.companyId} onNavigate={tab=>requestTabChange(tab as NavigationTab)}/>} 
-        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='inspections'&&<VehicleInspectionsView/>}{activeTab==='trackers'&&<FleetComplianceManagement initialTab="trackers" trackerOnly/>}{activeTab==='compliance'&&<><TelemetryKmDivergenceOverview/><TelemetrySanitizedLocationOverview/><FleetComplianceManagement/></>}
+        {activeTab==='fleet'&&<FleetManagement/>}{activeTab==='inspections'&&<VehicleInspectionsView/>}{activeTab==='trackers'&&<FleetComplianceManagement initialTab="trackers" trackerOnly/>}{activeTab==='compliance'&&<FleetComplianceManagement/>}
         {activeTab==='drivers'&&<div className="p-4 sm:p-6"><DriversManagement companyId={user.companyId} onSelectVehicle={()=>requestTabChange('fleet')}/></div>}
         {activeTab==='contracts'&&<ContractsManagement companyId={user.companyId}/>} {activeTab==='trafficTickets'&&<TrafficTicketsManagement companyId={user.companyId}/>} 
         {activeTab==='maintenance'&&<MaintenanceManagement key={settlementRefreshVersion} companyId={user.companyId} onOpenPaymentModal={setSelectedPayableForPayment}/>}

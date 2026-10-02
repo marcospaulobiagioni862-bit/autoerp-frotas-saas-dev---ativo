@@ -13,11 +13,11 @@ export class TrackerNotFoundError extends Error {}
 export interface TrackerExpenseCategory { id:string; name:string; type:string; }
 export interface CreateTrackerInput {
   vehicleId:string; equipmentModel:string; imei:string; serialNumber?:string; chipCarrier?:string; chipNumber?:string;
-  monthlyCost:number; installationDate:string; supplierId?:string; notes?:string; categoryId?:string; sourceAttachmentId?:string;
+  monthlyCost:number; installationDate:string; supplierId?:string; providerName?:string; providerContact?:string; portalUrl?:string; notes?:string; categoryId?:string; sourceAttachmentId?:string;
 }
 export interface UpdateTrackerInput {
   equipmentModel?:string; imei?:string; serialNumber?:string|null; chipCarrier?:string|null; chipNumber?:string|null;
-  monthlyCost?:number; installationDate?:string; supplierId?:string|null; notes?:string|null; categoryId?:string;
+  monthlyCost?:number; installationDate?:string; supplierId?:string|null; providerName?:string|null; providerContact?:string|null; portalUrl?:string|null; notes?:string|null; categoryId?:string;
 }
 
 type RuleRow = { id:string; status:string; category_id?:string; amount?:unknown; supplier_id?:string; };
@@ -29,6 +29,12 @@ export function setTrackerTestHooksForTests(hooks:{afterTrackerCreated?:()=>void
 function rows(result:any):any[]{ return Array.isArray(result?.rows)?result.rows:[]; }
 function reqText(value:unknown,field:string,max=300):string { const s=typeof value==='string'?value.trim():''; if(!s||s.length>max) throw new TrackerValidationError(`Invalid ${field}`); return s; }
 function optText(value:unknown,max=1000):string|undefined { if(value===undefined||value===null||value==='')return undefined; const s=String(value).trim(); if(!s||s.length>max)throw new TrackerValidationError('Invalid optional text'); return s; }
+function portalUrl(value:unknown):string|undefined {
+  const result=optText(value,2048); if(result===undefined)return undefined;
+  try { const url=new URL(result); if(!/^https?:\/\//i.test(result)||!['http:','https:'].includes(url.protocol)||!url.hostname)throw new Error(); }
+  catch { throw new TrackerValidationError('Invalid portalUrl'); }
+  return result;
+}
 function money(value:unknown):number { const n=Number(value); if(!Number.isFinite(n)||n<0||n>999999999.99)throw new TrackerValidationError('Invalid monthlyCost'); return Math.round(n*100)/100; }
 function imei(value:unknown):string { const s=String(value||'').replace(/\D/g,''); if(!/^\d{15}$/.test(s))throw new TrackerValidationError('IMEI must contain 15 digits'); return s; }
 function isoDate(value:unknown):string { const s=String(value||'').trim(); if(!/^\d{4}-\d{2}-\d{2}$/.test(s))throw new TrackerValidationError('Invalid installationDate'); const d=new Date(`${s}T00:00:00Z`); if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==s)throw new TrackerValidationError('Invalid installationDate'); return s; }
@@ -116,6 +122,7 @@ export class TrackerAuthorityService {
     if(!vehicle||vehicle.isArchived)throw new TrackerNotFoundError('Veículo não encontrado');
     if([VehicleStatus.SOLD,VehicleStatus.ARCHIVED].includes(vehicle.status))throw new TrackerConflictError('Veículo não está elegível para rastreador');
     const normalizedImei=imei(input.imei),model=reqText(input.equipmentModel,'equipmentModel',200),cost=money(input.monthlyCost),installationDate=isoDate(input.installationDate),supplierId=optText(input.supplierId,160);
+    const providerName=optText(input.providerName,200),providerContact=optText(input.providerContact,300),portal=portalUrl(input.portalUrl);
     await validSupplier(tx,p.companyId,supplierId);
     let sourceAttachment:any;
     if(input.sourceAttachmentId){
@@ -134,7 +141,7 @@ export class TrackerAuthorityService {
     const now=new Date().toISOString(); const item:Tracker={
       id:randomUUID(),companyId:p.companyId,vehicleId,serialNumber:optText(input.serialNumber,120),equipmentModel:model,imei:normalizedImei,
       chipCarrier:optText(input.chipCarrier,120),chipNumber:optText(input.chipNumber,120),monthlyCost:cost,installationDate,status:'ACTIVE',supplierId,
-      notes:optText(input.notes,1000),createdBy:p.userId,createdAt:now,updatedAt:now,
+      providerName,providerContact,portalUrl:portal,notes:optText(input.notes,1000),createdBy:p.userId,createdAt:now,updatedAt:now,
     };
     const created=await tx.getTrackerRepo().create(item); await audit(tx,p,'Tracker',created.id,AuditAction.CREATE,undefined,created,now);
     if(sourceAttachment){
@@ -158,6 +165,9 @@ export class TrackerAuthorityService {
       chipNumber:input.chipNumber===undefined?before.chipNumber:input.chipNumber===null?undefined:optText(input.chipNumber,120),
       monthlyCost:input.monthlyCost===undefined?before.monthlyCost:money(input.monthlyCost),
       installationDate:input.installationDate===undefined?before.installationDate:isoDate(input.installationDate),supplierId,
+      providerName:input.providerName===undefined?before.providerName:optText(input.providerName,200),
+      providerContact:input.providerContact===undefined?before.providerContact:optText(input.providerContact,300),
+      portalUrl:input.portalUrl===undefined?before.portalUrl:portalUrl(input.portalUrl),
       notes:input.notes===undefined?before.notes:input.notes===null?undefined:optText(input.notes,1000),updatedAt:now};
     const updated=await repo.updateForCompany(p.companyId,id,updatedCandidate); if(!updated)throw new TrackerNotFoundError('Rastreador não encontrado');
     await syncRecurringRule(tx,p,updated,input.categoryId); await audit(tx,p,'Tracker',id,AuditAction.UPDATE,before,updated,now); return updated;

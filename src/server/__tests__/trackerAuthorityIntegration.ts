@@ -47,6 +47,31 @@ async function testHttpSecurity():Promise<void>{
   }finally{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
 }
 
+
+async function testSimpleProviderHttp():Promise<void>{
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{(req as any).principal=admin;next();});registerTrackerRoutes(app);
+  const server=createServer(app);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));const address=server.address();if(!address||typeof address==='string')throw new Error('test address unavailable');
+  const base='http://127.0.0.1:'+address.port+'/api/trackers';
+  const payload={vehicleId:vehicleA,equipmentModel:'Simple tracker',imei:'888888888888888',monthlyCost:0,installationDate:'2026-09-01',providerName:'Operational Provider',providerContact:'support@example.test',portalUrl:'https://provider.example.test/portal'};
+  const send=(url:string,method:string,body:any)=>fetch(url,{method,headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  try{
+    for(const portalUrl of ['javascript:alert(1)','data:text/html,test','file:///tmp/test','ftp://example.test','https:example.test','https://','not-a-url']){
+      const response=await send(base,'POST',{...payload,portalUrl});assert(response.status===400,'unsafe or malformed create URL accepted: '+portalUrl);
+    }
+    assert(Number((await one(sql`SELECT count(*)::int count FROM trackers WHERE company_id=${companyA} AND imei=${payload.imei}`)).count)===0,'invalid URL created tracker');
+    let response=await send(base,'POST',payload);assert(response.status===201,'valid HTTPS create rejected');const created=(await response.json()).item;
+    response=await fetch(base+'/'+created.id);const read=(await response.json()).item;
+    for(const key of ['providerName','providerContact','portalUrl'])assert(read[key]===(payload as any)[key],'provider field missing from read: '+key);
+    for(const portalUrl of ['javascript:alert(1)','data:text/html,test','file:///tmp/test','ftp://example.test']){
+      response=await send(base+'/'+created.id,'PATCH',{portalUrl});assert(response.status===400,'unsafe update URL accepted');
+    }
+    response=await send(base+'/'+created.id,'PATCH',{providerName:'Updated provider',providerContact:'11999990000',portalUrl:'http://provider.example.test/portal'});assert(response.status===200,'valid HTTP update rejected');
+    const updated=await TrackerAuthorityService.get(companyA,created.id);assert(updated?.providerName==='Updated provider'&&updated.providerContact==='11999990000'&&updated.portalUrl==='http://provider.example.test/portal','update not persisted');
+    response=await send(base+'/'+created.id,'PATCH',{providerName:null,providerContact:null,portalUrl:null});assert(response.status===200,'clearing optional fields rejected');
+    const cleared=await TrackerAuthorityService.get(companyA,created.id);assert(!cleared?.providerName&&!cleared?.providerContact&&!cleared?.portalUrl,'optional fields not cleared');
+  }finally{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
+}
+
 async function testAtomicRecurringLifecycle():Promise<void>{
   setTrackerTestHooksForTests({afterTrackerCreated:()=>{throw new Error('INDUCED_TRACKER_RULE_FAILURE');}});let failed=false;
   try{await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Rollback GPS',imei:'444444444444444',monthlyCost:50,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});}catch(error){failed=String(error).includes('INDUCED_TRACKER_RULE_FAILURE');}finally{setTrackerTestHooksForTests({});}
@@ -55,12 +80,15 @@ async function testAtomicRecurringLifecycle():Promise<void>{
   let missingSupplierRejected=false;
   try{await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Sem fornecedor',imei:'444444444444444',monthlyCost:65,installationDate:'2026-09-01',categoryId:categoryA});}catch(error){missingSupplierRejected=error instanceof TrackerValidationError;}
   assert(missingSupplierRejected,'positive tracker monthly cost without supplier was accepted');
-  const tracker=await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Concox K',imei:'555555555555555',chipCarrier:'Vivo',chipNumber:'11999990000',monthlyCost:65,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});
+  const tracker=await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Concox K',imei:'555555555555555',providerName:'Operational Provider',providerContact:'support@example.test',portalUrl:'https://provider.example.test/portal',chipCarrier:'Vivo',chipNumber:'11999990000',monthlyCost:65,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});
   let rule=await one(sql`SELECT id,status,amount,category_id,vehicle_id,supplier_id,next_generation_date::text next_date FROM recurring_rules WHERE company_id=${companyA} AND origin_type='TRACKER' AND origin_id=${tracker.id}`);
   assert(rule&&rule.status==='ACTIVE'&&Number(rule.amount)===65&&rule.category_id===categoryA,'tracker recurring rule not created canonically');
   const retry=await TrackerAuthorityService.create(admin,{vehicleId:vehicleA,equipmentModel:'Concox K',imei:'555555555555555',chipCarrier:'Vivo',chipNumber:'11999990000',monthlyCost:65,installationDate:'2026-09-01',supplierId:supplierA,categoryId:categoryA});assert(retry.id===tracker.id,'identical create retry did not converge');
   assert(Number((await one(sql`SELECT count(*)::int count FROM recurring_rules WHERE company_id=${companyA} AND origin_type='TRACKER' AND origin_id=${tracker.id}`))?.count)===1,'retry duplicated recurring rule');
 
+  const providerUpdate=await TrackerAuthorityService.update(admin,tracker.id,{providerContact:'new-support@example.test'});
+  assert(providerUpdate.supplierId===supplierA&&providerUpdate.monthlyCost===65&&providerUpdate.providerName==='Operational Provider'&&providerUpdate.portalUrl==='https://provider.example.test/portal','provider update changed financial or omitted fields');
+  assert(rule.supplier_id===supplierA,'operational provider replaced financial supplier');
   const first=await RecurringAuthorityService.processTenant(companyA,'2026-09-01','security-2k-worker-1');assert(first.failed===0&&first.processed===1,'scheduler did not create first tracker AP');
   let apCount=Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND origin_type='TRACKER' AND origin_id=${tracker.id}`))?.count);assert(apCount===1,`expected one tracker AP got ${apCount}`);
   const replay=await RecurringAuthorityService.processTenant(companyA,'2026-09-01','security-2k-worker-replay');assert(replay.processed===0&&replay.failed===0,'scheduler replayed same tracker period');
@@ -92,5 +120,6 @@ async function testRls():Promise<void>{
   finally{await client.end();await db.execute(sql.raw(`DROP OWNED BY ${roleName}`));await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`));}
 }
 
-async function main():Promise<void>{await seed();await testHttpSecurity();await testAtomicRecurringLifecycle();await testConcurrentReplacement();await testRls();console.log('SECURITY-2K tracker authority integration: PASS');}
-main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});
+export async function runTrackerAuthorityLocalTests():Promise<void>{await seed();await testHttpSecurity();await testSimpleProviderHttp();await testAtomicRecurringLifecycle();await testConcurrentReplacement();console.log('GAP 5 tracker HTTP, fields, URLs and recurring lifecycle: PASS');}
+async function main():Promise<void>{await runTrackerAuthorityLocalTests();await testRls();console.log('SECURITY-2K tracker authority integration: PASS');}
+if(process.argv[1]?.endsWith('trackerAuthorityIntegration.ts'))main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});

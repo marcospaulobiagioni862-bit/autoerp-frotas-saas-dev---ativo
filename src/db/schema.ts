@@ -1,5 +1,5 @@
 import { isNotNull, sql } from 'drizzle-orm';
-import { pgTable, text, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -543,9 +543,23 @@ export const trackers = pgTable('trackers', {
   id: text('id').primaryKey(),
   companyId: text('company_id').notNull(),
   vehicleId: text('vehicle_id').notNull(),
-  serialNumber: text('serial_number').notNull(),
+  serialNumber: text('serial_number'),
+  equipmentModel: text('equipment_model'),
+  imei: text('imei'),
+  chipCarrier: text('chip_carrier'),
+  chipNumber: text('chip_number'),
+  monthlyCost: numeric('monthly_cost', { precision: 12, scale: 2 }),
+  installationDate: date('installation_date'),
+  supplierId: text('supplier_id'),
+  providerName: text('provider_name'),
+  providerContact: text('provider_contact'),
+  portalUrl: text('portal_url'),
   status: text('status').notNull(),
+  notes: text('notes'),
   lastPing: timestamp('last_ping', { mode: 'string' }),
+  createdBy: text('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 });
 
 export const fileAttachments = pgTable('file_attachments', {
