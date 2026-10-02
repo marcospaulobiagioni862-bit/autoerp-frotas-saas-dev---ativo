@@ -177,7 +177,16 @@ async function suggestions(context:any,principal:AuthenticatedPrincipal,intakeId
 function schedule(companyId:string,extractionId:string):void{
   setImmediate(()=>{void dispatchDocumentAiExtractionFromEnvironment(companyId,extractionId,`traffic-ticket-intake-${extractionId}`).catch(()=>console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_AI_DISPATCH_FAILURE'));});
 }
+function uniqueConstraint(error:unknown):string|undefined{
+  let current:any=error;for(let depth=0;depth<6&&current;depth++,current=current.cause){
+    if(current.code==='23505')return typeof current.constraint==='string'?current.constraint:'';
+  }
+  return undefined;
+}
 function sendError(res:Response,error:unknown):void{
+  const constraint=uniqueConstraint(error);
+  if((error instanceof TrafficTicketConflictError&&error.message==='Auto de infração já cadastrado')||constraint==='uq_traffic_tickets_company_auto_canonical'){res.status(409).json({error:'Auto de infração já cadastrado'});return;}
+  if(constraint!==undefined){res.status(409).json({error:'Conflito ao confirmar a multa'});return;}
   if(error instanceof ValidationError||error instanceof TrafficTicketValidationError){res.status(400).json({error:'Invalid traffic ticket document intake request'});return;}
   if(error instanceof TrafficTicketForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof NotFoundError||error instanceof TrafficTicketDocumentIntakeAiNotFoundError||error instanceof TrafficTicketNotFoundError){res.status(404).json({error:'Not found'});return;}

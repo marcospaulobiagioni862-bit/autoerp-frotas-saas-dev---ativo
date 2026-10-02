@@ -170,6 +170,52 @@ async function attachmentBinding(ticketId:string):Promise<void>{
   finally{await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
 }
 
+async function testDuplicateHttpContracts():Promise<void>{
+  const app=express();app.use(express.json());app.use((req,_res,next)=>{(req as any).principal=admin;next();});registerTrafficTicketRoutes(app);
+  const server=createServer(app);await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',()=>resolve()));const address=server.address();if(!address||typeof address==='string')throw new Error('test address unavailable');const base='http://127.0.0.1:'+address.port;
+  const post=(route:string,body:any)=>fetch(base+route,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const snapshot=async()=>JSON.stringify(await one(sql`SELECT
+    (SELECT count(*)::int FROM traffic_tickets WHERE company_id=${companyA}) AS tickets,
+    (SELECT count(*)::int FROM account_payables WHERE company_id=${companyA}) AS payables,
+    (SELECT count(*)::int FROM account_receivables WHERE company_id=${companyA}) AS receivables,
+    (SELECT count(*)::int FROM operational_tasks WHERE company_id=${companyA}) AS tasks`));
+  const friendly='Auto de infração já cadastrado';
+  async function expectConflict(response:Response,duplicate:boolean):Promise<void>{
+    const body=await response.json();assert(response.status===409,'duplicate/race must return 409, got '+response.status);
+    assert(typeof body.error==='string'&&!/23505|postgres|constraint|insert|select|stack|failed query/i.test(body.error),'technical error leaked');
+    if(duplicate)assert(body.error===friendly,'duplicate message not friendly');else assert(body.error!==friendly,'unrelated constraint falsely classified as duplicate auto');
+  }
+  async function approvedIntake(autoNumber:string):Promise<{id:string;attachmentId:string;extractionId:string}>{
+    const id=randomUUID(),attachmentId=randomUUID(),extractionId=randomUUID();const now=new Date().toISOString();
+    await UnitOfWork.run(companyA,async context=>{
+      await context.getAttachmentRepo().create({id:attachmentId,companyId:companyA,entityType:'TrafficTicketDocumentIntake',entityName:'TrafficTicketDocumentIntake',entityId:id,fileName:'notice.pdf',fileSize:4,mimeType:'application/pdf',uploadedBy:'M Admin',storageProvider:'R2',storageKey:companyA+'/'+attachmentId,checksum:'a'.repeat(64),createdBy:adminA,isArchived:false,contentState:'AVAILABLE',createdAt:now});
+      const raw=context.getRawTransaction();const fields={plate:'MAA1A01',noticeNumber:autoNumber,organName:'DETRAN',infractionCode:'745-50',description:'Duplicate regression',infractionDate:'2026-08-01',dueDate:'2026-09-10',amount:200,points:4};
+      await raw.execute(sql`INSERT INTO document_ai_extractions(id,company_id,attachment_id,attachment_checksum,idempotency_key,status,requested_by,detected_document_type,proposed_fields,corrections) VALUES(${extractionId},${companyA},${attachmentId},${'a'.repeat(64)},${extractionId},'APPROVED',${adminA},'TRAFFIC_TICKET',${JSON.stringify(fields)}::jsonb,'{}'::jsonb)`);
+      await raw.execute(sql`INSERT INTO traffic_ticket_document_intakes(id,company_id,created_by,status,idempotency_key,attachment_id,approved_extraction_id,expires_at) VALUES(${id},${companyA},${adminA},'APPROVED',${id},${attachmentId},${extractionId},NOW()+INTERVAL '1 day')`);
+    });return {id,attachmentId,extractionId};
+  }
+  const intakeBody={vehicleId:vehicleA,driverId:driverA,responsibility:TicketResponsibility.DRIVER,baseExpenseCategoryId:expenseA,driverIncomeCategoryId:incomeA};
+  try{
+    let response=await post('/api/traffic-tickets',input('GAP10-MANUAL',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));assert(response.status===201,'first manual create failed');
+    let before=await snapshot();response=await post('/api/traffic-tickets',input('gap10-manual',TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));await expectConflict(response,true);assert(await snapshot()===before,'sequential duplicate left financial/task effects');
+    const known=await approvedIntake('gap10-manual');before=await snapshot();response=await post('/api/traffic-ticket-document-intakes/'+known.id+'/materialize',intakeBody);await expectConflict(response,true);assert(await snapshot()===before,'known document duplicate created effects');
+    const race=await approvedIntake('GAP10-INTAKE-RACE');
+    for(const constraint of ['uq_traffic_tickets_company_auto_canonical','another_unique_constraint','']){
+      const error=new Error('Failed query: INSERT INTO traffic_tickets; PostgreSQL constraint details');(error as any).cause={code:'23505',constraint};
+      setTrafficTicketTestHooksForTests({afterSecondaryObligationCreated:()=>{throw error;}});
+      before=await snapshot();response=await post('/api/traffic-tickets',input('GAP10-RACE-'+(constraint||'UNKNOWN'),TicketResponsibility.DRIVER,{driverId:driverA,driverIncomeCategoryId:incomeA}));await expectConflict(response,constraint==='uq_traffic_tickets_company_auto_canonical');assert(await snapshot()===before,'manual unique race left CP/CR/task effects');
+      response=await post('/api/traffic-ticket-document-intakes/'+race.id+'/materialize',intakeBody);await expectConflict(response,constraint==='uq_traffic_tickets_company_auto_canonical');assert(await snapshot()===before,'intake unique race left CP/CR/task effects');
+      response=await post('/api/traffic-tickets',input('GAP10-NIC-'+(constraint||'UNKNOWN'),TicketResponsibility.UNIDENTIFIED,{nicExpenseCategoryId:expenseA}));await expectConflict(response,constraint==='uq_traffic_tickets_company_auto_canonical');assert(await snapshot()===before,'manual unique race left NIC/task effects');
+      response=await post('/api/traffic-ticket-document-intakes/'+race.id+'/materialize',{vehicleId:vehicleA,responsibility:TicketResponsibility.UNIDENTIFIED,baseExpenseCategoryId:expenseA,nicExpenseCategoryId:expenseA});await expectConflict(response,constraint==='uq_traffic_tickets_company_auto_canonical');assert(await snapshot()===before,'intake unique race left NIC/task effects');
+      const persisted=await one(sql`SELECT status,traffic_ticket_id,consumed_at FROM traffic_ticket_document_intakes WHERE company_id=${companyA} AND id=${race.id}`);assert(persisted.status==='APPROVED'&&!persisted.traffic_ticket_id&&!persisted.consumed_at,'conflict consumed intake');
+      const attachment=await one(sql`SELECT entity_type,entity_id FROM file_attachments WHERE company_id=${companyA} AND id=${race.attachmentId}`);assert(attachment.entity_type==='TrafficTicketDocumentIntake'&&attachment.entity_id===race.id,'conflict changed document binding');
+    }
+    setTrafficTicketTestHooksForTests({});
+    response=await post('/api/traffic-ticket-document-intakes/'+race.id+'/materialize',intakeBody);assert(response.status===201,'intake did not recover after conflict');before=await snapshot();response=await post('/api/traffic-ticket-document-intakes/'+race.id+'/materialize',intakeBody);assert(response.status===200,'consumed intake retry did not reuse');assert(await snapshot()===before,'intake retry duplicated effects');
+  }finally{setTrafficTicketTestHooksForTests({});await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
+  console.log('GAP 10 manual/intake duplicate 409, safe unique conflicts, rollback and document retry PASS');
+}
+
 async function rls():Promise<void>{
   await db.execute(sql`INSERT INTO traffic_tickets(id,company_id,vehicle_id,auto_number,amount,issue_date,status,organ_name,infraction_code,description,infraction_date,due_date,original_amount,points,responsibility,created_by,responsibility_version,canonical_ready,created_at,updated_at)
     VALUES('security-2m-ticket-b',${companyB},${vehicleB},'M-B',100,'2026-08-01','COMPANY_PAYABLE_CREATED','DETRAN','X','B','2026-08-01','2026-09-01',100,0,'COMPANY','seed',0,true,NOW(),NOW()) ON CONFLICT(id) DO NOTHING`);
@@ -179,5 +225,6 @@ async function rls():Promise<void>{
   finally{await client.end();await db.execute(sql.raw(`DROP OWNED BY ${roleName}`));await db.execute(sql.raw(`DROP ROLE IF EXISTS ${roleName}`));}
 }
 
-async function main():Promise<void>{await seed();await httpSecurity();const ticketId=await atomicityAndRules();await contractResolutionAndVehiclePending();await overlappingContractIsFailClosed();await attachmentBinding(ticketId);await rls();console.log('SECURITY-2M traffic ticket authority integration: PASS');}
-main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});
+export async function runTrafficTicketLocalTests():Promise<void>{await seed();await httpSecurity();await atomicityAndRules();await contractResolutionAndVehiclePending();await overlappingContractIsFailClosed();await testDuplicateHttpContracts();console.log('GAP 10 isolated traffic ticket authority PASS');}
+async function main():Promise<void>{await seed();await httpSecurity();const ticketId=await atomicityAndRules();await contractResolutionAndVehiclePending();await overlappingContractIsFailClosed();await attachmentBinding(ticketId);await testDuplicateHttpContracts();await rls();console.log('SECURITY-2M traffic ticket authority integration: PASS');}
+if(process.argv[1]?.endsWith('trafficTicketAuthorityIntegration.ts'))main().then(()=>process.exit(0)).catch(error=>{console.error(error);process.exit(1);});

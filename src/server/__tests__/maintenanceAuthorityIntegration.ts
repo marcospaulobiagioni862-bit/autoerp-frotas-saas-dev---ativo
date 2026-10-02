@@ -3,6 +3,8 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
+import { UnitOfWork } from '../../db/uow';
+import { PayableService } from '../../domain/finance/PayableService';
 import { MaintenanceAuthorityService, setMaintenanceTestHooksForTests } from '../maintenanceAuthority';
 import { registerMaintenanceRoutes } from '../maintenanceRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
@@ -118,7 +120,7 @@ async function testSplitMaintenancePayables():Promise<void>{
   const supplier=await MaintenanceAuthorityService.createSupplier(adminPrincipal,{name:'Oficina Split',document:'98.765.432/0001-10',phone:'11988887777',category:'Oficina'});
   const part=await MaintenanceAuthorityService.createPart(adminPrincipal,{code:'SPLIT-PART',name:'Peça Split',category:'Teste',unit:'UN',currentCost:120,minimumStock:0,currentStock:5});
   const wo=await MaintenanceAuthorityService.createWorkOrder(adminPrincipal,{
-    number:'OS-J1-SPLIT',vehicleId:vehicleA,supplierId:supplier.id,entryKm:10125,description:'Teste financeiro separado',
+    number:'OS-J1-SPLIT',vehicleId:vehicleA,supplierId:supplier.id,entryKm:10125,serviceDate:'2026-09-16',description:'Teste financeiro separado',
     parts:[{partId:part.id,quantity:1}],
     services:[{description:'Serviço técnico',quantity:1,unitCost:80}],
     laborItems:[{description:'Mão de obra',hours:1,hourlyRate:50}],
@@ -128,13 +130,56 @@ async function testSplitMaintenancePayables():Promise<void>{
       {kind:'LABOR',supplierId:supplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'CASH',installmentsCount:1,firstDueDate:'2026-09-20',discountAmount:0,hasInvoice:false},
     ],
   });
-  const payables=rows(await db.execute(sql`SELECT origin_id,description,original_amount,total_installments FROM account_payables WHERE company_id=${companyA} AND origin_type='MAINTENANCE' AND origin_id LIKE ${wo.id+'%'} ORDER BY origin_id,installment_number`));
+  assert(!wo.accountPayableId&&wo.financialComponents?.length===3,'OS/components were not persisted without a CP link');
+  const count=async()=>Number((await one(sql`SELECT count(*)::int count FROM account_payables WHERE company_id=${companyA} AND origin_type='MAINTENANCE' AND origin_id LIKE ${wo.id+'%'}`))?.count||0);
+  assert(await count()===0,'opening split OS created CPs');
+  await MaintenanceAuthorityService.startWorkOrder(adminPrincipal,wo.id);
+  const kmBefore=Number((await one(sql`SELECT count(*)::int count FROM vehicle_km_records WHERE company_id=${companyA} AND vehicle_id=${vehicleA}`))?.count||0);
+  let hooks=0;setMaintenanceTestHooksForTests({afterPayableCreated:()=>{if(++hooks===2)throw new Error('INDUCED_SPLIT_FAILURE');}});
+  let failed=false;try{await MaintenanceAuthorityService.completeWorkOrder(adminPrincipal,wo.id,{exitKm:10130});}catch(error){failed=String(error).includes('INDUCED_SPLIT_FAILURE');}finally{setMaintenanceTestHooksForTests({});}
+  assert(failed&&await count()===0,'failure did not rollback every component CP');
+  assert((await one(sql`SELECT status FROM work_orders WHERE company_id=${companyA} AND id=${wo.id}`)).status==='IN_PROGRESS','failed split completion changed OS status');
+  assert(Number((await one(sql`SELECT current_km FROM vehicles WHERE company_id=${companyA} AND id=${vehicleA}`)).current_km)===10125,'failed split completion changed KM');
+  assert(Number((await one(sql`SELECT count(*)::int count FROM vehicle_km_records WHERE company_id=${companyA} AND vehicle_id=${vehicleA}`)).count)===kmBefore,'failed split completion created KM reading');
+  const completed=await Promise.all([MaintenanceAuthorityService.completeWorkOrder(adminPrincipal,wo.id,{exitKm:10130}),MaintenanceAuthorityService.completeWorkOrder(adminPrincipal,wo.id,{exitKm:10130})]);
+  assert(completed.every(item=>item.status==='COMPLETED'&&item.accountPayableId),'concurrent split completion did not converge');
+  await MaintenanceAuthorityService.completeWorkOrder(adminPrincipal,wo.id,{exitKm:10130});assert(await count()===4,'concurrent/retry duplicated CPs');
+  const payables=rows(await db.execute(sql`SELECT origin_id,description,original_amount,total_installments,supplier_id,competence_date::text competence FROM account_payables WHERE company_id=${companyA} AND origin_type='MAINTENANCE' AND origin_id LIKE ${wo.id+'%'} ORDER BY origin_id,installment_number`));
+  assert(payables.every(row=>row.supplier_id===supplier.id&&String(row.competence).slice(0,10)==='2026-09-16'),'same supplier or competence was lost');
+  assert(payables.reduce((sum,row)=>sum+Number(row.original_amount),0)===250,'split installment sum changed');
+  assert(payables.filter(row=>String(row.origin_id).endsWith(':PARTS')).every(row=>Number(row.original_amount)===60),'parts installment amounts changed');
   assert(payables.length===4,`split maintenance expected 4 payable installments, got ${payables.length}`);
   assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':PARTS')).length===2,'parts payable must remain separate and preserve installments');
   assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':SERVICES')).length===1,'service payable must be separate');
   assert(payables.filter((row:any)=>String(row.origin_id).endsWith(':LABOR')).length===1,'labor payable must be separate');
   assert(payables.every((row:any)=>String(row.description).includes('Cartão de crédito')),'planned payment method must be visible in payable description');
   assert(payables.some((row:any)=>String(row.description).includes('Parcelado 2x')),'installment condition must be visible in payable description');
+}
+
+async function testDifferentAndHistoricalPayables():Promise<void>{
+  const partsSupplier=await MaintenanceAuthorityService.createSupplier(adminPrincipal,{name:'Parts supplier',document:'99.111.111/0001-01',category:'Peças'});
+  const serviceSupplier=await MaintenanceAuthorityService.createSupplier(adminPrincipal,{name:'Service supplier',document:'99.222.222/0001-02',category:'Serviços'});
+  for(const historical of [false,true]){
+    const wo=await MaintenanceAuthorityService.createWorkOrder(adminPrincipal,{number:historical?'OS-J1-HISTORICAL':'OS-J1-DIFFERENT',vehicleId:vehicleA,entryKm:10130,serviceDate:'2026-09-17',description:'Separate suppliers',parts:[{description:'Parts',quantity:1,unitCost:100}],services:[{description:'Services',quantity:1,unitCost:200}],financialComponents:[
+      {kind:'PARTS',supplierId:partsSupplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'INSTALLMENTS',installmentsCount:2,firstDueDate:'2026-10-01',hasInvoice:true,invoiceNumber:'NF-123'},
+      {kind:'SERVICES',supplierId:serviceSupplier.id,categoryId:categoryA,paymentMethodId:paymentMethodA,paymentCondition:'CASH',installmentsCount:1,firstDueDate:'2026-10-15',hasInvoice:false},
+    ]});
+    const getPayables=async()=>rows(await db.execute(sql`SELECT id,origin_id,supplier_id,original_amount,competence_date::text competence FROM account_payables WHERE company_id=${companyA} AND origin_type='MAINTENANCE' AND origin_id LIKE ${wo.id+'%'} ORDER BY id`));
+    assert((await getPayables()).length===0,'opening different supplier OS created CPs');
+    let oldIds:string[]=[];
+    if(historical){
+      await UnitOfWork.run(companyA,async tx=>{
+        for(const component of wo.financialComponents!){await PayableService.create({companyId:companyA,originType:'MAINTENANCE' as any,originId:wo.id+':'+component.kind,vehicleId:vehicleA,supplierId:component.supplierId,categoryId:component.categoryId,description:'Historical component CP',totalAmount:component.netAmount,dueDate:component.firstDueDate,competenceDate:wo.serviceDate,competenceMode:'SINGLE_EVENT',installmentsCount:component.installmentsCount,userId:adminA,userName:'J1 Admin'},tx);}
+      });oldIds=(await getPayables()).map(row=>String(row.id));
+    }
+    await MaintenanceAuthorityService.startWorkOrder(adminPrincipal,wo.id);await MaintenanceAuthorityService.completeWorkOrder(adminPrincipal,wo.id,{exitKm:10130});
+    const payables=await getPayables();assert(payables.length===3,'different/historical suppliers duplicated or lost installments');
+    const parts=payables.filter(row=>row.origin_id.endsWith(':PARTS')),services=payables.filter(row=>row.origin_id.endsWith(':SERVICES'));
+    assert(parts.length===2&&parts.every(row=>row.supplier_id===partsSupplier.id)&&parts.reduce((sum,row)=>sum+Number(row.original_amount),0)===100,'parts supplier/amount lost');
+    assert(services.length===1&&services[0].supplier_id===serviceSupplier.id&&Number(services[0].original_amount)===200,'service supplier/amount lost');
+    assert(payables.every(row=>String(row.competence).slice(0,10)==='2026-09-17'),'component competence changed');
+    if(historical)assert(JSON.stringify(payables.map(row=>String(row.id)))===JSON.stringify(oldIds),'historical CPs not reused');
+  }
 }
 
 async function testRls():Promise<void>{
@@ -161,11 +206,13 @@ async function testRls():Promise<void>{
   }
 }
 
+export async function runMaintenanceLocalTests():Promise<void>{await seed();await testHttpSecurity();await testAtomicLifecycle();await testSplitMaintenancePayables();await testDifferentAndHistoricalPayables();await runMaintenanceWorkshopPerformanceIntegration();await runMaintenanceSlaRouteRegression();console.log('GAP 9 isolated authority, rollback, concurrent completion and historical reuse PASS');}
 async function main():Promise<void>{
   await seed();
   await testHttpSecurity();
   await testAtomicLifecycle();
   await testSplitMaintenancePayables();
+  await testDifferentAndHistoricalPayables();
   await testRls();
   await runMaintenanceTimelineIntegration();
   await runMaintenanceSlaIntegration();
@@ -173,4 +220,4 @@ async function main():Promise<void>{
   await runMaintenanceSlaRouteRegression();
   console.log('SECURITY-2J1 maintenance authority integration: PASS');
 }
-main().then(()=>process.exit(0)).catch((error)=>{console.error(error);process.exit(1);});
+if(process.argv[1]?.endsWith('maintenanceAuthorityIntegration.ts'))main().then(()=>process.exit(0)).catch((error)=>{console.error(error);process.exit(1);});
