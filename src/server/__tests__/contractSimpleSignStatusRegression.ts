@@ -87,6 +87,7 @@ async function dateRegression() {
     '../../api/attachmentClient': {},
     '../../api/contractExecutionClient': { ContractExecutionClient: { generatePdf: async () => ({ contract: { id: 'new-contract' } }) } },
     '../../types/enums': { DriverStatus: { ACTIVE: 'ACTIVE' }, VehicleStatus: { AVAILABLE: 'AVAILABLE' }, RecurringFrequency: { WEEKLY: 'WEEKLY', MONTHLY: 'MONTHLY' } },
+    '../../hooks/useLocalFormDraft': { useLocalFormDraft: () => ({ clear() {}, close(onClose: () => void) { onClose(); }, notice: '', dirty: false }) },
     '../../domain/operations/fleetOperationalState': { isContractBlocking: () => false },
   });
   const props = { isOpen: true, companyId: 'test', onClose() {}, onSuccess() {} };
