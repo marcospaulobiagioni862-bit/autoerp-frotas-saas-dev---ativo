@@ -1,3 +1,6 @@
+import { useDocumentAlertSettings } from '../../hooks/useDocumentAlertSettings';
+import { documentExpirationState, type DocumentAlertSettings, DEFAULT_DOCUMENT_ALERT_SETTINGS } from '../../shared/utils/documentAlertSettings';
+import { downloadBlob } from '../../shared/utils/downloadBlob';
 import React, { useEffect, useState } from 'react';
 import { documentTypeLabel } from '../../shared/utils/documentTypeLabel';
 import type { FileAttachment } from '../../types/entities/audit';
@@ -29,17 +32,15 @@ interface AttachmentListProps {
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const DOCUMENT_AI_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 
-function expirationLabel(expirationDate?: string): { text: string; className: string } | null {
+function expirationLabel(expirationDate?: string, settings: DocumentAlertSettings = DEFAULT_DOCUMENT_ALERT_SETTINGS): { text: string; className: string } | null {
   if (!expirationDate) return null;
-  const expiration = Date.parse(`${expirationDate}T00:00:00Z`);
-  if (!Number.isFinite(expiration)) return null;
-  const now = new Date();
-  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const days = Math.round((expiration - today) / 86_400_000);
+  const state = documentExpirationState(expirationDate, settings);
+  if (!state) return null;
+  const days = state.days;
   const dateLabel = new Date(`${expirationDate}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
   if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  if (days <= 7) return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  if (days <= 15) return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
+  if (state.color === 'RED') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (state.color === 'YELLOW') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
   return { text: `Válido · ${dateLabel}`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
 }
 
@@ -69,6 +70,7 @@ export function AttachmentList({
   contextLabels = {},
 }: AttachmentListProps) {
   const { user } = useAuth();
+  const { settings: alertSettings } = useDocumentAlertSettings();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
   const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
@@ -171,14 +173,7 @@ export function AttachmentList({
     }
     try {
       const blob = await AttachmentClient.content(id);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = item.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, item.fileName);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao baixar arquivo.');
     }
@@ -344,7 +339,7 @@ export function AttachmentList({
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
             const extractionStatus = showDocumentAiControls ? attachmentStatuses[att.id] : undefined;
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
-            const expirationBadge = showExpirationState ? expirationLabel(att.expirationDate) : null;
+            const expirationBadge = showExpirationState ? expirationLabel(att.expirationDate, alertSettings) : null;
             const contextLabel = contextLabels[att.id];
             return (
               <li key={att.id} className="p-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">

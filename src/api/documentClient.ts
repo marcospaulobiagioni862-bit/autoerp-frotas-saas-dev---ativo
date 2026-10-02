@@ -1,3 +1,4 @@
+import { validateDocumentAlertSettings, type DocumentAlertSettings } from '../shared/utils/documentAlertSettings';
 import type { DocumentRecord, DocumentSubjectType } from '../types/entities';
 import { DocumentStatus } from '../types/enums';
 
@@ -103,6 +104,18 @@ export interface VersionDocumentInput {
 }
 
 export class DocumentClient {
+  static async alertSettings(): Promise<DocumentAlertSettings> {
+    const response = await fetch('/api/documents/alert-settings', { credentials: 'include' });
+    if (!response.ok) throw new DocumentApiError(response.status, 'Falha ao carregar prazos de alerta');
+    return validateDocumentAlertSettings((await response.json()).settings);
+  }
+  static async updateAlertSettings(settings: DocumentAlertSettings): Promise<DocumentAlertSettings> {
+    const response = await fetch('/api/documents/alert-settings', { credentials: 'include', method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(validateDocumentAlertSettings(settings)) });
+    if (!response.ok) throw new DocumentApiError(response.status, 'Falha ao salvar prazos de alerta');
+    const saved = validateDocumentAlertSettings((await response.json()).settings);
+    window.dispatchEvent(new Event('autoerp-document-alert-settings'));
+    return saved;
+  }
   static async list(filters: DocumentListFilters = {}): Promise<DocumentRecord[]> {
     const params = new URLSearchParams();
     if (filters.subjectType) params.set('subjectType', filters.subjectType);

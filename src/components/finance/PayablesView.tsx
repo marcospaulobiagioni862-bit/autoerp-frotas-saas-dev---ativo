@@ -1,3 +1,6 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import { InstallmentCompetenceFields } from './InstallmentCompetenceFields';
+import { installmentCompetences, type InstallmentCompetenceMode } from '../../shared/utils/installmentCompetence';
 import React, { useEffect, useState } from 'react';
 import type { AccountPayable, Contract, Driver, Supplier, Vehicle } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
@@ -70,6 +73,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [competenceDate, setCompetenceDate] = useState<string>('');
+  const [competenceMode, setCompetenceMode] = useState<InstallmentCompetenceMode>('SINGLE_EVENT');
+  const [installmentCompetenceDates, setInstallmentCompetenceDates] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('1');
   const [supplierId, setSupplierId] = useState<string>('');
@@ -77,6 +82,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [vehicleId, setVehicleId] = useState<string>('');
   const [contractId, setContractId] = useState<string>('');
   const [createLoading, setCreateLoading] = useState<boolean>(false);
+
+  const formDraft = useLocalFormDraft('finance-payables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, supplierId }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setSupplierId(draft.supplierId); }, isCreateOpen);
 
   // Cancellation state if any
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -136,12 +143,15 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         totalAmount: parseFloat(totalAmount),
         dueDate,
         competenceDate: competenceDate || dueDate,
+        competenceMode,
+        installmentCompetenceDates: competenceMode === 'PER_INSTALLMENT' ? installmentCompetences({ competenceDate: competenceDate || dueDate, competenceMode, ...(installmentCompetenceDates.length ? { installmentCompetenceDates } : {}) }, Array(Number(installmentsCount)).fill(dueDate)) : undefined,
         installmentsCount: parseInt(installmentsCount) || 1,
         supplierId: supplierId.trim() || undefined,
         driverId: driverId.trim() || undefined,
         vehicleId: vehicleId.trim() || undefined,
         contractId: contractId.trim() || undefined,
       });
+      formDraft.clear();
       setActionMessage('Nova obrigação a pagar criada com sucesso!');
       setIsCreateOpen(false);
       // Reset form
@@ -149,6 +159,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       setTotalAmount('');
       setDueDate('');
       setCompetenceDate('');
+      setCompetenceMode('SINGLE_EVENT');
+      setInstallmentCompetenceDates([]);
       setCategoryId(categories[0]?.id || '');
       setInstallmentsCount('1');
       setSupplierId('');
@@ -432,7 +444,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
           title="Lançamento manual excepcional"
           maxWidth="max-w-2xl"
         >
-          <form onSubmit={handleCreatePayable} className="space-y-4">
+          {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+          <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
             </p>
@@ -497,7 +510,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
                 </select>
               </div>
-              <Input label="Parcelas" type="number" min="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} />
+              <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
+              <Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(e) => { setInstallmentsCount(e.target.value); setInstallmentCompetenceDates([]); }} />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -525,7 +539,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
                 Cancelar
               </Button>
               <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white">

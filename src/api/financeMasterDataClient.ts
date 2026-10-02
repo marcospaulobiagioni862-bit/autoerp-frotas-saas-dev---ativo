@@ -1,3 +1,4 @@
+import { isFinancialDreGroup, type FinancialDreGroup } from '../shared/utils/financialDreGroups';
 export interface FinanceMasterAccount {
   id: string;
   name: string;
@@ -19,6 +20,7 @@ export interface FinanceMasterPaymentMethod {
 }
 
 export interface FinanceMasterCategory {
+  dreGroup?: FinancialDreGroup | null;
   id: string;
   name: string;
   type: 'INCOME' | 'EXPENSE' | 'BOTH';
@@ -48,7 +50,7 @@ function method(value: unknown): FinanceMasterPaymentMethod {
 }
 function category(value: unknown): FinanceMasterCategory {
   const row = record(value); if (typeof row.id !== 'string' || typeof row.name !== 'string' || !['INCOME','EXPENSE','BOTH'].includes(String(row.type)) || typeof row.active !== 'boolean') throw new Error('Invalid financial category response');
-  return { id: row.id, name: row.name, type: row.type as FinanceMasterCategory['type'], parentId: typeof row.parentId === 'string' ? row.parentId : null, active: row.active };
+  return { id: row.id, name: row.name, type: row.type as FinanceMasterCategory['type'], parentId: typeof row.parentId === 'string' ? row.parentId : null, dreGroup: isFinancialDreGroup(row.dreGroup) ? row.dreGroup : null, active: row.active };
 }
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const response = await fetch(path, { ...init, credentials: 'include' });
@@ -71,6 +73,7 @@ export class FinanceMasterDataClient {
   static async setAccountStatus(id:string, status:'ACTIVE'|'INACTIVE'): Promise<void> { await request(`/api/finance/master-data/accounts/${encodeURIComponent(id)}`, json('PATCH', { status })); }
   static async createPaymentMethod(input:{name:string;type:string}): Promise<void> { await request('/api/finance/master-data/payment-methods', json('POST', input)); }
   static async setPaymentMethodActive(id:string, active:boolean): Promise<void> { await request(`/api/finance/master-data/payment-methods/${encodeURIComponent(id)}`, json('PATCH', { active })); }
-  static async createCategory(input:{name:string;type:'INCOME'|'EXPENSE'|'BOTH';parentId?:string}): Promise<void> { await request('/api/finance/master-data/categories', json('POST', input)); }
+  static async createCategory(input:{name:string;type:'INCOME'|'EXPENSE'|'BOTH';parentId?:string;dreGroup?:FinancialDreGroup}): Promise<void> { await request('/api/finance/master-data/categories', json('POST', input)); }
+  static async setCategoryDreGroup(id:string, dreGroup:FinancialDreGroup|null): Promise<void> { await request(`/api/finance/master-data/categories/${encodeURIComponent(id)}`, json('PATCH', { dreGroup })); }
   static async setCategoryActive(id:string, active:boolean): Promise<void> { await request(`/api/finance/master-data/categories/${encodeURIComponent(id)}`, json('PATCH', { active })); }
 }

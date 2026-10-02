@@ -11,6 +11,7 @@ import {
   StatementDirection,
   FinancialPeriodStatus,
 } from '../enums';
+import type { FinancialDreGroup } from '../../shared/utils/financialDreGroups';
 
 export interface FinancialAccount {
   id: string; // UUID
@@ -45,6 +46,7 @@ export interface FinancialCategory {
   name: string;
   type: FinancialCategoryType;
   parentId?: string; // For hierarchy (e.g., Despesas -> Veículos -> Manutenção)
+  dreGroup?: FinancialDreGroup | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;

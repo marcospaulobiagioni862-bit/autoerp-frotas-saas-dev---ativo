@@ -1,3 +1,4 @@
+import { DocumentAlertSettingsForm } from './DocumentAlertSettingsForm';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
@@ -266,6 +267,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
         </div>
       </Card>
 
+      <DocumentAlertSettingsForm/>
       <Card>
         <div className="border-b p-4 text-lg font-semibold">
           Arquivos ({filteredAttachments.length}{filtersActive ? ` de ${attachments.length}` : ''})

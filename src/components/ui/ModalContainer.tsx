@@ -24,6 +24,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
   const requireExplicitClose = title === 'Novo Contrato' || title === 'Editar Contrato';
   const guardId = useId();
   const dirtyRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const markDirty = (target: EventTarget | null) => {
     const element = target instanceof HTMLElement ? target : null;
@@ -39,7 +40,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
   };
 
   const requestClose = () => {
-    if (dirtyRef.current && !window.confirm(UNSAVED_CHANGES_MESSAGE)) return;
+    if ((dirtyRef.current || containerRef.current?.querySelector('[data-draft-dirty="true"]')) && !window.confirm(UNSAVED_CHANGES_MESSAGE)) return;
     clearUnsavedChanges(guardId);
     dirtyRef.current = false;
     onClose();
@@ -102,6 +103,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
 
   return (
     <div
+      ref={containerRef}
       aria-modal="true"
       role="dialog"
       aria-labelledby="modal-title"

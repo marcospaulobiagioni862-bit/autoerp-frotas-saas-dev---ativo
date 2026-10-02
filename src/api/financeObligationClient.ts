@@ -11,6 +11,8 @@ export interface CreateReceivableRequest {
   totalAmount: number;
   dueDate: string;
   competenceDate?: string;
+  competenceMode?: import('../shared/utils/installmentCompetence').InstallmentCompetenceMode;
+  installmentCompetenceDates?: string[];
   installmentsCount?: number;
   recurrenceDaysInterval?: number;
 }

@@ -1,3 +1,4 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, FileText, Save, X } from 'lucide-react';
 import { Button, Input, ModalContainer } from '../ui';
@@ -148,6 +149,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     return () => { active = false; };
   }, [isOpen, contractToEdit, companyId]);
 
+  const formDraft = useLocalFormDraft(`contract:${contractToEdit?.id || 'new'}:${contractToEdit?.updatedAt || ''}`, form, draft => { setForm(draft); setHasUnsavedChanges(true); }, isOpen, hasUnsavedChanges);
+
   const selectContractFile = (file: File | null) => {
     setError(null);
     setHasUnsavedChanges(true);
@@ -230,6 +233,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
 
       const completedContract = savedContract;
 
+      formDraft.clear();
       setHasUnsavedChanges(false);
       onClose();
       onSuccess({
@@ -251,7 +255,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       size="5xl"
       title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
     >
-      <form onSubmit={submit} className="p-3 space-y-3">
+      {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+      <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>

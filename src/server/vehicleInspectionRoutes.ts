@@ -145,15 +145,17 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         const vehicle=await context.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,req.params.id);
         if(!vehicle||vehicle.isArchived) throw new NotFoundError();
         if(vehicle.status===VehicleStatus.SOLD||vehicle.status===VehicleStatus.ARCHIVED) throw new ValidationError();
-        const driverId=optionalText(req.body?.driverId,120)||vehicle.currentDriverId||undefined;
+        let driverId=optionalText(req.body?.driverId,120)||vehicle.currentDriverId||undefined;
         const contractId=optionalText(req.body?.contractId,120)||vehicle.currentContractId||undefined;
+        if(contractId){
+          const contract=await context.getContractRepo().findByIdForCompany(principal.companyId,contractId);
+          if(!contract||contract.isArchived||contract.vehicleId!==vehicle.id) throw new ValidationError();
+          if(driverId&&contract.driverId!==driverId) throw new ValidationError();
+          driverId=contract.driverId;
+        }
         if(driverId){
           const driver=await context.getDriverRepo().findByIdForCompany(principal.companyId,driverId);
           if(!driver||driver.isArchived) throw new NotFoundError();
-        }
-        if(contractId){
-          const contract=await context.getContractRepo().findByIdForCompany(principal.companyId,contractId);
-          if(!contract||contract.vehicleId!==vehicle.id) throw new ValidationError();
         }
         const technical=technicalChecklist(req.body?.technicalChecklist);
         const equipment=equipmentSnapshot(req.body?.equipmentSnapshot);

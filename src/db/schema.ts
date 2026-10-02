@@ -31,6 +31,8 @@ export const tenantOperationalConfigs = pgTable('tenant_operational_configs', {
   currency: text('currency').notNull().default('BRL'),
   maxVehiclesLimit: integer('max_vehicles_limit').notNull().default(500),
   maxDriversLimit: integer('max_drivers_limit').notNull().default(1000),
+  documentRedDays: integer('document_red_days').notNull().default(7),
+  documentYellowDays: integer('document_yellow_days').notNull().default(15),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull(),
 });
@@ -269,6 +271,7 @@ export const financialCategories = pgTable('financial_categories', {
   name: text('name').notNull(),
   type: text('type').notNull(),
   parentId: text('parent_id'),
+  dreGroup: text('dre_group'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),

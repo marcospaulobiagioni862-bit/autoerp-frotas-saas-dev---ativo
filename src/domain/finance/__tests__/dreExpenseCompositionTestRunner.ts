@@ -9,7 +9,7 @@ import { AccountingRegime, ObligationStatus, OriginType } from '../../../types/e
 const companyId = 'dre-company-a';
 const inPeriod = '2026-09-10';
 const outsidePeriod = '2026-10-10';
-const category = { id: 'traffic', companyId, name: 'Multas de trânsito', type: 'EXPENSE', active: true };
+const category = { id: 'traffic', companyId, name: 'Multas de trânsito', dreGroup: 'TRAFFIC_TICKETS', type: 'EXPENSE', active: true };
 
 function context(receivables: any[], payables: any[], categories: any[] = [category]): ITransactionContext {
   return {

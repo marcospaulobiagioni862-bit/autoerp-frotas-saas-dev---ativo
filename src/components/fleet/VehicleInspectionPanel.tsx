@@ -1,3 +1,4 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React,{useEffect,useMemo,useState} from 'react';
 import { ClipboardCheck,Plus } from 'lucide-react';
 import { VehicleInspectionClient,type VehicleInspectionChecklist,type VehicleInspectionType,type VehicleInspection,type VehicleInspectionItemStatus,type VehicleInspectionTechnicalChecklist,type VehicleInspectionTechnicalKey,type VehicleInspectionResult } from '../../api/vehicleInspectionClient';
@@ -77,6 +78,8 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
   const technicalCompleted=useMemo(()=>TECHNICAL_ITEMS.filter(([key])=>Boolean(technicalChecklist[key])).length,[technicalChecklist]);
   const resultPreview=useMemo(()=>derivePreview(technicalChecklist),[technicalChecklist]);
 
+  const formDraft = useLocalFormDraft(`inspection:${vehicleId}`, { type, odometer, fuelLevel, notes, tireBrand, tireModel, tireMeasure, batteryBrand, batteryModel, checklist, technicalChecklist }, draft => { setType(draft.type); setOdometer(draft.odometer); setFuelLevel(draft.fuelLevel); setNotes(draft.notes); setTireBrand(draft.tireBrand); setTireModel(draft.tireModel); setTireMeasure(draft.tireMeasure); setBatteryBrand(draft.batteryBrand); setBatteryModel(draft.batteryModel); setChecklist(draft.checklist); setTechnicalChecklist(draft.technicalChecklist); });
+
   const create=async()=>{
     setLoading(true);setError(null);
     try{
@@ -91,14 +94,16 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
         equipmentSnapshot:{tireBrand:tireBrand.trim(),tireModel:tireModel.trim(),tireMeasure:tireMeasure.trim(),batteryBrand:batteryBrand.trim(),batteryModel:batteryModel.trim()},
         notes:notes.trim()||undefined,
       });
+      formDraft.clear();
       setItems(current=>[item,...current]);setExpanded(item.id);setNotes('');setChecklist(emptyChecklist());setTechnicalChecklist({});
       setTireBrand('');setTireModel('');setTireMeasure('');setBatteryBrand('');setBatteryModel('');
     }catch(e){setError(e instanceof Error?e.message:'Falha ao criar vistoria.');}
     finally{setLoading(false);}
   };
 
-  return <div className="space-y-4">
+  return <div data-draft-dirty={formDraft.dirty} className="space-y-4">
     <div className="rounded-xl border p-4 space-y-4">
+      {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div><h4 className="font-bold flex items-center gap-2"><ClipboardCheck className="w-4 h-4"/>Nova vistoria</h4><p className="text-xs text-slate-500">Entrada e saída usam exatamente o mesmo checklist.</p></div>
         <div className="flex gap-2">

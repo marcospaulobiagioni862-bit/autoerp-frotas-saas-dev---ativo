@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test:v2-core-corrections": "tsx src/domain/finance/__tests__/v2CompetenceAndDreRegression.ts && tsx src/app/__tests__/localDraftAndVersionRegression.tsx && tsx src/shared/utils/__tests__/documentAlertsAndDownloadRegression.ts && tsx src/server/__tests__/v2InspectionAndDocumentRoutesRegression.ts && tsx src/server/__tests__/v2MaintenanceFinanceRegression.ts",
     "test:v2-settlement-domain": "tsx src/domain/finance/__tests__/settlementResidualRegression.ts",
     "test:v2-settlement-ui": "tsx src/components/modals/__tests__/settlementUiRegression.tsx",
     "test:dre": "tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts && tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts && tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts",

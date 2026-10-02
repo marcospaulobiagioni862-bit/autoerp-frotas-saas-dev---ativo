@@ -1,3 +1,4 @@
+import { confirmDiscardUnsavedChanges, clearAllUnsavedChanges } from '../app/unsavedChangesAuthority';
 import React, { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { LoginView } from '../components/auth/LoginView';
 import {
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [client]);
 
   const logout = useCallback(async () => {
+    if (!confirmDiscardUnsavedChanges()) return;
+    clearAllUnsavedChanges();
     try {
       await client.logout();
     } finally {

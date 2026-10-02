@@ -32,7 +32,8 @@ export function requestGuardedClose(
 ): void {
   const element = event.currentTarget instanceof Element ? event.currentTarget : null;
   const guardId = element?.closest('[data-unsaved-guard]')?.getAttribute('data-unsaved-guard') || '';
-  if (guardId && dirtySources.has(guardId) && !window.confirm(message)) return;
+  const nestedDirty = element?.closest('[data-unsaved-guard]')?.querySelector('[data-draft-dirty="true"]');
+  if (guardId && (dirtySources.has(guardId) || nestedDirty) && !window.confirm(message)) return;
   if (guardId) clearUnsavedChanges(guardId);
   onClose();
 }

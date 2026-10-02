@@ -1,3 +1,4 @@
+import { AuthContext } from '../../../hooks/useAuth';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import React, { useState } from 'react';
@@ -19,7 +20,8 @@ import { VehicleClient } from '../../../api/vehicleClient';
 import { ContractClient } from '../../../api/contractClient';
 import { normalizeCurrencyCentsDraft, normalizeCurrencyDraft, parseCurrencyDraft } from '../../../shared/utils/currency';
 
-const { act, create } = TestRenderer;
+const { act } = TestRenderer;
+const create: typeof TestRenderer.create = (node, options) => TestRenderer.create(<AuthContext.Provider value={{user:{id:'test-user',userId:'test-user',companyId:'tenant-a',name:'Tester',role:'ADMIN',active:true,permissions:['*']},authMode:'server-session',logout:async()=>{}}}>{node}</AuthContext.Provider>, options);
 
 // React component tests, with API doubles only. No database or network connection.
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;

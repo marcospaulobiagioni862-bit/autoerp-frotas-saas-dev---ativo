@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(({ command }) => {
+  const buildId = randomUUID();
   const browserReadModelRepositories = path.resolve(
     __dirname,
     'src/persistence/repositories/serverReadModelRepositories.ts'
@@ -66,7 +68,8 @@ export default defineConfig(({ command }) => {
     : [];
 
   return {
-    plugins: [react(), tailwindcss()],
+    define: { __AUTOERP_BUILD_ID__: JSON.stringify(buildId) },
+    plugins: [react(), { name: 'autoerp-build-version', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) }); } }, tailwindcss()],
     resolve: {
       alias: [
         ...productionNavigationAliases,

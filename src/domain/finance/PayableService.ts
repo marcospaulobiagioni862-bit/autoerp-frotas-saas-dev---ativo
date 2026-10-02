@@ -1,6 +1,7 @@
 import { AccountPayableRepository } from '../../persistence/repositories/localRepositories';
 import { AccountPayable } from '../../types/entities';
 import { ObligationStatus, OriginType, AuditAction } from '../../types/enums';
+import { installmentCompetences, type InstallmentCompetenceMode } from '../../shared/utils/installmentCompetence';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -23,6 +24,8 @@ export interface CreatePayableParams {
   totalAmount: number;
   dueDate: string;
   competenceDate?: string;
+  competenceMode?: InstallmentCompetenceMode;
+  installmentCompetenceDates?: string[];
   installmentsCount?: number;
   recurrenceDaysInterval?: number;
   idempotencyKey?: string;
@@ -52,7 +55,21 @@ export class PayableService {
       await assertFinancialCategoryForObligation(params.companyId, categoryId, 'PAYABLE', txContext);
     }
 
-    const installments = Math.max(1, params.installmentsCount || 1);
+    const installments = params.installmentsCount ?? 1;
+    if (!Number.isInteger(installments) || installments < 1 || installments > 120 || !Number.isFinite(params.totalAmount) || params.totalAmount <= 0) throw new Error('Valor ou quantidade de parcelas inválidos');
+    const dueDates = Array.from({ length: installments }, (_, index) => {
+      const date = new Date(params.dueDate);
+      if (!Number.isFinite(date.getTime())) throw new Error('Data de vencimento inválida');
+      if (index > 0 && params.recurrenceDaysInterval) date.setUTCDate(date.getUTCDate() + params.recurrenceDaysInterval * index);
+      else if (index > 0) date.setUTCMonth(date.getUTCMonth() + index);
+      return date.toISOString().slice(0, 10);
+    });
+    const competences = installmentCompetences(params, dueDates);
+    // Validate the complete schedule before any title is created.
+    for (let index = 0; index < installments; index++) {
+      await FinancialPeriodService.assertDateOpen(params.companyId, competences[index], txContext);
+      await FinancialPeriodService.assertDateOpen(params.companyId, dueDates[index], txContext);
+    }
     const baseAmount = roundCurrency(params.totalAmount / installments);
     const createdList: AccountPayable[] = [];
     const groupId = installments > 1 ? generateUUID() : undefined;
@@ -69,7 +86,7 @@ export class PayableService {
         dueDateObj.setUTCMonth(dueDateObj.getUTCMonth() + (i - 1));
       }
       const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
-      const periodRef = params.competenceDate || calculatedDueDate;
+      const periodRef = competences[i - 1];
 
       await FinancialPeriodService.assertDateOpen(params.companyId, periodRef, txContext);
       await FinancialPeriodService.assertDateOpen(params.companyId, calculatedDueDate, txContext);
@@ -128,7 +145,7 @@ export class PayableService {
           paidAmount: 0,
           balanceAmount: amountForThisInstallment,
           dueDate: calculatedDueDate,
-          competenceDate: params.competenceDate || calculatedDueDate,
+          competenceDate: periodRef,
           status: ObligationStatus.PENDING,
           installmentGroupId: groupId,
           installmentNumber: i,

@@ -1,3 +1,4 @@
+import { DEFAULT_FINANCIAL_CATEGORIES, FINANCIAL_DRE_GROUPS, isDreGroupCompatible, type FinancialDreGroup } from '../../shared/utils/financialDreGroups';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FinanceMasterDataClient, type FinanceMasterDataSnapshot } from '../../api/financeMasterDataClient';
 
@@ -15,6 +16,8 @@ export const FinancialMasterDataView: React.FC = () => {
   const [categoryName, setCategoryName] = useState('');
   const [categoryType, setCategoryType] = useState<'INCOME'|'EXPENSE'|'BOTH'>('EXPENSE');
   const [categoryParentId, setCategoryParentId] = useState('');
+  const [categoryDreGroup, setCategoryDreGroup] = useState<FinancialDreGroup>('OTHER_COSTS');
+  const [addingDefaults, setAddingDefaults] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -65,13 +68,25 @@ export const FinancialMasterDataView: React.FC = () => {
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="font-semibold">Categorias financeiras</h3>
-        <form className="mt-4 grid gap-2 md:grid-cols-4" onSubmit={(event) => { event.preventDefault(); void run(async () => { await FinanceMasterDataClient.createCategory({ name: categoryName.trim(), type: categoryType, parentId: categoryParentId || undefined }); setCategoryName(''); setCategoryParentId(''); }); }}>
+        <p className="text-xs text-slate-500">O grupo DRE define a classificação, independentemente do nome. Categorias legadas sem grupo usam a origem do título.</p>
+        <button type="button" disabled={addingDefaults} className="mt-2 rounded-lg border p-2 text-sm" onClick={() => void run(async () => {
+          setAddingDefaults(true);
+          try {
+            const snapshot = await FinanceMasterDataClient.list();
+            const names = new Set(snapshot.categories.map(item => item.name.trim().toLocaleLowerCase('pt-BR')));
+            for (const item of DEFAULT_FINANCIAL_CATEGORIES) if (!names.has(item.name.toLocaleLowerCase('pt-BR'))) {
+              await FinanceMasterDataClient.createCategory(item); names.add(item.name.toLocaleLowerCase('pt-BR'));
+            }
+          } finally { setAddingDefaults(false); }
+        })}>Adicionar categorias padrão ausentes</button>
+        <form className="mt-4 grid gap-2 md:grid-cols-4" onSubmit={(event) => { event.preventDefault(); void run(async () => { await FinanceMasterDataClient.createCategory({ name: categoryName.trim(), type: categoryType, parentId: categoryParentId || undefined, dreGroup: categoryDreGroup }); setCategoryName(''); setCategoryParentId(''); }); }}>
           <input className="rounded-lg border p-2 text-sm" value={categoryName} onChange={(e) => setCategoryName(e.target.value)} placeholder="Nome da categoria" required />
-          <select className="rounded-lg border p-2 text-sm" value={categoryType} onChange={(e) => setCategoryType(e.target.value as 'INCOME'|'EXPENSE'|'BOTH')}><option value="INCOME">Receita</option><option value="EXPENSE">Despesa</option><option value="BOTH">Ambos</option></select>
+          <select className="rounded-lg border p-2 text-sm" value={categoryType} onChange={(e) => { setCategoryType(e.target.value as 'INCOME'|'EXPENSE'|'BOTH'); setCategoryDreGroup(e.target.value === 'INCOME' ? 'REVENUE' : 'OTHER_COSTS'); }}><option value="INCOME">Receita</option><option value="EXPENSE">Despesa</option><option value="BOTH">Ambos</option></select>
           <select className="rounded-lg border p-2 text-sm" value={categoryParentId} onChange={(e) => setCategoryParentId(e.target.value)}><option value="">Sem categoria pai</option>{data.categories.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+          <select aria-label="Grupo DRE da nova categoria" className="rounded-lg border p-2 text-sm" value={categoryDreGroup} onChange={e => setCategoryDreGroup(e.target.value as FinancialDreGroup)}>{Object.entries(FINANCIAL_DRE_GROUPS).map(([key,label]) => <option key={key} value={key} disabled={!isDreGroupCompatible(categoryType, key as FinancialDreGroup)}>{label}</option>)}</select>
           <button className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Adicionar categoria</button>
         </form>
-        <div className="mt-4 divide-y">{data.categories.map((item) => <div key={item.id} className="flex items-center justify-between py-3 text-sm"><div><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{item.type}{item.parentId ? ' · categoria filha' : ''}</div></div><button className="rounded-lg border px-3 py-1.5 text-xs" onClick={() => void run(() => FinanceMasterDataClient.setCategoryActive(item.id, !item.active))}>{item.active ? 'Inativar' : 'Ativar'}</button></div>)}</div>
+        <div className="mt-4 divide-y">{data.categories.map((item) => <div key={item.id} className="flex items-center justify-between py-3 text-sm"><div><div className="font-medium">{item.name}</div><select aria-label={`Grupo DRE de ${item.name}`} value={item.dreGroup || ''} onChange={e => void run(() => FinanceMasterDataClient.setCategoryDreGroup(item.id, (e.target.value || null) as FinancialDreGroup | null))} className="rounded border p-1 text-xs"><option value="">Sem grupo — usar origem</option>{Object.entries(FINANCIAL_DRE_GROUPS).map(([key,label]) => <option key={key} value={key} disabled={!isDreGroupCompatible(item.type,key as FinancialDreGroup)}>{label}</option>)}</select><div className="text-xs text-slate-500">{item.type}{item.parentId ? ' · categoria filha' : ''}</div></div><button className="rounded-lg border px-3 py-1.5 text-xs" onClick={() => void run(() => FinanceMasterDataClient.setCategoryActive(item.id, !item.active))}>{item.active ? 'Inativar' : 'Ativar'}</button></div>)}</div>
       </section>
     </div>
   );

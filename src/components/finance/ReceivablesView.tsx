@@ -1,3 +1,6 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import { InstallmentCompetenceFields } from './InstallmentCompetenceFields';
+import { installmentCompetences, type InstallmentCompetenceMode } from '../../shared/utils/installmentCompetence';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
@@ -78,6 +81,8 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
   const [totalAmount, setTotalAmount] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [competenceDate, setCompetenceDate] = useState('');
+  const [competenceMode, setCompetenceMode] = useState<InstallmentCompetenceMode>('SINGLE_EVENT');
+  const [installmentCompetenceDates, setInstallmentCompetenceDates] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState('');
   const [otherCategoryName, setOtherCategoryName] = useState('');
   const [installmentsCount, setInstallmentsCount] = useState('1');
@@ -91,6 +96,8 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
   const [manualOptionsError, setManualOptionsError] = useState<string | null>(null);
   const [createLoading, setCreateLoading] = useState(false);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+
+  const formDraft = useLocalFormDraft('finance-receivables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, otherCategoryName }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setOtherCategoryName(draft.otherCategoryName); }, isCreateOpen);
 
   const preview = useMemo(
     () => installmentPreview(Number(totalAmount), Math.max(1, Number.parseInt(installmentsCount, 10) || 1), dueDate),
@@ -162,6 +169,8 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
     setTotalAmount('');
     setDueDate('');
     setCompetenceDate('');
+    setCompetenceMode('SINGLE_EVENT');
+    setInstallmentCompetenceDates([]);
     setInstallmentsCount('1');
     setDriverId('');
     setVehicleId('');
@@ -194,6 +203,8 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
         totalAmount: total,
         dueDate,
         competenceDate: competenceDate || dueDate,
+        competenceMode,
+        installmentCompetenceDates: competenceMode === 'PER_INSTALLMENT' ? installmentCompetences({ competenceDate: competenceDate || dueDate, competenceMode, ...(installmentCompetenceDates.length ? { installmentCompetenceDates } : {}) }, Array(Number(installmentsCount)).fill(dueDate)) : undefined,
         installmentsCount: installments,
         driverId: driverId || undefined,
         vehicleId: vehicleId || undefined,
@@ -201,6 +212,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
       });
       setActionMessage(installments > 1 ? `${installments} parcelas a receber criadas com sucesso.` : 'Novo título a receber criado com sucesso.');
       setIsCreateOpen(false);
+      formDraft.clear();
       resetCreateForm();
       await loadReceivables();
     } catch (err) {
@@ -314,11 +326,13 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
       <ConfirmDialog isOpen={!!cancelTargetId} title="Cancelar Título a Receber" message="Deseja realmente cancelar este título a receber? Esta operação será auditada e processada no servidor." confirmText="Confirmar Cancelamento" confirmVariant="danger" onConfirm={confirmCancel} onCancel={() => setCancelTargetId(null)} />
 
       {isCreateOpen && <ModalContainer isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nova cobrança" maxWidth="max-w-2xl">
-        <form onSubmit={handleCreateReceivable} className="space-y-4">
+        {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+        <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreateReceivable} className="space-y-4">
           {manualOptionsError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{manualOptionsError}</div>}
           <Input label="Descrição da cobrança *" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex: Mensalidade avulsa, cobrança de sinistro..." required />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Valor Total (R$) *" type="number" min="0.01" step="0.01" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} required /><Input label="Primeiro vencimento *" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Data de Competência" type="date" value={competenceDate} onChange={(event) => setCompetenceDate(event.target.value)} /><Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(event) => setInstallmentsCount(event.target.value)} /></div>
+          <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Data de Competência" type="date" value={competenceDate} onChange={(event) => setCompetenceDate(event.target.value)} /><Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(event) => { setInstallmentsCount(event.target.value); setInstallmentCompetenceDates([]); }} /></div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1"><label className="text-xs font-semibold text-slate-500 block">Motorista / responsável *</label><select value={driverId} onChange={(event) => setDriverId(event.target.value)} disabled={manualOptionsLoading} className="control w-full"><option value="">Selecione o motorista</option>{drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName} • CPF {driver.cpf}</option>)}</select></div>
@@ -332,7 +346,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
 
           {preview.length > 1 && <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 text-xs font-semibold">Prévia das parcelas</div><div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">{preview.map((item) => <div key={item.number} className="flex items-center justify-between px-3 py-2 text-xs"><span>Parcela {item.number}/{preview.length} • vencimento {item.dueDate}</span><b>R$ {formatMoney(item.amount)}</b></div>)}</div><div className="px-3 py-2 text-[11px] text-slate-500">Soma: R$ {formatMoney(preview.reduce((sum, item) => roundCurrency(sum + item.amount), 0))}. As parcelas seguintes usam periodicidade mensal, igual à autoridade financeira atual.</div></div>}
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button><Button type="submit" variant="primary" isLoading={createLoading} disabled={manualOptionsLoading}>Criar cobrança</Button></div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>Cancelar</Button><Button type="submit" variant="primary" isLoading={createLoading} disabled={manualOptionsLoading}>Criar cobrança</Button></div>
         </form>
       </ModalContainer>}
 

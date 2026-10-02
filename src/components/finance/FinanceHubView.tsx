@@ -1,3 +1,4 @@
+import { confirmDiscardUnsavedChanges, clearAllUnsavedChanges } from '../../app/unsavedChangesAuthority';
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
@@ -36,6 +37,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   onOpenRenegotiationModal,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<FinanceSubTab>(initialSubTab);
+  const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
 
   const subTabs = [
     { id: 'overview' as const, label: 'Visão Geral', icon: LayoutDashboard },
@@ -62,7 +64,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
+              onClick={() => navigate(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs'
@@ -80,7 +82,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
           <div key={refreshVersion} className="mt-6 min-w-0">
         {activeSubTab === 'overview' && (
-          <FinanceOverviewView onSelectSubTab={(tab) => setActiveSubTab(tab)} />
+          <FinanceOverviewView onSelectSubTab={navigate} />
         )}
         {activeSubTab === 'receivables' && (
           <ReceivablesView

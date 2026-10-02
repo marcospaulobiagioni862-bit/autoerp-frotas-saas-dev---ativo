@@ -68,6 +68,14 @@ jobs:
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
 
+      - name: V2 competence, DRE, drafts, version and document regressions
+        run: |
+          npx tsx src/domain/finance/__tests__/v2CompetenceAndDreRegression.ts
+          npx tsx src/app/__tests__/localDraftAndVersionRegression.tsx
+          npx tsx src/shared/utils/__tests__/documentAlertsAndDownloadRegression.ts
+          npx tsx src/server/__tests__/v2InspectionAndDocumentRoutesRegression.ts
+          npx tsx src/server/__tests__/v2MaintenanceFinanceRegression.ts
+
       - name: AUDIT-WAVE-A source-of-truth transversal invariants
         run: npm run test:audit-wave-a
 

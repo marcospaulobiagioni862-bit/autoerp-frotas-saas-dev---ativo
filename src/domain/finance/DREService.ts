@@ -30,13 +30,14 @@ export class DREService {
     amount: number,
     category?: FinancialCategory
   ): void {
-    if (category) {
-      const name = category.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      if (/multa|infracao/.test(name)) breakdown.trafficTicketCosts += amount;
-      else if (/manutencao|peca|oficina/.test(name)) breakdown.maintenanceCosts += amount;
-      else if (/seguro/.test(name)) breakdown.insuranceCosts += amount;
-      else if (/rastrea|telemetria/.test(name)) breakdown.trackerCosts += amount;
-      else breakdown.otherCosts += amount;
+    if (category?.dreGroup) {
+      switch (category.dreGroup) {
+        case 'MAINTENANCE': breakdown.maintenanceCosts += amount; break;
+        case 'INSURANCE': breakdown.insuranceCosts += amount; break;
+        case 'TRACKER': breakdown.trackerCosts += amount; break;
+        case 'TRAFFIC_TICKETS': breakdown.trafficTicketCosts += amount; break;
+        default: breakdown.otherCosts += amount;
+      }
       return;
     }
     switch (originType) {
@@ -109,7 +110,7 @@ export class DREService {
           r.status !== ObligationStatus.CANCELLED &&
           dateKey(r.competenceDate) >= periodStart &&
           dateKey(r.competenceDate) <= periodEnd &&
-          !isDeposit(r.description, r.originType)
+          !isDeposit(r.description, r.originType) && categoriesById.get(r.categoryId)?.dreGroup !== 'SECURITY_DEPOSIT'
       );
 
       const periodPays = pays.filter(
@@ -118,7 +119,7 @@ export class DREService {
           p.status !== ObligationStatus.CANCELLED &&
           dateKey(p.competenceDate) >= periodStart &&
           dateKey(p.competenceDate) <= periodEnd &&
-          !isDeposit(p.description, p.originType)
+          !isDeposit(p.description, p.originType) && categoriesById.get(p.categoryId)?.dreGroup !== 'SECURITY_DEPOSIT'
       );
 
       for (const r of periodRecs) {
@@ -126,19 +127,22 @@ export class DREService {
         financialResultAmount += (
           Number(r.fineAmount || 0) +
           Number(r.interestAmount || 0) -
-          Number(r.discountAmount || 0)
+          Number(r.discountAmount || 0) + Number(r.additionalAmount || 0)
         );
       }
 
       for (const p of periodPays) {
         const amount = Number(p.originalAmount || 0);
-        directCostsAmount += amount;
+        const category = categoriesById.get(p.categoryId);
+        const operatingExpense = ['ADMINISTRATIVE', 'PAYROLL', 'TAXES'].includes(category?.dreGroup || '');
+        if (operatingExpense) operatingExpensesAmount += amount;
+        else directCostsAmount += amount;
         financialResultAmount += (
           Number(p.discountAmount || 0) -
           Number(p.fineAmount || 0) -
-          Number(p.interestAmount || 0)
+          Number(p.interestAmount || 0) - Number(p.additionalAmount || 0)
         );
-        this.addExpenseToBreakdown(breakdown, p.originType, amount, categoriesById.get(p.categoryId));
+        if (!operatingExpense) this.addExpenseToBreakdown(breakdown, p.originType, amount, category);
       }
     } else {
       // CASH REGIME
@@ -191,7 +195,7 @@ export class DREService {
     const grossProfit: DREItem = { code: '5', description: '5. Lucro Bruto Operacional', amount: grossProfitAmount, isTotal: true };
     const operatingExpenses: DREItem = { code: '6', description: '6. Despesas Operacionais / Administrativas', amount: operatingExpensesAmount };
     const operatingProfit: DREItem = { code: '7', description: '7. Resultado Antes Financeiro (EBITDA)', amount: operatingProfitAmount, isTotal: true };
-    const financialResult: DREItem = { code: '8', description: '8. Resultado Financeiro (Juros/Multas/Descontos)', amount: financialResultAmount };
+    const financialResult: DREItem = { code: '8', description: '8. Resultado Financeiro (Juros/Multas/Acréscimos/Descontos)', amount: roundCurrency(financialResultAmount) };
     const netIncome: DREItem = { code: '9', description: '9. LUCRO LÍQUIDO DO EXERCÍCIO', amount: netIncomeAmount, isTotal: true };
 
     return {
