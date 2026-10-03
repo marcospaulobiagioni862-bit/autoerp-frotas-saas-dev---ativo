@@ -53,4 +53,12 @@ assert.match(payables, /entry\.installmentGroupId === item\.installmentGroupId/)
 assert.match(payables, /\`\$\{item\.installmentNumber\}\/\$\{item\.totalInstallments\}\`/);
 assert.match(payables, /statusLabel\(String\(item\.status\)\)/);
 assert.match(payables, /Nenhuma conta a pagar encontrada para os filtros atuais/);
+assert.match(receivables, /Saldo Operacional/, 'receivables list must identify operational balance');
+assert.match(receivables, /isCancelled \? 0 : item\.balanceAmount/, 'cancelled receivable must present zero operational balance');
+assert.match(receivables, /Histórico R\$ \{formatMoney\(item\.balanceAmount\)\}/, 'cancelled receivable must preserve historical balance visibly');
+assert.match(payables, /Saldo Operacional/, 'payables list must identify operational balance');
+assert.match(payables, /isCancelled \? 0 : item\.balanceAmount/, 'cancelled payable must present zero operational balance');
+assert.match(payables, /Histórico R\$ \{item\.balanceAmount\.toLocaleString/, 'cancelled payable must preserve historical balance visibly');
+assert.match(modal, /Saldo operacional/, 'details must identify operational balance');
+assert.match(modal, /Saldo histórico preservado/, 'details must preserve cancelled historical balance');
 console.log('FINANCE-UX-1C obligation details regression: PASS');

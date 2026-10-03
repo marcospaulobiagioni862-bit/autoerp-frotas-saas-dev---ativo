@@ -205,6 +205,9 @@ assert.match(executionRoutes, /getMoveFlexApprovedContractMaster\(template\.temp
 assert.doesNotMatch(contractForm, /Nenhum contrato salvo está disponível/, 'V2 creation must not require a saved template');
 assert.match(contractForm, /blockedVehicleIds/, 'new contract must hide vehicles already bound to another non-terminal contract');
 assert.match(contractForm, /blockedDriverIds/, 'new contract must hide drivers already bound to another non-terminal contract');
+assert.match(contractForm, /Nenhum veículo disponível para novo contrato/, 'new contract must explain when no vehicle is eligible');
+assert.match(contractForm, /Nenhum motorista disponível para novo contrato/, 'new contract must explain when no driver is eligible');
+assert.match(contractForm, /noVehiclesForNewContract \|\| noDriversForNewContract/, 'new contract save must remain disabled while a required eligible option is unavailable');
 assert.match(contractForm, /isContractBlocking\(item\.status\)/, 'new contract must use the shared blocking-contract authority');
 assert.doesNotMatch(contractForm, /new Set<ContractStatus>/, 'new contract must not maintain a local blocking-status matrix');
 assert.match(

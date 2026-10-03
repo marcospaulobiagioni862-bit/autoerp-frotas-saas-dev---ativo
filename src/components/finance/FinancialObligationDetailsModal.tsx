@@ -163,6 +163,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
 
   if (!obligation) return null;
 
+  const operationalBalance = obligation.status === 'CANCELLED' ? 0 : obligation.balanceAmount;
   const amountRows = [
     ...(obligation.totalAmount !== undefined ? [['Total original do parcelamento', obligation.totalAmount] as const] : []),
     ['Valor original', obligation.originalAmount],
@@ -172,7 +173,10 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
     ['Acréscimos', obligation.additionalAmount ?? 0],
     ['Valor atualizado', obligation.updatedAmount],
     ['Valor liquidado', obligation.paidAmount],
-    ['Saldo atual', obligation.balanceAmount],
+    ['Saldo operacional', operationalBalance],
+    ...(obligation.status === 'CANCELLED' && obligation.balanceAmount > 0
+      ? [['Saldo histórico preservado', obligation.balanceAmount] as const]
+      : []),
   ] as const;
 
   return (

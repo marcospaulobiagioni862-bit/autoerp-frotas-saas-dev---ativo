@@ -319,7 +319,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   <th className="p-3.5">Despesa Total</th>
                   <th className="p-3.5">Parcela</th>
                   <th className="p-3.5">Valor da Parcela</th>
-                  <th className="p-3.5">Saldo a Pagar</th>
+                  <th className="p-3.5">Saldo Operacional</th>
                   <th className="p-3.5 text-center">Status</th>
                   <th className="p-3.5 text-right">Ação Operacional</th>
                 </tr>
@@ -332,6 +332,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
                   const blockingInstallment = firstUnpaidPreviousInstallment(item, payables);
                   const isPaid = item.status === ObligationStatus.PAID;
+                  const isCancelled = item.status === ObligationStatus.CANCELLED;
+                  const operationalBalance = isCancelled ? 0 : item.balanceAmount;
                   const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < today;
                   const supplierName = item.supplierId ? suppliers.find((entry) => entry.id === item.supplierId)?.name : undefined;
                   const driverName = item.driverId ? drivers.find((entry) => entry.id === item.driverId)?.fullName : undefined;
@@ -379,7 +381,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                         R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
-                        R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <span className="block">R$ {operationalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-slate-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="p-3.5 text-center">
                         <Badge
