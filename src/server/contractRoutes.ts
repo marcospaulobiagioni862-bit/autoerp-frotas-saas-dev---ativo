@@ -20,6 +20,7 @@ import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
 import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
 import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
 import { contractConflictResponse } from './contractConflictResponse';
+import { getOperationalISODate } from '../shared/utils/date';
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -769,11 +770,16 @@ export function registerContractRoutes(app: Express): void {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status === ContractStatus.CANCELLED) return contract;
-        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
+        const futureActive = contract.status === ContractStatus.ACTIVE
+          && getOperationalISODate() < (await requireContractEffectivePeriod(contract, tx)).effectiveStartDate;
+        if (!futureActive && ![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
           throw new ContractConflictError('Contract lifecycle does not allow cancel');
         }
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
+        if (futureActive && (vehicle.currentContractId !== contract.id || vehicle.currentDriverId !== contract.driverId)) {
+          throw new ContractConflictError('Contract binding mismatch');
+        }
         const now = new Date().toISOString();
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           status: ContractStatus.CANCELLED,

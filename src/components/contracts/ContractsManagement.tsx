@@ -8,7 +8,7 @@ import { FinanceObligationClient } from '../../api/financeObligationClient';
 import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { formatDateBR } from '../../shared/utils/date';
+import { formatDateBR, getOperationalISODate } from '../../shared/utils/date';
 
 const ContractFormModal=lazy(()=>import('./ContractFormModal').then(module=>({default:module.ContractFormModal})));
 const ContractDetailsModal=lazy(()=>import('./ContractDetailsModal').then(module=>({default:module.ContractDetailsModal})));
@@ -16,6 +16,14 @@ const ContractTemplateManagementModal=lazy(()=>import('./ContractTemplateManagem
 
 interface ContractsManagementProps {
   companyId: string;
+}
+
+export function activeContractAction(
+  contract: Pick<Contract, 'status' | 'startDate'>,
+  now = new Date(),
+): 'CANCEL' | 'CLOSE' | null {
+  if (contract.status !== ContractStatus.ACTIVE) return null;
+  return contract.startDate > getOperationalISODate(now) ? 'CANCEL' : 'CLOSE';
 }
 
 export const contractStatusLabel=(status:ContractStatus,signedContractUrl?:string,hasSignedEvidence?:boolean):string=>{
@@ -127,6 +135,10 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     if (!confirm('Deseja encerrar este contrato? O vínculo do veículo será liberado de forma atômica.')) return;
     return runAction(id, () => ContractClient.close(id, { reason: 'Encerrado via gestão de contratos' }));
   };
+  const handleCancel = (id: string) => {
+    if (!confirm('Deseja cancelar este contrato antes do início da vigência? O vínculo do veículo será liberado de forma atômica.')) return;
+    return runAction(id, () => ContractClient.cancel(id, 'Cancelado antes do início da vigência via gestão de contratos'));
+  };
   const handleArchive = (id: string) => {
     if (!confirm('Deseja arquivar este contrato? O histórico será preservado.')) return;
     return runAction(id, () => ContractClient.archive(id, 'Arquivado via gestão de contratos'));
@@ -234,6 +246,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                   const vehicle = vehicles[item.vehicleId];
                   const driver = drivers[item.driverId];
                   const busy = actionLoadingId === item.id;
+                  const lifecycleAction = activeContractAction(item);
                   const hasOverdue = (receivables[item.id] || []).some((receivable) =>
                     receivable.balanceAmount > 0 && receivable.dueDate < today && receivable.status !== 'CANCELLED'
                   );
@@ -262,7 +275,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                             <div className="absolute right-0 z-20 mt-1 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
                               {item.status === ContractStatus.DRAFT && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</button>}
                               {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>Documento / Assinatura</button>}
-                              {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void handleClose(item.id)}>Encerrar contrato</button>}
+                              {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
                               {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
                             </div>
                           </details>

@@ -14,9 +14,10 @@ async function scalar(query: any): Promise<any> {
 
 /**
  * CONTRACT-CANCEL-LIFECYCLE-GATE-1
- * Runs the authoritative contract integration suite and injects one extra assertion exactly
- * after the first successful activation: cancelling an ACTIVE contract must fail closed and
- * must not mutate contract, vehicle binding, receivables or Contract audit history.
+ * Runs the authoritative contract integration suite and injects one extra assertion after
+ * the first successful V2 contract creation: cancelling an ACTIVE contract whose vigência
+ * has already started must fail closed and must not mutate contract, vehicle binding,
+ * receivables or Contract audit history.
  */
 export async function runContractCancelLifecycleRegression(): Promise<void> {
   const originalFetch = globalThis.fetch.bind(globalThis);
@@ -32,10 +33,11 @@ export async function runContractCancelLifecycleRegression(): Promise<void> {
         : input.url;
     const requestMethod = String(init?.method ?? (typeof input === 'string' || input instanceof URL ? 'GET' : input.method)).toUpperCase();
 
-    if (!activeCancelChecked && requestMethod === 'POST' && requestUrl.endsWith('/activate') && response.status === 200) {
+    if (!activeCancelChecked && requestMethod === 'POST' && requestUrl.endsWith('/api/contracts') && response.status === 201) {
+      activeCancelChecked = true;
       const payload = await response.clone().json() as { item?: { id?: string } };
       const contractId = payload.item?.id;
-      assert(contractId, 'successful activation did not expose contract id for lifecycle regression');
+      assert(contractId, 'successful creation did not expose contract id for lifecycle regression');
 
       const contractBefore = await scalar(sql`
         SELECT status, vehicle_id, driver_id, end_date
@@ -59,7 +61,7 @@ export async function runContractCancelLifecycleRegression(): Promise<void> {
         WHERE entity_type='Contract' AND entity_id=${contractId}
       `);
 
-      const cancelResponse = await originalFetch(requestUrl.replace(/\/activate$/, '/cancel'), {
+      const cancelResponse = await originalFetch(`${requestUrl}/${encodeURIComponent(contractId)}/cancel`, {
         method: 'POST',
         headers: init?.headers,
         body: JSON.stringify({ reason: 'Contrato ativo deve ser encerrado pelo fluxo close' }),
@@ -95,7 +97,6 @@ export async function runContractCancelLifecycleRegression(): Promise<void> {
       assert(vehicleAfter?.current_driver_id === contractBefore.driver_id, 'ACTIVE cancel removed vehicle driver binding');
       assert(Number(receivablesAfter?.count) === Number(receivablesBefore?.count), 'ACTIVE cancel mutated receivables');
       assert(Number(auditsAfter?.count) === Number(auditsBefore?.count), 'ACTIVE cancel created Contract audit mutation');
-      activeCancelChecked = true;
     }
 
     return response;

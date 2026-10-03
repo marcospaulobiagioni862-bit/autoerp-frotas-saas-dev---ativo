@@ -5,7 +5,8 @@ import { db } from '../../db';
 import { seedContractSignedFixture } from './contractSignedFixture';
 import { registerContractRoutes } from '../contractRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
-import { ContractStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { AuditAction, ContractStatus, ObligationStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
+import { UnitOfWork } from '../../db/uow';
 import { PostgresAuditLogRepository, PostgresVehicleRepository } from '../../db/repositories/postgresRepositories';
 
 const companyA = 'security-2i3-company-a';
@@ -263,6 +264,106 @@ export class ContractAuthorityIntegrationRunner {
       const rollbackVehicle = await scalar(sql`SELECT status, current_driver_id, current_contract_id FROM vehicles WHERE id='i3-veh-a3'`);
       assert(Number(rolledBack?.count) === 0, 'audit failure must rollback contract');
       assert(rollbackVehicle?.status === VehicleStatus.AVAILABLE && !rollbackVehicle?.current_driver_id && !rollbackVehicle?.current_contract_id, 'audit failure must rollback vehicle binding');
+
+      const futureResponse = await create({
+        ...baseContract,
+        contractNumber: 'CNT-V2-FUTURE',
+        driverId: 'i3-drv-a2',
+        vehicleId: 'i3-veh-a2',
+        startDate: '2027-01-01',
+      }, adminA, 'v2-future-cancel');
+      assert(futureResponse.status === 201, `future create expected 201, got ${futureResponse.status}`);
+      const future = (await json(futureResponse)).item;
+
+      const cancelFuture = async (now = '2027-01-01T02:59:59Z') => {
+        const CurrentDate = Date;
+        class OperationalTestDate extends CurrentDate {
+          constructor(...args: any[]) { super(args.length ? args[0] : now); }
+          static now() { return new CurrentDate(now).getTime(); }
+        }
+        globalThis.Date = OperationalTestDate as DateConstructor;
+        try {
+          return await request(`/api/contracts/${future.id}/cancel`, {
+            method: 'POST',
+            body: JSON.stringify({ reason: 'Cancelamento antes da vigência' }),
+          }, adminA);
+        } finally {
+          globalThis.Date = CurrentDate;
+        }
+      };
+
+      const snapshot = () => UnitOfWork.run(companyA, async tx => ({
+        contract: await tx.getContractRepo().findByIdForCompany(companyA, future.id),
+        vehicle: await tx.getVehicleRepo().findByIdForCompany(companyA, future.vehicleId),
+        receivables: await tx.getReceivableRepo().findByContractId(future.id),
+      }));
+
+      const initial = await snapshot();
+      const paid = initial.receivables[0];
+      assert(paid, 'future contract must create at least one receivable');
+      await UnitOfWork.run(companyA, async tx => {
+        await tx.getReceivableRepo().update(paid.id, {
+          status: ObligationStatus.PAID,
+          paidAmount: paid.updatedAmount,
+          balanceAmount: 0,
+        });
+      });
+
+      for (const mismatch of [{ currentContractId: null }, { currentDriverId: 'i3-drv-a3' }]) {
+        await UnitOfWork.run(companyA, async tx => {
+          await tx.getVehicleRepo().updateForCompany(companyA, future.vehicleId, mismatch);
+        });
+        response = await cancelFuture();
+        assert(response.status === 409, 'future cancel must reject divergent bindings');
+        assert((await snapshot()).contract?.status === ContractStatus.ACTIVE, 'binding rejection changed contract');
+        await UnitOfWork.run(companyA, async tx => {
+          await tx.getVehicleRepo().updateForCompany(companyA, future.vehicleId, {
+            currentContractId: future.id,
+            currentDriverId: future.driverId,
+          });
+        });
+      }
+
+      const beforeCancel = await snapshot();
+      response = await cancelFuture('2027-01-01T03:00:00Z');
+      assert(response.status === 409, 'ACTIVE starting today must use close');
+      assert(JSON.stringify(await snapshot()) === JSON.stringify(beforeCancel), 'started cancel changed state');
+
+      PostgresAuditLogRepository.prototype.create = async function(): Promise<any> {
+        throw new Error('FORCED_CANCEL_AUDIT_FAILURE');
+      };
+      try {
+        response = await cancelFuture();
+        assert(response.status === 500, 'cancel audit failure must fail');
+      } finally {
+        PostgresAuditLogRepository.prototype.create = originalAuditCreate;
+      }
+      assert(JSON.stringify(await snapshot()) === JSON.stringify(beforeCancel), 'cancel failure must rollback all mutations');
+
+      const cancelAudits: any[] = [];
+      PostgresAuditLogRepository.prototype.create = async function(item: any): Promise<any> {
+        const result = await originalAuditCreate.call(this, item);
+        cancelAudits.push(item);
+        return result;
+      };
+      try {
+        response = await cancelFuture();
+        assert(response.status === 200, `future cancel expected 200, got ${response.status}`);
+      } finally {
+        PostgresAuditLogRepository.prototype.create = originalAuditCreate;
+      }
+
+      const afterCancel = await snapshot();
+      assert(afterCancel.contract?.status === ContractStatus.CANCELLED, 'future contract was not cancelled');
+      assert(afterCancel.contract.startDate === future.startDate && afterCancel.contract.endDate === future.endDate, 'cancel changed dates');
+      assert(afterCancel.vehicle?.status === VehicleStatus.AVAILABLE && !afterCancel.vehicle.currentContractId && !afterCancel.vehicle.currentDriverId, 'cancel did not release bindings');
+      const paidBefore = beforeCancel.receivables.find(item => item.id === paid.id);
+      const paidAfter = afterCancel.receivables.find(item => item.id === paid.id);
+      assert(Boolean(paidBefore && paidAfter) && JSON.stringify(paidAfter) === JSON.stringify(paidBefore), 'cancel changed settled receivable');
+      assert(afterCancel.receivables.filter(item => item.id !== paid.id).every(item => item.status === ObligationStatus.CANCELLED), 'unpaid receivables not cancelled');
+      assert(cancelAudits.some(item => item.entityName === 'Contract' && item.entityId === future.id && item.action === AuditAction.CANCEL), 'missing contract CANCEL audit');
+      assert(cancelAudits.some(item => item.entityName === 'AccountReceivable' && item.action === AuditAction.CANCEL), 'missing receivable CANCEL audit');
+
       console.log('V2 P0 contract authority: PASS');
     } finally {
       globalThis.Date = RealDate;

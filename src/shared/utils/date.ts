@@ -14,6 +14,18 @@ export function getCurrentISODate(): string {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
+/** Civil date used by contract operations, independent of the host timezone. */
+export function getOperationalISODate(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = (type: string) => parts.find((part) => part.type === type)!.value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
 export function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setUTCDate(d.getUTCDate() + days);
