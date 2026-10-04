@@ -11,6 +11,7 @@ import {
   financialCategories,
   financialTransactions,
   paymentMethods,
+  securityDepositMovements,
   securityDeposits,
   users,
   vehicleKmRecords,
@@ -433,11 +434,7 @@ async function runV2DemoSeed() {
       receivedAmount: money(depositReceived[index]),
       usedAmount: money(0),
       returnedAmount: money(0),
-      status: depositReceived[index] === depositAmounts[index]
-        ? 'RECEIVED'
-        : depositReceived[index] > 0
-          ? 'PARTIALLY_USED'
-          : 'PENDING',
+      status: depositReceived[index] === depositAmounts[index] ? 'RECEIVED' : 'PENDING',
       receivedAt: depositReceived[index] > 0 ? isoTimestamp(addDays(now, -30 + index)) : null,
       notes: 'Caução fictícia V2 para homologação.',
     }));
@@ -798,6 +795,40 @@ async function runV2DemoSeed() {
     ];
 
     await tx.insert(financialTransactions).values(transactionRows).onConflictDoNothing();
+
+    const depositMovementRows = depositReceived
+      .map((amount, index) => ({ amount, index }))
+      .filter((item) => item.amount > 0)
+      .map((item) => ({
+        id: prefix + '-deposit-movement-' + String(item.index + 1).padStart(2, '0'),
+        companyId,
+        depositId: prefix + '-deposit-' + String(item.index + 1).padStart(2, '0'),
+        type: 'RECEIPT',
+        amount: money(item.amount),
+        date: isoTimestamp(addDays(now, -25 + item.index)),
+        financialTransactionId: prefix + '-tx-deposit-' + String(item.index + 1).padStart(2, '0'),
+        receivableId: prefix + '-receivable-deposit-' + String(item.index + 1).padStart(2, '0'),
+        description: 'Recebimento de caução Demo V2',
+        createdById,
+      }));
+
+    await tx.insert(securityDepositMovements).values(depositMovementRows).onConflictDoNothing();
+
+    for (const movement of depositMovementRows) {
+      await tx
+        .update(securityDepositMovements)
+        .set({
+          depositId: movement.depositId,
+          type: movement.type,
+          amount: movement.amount,
+          date: movement.date,
+          financialTransactionId: movement.financialTransactionId,
+          receivableId: movement.receivableId,
+          description: movement.description,
+          createdById,
+        })
+        .where(and(eq(securityDepositMovements.id, movement.id), eq(securityDepositMovements.companyId, companyId)));
+    }
 
     for (const transaction of transactionRows) {
       await tx
