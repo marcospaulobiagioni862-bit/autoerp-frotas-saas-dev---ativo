@@ -119,6 +119,19 @@ async function startServer() {
     assertBootstrapRuntimeConfiguration(process.env.AUTOERP_BOOTSTRAP_TOKEN, true);
   }
 
+  // Temporary operational bridge for isolated V2 homologation only.
+  // The seed itself carries additional target/branch/arming guards.
+  if (process.env.RUN_V2_DEMO_SEED_ON_BOOT === 'YES_V2_NON_PRODUCTION_ONLY') {
+    if (process.env.RENDER_GIT_BRANCH !== 'v2/core-simplified') {
+      throw new Error('FATAL: V2 demo boot seed refused outside v2/core-simplified.');
+    }
+
+    console.log('[v2-demo-seed] guarded boot execution requested');
+    const { runV2DemoSeed } = await import('./src/db/v2DemoSeed');
+    await runV2DemoSeed();
+    console.log('[v2-demo-seed] guarded boot execution completed');
+  }
+
   // Inject UOW for real ACID transactions in production
   FinanceEngine.uowRunner = UnitOfWork.run;
 
