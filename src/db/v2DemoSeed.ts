@@ -95,15 +95,35 @@ function parseContractSequence(value: string | null | undefined) {
   return match ? Number(match[1]) : 0;
 }
 
-async function runV2DemoSeed() {
+export async function runV2DemoSeed() {
   assertSeedSafety();
 
-  const companyId = String(process.env.V2_DEMO_COMPANY_ID || '').trim();
-  if (!companyId) {
-    throw new Error('V2_DEMO_COMPANY_ID is required. The seed never creates or guesses a tenant.');
+  const database: any = db;
+  let companyId = String(process.env.V2_DEMO_COMPANY_ID || '').trim();
+
+  if (!companyId && String(process.env.V2_DEMO_AUTO_SELECT_SINGLE_COMPANY || '').trim() === 'YES') {
+    const candidates = await database
+      .select({ id: companies.id })
+      .from(companies)
+      .limit(2);
+
+    if (candidates.length !== 1) {
+      throw new Error(
+        'V2 demo auto-selection requires exactly one company in the isolated database; found ' +
+          candidates.length +
+          '.'
+      );
+    }
+
+    companyId = candidates[0].id;
   }
 
-  const database: any = db;
+  if (!companyId) {
+    throw new Error(
+      'V2_DEMO_COMPANY_ID is required unless V2_DEMO_AUTO_SELECT_SINGLE_COMPANY=YES on an isolated database.'
+    );
+  }
+
   const now = new Date();
   const prefix = 'v2demo-' + companyKey(companyId);
 
@@ -896,7 +916,3 @@ async function runV2DemoSeed() {
   }, null, 2));
 }
 
-runV2DemoSeed().catch((error) => {
-  console.error('[v2-demo-seed] failed:', error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
