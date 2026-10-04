@@ -301,23 +301,34 @@ async function runV2DemoSeed() {
         currentBalance: money(0),
         status: 'ACTIVE',
       },
-    ]).onConflictDoUpdate({
-      target: financialAccounts.id,
-      set: {
-        currentBalance: money(23000),
-        status: 'ACTIVE',
-      },
-    });
+    ]).onConflictDoNothing();
+
+    const accountUpdates = [
+      { id: accountIds.cash, currentBalance: money(2500) },
+      { id: accountIds.bank, currentBalance: money(23000) },
+      { id: accountIds.card, currentBalance: money(0) },
+    ];
+
+    for (const account of accountUpdates) {
+      await tx
+        .update(financialAccounts)
+        .set({ currentBalance: account.currentBalance, status: 'ACTIVE' })
+        .where(and(eq(financialAccounts.id, account.id), eq(financialAccounts.companyId, companyId)));
+    }
 
     await tx.insert(paymentMethods).values([
       { id: methodIds.pix, companyId, name: 'PIX Demo V2', type: 'PIX', feePercentage: money(0), active: true },
       { id: methodIds.cash, companyId, name: 'Dinheiro Demo V2', type: 'CASH', feePercentage: money(0), active: true },
       { id: methodIds.transfer, companyId, name: 'Transferência Demo V2', type: 'BANK_TRANSFER', feePercentage: money(0), active: true },
       { id: methodIds.card, companyId, name: 'Cartão Demo V2', type: 'CREDIT_CARD', feePercentage: money(2.5), active: true },
-    ]).onConflictDoUpdate({
-      target: paymentMethods.id,
-      set: { active: true },
-    });
+    ]).onConflictDoNothing();
+
+    for (const methodId of Object.values(methodIds)) {
+      await tx
+        .update(paymentMethods)
+        .set({ active: true })
+        .where(and(eq(paymentMethods.id, methodId), eq(paymentMethods.companyId, companyId)));
+    }
 
     await tx.insert(financialCategories).values([
       { id: categoryIds.rent, companyId, name: 'Locação Demo V2', type: 'INCOME', active: true },
@@ -326,17 +337,16 @@ async function runV2DemoSeed() {
       { id: categoryIds.insurance, companyId, name: 'Seguro Demo V2', type: 'EXPENSE', active: true },
       { id: categoryIds.documentation, companyId, name: 'Documentação Demo V2', type: 'EXPENSE', active: true },
       { id: categoryIds.tracker, companyId, name: 'Rastreador Demo V2', type: 'EXPENSE', active: true },
-    ]).onConflictDoUpdate({
-      target: financialCategories.id,
-      set: { active: true },
-    });
+    ]).onConflictDoNothing();
 
-    await tx.insert(drivers).values(driverRows).onConflictDoUpdate({
-      target: drivers.id,
-      set: {
-        name: drivers.name,
-      },
-    });
+    for (const categoryId of Object.values(categoryIds)) {
+      await tx
+        .update(financialCategories)
+        .set({ active: true })
+        .where(and(eq(financialCategories.id, categoryId), eq(financialCategories.companyId, companyId)));
+    }
+
+    await tx.insert(drivers).values(driverRows).onConflictDoNothing();
 
     for (const driver of driverRows) {
       await tx
@@ -353,12 +363,7 @@ async function runV2DemoSeed() {
         .where(and(eq(drivers.id, driver.id), eq(drivers.companyId, companyId)));
     }
 
-    await tx.insert(vehicles).values(vehicleRows).onConflictDoUpdate({
-      target: vehicles.id,
-      set: {
-        status: vehicles.status,
-      },
-    });
+    await tx.insert(vehicles).values(vehicleRows).onConflictDoNothing();
 
     for (const vehicle of vehicleRows) {
       await tx
@@ -389,12 +394,7 @@ async function runV2DemoSeed() {
         .where(and(eq(vehicles.id, vehicle.id), eq(vehicles.companyId, companyId)));
     }
 
-    await tx.insert(contracts).values(contractRows).onConflictDoUpdate({
-      target: contracts.id,
-      set: {
-        status: 'ACTIVE',
-      },
-    });
+    await tx.insert(contracts).values(contractRows).onConflictDoNothing();
 
     for (const contract of contractRows) {
       await tx
@@ -442,10 +442,23 @@ async function runV2DemoSeed() {
       notes: 'Caução fictícia V2 para homologação.',
     }));
 
-    await tx.insert(securityDeposits).values(depositRows).onConflictDoUpdate({
-      target: securityDeposits.id,
-      set: { notes: 'Caução fictícia V2 para homologação.' },
-    });
+    await tx.insert(securityDeposits).values(depositRows).onConflictDoNothing();
+
+    for (const deposit of depositRows) {
+      await tx
+        .update(securityDeposits)
+        .set({
+          amount: deposit.amount,
+          originalAmount: deposit.originalAmount,
+          receivedAmount: deposit.receivedAmount,
+          usedAmount: deposit.usedAmount,
+          returnedAmount: deposit.returnedAmount,
+          status: deposit.status,
+          receivedAt: deposit.receivedAt,
+          notes: deposit.notes,
+        })
+        .where(and(eq(securityDeposits.id, deposit.id), eq(securityDeposits.companyId, companyId)));
+    }
 
     const rentReceivables = [
       {
@@ -786,6 +799,29 @@ async function runV2DemoSeed() {
 
     await tx.insert(financialTransactions).values(transactionRows).onConflictDoNothing();
 
+    for (const transaction of transactionRows) {
+      await tx
+        .update(financialTransactions)
+        .set({
+          financialAccountId: transaction.financialAccountId,
+          receivableId: (transaction as any).receivableId || null,
+          payableId: (transaction as any).payableId || null,
+          type: transaction.type,
+          amount: transaction.amount,
+          paymentMethodId: transaction.paymentMethodId,
+          transactionDate: transaction.transactionDate,
+          competenceDate: transaction.competenceDate,
+          description: transaction.description,
+          isReversed: false,
+          vehicleId: transaction.vehicleId || null,
+          driverId: (transaction as any).driverId || null,
+          supplierId: (transaction as any).supplierId || null,
+          createdById,
+          idempotencyKey: transaction.idempotencyKey,
+        })
+        .where(and(eq(financialTransactions.id, transaction.id), eq(financialTransactions.companyId, companyId)));
+    }
+
     const kmRows = vehicleRows.slice(0, 4).map((vehicle, index) => ({
       id: prefix + '-km-' + String(index + 1).padStart(2, '0'),
       companyId,
@@ -799,6 +835,21 @@ async function runV2DemoSeed() {
     }));
 
     await tx.insert(vehicleKmRecords).values(kmRows).onConflictDoNothing();
+
+    for (const km of kmRows) {
+      await tx
+        .update(vehicleKmRecords)
+        .set({
+          vehicleId: km.vehicleId,
+          driverId: km.driverId,
+          contractId: km.contractId,
+          kmValue: km.kmValue,
+          recordDate: km.recordDate,
+          readingType: km.readingType,
+          notes: km.notes,
+        })
+        .where(and(eq(vehicleKmRecords.id, km.id), eq(vehicleKmRecords.companyId, companyId)));
+    }
   });
 
   console.log(JSON.stringify({
