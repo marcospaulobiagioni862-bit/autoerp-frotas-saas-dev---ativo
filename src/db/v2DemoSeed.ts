@@ -10,12 +10,17 @@ import {
   financialAccounts,
   financialCategories,
   financialTransactions,
+  maintenance,
   paymentMethods,
   securityDepositMovements,
   securityDeposits,
+  trackers,
+  trafficTickets,
   users,
+  vehicleInspections,
   vehicleKmRecords,
   vehicles,
+  documents,
 } from './schema';
 
 const DEMO_TARGETS = new Set(['development', 'test', 'preview']);
@@ -169,6 +174,8 @@ export async function runV2DemoSeed() {
     insurance: prefix + '-cat-insurance',
     documentation: prefix + '-cat-documentation',
     tracker: prefix + '-cat-tracker',
+    trafficFineIncome: prefix + '-cat-traffic-fine-income',
+    trafficFineExpense: prefix + '-cat-traffic-fine-expense',
   };
 
   const vehicleSpecs = [
@@ -358,6 +365,8 @@ export async function runV2DemoSeed() {
       { id: categoryIds.insurance, companyId, name: 'Seguro Demo V2', type: 'EXPENSE', active: true },
       { id: categoryIds.documentation, companyId, name: 'Documentação Demo V2', type: 'EXPENSE', active: true },
       { id: categoryIds.tracker, companyId, name: 'Rastreador Demo V2', type: 'EXPENSE', active: true },
+      { id: categoryIds.trafficFineIncome, companyId, name: 'Multas cobradas de motoristas Demo V2', type: 'INCOME', active: true },
+      { id: categoryIds.trafficFineExpense, companyId, name: 'Multas de trânsito Demo V2', type: 'EXPENSE', active: true },
     ]).onConflictDoNothing();
 
     for (const categoryId of Object.values(categoryIds)) {
@@ -901,6 +910,325 @@ export async function runV2DemoSeed() {
         })
         .where(and(eq(vehicleKmRecords.id, km.id), eq(vehicleKmRecords.companyId, companyId)));
     }
+
+    const maintenanceRows = [
+      {
+        id: prefix + '-maintenance-01',
+        companyId,
+        vehicleId: vehicleRows[6].id,
+        type: 'PREVENTIVE',
+        status: 'IN_PROGRESS',
+        cost: money(650),
+        date: isoTimestamp(addDays(now, -2)),
+        description: 'Revisão preventiva 40.000 km - óleo, filtros e inspeção geral.',
+      },
+      {
+        id: prefix + '-maintenance-02',
+        companyId,
+        vehicleId: vehicleRows[4].id,
+        type: 'CORRECTIVE',
+        status: 'COMPLETED',
+        cost: money(380),
+        date: isoTimestamp(addDays(now, -18)),
+        description: 'Troca de pastilhas de freio dianteiras - Demo V2.',
+      },
+      {
+        id: prefix + '-maintenance-03',
+        companyId,
+        vehicleId: vehicleRows[5].id,
+        type: 'PREVENTIVE',
+        status: 'SCHEDULED',
+        cost: money(520),
+        date: isoTimestamp(addDays(now, 7)),
+        description: 'Revisão programada 70.000 km - Demo V2.',
+      },
+    ];
+
+    await tx.insert(maintenance).values(maintenanceRows).onConflictDoNothing();
+    for (const row of maintenanceRows) {
+      await tx
+        .update(maintenance)
+        .set({
+          vehicleId: row.vehicleId,
+          type: row.type,
+          status: row.status,
+          cost: row.cost,
+          date: row.date,
+          description: row.description,
+        })
+        .where(and(eq(maintenance.id, row.id), eq(maintenance.companyId, companyId)));
+    }
+
+    const trackerRows = vehicleRows.slice(0, 6).map((vehicle, index) => ({
+      id: prefix + '-tracker-' + String(index + 1).padStart(2, '0'),
+      companyId,
+      vehicleId: vehicle.id,
+      serialNumber: 'TRK-DEMO-' + String(index + 1).padStart(4, '0'),
+      equipmentModel: 'Tracker V2',
+      imei: '3599999900000' + String(index + 1).padStart(2, '0'),
+      chipCarrier: index % 2 === 0 ? 'Vivo' : 'Claro',
+      chipNumber: '1199000' + String(1000 + index),
+      monthlyCost: money(89.9 + index * 5),
+      installationDate: isoDate(addDays(now, -120 + index * 5)),
+      supplierId: prefix + '-supplier-tracker',
+      providerName: 'Rastreamento Demo V2',
+      providerContact: '(11) 4000-0000',
+      portalUrl: 'https://example.invalid/rastreamento-v2',
+      status: index === 5 ? 'INACTIVE' : 'ACTIVE',
+      notes: 'Rastreador fictício para homologação.',
+      lastPing: index === 5 ? null : isoTimestamp(addDays(now, 0)),
+      createdBy: createdById,
+    }));
+
+    await tx.insert(trackers).values(trackerRows).onConflictDoNothing();
+    for (const row of trackerRows) {
+      await tx
+        .update(trackers)
+        .set({
+          vehicleId: row.vehicleId,
+          serialNumber: row.serialNumber,
+          equipmentModel: row.equipmentModel,
+          imei: row.imei,
+          chipCarrier: row.chipCarrier,
+          chipNumber: row.chipNumber,
+          monthlyCost: row.monthlyCost,
+          installationDate: row.installationDate,
+          supplierId: row.supplierId,
+          providerName: row.providerName,
+          providerContact: row.providerContact,
+          portalUrl: row.portalUrl,
+          status: row.status,
+          notes: row.notes,
+          lastPing: row.lastPing,
+          createdBy: createdById,
+        })
+        .where(and(eq(trackers.id, row.id), eq(trackers.companyId, companyId)));
+    }
+
+    const inspectionRows = [
+      {
+        id: prefix + '-inspection-checkout-01',
+        companyId,
+        vehicleId: vehicleRows[0].id,
+        driverId: driverRows[0].id,
+        contractId: contractRows[0].id,
+        inspectionType: 'CHECK_OUT',
+        inspectionDate: isoTimestamp(addDays(now, -45)),
+        odometer: vehicleRows[0].currentKm - 3200,
+        fuelLevel: 100,
+        checklist: {
+          tires: { condition: 'OK', brand: 'Goodyear', model: 'EfficientGrip' },
+          battery: { condition: 'OK', brand: 'Moura', model: 'M60GD' },
+          body: 'OK',
+          lights: 'OK',
+        },
+        notes: 'Vistoria fictícia de saída do contrato.',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-inspection-checkin-02',
+        companyId,
+        vehicleId: vehicleRows[1].id,
+        driverId: driverRows[1].id,
+        contractId: contractRows[1].id,
+        inspectionType: 'CHECK_IN',
+        inspectionDate: isoTimestamp(addDays(now, -3)),
+        odometer: vehicleRows[1].currentKm,
+        fuelLevel: 50,
+        checklist: {
+          tires: { condition: 'ATTENTION', brand: 'Pirelli', model: 'Cinturato P1' },
+          battery: { condition: 'OK', brand: 'Heliar', model: 'HG60DD' },
+          body: 'PEQUENO_RISCO_PORTA_DIREITA',
+          lights: 'OK',
+        },
+        notes: 'Vistoria fictícia de retorno com item para acompanhamento.',
+        createdBy: createdById,
+      },
+    ];
+
+    await tx.insert(vehicleInspections).values(inspectionRows).onConflictDoNothing();
+    for (const row of inspectionRows) {
+      await tx
+        .update(vehicleInspections)
+        .set({
+          vehicleId: row.vehicleId,
+          driverId: row.driverId,
+          contractId: row.contractId,
+          inspectionType: row.inspectionType,
+          inspectionDate: row.inspectionDate,
+          odometer: row.odometer,
+          fuelLevel: row.fuelLevel,
+          checklist: row.checklist,
+          notes: row.notes,
+          createdBy: createdById,
+        })
+        .where(and(eq(vehicleInspections.id, row.id), eq(vehicleInspections.companyId, companyId)));
+    }
+
+    const documentRows = [
+      {
+        id: prefix + '-document-crlv-01',
+        companyId,
+        subjectType: 'VEHICLE',
+        subjectId: vehicleRows[0].id,
+        documentType: 'CRLV',
+        documentNumber: 'CRLV-DEMO-001',
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -180)),
+        expirationDate: isoDate(addDays(now, 120)),
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'CRLV fictício válido para homologação.',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-crlv-alert-02',
+        companyId,
+        subjectType: 'VEHICLE',
+        subjectId: vehicleRows[1].id,
+        documentType: 'CRLV',
+        documentNumber: 'CRLV-DEMO-002',
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -330)),
+        expirationDate: isoDate(addDays(now, 12)),
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'CRLV fictício próximo do vencimento.',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-cnh-01',
+        companyId,
+        subjectType: 'DRIVER',
+        subjectId: driverRows[0].id,
+        documentType: 'CNH',
+        documentNumber: driverRows[0].cnh,
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -900)),
+        expirationDate: isoDate(addDays(now, 6)),
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'CNH fictícia em faixa crítica de vencimento.',
+        createdBy: createdById,
+      },
+    ];
+
+    await tx.insert(documents).values(documentRows).onConflictDoNothing();
+    for (const row of documentRows) {
+      await tx
+        .update(documents)
+        .set({
+          subjectType: row.subjectType,
+          subjectId: row.subjectId,
+          documentType: row.documentType,
+          documentNumber: row.documentNumber,
+          referenceYear: row.referenceYear,
+          issueDate: row.issueDate,
+          expirationDate: row.expirationDate,
+          versionNumber: row.versionNumber,
+          isCurrent: row.isCurrent,
+          isArchived: row.isArchived,
+          cost: row.cost,
+          notes: row.notes,
+          createdBy: createdById,
+        })
+        .where(and(eq(documents.id, row.id), eq(documents.companyId, companyId)));
+    }
+
+    const ticketRow = {
+      id: prefix + '-traffic-ticket-01',
+      companyId,
+      vehicleId: vehicleRows[0].id,
+      vehiclePlate: vehicleRows[0].plate,
+      driverId: driverRows[0].id,
+      autoNumber: 'AIT-DEMO-' + companyKey(companyId).toUpperCase(),
+      amount: money(195.23),
+      issueDate: isoTimestamp(addDays(now, -11)),
+      status: 'OPEN',
+    };
+
+    await tx.insert(trafficTickets).values(ticketRow).onConflictDoNothing();
+    await tx
+      .update(trafficTickets)
+      .set(ticketRow)
+      .where(and(eq(trafficTickets.id, ticketRow.id), eq(trafficTickets.companyId, companyId)));
+
+    const ticketReceivable = {
+      id: prefix + '-receivable-traffic-ticket-01',
+      companyId,
+      originType: 'TRAFFIC_TICKET',
+      originId: ticketRow.id,
+      vehicleId: ticketRow.vehicleId,
+      driverId: ticketRow.driverId,
+      contractId: contractRows[0].id,
+      categoryId: categoryIds.trafficFineIncome,
+      description: 'Multa de trânsito AIT ' + ticketRow.autoNumber + ' - valor nominal',
+      originalAmount: ticketRow.amount,
+      discountAmount: money(0),
+      fineAmount: money(0),
+      interestAmount: money(0),
+      additionalAmount: money(0),
+      updatedAmount: ticketRow.amount,
+      paidAmount: money(0),
+      balanceAmount: ticketRow.amount,
+      dueDate: isoTimestamp(addDays(now, 15)),
+      competenceDate: ticketRow.issueDate,
+      status: 'PENDING',
+      installmentGroupId: prefix + '-traffic-ticket-cr-group',
+      installmentNumber: 1,
+      totalInstallments: 1,
+      periodRef: 'traffic-ticket-' + ticketRow.autoNumber,
+      idempotencyKey: prefix + ':traffic-ticket:cr:01',
+      notes: 'CR fictício do motorista pelo valor nominal da multa.',
+    };
+
+    await tx.insert(accountReceivables).values(ticketReceivable).onConflictDoNothing();
+    await tx
+      .update(accountReceivables)
+      .set(ticketReceivable)
+      .where(and(eq(accountReceivables.id, ticketReceivable.id), eq(accountReceivables.companyId, companyId)));
+
+    const ticketPayable = {
+      id: prefix + '-payable-traffic-ticket-01',
+      companyId,
+      originType: 'TRAFFIC_TICKET',
+      originId: ticketRow.id,
+      vehicleId: ticketRow.vehicleId,
+      driverId: ticketRow.driverId,
+      contractId: contractRows[0].id,
+      categoryId: categoryIds.trafficFineExpense,
+      description: 'Pagamento ao órgão - multa AIT ' + ticketRow.autoNumber,
+      originalAmount: ticketRow.amount,
+      discountAmount: money(0),
+      fineAmount: money(0),
+      interestAmount: money(0),
+      additionalAmount: money(0),
+      updatedAmount: ticketRow.amount,
+      paidAmount: money(0),
+      balanceAmount: ticketRow.amount,
+      dueDate: isoTimestamp(addDays(now, 10)),
+      competenceDate: ticketRow.issueDate,
+      status: 'PENDING',
+      supplierId: prefix + '-supplier-traffic-authority',
+      installmentGroupId: prefix + '-traffic-ticket-cp-group',
+      installmentNumber: 1,
+      totalInstallments: 1,
+      periodRef: 'traffic-ticket-' + ticketRow.autoNumber,
+      idempotencyKey: prefix + ':traffic-ticket:cp:01',
+      notes: 'CP fictício do órgão de trânsito pelo valor nominal da multa.',
+    };
+
+    await tx.insert(accountPayables).values(ticketPayable).onConflictDoNothing();
+    await tx
+      .update(accountPayables)
+      .set(ticketPayable)
+      .where(and(eq(accountPayables.id, ticketPayable.id), eq(accountPayables.companyId, companyId)));
   });
 
   console.log(JSON.stringify({
@@ -910,8 +1238,13 @@ export async function runV2DemoSeed() {
     vehicles: vehicleRows.length,
     drivers: driverRows.length,
     contracts: contractIds.length,
-    receivables: 8,
-    payables: 4,
+    receivables: 9,
+    payables: 5,
+    maintenance: 3,
+    trackers: 6,
+    inspections: 2,
+    documents: 3,
+    trafficTickets: 1,
     target: process.env.V2_DEMO_SEED_TARGET,
   }, null, 2));
 }
