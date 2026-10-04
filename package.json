@@ -24,7 +24,8 @@
     "start": "node dist/server.mjs",
     "db:migrate": "node migrate_db.cjs",
     "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:seed:v2-demo": "tsx src/db/v2DemoSeed.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.5",
