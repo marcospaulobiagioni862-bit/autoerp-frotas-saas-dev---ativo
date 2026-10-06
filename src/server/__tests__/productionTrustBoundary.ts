@@ -200,7 +200,13 @@ async function main(): Promise<void> {
   assert(tenantAuthority.includes("entityName: 'TenantOperationalConfig'"), 'SECURITY-2Q2 mutation lacks atomic audit evidence');
   assert(tenantRoutes.includes("app.get('/api/admin/tenant-profile'"), 'SECURITY-2Q2 GET route missing');
   assert(tenantRoutes.includes("app.patch('/api/admin/tenant-profile'"), 'SECURITY-2Q2 PATCH route missing');
-  assert(tenantRoutes.includes("new Set(['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit'])"), 'SECURITY-2Q2 PATCH allowlist changed');
+  // logoUrl entrou no AUTOERP-33, que parametrizou a marca do cliente pelo
+  // TenantProfile. Esta invariante e um fio-de-armar deliberado: mudar a
+  // allowlist do PATCH exige atualizar esta linha de proposito, para que
+  // ninguem amplie a superficie de escrita do perfil da empresa sem que apareca
+  // numa revisao. Ao acrescentar campo aqui, confira que ele e de fato
+  // configuracao da empresa e nao dado que exige autoridade propria.
+  assert(tenantRoutes.includes("new Set(['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit', 'logoUrl'])"), 'SECURITY-2Q2 PATCH allowlist changed');
   assert(tenantClient.includes("credentials: 'include'"), 'SECURITY-2Q2 client must use authenticated cookie transport');
   assert(tenantClient.includes("fetch('/api/admin/tenant-profile'"), 'SECURITY-2Q2 client route missing');
   assert(tenantView.includes('Documento da empresa somente leitura'), 'SECURITY-2Q2 immutable document UI guard missing');
