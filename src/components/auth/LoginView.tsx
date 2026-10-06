@@ -51,7 +51,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
               inputMode="text"
               autoCapitalize="none"
               spellCheck={false}
-              placeholder="Ex.: MOVEFLEX ou 22791551000153"
+              placeholder="Ex.: Minha Locadora ou 00.000.000/0001-00"
               required
               disabled={isSubmitting}
               className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"

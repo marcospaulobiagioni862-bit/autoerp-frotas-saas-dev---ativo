@@ -288,7 +288,7 @@ export class SessionLoginTestRunner {
       for (const requiredSource of [
         'Empresa ou CNPJ',
         'inputMode="text"',
-        'MOVEFLEX ou 22791551000153',
+        'Minha Locadora ou 00.000.000/0001-00',
       ]) {
         if (!loginViewSource.includes(requiredSource)) {
           throw new Error(`Company alias login UI invariant missing: ${requiredSource}`);

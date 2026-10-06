@@ -16,6 +16,7 @@ function formFrom(profile: TenantProfileDto): TenantProfileUpdateInput {
     currency: 'BRL',
     maxVehiclesLimit: profile.maxVehiclesLimit,
     maxDriversLimit: profile.maxDriversLimit,
+    logoUrl: profile.logoUrl || '',
   };
 }
 
@@ -48,7 +49,7 @@ export const ProductionTenantProfileView: React.FC = () => {
     void load();
   }, []);
 
-  const setText = (field: 'companyName' | 'timezone', value: string) => {
+  const setText = (field: 'companyName' | 'timezone' | 'logoUrl', value: string) => {
     setForm((current) => current ? { ...current, [field]: value } : current);
     setMessage(null);
   };
@@ -66,6 +67,7 @@ export const ProductionTenantProfileView: React.FC = () => {
     form &&
     form.companyName.trim().length >= 2 && form.companyName.trim().length <= 160 &&
     form.timezone.trim().length > 0 && form.timezone.trim().length <= 100 &&
+    (!form.logoUrl || form.logoUrl.trim().length <= 2000000) &&
     Number.isInteger(form.maxVehiclesLimit) && form.maxVehiclesLimit >= 0 && form.maxVehiclesLimit <= 100000 &&
     Number.isInteger(form.maxDriversLimit) && form.maxDriversLimit >= 0 && form.maxDriversLimit <= 200000
   );
@@ -75,7 +77,8 @@ export const ProductionTenantProfileView: React.FC = () => {
     profile.timezone !== form.timezone.trim() ||
     profile.currency !== form.currency ||
     profile.maxVehiclesLimit !== form.maxVehiclesLimit ||
-    profile.maxDriversLimit !== form.maxDriversLimit
+    profile.maxDriversLimit !== form.maxDriversLimit ||
+    (profile.logoUrl || '') !== (form.logoUrl || '').trim()
   ));
 
   const save = async () => {
@@ -90,6 +93,7 @@ export const ProductionTenantProfileView: React.FC = () => {
         currency: 'BRL',
         maxVehiclesLimit: form.maxVehiclesLimit,
         maxDriversLimit: form.maxDriversLimit,
+        logoUrl: form.logoUrl ? form.logoUrl.trim() : null,
       });
       setProfile(updated);
       setForm(formFrom(updated));
@@ -209,6 +213,33 @@ export const ProductionTenantProfileView: React.FC = () => {
                 onChange={(event) => setLimit('maxDriversLimit', event.target.value)}
               />
             </label>
+
+            <div className="md:col-span-2 space-y-2">
+              <label className="space-y-1.5 block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logotipo da empresa (URL ou Data URL)</span>
+                <input
+                  className={inputClass}
+                  value={form.logoUrl || ''}
+                  maxLength={2000000}
+                  onChange={(event) => setText('logoUrl', event.target.value)}
+                  placeholder="https://exemplo.com/logo.png ou data:image/jpeg;base64,..."
+                />
+                <span className="block text-xs text-slate-500">
+                  URL da imagem ou string Base64 (JPEG/PNG) da marca que será exibida nos cabeçalhos e documentos.
+                </span>
+              </label>
+              {form.logoUrl && form.logoUrl.trim() && (
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                  <span className="text-xs text-slate-500">Prévia do logo:</span>
+                  <img
+                    src={form.logoUrl.trim()}
+                    alt="Prévia do logo da empresa"
+                    className="h-10 max-w-[160px] object-contain rounded border border-slate-200 bg-white p-1 dark:border-slate-700"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
 
             <div className="md:col-span-2 flex flex-col gap-3 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-slate-500">

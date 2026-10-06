@@ -79,6 +79,41 @@ export class TenantProfileClientTestRunner {
       if (!failed) throw new Error('Unsupported tenant profile currency must fail closed');
     });
 
+    tests.push(async () => {
+      let sent: unknown;
+      globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        sent = init?.body ? JSON.parse(String(init.body)) : undefined;
+        return new Response(JSON.stringify({ item: { ...profile, logoUrl: 'https://example.com/logo.png' } }), { status: 200 });
+      }) as typeof fetch;
+      const result = await TenantProfileClient.update({
+        companyName: 'MoveFlex Locação',
+        timezone: 'America/Sao_Paulo',
+        currency: 'BRL',
+        maxVehiclesLimit: 750,
+        maxDriversLimit: 1500,
+        logoUrl: 'https://example.com/logo.png',
+      });
+      if (result.logoUrl !== 'https://example.com/logo.png') {
+        throw new Error('Tenant profile update logoUrl failed');
+      }
+      const body = sent as Record<string, unknown>;
+      if (body.logoUrl !== 'https://example.com/logo.png') {
+        throw new Error('Tenant profile PATCH must include logoUrl when provided');
+      }
+    });
+
+    tests.push(async () => {
+      let url = '';
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        url = String(input);
+        return new Response(JSON.stringify({ item: { companyId: 'c1', companyName: 'Locadora', document: '123', logoUrl: 'logo.jpg' } }), { status: 200 });
+      }) as typeof fetch;
+      const branding = await TenantProfileClient.getBranding();
+      if (url !== '/api/tenant/branding' || branding.companyName !== 'Locadora' || branding.logoUrl !== 'logo.jpg') {
+        throw new Error('Tenant branding transport failed');
+      }
+    });
+
     try {
       for (const test of tests) {
         await test();

@@ -28,6 +28,7 @@ export interface TenantProfile {
   currency: string;
   maxVehiclesLimit: number;
   maxDriversLimit: number;
+  logoUrl: string | null;
   updatedAt: string;
   updatedBy: string;
 }
@@ -38,6 +39,7 @@ export interface TenantProfileUpdate {
   currency?: unknown;
   maxVehiclesLimit?: unknown;
   maxDriversLimit?: unknown;
+  logoUrl?: unknown;
 }
 
 export class TenantProfileForbiddenError extends Error {}
@@ -86,6 +88,15 @@ function limit(value: unknown, maximum: number): number {
   return value;
 }
 
+function optionalLogoUrl(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') throw new TenantProfileValidationError();
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  if (trimmed.length > 2_000_000) throw new TenantProfileValidationError();
+  return trimmed;
+}
+
 function sanitize(company: any, config: any): TenantProfile {
   return {
     companyId: company.id,
@@ -95,6 +106,7 @@ function sanitize(company: any, config: any): TenantProfile {
     currency: config.currency,
     maxVehiclesLimit: config.maxVehiclesLimit,
     maxDriversLimit: config.maxDriversLimit,
+    logoUrl: config.logoUrl || null,
     updatedAt: config.updatedAt,
     updatedBy: config.updatedBy,
   };
@@ -109,6 +121,7 @@ async function ensureConfig(context: any, actor: TenantProfileActor, company: an
     currency: DEFAULT_CURRENCY,
     maxVehiclesLimit: DEFAULT_MAX_VEHICLES_LIMIT,
     maxDriversLimit: DEFAULT_MAX_DRIVERS_LIMIT,
+    logoUrl: null,
     updatedAt: now,
     updatedBy: actor.userId,
   }).onConflictDoNothing({ target: tenantOperationalConfigs.companyId }).returning();
@@ -156,7 +169,7 @@ export class TenantProfileAuthority {
   static async update(actor: TenantProfileActor, input: TenantProfileUpdate): Promise<TenantProfile> {
     assertAdmin(actor);
     const keys = Object.keys(input);
-    if (keys.length === 0 || !keys.every((key) => ['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit'].includes(key))) {
+    if (keys.length === 0 || !keys.every((key) => ['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit', 'logoUrl'].includes(key))) {
       throw new TenantProfileValidationError();
     }
     const parsed = {
@@ -165,6 +178,7 @@ export class TenantProfileAuthority {
       currency: input.currency === undefined ? undefined : currency(input.currency),
       maxVehiclesLimit: input.maxVehiclesLimit === undefined ? undefined : limit(input.maxVehiclesLimit, MAX_VEHICLES_LIMIT),
       maxDriversLimit: input.maxDriversLimit === undefined ? undefined : limit(input.maxDriversLimit, MAX_DRIVERS_LIMIT),
+      logoUrl: input.logoUrl === undefined ? undefined : optionalLogoUrl(input.logoUrl),
     };
 
     return await UnitOfWork.run(actor.companyId, async (context: any) => {
@@ -185,12 +199,14 @@ export class TenantProfileAuthority {
         currency: parsed.currency ?? config.currency,
         maxVehiclesLimit: parsed.maxVehiclesLimit ?? config.maxVehiclesLimit,
         maxDriversLimit: parsed.maxDriversLimit ?? config.maxDriversLimit,
+        logoUrl: parsed.logoUrl !== undefined ? parsed.logoUrl : (config.logoUrl || null),
       };
       const previous = sanitize(company, config);
       if (
         candidate.companyName === previous.companyName && candidate.timezone === previous.timezone &&
         candidate.currency === previous.currency && candidate.maxVehiclesLimit === previous.maxVehiclesLimit &&
-        candidate.maxDriversLimit === previous.maxDriversLimit
+        candidate.maxDriversLimit === previous.maxDriversLimit &&
+        candidate.logoUrl === previous.logoUrl
       ) return previous;
 
       const now = new Date().toISOString();
@@ -203,6 +219,7 @@ export class TenantProfileAuthority {
         currency: candidate.currency,
         maxVehiclesLimit: candidate.maxVehiclesLimit,
         maxDriversLimit: candidate.maxDriversLimit,
+        logoUrl: candidate.logoUrl,
         updatedAt: now,
         updatedBy: actor.userId,
       }).where(eq(tenantOperationalConfigs.companyId, actor.companyId)).returning();
@@ -221,6 +238,7 @@ export class TenantProfileAuthority {
           currency: previous.currency,
           maxVehiclesLimit: previous.maxVehiclesLimit,
           maxDriversLimit: previous.maxDriversLimit,
+          logoUrl: previous.logoUrl,
         }),
         newState: JSON.stringify({
           companyName: updated.companyName,
@@ -228,12 +246,32 @@ export class TenantProfileAuthority {
           currency: updated.currency,
           maxVehiclesLimit: updated.maxVehiclesLimit,
           maxDriversLimit: updated.maxDriversLimit,
+          logoUrl: updated.logoUrl,
         }),
         userId: actor.userId,
         userName: actor.name,
         timestamp: now,
       });
       return updated;
+    });
+  }
+
+  static async getBranding(companyId: string): Promise<{ companyId: string; companyName: string; document: string; logoUrl: string | null }> {
+    return await UnitOfWork.run(companyId, async (context: any) => {
+      const tx = context.getRawTransaction();
+      const companyRows = await tx.select().from(companies)
+        .where(and(eq(companies.id, companyId), eq(companies.status, 'ACTIVE'))).limit(1);
+      const company = companyRows[0];
+      if (!company) throw new TenantProfileNotFoundError();
+      const configRows = await tx.select().from(tenantOperationalConfigs)
+        .where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+      const config = configRows[0];
+      return {
+        companyId: company.id,
+        companyName: company.name,
+        document: company.document || '',
+        logoUrl: config?.logoUrl || null,
+      };
     });
   }
 }

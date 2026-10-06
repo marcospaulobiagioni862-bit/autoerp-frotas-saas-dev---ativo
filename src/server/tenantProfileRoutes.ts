@@ -34,7 +34,7 @@ function updateBody(value: unknown): Record<string, unknown> {
     throw new TenantProfileValidationError();
   }
   const body = value as Record<string, unknown>;
-  const allowed = new Set(['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit']);
+  const allowed = new Set(['companyName', 'timezone', 'currency', 'maxVehiclesLimit', 'maxDriversLimit', 'logoUrl']);
   if (Object.keys(body).length === 0 || !Object.keys(body).every((key) => allowed.has(key))) {
     throw new TenantProfileValidationError();
   }
@@ -59,6 +59,19 @@ function sendError(res: Response, error: unknown): void {
 }
 
 export function registerTenantProfileRoutes(app: Express): void {
+  app.get('/api/tenant/branding', async (req, res) => {
+    const item = principal(req);
+    if (!item) {
+      res.status(401).json({ error: 'Unauthorized: Authentication required' });
+      return;
+    }
+    try {
+      res.json({ item: await TenantProfileAuthority.getBranding(item.companyId) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
   app.get('/api/admin/tenant-profile', async (req, res) => {
     const item = requireAdmin(req, res);
     if (!item) return;

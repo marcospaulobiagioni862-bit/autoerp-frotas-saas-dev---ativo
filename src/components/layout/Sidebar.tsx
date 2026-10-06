@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Car,
@@ -12,6 +12,7 @@ import {
   ChevronRight,
   X,
 } from 'lucide-react';
+import { TenantProfileClient, type TenantBrandingDto } from '../../api/tenantProfileClient';
 
 export type NavigationTab =
   | 'dashboard'
@@ -53,6 +54,7 @@ interface SidebarProps {
   pendingReceivablesCount?: number;
   pendingPayablesCount?: number;
   pendingPendingsCount?: number;
+  companyName?: string;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -62,9 +64,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   pendingReceivablesCount = 0,
   pendingPayablesCount = 0,
+  companyName,
   isMobileOpen = false,
   onCloseMobile,
 }) => {
+  const [branding, setBranding] = useState<TenantBrandingDto | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void TenantProfileClient.getBranding()
+      .then((data) => { if (!cancelled) setBranding(data); })
+      .catch(() => { /* fail closed: fallback below */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  const displayName = companyName || branding?.companyName || 'AutoERP';
   const categories = [
     {
       title: 'INÍCIO',
@@ -107,9 +121,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarContent = (
     <aside className="w-64 h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
       <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
-        <div>
-          <span className="text-sm font-black tracking-wide text-white block">MoveFlex</span>
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 block">AutoERP V2</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          {branding?.logoUrl && (
+            <img
+              src={branding.logoUrl}
+              alt={displayName}
+              className="h-7 max-w-[70px] object-contain rounded bg-white/10 p-0.5 shrink-0"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          <div className="min-w-0">
+            <span className="text-sm font-black tracking-wide text-white block truncate">{displayName}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 block">AutoERP V2</span>
+          </div>
         </div>
         {onCloseMobile && (
           <button

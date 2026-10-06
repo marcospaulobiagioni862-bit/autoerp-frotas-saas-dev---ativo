@@ -25,7 +25,9 @@
     "db:migrate": "node migrate_db.cjs",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:seed:v2-demo": "tsx src/db/runV2DemoSeed.ts"
+    "db:seed:v2-demo": "tsx src/db/runV2DemoSeed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.5",
@@ -57,7 +59,8 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": "22.x"
