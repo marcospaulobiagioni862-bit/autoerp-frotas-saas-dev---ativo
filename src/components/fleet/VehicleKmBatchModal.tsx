@@ -41,8 +41,8 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
   const validationError = (): string | null => {
     if (entries.length === 0) return 'Informe a nova quilometragem de pelo menos um veículo.';
     for (const { vehicle, kmValue } of entries) {
-      if (!Number.isInteger(kmValue) || kmValue <= vehicle.currentKm) {
-        return `A quilometragem de ${vehicle.plate} deve ser um número inteiro maior que ${vehicle.currentKm.toLocaleString('pt-BR')} km.`;
+      if (!Number.isInteger(kmValue) || kmValue < vehicle.currentKm) {
+        return `A quilometragem de ${vehicle.plate} deve ser um número inteiro maior ou igual a ${vehicle.currentKm.toLocaleString('pt-BR')} km.`;
       }
     }
     return null;
@@ -111,7 +111,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
                     <input
                       aria-label={`Nova KM de ${vehicle.plate}`}
                       type="number"
-                      min={vehicle.currentKm + 1}
+                      min={vehicle.currentKm}
                       step="1"
                       value={values[vehicle.id] || ''}
                       onChange={(event) => setValues((current) => ({ ...current, [vehicle.id]: event.target.value }))}

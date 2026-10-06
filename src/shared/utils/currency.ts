@@ -29,6 +29,36 @@ export function parseCurrencyInput(value: string): number {
   return isNaN(num) ? 0 : roundCurrency(num);
 }
 
+/** Editable decimal draft: keep empty input and cents, without forcing a leading zero. */
+export function normalizeCurrencyDraft(value: string): string | null {
+  const draft = value.trim();
+  if (!/^\d*(?:[.,]\d{0,2})?$/.test(draft)) return null;
+  return draft.replace(/^0+(?=\d)/, '').replace('.', ',');
+}
+
+export function parseCurrencyDraft(value: string): number {
+  const draft = normalizeCurrencyDraft(value);
+  if (draft === null || !/\d/.test(draft)) return NaN;
+  return Number(draft.replace(',', '.'));
+}
+
+/**
+ * Currency mask for operational money fields.
+ * Digits are treated as cents so operators do not need a decimal separator:
+ * 500 -> 5,00; 200 -> 2,00; 1000 -> 10,00.
+ * Pasted values with separators also normalize correctly (5,00 -> 5,00).
+ */
+export function normalizeCurrencyCentsDraft(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+
+  const significant = digits.replace(/^0+(?=\d)/, '');
+  const padded = significant.padStart(3, '0');
+  const integerPart = padded.slice(0, -2).replace(/^0+(?=\d)/, '') || '0';
+  const cents = padded.slice(-2);
+  return `${integerPart},${cents}`;
+}
+
 /**
  * Calculates late payment interest and fines based on explicit rates.
  * @param originalAmount Original obligation value

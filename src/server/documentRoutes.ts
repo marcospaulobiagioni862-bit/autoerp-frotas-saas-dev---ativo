@@ -1,3 +1,6 @@
+import { eq } from 'drizzle-orm';
+import { tenantOperationalConfigs } from '../db/schema';
+import { DEFAULT_DOCUMENT_ALERT_SETTINGS, validateDocumentAlertSettings } from '../shared/utils/documentAlertSettings';
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
@@ -271,6 +274,32 @@ async function createPayableIfRequested(
 }
 
 export function registerDocumentRoutes(app: Express): void {
+  app.get('/api/documents/alert-settings', async (req, res) => {
+    const principal = requirePrincipal(req, res, 'VIEW_DOCUMENT'); if (!principal) return;
+    try {
+      const settings = await UnitOfWork.run(principal.companyId, async context => {
+        const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Document settings persistence unavailable');
+        const rows = await tx.select({ redDays: tenantOperationalConfigs.documentRedDays, yellowDays: tenantOperationalConfigs.documentYellowDays }).from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, principal.companyId)).limit(1);
+        return rows[0] || DEFAULT_DOCUMENT_ALERT_SETTINGS;
+      });
+      res.json({ settings });
+    } catch (error) { sendError(res, error); }
+  });
+  app.put('/api/documents/alert-settings', async (req, res) => {
+    const principal = requirePrincipal(req, res, 'VIEW_DOCUMENT'); if (!principal) return;
+    if (!['ADMIN','MANAGER','OPERATIONAL_MANAGER'].includes(String(principal.role).toUpperCase())) { res.status(403).json({ error: 'Forbidden' }); return; }
+    try {
+      let settings; try { settings = validateDocumentAlertSettings(req.body); } catch { throw new DocumentValidationError(); }
+      await UnitOfWork.run(principal.companyId, async context => {
+        const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Document settings persistence unavailable');
+        const previous = await tx.select({ redDays: tenantOperationalConfigs.documentRedDays, yellowDays: tenantOperationalConfigs.documentYellowDays }).from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, principal.companyId)).limit(1);
+        const now = new Date().toISOString();
+        await tx.insert(tenantOperationalConfigs).values({ companyId: principal.companyId, updatedBy: principal.userId, updatedAt: now, documentRedDays: settings.redDays, documentYellowDays: settings.yellowDays }).onConflictDoUpdate({ target: tenantOperationalConfigs.companyId, set: { documentRedDays: settings.redDays, documentYellowDays: settings.yellowDays, updatedBy: principal.userId, updatedAt: now } });
+        await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'TenantOperationalConfig', entityId: principal.companyId, action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name, timestamp: now, previousState: JSON.stringify(previous[0] || DEFAULT_DOCUMENT_ALERT_SETTINGS), newState: JSON.stringify({ documentAlertSettings: settings }) });
+      });
+      res.json({ settings });
+    } catch (error) { sendError(res, error); }
+  });
   app.get('/api/documents/alerts', async (req: Request, res: Response) => {
     const principal = requirePrincipal(req, res, 'VIEW_DOCUMENT');
     if (!principal) return;

@@ -20,6 +20,8 @@ import { registerOpsHealthRoutes } from './src/server/opsHealthRoutes';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { db } from './src/db/index';
 import { companies, users } from './src/db/schema';
@@ -86,6 +88,10 @@ function sendFinanceCommandError(res: Response, error: unknown): void {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
+  if (message.startsWith('Quite primeiro a parcela ')) {
+    res.status(409).json({ error: message, code: 'PAYABLE_INSTALLMENT_ORDER' });
+    return;
+  }
   if (message.includes('não encontrada') || message.includes('não encontrado')) {
     res.status(404).json({ error: 'Not found' });
     return;
@@ -115,10 +121,95 @@ async function startServer() {
     assertBootstrapRuntimeConfiguration(process.env.AUTOERP_BOOTSTRAP_TOKEN, true);
   }
 
+  // Temporary operational bridge for isolated V2 homologation only.
+  // The seed itself carries additional target/branch/arming guards.
+  if (process.env.RUN_V2_DEMO_SEED_ON_BOOT === 'YES_V2_NON_PRODUCTION_ONLY') {
+    if (process.env.RENDER_GIT_BRANCH !== 'v2/core-simplified') {
+      throw new Error('FATAL: V2 demo boot seed refused outside v2/core-simplified.');
+    }
+
+    console.log('[v2-demo-seed] guarded boot execution requested');
+    const { runV2DemoSeed } = await import('./src/db/v2DemoSeed');
+    await runV2DemoSeed();
+    console.log('[v2-demo-seed] guarded boot execution completed');
+  }
+
   // Inject UOW for real ACID transactions in production
   FinanceEngine.uowRunner = UnitOfWork.run;
 
   const app = express();
+
+  // Render termina TLS num proxy na frente do servico. Sem isto, req.ip e o IP
+  // do proxy e TODOS os clientes caem no mesmo balde de rate limit.
+  app.set('trust proxy', 1);
+
+  // Cabecalhos de seguranca.
+  //
+  // O CSP comeca em REPORT-ONLY: a SPA nunca rodou sob uma politica, entao o
+  // navegador apenas RELATA o que teria bloqueado, sem quebrar nada. As
+  // violacoes chegam em POST /api/csp-report e sao logadas; quando o log
+  // estiver limpo, troca-se reportOnly para false.
+  //
+  // Cada excecao abaixo foi levantada no codigo, nao copiada de receita:
+  // - img-src e frame-src com blob: porque o preview de anexo e a foto do
+  //   motorista alimentam <img> e <iframe> com URL de URL.createObjectURL
+  //   (AttachmentList.tsx, DocumentPreviewModal.tsx, DriverProfilePhoto.tsx).
+  // - img-src com data: porque o logo do contrato e um JPEG em base64
+  //   embutido no codigo (moveflexBrand.ts).
+  // - style-src com unsafe-inline porque ha style={{...}} em 14 componentes,
+  //   e porque a biblioteca de animacao injeta <style> em tempo de execucao.
+  // - connect-src com viacep.com.br porque a busca de CEP do cadastro de
+  //   motorista e feita do NAVEGADOR (DriverFormModal.tsx). A chamada ao
+  //   Gemini NAO entra aqui: ela sai do servidor, nao do navegador.
+  // - script-src fica em 'self' puro: o index.html gerado pelo build nao tem
+  //   nenhum script inline (conferido em dist/index.html).
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        reportOnly: true,
+        useDefaults: false,
+        directives: {
+          'default-src': ["'self'"],
+          'base-uri': ["'self'"],
+          'connect-src': ["'self'", 'https://viacep.com.br'],
+          'font-src': ["'self'", 'data:'],
+          'form-action': ["'self'"],
+          'frame-ancestors': ["'self'"],
+          'frame-src': ["'self'", 'blob:'],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'object-src': ["'none'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'worker-src': ["'self'", 'blob:'],
+          'report-uri': ['/api/csp-report'],
+        },
+      },
+    })
+  );
+
+  // Protecao contra forca bruta no login. skipSuccessfulRequests faz com que
+  // apenas tentativas FALHAS contem para o limite, entao quem trabalha normal
+  // nunca e bloqueado; a janela so enche com senha errada.
+  const loginRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: { error: 'Muitas tentativas de login. Tente novamente em alguns minutos.' },
+  });
+
+  // Provisionamento do primeiro admin: mais restrito, porque em operacao
+  // normal este endpoint nao deveria ser chamado nenhuma vez.
+  const bootstrapRateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitas tentativas. Tente novamente mais tarde.' },
+  });
+
   app.use(requestCorrelationMiddleware);
   app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'private, no-store');
@@ -128,10 +219,50 @@ async function startServer() {
   app.use(express.json());
   const PORT = Number(process.env.PORT || 3000);
 
+  // Coletor de violacoes do CSP. Precisa ficar ANTES do guarda autenticado de
+  // /api, porque o navegador envia o relatorio sem sessao. Limite proprio para
+  // nao virar vetor de inundacao de log, e corpo limitado a 32kb.
+  const cspReportRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    standardHeaders: false,
+    legacyHeaders: false,
+  });
+  app.post(
+    '/api/csp-report',
+    cspReportRateLimiter,
+    express.json({
+      type: ['application/csp-report', 'application/reports+json', 'application/json'],
+      limit: '32kb',
+    }),
+    (req: Request, res: Response) => {
+      // Dois formatos chegam aqui. O report-uri classico manda um objeto
+      // {"csp-report": {...}} com chaves em kebab-case; a Reporting API nova
+      // manda um ARRAY de {body: {...}} com chaves em camelCase. Tratar so o
+      // primeiro fazia o segundo virar um registro todo nulo no log, que
+      // parece violacao sem informacao e engana quem le.
+      const payload = req.body ?? {};
+      const entries: Record<string, unknown>[] = Array.isArray(payload)
+        ? payload.map((item) => ((item as Record<string, unknown>)?.body ?? item) as Record<string, unknown>)
+        : [((payload as Record<string, unknown>)['csp-report'] ?? payload) as Record<string, unknown>];
+
+      for (const report of entries) {
+        const directive = report['violated-directive'] ?? report['effectiveDirective'] ?? null;
+        const blocked = report['blocked-uri'] ?? report['blockedURL'] ?? null;
+        const document = report['document-uri'] ?? report['documentURL'] ?? null;
+        if (directive === null && blocked === null && document === null) {
+          continue;
+        }
+        console.warn('AUTOERP_CSP_VIOLATION', JSON.stringify({ directive, blocked, document }));
+      }
+      res.status(204).end();
+    }
+  );
+
   // One-time first-admin credential provisioning. Disabled unless a strong
   // server-only bootstrap secret is explicitly configured. The endpoint never
   // creates a session; normal login is required after provisioning.
-  app.post('/api/auth/bootstrap', async (req: Request, res: Response) => {
+  app.post('/api/auth/bootstrap', bootstrapRateLimiter, async (req: Request, res: Response) => {
     try {
       const providedToken = typeof req.headers['x-autoerp-bootstrap-token'] === 'string'
         ? req.headers['x-autoerp-bootstrap-token']
@@ -251,7 +382,7 @@ async function startServer() {
   // Login must be reachable before the protected /api middleware. Tenant is
   // resolved from exactly one ACTIVE company by CNPJ/document or trade name;
   // users and credentials are read only after app.current_tenant is established.
-  app.post('/api/auth/login', async (req: Request, res: Response) => {
+  app.post('/api/auth/login', loginRateLimiter, async (req: Request, res: Response) => {
     try {
       const principal = await authenticatePasswordLogin(
         {
@@ -919,6 +1050,33 @@ async function startServer() {
     }
   });
 
+  app.get('/api/finance/receivables/:id/daily-interest-quote', async (req: Request, res: Response) => {
+    const principal = requireFinancePrincipal(req, res);
+    if (!principal) return;
+
+    const effectiveDate = typeof req.query.date === 'string' ? req.query.date : '';
+    const dailyInterestAmount = typeof req.query.daily === 'string' ? Number(req.query.daily) : NaN;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || !Number.isFinite(dailyInterestAmount) || dailyInterestAmount < 0) {
+      res.status(400).json({ error: 'Invalid daily interest quote request' });
+      return;
+    }
+
+    try {
+      const quote = await UnitOfWork.run(principal.companyId, async (txContext) =>
+        await SettlementService.quoteReceiptDailyInterest(
+          principal.companyId,
+          req.params.id,
+          effectiveDate,
+          dailyInterestAmount,
+          txContext
+        )
+      );
+      res.json({ quote });
+    } catch (error) {
+      sendFinanceCommandError(res, error);
+    }
+  });
+
   app.post('/api/finance/receivables/:id/receipt', async (req: Request, res: Response) => {
     const principal = requireFinancePrincipal(req, res);
     if (!principal) return;
@@ -934,6 +1092,12 @@ async function startServer() {
               financialAccountId: req.body?.financialAccountId,
               paymentMethodId: req.body?.paymentMethodId,
               paymentAmount: Number(req.body?.paymentAmount),
+              dailyInterestAmount: req.body?.dailyInterestAmount === undefined ? undefined : Number(req.body.dailyInterestAmount),
+              settleRemainingBalance: req.body?.settleRemainingBalance,
+              interestAmount: req.body?.interestAmount === undefined ? undefined : Number(req.body.interestAmount),
+              additionalAmount: req.body?.additionalAmount === undefined ? undefined : Number(req.body.additionalAmount),
+              fineAmount: req.body?.fineAmount === undefined ? undefined : Number(req.body.fineAmount),
+              discountAmount: req.body?.discountAmount === undefined ? undefined : Number(req.body.discountAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
               idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',
@@ -965,6 +1129,12 @@ async function startServer() {
               financialAccountId: req.body?.financialAccountId,
               paymentMethodId: req.body?.paymentMethodId,
               paymentAmount: Number(req.body?.paymentAmount),
+              dailyInterestAmount: req.body?.dailyInterestAmount === undefined ? undefined : Number(req.body.dailyInterestAmount),
+              settleRemainingBalance: req.body?.settleRemainingBalance,
+              interestAmount: req.body?.interestAmount === undefined ? undefined : Number(req.body.interestAmount),
+              additionalAmount: req.body?.additionalAmount === undefined ? undefined : Number(req.body.additionalAmount),
+              fineAmount: req.body?.fineAmount === undefined ? undefined : Number(req.body.fineAmount),
+              discountAmount: req.body?.discountAmount === undefined ? undefined : Number(req.body.discountAmount),
               paymentDate: req.body?.paymentDate,
               description: req.body?.description,
               idempotencyKey: typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : '',
@@ -1035,6 +1205,8 @@ async function startServer() {
               totalAmount: req.body?.totalAmount,
               dueDate: req.body?.dueDate,
               competenceDate: req.body?.competenceDate,
+              competenceMode: req.body?.competenceMode,
+              installmentCompetenceDates: req.body?.installmentCompetenceDates,
               installmentsCount: req.body?.installmentsCount,
               recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
               userId: principal.userId,
@@ -1099,6 +1271,8 @@ async function startServer() {
               totalAmount: req.body?.totalAmount,
               dueDate: req.body?.dueDate,
               competenceDate: req.body?.competenceDate,
+              competenceMode: req.body?.competenceMode,
+              installmentCompetenceDates: req.body?.installmentCompetenceDates,
               installmentsCount: req.body?.installmentsCount,
               recurrenceDaysInterval: req.body?.recurrenceDaysInterval,
               idempotencyKey: req.body?.idempotencyKey,
@@ -1142,15 +1316,6 @@ async function startServer() {
     }
   });
 
-  // DB Test endpoint
-  app.get('/api/db-test', async (_req: Request, res: Response) => {
-    try {
-      const result = await db.execute(sql`SELECT 1 as result`);
-      res.json({ status: 'ok', result: result.rows });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
-    }
-  });
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

@@ -13,6 +13,9 @@ export interface Tracker {
   installationDate: string;
   status: 'ACTIVE' | 'INACTIVE' | 'REMOVED';
   supplierId?: string;
+  providerName?: string;
+  providerContact?: string;
+  portalUrl?: string;
   notes?: string;
   lastPing?: string;
   createdBy?: string;

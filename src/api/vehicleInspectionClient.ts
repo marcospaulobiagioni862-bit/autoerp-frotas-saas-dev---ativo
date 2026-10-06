@@ -5,6 +5,9 @@ export type VehicleInspectionTechnicalKey=
   'tires'|'glassMirrors'|'bodyPaint'|'interior'|'dashboard'|'lighting'|
   'brakes'|'suspension'|'steering'|'engine'|'transmission'|'safety';
 export type VehicleInspectionTechnicalChecklist=Record<VehicleInspectionTechnicalKey,VehicleInspectionItemStatus>;
+export interface VehicleInspectionEquipmentSnapshot{
+  tireBrand:string;tireModel:string;tireMeasure:string;batteryBrand:string;batteryModel:string;
+}
 
 export interface VehicleInspectionChecklist{
   keyMain:boolean;keySpare:boolean;crlvPrinted:boolean;phoneHolder:boolean;jack:boolean;triangle:boolean;
@@ -13,12 +16,12 @@ export interface VehicleInspectionChecklist{
 export interface VehicleInspection{
   id:string;companyId:string;vehicleId:string;driverId?:string;contractId?:string;
   inspectionType:VehicleInspectionType;inspectionDate:string;odometer:number;fuelLevel:number;
-  checklist:VehicleInspectionChecklist;technicalChecklist?:VehicleInspectionTechnicalChecklist;result?:VehicleInspectionResult;
+  checklist:VehicleInspectionChecklist;technicalChecklist?:VehicleInspectionTechnicalChecklist;equipmentSnapshot?:VehicleInspectionEquipmentSnapshot;result?:VehicleInspectionResult;
   notes?:string;createdBy:string;createdAt:string;updatedAt:string;
 }
 export interface VehicleInspectionCreateInput{
   inspectionType:VehicleInspectionType;odometer:number;fuelLevel:number;checklist:VehicleInspectionChecklist;
-  technicalChecklist:VehicleInspectionTechnicalChecklist;notes?:string;driverId?:string;contractId?:string;
+  technicalChecklist:VehicleInspectionTechnicalChecklist;equipmentSnapshot:VehicleInspectionEquipmentSnapshot;notes?:string;driverId?:string;contractId?:string;
 }
 
 function record(value:unknown):Record<string,unknown>{
@@ -34,6 +37,12 @@ function validate(value:unknown):VehicleInspection{
     !item.checklist||typeof item.checklist!=='object'||Array.isArray(item.checklist)||
     typeof item.createdBy!=='string'||typeof item.createdAt!=='string'||typeof item.updatedAt!=='string'
   )throw new Error('Invalid vehicle inspection payload');
+  if(item.equipmentSnapshot!==undefined){
+    const equipment=record(item.equipmentSnapshot);
+    for(const key of ['tireBrand','tireModel','tireMeasure','batteryBrand','batteryModel'] as const){
+      if(typeof equipment[key]!=='string'||!String(equipment[key]).trim())throw new Error('Invalid vehicle inspection equipment snapshot');
+    }
+  }
   return item as unknown as VehicleInspection;
 }
 async function fail(response:Response):Promise<Error>{

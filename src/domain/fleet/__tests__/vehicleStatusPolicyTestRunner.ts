@@ -149,7 +149,12 @@ assert.match(archivedHistoryModal, /AttachmentList/, 'archived history must reta
 assert.doesNotMatch(archivedHistoryModal, /FileUpload|VehicleCrlvImportPanel|recordKm|markSold|archive\(/, 'archived history must not expose mutation controls');
 assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id'[\s\S]*if \(!item\) throw new VehicleNotFoundError/, 'archived vehicle detail must remain readable');
 assert.match(vehicleRoutes, /app\.get\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*if \(!vehicle\) throw new VehicleNotFoundError/, 'archived KM history must remain readable');
-assert.match(vehicleRoutes, /app\.post\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*vehicle\.isArchived/, 'archived vehicles must remain immutable for new KM writes');
+assert.match(vehicleRoutes, /app\.post\('\/api\/fleet\/vehicles\/:id\/km-records'[\s\S]*recordVehicleKm\(/, 'KM writes must delegate terminal protection to the central authority');
+assert.match(
+  readFileSync(new URL('../../../server/vehicleKmAuthority.ts', import.meta.url), 'utf8'),
+  /before\.isArchived \|\| \[VehicleStatus\.SOLD, VehicleStatus\.ARCHIVED\]\.includes\(before\.status\)/,
+  'archived and sold vehicles must remain immutable for new KM writes',
+);
 
 assert.match(lifecycleMigration, /FORCE ROW LEVEL SECURITY/, 'lifecycle persistence must enforce tenant RLS');
 assert.match(lifecycleMigration, /vehicle_lifecycle_events_tenant_policy/, 'lifecycle persistence must define tenant policy');

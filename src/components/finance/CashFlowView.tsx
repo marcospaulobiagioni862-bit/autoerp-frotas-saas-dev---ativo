@@ -3,20 +3,46 @@ import { Banknote, CalendarRange, TrendingDown, TrendingUp } from 'lucide-react'
 import { FinanceReportingClient } from '../../api/financeReportingClient';
 import { CashFlowReport } from '../../types/reports';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { formatDateBR } from '../../shared/utils/date';
 import { Card, Skeleton } from '../ui';
 
-function currentYearRange(): { start: string; end: string } {
-  const year = new Date().getFullYear();
-  return { start: `${year}-01-01`, end: `${year}-12-31` };
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function currentMonthRange(): { start: string; end: string } {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+  return { start: isoDate(start), end: isoDate(end) };
+}
+
+function rollingRange(days: number): { start: string; end: string } {
+  const start = new Date();
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + Math.max(0, days - 1));
+  return { start: isoDate(start), end: isoDate(end) };
 }
 
 export const CashFlowView: React.FC = () => {
-  const defaults = useMemo(currentYearRange, []);
+  const defaults = useMemo(currentMonthRange, []);
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [report, setReport] = useState<CashFlowReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const applyPreset = (preset: 'MONTH' | 30 | 60 | 90) => {
+    const next = preset === 'MONTH' ? currentMonthRange() : rollingRange(preset);
+    setStartDate(next.start);
+    setEndDate(next.end);
+  };
+
+  const projectedReceivable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedIncomes, 0) ?? 0;
+  const projectedPayable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedExpenses, 0) ?? 0;
+  const projectedClosing = report?.dailyFlows.length
+    ? report.dailyFlows[report.dailyFlows.length - 1].predictedClosingBalance
+    : report?.finalRealizedCashBalance ?? 0;
 
   useEffect(() => {
     let active = true;
@@ -63,7 +89,14 @@ export const CashFlowView: React.FC = () => {
         </div>
 
         <Card padding="sm">
+          <div className="mb-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Mês atual</button>
+            <button type="button" onClick={() => applyPreset(30)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">30 dias</button>
+            <button type="button" onClick={() => applyPreset(60)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">60 dias</button>
+            <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">90 dias</button>
+          </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
+            <span className="font-semibold text-slate-500">Personalizado</span>
             <CalendarRange className="w-4 h-4 text-slate-400" />
             <label className="text-slate-500">De</label>
             <input
@@ -106,7 +139,7 @@ export const CashFlowView: React.FC = () => {
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600">Entradas realizadas</span>
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
-              <strong className="block mt-1 text-xl font-mono text-emerald-700 dark:text-emerald-400">
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {formatCurrencyBRL(report.totalRealizedIncomes)}
               </strong>
             </Card>
@@ -115,7 +148,7 @@ export const CashFlowView: React.FC = () => {
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-red-600">Saídas realizadas</span>
                 <TrendingDown className="w-4 h-4 text-red-600" />
               </div>
-              <strong className="block mt-1 text-xl font-mono text-red-700 dark:text-red-400">
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-700 dark:text-red-400'}`}>
                 {formatCurrencyBRL(report.totalRealizedExpenses)}
               </strong>
             </Card>
@@ -127,13 +160,32 @@ export const CashFlowView: React.FC = () => {
             </Card>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <Card padding="sm">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">A receber no período</span>
+              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-emerald-700 dark:text-emerald-400'}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
+            </Card>
+            <Card padding="sm">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">A pagar no período</span>
+              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-700 dark:text-red-400'}`}>{formatCurrencyBRL(projectedPayable)}</strong>
+            </Card>
+            <Card padding="sm">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-600">Saldo projetado</span>
+              <strong className="mt-1 block font-mono text-lg text-blue-700 dark:text-blue-300">{formatCurrencyBRL(projectedClosing)}</strong>
+            </Card>
+            <Card padding="sm">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Resultado projetado</span>
+              <strong className="mt-1 block font-mono text-lg text-slate-900 dark:text-slate-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
+            </Card>
+          </div>
+
           <Card padding="md" className="overflow-hidden">
             <div className="flex items-center justify-between mb-4 gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Movimento diário e projeção</h3>
                 <p className="text-xs text-slate-500">Transferências internas não inflam entradas/saídas consolidadas.</p>
               </div>
-              <span className="text-xs font-mono text-slate-500 shrink-0">{report.periodStart} a {report.periodEnd}</span>
+              <span className="text-xs font-mono text-slate-500 shrink-0">{formatDateBR(report.periodStart)} a {formatDateBR(report.periodEnd)}</span>
             </div>
 
             <div className="overflow-x-auto">
@@ -155,18 +207,21 @@ export const CashFlowView: React.FC = () => {
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-slate-500">Sem movimentos ou títulos previstos no período.</td>
                     </tr>
-                  ) : report.dailyFlows.map((daily) => (
+                  ) : report.dailyFlows.map((daily) => {
+                    const overdueProjection = daily.date < new Date().toISOString().slice(0, 10) && (daily.predictedIncomes > 0 || daily.predictedExpenses > 0);
+                    return (
                     <tr key={daily.date} className="border-b border-slate-100 dark:border-slate-800/70 last:border-0">
-                      <td className="py-2.5 pr-3 font-mono text-slate-700 dark:text-slate-300">{daily.date}</td>
+                      <td className="py-2.5 pr-3 font-mono text-slate-700 dark:text-slate-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-rose-600">Vencidos</span>}</td>
                       <td className="py-2.5 px-3 text-right font-mono">{formatCurrencyBRL(daily.openingBalance)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600">{formatCurrencyBRL(daily.realizedIncomes)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-red-600">{formatCurrencyBRL(daily.realizedExpenses)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-slate-500' : 'text-emerald-600'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-slate-500' : 'text-red-600'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatCurrencyBRL(daily.closingBalance)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-emerald-600/80">{formatCurrencyBRL(daily.predictedIncomes)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono text-red-600/80">{formatCurrencyBRL(daily.predictedExpenses)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-slate-500' : 'text-emerald-600/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-slate-500' : 'text-red-600/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
                       <td className="py-2.5 pl-3 text-right font-mono font-bold text-blue-700 dark:text-blue-300">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

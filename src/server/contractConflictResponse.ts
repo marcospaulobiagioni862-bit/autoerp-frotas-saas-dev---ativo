@@ -22,7 +22,7 @@ const reasons: Record<string, [string, string]> = {
   'Contract must be active': ['CONTRACT_NOT_ACTIVE', 'Ative o contrato assinado antes desta cobrança.'],
   'Billing competence precedes contract start': ['CONTRACT_BILLING_BEFORE_SIGNATURE', 'A competência da cobrança não pode ser anterior à assinatura.'],
   'Billing competence exceeds contract end': ['CONTRACT_BILLING_AFTER_END', 'A competência da cobrança ultrapassa o término do contrato.'],
-  'Close date precedes contract start': ['CONTRACT_CLOSE_BEFORE_SIGNATURE', 'O encerramento não pode ser anterior à assinatura.'],
+  'Close date precedes contract start': ['CONTRACT_CLOSE_BEFORE_SIGNATURE', 'O encerramento não pode ser anterior ao início da vigência.'],
   'Close date cannot be in the future': ['CONTRACT_CLOSE_IN_FUTURE', 'A data de encerramento não pode estar no futuro.'],
   'Contract financial reconciliation conflict': ['CONTRACT_FINANCE_REVIEW_REQUIRED', 'A conciliação da cobrança exige revisão. Nenhuma alteração desta operação foi aplicada.'],
   'Financial period closed': ['CONTRACT_FINANCIAL_PERIOD_CLOSED', 'O período financeiro está fechado. Regularize o período antes de ajustar a cobrança.'],

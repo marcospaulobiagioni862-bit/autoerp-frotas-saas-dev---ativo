@@ -160,21 +160,13 @@ for (const term of [
   '539382',
   '081159',
   '999990000',
-  '58279323',
-  'Rua das Flores',
-  'flores',
-  'Centro',
-  'sao paulo',
-  '18077381',
-  '2003-05-27',
-  '27/05/2003',
-  '2031-09-10',
-  '10/09/2031',
 ]) {
-  assert.equal(matchesDriverSearch(searchableDriver, term), true, `driver expanded search must match: ${term}`);
+  assert.equal(matchesDriverSearch(searchableDriver, term), true, `driver quick search must match: ${term}`);
 }
-assert.equal(matchesDriverSearch(searchableDriver, '1999-01-01'), false, 'driver expanded search must reject unrelated dates');
-assert.match(source, /matchesDriverSearch\(driver, searchTerm\)/, 'DriversManagement must delegate free-text matching to the expanded driver search policy');
-assert.match(source, /RG, endereço, CEP ou data/, 'driver search placeholder must advertise the expanded searchable fields');
+for (const term of ['58279323', 'Rua das Flores', 'Centro', '18077381', '27/05/2003', '10/09/2031']) {
+  assert.equal(matchesDriverSearch(searchableDriver, term), false, `driver quick search must ignore advanced-profile fields: ${term}`);
+}
+assert.match(source, /matchesDriverSearch\(driver, searchTerm\)/, 'DriversManagement must delegate free-text matching to the quick driver search policy');
+assert.match(source, /Buscar por nome, CPF, CNH ou telefone/, 'driver search placeholder must advertise only operational quick-search fields');
 
 console.log('Deferred driver modals, profile photo, CNH history, document upload UX and driver list resilience regression: PASS');

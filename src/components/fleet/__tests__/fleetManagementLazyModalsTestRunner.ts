@@ -5,6 +5,8 @@ const source = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 
 const formSource = readFileSync(new URL('../VehicleFormModal.tsx', import.meta.url), 'utf8');
 const intakeSource = readFileSync(new URL('../VehicleDocumentIntakeModal.tsx', import.meta.url), 'utf8');
 const detailsSource = readFileSync(new URL('../VehicleDetailsModal.tsx', import.meta.url), 'utf8');
+const recordKmSource = readFileSync(new URL('../RecordKmModal.tsx', import.meta.url), 'utf8');
+const batchKmSource = readFileSync(new URL('../VehicleKmBatchModal.tsx', import.meta.url), 'utf8');
 const gallerySource = readFileSync(new URL('../../documents/EntityFileGallery.tsx', import.meta.url), 'utf8');
 
 const modals = ['VehicleFormModal', 'VehicleDetailsModal', 'RecordKmModal', 'VehicleKmBatchModal'] as const;
@@ -39,6 +41,11 @@ assert.match(
   'KM recording must render only with its authorized vehicle',
 );
 assert.match(source, /Atualizar KM em lote/, 'fleet must expose the batch KM action');
+assert.match(recordKmSource, /kmValue < vehicle\.currentKm/, 'individual KM must accept equality as yard confirmation');
+assert.match(recordKmSource, /min=\{vehicle\.currentKm\}/, 'individual KM input must not force current KM + 1');
+assert.match(recordKmSource, /registra conferência/, 'individual KM helper must explain equal-KM confirmation');
+assert.match(batchKmSource, /kmValue < vehicle\.currentKm/, 'batch KM must accept equality as yard confirmation');
+assert.match(batchKmSource, /min=\{vehicle\.currentKm\}/, 'batch KM input must not force current KM + 1');
 assert.match(
   source,
   /\{isKmBatchOpen&&<VehicleKmBatchModal isOpen vehicles=\{vehicles\}/,
@@ -62,13 +69,13 @@ assert.doesNotMatch(
 
 assert.match(source, /Ações do veículo/, 'vehicle cards must expose an explicit lifecycle action area');
 assert.match(source, /Histórico do veículo/, 'terminal vehicles must expose the read-only history action area');
-assert.match(source, />O histórico não será apagado\.</, 'lifecycle actions must explain history preservation');
+assert.doesNotMatch(source, /<span[^>]*>O histórico não será apagado\.<\/span>/, 'fleet cards must not repeat history-preservation copy on every row');
 assert.match(
   source,
   /handleStatusChangeClick\(vehicle, VehicleStatus\.INACTIVE\)/,
   'out-of-use action must reuse the authoritative INACTIVE status transition',
 );
-assert.match(source, />\s*Fora de uso\s*</, 'out-of-use action must be visible without the generic status selector');
+assert.match(source, />Colocar fora de uso<\/button>/, 'out-of-use action must remain available in the contextual actions menu');
 assert.match(
   source,
   /nextValue === '__SELL__'[\s\S]*setVehicleForSale\(vehicle\)/,

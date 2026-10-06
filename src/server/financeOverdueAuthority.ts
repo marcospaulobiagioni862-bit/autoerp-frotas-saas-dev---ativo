@@ -105,6 +105,7 @@ type ObligationRow = {
   discountAmount: string | number;
   fineAmount: string | number;
   interestAmount: string | number;
+  additionalAmount: string | number;
   updatedAmount: string | number;
   paidAmount: string | number;
   balanceAmount: string | number;
@@ -248,7 +249,7 @@ async function lockedRows(tx: any, companyId: string, type: OverdueObligationTyp
           company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount", additional_amount AS "additionalAmount",
           updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
           due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_receivables
@@ -261,7 +262,7 @@ async function lockedRows(tx: any, companyId: string, type: OverdueObligationTyp
           company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount", additional_amount AS "additionalAmount",
           updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
           due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_payables
@@ -343,17 +344,20 @@ async function processType(
     const originalAmount = numberValue(row.originalAmount);
     const paidAmount = numberValue(row.paidAmount);
     const discountAmount = numberValue(row.discountAmount);
+    const additionalAmount = numberValue(row.additionalAmount);
 
     // FINANCE-R12 intentionally preserves the proven legacy charge-base equation:
     // face value minus amounts already settled. Discount remains a separate
     // authoritative adjustment in updatedAmount until a future business rule says otherwise.
     const outstandingPrincipal = roundCurrency(Math.max(0, originalAmount - paidAmount));
     const chargeable = daysOverdue > rule.gracePeriodDays;
-    const fineAmount = chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
-    const interestAmount = chargeable
+    // Preserve operation-specific charges and never accrue global charges on CP.
+    const preserveCharges = type === 'PAYABLE' || Boolean((await tx.execute(sql`SELECT 1 FROM audit_logs WHERE company_id=${actor.companyId} AND entity_type='FinancialSettlement' AND (changes::jsonb->>'newState')::jsonb->>'obligationId'=${row.id} LIMIT 1`)).rows?.length);
+    const fineAmount = preserveCharges ? numberValue(row.fineAmount) : chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
+    const interestAmount = preserveCharges ? numberValue(row.interestAmount) : chargeable
       ? roundCurrency(outstandingPrincipal * (rule.dailyInterestPercent / 100) * daysOverdue)
       : 0;
-    const updatedAmount = roundCurrency(Math.max(0, originalAmount + fineAmount + interestAmount - discountAmount));
+    const updatedAmount = roundCurrency(Math.max(0, originalAmount + fineAmount + interestAmount + additionalAmount - discountAmount));
     const balanceAmount = roundCurrency(Math.max(0, updatedAmount - paidAmount));
     const status = daysOverdue > 0 ? 'OVERDUE' : paidAmount > 0 ? 'PARTIALLY_PAID' : 'PENDING';
 
@@ -382,7 +386,7 @@ async function reportRows(tx: any, companyId: string, type: OverdueObligationTyp
           company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount", additional_amount AS "additionalAmount",
           updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
           due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_receivables
@@ -394,7 +398,7 @@ async function reportRows(tx: any, companyId: string, type: OverdueObligationTyp
           company_id AS "companyId", origin_type AS "originType", origin_id AS "originId",
           vehicle_id AS "vehicleId", driver_id AS "driverId", contract_id AS "contractId",
           original_amount AS "originalAmount", discount_amount AS "discountAmount",
-          fine_amount AS "fineAmount", interest_amount AS "interestAmount",
+          fine_amount AS "fineAmount", interest_amount AS "interestAmount", additional_amount AS "additionalAmount",
           updated_amount AS "updatedAmount", paid_amount AS "paidAmount", balance_amount AS "balanceAmount",
           due_date::date::text AS "dueDate", competence_date::date::text AS "competenceDate", status
         FROM account_payables

@@ -1,3 +1,4 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React, { useEffect, useState } from 'react';
 import { AlertCircle, FileText, Save, X } from 'lucide-react';
 import { Button, Input, ModalContainer } from '../ui';
@@ -114,9 +115,6 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         setVehicles(validVehicles);
         setDrivers(validDrivers);
         setTemplates(selectableTemplates);
-        if (!contractToEdit && savedTemplates.length === 0) {
-          setError('Nenhum contrato salvo está disponível. Abra Modelos de Contrato, crie ou importe um modelo e salve antes de cadastrar o contrato do motorista.');
-        }
       })
       .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
       .finally(() => { if (active) setLoadingOptions(false); });
@@ -151,6 +149,10 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     return () => { active = false; };
   }, [isOpen, contractToEdit, companyId]);
 
+  const formDraft = useLocalFormDraft(`contract:${contractToEdit?.id || 'new'}:${contractToEdit?.updatedAt || ''}`, form, draft => { setForm(draft); setHasUnsavedChanges(true); }, isOpen, hasUnsavedChanges);
+  const noVehiclesForNewContract = !contractToEdit && !loadingOptions && vehicles.length === 0;
+  const noDriversForNewContract = !contractToEdit && !loadingOptions && drivers.length === 0;
+
   const selectContractFile = (file: File | null) => {
     setError(null);
     setHasUnsavedChanges(true);
@@ -181,7 +183,6 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     event.preventDefault();
     setError(null);
     const nextErrors:Record<string,string>={};
-    if(!form.templateId)nextErrors.templateId='Selecione o modelo de contrato.';
     if(!form.vehicleId)nextErrors.vehicleId='Selecione o veículo.';
     if(!form.driverId)nextErrors.driverId='Selecione o motorista.';
     if(!form.startDate)nextErrors.startDate='Informe a data inicial.';
@@ -195,7 +196,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     setLoading(true);
     try {
       const input = {
-        contractNumber: form.contractNumber.trim() || undefined,
+        contractNumber: contractToEdit ? (form.contractNumber.trim() || undefined) : undefined,
         vehicleId: form.vehicleId,
         driverId: form.driverId,
         startDate: form.startDate,
@@ -232,29 +233,14 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
         }
       }
 
-      let completedContract = savedContract;
-      if (!contractToEdit) {
-        const selectedTemplate = templates.find((item) => item.id === form.templateId);
-        if (selectedTemplate) {
-          try {
-            if (contractTemplateGenerationMode(selectedTemplate) === 'PDF') {
-              completedContract = (await ContractExecutionClient.generatePdf(savedContract.id, selectedTemplate.id)).contract;
-            } else if (contractTemplateGenerationMode(selectedTemplate) === 'DOCX') {
-              completedContract = (await ContractExecutionClient.generateDocx(savedContract.id, selectedTemplate.id)).contract;
-            } else {
-              throw new Error('O modelo não possui fonte operacional válida.');
-            }
-          } catch (generationError) {
-            warnings.push(`Contrato salvo, mas o documento oficial automático não foi gerado: ${generationError instanceof Error ? generationError.message : 'falha na geração'}.`);
-          }
-        }
-      }
+      const completedContract = savedContract;
 
+      formDraft.clear();
       setHasUnsavedChanges(false);
       onClose();
       onSuccess({
         contract: completedContract,
-        openPdfSignature: !contractToEdit,
+        openPdfSignature: false,
         warning: warnings.length ? warnings.join(' ') : undefined,
       });
     } catch (caught) {
@@ -271,14 +257,27 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       size="5xl"
       title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
     >
-      <form onSubmit={submit} className="p-3 space-y-3">
+      {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+      <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Número do contrato"><Input value={form.contractNumber} onChange={(e) => set('contractNumber', e.target.value)} placeholder="Em branco = gerado no servidor" /></Field>
-          <Field label="Modelo de contrato *" error={fieldErrors.templateId}><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.templateId?'border-red-500':''}`}><option value="">Selecione</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
+          <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
+          <Field label="Modelo de contrato (opcional)"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Sem modelo</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
           <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
-          <Field label="Veículo *" error={fieldErrors.vehicleId}><select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}><option value="">Selecione</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}</select></Field>
-          <Field label="Motorista *" error={fieldErrors.driverId}><select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions} className={`control ${fieldErrors.driverId?'border-red-500':''}`}><option value="">Selecione</option>{drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}</select></Field>
+          <Field label="Veículo *" error={fieldErrors.vehicleId}>
+            <select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions || noVehiclesForNewContract} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}>
+              <option value="">{loadingOptions ? 'Carregando veículos...' : noVehiclesForNewContract ? 'Nenhum veículo disponível para novo contrato' : 'Selecione'}</option>
+              {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}
+            </select>
+            {noVehiclesForNewContract && <span role="status" className="block text-[11px] font-normal text-amber-700 dark:text-amber-300">Nenhum veículo disponível para novo contrato.</span>}
+          </Field>
+          <Field label="Motorista *" error={fieldErrors.driverId}>
+            <select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions || noDriversForNewContract} className={`control ${fieldErrors.driverId?'border-red-500':''}`}>
+              <option value="">{loadingOptions ? 'Carregando motoristas...' : noDriversForNewContract ? 'Nenhum motorista disponível para novo contrato' : 'Selecione'}</option>
+              {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}
+            </select>
+            {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-amber-700 dark:text-amber-300">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
+          </Field>
           <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
           <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
           <Field label="Periodicidade *" error={fieldErrors.billingPeriodicity}><select value={form.billingPeriodicity} onChange={(e) => setBillingPeriodicity(e.target.value)} className={`control ${fieldErrors.billingPeriodicity?'border-red-500':''}`}><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
@@ -302,9 +301,9 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
           </span>
         </Field>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
-          <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel é uma <strong>Conta a Receber do motorista</strong>, vinculada também ao veículo e ao contrato. O veículo é o ativo locado e não gera Conta a Pagar pelo aluguel. A categoria financeira de receita é obrigatória na ativação, quando o primeiro título é criado. Caução, franquia de KM e KM excedente devem ser informados conscientemente conforme a regra do contrato; não são mais preenchidos automaticamente.
+          <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel e a caução são gerados automaticamente como <strong>Contas a Receber do motorista</strong>, vinculadas ao veículo e ao contrato. O contrato nasce ativo e não depende de ativação financeira ou de modelo. Documento e assinatura são evidências opcionais.
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions}><Save className="w-4 h-4" />Salvar</Button></div>
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions || noVehiclesForNewContract || noDriversForNewContract}><Save className="w-4 h-4" />Salvar</Button></div>
       </form>
       <style>{`.control{width:100%;border:1px solid rgb(203 213 225);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem;color:inherit}.dark .control{border-color:rgb(51 65 85);background:rgb(2 6 23 / .35);color:rgb(226 232 240)}`}</style>
     </ModalContainer>

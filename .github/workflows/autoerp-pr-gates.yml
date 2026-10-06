@@ -68,6 +68,14 @@ jobs:
       - name: Install dependencies once
         run: npm install --ignore-scripts --package-lock=false
 
+      - name: V2 competence, DRE, drafts, version and document regressions
+        run: |
+          npx tsx src/domain/finance/__tests__/v2CompetenceAndDreRegression.ts
+          npx tsx src/app/__tests__/localDraftAndVersionRegression.tsx
+          npx tsx src/shared/utils/__tests__/documentAlertsAndDownloadRegression.ts
+          npx tsx src/server/__tests__/v2InspectionAndDocumentRoutesRegression.ts
+          npx tsx src/server/__tests__/v2MaintenanceFinanceRegression.ts
+
       - name: AUDIT-WAVE-A source-of-truth transversal invariants
         run: npm run test:audit-wave-a
 
@@ -277,11 +285,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "WhatsappClient.decideConsent" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "O ERP não exige registro de consentimento para preparar a comunicação." src/components/drivers/DriverDetailsModal.tsx
           grep -F "Preparar lembrete — sem enviar" src/components/drivers/DriverDetailsModal.tsx
           grep -F "providerCallApplied: false" src/api/whatsappClient.ts
+          grep -F "ERP_DIRECT_NO_INTERNAL_CONSENT" src/server/whatsappRoutes.ts src/server/trafficTicketWhatsappAuthority.ts
+          if grep -Fq "WhatsappClient.decideConsent" src/components/drivers/DriverDetailsModal.tsx; then
+            echo "FAIL: driver UI must not require internal consent registration"
+            exit 1
+          fi
           if grep -Fq "wa.me/" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must not bypass consent/outbox through wa.me"
+            echo "FAIL: driver UI must not bypass the auditable outbox through wa.me"
             exit 1
           fi
           if grep -Fq "window.open" src/components/drivers/DriverDetailsModal.tsx; then
@@ -533,16 +546,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "DocumentAiClient.observability()" src/components/documents/DocumentAiReviewPanel.tsx
-          grep -F "method: 'GET'" src/api/documentAiClient.ts
-          if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" src/components/documents/DocumentAiReviewPanel.tsx src/api/documentAiClient.ts; then
+
+          CLIENT=src/api/documentAiClient.ts
+          PANEL=src/components/documents/DocumentAiReviewPanel.tsx
+
+          # O cliente e codigo vivo (importado por documentAiFocusedClient,
+          # driverCnhPrefill e documentAiStatusFilter): sempre exigido.
+          grep -F "method: 'GET'" "$CLIENT"
+
+          # O painel nao e importado por nenhum componente de produto, so por
+          # um arquivo de teste. As assercoes sobre ele passam a ser
+          # condicionais, para que este portao continue valido quando o painel
+          # for removido na limpeza de codigo morto - antes, a remocao faria o
+          # grep falhar sob "set -e" e quebrar o CI por um motivo que nao e
+          # defeito.
+          TARGETS="$CLIENT"
+          if [ -f "$PANEL" ]; then
+            grep -F "DocumentAiClient.observability()" "$PANEL"
+            TARGETS="$TARGETS $PANEL"
+          else
+            echo "DOC-AI-1B4: $PANEL ausente (removido na limpeza); assercoes do painel ignoradas"
+          fi
+
+          # shellcheck disable=SC2086
+          if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" $TARGETS; then
             echo "FAIL: DOC-AI observability client must remain read-only"
             exit 1
           fi
-          if grep -Eq "apiKey|storageKey|workerId|companyId|attachmentChecksum" src/components/documents/DocumentAiReviewPanel.tsx | grep -F "Observability"; then
+
+          # CORRECAO DE BUG: aqui o "-q" estava no PRIMEIRO grep, que por
+          # definicao nao imprime nada - logo o segundo grep recebia entrada
+          # vazia e saia 1, e esta checagem NUNCA podia disparar. Era logica
+          # morta que se lia como garantia. O "-q" pertence ao ultimo grep do
+          # cano.
+          if [ -f "$PANEL" ] && grep -E "apiKey|storageKey|workerId|companyId|attachmentChecksum" "$PANEL" | grep -qF "Observability"; then
             echo "FAIL: observability panel may consume protected authority"
             exit 1
           fi
+
           echo "DOC-AI-1B4 fail-closed client observability invariants: PASS"
 
       - name: DOC-AI-1B5 explicit idempotent request invariants
@@ -583,69 +624,62 @@ jobs:
           fi
           echo "DOC-AI-1B6 sanitized attachment status invariants: PASS"
 
-      - name: DOC-AI-1B7 client-side status filter invariants
+      - name: DOC-AI-1B7 hidden technical status invariants
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "matchesDocumentAiStatusFilter(" src/components/documents/DocumentCenter.tsx
-          grep -F "setExtractionStatusFilter('ALL')" src/components/documents/DocumentCenter.tsx
-          grep -F '<option value="NONE">Sem extração (' src/components/documents/DocumentCenter.tsx
-          grep -F "if (filter === 'ALL' || statusesUnavailable) return true;" src/components/documents/documentAiStatusFilter.ts
           grep -F "DocumentAiClient.attachmentStatuses()" src/components/documents/DocumentCenter.tsx
-          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
-            echo "FAIL: local status filter must not fetch or consume protected authority"
+          grep -F "showDocumentAiControls={false}" src/components/documents/DocumentCenter.tsx
+          grep -F "INTERNAL_ENTITY_TYPES" src/components/documents/DocumentCenter.tsx
+          grep -F "item.contentState === 'AVAILABLE'" src/components/documents/DocumentCenter.tsx
+          if grep -Eq "Estado da Extração|Sem extração \(|Prioridade de triagem|Ação necessária \(|Revisão assistida por IA" src/components/documents/DocumentCenter.tsx; then
+            echo "FAIL: user-facing document library must not expose Document AI technical state"
             exit 1
           fi
-          echo "DOC-AI-1B7 client-side status filter invariants: PASS"
+          echo "DOC-AI-1B7 hidden technical status invariants: PASS"
 
-      - name: DOC-AI-1B8 sanitized status count invariants
+      - name: DOC-AI-1B8 sanitized status count authority invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "createDocumentAiStatusCounts(" src/components/documents/documentAiStatusFilter.ts
-          grep -F "baseFilteredAttachments.map((attachment) => attachment.id)" src/components/documents/DocumentCenter.tsx
           grep -F "NONE: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F "Sem extração ({statusCountLabel(extractionStatusCounts.NONE)})" src/components/documents/DocumentCenter.tsx
           grep -F "unavailable status data must never be represented as zero" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -Eq "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model"; then
             echo "FAIL: local status counts must not fetch or consume protected authority"
             exit 1
           fi
-          echo "DOC-AI-1B8 sanitized status count invariants: PASS"
+          echo "DOC-AI-1B8 sanitized status count authority invariants: PASS"
 
-      - name: DOC-AI-1B9 local triage sorting invariants
+      - name: DOC-AI-1B9 internal triage sorting invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "export function sortDocumentAiAttachments<" src/components/documents/documentAiStatusFilter.ts
-          grep -F "const [extractionSort, setExtractionSort] = useState<DocumentAiStatusSort>('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
-          grep -F "setExtractionSort('ATTACHMENT_NEWEST')" src/components/documents/DocumentCenter.tsx
           grep -F "REVIEW_REQUIRED: 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F '<option value="REVIEW_PRIORITY">Prioridade de triagem</option>' src/components/documents/DocumentCenter.tsx
           grep -F "sorting must not mutate authorized input data" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -E "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" >/dev/null; then
-            echo "FAIL: local triage sorting must not fetch or consume protected authority"
+            echo "FAIL: internal triage sorting must not fetch or consume protected authority"
             exit 1
           fi
-          echo "DOC-AI-1B9 local triage sorting invariants: PASS"
+          echo "DOC-AI-1B9 internal triage sorting invariants: PASS"
 
-      - name: DOC-AI-1B10 consolidated action filter invariants
+      - name: DOC-AI-1B10 internal action filter invariants
         shell: bash
         run: |
           set -euo pipefail
           grep -F "'ACTION_REQUIRED'," src/components/documents/documentAiStatusFilter.ts
           grep -F "current?.status === 'REVIEW_REQUIRED' || current?.status === 'FAILED'" src/components/documents/documentAiStatusFilter.ts
           grep -F "ACTION_REQUIRED: statusesUnavailable ? null : 0" src/components/documents/documentAiStatusFilter.ts
-          grep -F '<option value="ACTION_REQUIRED">Ação necessária (' src/components/documents/DocumentCenter.tsx
           grep -F "matchesDocumentAiStatusFilter('review', 'ACTION_REQUIRED', statuses, false), true" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "matchesDocumentAiStatusFilter('pending', 'ACTION_REQUIRED', statuses, false), false" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "ACTION_REQUIRED: 2" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
           grep -F "ACTION_REQUIRED: null" src/components/documents/__tests__/documentAiStatusFilterTestRunner.ts
-          if sed '/^import /d' src/components/documents/documentAiStatusFilter.ts | grep -E "fetch\\(|/api/|companyId|tenantId|requestedBy|attachmentChecksum|provider|model" >/dev/null; then
-            echo "FAIL: consolidated action filter must not fetch or consume protected authority"
+          if grep -Eq "ACTION_REQUIRED|Revisão assistida por IA|Prioridade de triagem" src/components/documents/DocumentCenter.tsx; then
+            echo "FAIL: internal Document AI triage must remain hidden from the user document library"
             exit 1
           fi
-          echo "DOC-AI-1B10 consolidated action filter invariants: PASS"
+          echo "DOC-AI-1B10 internal action filter invariants: PASS"
 
       - name: TypeScript gate
         run: npm run lint
@@ -687,6 +721,7 @@ jobs:
         run: |
           npx tsx src/components/contracts/__tests__/contractsManagementLazyModalsTestRunner.ts
           npx tsx src/components/contracts/__tests__/moveflexBaseContractPdfTestRunner.ts
+          npx tsx src/api/__tests__/contractExecutionClientTestRunner.ts
 
       - name: Company profile contract authority regression
         run: npx tsx src/components/admin/__tests__/companyProfileContractAuthorityTestRunner.ts
@@ -845,7 +880,11 @@ jobs:
       - name: Fleet domain regressions
         if: matrix.suite == 'fleet'
         run: |
+          npx tsx src/server/__tests__/vehicleKmAuthorityIntegration.ts
+          npx tsx src/server/__tests__/vehicleKmAuditRegression.ts
+          npm run test:maintenance-client
           npx tsx src/domain/fleet/__tests__/vehicleStatusPolicyTestRunner.ts
+          npx tsx src/components/fleet/__tests__/vehicleDetailsPresentationTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
           npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
           npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
@@ -869,6 +908,8 @@ jobs:
       - name: Finance authority regressions
         if: matrix.suite == 'finance'
         run: |
+          npx tsx src/server/__tests__/fixedDailyInterestIntegration.ts
+          npx tsx src/components/modals/__tests__/fixedDailyInterestUiRegression.tsx
           npx tsx src/server/__tests__/financeCategoryAuthorityIntegration.ts
           npx tsx src/server/__tests__/securityDepositAuthorityIntegration.ts
           npx tsx src/server/__tests__/financeActiveAccountAuthorityIntegration.ts
@@ -890,9 +931,15 @@ jobs:
       - name: Finance domain regressions
         if: matrix.suite == 'finance'
         run: |
+          npx tsx src/domain/finance/__tests__/dreExpenseCompositionTestRunner.ts
+          npm run test:v2-settlement-domain
+          npm run test:v2-settlement-ui
+          npx tsx src/shared/utils/__tests__/civilDateRegression.ts
+          npx tsx src/domain/finance/__tests__/auditAdjustmentReversalRegression.ts
           npx tsx src/domain/finance/__tests__/profitabilityNicTicketClassificationTestRunner.ts
           npx tsx src/domain/finance/__tests__/profitabilityTenantIsolationTestRunner.ts
           npx tsx src/domain/finance/__tests__/reportingRegimeGuardTestRunner.ts
+          npx tsx src/shared/utils/__tests__/reportingPeriodTestRunner.ts
           npx tsx src/domain/finance/__tests__/drePayableAdjustmentsTestRunner.ts
           npx tsx src/domain/finance/__tests__/dreEvidenceBreakdownTestRunner.ts
           npx tsx src/shared/utils/__tests__/renegotiationScheduleTestRunner.ts

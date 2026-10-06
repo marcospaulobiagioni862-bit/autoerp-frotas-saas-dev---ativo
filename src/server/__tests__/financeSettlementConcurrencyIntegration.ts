@@ -74,6 +74,7 @@ async function seed(): Promise<void> {
     ['r21-rec-conflict-acc', 0], ['r21-rec-cancel-acc', 0],
     ['r21-pay-over-acc', 1000], ['r21-pay-exact-acc', 1000], ['r21-pay-retry-acc', 1000],
     ['r21-pay-cancel-acc', 1000],
+    ['r21-pay-order-acc', 1000],
   ] as const;
   for (const [id, balance] of accounts) {
     await db.execute(sql`
@@ -107,6 +108,19 @@ async function seed(): Promise<void> {
       ) VALUES(
         ${id},${companyId},'MANUAL',${`origin-${id}`},'finance-r21-expense',${id},100,
         0,0,0,100,0,100,'2026-09-20','2026-08-22','PENDING',${`obligation-${id}`},NOW(),NOW()
+      ) ON CONFLICT(id) DO NOTHING
+    `);
+  }
+  for (const [id, number] of [['r21-pay-order-1', 1], ['r21-pay-order-2', 2]] as const) {
+    await db.execute(sql`
+      INSERT INTO account_payables(
+        id,company_id,origin_type,origin_id,category_id,description,original_amount,
+        updated_amount,paid_amount,balance_amount,due_date,competence_date,status,
+        installment_group_id,installment_number,total_installments,created_at,updated_at
+      ) VALUES(
+        ${id},${companyId},'MANUAL','r21-order','finance-r21-expense',${id},100,
+        100,0,100,'2026-09-20','2026-08-22','PENDING',
+        'r21-order',${number},2,NOW(),NOW()
       ) ON CONFLICT(id) DO NOTHING
     `);
   }
@@ -272,7 +286,24 @@ async function run(): Promise<void> {
   await testConflictingRetryFailsClosed();
   await testSettlementVsCancellationReceipt();
   await testSettlementVsCancellationPayment();
+  await testConcurrentInstallmentOrder();
   console.log('FINANCE-R21 settlement concurrency/idempotency integration PASS');
+}
+
+async function testConcurrentInstallmentOrder(): Promise<void> {
+  const results = await Promise.allSettled([
+    payment('r21-pay-order-1','r21-pay-order-acc',100,'r21-order-first'),
+    payment('r21-pay-order-2','r21-pay-order-acc',100,'r21-order-second'),
+  ]);
+  const first = await payableState('r21-pay-order-1');
+  const second = await payableState('r21-pay-order-2');
+  assert(first.status === 'PAID', 'first installment must remain payable during race');
+  if (results[1].status === 'fulfilled') {
+    assert(second.status === 'PAID' && first.balance === 0, 'second can settle only after first commits');
+  } else {
+    assert(second.status === 'PENDING' && second.balance === 100, 'blocked second must remain unchanged');
+    assert(await txCountFor('payable_id','r21-pay-order-2') === 0, 'blocked race must not create a transaction');
+  }
 }
 
 run().catch((error) => {

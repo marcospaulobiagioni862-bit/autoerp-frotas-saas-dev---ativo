@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
@@ -19,6 +20,7 @@ import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
 import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
 import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
 import { contractConflictResponse } from './contractConflictResponse';
+import { getOperationalISODate } from '../shared/utils/date';
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -90,9 +92,30 @@ function normalizeContractNumber(value: unknown): string | undefined {
   return normalized;
 }
 
-function generateContractNumber(): string {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  return `CNT-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+async function generateContractNumber(companyId: string, raw: any): Promise<string> {
+  await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${companyId}:contract-number`})))`);
+  const result = await raw.execute(sql`
+    SELECT COALESCE(
+      MAX(
+        CASE
+          WHEN contract_number LIKE 'CNT-%'
+            AND length(contract_number) = 10
+            AND substring(contract_number from 5) ~ '^[0-9]{6}$'
+          THEN substring(contract_number from 5)::integer
+          ELSE 0
+        END
+      ),
+      0
+    ) AS max_number
+    FROM contracts
+    WHERE company_id=${companyId}
+  `);
+  const rows = Array.isArray((result as any)?.rows) ? (result as any).rows : [];
+  const current = Number(rows[0]?.max_number ?? 0);
+  if (!Number.isInteger(current) || current < 0 || current >= 999999) {
+    throw new ContractConflictError('Contract numbering exhausted');
+  }
+  return `CNT-${String(current + 1).padStart(6, '0')}`;
 }
 
 function normalizeDate(value: unknown, field: string): string {
@@ -320,11 +343,48 @@ export function registerContractRoutes(app: Express): void {
       const requestedNumber = normalizeContractNumber(body.contractNumber);
       const requestedTemplateId = optionalText(body.templateId);
 
-      const item = await UnitOfWork.run(principal.companyId, async (tx) => {
+      const idempotencyKey = typeof req.headers['x-idempotency-key'] === 'string'
+        ? req.headers['x-idempotency-key'].trim()
+        : '';
+      if (!idempotencyKey || idempotencyKey.length > 200) {
+        throw new ContractValidationError('Missing idempotency key');
+      }
+
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const raw = tx.getRawTransaction?.();
+        if (!raw) throw new Error('Contract idempotency authority unavailable');
+        await raw.execute(sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${principal.companyId}:contract-create:${idempotencyKey}`})))`);
+
+        const replayMarker = `[V2-IDEMPOTENCY:${idempotencyKey}]`;
+        const replayRows = await raw.execute(sql`
+          SELECT id FROM contracts
+          WHERE company_id=${principal.companyId}
+            AND notes LIKE ${`%${replayMarker}%`}
+            AND is_archived=false
+          ORDER BY created_at DESC
+          LIMIT 1
+        `);
+        const replayId = Array.isArray((replayRows as any)?.rows) ? (replayRows as any).rows[0]?.id : undefined;
+        if (replayId) {
+          const existing = await tx.getContractRepo().findByIdForCompany(principal.companyId, String(replayId));
+          if (existing) {
+            const receivables = await tx.getReceivableRepo().findByContractId(existing.id);
+            return { item: existing, receivables };
+          }
+        }
+
         const vehicle = await tx.getVehicleRepo().findByIdForCompany(principal.companyId, vehicleId);
         const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, driverId);
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
+        // Compare civil dates in the operating timezone, without parsing CNH as a timestamp.
+        if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
+        if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
+        const civilParts = new Intl.DateTimeFormat('en', {
+          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).formatToParts(new Date());
+        const today = ['year', 'month', 'day'].map(type => civilParts.find(part => part.type === type)!.value).join('-');
+        if (driver.cnhExpiration && driver.cnhExpiration < today) throw new ContractConflictError('Driver CNH invalid');
         const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
         const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);
         if (vehicleBinding) throw new ContractConflictError('Vehicle already bound to another contract');
@@ -335,13 +395,9 @@ export function registerContractRoutes(app: Express): void {
           if (!template.isCurrent || !template.isActive) throw new ContractConflictError('Contract template unavailable');
         }
 
-        let contractNumber = requestedNumber || generateContractNumber();
+        const contractNumber = requestedNumber || await generateContractNumber(principal.companyId, raw);
         if (await tx.getContractRepo().findByNumber(principal.companyId, contractNumber)) {
-          if (requestedNumber) throw new ContractConflictError('Duplicate contract number');
-          contractNumber = generateContractNumber();
-          if (await tx.getContractRepo().findByNumber(principal.companyId, contractNumber)) {
-            throw new ContractConflictError('Duplicate generated contract number');
-          }
+          throw new ContractConflictError(requestedNumber ? 'Duplicate contract number' : 'Duplicate generated contract number');
         }
 
         const now = new Date().toISOString();
@@ -353,7 +409,7 @@ export function registerContractRoutes(app: Express): void {
           vehicleId,
           startDate,
           endDate,
-          status: ContractStatus.DRAFT,
+          status: ContractStatus.ACTIVE,
           rentalAmount,
           billingPeriodicity,
           billingDueDayOfWeek,
@@ -364,19 +420,29 @@ export function registerContractRoutes(app: Express): void {
           paymentMethodId: optionalText(body.paymentMethodId),
           templateId: requestedTemplateId,
           signatureRequired: true,
-          notes: optionalText(body.notes),
+          notes: [optionalText(body.notes), `[V2-IDEMPOTENCY:${idempotencyKey}]`].filter(Boolean).join('\n'),
           isArchived: false,
           createdAt: now,
           updatedAt: now,
         });
+        const boundVehicle = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
+          status: VehicleStatus.RENTED,
+          currentDriverId: driverId,
+          currentContractId: created.id,
+          updatedAt: now,
+        });
+        if (!boundVehicle) throw new ContractNotFoundError();
+
+        const receivables = await ensureInitialContractReceivable(created, principal, tx);
+
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: created.id,
           action: AuditAction.CREATE, newState: auditState(created), userId: principal.userId,
           userName: principal.name, timestamp: now,
         });
-        return created;
+        return { item: created, receivables };
       });
-      res.status(201).json({ item });
+      res.status(201).json(result);
     } catch (error) {
       sendContractError(res, error);
     }
@@ -490,9 +556,6 @@ export function registerContractRoutes(app: Express): void {
         if (contract.rentalAmount <= 0) throw new ContractConflictError('Contract rental amount incomplete');
         validateDateRange(period.effectiveStartDate, contract.endDate);
         const today = new Date().toISOString().slice(0, 10);
-        if (period.effectiveStartDate > today) {
-          throw new ContractConflictError('Contract period has not started');
-        }
         if (contract.endDate && contract.endDate < today) {
           throw new ContractConflictError('Contract period already ended');
         }
@@ -500,14 +563,14 @@ export function registerContractRoutes(app: Express): void {
         if (!vehicle) throw new ContractNotFoundError();
         const driver = await tx.getDriverRepo().findByIdForCompanyWithLock(principal.companyId, contract.driverId);
         if (!driver) throw new ContractNotFoundError();
+
+        // V2: only operational exclusivity is a hard gate. Documentation,
+        // insurance and CNH compliance remain visible as warnings and must not
+        // strand a saved contract in DRAFT.
         ensureVehicleEligible(vehicle);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx);
-        await ensureVehicleDocumentsEligible(principal.companyId, vehicle.id, today, tx);
-        if (!(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, period.effectiveStartDate, tx)) ||
-            !(await ensureVehicleInsuranceEligible(principal.companyId, vehicle.id, today, tx))) {
-          throw new ContractConflictError('Vehicle insurance unavailable');
+        if (driver.isArchived || driver.status !== DriverStatus.ACTIVE) {
+          throw new ContractConflictError('Driver unavailable');
         }
-        ensureDriverEligible(driver);
 
         const vehicleConflict = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, contract.vehicleId, contract.id);
         const driverConflict = await tx.getContractRepo().findBlockingByDriver(principal.companyId, contract.driverId, contract.id);
@@ -707,11 +770,16 @@ export function registerContractRoutes(app: Express): void {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
         if (contract.status === ContractStatus.CANCELLED) return contract;
-        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
+        const futureActive = contract.status === ContractStatus.ACTIVE
+          && getOperationalISODate() < (await requireContractEffectivePeriod(contract, tx)).effectiveStartDate;
+        if (!futureActive && ![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status)) {
           throw new ContractConflictError('Contract lifecycle does not allow cancel');
         }
         const vehicle = await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId, contract.vehicleId);
         if (!vehicle) throw new ContractNotFoundError();
+        if (futureActive && (vehicle.currentContractId !== contract.id || vehicle.currentDriverId !== contract.driverId)) {
+          throw new ContractConflictError('Contract binding mismatch');
+        }
         const now = new Date().toISOString();
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           status: ContractStatus.CANCELLED,

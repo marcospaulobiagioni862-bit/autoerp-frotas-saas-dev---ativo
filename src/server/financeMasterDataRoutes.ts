@@ -1,3 +1,4 @@
+import { isFinancialDreGroup, type FinancialDreGroup } from '../shared/utils/financialDreGroups';
 import type { Express, Request, Response } from 'express';
 import type { AuthenticatedPrincipal } from './auth';
 import { FinancialAccountType, FinancialCategoryType } from '../types/enums';
@@ -62,6 +63,13 @@ function accountType(value: unknown): FinancialAccountType {
   const item = String(value || '') as FinancialAccountType;
   if (!Object.values(FinancialAccountType).includes(item)) throw new FinanceMasterDataValidationError();
   return item;
+}
+
+function dreGroup(value: unknown): FinancialDreGroup | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!isFinancialDreGroup(value)) throw new FinanceMasterDataValidationError();
+  return value;
 }
 
 function categoryType(value: unknown): FinancialCategoryType {
@@ -177,10 +185,10 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
     const p = requirePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
-      assertOnlyKeys(body, ['name', 'type', 'parentId', 'active']);
+      assertOnlyKeys(body, ['name', 'type', 'parentId', 'active', 'dreGroup']);
       res.status(201).json({ item: await FinanceMasterDataAuthority.createCategory(actorFrom(p), {
         name: requiredText(body.name), type: categoryType(body.type),
-        parentId: optionalText(body.parentId), active: optionalBoolean(body.active),
+        parentId: optionalText(body.parentId), active: optionalBoolean(body.active), dreGroup: dreGroup(body.dreGroup) ?? undefined,
       }) });
     } catch (error) { sendError(res, error); }
   });
@@ -189,12 +197,12 @@ export function registerFinanceMasterDataRoutes(app: Express): void {
     const p = requirePrincipal(req, res); if (!p) return;
     try {
       const body = objectBody(req.body);
-      assertOnlyKeys(body, ['name', 'type', 'parentId', 'active']);
+      assertOnlyKeys(body, ['name', 'type', 'parentId', 'active', 'dreGroup']);
       if (Object.keys(body).length === 0) throw new FinanceMasterDataValidationError();
       res.json({ item: await FinanceMasterDataAuthority.updateCategory(actorFrom(p), requiredText(req.params.id), {
         name: body.name === undefined ? undefined : requiredText(body.name),
         type: body.type === undefined ? undefined : categoryType(body.type),
-        parentId: nullableText(body.parentId), active: optionalBoolean(body.active),
+        parentId: nullableText(body.parentId), active: optionalBoolean(body.active), dreGroup: dreGroup(body.dreGroup),
       }) });
     } catch (error) { sendError(res, error); }
   });

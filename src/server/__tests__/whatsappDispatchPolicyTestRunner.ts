@@ -16,7 +16,6 @@ function candidate(
   return {
     id: id(digit),
     status: 'HELD_PROVIDER_DISABLED',
-    consentStatus: 'GRANTED',
     attemptCount: 0,
     lastAttemptAt: null,
     createdAt: `2026-08-25T06:00:0${digit}.000Z`,
@@ -54,20 +53,18 @@ const activePolicy: WhatsappDispatchPolicy = {
   retryScheduleSeconds: [60, 300, 1800],
 };
 const guarded = planWhatsappDispatch([
-  candidate('5', { createdAt: '2026-08-25T06:00:05.000Z' }),
   candidate('1', { status: 'CANCELLED' }),
-  candidate('2', { consentStatus: 'REVOKED' }),
-  candidate('3', { attemptCount: 3, lastAttemptAt: '2026-08-25T06:00:00.000Z' }),
-  candidate('4', { attemptCount: 1, lastAttemptAt: '2026-08-25T06:59:30.000Z' }),
+  candidate('2', { attemptCount: 3, lastAttemptAt: '2026-08-25T06:00:00.000Z' }),
+  candidate('3', { attemptCount: 1, lastAttemptAt: '2026-08-25T06:59:30.000Z' }),
+  candidate('4'),
 ], activePolicy, now, 0);
 assert.deepEqual(guarded.items.map((item) => item.decision), [
   'CANCELLED',
-  'CONSENT_REQUIRED',
   'ATTEMPTS_EXHAUSTED',
   'RETRY_WAIT',
   'READY',
 ]);
-assert.equal(guarded.items[3].nextAttemptAt, '2026-08-25T07:00:30.000Z');
+assert.equal(guarded.items[2].nextAttemptAt, '2026-08-25T07:00:30.000Z');
 
 const rateLimited = planWhatsappDispatch([
   candidate('3'),

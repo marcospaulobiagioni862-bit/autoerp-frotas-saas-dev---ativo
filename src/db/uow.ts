@@ -32,8 +32,9 @@ import {
   accountReceivables,
   financialAccounts,
   financialTransactions,
+  financialCategories,
 } from './schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 
 export interface UnitOfWorkOptions {
   financialPeriodLock?: 'SHARED' | 'EXCLUSIVE';
@@ -63,11 +64,35 @@ export class UnitOfWork {
       await tx.execute(sql`SELECT set_config('app.current_tenant', ${companyId}, true)`);
       await applyFinancialPeriodLock(tx,companyId,options?.financialPeriodLock);
       const txContext:any={
+        findSettlementComposition: async (transactionId: string) => {
+          const result = await tx.execute(sql`SELECT changes FROM audit_logs WHERE company_id=${companyId} AND entity_type='FinancialSettlement' AND entity_id=${transactionId}`);
+          if (!result.rows?.length) return null;
+          if (result.rows.length !== 1) throw new Error('Auditoria da liquidação ambígua');
+          const changes = typeof result.rows[0].changes === 'string' ? JSON.parse(result.rows[0].changes) : result.rows[0].changes;
+          const value = typeof changes.newState === 'string' ? JSON.parse(changes.newState) : changes.newState;
+          if (value?.version !== 1 || value.transactionId !== transactionId) throw new Error('Composição da liquidação inválida');
+          return value;
+        },
+        findLastReceivableSettlementDate: async (obligationId: string) => {
+          const result = await tx.execute(sql`
+            SELECT transaction_date
+            FROM financial_transactions
+            WHERE company_id = ${companyId}
+              AND receivable_id = ${obligationId}
+              AND type = 'INCOME'
+              AND COALESCE(is_reversed, false) = false
+            ORDER BY transaction_date DESC, created_at DESC
+            LIMIT 1
+          `);
+          const value = result.rows?.[0]?.transaction_date;
+          return typeof value === 'string' ? value.slice(0, 10) : value ? String(value).slice(0, 10) : null;
+        },
         getDriverRepo:()=>new PostgresDriverRepository(tx),
         getVehicleRepo:()=>new PostgresVehicleRepository(tx),
         getKmRecordRepo:()=>new PostgresKmRecordRepository(tx),
         getReceivableRepo:()=>new PostgresAccountReceivableRepository(tx,companyId),
         getPayableRepo:()=>new PostgresAccountPayableRepository(tx,companyId),
+        getFinancialCategories:async()=>await tx.select().from(financialCategories).where(eq(financialCategories.companyId,companyId)),
         getTransactionRepo:()=>new PostgresFinancialTransactionRepository(tx,companyId),
         getAccountRepo:()=>new PostgresFinancialAccountRepository(tx,companyId),
         getPaymentMethodRepo:()=>new PostgresPaymentMethodRepository(tx,companyId),
@@ -102,6 +127,11 @@ export class UnitOfWork {
             .where(and(eq(accountPayables.companyId,companyId),eq(accountPayables.id,id)))
             .for('update').limit(1);
           return rows[0]||null;
+        },
+        findPreviousPayableInstallmentsForUpdate:async(groupId:string,installmentNumber:number)=>{
+          return await tx.select().from(accountPayables)
+            .where(and(eq(accountPayables.companyId,companyId),eq(accountPayables.installmentGroupId,groupId),lt(accountPayables.installmentNumber,installmentNumber)))
+            .orderBy(accountPayables.installmentNumber).for('update');
         },
         findFinancialAccountByIdWithLock:async(id:string)=>{
           const rows=await tx.select().from(financialAccounts)

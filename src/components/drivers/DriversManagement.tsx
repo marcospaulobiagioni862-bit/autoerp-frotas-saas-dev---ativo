@@ -6,7 +6,7 @@ import {
   Car,
   Eye,
   Edit2,
-  Trash2,
+  Archive,
   RefreshCw,
   ScanLine,
 } from 'lucide-react';
@@ -26,6 +26,7 @@ import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClien
 import { Driver } from '../../types/entities';
 import { DriverStatus, DocumentStatus } from '../../types/enums';
 import { matchesDriverSearch } from './driverSearch';
+import { formatDateBR } from '../../shared/utils/date';
 
 const DriverFormModal = lazy(() => import('./DriverFormModal').then(module => ({ default: module.DriverFormModal })));
 const DriverDetailsModal = lazy(() => import('./DriverDetailsModal').then(module => ({ default: module.DriverDetailsModal })));
@@ -34,6 +35,27 @@ const DriverCnhIntakeModal = lazy(() => import('./DriverCnhIntakeModal').then(mo
 interface DriversManagementProps {
   companyId: string;
   onSelectVehicle?: (vehicleId: string) => void;
+}
+
+function maskCpf(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length !== 11) return '***';
+  return `***.***.***-${digits.slice(-2)}`;
+}
+
+function maskCnh(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '—';
+  return `${'•'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`;
+}
+
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 4 ? `•••• ${digits.slice(-4)}` : '—';
+}
+
+function earLabel(value: boolean | undefined): string {
+  return value === true ? 'EAR: Sim' : value === false ? 'EAR: Não' : 'EAR: Pendente';
 }
 
 function evaluateCnhStatus(expiration: string): { status: DocumentStatus; daysToExpiration: number } {
@@ -54,6 +76,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<'NAME' | 'CNH_EXPIRY' | 'STATUS'>('NAME');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [isCnhIntakeOpen, setIsCnhIntakeOpen] = useState(false);
@@ -140,8 +163,12 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
       if (statusFilter === 'WITH_VEHICLE') return !!driver.currentVehicleId;
       if (statusFilter === 'WITHOUT_VEHICLE') return !driver.currentVehicleId;
       return true;
+    }).sort((a, b) => {
+      if (sortOption === 'CNH_EXPIRY') return a.cnhExpiration.localeCompare(b.cnhExpiration);
+      if (sortOption === 'STATUS') return String(a.status).localeCompare(String(b.status), 'pt-BR');
+      return a.fullName.localeCompare(b.fullName, 'pt-BR');
     });
-  }, [drivers, searchTerm, statusFilter]);
+  }, [drivers, searchTerm, statusFilter, sortOption]);
 
   const handleOpenCreate = () => {
     setEditingDriver(null);
@@ -223,7 +250,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         return <Badge variant="danger">Bloqueado</Badge>;
       case DriverStatus.PENDING_DOCS:
       case DriverStatus.PENDING:
-        return <Badge variant="warning">Pendente Docs</Badge>;
+        return <Badge variant="warning">Documentação pendente</Badge>;
       default:
         return <Badge variant="neutral">{status}</Badge>;
     }
@@ -254,10 +281,6 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
               <ScanLine className="w-4 h-4 mr-1.5" />
               Cadastrar pela CNH
             </Button>
-            <Button variant="outline" size="sm" onClick={loadData}>
-              <RefreshCw className="w-4 h-4 mr-1.5" />
-              Atualizar
-            </Button>
           </div>
         }
       />
@@ -280,7 +303,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
           <strong className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">{kpis.blocked}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-500">
-          <span className="text-[11px] font-medium text-slate-500 block">Pend. Docs</span>
+          <span className="text-[11px] font-medium text-slate-500 block">Documentos pendentes</span>
           <strong className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">{kpis.pendingDocs}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-600">
@@ -300,13 +323,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Buscar por nome, CPF, CNH, telefone, RG, endereço, CEP ou data..."
+            placeholder="Buscar por nome, CPF, CNH ou telefone..."
             className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
         <div className="w-full sm:w-64">
           <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="ALL">Todos os Filtros</option>
+            <option value="ALL">Filtros</option>
             <option value="ACTIVE">Ativos</option>
             <option value="INACTIVE">Inativos</option>
             <option value="BLOCKED">Bloqueados</option>
@@ -315,6 +338,13 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             <option value="CNH_EXPIRED">CNH Vencida</option>
             <option value="WITH_VEHICLE">Com Veículo Alocado</option>
             <option value="WITHOUT_VEHICLE">Sem Veículo Alocado</option>
+          </Select>
+        </div>
+        <div className="w-full sm:w-52">
+          <Select value={sortOption} onChange={(event) => setSortOption(event.target.value as typeof sortOption)}>
+            <option value="NAME">Ordenar: nome</option>
+            <option value="CNH_EXPIRY">Ordenar: validade CNH</option>
+            <option value="STATUS">Ordenar: status</option>
           </Select>
         </div>
       </Card>
@@ -364,16 +394,16 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                     >
                       <td className="p-3.5">
                         <div className="font-bold text-slate-900 dark:text-slate-100">{driver.fullName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">CPF: {driver.cpf} • Tel: {driver.phone}</div>
+                        <div className="text-[11px] text-slate-500 font-mono">CPF: {maskCpf(driver.cpf)} • Tel: {maskPhone(driver.phone)}</div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">{driver.cnhNumber}</div>
+                        <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">{maskCnh(driver.cnhNumber)}</div>
                         <div className="text-[11px] text-slate-400">
-                          Cat. <span className="font-bold text-slate-700 dark:text-slate-300">{driver.cnhCategory}</span>
+                          Cat. <span className="font-bold text-slate-700 dark:text-slate-300">{driver.cnhCategory}</span> • {earLabel(driver.cnhEar)}
                         </div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-mono text-slate-800 dark:text-slate-200">{driver.cnhExpiration}</div>
+                        <div className="font-mono text-slate-800 dark:text-slate-200">{formatDateBR(driver.cnhExpiration)}</div>
                         {cnhEval.status === DocumentStatus.EXPIRED && (
                           <span className="text-[10px] font-semibold text-rose-600 block">Vencida há {Math.abs(cnhEval.daysToExpiration)}d</span>
                         )}
@@ -384,24 +414,39 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                       <td className="p-3.5">{getStatusBadge(driver.status)}</td>
                       <td className="p-3.5 text-slate-600 dark:text-slate-400">
                         {vehicleName ? (
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                            <Car className="w-3.5 h-3.5" />{vehicleName}
-                          </span>
+                          onSelectVehicle && driver.currentVehicleId ? (
+                            <button
+                              type="button"
+                              onClick={(event) => { event.stopPropagation(); onSelectVehicle(driver.currentVehicleId!); }}
+                              className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:underline"
+                            >
+                              <Car className="w-3.5 h-3.5" />{vehicleName}
+                            </button>
+                          ) : (
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Car className="w-3.5 h-3.5" />{vehicleName}
+                            </span>
+                          )
                         ) : (
                           <span className="text-slate-400 italic">Sem veículo</span>
                         )}
                       </td>
                       <td className="p-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
-                          <Button size="sm" variant="ghost" onClick={() => handleOpenDetails(driver.id)} title="Ver Detalhes">
-                            <Eye className="w-4 h-4" />
+                        <div className="flex items-center justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                          <Button size="sm" variant="primary" onClick={() => handleOpenDetails(driver.id)}>
+                            <Eye className="w-4 h-4 mr-1" />Detalhes
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={(event) => handleOpenEdit(driver, event)} title="Editar">
-                            <Edit2 className="w-4 h-4 text-blue-600" />
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setDeletingDriver(driver)} title="Arquivar / Remover">
-                            <Trash2 className="w-4 h-4 text-rose-600" />
-                          </Button>
+                          <details className="relative">
+                            <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
+                            <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                              <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                                <Edit2 className="w-4 h-4" />Editar
+                              </button>
+                              <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30">
+                                <Archive className="w-4 h-4" />Arquivar
+                              </button>
+                            </div>
+                          </details>
                         </div>
                       </td>
                     </tr>
@@ -423,18 +468,18 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{driver.fullName}</h3>
-                      <p className="text-xs text-slate-500 font-mono">CPF: {driver.cpf}</p>
+                      <p className="text-xs text-slate-500 font-mono">CPF: {maskCpf(driver.cpf)}</p>
                     </div>
                     {getStatusBadge(driver.status)}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
                     <div>
                       <span className="text-slate-400 block text-[10px]">CNH</span>
-                      <strong className="font-mono">{driver.cnhNumber} ({driver.cnhCategory})</strong>
+                      <strong className="font-mono">{maskCnh(driver.cnhNumber)} ({driver.cnhCategory})</strong><span className="block text-[10px] text-slate-400 mt-0.5">{earLabel(driver.cnhEar)}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">Validade CNH</span>
-                      <strong className="font-mono">{driver.cnhExpiration}</strong>
+                      <strong className="font-mono">{formatDateBR(driver.cnhExpiration)}</strong>
                     </div>
                   </div>
                   {vehicleName && (
@@ -446,12 +491,16 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                     className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <Button size="sm" variant="outline" onClick={() => handleOpenDetails(driver.id)}>
+                    <Button size="sm" variant="primary" onClick={() => handleOpenDetails(driver.id)}>
                       <Eye className="w-4 h-4 mr-1" />Detalhes
                     </Button>
-                    <Button size="sm" variant="outline" onClick={(event) => handleOpenEdit(driver, event)}>
-                      <Edit2 className="w-4 h-4 mr-1" />Editar
-                    </Button>
+                    <details className="relative">
+                      <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>
+                      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                        <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Edit2 className="w-4 h-4"/>Editar</button>
+                        <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-4 h-4"/>Arquivar</button>
+                      </div>
+                    </details>
                   </div>
                 </Card>
               );

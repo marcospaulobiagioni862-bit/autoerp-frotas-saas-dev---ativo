@@ -7,7 +7,7 @@ import {
   type CreateTrafficTicketAuthorityInput,type UpdateTrafficTicketAuthorityInput,
 } from './trafficTicketAuthority';
 import { TrafficTicketDriverIndicationAuthorityService } from './trafficTicketDriverIndicationAuthority';
-import { TrafficTicketWhatsappAuthorityService,TrafficTicketWhatsappConsentRequiredError } from './trafficTicketWhatsappAuthority';
+import { TrafficTicketWhatsappAuthorityService } from './trafficTicketWhatsappAuthority';
 import { TrafficTicketVehicleOperationalAuthorityService } from './trafficTicketVehicleOperationalAuthority';
 import { registerTrafficTicketDocumentIntakeRoutes } from './trafficTicketDocumentIntakeRoutes';
 import { registerTrafficTicketDocumentIntakeUploadRoutes } from './trafficTicketDocumentIntakeUploadRoutes';
@@ -27,15 +27,23 @@ function date(value:unknown,required=true):string|undefined{if(value===undefined
 function responsibility(value:unknown):TicketResponsibility{const item=String(value||'') as TicketResponsibility;if(!Object.values(TicketResponsibility).includes(item))throw new TrafficTicketValidationError();return item;}
 function status(value:unknown):TicketStatus|undefined{if(value===undefined||value===null||value==='')return undefined;const item=String(value) as TicketStatus;if(!Object.values(TicketStatus).includes(item))throw new TrafficTicketValidationError();return item;}
 function indicationStatus(value:unknown):TrafficTicketDriverIndicationStatus{const item=String(value||'') as TrafficTicketDriverIndicationStatus;if(!Object.values(TrafficTicketDriverIndicationStatus).includes(item))throw new TrafficTicketValidationError();return item;}
-function isUnique(error:unknown):boolean{let current:any=error;for(let i=0;i<6&&current;i++,current=current.cause)if(current.code==='23505')return true;return false;}
+function uniqueConstraint(error:unknown):string|undefined{
+  let current:any=error;for(let depth=0;depth<6&&current;depth++,current=current.cause){
+    if(current.code==='23505')return typeof current.constraint==='string'?current.constraint:'';
+  }
+  return undefined;
+}
 function sendError(res:Response,error:unknown):void{
   const message=error instanceof Error?error.message:'';
-  if(error instanceof TrafficTicketValidationError){res.status(400).json({error:'Invalid traffic ticket request'});return;}
-  if(error instanceof TrafficTicketForbiddenError||message.startsWith('Acesso negado:')){res.status(403).json({error:'Forbidden'});return;}
-  if(error instanceof TrafficTicketNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Not found'});return;}
-  if(error instanceof TrafficTicketWhatsappConsentRequiredError){res.status(409).json({error:'Current WhatsApp consent required'});return;}
-  if(error instanceof TrafficTicketConflictError||isUnique(error)||message.includes('Não é possível cancelar')||message.includes('já se encontra')||message.includes('período financeiro')){res.status(409).json({error:'Traffic ticket conflict'});return;}
-  console.error('AUTOERP_TRAFFIC_TICKET_API_FAILURE',error);res.status(500).json({error:'Traffic ticket operation failed'});
+  const constraint=uniqueConstraint(error);
+  if((error instanceof TrafficTicketConflictError&&message==='Auto de infração já cadastrado')||constraint==='uq_traffic_tickets_company_auto_canonical'){res.status(409).json({error:'Auto de infração já cadastrado'});return;}
+  if(constraint!==undefined){res.status(409).json({error:'Conflito ao cadastrar a multa'});return;}
+  if(error instanceof TrafficTicketValidationError){res.status(400).json({error:'Solicitação de multa inválida'});return;}
+  if(error instanceof TrafficTicketForbiddenError||message.startsWith('Acesso negado:')){res.status(403).json({error:'Acesso negado'});return;}
+  if(error instanceof TrafficTicketNotFoundError||message.includes('não encontrado')||message.includes('não encontrada')){res.status(404).json({error:'Registro não encontrado'});return;}
+  if(message.includes('Não é possível cancelar')||message.includes('já se encontra')||message.includes('período financeiro')){res.status(409).json({error:message});return;}
+  if(error instanceof TrafficTicketConflictError){res.status(409).json({error:message||'Conflito ao atualizar a multa'});return;}
+  console.error('AUTOERP_TRAFFIC_TICKET_API_FAILURE',error);res.status(500).json({error:'Falha ao processar a multa'});
 }
 
 export function registerTrafficTicketRoutes(app:Express):void{
@@ -51,7 +59,7 @@ export function registerTrafficTicketRoutes(app:Express):void{
   app.post('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(hasProtected(req.body))throw new TrafficTicketValidationError();
     const input:CreateTrafficTicketAuthorityInput={
-      vehicleId:text(req.body?.vehicleId,200),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),
+      vehicleId:optionalText(req.body?.vehicleId,200),vehiclePlate:optionalText(req.body?.vehiclePlate,20),driverId:optionalText(req.body?.driverId,200),contractId:optionalText(req.body?.contractId,200),
       autoNumber:text(req.body?.autoNumber,160),organName:text(req.body?.organName,200),infractionCode:text(req.body?.infractionCode,120),
       description:text(req.body?.description,2000),infractionDate:date(req.body?.infractionDate,true)!,infractionTime:optionalText(req.body?.infractionTime,5),infractionLocation:optionalText(req.body?.infractionLocation,500),dueDate:date(req.body?.dueDate,true)!,
       discountDueDate:date(req.body?.discountDueDate,false),originalAmount:amount(req.body?.originalAmount,true)!,

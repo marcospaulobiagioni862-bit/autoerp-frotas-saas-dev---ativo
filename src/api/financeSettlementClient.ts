@@ -17,7 +17,23 @@ export interface SettlementOptions {
   paymentMethods: SettlementPaymentMethodOption[];
 }
 
+export interface ReceiptDailyInterestQuote {
+  daysOverdue: number;
+  dailyInterestAmount: number;
+  interestAmount: number;
+  periodStartDate: string;
+  effectiveDate: string;
+  additionalInterest: number;
+  totalAmount: number;
+}
+
 export interface SettlementCommandInput {
+  dailyInterestAmount?: number;
+  settleRemainingBalance?: boolean;
+  interestAmount?: number;
+  additionalAmount?: number;
+  fineAmount?: number;
+  discountAmount?: number;
   financialAccountId: string;
   paymentMethodId: string;
   paymentAmount: number;
@@ -106,6 +122,37 @@ export class FinanceSettlementClient {
       accounts: payload.accounts.map(normalizeAccount),
       paymentMethods: payload.paymentMethods.map(normalizePaymentMethod),
     };
+  }
+
+  static async getReceiptDailyInterestQuote(
+    receivableId: string,
+    effectiveDate: string,
+    dailyInterestAmount: number
+  ): Promise<ReceiptDailyInterestQuote> {
+    const params = new URLSearchParams({ date: effectiveDate, daily: String(dailyInterestAmount) });
+    const payload = asRecord(await requestJson(`/api/finance/receivables/${encodeURIComponent(receivableId)}/daily-interest-quote?${params.toString()}`));
+    const row = asRecord(payload.quote);
+    const quote: ReceiptDailyInterestQuote = {
+      daysOverdue: Number(row.daysOverdue),
+      dailyInterestAmount: Number(row.dailyInterestAmount),
+      interestAmount: Number(row.interestAmount),
+      periodStartDate: typeof row.periodStartDate === 'string' ? row.periodStartDate : '',
+      effectiveDate: typeof row.effectiveDate === 'string' ? row.effectiveDate : effectiveDate,
+      additionalInterest: Number(row.additionalInterest),
+      totalAmount: Number(row.totalAmount),
+    };
+    if (
+      !Number.isFinite(quote.daysOverdue) ||
+      !Number.isFinite(quote.dailyInterestAmount) ||
+      !Number.isFinite(quote.interestAmount) ||
+      !Number.isFinite(quote.additionalInterest) ||
+      !Number.isFinite(quote.totalAmount) ||
+      !quote.periodStartDate ||
+      !quote.effectiveDate
+    ) {
+      throw new Error('Invalid daily interest quote response');
+    }
+    return quote;
   }
 
   static async registerReceipt(receivableId: string, input: SettlementCommandInput): Promise<void> {

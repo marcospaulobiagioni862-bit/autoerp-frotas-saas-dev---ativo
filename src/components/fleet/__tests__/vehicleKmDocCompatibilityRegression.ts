@@ -10,10 +10,11 @@ const intakeModalSource = readFileSync(new URL('../VehicleDocumentIntakeModal.ts
 const intakeClientSource = readFileSync(new URL('../../../api/vehicleDocumentIntakeClient.ts', import.meta.url), 'utf8');
 const crlvRouteSource = readFileSync(new URL('../../../server/vehicleCrlvApplyRoutes.ts', import.meta.url), 'utf8');
 
-assert.ok(recordKmSource.includes('kmValue <= vehicle.currentKm'), 'single KM update must reject equal or lower odometer values');
-assert.ok(recordKmSource.includes('min={vehicle.currentKm + 1}'), 'single KM input must start above current odometer');
-assert.ok(batchKmSource.includes('kmValue <= vehicle.currentKm'), 'batch KM update must reject equal or lower odometer values');
-assert.ok(batchKmSource.includes('min={vehicle.currentKm + 1}'), 'batch KM input must start above current odometer');
+assert.ok(recordKmSource.includes('kmValue < vehicle.currentKm'), 'single KM update must reject only lower odometer values');
+assert.ok(recordKmSource.includes('min={vehicle.currentKm}'), 'single KM input must allow equal odometer confirmation');
+assert.ok(recordKmSource.includes('registra conferência'), 'single KM helper must explain equal-KM confirmation');
+assert.ok(batchKmSource.includes('kmValue < vehicle.currentKm'), 'batch KM update must reject only lower odometer values');
+assert.ok(batchKmSource.includes('min={vehicle.currentKm}'), 'batch KM input must allow equal odometer confirmation');
 assert.ok(bridgeSource.includes('record.kmValue!==records[index-1].kmValue'), 'visible KM history must suppress consecutive duplicate values');
 
 assert.ok(modalSource.includes("document.body.style.overflow = 'hidden'"), 'modal must lock body scroll');

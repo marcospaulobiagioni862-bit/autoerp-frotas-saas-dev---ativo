@@ -1,5 +1,6 @@
 import type { Contract, ContractArtifact, ContractSignatureMethod, FileAttachment } from '../types/entities';
 import { runIdempotentMutation } from './idempotentMutation';
+import { asApiRecord, normalizeNumericFields } from './apiPayloadNormalization';
 
 export class ContractExecutionApiError extends Error {
   constructor(public readonly status: number, message: string, public readonly code?: string) {
@@ -8,14 +9,9 @@ export class ContractExecutionApiError extends Error {
   }
 }
 
-type JsonRecord = Record<string, unknown>;
-function asRecord(value: unknown): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid contract execution payload');
-  return value as JsonRecord;
-}
 
 function validateArtifact(value: unknown): ContractArtifact {
-  const item = asRecord(value);
+  const item = asApiRecord(value, 'contract artifact');
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractId !== 'string' ||
     (item.artifactType !== 'GENERATED_PDF' && item.artifactType !== 'GENERATED_DOCX' && item.artifactType !== 'REVIEWED_FINAL_PDF' && item.artifactType !== 'SIGNED_EVIDENCE') ||
@@ -33,7 +29,7 @@ function validateArtifact(value: unknown): ContractArtifact {
 }
 
 function validateAttachment(value: unknown): FileAttachment {
-  const item = asRecord(value);
+  const item = normalizeNumericFields(asApiRecord(value, 'contract execution attachment'), ['fileSize']);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.entityType !== 'string' ||
     typeof item.entityId !== 'string' || typeof item.fileName !== 'string' || typeof item.fileSize !== 'number' ||
@@ -44,7 +40,7 @@ function validateAttachment(value: unknown): FileAttachment {
 }
 
 function validateContract(value: unknown): Contract {
-  const item = asRecord(value);
+  const item = normalizeNumericFields(asApiRecord(value, 'contract execution'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
   if (
     typeof item.id !== 'string' || typeof item.companyId !== 'string' || typeof item.contractNumber !== 'string' ||
     typeof item.driverId !== 'string' || typeof item.vehicleId !== 'string' || typeof item.status !== 'string' ||
@@ -58,7 +54,7 @@ async function apiError(response: Response): Promise<ContractExecutionApiError> 
   let message = `Contract execution request failed (${response.status})`;
   let code: string | undefined;
   try {
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'contract execution');
     if (typeof payload.error === 'string') message = payload.error;
     if (typeof payload.code === 'string') code = payload.code;
   } catch {
@@ -74,7 +70,7 @@ async function generatedRequest(contractId: string, action: 'generate-pdf' | 'ge
       body: '{}',
     });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'contract execution');
     return {
       artifact: validateArtifact(payload.artifact),
       attachment: validateAttachment(payload.attachment),
@@ -87,7 +83,7 @@ export class ContractExecutionClient {
   static async listArtifacts(contractId: string): Promise<ContractArtifact[]> {
     const response = await fetch(`/api/contracts/${encodeURIComponent(contractId)}/artifacts`, { credentials: 'include' });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'contract execution');
     if (!Array.isArray(payload.items)) throw new Error('Invalid contract artifact list payload');
     return payload.items.map(validateArtifact);
   }
@@ -110,7 +106,7 @@ export class ContractExecutionClient {
       body: JSON.stringify({ attachmentId }),
     });
     if (!response.ok) throw await apiError(response);
-    return validateArtifact(asRecord(await response.json()).artifact);
+    return validateArtifact(asApiRecord(await response.json(), 'contract execution').artifact);
   }
 
   static async registerSignatureEvidence(
@@ -122,7 +118,7 @@ export class ContractExecutionClient {
       body: JSON.stringify(input),
     });
     if (!response.ok) throw await apiError(response);
-    return validateArtifact(asRecord(await response.json()).artifact);
+    return validateArtifact(asApiRecord(await response.json(), 'contract execution').artifact);
   }
 
   static async setManualSignStatus(contractId: string, signed: boolean): Promise<{ contract: Contract; artifact: ContractArtifact | null; signed: boolean }> {
@@ -131,7 +127,7 @@ export class ContractExecutionClient {
       body: JSON.stringify({ signed }),
     });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'contract execution');
     if (typeof payload.signed !== 'boolean') throw new Error('Invalid contract sign status payload');
     return {
       contract: validateContract(payload.contract),

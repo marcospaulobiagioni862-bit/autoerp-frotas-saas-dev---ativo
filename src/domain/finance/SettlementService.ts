@@ -1,3 +1,5 @@
+import { fixedSettlementQuote, fixedDailyInterest } from './dailyLateInterest';
+import { determinePrincipalLiquidated, requestedAdjustments, settlementState, type SettlementComposition } from './settlementComposition';
 import { ITransactionContext } from './ITransactionContext';
 import {
   AccountReceivableRepository,
@@ -6,13 +8,14 @@ import {
   FinancialAccountRepository,
 } from '../../persistence/repositories/localRepositories';
 import { AccountReceivable, AccountPayable, FinancialTransaction, FinancialAccount } from '../../types/entities';
-import { ObligationStatus, TransactionType, AuditAction } from '../../types/enums';
+import { ObligationStatus, TransactionType, AuditAction, OriginType, SecurityDepositStatus, SecurityDepositMovementType } from '../../types/enums';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
 import { FinancialPeriodService } from './FinancialPeriodService';
 import { FinancialAuthorizationService } from './FinancialAuthorizationService';
 import { resolveAuthoritativeTrafficTicketDiscount } from './TrafficTicketSettlementDiscount';
+import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from './payableInstallmentOrder';
 
 export interface SettlementParams {
   companyId: string;
@@ -22,8 +25,11 @@ export interface SettlementParams {
   paymentAmount: number;
   paymentDate: string;
   competenceDate?: string;
+  dailyInterestAmount?: number;
+  settleRemainingBalance?: boolean;
   fineAmount?: number;
   interestAmount?: number;
+  additionalAmount?: number;
   discountAmount?: number;
   description?: string;
   /** Logical command key. Required on the authoritative PostgreSQL/UOW path. */
@@ -56,7 +62,7 @@ export class SettlementService {
       !txContext.findFinancialAccountByIdWithLock ||
       !txContext.findFinancialTransactionByIdempotencyKey ||
       (kind === 'RECEIVABLE' && !txContext.findReceivableByIdWithLock) ||
-      (kind === 'PAYABLE' && !txContext.findPayableByIdWithLock)
+      (kind === 'PAYABLE' && (!txContext.findPayableByIdWithLock || !txContext.findPreviousPayableInstallmentsForUpdate))
     ) {
       throw new Error('Autoridade transacional de liquidação indisponível');
     }
@@ -88,6 +94,83 @@ export class SettlementService {
     if (!matches) {
       throw new Error('Chave de idempotência reutilizada com comando de liquidação diferente');
     }
+  }
+
+  private static async checkRetryAdjustments(existing: FinancialTransaction, params: SettlementParams, tx: ITransactionContext) {
+    const requested = requestedAdjustments(params);
+    const evidence = await tx.findSettlementComposition?.(existing.id);
+    if (evidence) {
+      if (requested.dailyInterestAmount !== (evidence.requested.dailyInterestAmount ?? null) || requested.settleRemainingBalance !== (evidence.requested.settleRemainingBalance ?? false)) throw new Error('Chave de idempotência reutilizada com composição diferente');
+      const interest = requested.interestAmount ?? evidence.applied.interestAmount;
+      if (requested.fineAmount !== evidence.requested.fineAmount || requested.additionalAmount !== (evidence.requested.additionalAmount ?? 0) || requested.discountAmount !== evidence.requested.discountAmount || interest !== evidence.applied.interestAmount) throw new Error('Chave de idempotência reutilizada com ajustes diferentes');
+    } else if (requested.fineAmount || requested.interestAmount || requested.additionalAmount || requested.discountAmount || requested.dailyInterestAmount != null || requested.settleRemainingBalance) {
+      throw new Error('Composição histórica da liquidação indisponível para validar retry com ajustes');
+    }
+  }
+
+  private static async appliedAdjustments(params: SettlementParams, obligation: AccountReceivable | AccountPayable, kind: 'RECEIVABLE' | 'PAYABLE', tx?: ITransactionContext) {
+    const requested = requestedAdjustments(params);
+    const daily = requested.dailyInterestAmount;
+    if (kind === 'PAYABLE' && daily != null) throw new Error('CP não admite diária automática');
+    if (kind === 'RECEIVABLE' && requested.settleRemainingBalance) throw new Error('Modalidade integral exclusiva de CP');
+    let interestAmount: number;
+    if (daily == null) {
+      interestAmount = requested.interestAmount ?? 0;
+    } else {
+      const previousSettlementDate = tx?.findLastReceivableSettlementDate
+        ? await tx.findLastReceivableSettlementDate(params.obligationId)
+        : null;
+      const dueDate = dateKey(obligation.dueDate);
+      const periodStartDate = previousSettlementDate && previousSettlementDate > dueDate ? previousSettlementDate : dueDate;
+      if (previousSettlementDate && dateKey(params.paymentDate) < previousSettlementDate) {
+        throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
+      }
+      interestAmount = fixedSettlementQuote(obligation, params.paymentDate, daily, periodStartDate).additionalInterest;
+    }
+    if (kind === 'PAYABLE' && requested.settleRemainingBalance) {
+      const base = roundCurrency(Number(obligation.balanceAmount) + requested.fineAmount + requested.additionalAmount - requested.discountAmount);
+      if (params.paymentAmount < base) throw new Error('Liquidação integral inferior ao saldo');
+      interestAmount = roundCurrency(params.paymentAmount - base);
+    }
+    if ((daily != null || requested.settleRemainingBalance) && requested.interestAmount != null && requested.interestAmount !== interestAmount) throw new Error('Juros divergem do cálculo autoritativo; atualize a liquidação');
+    return { fineAmount: requested.fineAmount, interestAmount, additionalAmount: requested.additionalAmount, discountAmount: requested.discountAmount };
+  }
+
+  public static async quoteReceiptDailyInterest(
+    companyId: string,
+    obligationId: string,
+    effectiveDate: string,
+    dailyInterestAmount: number,
+    txContext?: ITransactionContext
+  ) {
+    if (!txContext) throw new Error('Autoridade transacional de diária indisponível');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) throw new Error('Data efetiva inválida');
+    if (!Number.isFinite(dailyInterestAmount) || dailyInterestAmount < 0) throw new Error('Diária inválida');
+    const receivable = await txContext.getReceivableRepo().findById(obligationId);
+    if (!receivable || receivable.companyId !== companyId) throw new Error('Conta a Receber não encontrada');
+    const previousSettlementDate = txContext.findLastReceivableSettlementDate
+      ? await txContext.findLastReceivableSettlementDate(obligationId)
+      : null;
+    const dueDate = dateKey(receivable.dueDate);
+    const periodStartDate = previousSettlementDate && previousSettlementDate > dueDate ? previousSettlementDate : dueDate;
+    if (previousSettlementDate && effectiveDate < previousSettlementDate) {
+      throw new Error('Data do recebimento não pode ser anterior à última baixa do título');
+    }
+    return fixedSettlementQuote(receivable, effectiveDate, dailyInterestAmount, periodStartDate);
+  }
+
+  private static async auditComposition(params: SettlementParams, before: any, after: any, transaction: FinancialTransaction, applied: {fineAmount: number; interestAmount: number; additionalAmount: number; discountAmount: number}, principalLiquidated: number | null, tx?: ITransactionContext) {
+    const composition: SettlementComposition = {
+      version: 1, transactionId: transaction.id, obligationId: params.obligationId,
+      dueDate: dateKey(before.dueDate), effectiveDate: params.paymentDate,
+      daysOverdue: fixedDailyInterest(dateKey(before.dueDate), params.paymentDate, 0).daysOverdue,
+      principalLiquidated,
+      financialAccountId: params.financialAccountId, paymentMethodId: params.paymentMethodId, userId: params.userId,
+      requested: requestedAdjustments(params), applied, movementAmount: params.paymentAmount,
+      balanceReduction: roundCurrency(params.paymentAmount - applied.fineAmount - applied.interestAmount - applied.additionalAmount + applied.discountAmount),
+      before: settlementState(before), after: settlementState(after),
+    };
+    await AuditLogger.logAction(params.companyId, 'FinancialSettlement', transaction.id, AuditAction.CREATE, params.userId, params.userName, undefined, composition, tx);
   }
 
   private static async validatePaymentMethod(params: SettlementParams, txContext?: ITransactionContext): Promise<void> {
@@ -125,6 +208,90 @@ export class SettlementService {
       throw new Error('Conta financeira inativa');
     }
     return account;
+  }
+
+  private static async syncSecurityDepositReceipt(
+    receivable: AccountReceivable,
+    transaction: FinancialTransaction,
+    paymentAmount: number,
+    params: SettlementParams,
+    txContext?: ITransactionContext
+  ): Promise<void> {
+    if (receivable.originType !== OriginType.SECURITY_DEPOSIT) return;
+    if (!txContext || !receivable.contractId) {
+      throw new Error('Autoridade transacional da caução indisponível');
+    }
+
+    const depositRepo = txContext.getSecurityDepositRepo();
+    const movementRepo = txContext.getSecurityDepositMovementRepo();
+    const existingMovement = await movementRepo.findByFinancialTransactionId(transaction.id);
+    if (existingMovement) return;
+
+    await depositRepo.lockContract(params.companyId, receivable.contractId);
+    const contract = await txContext.getContractRepo().findByIdForCompanyWithLock(params.companyId, receivable.contractId);
+    if (!contract || contract.isArchived) throw new Error('Contrato da caução não encontrado');
+
+    const originalAmount = roundCurrency(Number(contract.securityDepositAmount));
+    if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+      throw new Error('Contrato não possui caução válida');
+    }
+
+    const now = new Date().toISOString();
+    let deposit = await depositRepo.findByContractId(receivable.contractId);
+    if (!deposit) {
+      deposit = await depositRepo.create({
+        id: generateUUID(),
+        companyId: params.companyId,
+        contractId: contract.id,
+        driverId: contract.driverId,
+        vehicleId: contract.vehicleId,
+        originalAmount,
+        receivedAmount: 0,
+        usedAmount: 0,
+        returnedAmount: 0,
+        status: SecurityDepositStatus.PENDING,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    if (deposit.companyId !== params.companyId || roundCurrency(Number(deposit.originalAmount)) !== originalAmount) {
+      throw new Error('Caução vinculada diverge do contrato');
+    }
+
+    const previousState = { ...deposit };
+    const receivedAmount = roundCurrency(Number(deposit.receivedAmount) + paymentAmount);
+    if (receivedAmount > originalAmount) throw new Error('Recebimento da caução excede o valor previsto');
+
+    const updatedDeposit = await depositRepo.update(deposit.id, {
+      receivedAmount,
+      status: receivedAmount >= originalAmount ? SecurityDepositStatus.RECEIVED : SecurityDepositStatus.PENDING,
+      receivedAt: now,
+      updatedAt: now,
+    });
+    await movementRepo.create({
+      id: generateUUID(),
+      securityDepositId: deposit.id,
+      companyId: params.companyId,
+      type: SecurityDepositMovementType.RECEIPT,
+      amount: paymentAmount,
+      date: now,
+      financialTransactionId: transaction.id,
+      receivableId: receivable.id,
+      description: 'Recebimento de caução via Conta a Receber',
+      createdById: params.userId,
+      createdAt: now,
+    });
+    await AuditLogger.logAction(
+      params.companyId,
+      'SecurityDeposit',
+      deposit.id,
+      AuditAction.RECEIVE,
+      params.userId,
+      params.userName,
+      previousState,
+      updatedDeposit,
+      txContext
+    );
   }
 
   public static async registerReceipt(params: SettlementParams, txContext?: ITransactionContext): Promise<{
@@ -166,6 +333,7 @@ export class SettlementService {
     if (txContext && idempotencyKey) {
       const existing = await txContext.findFinancialTransactionByIdempotencyKey!(idempotencyKey);
       if (existing) {
+        await this.checkRetryAdjustments(existing, params, txContext);
         this.assertRetryMatches(
           existing,
           params,
@@ -174,6 +342,7 @@ export class SettlementService {
           competenceDate,
           description
         );
+        await this.syncSecurityDepositReceipt(receivable, existing, params.paymentAmount, params, txContext);
         return { receivable, transaction: existing };
       }
     }
@@ -186,16 +355,16 @@ export class SettlementService {
       throw new Error(`Título em status ${receivable.status} não aceita recebimento`);
     }
 
-    const fine = params.fineAmount || 0;
-    const interest = params.interestAmount || 0;
-    const discount = params.discountAmount || 0;
+    const applied = await this.appliedAdjustments(params, receivable, 'RECEIVABLE', txContext);
+    const { fineAmount: fine, interestAmount: interest, additionalAmount: additional, discountAmount: discount } = applied;
 
     const newFineAmount = Number(receivable.fineAmount) + fine;
     const newInterestAmount = Number(receivable.interestAmount) + interest;
+    const newAdditionalAmount = Number(receivable.additionalAmount ?? 0) + additional;
     const newDiscountAmount = Number(receivable.discountAmount) + discount;
 
     const updatedAmount = roundCurrency(
-      Number(receivable.originalAmount) + newFineAmount + newInterestAmount - newDiscountAmount
+      Number(receivable.originalAmount) + newFineAmount + newInterestAmount + newAdditionalAmount - newDiscountAmount
     );
 
     if (params.paymentAmount > roundCurrency(updatedAmount - Number(receivable.paidAmount))) {
@@ -206,14 +375,16 @@ export class SettlementService {
     const balanceAmount = roundCurrency(Math.max(0, updatedAmount - effectivePaid));
 
     let newStatus = ObligationStatus.PARTIALLY_PAID;
-    if (balanceAmount <= 0.01) {
+    if (balanceAmount === 0) {
       newStatus = ObligationStatus.PAID;
     }
 
+    const principalLiquidated = determinePrincipalLiquidated({ ...settlementState(receivable), originalAmount: Number(receivable.originalAmount) }, applied, params.paymentAmount);
     const previousState = { ...receivable };
     const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
+      additionalAmount: newAdditionalAmount,
       discountAmount: newDiscountAmount,
       updatedAmount,
       paidAmount: effectivePaid,
@@ -267,6 +438,8 @@ export class SettlementService {
         updatedReceivable,
         txContext
       );
+      await this.auditComposition(params, previousState, updatedReceivable, savedTransaction, applied, principalLiquidated, txContext);
+      await this.syncSecurityDepositReceipt(receivable, savedTransaction, params.paymentAmount, params, txContext);
 
       return { receivable: updatedReceivable, transaction: savedTransaction };
     } catch (error) {
@@ -318,6 +491,7 @@ export class SettlementService {
     if (txContext && idempotencyKey) {
       const existing = await txContext.findFinancialTransactionByIdempotencyKey!(idempotencyKey);
       if (existing) {
+        await this.checkRetryAdjustments(existing, params, txContext);
         this.assertRetryMatches(
           existing,
           params,
@@ -330,24 +504,33 @@ export class SettlementService {
       }
     }
 
-    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
-    await this.getLockedAccount(params, txContext);
-    await this.validatePaymentMethod(params, txContext);
-
     if (payable.status === ObligationStatus.PAID || payable.status === ObligationStatus.CANCELLED) {
       throw new Error(`Título em status ${payable.status} não aceita pagamento`);
     }
 
-    const fine = params.fineAmount || 0;
-    const interest = params.interestAmount || 0;
-    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, params, txContext);
+    if (payable.installmentGroupId && payable.installmentNumber && payable.installmentNumber > 1) {
+      const previous = txContext
+        ? await txContext.findPreviousPayableInstallmentsForUpdate!(payable.installmentGroupId, payable.installmentNumber)
+        : await this.payableRepo.findAllForCompany(params.companyId);
+      const blocking = firstUnpaidPreviousInstallment(payable, previous);
+      if (blocking) throw new Error(payableInstallmentOrderMessage(blocking));
+    }
+
+    await FinancialPeriodService.assertDateOpen(params.companyId, params.paymentDate, txContext);
+    await this.getLockedAccount(params, txContext);
+    await this.validatePaymentMethod(params, txContext);
+
+    const applied = await this.appliedAdjustments(params, payable, 'PAYABLE', txContext);
+    const { fineAmount: fine, interestAmount: interest, additionalAmount: additional } = applied;
+    const discount = await resolveAuthoritativeTrafficTicketDiscount(payable, { ...params, interestAmount: interest, additionalAmount: additional }, txContext);
 
     const newFineAmount = Number(payable.fineAmount) + fine;
     const newInterestAmount = Number(payable.interestAmount) + interest;
+    const newAdditionalAmount = Number(payable.additionalAmount ?? 0) + additional;
     const newDiscountAmount = Number(payable.discountAmount) + discount;
 
     const updatedAmount = roundCurrency(
-      Number(payable.originalAmount) + newFineAmount + newInterestAmount - newDiscountAmount
+      Number(payable.originalAmount) + newFineAmount + newInterestAmount + newAdditionalAmount - newDiscountAmount
     );
 
     if (params.paymentAmount > roundCurrency(updatedAmount - Number(payable.paidAmount))) {
@@ -358,14 +541,16 @@ export class SettlementService {
     const balanceAmount = roundCurrency(Math.max(0, updatedAmount - effectivePaid));
 
     let newStatus = ObligationStatus.PARTIALLY_PAID;
-    if (balanceAmount <= 0.01) {
+    if (balanceAmount === 0) {
       newStatus = ObligationStatus.PAID;
     }
 
+    const principalLiquidated = determinePrincipalLiquidated({ ...settlementState(payable), originalAmount: Number(payable.originalAmount) }, { ...applied, discountAmount: discount }, params.paymentAmount);
     const previousState = { ...payable };
     const updateData = {
       fineAmount: newFineAmount,
       interestAmount: newInterestAmount,
+      additionalAmount: newAdditionalAmount,
       discountAmount: newDiscountAmount,
       updatedAmount,
       paidAmount: effectivePaid,
@@ -421,6 +606,7 @@ export class SettlementService {
         txContext
       );
 
+      await this.auditComposition(params, previousState, updatedPayable, savedTransaction, { ...applied, discountAmount: discount }, principalLiquidated, txContext);
       return { payable: updatedPayable, transaction: savedTransaction };
     } catch (error) {
       if (!txContext) {

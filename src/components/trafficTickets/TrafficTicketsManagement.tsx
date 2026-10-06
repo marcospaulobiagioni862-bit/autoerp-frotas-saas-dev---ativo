@@ -37,11 +37,11 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
   }catch(err){setError(err instanceof Error?err.message:'Erro ao carregar multas.');}finally{setLoading(false);}};
   useEffect(()=>{void loadData();},[]);
 
-  const vehicleInfo=(id:string)=>{const v=vehicles.find(item=>item.id===id);return v?`${v.plate} (${v.brand} ${v.model})`:id;};
+  const vehicleInfo=(id:string,plate?:string)=>{const v=id?vehicles.find(item=>item.id===id):undefined;return v?`${v.plate} (${v.brand} ${v.model})`:plate?`${plate} (fora da frota)`:(id||'Veículo não cadastrado');};
   const driverInfo=(id?:string)=>{if(!id)return 'Não identificado';const d=drivers.find(item=>item.id===id);return d?d.fullName:id;};
   const filtered=useMemo(()=>tickets.filter(t=>{
     const term=searchTerm.toLowerCase();
-    return (!term||t.autoNumber.toLowerCase().includes(term)||t.description.toLowerCase().includes(term)||vehicleInfo(t.vehicleId).toLowerCase().includes(term)||driverInfo(t.driverId).toLowerCase().includes(term))
+    return (!term||t.autoNumber.toLowerCase().includes(term)||t.description.toLowerCase().includes(term)||vehicleInfo(t.vehicleId,t.vehiclePlate).toLowerCase().includes(term)||driverInfo(t.driverId).toLowerCase().includes(term))
       &&(statusFilter==='ALL'||t.status===statusFilter)&&(responsibilityFilter==='ALL'||t.responsibility===responsibilityFilter);
   }),[tickets,vehicles,drivers,searchTerm,statusFilter,responsibilityFilter]);
 
@@ -49,6 +49,7 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
   const pending=tickets.filter(t=>t.responsibility===TicketResponsibility.UNIDENTIFIED).length;
   const driverCharges=tickets.filter(t=>t.responsibility===TicketResponsibility.DRIVER&&Boolean(t.receivableId)).length;
   const responsibilityLabel=(value:TicketResponsibility)=>value===TicketResponsibility.DRIVER?'Motorista':value===TicketResponsibility.COMPANY?'Empresa':'Não identificado';
+  const ticketStatusLabel=(value:TicketStatus)=>value===TicketStatus.PENDING_IDENTIFICATION?'Aguardando identificação':value===TicketStatus.IDENTIFIED?'Identificada':value===TicketStatus.CHARGED_DRIVER?'Cobrança gerada ao motorista':value===TicketStatus.COMPANY_PAYABLE_CREATED?'Conta a pagar criada':value===TicketStatus.PAID_BY_COMPANY?'Pago pela empresa':value===TicketStatus.APPEALED?'Em recurso':'Cancelada';
   const ticketModalResetKey=isIntakeOpen?'intake':isFormOpen?'form':selectedTicketId?`details:${selectedTicketId}`:'none';
 
   return <div className="space-y-3">
@@ -86,7 +87,7 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
       <Card className="overflow-x-auto">
         {loading?<div className="p-10 text-center text-sm text-slate-500">Carregando multas...</div>:filtered.length===0?<div className="p-10 text-center text-sm text-slate-500">Nenhuma multa encontrada.</div>:
         <table className="w-full text-xs"><thead><tr className="border-b"><th className="p-3 text-left">Auto</th><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Motorista</th><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Valor</th><th className="p-3 text-left">Responsabilidade</th><th className="p-3 text-left">Status</th><th className="p-3"/></tr></thead>
-        <tbody>{filtered.map(t=><tr key={t.id} className="border-b last:border-0"><td className="p-3 font-mono font-semibold">{t.autoNumber}</td><td className="p-3">{vehicleInfo(t.vehicleId)}</td><td className="p-3">{driverInfo(t.driverId)}</td><td className="p-3">{new Date(`${t.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}</td><td className="p-3">{formatCurrencyBRL(t.originalAmount)}</td><td className="p-3"><Badge variant={t.responsibility===TicketResponsibility.UNIDENTIFIED?'warning':t.responsibility===TicketResponsibility.DRIVER?'indigo':'slate'}>{responsibilityLabel(t.responsibility)}</Badge></td><td className="p-3"><Badge variant={t.status===TicketStatus.CANCELLED?'danger':t.status===TicketStatus.PAID_BY_COMPANY?'success':t.status===TicketStatus.APPEALED?'warning':'secondary'}>{t.status}</Badge></td><td className="p-3 text-right"><Button variant="outline" size="sm" onClick={()=>setSelectedTicketId(t.id)}>Detalhes</Button></td></tr>)}</tbody></table>}
+        <tbody>{filtered.map(t=><tr key={t.id} className="border-b last:border-0"><td className="p-3 font-mono font-semibold">{t.autoNumber}</td><td className="p-3">{vehicleInfo(t.vehicleId,t.vehiclePlate)}</td><td className="p-3">{driverInfo(t.driverId)}</td><td className="p-3">{new Date(`${t.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}</td><td className="p-3">{formatCurrencyBRL(t.originalAmount)}</td><td className="p-3"><Badge variant={t.responsibility===TicketResponsibility.UNIDENTIFIED?'warning':t.responsibility===TicketResponsibility.DRIVER?'indigo':'slate'}>{responsibilityLabel(t.responsibility)}</Badge></td><td className="p-3"><Badge variant={t.status===TicketStatus.CANCELLED?'danger':t.status===TicketStatus.PAID_BY_COMPANY?'success':t.status===TicketStatus.APPEALED?'warning':'secondary'}>{ticketStatusLabel(t.status)}</Badge></td><td className="p-3 text-right"><Button variant="outline" size="sm" onClick={()=>setSelectedTicketId(t.id)}>Detalhes</Button></td></tr>)}</tbody></table>}
       </Card>
       <LazyModuleErrorBoundary resetKey={ticketModalResetKey} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados da multa...</div></div>}>

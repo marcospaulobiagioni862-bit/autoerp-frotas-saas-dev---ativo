@@ -17,6 +17,7 @@ import { ContractExecutionPanel } from './ContractExecutionPanel';
 import type { AccountReceivable, AuditLog, Contract, Driver, SecurityDeposit, TrafficTicket, Vehicle } from '../../types/entities';
 import { ContractStatus, ObligationStatus } from '../../types/enums';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
+import { formatDateBR } from '../../shared/utils/date';
 
 interface ContractDetailsModalProps {
   isOpen: boolean;
@@ -76,6 +77,33 @@ function contractAuditChangeSummary(previousState?: string, newState?: string): 
       ? `${previousStatus} → ${nextStatus}`
       : undefined;
   return { fields, statusTransition };
+}
+
+function contractStatusLabel(status: ContractStatus): string {
+  switch (status) {
+    case ContractStatus.DRAFT: return 'Rascunho';
+    case ContractStatus.AWAITING_SIGNATURE: return 'Aguardando assinatura';
+    case ContractStatus.ACTIVE: return 'Ativo';
+    case ContractStatus.SUSPENDED: return 'Suspenso';
+    case ContractStatus.FINISHED: return 'Finalizado';
+    case ContractStatus.CLOSED: return 'Encerrado';
+    case ContractStatus.CANCELLED: return 'Cancelado';
+    case ContractStatus.ARCHIVED: return 'Arquivado';
+    default: return String(status);
+  }
+}
+
+function obligationStatusLabel(status: ObligationStatus): string {
+  switch (status) {
+    case ObligationStatus.PENDING: return 'Em aberto';
+    case ObligationStatus.PARTIALLY_PAID: return 'Pago parcialmente';
+    case ObligationStatus.PAID: return 'Pago';
+    case ObligationStatus.OVERDUE: return 'Vencido';
+    case ObligationStatus.CANCELLED: return 'Cancelado';
+    case ObligationStatus.RENEGOTIATED: return 'Renegociado';
+    case ObligationStatus.WRITTEN_OFF: return 'Baixado';
+    default: return String(status);
+  }
 }
 
 const bridge = new ContractLegacyDetailsBridge();
@@ -208,6 +236,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
 
   const today = new Date().toISOString().slice(0, 10);
   const totalBilled = receivables.reduce((sum, item) => sum + item.originalAmount, 0);
+  const totalUpdated = receivables.reduce((sum, item) => sum + item.updatedAmount, 0);
   const totalPaid = receivables.reduce((sum, item) => sum + item.paidAmount, 0);
   const pending = receivables.reduce((sum, item) => sum + item.balanceAmount, 0);
   const overdue = receivables.filter((item) => item.dueDate < today && item.balanceAmount > 0 && item.status !== ObligationStatus.CANCELLED).reduce((sum, item) => sum + item.balanceAmount, 0);
@@ -216,7 +245,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="6xl">
       <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
-        <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-600" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contract.status}</Badge>}</div><p className="mt-1 text-xs text-slate-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
+        <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-600" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(contract.status)}</Badge>}</div><p className="mt-1 text-xs text-slate-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
         <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-slate-400"><X className="w-5 h-5" /></button>
       </div>
 
@@ -230,8 +259,6 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 dark:border-rose-900 dark:bg-rose-950/20"><p className="text-[11px] text-rose-700 dark:text-rose-300">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && contract.signatureRequired === false && <Button size="sm" variant="primary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={() => void activate()}>Ativar legado</Button>}
-          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} disabled={!incomeCategoryId} onClick={bill}>Faturar competência</Button>}
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
           {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
           {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
@@ -255,15 +282,15 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         {loading ? <div className="p-12 text-center text-sm text-slate-400">Carregando detalhes...</div> : contract && <>
           {tab === 'OVERVIEW' && <div className="space-y-4">
             <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} focusOnOpen={initialFocus === 'PDF_SIGNATURE'} onChanged={async () => { await load(); onRefresh(); }} />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado" value={formatCurrencyBRL(totalBilled)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado original" value={formatCurrencyBRL(totalBilled)} /><Metric label="Valor atualizado" value={formatCurrencyBRL(totalUpdated)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
-              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><User className="w-4 h-4 text-emerald-600" />Motorista</h3>{driver ? <div className="space-y-1 text-xs text-slate-600"><p><b>{driver.fullName}</b></p><p>CPF: {driver.cpf}</p><p>CNH: {driver.cnhNumber} • {driver.cnhExpiration}</p><p>Status: {driver.status}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
+              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-emerald-600" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-slate-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status === 'AVAILABLE' ? 'Disponível' : vehicle.status === 'RENTED' ? 'Alugado' : vehicle.status === 'RESERVED' ? 'Reservado' : vehicle.status === 'MAINTENANCE' ? 'Manutenção' : vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
+              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><User className="w-4 h-4 text-emerald-600" />Motorista</h3>{driver ? <div className="space-y-1 text-xs text-slate-600"><p><b>{driver.fullName}</b></p><p>CPF: {driver.cpf}</p><p>CNH: {driver.cnhNumber} • {formatDateBR(driver.cnhExpiration)}</p><p>Status: {driver.status === 'ACTIVE' ? 'Ativo' : driver.status === 'INACTIVE' ? 'Inativo' : driver.status === 'BLOCKED' ? 'Bloqueado' : driver.status}</p></div> : <p className="text-xs text-slate-400">Não localizado.</p>}</Card>
             </div>
-            <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Calendar className="w-4 h-4 text-emerald-600" />Condições</h3><div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><Info label="Início" value={contract.startDate} /><Info label="Término" value={contract.endDate || 'Indeterminado'} /><Info label="Franquia" value={`${contract.franchiseKm} km`} /><Info label="KM excedente" value={formatCurrencyBRL(contract.excessKmRate)} /></div>{contract.notes && <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-2 text-xs text-slate-500">{contract.notes}</p>}</Card>
+            <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Calendar className="w-4 h-4 text-emerald-600" />Condições</h3><div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><Info label="Início" value={formatDateBR(contract.startDate)} /><Info label="Término" value={contract.endDate ? formatDateBR(contract.endDate) : 'Indeterminado'} /><Info label="Franquia" value={`${contract.franchiseKm} km`} /><Info label="KM excedente" value={formatCurrencyBRL(contract.excessKmRate)} /></div>{contract.notes && <p className="mt-3 whitespace-pre-wrap border-t border-slate-100 pt-2 text-xs text-slate-500">{contract.notes}</p>}</Card>
           </div>}
 
-          {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3>{contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="primary" onClick={bill} isLoading={actionLoading} disabled={!incomeCategoryId}>Nova competência</Button>}</div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{item.status}</Badge></div><p className="mt-1 text-[11px] text-slate-500">Venc. {item.dueDate} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
+          {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3></div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{obligationStatusLabel(item.status)}</Badge></div><p className="mt-1 text-[11px] text-slate-500">Venc. {formatDateBR(item.dueDate)} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
 
           {tab === 'DEPOSIT' && <Card padding="md">
             <div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(depositRemaining)} /></div>

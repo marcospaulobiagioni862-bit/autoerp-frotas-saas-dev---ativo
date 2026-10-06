@@ -11,6 +11,7 @@ import {
   StatementDirection,
   FinancialPeriodStatus,
 } from '../enums';
+import type { FinancialDreGroup } from '../../shared/utils/financialDreGroups';
 
 export interface FinancialAccount {
   id: string; // UUID
@@ -45,6 +46,7 @@ export interface FinancialCategory {
   name: string;
   type: FinancialCategoryType;
   parentId?: string; // For hierarchy (e.g., Despesas -> Veículos -> Manutenção)
+  dreGroup?: FinancialDreGroup | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -96,6 +98,7 @@ export interface AccountReceivable {
   discountAmount: number;
   fineAmount: number;
   interestAmount: number;
+  additionalAmount?: number;
   updatedAmount: number; // original + fine + interest - discount
   paidAmount: number; // Sum of effective transactions
   balanceAmount: number; // updatedAmount - paidAmount
@@ -130,6 +133,7 @@ export interface AccountPayable {
   discountAmount: number;
   fineAmount: number;
   interestAmount: number;
+  additionalAmount?: number;
   updatedAmount: number;
   paidAmount: number;
   balanceAmount: number;

@@ -1,6 +1,7 @@
 import type { AccountReceivable, Contract } from '../types/entities';
 import { ContractStatus, ObligationStatus, RecurringFrequency } from '../types/enums';
 import { runIdempotentMutation } from './idempotentMutation';
+import { asApiRecord, normalizeNumericFields } from './apiPayloadNormalization';
 
 export class ContractApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -9,12 +10,6 @@ export class ContractApiError extends Error {
   }
 }
 
-type JsonRecord = Record<string, unknown>;
-
-function asRecord(value: unknown): JsonRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid Contract payload');
-  return value as JsonRecord;
-}
 
 const CONTRACT_STATUSES = new Set(Object.values(ContractStatus));
 const PERIODICITIES = new Set(Object.values(RecurringFrequency));
@@ -25,7 +20,7 @@ function isOptionalIntegerInRange(value: unknown, min: number, max: number): boo
 }
 
 function validateContract(value: unknown): Contract {
-  const item = asRecord(value);
+  const item = normalizeNumericFields(asApiRecord(value, 'Contract'), ['rentalAmount', 'securityDepositAmount', 'franchiseKm', 'excessKmRate']);
   if (
     typeof item.id !== 'string' ||
     typeof item.companyId !== 'string' ||
@@ -56,7 +51,7 @@ function validateContract(value: unknown): Contract {
 }
 
 function validateReceivable(value: unknown): AccountReceivable {
-  const item = asRecord(value);
+  const item = normalizeNumericFields(asApiRecord(value, 'Contract receivable'), ['originalAmount', 'discountAmount', 'fineAmount', 'interestAmount', 'updatedAmount', 'paidAmount', 'balanceAmount']);
   if (
     typeof item.id !== 'string' ||
     typeof item.companyId !== 'string' ||
@@ -75,7 +70,7 @@ function validateReceivable(value: unknown): AccountReceivable {
 async function apiError(response: Response): Promise<ContractApiError> {
   let message = `Contract request failed (${response.status})`;
   try {
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'Contract');
     if (typeof payload.error === 'string') message = payload.error;
   } catch {
     // Preserve status and fail closed when the response body is malformed.
@@ -106,14 +101,14 @@ export type ContractUpdateInput = Partial<ContractCreateInput>;
 async function requestItem(url: string, init?: RequestInit): Promise<Contract> {
   const response = await fetch(url, { credentials: 'include', ...init });
   if (!response.ok) throw await apiError(response);
-  return validateContract(asRecord(await response.json()).item);
+  return validateContract(asApiRecord(await response.json(), 'Contract').item);
 }
 
 export class ContractClient {
   static async list(): Promise<Contract[]> {
     const response = await fetch('/api/contracts', { credentials: 'include' });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'Contract');
     if (!Array.isArray(payload.items)) throw new Error('Invalid Contract list payload');
     return payload.items.map(validateContract);
   }
@@ -148,7 +143,7 @@ export class ContractClient {
       body: JSON.stringify({ categoryId }),
     });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'Contract');
     if (!Array.isArray(payload.receivables)) throw new Error('Invalid Contract activation payload');
     return { item: validateContract(payload.item), receivables: payload.receivables.map(validateReceivable) };
   }
@@ -184,7 +179,7 @@ export class ContractClient {
       body: JSON.stringify({ dueDate, competenceDate, categoryId }),
     });
     if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
+    const payload = asApiRecord(await response.json(), 'Contract');
     if (!Array.isArray(payload.items)) throw new Error('Invalid Contract billing payload');
     return payload.items.map(validateReceivable);
   }

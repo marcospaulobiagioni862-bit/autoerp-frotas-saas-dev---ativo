@@ -11,6 +11,8 @@ export interface CreateReceivableRequest {
   totalAmount: number;
   dueDate: string;
   competenceDate?: string;
+  competenceMode?: import('../shared/utils/installmentCompetence').InstallmentCompetenceMode;
+  installmentCompetenceDates?: string[];
   installmentsCount?: number;
   recurrenceDaysInterval?: number;
 }
@@ -60,6 +62,7 @@ function normalizeReceivable(value: unknown): AccountReceivable {
     discountAmount: numberField(record, 'discountAmount'),
     fineAmount: numberField(record, 'fineAmount'),
     interestAmount: numberField(record, 'interestAmount'),
+    additionalAmount: record.additionalAmount == null ? 0 : numberField(record, 'additionalAmount'),
     updatedAmount: numberField(record, 'updatedAmount'),
     paidAmount: numberField(record, 'paidAmount'),
     balanceAmount: numberField(record, 'balanceAmount'),
@@ -76,6 +79,7 @@ function normalizePayable(value: unknown): AccountPayable {
     discountAmount: numberField(record, 'discountAmount'),
     fineAmount: numberField(record, 'fineAmount'),
     interestAmount: numberField(record, 'interestAmount'),
+    additionalAmount: record.additionalAmount == null ? 0 : numberField(record, 'additionalAmount'),
     updatedAmount: numberField(record, 'updatedAmount'),
     paidAmount: numberField(record, 'paidAmount'),
     balanceAmount: numberField(record, 'balanceAmount'),

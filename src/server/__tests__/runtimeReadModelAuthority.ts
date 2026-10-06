@@ -98,7 +98,7 @@ const header = read('src/components/layout/Header.tsx');
 assert.doesNotMatch(header, /Reset Seed/, 'Production header must not expose Reset Seed');
 assert.doesNotMatch(header, /Carlos Silva|Gestor de Operações/, 'Production header must not contain a simulated operator identity');
 assert.match(header, /useAuth\(\)/, 'Header identity must come from the authenticated session');
-assert.match(header, /GitHub Actions/, 'Header must point test status to the authoritative CI environment when browser tests are disabled');
+assert.doesNotMatch(header, /GitHub Actions|Gates:/, 'Operational header must not expose developer CI controls in the V2 preview');
 
 await assert.rejects(
   () => new VehicleRepository().create({} as never),

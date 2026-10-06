@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { formatDateBR } from '../../shared/utils/date';
+import { settlementLocalDate } from './SettlementLateInterest';
+import React, { useState, useEffect, useRef } from 'react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
 import {
@@ -21,16 +25,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
-  const [amount, setAmount] = useState<number>(0);
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [amount, setAmount] = useState<string>('');
+  const [interestAmount, setInterestAmount] = useState<string>('0,00');
+  const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
+  const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
+  const [fineAmount, setFineAmount] = useState('0,00');
+  const [discountAmount, setDiscountAmount] = useState('0,00');
+  const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (payable) {
-      setAmount(payable.balanceAmount || payable.updatedAmount);
+      amountEdited.current = false;
+      setInterestAmount('0,00');
+      setAdditionalAmount('0,00');
+      setFineAmount('0,00');
+      setDiscountAmount('0,00');
+      setAmount(payable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
@@ -53,65 +69,115 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
     }
   };
 
+  const interestValue = parseCurrencyDraft(interestAmount);
+  const additionalValue = parseCurrencyDraft(additionalAmount);
+  const fineValue = parseCurrencyDraft(fineAmount);
+  const discountValue = parseCurrencyDraft(discountAmount);
+  const settlementTotal = roundCurrency((payable?.balanceAmount ?? 0) + interestValue + additionalValue + fineValue - discountValue);
+  const paymentValue = parseCurrencyDraft(amount);
+  const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
+  const adjustmentTotal = roundCurrency(interestValue + additionalValue + fineValue - discountValue);
+  const projectedBalance = Math.max(0, roundCurrency(settlementTotal - safePaymentValue));
+  useEffect(() => {
+    if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
+  }, [settlementTotal, payable]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen && !submittingRef.current && !confirmOpen) onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, confirmOpen, onClose]);
+
   if (!isOpen || !payable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) {
+    const paymentAmount = parseCurrencyDraft(amount);
+    if (submittingRef.current || confirmOpen) return;
+    if (!Number.isFinite(interestValue)) { setError('Juros inválidos'); return; }
+    if (!Number.isFinite(fineValue) || !Number.isFinite(discountValue) || settlementTotal < 0) { setError('Confira multa e desconto: o total não pode ser negativo.'); return; }
+    if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a pagar deve ser maior que zero.');
       return;
     }
-    if (amount > payable.balanceAmount) {
-      setError(`O valor inserido (R$ ${amount.toFixed(2)}) é maior que o saldo restante da obrigação (R$ ${payable.balanceAmount.toFixed(2)}).`);
+    if (paymentAmount > settlementTotal) {
+      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o total previsto (${formatCurrencyBRL(settlementTotal)}).`);
       return;
     }
+    if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
+        !methods.some(method => method.id === selectedMethodId && method.active)) {
+      setError('Selecione uma conta financeira e um meio de pagamento ativos.');
+      return;
+    }
+    setError(null);
+    setConfirmOpen(true);
+  };
 
+  const confirmSettlement = async () => {
+    if (submittingRef.current || !confirmOpen) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    const paymentAmount = parseCurrencyDraft(amount);
     try {
-      setIsSubmitting(true);
       setError(null);
 
       await FinanceSettlementClient.registerPayment(payable.id, {
         financialAccountId: selectedAccountId,
-        paymentAmount: amount,
+        paymentAmount,
+        settleRemainingBalance: paymentAmount >= settlementTotal,
+        interestAmount: interestValue,
+        additionalAmount: additionalValue,
+        fineAmount: fineValue,
+        discountAmount: discountValue,
         paymentDate,
         paymentMethodId: selectedMethodId,
-        description: notes || 'Pagamento efetuado via portal operacional',
+        description: notes || `Pagamento • ${payable.description}${payable.installmentNumber ? ` • Parcela ${payable.installmentNumber}/${payable.totalInstallments}` : ''}`,
         idempotencyKey,
       });
 
-      onSuccess();
-      onClose();
     } catch (err: any) {
+      submittingRef.current = false;
+      setConfirmOpen(false);
       // Keep the key after an ambiguous failure so an unchanged retry cannot
       // debit the financial account twice.
       setError(err.message || 'Erro ao registrar o pagamento.');
+      return;
     } finally {
       setIsSubmitting(false);
     }
+    // A read-model refresh failure must never turn a committed settlement into a retry.
+    onSuccess();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-indigo-600" />
-              Operação de Pagamento (Payment)
+              Registrar pagamento
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Liquidação de Conta a Pagar • {payable.description}
             </p>
           </div>
           <button
-            onClick={(event)=>requestGuardedClose(event,onClose)}
+            aria-label="Fechar modal"
+            disabled={isSubmitting || confirmOpen}
+            onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
+          <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -131,23 +197,111 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </div>
             <div className="text-right">
               <span className="text-slate-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{payable.dueDate}</span>
+              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatDateBR(payable.dueDate)}</span>
             </div>
           </div>
 
+          <dl aria-label="Composição do pagamento">
+            <div>{payable.interestAmount || payable.fineAmount || payable.additionalAmount || payable.discountAmount ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo atual'}: {formatCurrencyBRL(payable.balanceAmount)}</div>
+            <div>Juros desta baixa: {formatCurrencyBRL(interestValue)}</div>
+            <div>Acréscimo: {formatCurrencyBRL(additionalValue)}</div>
+            <div>Valor total a pagar: {formatCurrencyBRL(settlementTotal)}</div>
+            <div>Valor pago agora: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
+          </dl>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Juros (R$)
+              <input
+                aria-label="Juros (R$)"
+                type="text"
+                inputMode="decimal" onFocus={event => event.target.select()}
+                value={interestAmount}
+                onChange={e => {
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
+                  if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
+                }}
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+              />
+            </label>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              Acréscimo (R$)
+              <input
+                aria-label="Acréscimo (R$)"
+                type="text"
+                inputMode="decimal" onFocus={event => event.target.select()}
+                value={additionalAmount}
+                onChange={e => {
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
+                  if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
+                }}
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+              />
+            </label>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor a Pagar (R$) *
+              Valor pago agora (R$) *
             </label>
             <input
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal" onFocus={event => event.target.select()}
+              aria-label="Valor pago agora (R$)"
               value={amount}
-              onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); rotateCommandKey(); }}
+              onChange={(e) => {
+                const draft = normalizeCurrencyCentsDraft(e.target.value);
+                if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
+              }}
               className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
+            <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+              <div>
+                <span className="block text-slate-500">Saldo atual</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(payable.balanceAmount)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Ajustes desta baixa</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Valor total a pagar</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Pago agora</span>
+                <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
+              </div>
+              <div>
+                <span className="block text-slate-500">Saldo devedor após pagamento</span>
+                <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+              </div>
+            </div>
           </div>
+
+
+          <div className="grid grid-cols-2 gap-3">
+            {([['Multa (R$)', fineAmount, setFineAmount], ...(payable.originType === 'TRAFFIC_TICKET_COMPANY' ? [] : [['Desconto (R$)', discountAmount, setDiscountAmount] as const])] as const).map(([label, value, setter]) => (
+              <label key={label} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {label}
+                <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
+                  onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg" />
+              </label>
+            ))}
+          </div>
+          {payable.originType === 'TRAFFIC_TICKET_COMPANY' && <p className="text-xs text-slate-500">O desconto desta multa segue o valor e o prazo cadastrados na multa e é conferido pelo servidor.</p>}
+          <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
+            <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(payable.originalAmount)}</dd></div>
+            <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(payable.paidAmount)}</dd></div>
+            <div><dt>Valor atualizado antes desta baixa</dt><dd>{formatCurrencyBRL(payable.updatedAmount)}</dd></div>
+            <div><dt>Parcela</dt><dd>{payable.installmentNumber && payable.totalInstallments ? `${payable.installmentNumber}/${payable.totalInstallments}` : 'Única'}</dd></div>
+            {payable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(payable.totalAmount)}</dd></div>}
+          </dl>
+          {(accounts.length === 0 || methods.length === 0) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+              Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o pagamento.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -215,20 +369,44 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={(event)=>requestGuardedClose(event,onClose)}
+              onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
               className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
             </button>
           </div>
+          </fieldset>
         </form>
+        <ConfirmDialog
+          isOpen={confirmOpen}
+          title="Confirmar Pagamento"
+          variant="primary"
+          confirmText={isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
+          isLoading={isSubmitting}
+          onCancel={() => { if (!submittingRef.current) setConfirmOpen(false); }}
+          onConfirm={confirmSettlement}
+        >
+          <dl className="space-y-2">
+            <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
+            <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(payable.balanceAmount)}</dd></div>
+            <div><dt>Valor total a pagar</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
+            <div><dt>Valor pago agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Saldo devedor após pagamento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
+            <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
+            <div><dt>Multa desta baixa</dt><dd>{formatCurrencyBRL(fineValue)}</dd></div>
+            <div><dt>Desconto desta baixa</dt><dd>{formatCurrencyBRL(discountValue)}</dd></div>
+            <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
+            <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
+            <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
+          </dl>
+        </ConfirmDialog>
       </div>
     </div>
   );

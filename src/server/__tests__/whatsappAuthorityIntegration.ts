@@ -132,7 +132,13 @@ export class WhatsappAuthorityIntegrationRunner {
         method: 'POST',
         body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
       }, adminA);
-      assert.equal(response.status, 409, 'outbox requires current consent');
+      assert.equal(response.status, 201, 'outbox must not require ERP consent');
+      const directWithoutConsent = await responseJson(response);
+      assert.equal(directWithoutConsent.created, true);
+      await UnitOfWork.run(companyA, async (context: any) => {
+        const tx = context.getRawTransaction();
+        await tx.execute(sql`DELETE FROM whatsapp_outbox WHERE company_id=${companyA} AND id=${directWithoutConsent.item.id}`);
+      });
 
       response = await request(`/api/whatsapp/consents/${driverAId}`, {
         method: 'PUT',
@@ -213,17 +219,18 @@ export class WhatsappAuthorityIntegrationRunner {
       assert.equal(response.status, 200);
       const revoked = await responseJson(response);
       assert.equal(revoked.item.status, 'REVOKED');
-      assert.equal(revoked.cancelledHeldItems, 1, 'revocation must cancel held outbox');
+      assert.equal(revoked.cancelledHeldItems, 0, 'consent is informational and must not cancel held outbox');
 
       response = await request(`/api/whatsapp/outbox/${created.item.id}`, {}, adminA);
       assert.equal(response.status, 200);
-      assert.equal((await responseJson(response)).item.status, 'CANCELLED');
+      assert.equal((await responseJson(response)).item.status, 'HELD_PROVIDER_DISABLED');
 
       response = await request('/api/whatsapp/outbox', {
         method: 'POST',
         body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
       }, adminA);
-      assert.equal(response.status, 409, 'revoked consent must prevent new outbox items');
+      assert.equal(response.status, 200, 'revoked ERP consent must not block outbox replay');
+      assert.equal((await responseJson(response)).created, false);
 
       const auditRows = await UnitOfWork.run(companyA, async (context: any) => {
         const tx = context.getRawTransaction();
@@ -233,7 +240,7 @@ export class WhatsappAuthorityIntegrationRunner {
             AND entity_type IN ('WhatsappConsent', 'WhatsappOutbox')
         `));
       });
-      assert.equal(auditRows.length, 3, 'grant, held outbox, and revoke must each emit one audit event');
+      assert.equal(auditRows.length, 4, 'direct outbox, grant, held outbox, and revoke must each emit one audit event');
       for (const row of auditRows) {
         const changes = typeof row.changes === 'string' ? JSON.parse(row.changes) : row.changes;
         const next = typeof changes.newState === 'string' ? JSON.parse(changes.newState) : changes.newState;
@@ -248,10 +255,10 @@ export class WhatsappAuthorityIntegrationRunner {
           WHERE company_id = ${companyA} AND id = ${created.item.id}
         `))[0];
       });
-      assert.equal(stored.status, 'CANCELLED');
+      assert.equal(stored.status, 'HELD_PROVIDER_DISABLED');
       assert.equal(stored.requested_by, adminAId);
-      assert.equal(stored.cancelled_by, adminAId);
-      assert.equal(stored.cancellation_reason, 'CONSENT_REVOKED');
+      assert.equal(stored.cancelled_by, null);
+      assert.equal(stored.cancellation_reason, null);
 
       response = await request(`/api/whatsapp/consents/${driverAId}`, {
         method: 'PUT',
@@ -262,9 +269,9 @@ export class WhatsappAuthorityIntegrationRunner {
         method: 'POST',
         body: JSON.stringify({ driverId: driverAId, templateKey: 'DRIVER_CNH_EXPIRY' }),
       }, adminA);
-      assert.equal(response.status, 201, 'a new explicit consent cycle must permit a new held item');
+      assert.equal(response.status, 200, 'consent changes must not alter outbox idempotency');
       const afterRegrant = await responseJson(response);
-      assert.notEqual(afterRegrant.item.id, created.item.id, 'revoked item must never be resurrected');
+      assert.equal(afterRegrant.item.id, created.item.id, 'consent state must not fork the ERP outbox identity');
       assert.equal(afterRegrant.item.templateVersion, 1);
 
       let immutableRejected = false;
@@ -308,7 +315,7 @@ export class WhatsappAuthorityIntegrationRunner {
 
 if (process.argv[1]?.includes('whatsappAuthorityIntegration')) {
   WhatsappAuthorityIntegrationRunner.runAllTests()
-    .then(() => console.log('WhatsApp consent/outbox authority integration PASS'))
+    .then(() => console.log('WhatsApp outbox authority integration without internal consent gate PASS'))
     .catch((error) => {
       console.error(error);
       process.exitCode = 1;

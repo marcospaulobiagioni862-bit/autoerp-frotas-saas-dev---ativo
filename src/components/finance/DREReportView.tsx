@@ -6,13 +6,20 @@ import { AccountingRegime } from '../../types/enums';
 import type { DREReport, VehicleProfitabilityReport } from '../../types/reports';
 import { PieChart, Calendar, Car } from 'lucide-react';
 import { Card, Select, Skeleton } from '../ui';
+import { DREStatement } from './DREStatement';
 import { useAuth } from '../../hooks/useAuth';
 import { VehicleProfitabilityBreakdown } from './VehicleProfitabilityBreakdown';
+import {
+  currentReportingMonthRange,
+  currentReportingYearRange,
+  lastReportingDaysRange,
+} from '../../shared/utils/reportingPeriod';
 
 export const DREReportView: React.FC = () => {
   const [regime, setRegime] = useState<AccountingRegime>(AccountingRegime.CASH);
-  const [startDate, setStartDate] = useState('2026-01-01');
-  const [endDate, setEndDate] = useState('2026-12-31');
+  const defaultRange = currentReportingMonthRange();
+  const [startDate, setStartDate] = useState(defaultRange.start);
+  const [endDate, setEndDate] = useState(defaultRange.end);
   const [dreReport, setDreReport] = useState<DREReport | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
@@ -20,6 +27,12 @@ export const DREReportView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const lastCompanyIdRef = useRef<string | undefined>(user?.companyId);
+
+  const applyPreset = (preset: 'MONTH' | '30_DAYS' | 'YEAR') => {
+    const next = preset === 'MONTH' ? currentReportingMonthRange() : preset === '30_DAYS' ? lastReportingDaysRange(30) : currentReportingYearRange();
+    setStartDate(next.start);
+    setEndDate(next.end);
+  };
 
   useEffect(() => {
     let active = true;
@@ -88,10 +101,12 @@ export const DREReportView: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <PieChart className="w-6 h-6 text-indigo-600" />
-            Demonstrativo de Resultado do Exercício (DRE) & Rentabilidade
+            {regime === AccountingRegime.CASH ? 'Resultado Gerencial — Caixa' : 'DRE Gerencial'}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Relatório gerencial com alternância entre Regime de Caixa (CASH) e Competência (ACCRUAL).
+            {regime === AccountingRegime.CASH
+              ? 'Entradas e saídas efetivadas no período. A rentabilidade por veículo aparece em uma seção separada.'
+              : 'Receitas e despesas por competência no período. A rentabilidade por veículo aparece em uma seção separada.'}
           </p>
         </div>
 
@@ -100,19 +115,25 @@ export const DREReportView: React.FC = () => {
             onClick={() => setRegime(AccountingRegime.CASH)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.CASH ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
           >
-            Regime de Caixa (Efetivado)
+            Regime de Caixa
           </button>
           <button
             onClick={() => setRegime(AccountingRegime.ACCRUAL)}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.ACCRUAL ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
           >
-            Regime de Competência (Gerado)
+            Regime de Competência
           </button>
         </div>
       </div>
 
       <Card padding="sm">
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Mês atual</button>
+          <button type="button" onClick={() => applyPreset('30_DAYS')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Últimos 30 dias</button>
+          <button type="button" onClick={() => applyPreset('YEAR')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Ano atual</button>
+        </div>
         <div className="flex flex-wrap items-center gap-4 text-xs">
+          <span className="font-semibold text-slate-500">Personalizado</span>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-slate-400" />
             <span className="font-semibold text-slate-700 dark:text-slate-300">Período de Análise:</span>
@@ -134,40 +155,8 @@ export const DREReportView: React.FC = () => {
           <Skeleton className="h-40 w-full" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card padding="md" className="lg:col-span-2 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                Estrutura de Resultados • {regime === AccountingRegime.CASH ? 'Regime de Caixa' : 'Regime de Competência'}
-              </h3>
-              <span className="text-xs font-mono text-slate-500">{startDate} a {endDate}</span>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between items-center p-3 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-lg font-bold text-slate-900 dark:text-slate-100">
-                <span>(+) Receita Operacional Bruta (Locações / Multas)</span>
-                <span className="text-emerald-700 dark:text-emerald-400 font-mono tabular-nums text-sm">R$ {dreReport.grossRevenue.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-
-              <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/20 rounded-lg space-y-1.5">
-                <div className="flex justify-between items-center font-bold text-slate-900 dark:text-slate-100">
-                  <span>(-) Custos Diretos & Despesas Operacionais</span>
-                  <span className="text-indigo-700 dark:text-indigo-400 font-mono tabular-nums text-sm">R$ {dreReport.operatingExpenses.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="pl-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-400 border-l-2 border-indigo-200 dark:border-indigo-800">
-                  <div className="flex justify-between"><span>Manutenções & Peças:</span><span className="font-mono">R$ {(dreReport.breakdown?.maintenanceCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span>Seguros da Frota:</span><span className="font-mono">R$ {(dreReport.breakdown?.insuranceCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span>Rastreamento & Telemetria:</span><span className="font-mono">R$ {(dreReport.breakdown?.trackerCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                  <div className="flex justify-between"><span>Multas de Trânsito:</span><span className="font-mono">R$ {(dreReport.breakdown?.trafficTicketCosts || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center p-4 bg-slate-900 text-white rounded-xl font-black text-sm mt-4 shadow-md">
-                <span>(=) Resultado Líquido do Período</span>
-                <span className={`font-mono tabular-nums text-base ${dreReport.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {dreReport.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-            </div>
-          </Card>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <DREStatement report={dreReport} />
 
           <Card padding="md" className="space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -177,11 +166,11 @@ export const DREReportView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Selecionar Veículo da Frota:</label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Selecionar veículo:</label>
               <Select
                 value={selectedVehicleId}
                 onChange={(event) => setSelectedVehicleId(event.target.value)}
-                options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} - ${vehicle.brand} ${vehicle.model} (${vehicle.status})` }))}
+                options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.plate} • ${vehicle.brand} ${vehicle.model}` }))}
               />
             </div>
 

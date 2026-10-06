@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
+import { recordVehicleKm, VehicleKmError } from './vehicleKmAuthority';
 import { PayableService } from '../domain/finance/PayableService';
 import { roundCurrency } from '../shared/utils/currency';
 import { AuditAction, ContractStatus, OriginType, VehicleStatus } from '../types/enums';
@@ -18,7 +19,7 @@ export interface CreateWorkOrderInput {
   laborItems?:Array<{description:string;hours:number;hourlyRate:number}>; discount?:number;
   financialComponents?:Array<{kind:'PARTS'|'SERVICES'|'LABOR';supplierId?:string;categoryId:string;paymentMethodId:string;paymentCondition:'CASH'|'INSTALLMENTS';installmentsCount:number;firstDueDate:string;discountAmount?:number;hasInvoice:boolean;invoiceNumber?:string}>;
 }
-export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; }
+export interface CompleteWorkOrderInput { exitKm:number; categoryId?:string; dueDate?:string; installmentsCount?:number; preventivePlanIds?:string[]; preventiveExecutionReasons?:Record<string,string>; }
 export interface CreateSupplierInput { name:string; tradeName?:string; document:string; phone?:string; email?:string; address?:string; category:string; notes?:string; }
 export interface UpdateSupplierInput { name?:string; tradeName?:string|null; document?:string; phone?:string|null; email?:string|null; address?:string|null; category?:string; status?:Supplier['status']; notes?:string|null; }
 export interface CreatePartInput { code:string; name:string; description?:string; manufacturer?:string; category:string; unit:string; currentCost:number; minimumStock:number; currentStock:number; }
@@ -57,6 +58,8 @@ async function activeSupplier(tx:any,companyId:string,supplierId:string):Promise
   if(!s||s.status!=='ACTIVE')throw new MaintenanceNotFoundError('Fornecedor não encontrado');
 }
 async function targetVehicleStatus(tx:any,companyId:string,vehicle:any,workOrderId:string):Promise<VehicleStatus>{
+  // An inspection block requires an explicit release, even after maintenance.
+  if(vehicle.status===VehicleStatus.BLOCKED) return VehicleStatus.BLOCKED;
   if(await tx.getWorkOrderRepo().hasBlockingWorkOrder(companyId,vehicle.id,workOrderId)) return VehicleStatus.MAINTENANCE;
   if(vehicle.currentContractId){ const c=await tx.getContractRepo().findByIdForCompany(companyId,vehicle.currentContractId); if(c&&!c.isArchived&&c.status===ContractStatus.ACTIVE)return VehicleStatus.RENTED; }
   return VehicleStatus.AVAILABLE;
@@ -117,7 +120,6 @@ export class MaintenanceAuthorityService {
     const laborItems:WorkOrderLaborItem[]=(input.laborItems||[]).map(raw=>{const hours=pos(raw.hours,'labor hours'),hourlyRate=roundCurrency(nn(raw.hourlyRate,'hourlyRate'));return{id:randomUUID(),description:reqText(raw.description,'labor description',300),hours,hourlyRate,totalCost:roundCurrency(hours*hourlyRate)};});
     const subtotalParts=roundCurrency(parts.reduce((s,i)=>s+i.totalCost,0)),subtotalServices=roundCurrency(services.reduce((s,i)=>s+i.totalCost,0)),subtotalLabor=roundCurrency(laborItems.reduce((s,i)=>s+i.totalCost,0)),gross=roundCurrency(subtotalParts+subtotalServices+subtotalLabor);const now=new Date().toISOString();
     const financialComponents:WorkOrderFinancialComponent[]=[];
-    const paymentLabels=new Map<string,string>();
     if(input.financialComponents!==undefined){
       if(!Array.isArray(input.financialComponents)||input.financialComponents.length>3)throw new MaintenanceValidationError('Configuração financeira inválida');
       const seen=new Set<string>();
@@ -125,7 +127,7 @@ export class MaintenanceAuthorityService {
         const kind=raw.kind;if(kind!=='PARTS'&&kind!=='SERVICES'&&kind!=='LABOR')throw new MaintenanceValidationError('Componente financeiro inválido');if(seen.has(kind))throw new MaintenanceValidationError('Componente financeiro duplicado');seen.add(kind);
         const grossAmount=kind==='PARTS'?subtotalParts:kind==='SERVICES'?subtotalServices:subtotalLabor;if(grossAmount<=0)throw new MaintenanceValidationError('Componente financeiro sem valor');
         const categoryId=reqText(raw.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);
-        const paymentMethodId=reqText(raw.paymentMethodId,'paymentMethodId',120);const paymentMethod=await activePaymentMethod(tx,p.companyId,paymentMethodId);paymentLabels.set(paymentMethodId,paymentMethod.name);
+        const paymentMethodId=reqText(raw.paymentMethodId,'paymentMethodId',120);await activePaymentMethod(tx,p.companyId,paymentMethodId);
         const componentSupplierId=optText(raw.supplierId,120)||supplierId;if(!componentSupplierId)throw new MaintenanceValidationError('Fornecedor do pagamento é obrigatório');await activeSupplier(tx,p.companyId,componentSupplierId);
         const paymentCondition=raw.paymentCondition;if(paymentCondition!=='CASH'&&paymentCondition!=='INSTALLMENTS')throw new MaintenanceValidationError('Condição de pagamento inválida');
         const installmentsCount=Number(raw.installmentsCount);if(!Number.isInteger(installmentsCount)||installmentsCount<1||installmentsCount>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');if(paymentCondition==='CASH'&&installmentsCount!==1)throw new MaintenanceValidationError('Pagamento à vista deve ter uma parcela');if(paymentCondition==='INSTALLMENTS'&&installmentsCount<2)throw new MaintenanceValidationError('Pagamento parcelado exige ao menos duas parcelas');
@@ -139,18 +141,8 @@ export class MaintenanceAuthorityService {
     }
     const discount=financialComponents.length>0?roundCurrency(financialComponents.reduce((sum,item)=>sum+item.discountAmount,0)):roundCurrency(nn(input.discount??0,'discount'));if(discount>gross)throw new MaintenanceValidationError('Desconto excede o total da OS');
     const item:WorkOrder={id:randomUUID(),companyId:p.companyId,number,vehicleId:vehicle.id,supplierId,status:'OPEN',openedAt:now,serviceDate,entryKm,description:reqText(input.description,'description',1000),diagnosis:optText(input.diagnosis,1000),notes:optText(input.notes,2000),parts,services,laborItems,financialComponents,subtotalParts,subtotalServices,subtotalLabor,discount,total:roundCurrency(gross-discount),createdBy:p.userId,createdAt:now,updatedAt:now};
-    let created=await tx.getWorkOrderRepo().create(item);
-    const payableIds:string[]=[];
-    for(const component of financialComponents){
-      if(component.netAmount<=0)continue;
-      const componentLabel=component.kind==='PARTS'?'Peças':component.kind==='SERVICES'?'Serviços':'Mão de obra';
-      const methodLabel=paymentLabels.get(component.paymentMethodId)||component.paymentMethodId;
-      const conditionLabel=component.paymentCondition==='CASH'?'À vista':`Parcelado ${component.installmentsCount}x`;
-      const createdPayables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:`${created.id}:${component.kind}`,vehicleId:created.vehicleId,supplierId:component.supplierId,categoryId:component.categoryId,description:`Manutenção OS #${created.number} - ${componentLabel} - ${methodLabel} - ${conditionLabel}`,totalAmount:component.netAmount,dueDate:component.firstDueDate,installmentsCount:component.installmentsCount,userId:p.userId,userName:p.name},tx);
-      payableIds.push(...createdPayables.map((item:any)=>item.id));
-    }
-    if(payableIds.length>0){const linked=await tx.getWorkOrderRepo().updateLifecycle(p.companyId,created.id,{status:'OPEN',accountPayableId:payableIds[0],updatedAt:now});if(!linked)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');created=linked;}
-    await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,{...created,payableIds},now);
+    const created=await tx.getWorkOrderRepo().create(item);
+    await audit(tx,p,'WorkOrder',created.id,AuditAction.CREATE,undefined,created,now);
     if(sourceAttachment){
       const relinked=await rawTx.execute(sql`UPDATE file_attachments SET entity_name='MaintenanceWorkOrder',entity_type='MaintenanceWorkOrder',entity_id=${created.id} WHERE company_id=${p.companyId} AND id=${input.sourceAttachmentId} AND entity_type='Vehicle' AND entity_id=${vehicle.id} AND is_archived=false RETURNING id`);
       if(rows(relinked).length!==1)throw new MaintenanceConflictError('Falha ao vincular documento original à ordem de serviço');
@@ -161,18 +153,21 @@ export class MaintenanceAuthorityService {
 
   static startWorkOrder(p:AuthenticatedPrincipal,id:string):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
     const repo=tx.getWorkOrderRepo(),before=await repo.findByIdForCompanyWithLock(p.companyId,id);if(!before)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(before.status==='IN_PROGRESS')return before;if(!['OPEN','WAITING_APPROVAL','WAITING_PARTS'].includes(before.status))throw new MaintenanceConflictError(`Não é possível iniciar OS com status ${before.status}`);
-    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');if([VehicleStatus.SOLD,VehicleStatus.INACTIVE,VehicleStatus.ARCHIVED].includes(vehicle.status))throw new MaintenanceConflictError('Veículo não está elegível para manutenção');const now=new Date().toISOString();const updated=await repo.updateLifecycle(p.companyId,id,{status:'IN_PROGRESS',startedAt:now,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{status:VehicleStatus.MAINTENANCE,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,updated,now);return updated;
+    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');if([VehicleStatus.SOLD,VehicleStatus.INACTIVE,VehicleStatus.ARCHIVED].includes(vehicle.status))throw new MaintenanceConflictError('Veículo não está elegível para manutenção');const now=new Date().toISOString();const updated=await repo.updateLifecycle(p.companyId,id,{status:'IN_PROGRESS',startedAt:now,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(vehicle.status!==VehicleStatus.BLOCKED&&!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{status:VehicleStatus.MAINTENANCE,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,updated,now);return updated;
   }); }
 
   static completeWorkOrder(p:AuthenticatedPrincipal,id:string,input:CompleteWorkOrderInput):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{
     const repo=tx.getWorkOrderRepo(),before=await repo.findByIdForCompanyWithLock(p.companyId,id);if(!before)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');if(before.status==='COMPLETED')return before;if(before.status==='CANCELLED')throw new MaintenanceConflictError('Ordem de serviço cancelada');if(before.status!=='IN_PROGRESS')throw new MaintenanceConflictError('Ordem de serviço deve estar em andamento para conclusão');
-    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');const exitKm=nn(input.exitKm,'exitKm');if(!Number.isInteger(exitKm)||exitKm<before.entryKm||exitKm<vehicle.currentKm)throw new MaintenanceValidationError('KM de saída regressivo');
+    const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(p.companyId,before.vehicleId);if(!vehicle||vehicle.isArchived)throw new MaintenanceNotFoundError('Veículo não encontrado');const exitKm=nn(input.exitKm,'exitKm');if(!Number.isInteger(exitKm)||exitKm<before.entryKm)throw new MaintenanceValidationError('KM de saída regressivo');
 
     const explicitPreventiveSelection=input.preventivePlanIds!==undefined;
     const preventivePlanIds=explicitPreventiveSelection
       ?Array.from(new Set((input.preventivePlanIds||[]).map(value=>reqText(value,'preventivePlanId',200))))
       :[];
     if(preventivePlanIds.length>100)throw new MaintenanceValidationError('Muitos itens preventivos selecionados');
+    const preventiveExecutionReasons=input.preventiveExecutionReasons||{};
+    if(!preventiveExecutionReasons||typeof preventiveExecutionReasons!=='object'||Array.isArray(preventiveExecutionReasons))throw new MaintenanceValidationError('Justificativas preventivas inválidas');
+    for(const planId of Object.keys(preventiveExecutionReasons))if(!preventivePlanIds.includes(planId))throw new MaintenanceValidationError('Justificativa informada para item preventivo não selecionado');
     const raw=tx.getRawTransaction?.();if(explicitPreventiveSelection&&!raw)throw new Error('Maintenance persistence unavailable');
     const selectedPlans:any[]=[];
     if(explicitPreventiveSelection){
@@ -187,10 +182,34 @@ export class MaintenanceAuthorityService {
 
     const t=totals(before);if(t.subtotalParts!==roundCurrency(before.subtotalParts)||t.subtotalServices!==roundCurrency(before.subtotalServices)||t.subtotalLabor!==roundCurrency(before.subtotalLabor)||t.total!==roundCurrency(before.total))throw new MaintenanceConflictError('Totais persistidos da OS estão inconsistentes');
     let payables:any[]=[];
-    if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();}
+    if(before.financialComponents&&before.financialComponents.length>0){
+      for(const component of before.financialComponents){
+        if(component.netAmount<=0)continue;
+        const componentLabel=component.kind==='PARTS'?'Peças':component.kind==='SERVICES'?'Serviços':'Mão de obra';
+        // A planned payment method may have become inactive since opening the OS.
+        // Keep its label without adding a new eligibility rule to completion.
+        const payment=rows(await tx.getRawTransaction().execute(sql`SELECT name FROM payment_methods WHERE company_id=${p.companyId} AND id=${component.paymentMethodId} LIMIT 1`))[0];
+        const methodLabel=String(payment?.name||component.paymentMethodId);
+        const conditionLabel=component.paymentCondition==='CASH'?'À vista':`Parcelado ${component.installmentsCount}x`;
+        const createdPayables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:`${before.id}:${component.kind}`,vehicleId:before.vehicleId,supplierId:component.supplierId,categoryId:component.categoryId,description:`Manutenção OS #${before.number} - ${componentLabel} - ${methodLabel} - ${conditionLabel}`,totalAmount:component.netAmount,dueDate:component.firstDueDate,competenceDate:before.serviceDate,competenceMode:'SINGLE_EVENT',installmentsCount:component.installmentsCount,userId:p.userId,userName:p.name},tx);
+        payables.push(...createdPayables);
+        await afterPayableCreatedForTests?.();
+      }
+    }
+    if(!(before.financialComponents&&before.financialComponents.length>0)&&t.total>0){const dueDate=reqText(input.dueDate,'dueDate',10);isoDate(dueDate);const categoryId=reqText(input.categoryId,'categoryId',120);await expenseCategory(tx,p.companyId,categoryId);const installments=Number(input.installmentsCount??1);if(!Number.isInteger(installments)||installments<1||installments>60)throw new MaintenanceValidationError('Quantidade de parcelas inválida');payables=await PayableService.create({companyId:p.companyId,originType:OriginType.MAINTENANCE,originId:before.id,vehicleId:before.vehicleId,supplierId:before.supplierId,categoryId,description:`Manutenção OS #${before.number} - ${before.description}`,totalAmount:t.total,dueDate,competenceDate:before.serviceDate||new Date().toISOString().slice(0,10),competenceMode:'SINGLE_EVENT',installmentsCount:installments,userId:p.userId,userName:p.name},tx);await afterPayableCreatedForTests?.();}
 
     const now=new Date().toISOString(),completionDate=now.slice(0,10);
-    const preventiveExecutions:Array<{planId:string;executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'}>=[];
+    try {
+      await recordVehicleKm(tx,p.companyId,{vehicleId:vehicle.id,kmValue:exitKm,recordDate:completionDate,readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`});
+    } catch(error) {
+      if(error instanceof VehicleKmError){
+        if(error.kind==='NOT_FOUND')throw new MaintenanceNotFoundError(error.message);
+        if(error.kind==='TERMINAL')throw new MaintenanceConflictError(error.message);
+        throw new MaintenanceValidationError(error.message);
+      }
+      throw error;
+    }
+    const preventiveExecutions:Array<{planId:string;executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA';earlyReason?:string}>=[];
     if(explicitPreventiveSelection){
       await raw.execute(sql`UPDATE work_orders SET preventive_plan_selection_applied=true,updated_at=${now} WHERE company_id=${p.companyId} AND id=${id}`);
       for(const plan of selectedPlans){
@@ -200,9 +219,10 @@ export class MaintenanceAuthorityService {
         const beforeKmDue=dueKm===undefined||exitKm<dueKm;
         const beforeDateDue=dueDate===undefined||completionDate<dueDate;
         const executionKind:'SCHEDULED'|'PREVENTIVA_ANTECIPADA'=hasDue&&beforeKmDue&&beforeDateDue?'PREVENTIVA_ANTECIPADA':'SCHEDULED';
+        const earlyReason=executionKind==='PREVENTIVA_ANTECIPADA'?reqText(preventiveExecutionReasons[String(plan.id)],'preventiveExecutionReason',1000):undefined;
         const executionId=randomUUID();
-        const inserted=rows(await raw.execute(sql`INSERT INTO maintenance_work_order_plan_executions(id,company_id,work_order_id,maintenance_plan_id,execution_kind,execution_km,execution_date,created_by,created_at)
-          VALUES(${executionId},${p.companyId},${id},${String(plan.id)},${executionKind},${exitKm},${completionDate},${p.userId},${now})
+        const inserted=rows(await raw.execute(sql`INSERT INTO maintenance_work_order_plan_executions(id,company_id,work_order_id,maintenance_plan_id,execution_kind,execution_km,execution_date,early_reason,created_by,created_at)
+          VALUES(${executionId},${p.companyId},${id},${String(plan.id)},${executionKind},${exitKm},${completionDate},${earlyReason??null},${p.userId},${now})
           ON CONFLICT(company_id,work_order_id,maintenance_plan_id) DO NOTHING RETURNING id`))[0];
         if(!inserted)continue;
         const updatedPlan=rows(await raw.execute(sql`UPDATE maintenance_plans
@@ -216,13 +236,13 @@ export class MaintenanceAuthorityService {
           WHERE company_id=${p.companyId} AND id=${String(plan.id)} AND vehicle_id=${before.vehicleId} AND status='ACTIVE'
           RETURNING id,cycle_sequence,next_due_km,next_due_date,last_execution_km,last_execution_date,last_work_order_id`))[0];
         if(!updatedPlan)throw new MaintenanceConflictError('Falha ao avançar item preventivo');
-        preventiveExecutions.push({planId:String(plan.id),executionKind});
-        await audit(tx,p,'MaintenancePlan',String(plan.id),AuditAction.UPDATE,plan,{event:executionKind,workOrderId:id,executionKm:exitKm,executionDate:completionDate,cycleSequence:Number(updatedPlan.cycle_sequence),nextDueKm:updatedPlan.next_due_km===null?undefined:Number(updatedPlan.next_due_km),nextDueDate:updatedPlan.next_due_date===null?undefined:String(updatedPlan.next_due_date).slice(0,10)},now);
+        preventiveExecutions.push({planId:String(plan.id),executionKind,earlyReason});
+        await audit(tx,p,'MaintenancePlan',String(plan.id),AuditAction.UPDATE,plan,{event:executionKind,workOrderId:id,executionKm:exitKm,executionDate:completionDate,earlyReason,cycleSequence:Number(updatedPlan.cycle_sequence),nextDueKm:updatedPlan.next_due_km===null?undefined:Number(updatedPlan.next_due_km),nextDueDate:updatedPlan.next_due_date===null?undefined:String(updatedPlan.next_due_date).slice(0,10)},now);
       }
     }
 
-    const updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{currentKm:exitKm,status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
-    await tx.getKmRecordRepo().create({id:randomUUID(),companyId:p.companyId,vehicleId:vehicle.id,driverId:vehicle.currentDriverId,contractId:vehicle.currentContractId,kmValue:exitKm,recordDate:completionDate,readingType:'MAINTENANCE',notes:`Conclusão OS #${before.number}`,createdAt:now});await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id),preventiveSelectionApplied:explicitPreventiveSelection,preventiveExecutions},now);return updated;
+    const updated=await repo.updateLifecycle(p.companyId,id,{status:'COMPLETED',exitKm,completedAt:now,accountPayableId:payables[0]?.id||before.accountPayableId,updatedAt:now});if(!updated)throw new MaintenanceNotFoundError('Ordem de serviço não encontrada');const status=await targetVehicleStatus(tx,p.companyId,vehicle,id);if(!await tx.getVehicleRepo().updateForCompany(p.companyId,vehicle.id,{status,updatedAt:now}))throw new MaintenanceNotFoundError('Veículo não encontrado');
+    await audit(tx,p,'WorkOrder',id,AuditAction.UPDATE,before,{...updated,vehicleStatus:status,payableIds:payables.map((x:any)=>x.id),preventiveSelectionApplied:explicitPreventiveSelection,preventiveExecutions},now);return updated;
   },{financialPeriodLock:'SHARED'}); }
 
   static cancelWorkOrder(p:AuthenticatedPrincipal,id:string,reason:string):Promise<WorkOrder>{ return UnitOfWork.run(p.companyId,async tx=>{

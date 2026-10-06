@@ -1,6 +1,7 @@
 import { AccountReceivableRepository } from '../../persistence/repositories/localRepositories';
 import { AccountReceivable } from '../../types/entities';
 import { ObligationStatus, OriginType, AuditAction } from '../../types/enums';
+import { installmentCompetences, type InstallmentCompetenceMode } from '../../shared/utils/installmentCompetence';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -23,6 +24,8 @@ export interface CreateReceivableParams {
   totalAmount: number;
   dueDate: string;
   competenceDate?: string;
+  competenceMode?: InstallmentCompetenceMode;
+  installmentCompetenceDates?: string[];
   installmentsCount?: number;
   recurrenceDaysInterval?: number;
   userId: string;
@@ -31,7 +34,8 @@ export interface CreateReceivableParams {
 
 async function assertContractRentCompetenceWithinContract(
   params: CreateReceivableParams,
-  txContext?: ITransactionContext
+  txContext?: ITransactionContext,
+  competenceDates?: string[]
 ): Promise<void> {
   if (![OriginType.CONTRACT_RENT, OriginType.SECURITY_DEPOSIT, OriginType.KM_EXCESS].includes(params.originType)) return;
   if (!txContext) throw new Error('Autoridade contratual transacional indisponível para cobrança');
@@ -44,9 +48,8 @@ async function assertContractRentCompetenceWithinContract(
     throw new Error('Contrato indisponível para cobrança de aluguel');
   }
 
-  const competenceDate = params.competenceDate || params.dueDate;
   const period = await requireContractEffectivePeriod(contract, txContext);
-  if (competenceDate < period.effectiveStartDate || (contract.endDate && competenceDate > contract.endDate)) {
+  if ((competenceDates || [params.competenceDate || params.dueDate]).some(date => date < period.effectiveStartDate || (contract.endDate && date > contract.endDate))) {
     throw new Error('Período contratual inválido para cobrança');
   }
 }
@@ -65,8 +68,6 @@ export class ReceivableService {
       txContext
     );
 
-    await assertContractRentCompetenceWithinContract(params, txContext);
-
     const categoryId = typeof params.categoryId === 'string' ? params.categoryId.trim() : '';
     if (params.originType === OriginType.MANUAL) {
       if (!txContext?.getRawTransaction) {
@@ -75,7 +76,22 @@ export class ReceivableService {
       await assertFinancialCategoryForObligation(params.companyId, categoryId, 'RECEIVABLE', txContext);
     }
 
-    const installments = Math.max(1, params.installmentsCount || 1);
+    const installments = params.installmentsCount ?? 1;
+    if (!Number.isInteger(installments) || installments < 1 || installments > 120 || !Number.isFinite(params.totalAmount) || params.totalAmount <= 0) throw new Error('Valor ou quantidade de parcelas inválidos');
+    const dueDates = Array.from({ length: installments }, (_, index) => {
+      const date = new Date(params.dueDate);
+      if (!Number.isFinite(date.getTime())) throw new Error('Data de vencimento inválida');
+      if (index > 0 && params.recurrenceDaysInterval) date.setUTCDate(date.getUTCDate() + params.recurrenceDaysInterval * index);
+      else if (index > 0) date.setUTCMonth(date.getUTCMonth() + index);
+      return date.toISOString().slice(0, 10);
+    });
+    const competences = installmentCompetences(params, dueDates);
+    await assertContractRentCompetenceWithinContract(params, txContext, params.competenceMode === 'PER_INSTALLMENT' ? competences : undefined);
+    // Validate the complete schedule before any title is created.
+    for (let index = 0; index < installments; index++) {
+      await FinancialPeriodService.assertDateOpen(params.companyId, competences[index], txContext);
+      await FinancialPeriodService.assertDateOpen(params.companyId, dueDates[index], txContext);
+    }
     const baseAmount = roundCurrency(params.totalAmount / installments);
     const createdList: AccountReceivable[] = [];
     const groupId = installments > 1 ? generateUUID() : undefined;
@@ -87,12 +103,12 @@ export class ReceivableService {
 
       const dueDateObj = new Date(params.dueDate);
       if (i > 1 && params.recurrenceDaysInterval) {
-        dueDateObj.setDate(dueDateObj.getDate() + params.recurrenceDaysInterval * (i - 1));
+        dueDateObj.setUTCDate(dueDateObj.getUTCDate() + params.recurrenceDaysInterval * (i - 1));
       } else if (i > 1) {
-        dueDateObj.setMonth(dueDateObj.getMonth() + (i - 1));
+        dueDateObj.setUTCMonth(dueDateObj.getUTCMonth() + (i - 1));
       }
       const calculatedDueDate = dueDateObj.toISOString().split('T')[0];
-      const periodRef = params.competenceDate || calculatedDueDate;
+      const periodRef = competences[i - 1];
 
       await FinancialPeriodService.assertDateOpen(params.companyId, periodRef, txContext);
       await FinancialPeriodService.assertDateOpen(params.companyId, calculatedDueDate, txContext);
@@ -150,7 +166,7 @@ export class ReceivableService {
           paidAmount: 0,
           balanceAmount: amountForThisInstallment,
           dueDate: calculatedDueDate,
-          competenceDate: params.competenceDate || calculatedDueDate,
+          competenceDate: periodRef,
           status: ObligationStatus.PENDING,
           installmentGroupId: groupId,
           installmentNumber: i,

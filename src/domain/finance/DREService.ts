@@ -3,10 +3,11 @@ import {
   AccountReceivableRepository,
   AccountPayableRepository,
   FinancialTransactionRepository,
+  FinancialCategoryRepository,
 } from '../../persistence/repositories/localRepositories';
 import { AccountingRegime, TransactionType, ObligationStatus, OriginType } from '../../types/enums';
 import { DREReport, DREItem } from '../../types/reports';
-import { AccountPayable } from '../../types/entities';
+import { AccountPayable, FinancialCategory } from '../../types/entities';
 import { roundCurrency } from '../../shared/utils/currency';
 
 type DRECostBreakdown = {
@@ -14,18 +15,31 @@ type DRECostBreakdown = {
   insuranceCosts: number;
   trackerCosts: number;
   trafficTicketCosts: number;
+  otherCosts: number;
 };
 
 export class DREService {
   private static recRepo = new AccountReceivableRepository();
   private static payRepo = new AccountPayableRepository();
   private static txRepo = new FinancialTransactionRepository();
+  private static categoryRepo = new FinancialCategoryRepository();
 
   private static addExpenseToBreakdown(
     breakdown: DRECostBreakdown,
     originType: OriginType | string | undefined,
-    amount: number
+    amount: number,
+    category?: FinancialCategory
   ): void {
+    if (category?.dreGroup) {
+      switch (category.dreGroup) {
+        case 'MAINTENANCE': breakdown.maintenanceCosts += amount; break;
+        case 'INSURANCE': breakdown.insuranceCosts += amount; break;
+        case 'TRACKER': breakdown.trackerCosts += amount; break;
+        case 'TRAFFIC_TICKETS': breakdown.trafficTicketCosts += amount; break;
+        default: breakdown.otherCosts += amount;
+      }
+      return;
+    }
     switch (originType) {
       case OriginType.MAINTENANCE:
         breakdown.maintenanceCosts += amount;
@@ -41,7 +55,7 @@ export class DREService {
         breakdown.trafficTicketCosts += amount;
         break;
       default:
-        // Other expenses remain in directCosts, but are not fabricated into named buckets.
+        breakdown.otherCosts += amount;
         break;
     }
   }
@@ -67,7 +81,13 @@ export class DREService {
       insuranceCosts: 0,
       trackerCosts: 0,
       trafficTicketCosts: 0,
+      otherCosts: 0,
     };
+
+    const categories = txContext?.getFinancialCategories
+      ? await txContext.getFinancialCategories()
+      : txContext ? [] : await this.categoryRepo.findAllForCompany(companyId);
+    const categoriesById = new Map(categories.filter((item) => item.companyId === companyId).map((item) => [item.id, item]));
 
     const dateKey = (value?: string) => (value || '').slice(0, 10);
 
@@ -90,7 +110,7 @@ export class DREService {
           r.status !== ObligationStatus.CANCELLED &&
           dateKey(r.competenceDate) >= periodStart &&
           dateKey(r.competenceDate) <= periodEnd &&
-          !isDeposit(r.description, r.originType)
+          !isDeposit(r.description, r.originType) && categoriesById.get(r.categoryId)?.dreGroup !== 'SECURITY_DEPOSIT'
       );
 
       const periodPays = pays.filter(
@@ -99,7 +119,7 @@ export class DREService {
           p.status !== ObligationStatus.CANCELLED &&
           dateKey(p.competenceDate) >= periodStart &&
           dateKey(p.competenceDate) <= periodEnd &&
-          !isDeposit(p.description, p.originType)
+          !isDeposit(p.description, p.originType) && categoriesById.get(p.categoryId)?.dreGroup !== 'SECURITY_DEPOSIT'
       );
 
       for (const r of periodRecs) {
@@ -107,19 +127,22 @@ export class DREService {
         financialResultAmount += (
           Number(r.fineAmount || 0) +
           Number(r.interestAmount || 0) -
-          Number(r.discountAmount || 0)
+          Number(r.discountAmount || 0) + Number(r.additionalAmount || 0)
         );
       }
 
       for (const p of periodPays) {
         const amount = Number(p.originalAmount || 0);
-        directCostsAmount += amount;
+        const category = categoriesById.get(p.categoryId);
+        const operatingExpense = ['ADMINISTRATIVE', 'PAYROLL', 'TAXES'].includes(category?.dreGroup || '');
+        if (operatingExpense) operatingExpensesAmount += amount;
+        else directCostsAmount += amount;
         financialResultAmount += (
           Number(p.discountAmount || 0) -
           Number(p.fineAmount || 0) -
-          Number(p.interestAmount || 0)
+          Number(p.interestAmount || 0) - Number(p.additionalAmount || 0)
         );
-        this.addExpenseToBreakdown(breakdown, p.originType, amount);
+        if (!operatingExpense) this.addExpenseToBreakdown(breakdown, p.originType, amount, category);
       }
     } else {
       // CASH REGIME
@@ -155,9 +178,7 @@ export class DREService {
         } else if (t.type === TransactionType.EXPENSE) {
           directCostsAmount += amount;
           const payable = t.payableId ? payablesById.get(t.payableId) : undefined;
-          if (payable) {
-            this.addExpenseToBreakdown(breakdown, payable.originType, amount);
-          }
+          this.addExpenseToBreakdown(breakdown, payable?.originType, amount, payable ? categoriesById.get(payable.categoryId) : undefined);
         }
       }
     }
@@ -174,7 +195,7 @@ export class DREService {
     const grossProfit: DREItem = { code: '5', description: '5. Lucro Bruto Operacional', amount: grossProfitAmount, isTotal: true };
     const operatingExpenses: DREItem = { code: '6', description: '6. Despesas Operacionais / Administrativas', amount: operatingExpensesAmount };
     const operatingProfit: DREItem = { code: '7', description: '7. Resultado Antes Financeiro (EBITDA)', amount: operatingProfitAmount, isTotal: true };
-    const financialResult: DREItem = { code: '8', description: '8. Resultado Financeiro (Juros/Multas/Descontos)', amount: financialResultAmount };
+    const financialResult: DREItem = { code: '8', description: '8. Resultado Financeiro (Juros/Multas/Acréscimos/Descontos)', amount: roundCurrency(financialResultAmount) };
     const netIncome: DREItem = { code: '9', description: '9. LUCRO LÍQUIDO DO EXERCÍCIO', amount: netIncomeAmount, isTotal: true };
 
     return {
@@ -196,6 +217,7 @@ export class DREService {
         insuranceCosts: roundCurrency(breakdown.insuranceCosts),
         trackerCosts: roundCurrency(breakdown.trackerCosts),
         trafficTicketCosts: roundCurrency(breakdown.trafficTicketCosts),
+        otherCosts: roundCurrency(breakdown.otherCosts),
       },
     };
   }

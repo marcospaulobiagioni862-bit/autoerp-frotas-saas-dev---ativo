@@ -9,7 +9,7 @@ function iso(value:unknown):string{if(value instanceof Date)return value.toISOSt
 function optional(value:unknown):string|undefined{return value===null||value===undefined||value===''?undefined:String(value);}
 function map(row:any):TrafficTicket{
   return {
-    id:String(row.id),companyId:String(row.company_id),vehicleId:String(row.vehicle_id),
+    id:String(row.id),companyId:String(row.company_id),vehicleId:optional(row.vehicle_id)||'',vehiclePlate:optional(row.vehicle_plate),
     driverId:optional(row.driver_id),contractId:optional(row.contract_id),
     autoNumber:String(row.auto_number),organName:String(row.organ_name||''),infractionCode:String(row.infraction_code||''),
     description:String(row.description||''),infractionDate:dateOnly(row.infraction_date||row.issue_date),infractionTime:optional(row.infraction_time),infractionLocation:optional(row.infraction_location),
@@ -56,13 +56,13 @@ export class PostgresTrafficTicketRepository {
   async create(item:TrafficTicket):Promise<TrafficTicket>{
     const result=await this.tx.execute(sql`
       INSERT INTO traffic_tickets(
-        id,company_id,vehicle_id,driver_id,contract_id,auto_number,amount,issue_date,status,
+        id,company_id,vehicle_id,vehicle_plate,driver_id,contract_id,auto_number,amount,issue_date,status,
         organ_name,infraction_code,description,infraction_date,infraction_time,infraction_location,due_date,discount_due_date,
         original_amount,discounted_amount,nic_amount,points,responsibility,
         base_payable_id,receivable_id,nic_payable_id,notes,created_by,cancelled_at,cancel_reason,
         responsibility_version,canonical_ready,created_at,updated_at
       ) VALUES (
-        ${item.id},${item.companyId},${item.vehicleId},${item.driverId||null},${item.contractId||null},${item.autoNumber},
+        ${item.id},${item.companyId},${item.vehicleId||null},${item.vehiclePlate||null},${item.driverId||null},${item.contractId||null},${item.autoNumber},
         ${String(item.originalAmount)},${item.infractionDate},${item.status},
         ${item.organName},${item.infractionCode},${item.description},${item.infractionDate},${item.infractionTime||null},${item.infractionLocation||null},${item.dueDate},${item.discountDueDate||null},
         ${String(item.originalAmount)},${item.discountedAmount==null?null:String(item.discountedAmount)},

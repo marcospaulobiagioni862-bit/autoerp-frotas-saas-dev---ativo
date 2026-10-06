@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response as ExpressResponse } from 'express';
 import { createServer } from 'node:http';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { sql } from 'drizzle-orm';
@@ -205,6 +205,18 @@ export class AttachmentAuthorityIntegrationRunner {
       const downloaded = new Uint8Array(await response.arrayBuffer());
       assert(downloaded.length === 4 && downloaded[0] === 37 && downloaded[1] === 80, 'download bytes mismatch');
       assert(response.headers.get('content-length') === '4', 'download content-length mismatch');
+
+      const compatibilityUpload = await upload(adminA, { fileName: 'legacy-storage-root.pdf' });
+      assert(compatibilityUpload.status === 201, 'legacy storage compatibility fixture upload failed');
+      const compatibilityAttachment = (await json(compatibilityUpload)).item;
+      const currentBlob = path.join(storageRoot, companyA, `${compatibilityAttachment.id}.bin`);
+      const legacyCompanyRoot = path.join(storageRoot, 'attachments', companyA);
+      await mkdir(legacyCompanyRoot, { recursive: true });
+      const legacyBlob = path.join(legacyCompanyRoot, `${compatibilityAttachment.id}.bin`);
+      await rename(currentBlob, legacyBlob);
+      response = await request(`/api/attachments/${encodeURIComponent(compatibilityAttachment.id)}/content`, {}, adminA);
+      assert(response.status === 200, `legacy nested storage root content expected 200, got ${response.status}`);
+      await rename(legacyBlob, currentBlob);
 
       response = await request(`/api/attachments/${encodeURIComponent(created.id)}`, {}, adminB);
       assert(response.status === 404, `cross-tenant metadata expected 404, got ${response.status}`);

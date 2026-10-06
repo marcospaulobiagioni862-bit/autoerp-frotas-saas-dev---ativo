@@ -9,7 +9,7 @@ import type { AuthenticatedPrincipal } from './auth';
 
 export interface TicketFinancialCategory { id:string; name:string; type:string; }
 export interface CreateTrafficTicketAuthorityInput {
-  vehicleId:string;driverId?:string;contractId?:string;autoNumber:string;organName:string;infractionCode:string;
+  vehicleId?:string;vehiclePlate?:string;driverId?:string;contractId?:string;autoNumber:string;organName:string;infractionCode:string;
   description:string;infractionDate:string;infractionTime?:string;infractionLocation?:string;dueDate:string;discountDueDate?:string;originalAmount:number;
   discountedAmount?:number;nicAmount?:number;points:number;responsibility:TicketResponsibility;notes?:string;
   baseExpenseCategoryId:string;driverIncomeCategoryId?:string;nicExpenseCategoryId?:string;
@@ -38,6 +38,10 @@ const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function round(value:number):number{return Math.round((value+Number.EPSILON)*100)/100;}
 function normalizeAuto(value:string):string{return value.trim().toUpperCase().replace(/\s+/g,' ');}
+function normalizePlate(value?:string):string|undefined{
+  const plate=value?.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return plate&&plate.length>=5&&plate.length<=10?plate:undefined;
+}
 function assertWrite(principal:AuthenticatedPrincipal):void{
   const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
   if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
@@ -120,7 +124,7 @@ async function operationalAlertDescription(rawTx:any,companyId:string,ticket:Tra
     (SELECT name FROM drivers WHERE company_id=${companyId} AND id=${ticket.driverId||null} LIMIT 1) AS driver_name,
     (SELECT contract_number FROM contracts WHERE company_id=${companyId} AND id=${ticket.contractId||null} LIMIT 1) AS contract_number,
     (SELECT indication_deadline FROM traffic_ticket_driver_indications WHERE company_id=${companyId} AND traffic_ticket_id=${ticket.id} LIMIT 1) AS indication_deadline`);
-  const context=rows(result)[0]||{},plate=String(context.plate||ticket.vehicleId);
+  const context=rows(result)[0]||{},plate=String(context.plate||ticket.vehiclePlate||ticket.vehicleId||'não cadastrado');
   const driver=String(context.driver_name||ticket.driverId||'não identificado'),contract=String(context.contract_number||ticket.contractId||'não localizado');
   const amount=Number(ticket.originalAmount).toFixed(2).replace('.',','),indicationDeadline=context.indication_deadline?String(context.indication_deadline).slice(0,10):'não informado';
   return `Auto: ${ticket.autoNumber}. Veículo: ${plate}. Motorista: ${driver}. Contrato: ${contract}. Infração: ${ticket.infractionDate}${ticket.infractionTime?` às ${ticket.infractionTime}`:''}. Local: ${ticket.infractionLocation||'não informado'}. Órgão: ${ticket.organName}. Código: ${ticket.infractionCode}. Descrição: ${ticket.description}. Pontos: ${ticket.points}. Valor: R$ ${amount}. Vencimento: ${ticket.dueDate}. Prazo de indicação: ${indicationDeadline}. Responsabilidade: ${ticket.responsibility}.`;
@@ -177,9 +181,9 @@ export class TrafficTicketAuthorityService {
   static async create(principal:AuthenticatedPrincipal,input:CreateTrafficTicketAuthorityInput):Promise<TrafficTicketDetails>{
     assertWrite(principal);
     const autoNumber=normalizeAuto(input.autoNumber),organName=input.organName.trim(),infractionCode=input.infractionCode.trim(),description=input.description.trim(),infractionTime=normalizeTime(input.infractionTime),infractionLocation=input.infractionLocation?.trim()||undefined;
-    if(!input.vehicleId||!autoNumber||!organName||!infractionCode||!description||!input.baseExpenseCategoryId)throw new TrafficTicketValidationError('Campos obrigatórios ausentes');
+    if(!autoNumber||!organName||!infractionCode||!description||!input.baseExpenseCategoryId)throw new TrafficTicketValidationError('Campos obrigatórios ausentes');
     validateDate(input.infractionDate,'Data da infração');validateDate(input.dueDate,'Vencimento');if(input.dueDate<input.infractionDate)throw new TrafficTicketValidationError('Vencimento anterior à infração');
-    if(input.discountDueDate){validateDate(input.discountDueDate,'Data de desconto');if(input.discountDueDate>input.dueDate)throw new TrafficTicketValidationError('Data de desconto posterior ao vencimento');}
+    if(input.discountDueDate){validateDate(input.discountDueDate,'Data de desconto');if(input.discountDueDate<input.infractionDate)throw new TrafficTicketValidationError('Data de desconto anterior à infração');if(input.discountDueDate>input.dueDate)throw new TrafficTicketValidationError('Data de desconto posterior ao vencimento');}
     const original=round(Number(input.originalAmount));if(!Number.isFinite(original)||original<=0)throw new TrafficTicketValidationError('Valor original inválido');
     const discounted=input.discountedAmount==null?undefined:round(Number(input.discountedAmount));if(discounted!==undefined&&(!input.discountDueDate||discounted<=0||discounted>=original))throw new TrafficTicketValidationError('Desconto inválido');
     const nic=input.nicAmount==null?undefined:round(Number(input.nicAmount));if(nic!==undefined&&nic<=0)throw new TrafficTicketValidationError('NIC inválida');
@@ -189,34 +193,48 @@ export class TrafficTicketAuthorityService {
     if(input.responsibility===TicketResponsibility.DRIVER&&!input.driverIncomeCategoryId)throw new TrafficTicketValidationError('Categoria de receita obrigatória');
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');
-      const repo=tx.getTrafficTicketRepo();const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,input.vehicleId);if(!vehicle||vehicle.isArchived)throw new TrafficTicketNotFoundError('Veículo não encontrado');
+      const repo=tx.getTrafficTicketRepo();
+      let vehicleId=input.vehicleId?.trim()||undefined;
+      let vehiclePlate=normalizePlate(input.vehiclePlate);
+      if(vehicleId){
+        const vehicle=await tx.getVehicleRepo().findByIdForCompanyWithLock(principal.companyId,vehicleId);
+        if(!vehicle||vehicle.isArchived)throw new TrafficTicketNotFoundError('Veículo não encontrado');
+        const registeredPlate=normalizePlate(vehicle.plate);
+        if(!registeredPlate)throw new TrafficTicketConflictError('Placa do veículo cadastrado inválida');
+        if(vehiclePlate&&vehiclePlate!==registeredPlate)throw new TrafficTicketConflictError('Placa divergente do veículo cadastrado');
+        vehiclePlate=registeredPlate;
+      }
+      if(!vehiclePlate)throw new TrafficTicketValidationError('Placa obrigatória');
       if(await repo.findByAutoNumber(principal.companyId,autoNumber))throw new TrafficTicketConflictError('Auto de infração já cadastrado');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
-      const resolved=await resolveContract(rawTx,principal.companyId,input.vehicleId,input.infractionDate,input.contractId,input.driverId);
-      let driverId=input.driverId,contractId=input.contractId;
-      if(!contractId&&resolved.contractId)contractId=resolved.contractId;
-      if(input.responsibility===TicketResponsibility.DRIVER&&!driverId&&resolved.driverId)driverId=resolved.driverId;
-      if(input.responsibility===TicketResponsibility.DRIVER&&!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
+      let driverId: string|undefined;
+      let contractId: string|undefined;
+      if(input.responsibility===TicketResponsibility.DRIVER){
+        const resolved=vehicleId?await resolveContract(rawTx,principal.companyId,vehicleId,input.infractionDate,input.contractId,input.driverId):{};
+        driverId=input.driverId||resolved.driverId;
+        contractId=vehicleId?(input.contractId||resolved.contractId):undefined;
+        if(!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
+      }
       await validateCategory(rawTx,principal.companyId,input.baseExpenseCategoryId,'EXPENSE');
       if(input.responsibility===TicketResponsibility.DRIVER)await validateCategory(rawTx,principal.companyId,input.driverIncomeCategoryId!,'INCOME');
       const nicCategory=input.nicExpenseCategoryId||input.baseExpenseCategoryId;
       if(input.responsibility===TicketResponsibility.UNIDENTIFIED)await validateCategory(rawTx,principal.companyId,nicCategory,'EXPENSE');
       const now=new Date().toISOString(),id=randomUUID();
       let ticket:TrafficTicket=await repo.create({
-        id,companyId:principal.companyId,vehicleId:input.vehicleId,driverId:input.responsibility===TicketResponsibility.DRIVER?driverId:undefined,
+        id,companyId:principal.companyId,vehicleId:vehicleId||'',vehiclePlate,driverId:input.responsibility===TicketResponsibility.DRIVER?driverId:undefined,
         contractId,autoNumber,organName,infractionCode,description,infractionDate:input.infractionDate,infractionTime,infractionLocation,dueDate:input.dueDate,
         discountDueDate:input.discountDueDate,originalAmount:original,discountedAmount:discounted,nicAmount:nic,points:input.points,
         responsibility:input.responsibility,status:input.responsibility===TicketResponsibility.UNIDENTIFIED?TicketStatus.PENDING_IDENTIFICATION:TicketStatus.IDENTIFIED,
         notes:input.notes?.trim()||undefined,createdBy:principal.userId,responsibilityVersion:0,createdAt:now,updatedAt:now,
       });
       const base=(await PayableService.create({
-        companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_COMPANY,originId:id,vehicleId:ticket.vehicleId,contractId:ticket.contractId,
+        companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_COMPANY,originId:id,vehicleId:ticket.vehicleId||undefined,contractId:ticket.contractId,
         categoryId:input.baseExpenseCategoryId,description:`Multa ${ticket.autoNumber} — ${ticket.description}`,totalAmount:ticket.originalAmount,
         dueDate:ticket.dueDate,competenceDate:ticket.infractionDate,userId:principal.userId,userName:principal.name,
       },tx))[0];ticket.payableId=base.id;await testHooks.afterBasePayableCreated?.();
       if(ticket.responsibility===TicketResponsibility.DRIVER){
         const rec=(await ReceivableService.create({
-          companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_DRIVER,originId:id,vehicleId:ticket.vehicleId,driverId:ticket.driverId,
+          companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_DRIVER,originId:id,vehicleId:ticket.vehicleId||undefined,driverId:ticket.driverId,
           contractId:ticket.contractId,categoryId:input.driverIncomeCategoryId!,description:`Reembolso multa ${ticket.autoNumber}`,
           totalAmount:ticket.originalAmount,dueDate:ticket.dueDate,competenceDate:ticket.infractionDate,userId:principal.userId,userName:principal.name,
         },tx))[0];ticket.receivableId=rec.id;ticket.status=TicketStatus.CHARGED_DRIVER;await testHooks.afterSecondaryObligationCreated?.();
@@ -225,7 +243,7 @@ export class TrafficTicketAuthorityService {
       }else{
         const nicAmount=ticket.nicAmount??ticket.originalAmount;
         const nicPay=(await PayableService.create({
-          companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId:id,vehicleId:ticket.vehicleId,contractId:ticket.contractId,
+          companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId:id,vehicleId:ticket.vehicleId||undefined,contractId:ticket.contractId,
           categoryId:nicCategory,description:`NIC multa ${ticket.autoNumber}`,totalAmount:nicAmount,dueDate:ticket.dueDate,
           competenceDate:ticket.infractionDate,userId:principal.userId,userName:principal.name,
         },tx))[0];ticket.nicAmount=nicAmount;ticket.nicPayableId=nicPay.id;await testHooks.afterSecondaryObligationCreated?.();
@@ -248,8 +266,11 @@ export class TrafficTicketAuthorityService {
     return await UnitOfWork.run(principal.companyId,async tx=>{
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
-      const resolved=await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,input.contractId,input.driverId);
-      let driverId=input.driverId,contractId=input.contractId||resolved.contractId;
+      const resolved=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId
+        ?await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,input.contractId,input.driverId)
+        :{};
+      let driverId=input.responsibility===TicketResponsibility.DRIVER?input.driverId:undefined;
+      let contractId=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId?(input.contractId||resolved.contractId):undefined;
       if(input.responsibility===TicketResponsibility.DRIVER&&!driverId&&resolved.driverId)driverId=resolved.driverId;
       if(input.responsibility===TicketResponsibility.DRIVER&&!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
       if(current.responsibility===input.responsibility&&current.driverId===driverId)return (await TrafficTicketAuthorityService.getDetails(principal.companyId,id))!;
@@ -259,14 +280,14 @@ export class TrafficTicketAuthorityService {
       if(current.nicPayableId){await cancelPayableIfOpen(tx,principal,current.nicPayableId);next.nicPayableId=undefined;}
       if(input.responsibility===TicketResponsibility.DRIVER){
         await validateCategory(rawTx,principal.companyId,input.driverIncomeCategoryId!,'INCOME');
-        const rec=(await ReceivableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_DRIVER,originId,vehicleId:next.vehicleId,driverId:next.driverId,contractId:next.contractId,categoryId:input.driverIncomeCategoryId!,description:`Reembolso multa ${next.autoNumber}`,totalAmount:next.originalAmount,dueDate:next.dueDate,competenceDate:next.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
+        const rec=(await ReceivableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_DRIVER,originId,vehicleId:next.vehicleId||undefined,driverId:next.driverId,contractId:next.contractId,categoryId:input.driverIncomeCategoryId!,description:`Reembolso multa ${next.autoNumber}`,totalAmount:next.originalAmount,dueDate:next.dueDate,competenceDate:next.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
         next.receivableId=rec.id;next.status=TicketStatus.CHARGED_DRIVER;
       }else if(input.responsibility===TicketResponsibility.COMPANY){
         next.status=TicketStatus.COMPANY_PAYABLE_CREATED;
       }else{
         const category=input.nicExpenseCategoryId;if(!category)throw new TrafficTicketValidationError('Categoria NIC obrigatória');
         await validateCategory(rawTx,principal.companyId,category,'EXPENSE');const nicAmount=input.nicAmount==null?next.originalAmount:round(Number(input.nicAmount));if(!Number.isFinite(nicAmount)||nicAmount<=0)throw new TrafficTicketValidationError('NIC inválida');
-        const nicPay=(await PayableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId,vehicleId:next.vehicleId,contractId:next.contractId,categoryId:category,description:`NIC multa ${next.autoNumber}`,totalAmount:nicAmount,dueDate:next.dueDate,competenceDate:next.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
+        const nicPay=(await PayableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId,vehicleId:next.vehicleId||undefined,contractId:next.contractId,categoryId:category,description:`NIC multa ${next.autoNumber}`,totalAmount:nicAmount,dueDate:next.dueDate,competenceDate:next.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
         next.nicAmount=nicAmount;next.nicPayableId=nicPay.id;next.status=TicketStatus.PENDING_IDENTIFICATION;
       }
       const saved=await repo.save(next);await audit(tx,principal,AuditAction.UPDATE,current,saved);await syncOperationalAlert(tx,principal,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};
@@ -284,7 +305,7 @@ export class TrafficTicketAuthorityService {
       await validateCategory(rawTx,principal.companyId,categoryId,'EXPENSE');
       const amount=nicAmount==null?current.originalAmount:round(Number(nicAmount));if(!Number.isFinite(amount)||amount<=0)throw new TrafficTicketValidationError('NIC inválida');
       const version=(current.responsibilityVersion||0)+1,originId=originForVersion(id,version);
-      const nicPay=(await PayableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId,vehicleId:current.vehicleId,contractId:current.contractId,categoryId,description:`NIC multa ${current.autoNumber}`,totalAmount:amount,dueDate:current.dueDate,competenceDate:current.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
+      const nicPay=(await PayableService.create({companyId:principal.companyId,originType:OriginType.TRAFFIC_TICKET_NIC,originId,vehicleId:current.vehicleId||undefined,contractId:current.contractId,categoryId,description:`NIC multa ${current.autoNumber}`,totalAmount:amount,dueDate:current.dueDate,competenceDate:current.infractionDate,userId:principal.userId,userName:principal.name},tx))[0];
       const saved=await repo.save({...current,nicAmount:amount,nicPayableId:nicPay.id,responsibilityVersion:version,updatedAt:new Date().toISOString()});await audit(tx,principal,AuditAction.UPDATE,current,saved);const financial=await currentFinancial(tx,saved);return {item:projected(saved,financial),financial};
     },{financialPeriodLock:'SHARED'});
   }

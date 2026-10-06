@@ -1,3 +1,4 @@
+import { isFinancialDreGroup, isDreGroupCompatible, type FinancialDreGroup } from '../shared/utils/financialDreGroups';
 import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
@@ -45,6 +46,7 @@ export interface UpdatePaymentMethodInput {
 }
 
 export interface CreateFinancialCategoryInput {
+  dreGroup?: FinancialDreGroup;
   name: string;
   type: FinancialCategoryType;
   parentId?: string;
@@ -52,6 +54,7 @@ export interface CreateFinancialCategoryInput {
 }
 
 export interface UpdateFinancialCategoryInput {
+  dreGroup?: FinancialDreGroup | null;
   name?: string;
   type?: FinancialCategoryType;
   parentId?: string | null;
@@ -234,6 +237,7 @@ export class FinanceMasterDataAuthority {
     return UnitOfWork.run(actor.companyId, async (txContext: any) => {
       await FinancialAuthorizationService.authorize(actor.userId, actor.companyId, 'FINANCIAL_MASTER_DATA_MANAGE', txContext);
       const tx = txContext.getRawTransaction();
+      if (input.dreGroup != null && (!isFinancialDreGroup(input.dreGroup) || !isDreGroupCompatible(input.type, input.dreGroup))) throw new Error('Grupo DRE incompatível');
       await assertUniqueName(tx, financialCategories, actor.companyId, `category:${input.type}`, input.name);
       if (input.parentId) {
         const parent = await getCategory(tx, actor.companyId, input.parentId);
@@ -243,7 +247,7 @@ export class FinanceMasterDataAuthority {
       const now = new Date().toISOString();
       const rows = await tx.insert(financialCategories).values({
         id: randomUUID(), companyId: actor.companyId, name: input.name, type: input.type,
-        parentId: input.parentId || null, active: input.active ?? true, createdAt: now, updatedAt: now,
+        dreGroup: input.dreGroup || null, parentId: input.parentId || null, active: input.active ?? true, createdAt: now, updatedAt: now,
       }).returning();
       const item = rows[0];
       await audit(txContext, actor, 'FinancialCategory', item.id, AuditAction.CREATE, null, item);
@@ -261,6 +265,8 @@ export class FinanceMasterDataAuthority {
       const existing = existingRows[0];
       if (!existing) throw new Error('Categoria financeira não encontrada');
       const nextType = input.type || existing.type as FinancialCategoryType;
+      const nextGroup = input.dreGroup === undefined ? existing.dreGroup : input.dreGroup;
+      if (nextGroup != null && (!isFinancialDreGroup(nextGroup) || !isDreGroupCompatible(nextType, nextGroup))) throw new Error('Grupo DRE incompatível');
       const nextName = input.name || existing.name;
       await assertUniqueName(tx, financialCategories, actor.companyId, `category:${nextType}`, nextName, id);
       const nextParentId = input.parentId === undefined ? existing.parentId : input.parentId;
@@ -274,6 +280,7 @@ export class FinanceMasterDataAuthority {
         ...(input.name !== undefined ? { name: input.name } : {}),
         ...(input.type !== undefined ? { type: input.type } : {}),
         ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        ...(input.dreGroup !== undefined ? { dreGroup: input.dreGroup } : {}),
         ...(input.active !== undefined ? { active: input.active } : {}),
         updatedAt: new Date().toISOString(),
       }).where(and(eq(financialCategories.companyId, actor.companyId), eq(financialCategories.id, id))).returning();

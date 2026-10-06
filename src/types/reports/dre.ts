@@ -27,5 +27,6 @@ export interface DREReport {
     insuranceCosts?: number;
     trackerCosts?: number;
     trafficTicketCosts?: number;
+    otherCosts?: number;
   };
 }

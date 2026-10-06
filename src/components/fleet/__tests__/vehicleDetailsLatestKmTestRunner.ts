@@ -171,7 +171,9 @@ assert.ok(inspectionPanelSource.includes("'video/mp4'"), 'inspection UI must per
 assert.ok(fileUploadSource.includes("'VehicleInspection'"), 'shared uploader must recognize inspection authority');
 assert.ok(inspectionRoutesSource.includes("inspectionType:type"), 'server must persist the explicit inspection type');
 assert.ok(inspectionRoutesSource.includes("readingType:type==='ENTRY'?'CHECK_IN':'CHECK_OUT'"), 'inspection KM must integrate with odometer history');
-assert.ok(inspectionRoutesSource.includes("if(odometer<vehicle.currentKm)"), 'inspection must reject KM regression');
+assert.ok(inspectionRoutesSource.includes('recordVehicleKm(context,principal.companyId'), 'inspection must delegate KM validation to the locked central authority');
+const kmAuthoritySource = readFileSync(new URL('../../../server/vehicleKmAuthority.ts', import.meta.url), 'utf8');
+assert.ok(kmAuthoritySource.includes('input.kmValue < before.currentKm'), 'central authority must reject KM regression');
 assert.ok(inspectionMigrationSource.includes("inspection_type IN ('ENTRY','EXIT')"), 'database must restrict inspections to entry or exit');
 assert.ok(inspectionMigrationSource.includes('ENABLE ROW LEVEL SECURITY') && inspectionMigrationSource.includes('FORCE ROW LEVEL SECURITY'), 'inspection table must remain tenant isolated');
 for (const key of ['tires','glassMirrors','bodyPaint','interior','dashboard','lighting','brakes','suspension','steering','engine','transmission','safety']) {

@@ -1,7 +1,8 @@
+import { confirmDiscardUnsavedChanges, clearAllUnsavedChanges } from '../../app/unsavedChangesAuthority';
 import React, { lazy, Suspense, useState } from 'react';
 import { PageHeader } from '../ui/PageHeader';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
-import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, PieChart, CalendarRange, SlidersHorizontal, Banknote, ShieldAlert, Landmark } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, CreditCard, ArrowRightLeft, Banknote, PieChart, Settings } from 'lucide-react';
 import { AccountReceivable, AccountPayable } from '../../types/entities';
 
 const FinanceOverviewView=lazy(()=>import('./FinanceOverviewView').then(module=>({default:module.FinanceOverviewView})));
@@ -19,6 +20,7 @@ const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(
 type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'cards' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
+  refreshVersion?: number;
   initialSubTab?: FinanceSubTab;
   onOpenReceiptModal: (rec: AccountReceivable) => void;
   onOpenPaymentModal: (pay: AccountPayable) => void;
@@ -28,12 +30,14 @@ interface FinanceHubViewProps {
 
 export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   initialSubTab = 'overview',
+  refreshVersion = 0,
   onOpenReceiptModal,
   onOpenPaymentModal,
   onOpenTransferModal,
   onOpenRenegotiationModal,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<FinanceSubTab>(initialSubTab);
+  const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
 
   const subTabs = [
     { id: 'overview' as const, label: 'Visão Geral', icon: LayoutDashboard },
@@ -41,20 +45,16 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
     { id: 'payables' as const, label: 'Contas a Pagar', icon: CreditCard },
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
-    { id: 'delinquency' as const, label: 'Inadimplência', icon: ShieldAlert },
-    { id: 'reconciliation' as const, label: 'Conciliação Bancária', icon: Landmark },
-    { id: 'cards' as const, label: 'Cartões / Faturas', icon: CreditCard },
-    { id: 'periods' as const, label: 'Períodos', icon: CalendarRange },
-    { id: 'dre' as const, label: 'DRE / Relatórios', icon: PieChart },
-    { id: 'settings' as const, label: 'Configurações', icon: SlidersHorizontal },
+    { id: 'dre' as const, label: 'Relatórios / Rentabilidade', icon: PieChart },
+    { id: 'settings' as const, label: 'Configurações', icon: Settings },
   ];
 
   return (
     <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Financeiro"
-        description="Contas, movimentações, períodos contábeis, fluxo de caixa e visão financeira consolidada"
-        breadcrumb="Gestão Financeira & Motor de Pagamentos"
+        description="Contas a receber e pagar, movimentações, fluxo de caixa e relatórios"
+        breadcrumb="Financeiro"
       />
 
       <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
@@ -64,7 +64,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveSubTab(tab.id)}
+              onClick={() => navigate(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs'
@@ -80,9 +80,9 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
 
       <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
         <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
-          <div className="mt-6 min-w-0">
+          <div key={refreshVersion} className="mt-6 min-w-0">
         {activeSubTab === 'overview' && (
-          <FinanceOverviewView onSelectSubTab={(tab) => setActiveSubTab(tab)} />
+          <FinanceOverviewView onSelectSubTab={navigate} />
         )}
         {activeSubTab === 'receivables' && (
           <ReceivablesView

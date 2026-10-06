@@ -6,7 +6,7 @@ import {
   AccountReceivableRepository,
 } from '../../persistence/repositories/localRepositories';
 import { SecurityDeposit, SecurityDepositMovement, FinancialTransaction } from '../../types/entities';
-import { SecurityDepositStatus, SecurityDepositMovementType, TransactionType, AuditAction, ObligationStatus } from '../../types/enums';
+import { SecurityDepositStatus, SecurityDepositMovementType, TransactionType, AuditAction, ObligationStatus, OriginType } from '../../types/enums';
 import { roundCurrency } from '../../shared/utils/currency';
 import { generateUUID } from '../../shared/utils/uuid';
 import { AuditLogger } from '../../shared/utils/auditLogger';
@@ -147,10 +147,36 @@ export class DepositService {
       txContext
     );
 
-    if (txContext) {
-      return await txContext.getSecurityDepositRepo().findByContractId(contractId);
-    }
-    return await this.depositRepo.findByContractIdForCompany(companyId, contractId);
+    if (!txContext) return await this.depositRepo.findByContractIdForCompany(companyId, contractId);
+
+    const contract = await txContext.getContractRepo().findByIdForCompany(companyId, contractId);
+    if (!contract || contract.isArchived) return null;
+    const persisted = await txContext.getSecurityDepositRepo().findByContractId(contractId);
+    const receivables = (await txContext.getReceivableRepo().findByContractId(contractId))
+      .filter((item) => item.companyId === companyId && item.originType === OriginType.SECURITY_DEPOSIT && item.status !== ObligationStatus.CANCELLED);
+    const receivablePaid = roundCurrency(receivables.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0));
+    if (!persisted && receivablePaid <= 0) return null;
+
+    const originalAmount = roundCurrency(Number(contract.securityDepositAmount));
+    const effectiveReceived = roundCurrency(Math.min(originalAmount, Math.max(Number(persisted?.receivedAmount || 0), receivablePaid)));
+    const now = receivables.map((item) => item.updatedAt).sort().at(-1) || new Date().toISOString();
+    return {
+      id: persisted?.id || `derived-${contractId}`,
+      companyId,
+      contractId,
+      driverId: persisted?.driverId || contract.driverId,
+      vehicleId: persisted?.vehicleId || contract.vehicleId,
+      originalAmount,
+      receivedAmount: effectiveReceived,
+      usedAmount: Number(persisted?.usedAmount || 0),
+      returnedAmount: Number(persisted?.returnedAmount || 0),
+      status: effectiveReceived >= originalAmount ? SecurityDepositStatus.RECEIVED : (persisted?.status || SecurityDepositStatus.PENDING),
+      receivedAt: persisted?.receivedAt || (effectiveReceived > 0 ? now : undefined),
+      returnedAt: persisted?.returnedAt,
+      notes: persisted?.notes,
+      createdAt: persisted?.createdAt || receivables[0]?.createdAt || now,
+      updatedAt: persisted?.updatedAt || now,
+    };
   }
 
   private static async receiveSecurityDepositTransactional(
@@ -205,6 +231,9 @@ export class DepositService {
     let deposit = await depositRepo.findByContractId(contractId);
     const now = new Date().toISOString();
     const today = now.split('T')[0];
+    const depositReceivables = (await txContext.getReceivableRepo().findByContractId(contractId))
+      .filter((item) => item.companyId === companyId && item.originType === OriginType.SECURITY_DEPOSIT && item.status !== ObligationStatus.CANCELLED);
+    const receivablePaid = roundCurrency(depositReceivables.reduce((sum, item) => sum + Number(item.paidAmount || 0), 0));
 
     if (!deposit) {
       deposit = await depositRepo.create({
@@ -214,15 +243,23 @@ export class DepositService {
         driverId: canonicalDriverId,
         vehicleId: canonicalVehicleId,
         originalAmount,
-        receivedAmount: 0,
+        receivedAmount: Math.min(originalAmount, receivablePaid),
         usedAmount: 0,
         returnedAmount: 0,
-        status: SecurityDepositStatus.PENDING,
+        status: receivablePaid >= originalAmount ? SecurityDepositStatus.RECEIVED : SecurityDepositStatus.PENDING,
+        receivedAt: receivablePaid > 0 ? now : undefined,
         createdAt: now,
         updatedAt: now,
       });
     } else if (roundCurrency(deposit.originalAmount) !== originalAmount) {
       throw new Error('Principal da caução diverge do contrato');
+    } else if (receivablePaid > Number(deposit.receivedAmount)) {
+      deposit = await depositRepo.update(deposit.id, {
+        receivedAmount: Math.min(originalAmount, receivablePaid),
+        status: receivablePaid >= originalAmount ? SecurityDepositStatus.RECEIVED : deposit.status,
+        receivedAt: deposit.receivedAt || now,
+        updatedAt: now,
+      });
     }
 
     const description = `Recebimento de Caução (Contrato: ${contractId})`;

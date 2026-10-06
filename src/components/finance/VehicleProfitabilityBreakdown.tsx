@@ -16,6 +16,10 @@ const Metric: React.FC<{ label: string; value: string; emphasize?: boolean }> = 
 );
 
 export const VehicleProfitabilityBreakdown: React.FC<VehicleProfitabilityBreakdownProps> = ({ report }) => {
+  const hasFinancialActivity = report.totalIncome !== 0 || report.totalExpense !== 0;
+  const hasKmBase = report.kmTraveledPeriod > 0;
+  const hasMarginBase = hasFinancialActivity && report.totalIncome > 0;
+
   const income = [
     ['Locação', report.rentalIncome],
     ['KM excedente', report.kmExcessIncome],
@@ -38,8 +42,14 @@ export const VehicleProfitabilityBreakdown: React.FC<VehicleProfitabilityBreakdo
     <div className="space-y-4 text-xs">
       <div className="grid grid-cols-2 gap-2">
         <Metric label="KM no período" value={`${number(report.kmTraveledPeriod)} km`} />
-        <Metric label="Margem" value={`${report.profitMarginPercentage.toFixed(1)}%`} />
+        <Metric label="Margem" value={hasMarginBase ? `${report.profitMarginPercentage.toFixed(1)}%` : '—'} />
       </div>
+
+      {!hasFinancialActivity && (
+        <p className="rounded-lg border border-dashed border-slate-200 p-3 text-xs text-slate-500 dark:border-slate-800">
+          Sem dados financeiros no período selecionado.
+        </p>
+      )}
 
       <section>
         <div className="mb-2 flex items-center justify-between">
@@ -62,10 +72,10 @@ export const VehicleProfitabilityBreakdown: React.FC<VehicleProfitabilityBreakdo
       </section>
 
       <section className="grid grid-cols-2 gap-2">
-        <Metric label="Receita por KM" value={money(report.revenuePerKm)} />
-        <Metric label="Custo por KM" value={money(report.costPerKm)} />
-        <Metric label="Lucro líquido" value={money(report.netProfit)} emphasize />
-        <Metric label="Margem líquida" value={`${report.profitMarginPercentage.toFixed(1)}%`} emphasize />
+        <Metric label="Receita por KM" value={hasKmBase ? money(report.revenuePerKm) : 'Não calculável'} />
+        <Metric label="Custo por KM" value={hasKmBase ? money(report.costPerKm) : 'Não calculável'} />
+        <Metric label="Lucro líquido" value={hasFinancialActivity ? money(report.netProfit) : '—'} emphasize />
+        <Metric label="Margem líquida" value={hasMarginBase ? `${report.profitMarginPercentage.toFixed(1)}%` : '—'} emphasize />
       </section>
     </div>
   );

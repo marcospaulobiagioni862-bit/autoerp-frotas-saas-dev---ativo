@@ -63,10 +63,13 @@ assert.match(preventiveSource, /Todas as ações/, 'preventive plans must offer 
 assert.match(preventiveSource, /Todos os status/, 'preventive plans must offer operational status filtering');
 assert.match(preventiveSource, /Até X km restantes/, 'preventive plans must offer KM proximity filtering');
 assert.match(preventiveSource, /Até X dias restantes/, 'preventive plans must offer day proximity filtering');
-assert.match(preventiveSource, /filteredPlans\.map/, 'preventive table must render the filtered projection');
+assert.match(preventiveSource, /displayedPlans\.map/, 'preventive table must render the filtered/compact projection');
 assert.match(preventiveSource, /OVERDUE:0,DUE:1,UPCOMING:2,OK:3,PAUSED:4/, 'preventive plans must sort by operational urgency');
 assert.match(preventiveSource, /Nenhum plano corresponde aos filtros selecionados/, 'combined filters must provide an empty state');
 assert.doesNotMatch(preventiveSource, /plans\.map\(p=><tr/, 'preventive table must not bypass the filtered projection');
+assert.match(preventiveSource, />Visão rápida<\/Button>/, 'preventive UI must expose a compact operational view');
+assert.match(preventiveSource, />Por veículo<\/Button>/, 'preventive UI must expose a vehicle-focused view');
+assert.match(preventiveSource, />Configuração<\/Button>/, 'preventive UI must separate fleet rules and templates from daily operation');
 
 assert.match(preventiveSource, /aria-label="Item preventivo para aplicação individual"/, 'individual preventive apply must expose template selection');
 assert.match(preventiveSource, /aria-label="Veículo para aplicação individual"/, 'individual preventive apply must expose vehicle selection');

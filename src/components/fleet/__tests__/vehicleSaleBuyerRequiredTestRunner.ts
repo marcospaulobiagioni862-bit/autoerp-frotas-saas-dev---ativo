@@ -6,6 +6,7 @@ const restoreModal = readFileSync(new URL('../VehicleRestoreModal.tsx', import.m
 const fleet = readFileSync(new URL('../FleetManagement.tsx', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../../../api/vehicleClient.ts', import.meta.url), 'utf8');
 const routes = readFileSync(new URL('../../../server/vehicleLifecycleRoutes.ts', import.meta.url), 'utf8');
+const historyModal = readFileSync(new URL('../ArchivedVehicleHistoryModal.tsx', import.meta.url), 'utf8');
 const lifecycleMigration = readFileSync(new URL('../../../../drizzle/0053_vehicle_lifecycle_events.sql', import.meta.url), 'utf8');
 
 assert.match(modal, /label="Comprador \*" required/, 'buyer name must be required in the sale modal');
@@ -14,6 +15,10 @@ assert.match(modal, /if \(!buyerName\.trim\(\)\)/, 'sale modal must block empty 
 assert.match(modal, /if \(!buyerDocument\.trim\(\)\)/, 'sale modal must block empty buyer document');
 assert.match(client, /buyerName: string;/, 'sale client contract must require buyerName');
 assert.match(client, /buyerDocument: string;/, 'sale client contract must require buyerDocument');
+assert.match(client, /buyerPhone\?: string;/, 'sale client contract must accept optional buyerPhone');
+assert.match(client, /buyerEmail\?: string;/, 'sale client contract must accept optional buyerEmail');
+assert.match(modal, /label="Telefone do comprador"/, 'sale modal must collect optional buyer phone');
+assert.match(modal, /label="E-mail do comprador"/, 'sale modal must collect optional buyer email');
 assert.match(routes, /buyerName = requiredText\(req\.body\?\.buyerName, 'buyerName'\)/, 'server must require buyerName');
 assert.match(routes, /buyerDocument = requiredText\(req\.body\?\.buyerDocument, 'buyerDocument'\)/, 'server must require buyerDocument');
 assert.doesNotMatch(routes, /const buyerName = optionalText\(req\.body\?\.buyerName\)/, 'server must not accept optional buyer name');
@@ -42,6 +47,17 @@ assert.match(
   /item\.buyerDocument !== undefined && typeof item\.buyerDocument !== 'string'/,
   'history must still reject malformed non-string buyerDocument'
 );
+
+assert.match(historyModal, /CPF\/CNPJ do comprador:/, 'sold vehicle history must display buyer document');
+assert.match(historyModal, /Telefone do comprador:/, 'sold vehicle history must display buyer phone');
+assert.match(historyModal, /E-mail do comprador:/, 'sold vehicle history must display buyer email');
+assert.match(routes, /buyer_phone, buyer_email/, 'sale lifecycle persistence must include buyer contact columns');
+assert.match(historyModal, /Valor da venda:/, 'sold vehicle history must display sale value');
+assert.match(historyModal, /KM na venda:/, 'sold vehicle history must display final sale km');
+assert.match(historyModal, /Tipo da baixa:/, 'sold vehicle history must display disposal type');
+assert.match(historyModal, /Registrado por:/, 'sold vehicle history must display the sale author');
+assert.match(routes, /creator\.name AS created_by_name/, 'lifecycle read model must resolve the author name server-side');
+assert.match(client, /createdByName\?: string;/, 'lifecycle client must expose the resolved author name');
 
 // Reentry is a dedicated audited lifecycle action. Generic SOLD -> AVAILABLE remains blocked elsewhere.
 assert.match(lifecycleMigration, /'RESTORED'/, 'existing lifecycle schema must already allow RESTORED without a new migration');

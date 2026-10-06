@@ -8,6 +8,7 @@ import { FinanceObligationClient } from '../../api/financeObligationClient';
 import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
+import { formatDateBR, getOperationalISODate } from '../../shared/utils/date';
 
 const ContractFormModal=lazy(()=>import('./ContractFormModal').then(module=>({default:module.ContractFormModal})));
 const ContractDetailsModal=lazy(()=>import('./ContractDetailsModal').then(module=>({default:module.ContractDetailsModal})));
@@ -15,6 +16,14 @@ const ContractTemplateManagementModal=lazy(()=>import('./ContractTemplateManagem
 
 interface ContractsManagementProps {
   companyId: string;
+}
+
+export function activeContractAction(
+  contract: Pick<Contract, 'status' | 'startDate'>,
+  now = new Date(),
+): 'CANCEL' | 'CLOSE' | null {
+  if (contract.status !== ContractStatus.ACTIVE) return null;
+  return contract.startDate > getOperationalISODate(now) ? 'CANCEL' : 'CLOSE';
 }
 
 export const contractStatusLabel=(status:ContractStatus,signedContractUrl?:string,hasSignedEvidence?:boolean):string=>{
@@ -126,6 +135,10 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     if (!confirm('Deseja encerrar este contrato? O vínculo do veículo será liberado de forma atômica.')) return;
     return runAction(id, () => ContractClient.close(id, { reason: 'Encerrado via gestão de contratos' }));
   };
+  const handleCancel = (id: string) => {
+    if (!confirm('Deseja cancelar este contrato antes do início da vigência? O vínculo do veículo será liberado de forma atômica.')) return;
+    return runAction(id, () => ContractClient.cancel(id, 'Cancelado antes do início da vigência via gestão de contratos'));
+  };
   const handleArchive = (id: string) => {
     if (!confirm('Deseja arquivar este contrato? O histórico será preservado.')) return;
     return runAction(id, () => ContractClient.archive(id, 'Arquivado via gestão de contratos'));
@@ -177,8 +190,12 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
           onClick: () => { setContractToEdit(null); setFormOpen(true); },
           icon: <Plus className="w-4 h-4" />,
         }}
+        secondaryActions={
+          <Button size="sm" variant="outline" onClick={() => setTemplateManagerOpen(true)}>
+            <Settings2 className="w-4 h-4" />Modelos de Contrato
+          </Button>
+        }
       />
-      <div className="flex justify-end"><Button variant="secondary" onClick={() => setTemplateManagerOpen(true)}><Settings2 className="w-4 h-4" />Modelos de Contrato</Button></div>
 
       {error && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
@@ -229,23 +246,39 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                   const vehicle = vehicles[item.vehicleId];
                   const driver = drivers[item.driverId];
                   const busy = actionLoadingId === item.id;
+                  const lifecycleAction = activeContractAction(item);
+                  const hasOverdue = (receivables[item.id] || []).some((receivable) =>
+                    receivable.balanceAmount > 0 && receivable.dueDate < today && receivable.status !== 'CANCELLED'
+                  );
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
-                      <td className="px-4 py-3 font-mono font-semibold">{item.contractNumber}</td>
+                      <td className="px-4 py-3 font-mono font-semibold whitespace-nowrap">{item.contractNumber}</td>
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><Car className="w-4 h-4 text-slate-400" /><span>{vehicle ? `${vehicle.plate} • ${vehicle.model}` : '—'}</span></div></td>
                       <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /><span>{driver?.fullName || '—'}</span></div></td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.startDate}{item.endDate ? ` → ${item.endDate}` : ''}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.endDate ? `${formatDateBR(item.startDate)} → ${formatDateBR(item.endDate)}` : `Início: ${formatDateBR(item.startDate)}`}</span></div></td>
                       <td className="px-4 py-3 text-right font-mono">{item.rentalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                      <td className="px-4 py-3"><Badge variant={item.status === ContractStatus.ACTIVE || ([ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && (item.hasSignedEvidence ?? Boolean(item.signedContractUrl))) ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status,item.signedContractUrl,item.hasSignedEvidence)}</Badge></td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-1.5 flex-wrap">
-                          <Button size="sm" variant="ghost" title="Visualizar contrato" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4" /></Button>
-                          {item.status === ContractStatus.DRAFT && <Button size="sm" variant="secondary" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired === false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'OVERVIEW')}>Ativar / Categoria</Button>}
-                          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && item.signatureRequired !== false && <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>PDF / Assinatura</Button>}
-                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" onClick={() => openContractDetails(item.id, 'FINANCIAL')}>Faturar / Categoria</Button>}
-                          {item.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={busy} onClick={() => void handleClose(item.id)}>Encerrar</Button>}
-                          {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <Button size="sm" variant="ghost" isLoading={busy} onClick={() => void handleArchive(item.id)}>Arquivar</Button>}
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge variant={item.status === ContractStatus.ACTIVE || ([ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && (item.hasSignedEvidence ?? Boolean(item.signedContractUrl))) ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status,item.signedContractUrl,item.hasSignedEvidence)}</Badge>
+                          {hasOverdue && (
+                            <button type="button" onClick={() => openContractDetails(item.id, 'FINANCIAL')} className="text-[10px] font-semibold text-rose-600 hover:underline">
+                              Cobrança vencida
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4 mr-1" />Detalhes</Button>
+                          <details className="relative">
+                            <summary aria-label={`Mais ações do contrato ${item.contractNumber}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
+                            <div className="absolute right-0 z-20 mt-1 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                              {item.status === ContractStatus.DRAFT && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</button>}
+                              {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>Documento / Assinatura</button>}
+                              {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
+                              {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
+                            </div>
+                          </details>
                         </div>
                       </td>
                     </tr>

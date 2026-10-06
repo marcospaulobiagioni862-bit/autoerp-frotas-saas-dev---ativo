@@ -46,7 +46,7 @@ export function parseReferenceYear(value: unknown, required = false): number | u
 export function daysUntilExpiration(expirationDate?: string, now = new Date()): number | undefined {
   if (!expirationDate) return undefined;
   const parsed = parseIsoDate(expirationDate, 'expirationDate', true)!;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const expiration = Date.parse(`${parsed}T00:00:00Z`);
   return Math.round((expiration - today) / 86_400_000);
 }

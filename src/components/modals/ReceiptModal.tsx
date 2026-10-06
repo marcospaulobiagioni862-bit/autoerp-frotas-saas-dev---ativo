@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { formatDateBR } from '../../shared/utils/date';
+import { SettlementLateInterest, settlementQuote, settlementLocalDate } from './SettlementLateInterest';
+import React, { useState, useEffect, useRef } from 'react';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountReceivable } from '../../types/entities';
 import { X, CheckCircle, AlertCircle } from 'lucide-react';
 import {
@@ -6,6 +10,7 @@ import {
   SettlementAccountOption,
   SettlementPaymentMethodOption,
   createSettlementIdempotencyKey,
+  type ReceiptDailyInterestQuote,
 } from '../../api/financeSettlementClient';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
@@ -21,16 +26,34 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
-  const [amount, setAmount] = useState<number>(0);
-  const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [amount, setAmount] = useState<string>('');
+  const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
+  const [dailyInterest, setDailyInterest] = useState<string>('0,00');
+  const [manualInterest, setManualInterest] = useState<string>('0,00');
+  const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
+  const [fineAmount, setFineAmount] = useState('0,00');
+  const [discountAmount, setDiscountAmount] = useState('0,00');
+  const amountEdited = useRef(false);
   const [notes, setNotes] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const submittingRef = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dailyQuote, setDailyQuote] = useState<ReceiptDailyInterestQuote | null>(null);
+  const [dailyQuoteLoading, setDailyQuoteLoading] = useState(false);
 
   useEffect(() => {
     if (receivable) {
-      setAmount(receivable.balanceAmount || receivable.updatedAmount);
+      amountEdited.current = false;
+      setDailyInterest('0,00');
+      setManualInterest('0,00');
+      setAdditionalAmount('0,00');
+      setFineAmount('0,00');
+      setDiscountAmount('0,00');
+      setDailyQuote(null);
+      setDailyQuoteLoading(false);
+      setAmount(receivable.balanceAmount.toFixed(2).replace('.', ','));
       setIdempotencyKey(createSettlementIdempotencyKey());
       setError(null);
       loadOptions();
@@ -53,65 +76,147 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
     }
   };
 
+  const dailyInterestValue = parseCurrencyDraft(dailyInterest);
+  const manualInterestValue = parseCurrencyDraft(manualInterest);
+  const additionalValue = parseCurrencyDraft(additionalAmount);
+  const fineValue = parseCurrencyDraft(fineAmount);
+  const discountValue = parseCurrencyDraft(discountAmount);
+  const quote = dailyInterestValue > 0 ? dailyQuote : null;
+  const appliedInterest = dailyInterestValue > 0 ? (quote?.additionalInterest ?? 0) : manualInterestValue;
+  const settlementTotal = roundCurrency((receivable?.balanceAmount ?? 0) + appliedInterest + additionalValue + fineValue - discountValue);
+  const paymentValue = parseCurrencyDraft(amount);
+  const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
+  const adjustmentTotal = roundCurrency(appliedInterest + additionalValue + fineValue - discountValue);
+  const projectedBalance = Math.max(0, roundCurrency(settlementTotal - safePaymentValue));
+  useEffect(() => {
+    let active = true;
+    if (!receivable || !paymentDate || !Number.isFinite(dailyInterestValue) || dailyInterestValue <= 0) {
+      setDailyQuote(null);
+      setDailyQuoteLoading(false);
+      return () => { active = false; };
+    }
+    setDailyQuoteLoading(true);
+    void FinanceSettlementClient.getReceiptDailyInterestQuote(receivable.id, paymentDate, dailyInterestValue)
+      .then((nextQuote) => {
+        if (!active) return;
+        setDailyQuote(nextQuote);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setDailyQuote(null);
+        setError(err instanceof Error ? err.message : 'Erro ao calcular diária de atraso.');
+      })
+      .finally(() => {
+        if (active) setDailyQuoteLoading(false);
+      });
+    return () => { active = false; };
+  }, [receivable?.id, paymentDate, dailyInterestValue]);
+
+  useEffect(() => {
+    if (!amountEdited.current && receivable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
+  }, [settlementTotal, receivable]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isOpen && !submittingRef.current && !confirmOpen) onClose();
+    };
+    if (isOpen) window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, confirmOpen, onClose]);
+
   if (!isOpen || !receivable) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) {
+    const paymentAmount = parseCurrencyDraft(amount);
+    if (submittingRef.current || confirmOpen) return;
+    if (!Number.isFinite(dailyInterestValue)) { setError('Diária inválida'); return; }
+    if (!Number.isFinite(manualInterestValue)) { setError('Juros inválidos'); return; }
+    if (!Number.isFinite(fineValue) || !Number.isFinite(discountValue) || settlementTotal < 0) { setError('Confira multa e desconto: o total não pode ser negativo.'); return; }
+    if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
+    if (dailyInterestValue > 0 && manualInterestValue > 0) { setError('Use juros por diária ou juros manual, não os dois ao mesmo tempo.'); return; }
+    if (dailyInterestValue > 0 && (dailyQuoteLoading || !quote)) { setError('Aguarde o cálculo da diária antes de confirmar.'); return; }
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
       setError('O valor a receber deve ser maior que zero.');
       return;
     }
-    if (amount > receivable.balanceAmount) {
-      setError(`O valor inserido (R$ ${amount.toFixed(2)}) é maior que o saldo restante da obrigação (R$ ${receivable.balanceAmount.toFixed(2)}).`);
+    if (paymentAmount > settlementTotal) {
+      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o saldo restante (${formatCurrencyBRL(settlementTotal)}).`);
       return;
     }
 
+    if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
+        !methods.some(method => method.id === selectedMethodId && method.active)) {
+      setError('Selecione uma conta financeira e um meio de pagamento ativos.');
+      return;
+    }
+    setError(null);
+    setConfirmOpen(true);
+  };
+
+  const confirmSettlement = async () => {
+    if (submittingRef.current || !confirmOpen) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    const paymentAmount = parseCurrencyDraft(amount);
     try {
-      setIsSubmitting(true);
       setError(null);
 
       await FinanceSettlementClient.registerReceipt(receivable.id, {
         financialAccountId: selectedAccountId,
-        paymentAmount: amount,
+        paymentAmount,
+        ...(dailyInterestValue > 0
+          ? { dailyInterestAmount: dailyInterestValue, interestAmount: quote?.additionalInterest ?? 0 }
+          : { interestAmount: manualInterestValue }),
+        additionalAmount: additionalValue,
+        fineAmount: fineValue,
+        discountAmount: discountValue,
         paymentDate,
         paymentMethodId: selectedMethodId,
-        description: notes || 'Recebimento de título via portal operacional',
+        description: notes || `Recebimento • ${receivable.description}${receivable.installmentNumber ? ` • Parcela ${receivable.installmentNumber}/${receivable.totalInstallments}` : ''}`,
         idempotencyKey,
       });
 
-      onSuccess();
-      onClose();
     } catch (err: any) {
+      submittingRef.current = false;
+      setConfirmOpen(false);
       // Preserve the same command key on an ambiguous/network failure. A retry
       // with unchanged fields therefore converges to the first committed result.
       setError(err.message || 'Erro ao registrar o recebimento.');
+      return;
     } finally {
       setIsSubmitting(false);
     }
+    // A read-model refresh failure must never turn a committed settlement into a retry.
+    onSuccess();
+    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
-              Operação de Recebimento (Receipt)
+              Registrar recebimento
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Liquidação de Conta a Receber • {receivable.description}
             </p>
           </div>
           <button
-            onClick={(event)=>requestGuardedClose(event,onClose)}
+            aria-label="Fechar modal"
+            disabled={isSubmitting || confirmOpen}
+            onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
             className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
+          <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
@@ -131,27 +236,135 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
             <div className="text-right">
               <span className="text-slate-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{receivable.dueDate}</span>
+              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatDateBR(receivable.dueDate)}</span>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-              Valor a Receber (R$) *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => { setAmount(parseFloat(e.target.value) || 0); rotateCommandKey(); }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-              required
-            />
-            <span className="text-[11px] text-slate-500 mt-1 block">
-              Permite liquidação parcial se o valor for menor que R${' '}
-              {receivable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </span>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 space-y-3">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Composição desta baixa
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Diária de atraso (R$)
+                <input
+                  aria-label="Diária de atraso (R$)"
+                  type="text"
+                  inputMode="decimal" onFocus={event => event.target.select()}
+                  value={dailyInterest}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
+                    setDailyInterest(draft);
+                    if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00');
+                    rotateCommandKey();
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Juros manual (R$)
+                <input
+                  aria-label="Juros manual (R$)"
+                  type="text"
+                  inputMode="decimal" onFocus={event => event.target.select()}
+                  value={manualInterest}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
+                    setManualInterest(draft);
+                    if (parseCurrencyDraft(draft) > 0) setDailyInterest('0,00');
+                    rotateCommandKey();
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Acréscimo (R$)
+                <input
+                  aria-label="Acréscimo (R$)"
+                  type="text"
+                  inputMode="decimal" onFocus={event => event.target.select()}
+                  value={additionalAmount}
+                  onChange={e => {
+                    const draft = normalizeCurrencyCentsDraft(e.target.value);
+                    setAdditionalAmount(draft);
+                    rotateCommandKey();
+                  }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                />
+              </label>
+            </div>
+            {dailyQuoteLoading && dailyInterestValue > 0 ? (
+              <div className="rounded-lg border border-amber-200 p-3 text-xs text-slate-500">Calculando diária de atraso...</div>
+            ) : (
+              <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
+            )}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Valor recebido agora (R$) *
+              </label>
+              <input
+                type="text"
+                inputMode="decimal" onFocus={event => event.target.select()}
+                aria-label="Valor recebido agora (R$)"
+                value={amount}
+                onChange={(e) => {
+                  const draft = normalizeCurrencyCentsDraft(e.target.value);
+                  if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
+                }}
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                required
+              />
+              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+                <div>
+                  <span className="block text-slate-500">Saldo atual</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(receivable.balanceAmount)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Ajustes desta baixa</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Valor total a receber</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Recebido agora</span>
+                  <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
+                </div>
+                <div>
+                  <span className="block text-slate-500">Saldo devedor após recebimento</span>
+                  <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+                </div>
+              </div>
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Permite liquidação parcial se o valor for menor que {formatCurrencyBRL(settlementTotal)}
+              </span>
+            </div>
           </div>
+
+
+          <div className="grid grid-cols-2 gap-3">
+            {([['Multa (R$)', fineAmount, setFineAmount], ['Desconto (R$)', discountAmount, setDiscountAmount]] as const).map(([label, value, setter]) => (
+              <label key={label} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {label}
+                <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
+                  onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg" />
+              </label>
+            ))}
+          </div>
+          <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
+            <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(receivable.originalAmount)}</dd></div>
+            <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(receivable.paidAmount)}</dd></div>
+            <div><dt>Valor atualizado antes desta baixa</dt><dd>{formatCurrencyBRL(receivable.updatedAmount)}</dd></div>
+            <div><dt>Parcela</dt><dd>{receivable.installmentNumber && receivable.totalInstallments ? `${receivable.installmentNumber}/${receivable.totalInstallments}` : 'Única'}</dd></div>
+            {receivable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(receivable.totalAmount)}</dd></div>}
+          </dl>
+          {(accounts.length === 0 || methods.length === 0) && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+              Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o recebimento.
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -219,20 +432,44 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
-              onClick={(event)=>requestGuardedClose(event,onClose)}
+              onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
               className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSubmitting ? 'Processando...' : 'Confirmar Recebimento'}
             </button>
           </div>
+          </fieldset>
         </form>
+        <ConfirmDialog
+          isOpen={confirmOpen}
+          title="Confirmar Recebimento"
+          variant="primary"
+          confirmText={isSubmitting ? 'Processando...' : 'Confirmar Recebimento'}
+          isLoading={isSubmitting}
+          onCancel={() => { if (!submittingRef.current) setConfirmOpen(false); }}
+          onConfirm={confirmSettlement}
+        >
+          <dl className="space-y-2">
+            <div><dt>Título / origem</dt><dd>{receivable.description} • {receivable.originType}</dd></div>
+            <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(receivable.balanceAmount)}</dd></div>
+            <div><dt>Valor total a receber</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
+            <div><dt>Valor recebido agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+            <div><dt>Saldo devedor após recebimento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
+            <div><dt>Juros desta baixa</dt><dd>{formatCurrencyBRL(appliedInterest)}</dd></div>
+            <div><dt>Multa desta baixa</dt><dd>{formatCurrencyBRL(fineValue)}</dd></div>
+            <div><dt>Desconto desta baixa</dt><dd>{formatCurrencyBRL(discountValue)}</dd></div>
+            <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
+            <div><dt>Conta financeira de destino</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
+            <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
+          </dl>
+        </ConfirmDialog>
       </div>
     </div>
   );

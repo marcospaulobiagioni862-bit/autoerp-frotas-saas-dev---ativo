@@ -33,14 +33,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowRightLeft,
-  ShieldCheck,
   BellRing,
   ArrowRight,
   ShieldAlert,
   FileText,
 } from 'lucide-react';
 import { Card, Button, Badge, Skeleton, PageHeader } from '../ui';
-import { PerformanceMetricsWidget } from './PerformanceMetricsWidget';
 import { generateOperationalPendings, OperationalPendingItem } from '../../domain/operations/serverOperationalPendingProjection';
 import { summarizeFleetOperationalState } from '../../domain/operations/fleetOperationalState';
 
@@ -55,9 +53,6 @@ interface OverviewDashboardProps {
 export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   onNavigate,
   onOpenReceiptModal,
-  onOpenPaymentModal,
-  onOpenTransferModal,
-  onOpenTestRunner,
 }) => {
   const { user } = useAuth();
   const requestVersionRef = useRef(0);
@@ -248,23 +243,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Dashboard"
-        description="Visão geral operacional e financeira da frota e do motor financeiro"
-        breadcrumb="Plataforma AutoERP • Visão Consolidada"
-        primaryAction={{
-          label: 'Nova Transferência',
-          onClick: onOpenTransferModal,
-          icon: <ArrowRightLeft className="w-4 h-4" />
-        }}
-        secondaryActions={
-          <Button
-            onClick={onOpenTestRunner}
-            variant="secondary"
-            size="sm"
-            icon={<ShieldCheck className="w-4 h-4 text-emerald-500" />}
-          >
-            Suíte 42 Testes
-          </Button>
-        }
+        description="Visão operacional e financeira da frota"
       />
 
       {/* Hero Metric Cards */}
@@ -273,7 +252,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         <Card padding="sm">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Saldo Consolidado</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Saldo disponível</span>
               <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono tabular-nums">
                 R$ {totalAccountBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </h3>
@@ -283,8 +262,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 flex justify-between">
-            <span>Contas Ativas:</span>
-            <strong className="text-slate-700 dark:text-slate-300">{accounts.length} contas</strong>
+            <span>Contas/caixas ativas:</span>
+            <strong className="text-slate-700 dark:text-slate-300">{accounts.length > 0 ? `${accounts.length} cadastrada(s)` : 'Nenhuma'}</strong>
           </div>
         </Card>
 
@@ -409,7 +388,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Motoristas Ativos</span>
               <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
-                {activeDriversCount} <span className="text-xs text-slate-400 font-normal">/ {drivers.length}</span>
+                {activeDriversCount} <span className="text-xs text-slate-400 font-normal">ativos / {drivers.length} cadastrados</span>
               </h3>
             </div>
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-950/60 dark:text-blue-400">
@@ -427,7 +406,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <div>
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Contratos Ativos</span>
               <h3 className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
-                {activeContractsCount} <span className="text-xs text-slate-400 font-normal">/ {contracts.length}</span>
+                {activeContractsCount} <span className="text-xs text-slate-400 font-normal">ativo(s) / {contracts.length} contrato(s)</span>
               </h3>
             </div>
             <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl dark:bg-indigo-950/60 dark:text-indigo-400">
@@ -440,14 +419,6 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
         </Card>
       </div>
-
-      {/* Performance Metrics & Operational Health Widget */}
-      <PerformanceMetricsWidget
-        vehicles={vehicles}
-        receivables={receivables}
-        payables={payables}
-        accounts={accounts}
-      />
 
       {/* Central de Pendências Summary Widget */}
       <Card padding="none" className="border border-indigo-200/80 dark:border-indigo-900/50 shadow-sm overflow-hidden">

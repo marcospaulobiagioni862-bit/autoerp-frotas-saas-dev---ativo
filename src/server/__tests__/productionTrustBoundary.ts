@@ -74,8 +74,33 @@ async function main(): Promise<void> {
     'ManagementGoalsView',
   ];
   for (const symbol of appLegacyImports) {
-    assert(app.includes(symbol), `Expected App legacy entry ${symbol} changed; review alias coverage explicitly`);
     assert(boundary.includes(`export const ${symbol}`), `Production boundary does not export ${symbol}`);
+  }
+
+  const purgedAppLegacyImports = [
+    'IncidentManagementCenterView',
+    'ReleaseGovernanceCenterView',
+    'SystemIntegrityAuditView',
+    'SystemHealthCenterView',
+    'EnterpriseConsolidationView',
+    'PostGoLiveObservabilityView',
+    'GovernanceCenterView',
+    'OperationalProductivityView',
+  ];
+  for (const symbol of purgedAppLegacyImports) {
+    assert(!app.includes(symbol), `Purged legacy App entry ${symbol} must not return to V2 shell`);
+  }
+
+  const retainedAppLegacyImports = [
+    'OperationalWorkflowCenterView',
+    'ExecutiveDashboardView',
+    'PerformanceManagementCenterView',
+    'DecisionManagementCenterView',
+    'OperationalExecutionCenterView',
+    'ManagementGoalsView',
+  ];
+  for (const symbol of retainedAppLegacyImports) {
+    assert(app.includes(symbol), `Expected retained App entry ${symbol} changed; review boundary coverage explicitly`);
   }
 
   assert(boundary.includes('OperationalIncidentCenterView'), 'Incident duplicate is not routed to SECURITY-2O authority');

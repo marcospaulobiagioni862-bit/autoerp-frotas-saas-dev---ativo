@@ -1,4 +1,8 @@
+import { useDocumentAlertSettings } from '../../hooks/useDocumentAlertSettings';
+import { documentExpirationState, type DocumentAlertSettings, DEFAULT_DOCUMENT_ALERT_SETTINGS } from '../../shared/utils/documentAlertSettings';
+import { downloadBlob } from '../../shared/utils/downloadBlob';
 import React, { useEffect, useState } from 'react';
+import { documentTypeLabel } from '../../shared/utils/documentTypeLabel';
 import type { FileAttachment } from '../../types/entities/audit';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DocumentAiClient, type DocumentAiAttachmentStatus, type DocumentAiExtractionHistoryItem } from '../../api/documentAiClient';
@@ -20,10 +24,25 @@ interface AttachmentListProps {
   protectLatestDriverCnh?: boolean;
   showProtectedDriverCnh?: boolean;
   excludeAttachmentIds?: string[];
+  showDocumentAiControls?: boolean;
+  showExpirationState?: boolean;
+  contextLabels?: Record<string, string>;
 }
 
 const DOCUMENT_AI_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const DOCUMENT_AI_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
+
+function expirationLabel(expirationDate?: string, settings: DocumentAlertSettings = DEFAULT_DOCUMENT_ALERT_SETTINGS): { text: string; className: string } | null {
+  if (!expirationDate) return null;
+  const state = documentExpirationState(expirationDate, settings);
+  if (!state) return null;
+  const days = state.days;
+  const dateLabel = new Date(`${expirationDate}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+  if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (state.color === 'RED') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (state.color === 'YELLOW') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
+  return { text: `Válido · ${dateLabel}`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+}
 
 function extractionStatusLabel(status: DocumentAiAttachmentStatus['status']): { text: string; className: string } {
   if (status === 'PENDING') return { text: 'Na fila', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
@@ -46,8 +65,12 @@ export function AttachmentList({
   protectLatestDriverCnh = false,
   showProtectedDriverCnh = false,
   excludeAttachmentIds = [],
+  showDocumentAiControls = true,
+  showExpirationState = true,
+  contextLabels = {},
 }: AttachmentListProps) {
   const { user } = useAuth();
+  const { settings: alertSettings } = useDocumentAlertSettings();
   const [attachments, setAttachments] = useState<FileAttachment[]>(initialAttachments || []);
   const [loading, setLoading] = useState(!initialAttachments);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +148,7 @@ export function AttachmentList({
   const handlePreview = async (id: string) => {
     const item = getAvailableAttachment(id);
     if (!item) {
-      alert('O conteúdo deste registro legado não está disponível no storage do servidor.');
+      alert('O arquivo está cadastrado no ERP, mas o conteúdo não está disponível no armazenamento.');
       return;
     }
     try {
@@ -150,14 +173,7 @@ export function AttachmentList({
     }
     try {
       const blob = await AttachmentClient.content(id);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = item.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, item.fileName);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao baixar arquivo.');
     }
@@ -297,12 +313,12 @@ export function AttachmentList({
           {error} Os anexos já carregados continuam disponíveis abaixo.
         </div>
       )}
-      {attachmentStatusesUnavailable && (
+      {showDocumentAiControls && attachmentStatusesUnavailable && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           Estados de extração temporariamente indisponíveis. Os documentos continuam acessíveis.
         </div>
       )}
-      {documentAiMessage && (
+      {showDocumentAiControls && documentAiMessage && (
         <div className={`rounded-md border p-3 text-sm ${
           documentAiMessage.kind === 'success'
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
@@ -321,21 +337,29 @@ export function AttachmentList({
           {visibleAttachments.map((att) => {
             const contentAvailable = hasAvailableContent(att);
             const documentAiEligible = contentAvailable && DOCUMENT_AI_MIME_TYPES.has(att.mimeType);
-            const extractionStatus = attachmentStatuses[att.id];
+            const extractionStatus = showDocumentAiControls ? attachmentStatuses[att.id] : undefined;
             const extractionBadge = extractionStatus ? extractionStatusLabel(extractionStatus.status) : null;
+            const expirationBadge = showExpirationState ? expirationLabel(att.expirationDate, alertSettings) : null;
+            const contextLabel = contextLabels[att.id];
             return (
               <li key={att.id} className="p-4 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 <div className="flex min-w-0 items-center space-x-3 truncate">
                   <File className="h-5 w-5 text-gray-400 flex-shrink-0" />
                   <div className="truncate">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{att.fileName}</p>
+                    {contextLabel && <p className="mt-0.5 truncate text-xs text-gray-500">{contextLabel}</p>}
                     <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-500">{att.documentType || 'Documento'}</span>
+                      <span className="text-xs text-gray-500">{documentTypeLabel(att.documentType)}</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
                       <span className="text-xs text-gray-400">·</span>
-                      <span className="text-xs text-gray-500">{new Date(att.createdAt).toLocaleDateString()}</span>
-                      {!contentAvailable && <span className="text-xs text-amber-600">· Conteúdo legado não migrado</span>}
+                      <span className="text-xs text-gray-500">Cadastrado em {new Date(att.createdAt).toLocaleDateString('pt-BR')}</span>
+                      {!contentAvailable && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Arquivo indisponível no armazenamento</span>}
+                      {expirationBadge && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${expirationBadge.className}`}>
+                          {expirationBadge.text}
+                        </span>
+                      )}
                       {extractionBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${extractionBadge.className}`}>
                           {extractionBadge.text}
@@ -345,13 +369,13 @@ export function AttachmentList({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-1 sm:ml-4 sm:flex-shrink-0">
-                  {extractionStatus && (
+                  {showDocumentAiControls && extractionStatus && (
                     <Button variant="ghost" size="sm" onClick={() => void handleExtractionHistory(att.id)} title="Histórico sanitizado da extração">
                       <History className="h-4 w-4" />
                       <span className="sr-only">Histórico sanitizado da extração</span>
                     </Button>
                   )}
-                  {canRequestDocumentAi && documentAiEligible && !extractionStatus && (
+                  {showDocumentAiControls && canRequestDocumentAi && documentAiEligible && !extractionStatus && (
                     <Button variant="ghost" size="sm" onClick={() => void handleExtractionRequest(att)} isLoading={requestingExtractionId === att.id} disabled={requestingExtractionId !== null} title="Solicitar extração assistida">
                       <Bot className="h-4 w-4" />
                       <span className="sr-only">Solicitar extração assistida</span>

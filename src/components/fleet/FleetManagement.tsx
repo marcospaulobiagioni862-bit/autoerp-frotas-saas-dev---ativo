@@ -30,6 +30,7 @@ export const FleetManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [sortOption, setSortOption] = useState<'PLATE' | 'MODEL' | 'KM' | 'STATUS'>('PLATE');
   const [loading, setLoading] = useState<boolean>(true);
 
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -75,17 +76,21 @@ export const FleetManagement: React.FC = () => {
     const matchesSearch =
       v.plate.toLowerCase().includes(s) ||
       v.brand.toLowerCase().includes(s) ||
-      v.model.toLowerCase().includes(s) ||
-      v.renavam.toLowerCase().includes(s) ||
-      v.chassis.toLowerCase().includes(s);
+      v.model.toLowerCase().includes(s);
     const matchesStatus = vehicleMatchesStatusFilter(v.status, statusFilter);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
+  }).sort((a, b) => {
+    if (sortOption === 'MODEL') return `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`, 'pt-BR');
+    if (sortOption === 'KM') return a.currentKm - b.currentKm;
+    if (sortOption === 'STATUS') return vehicleStatusLabel(a.status).localeCompare(vehicleStatusLabel(b.status), 'pt-BR');
+    return a.plate.localeCompare(b.plate, 'pt-BR');
   });
 
   const totalCount = vehicles.length;
   const rentedCount = vehicles.filter((v) => v.status === VehicleStatus.RENTED).length;
   const availableCount = vehicles.filter((v) => v.status === VehicleStatus.AVAILABLE).length;
+  const reservedCount = vehicles.filter((v) => v.status === VehicleStatus.RESERVED).length;
   const maintenanceCount = vehicles.filter((v) => vehicleMatchesStatusFilter(v.status, VehicleStatus.MAINTENANCE)).length;
   const inactiveCount = vehicles.filter((v) => v.status === VehicleStatus.INACTIVE || v.status === VehicleStatus.SOLD).length;
 
@@ -151,10 +156,11 @@ export const FleetManagement: React.FC = () => {
       )}
 
       {!showArchived && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Total Frota</span><strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">{totalCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl"><span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl"><span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-900/50 rounded-xl"><span className="text-xs text-violet-600 dark:text-violet-400 block font-semibold">Reservados</span><strong className="text-lg font-mono font-bold text-violet-700 dark:text-violet-300">{reservedCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl"><span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong></div>
           <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Inativos</span><strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong></div>
         </div>
@@ -168,10 +174,10 @@ export const FleetManagement: React.FC = () => {
 
       <Card padding="sm">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
-          <div className="w-full md:w-96">
-            <Input type="text" placeholder="Buscar por placa, modelo, marca, RENAVAM ou chassi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />}/>
+          <div className="w-full md:max-w-xl md:flex-1">
+            <Input type="text" placeholder="Buscar por placa, marca ou modelo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />}/>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+          <div className="flex flex-wrap items-center justify-end gap-2 w-full md:w-auto">
             <Button variant="outline" size="sm" onClick={toggleArchivedView}>{showArchived ? 'Voltar à frota ativa' : 'Ver vendidos / arquivados'}</Button>
             {!showArchived && <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />}
             {!showArchived && VEHICLE_STATUS_FILTERS.map((st) => (
@@ -179,6 +185,14 @@ export const FleetManagement: React.FC = () => {
             ))}
             <div className="w-52 shrink-0">
               <Select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} options={[{ value: 'ALL', label: 'Todas as categorias' }, ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))]}/>
+            </div>
+            <div className="w-44 shrink-0">
+              <Select aria-label="Ordenar veículos" value={sortOption} onChange={(event) => setSortOption(event.target.value as typeof sortOption)} options={[
+                { value: 'PLATE', label: 'Ordenar: placa' },
+                { value: 'MODEL', label: 'Ordenar: modelo' },
+                { value: 'KM', label: 'Ordenar: KM' },
+                { value: 'STATUS', label: 'Ordenar: status' },
+              ]}/>
             </div>
           </div>
         </div>
@@ -211,13 +225,12 @@ export const FleetManagement: React.FC = () => {
                   <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex justify-between"><span className="text-slate-400">Quilometragem:</span><strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCurrencyBRL(vehicle.rentalValueBase)} / sem</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-400">RENAVAM:</span><span className="font-mono text-slate-700 dark:text-slate-300">{vehicle.renavam}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2 text-xs">
-                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-slate-700 dark:text-slate-300">{isReadOnlyTerminal ? 'Histórico do veículo' : 'Ações do veículo'}</span><span className="text-[10px] text-slate-400">O histórico não será apagado.</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-slate-700 dark:text-slate-300">{isReadOnlyTerminal ? 'Histórico do veículo' : 'Ações do veículo'}</span></div>
 
                   {isReadOnlyTerminal ? (
                     <div className="flex flex-wrap items-center gap-2">
@@ -232,38 +245,39 @@ export const FleetManagement: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    <>
-                      {(manualStatusOptions.length > 0 || canMarkSold) && (
-                        <Select
-                          aria-label={`Alterar status do veículo ${vehicle.plate}`}
-                          value=""
-                          onChange={(event) => {
-                            const nextValue = event.target.value;
-                            if (nextValue === '__SELL__') {
-                              setVehicleForSale(vehicle);
-                              return;
-                            }
-                            if (nextValue) handleStatusChangeClick(vehicle, nextValue as VehicleStatus);
-                          }}
-                          options={[
-                            { value: '', label: 'Alterar status...', disabled: true },
-                            ...manualStatusOptions,
-                            ...(canMarkSold ? [{ value: '__SELL__', label: 'Vender veículo...' }] : []),
-                          ]}
-                        />
-                      )}
-                      <div className="flex items-center justify-between gap-2">
-                        <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"><Eye className="w-3.5 h-3.5"/> Detalhes →</button>
-                        <div className="flex items-center gap-1 flex-wrap justify-end">
-                          {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} title="Colocar fora de uso" aria-label={`Colocar ${vehicle.plate} fora de uso`} className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md">Fora de uso</button>}
-                          {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} title="Marcar veículo como vendido" aria-label={`Marcar ${vehicle.plate} como vendido`} className="px-2 py-1 text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 rounded-md">Vendido</button>}
-                          {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" aria-label={`Arquivar ${vehicle.plate}`} className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300 rounded-md border border-rose-200 dark:border-rose-900"><Archive className="w-3 h-3"/>Arquivar / remover</button>}
-                          <button onClick={() => setVehicleForKmRecord(vehicle)} title="Registrar KM" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"><Gauge className="w-4 h-4"/></button>
-                          <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} title="Editar Veículo" className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"><Edit className="w-4 h-4"/></button>
-                          {isAvailable && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} title="Enviar para Manutenção" className="px-2 py-1 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 rounded-md">Oficina</button>}
+                    <div className="flex items-center justify-between gap-2">
+                      <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"><Eye className="w-3.5 h-3.5"/> Detalhes</button>
+                      <details className="relative">
+                        <summary aria-label={`Mais ações para ${vehicle.plate}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
+                        <div className="absolute right-0 z-20 mt-1 w-56 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                          {(manualStatusOptions.length > 0 || canMarkSold) && (
+                            <Select
+                              aria-label={`Alterar status do veículo ${vehicle.plate}`}
+                              value=""
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                if (nextValue === '__SELL__') {
+                                  setVehicleForSale(vehicle);
+                                  return;
+                                }
+                                if (nextValue) handleStatusChangeClick(vehicle, nextValue as VehicleStatus);
+                              }}
+                              options={[
+                                { value: '', label: 'Alterar status...', disabled: true },
+                                ...manualStatusOptions,
+                                ...(canMarkSold ? [{ value: '__SELL__', label: 'Vender veículo...' }] : []),
+                              ]}
+                            />
+                          )}
+                          <button onClick={() => setVehicleForKmRecord(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Gauge className="w-4 h-4"/>Registrar KM</button>
+                          <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Edit className="w-4 h-4"/>Editar</button>
+                          {isAvailable && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40">Enviar para manutenção</button>}
+                          {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Colocar fora de uso</button>}
+                          {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Marcar como vendido</button>}
+                          {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>}
                         </div>
-                      </div>
-                    </>
+                      </details>
+                    </div>
                   )}
                 </div>
               </Card>

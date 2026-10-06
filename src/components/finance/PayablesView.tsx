@@ -1,7 +1,15 @@
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import { InstallmentCompetenceFields } from './InstallmentCompetenceFields';
+import { installmentCompetences, type InstallmentCompetenceMode } from '../../shared/utils/installmentCompetence';
 import React, { useEffect, useState } from 'react';
-import { AccountPayable } from '../../types/entities';
+import type { AccountPayable, Contract, Driver, Supplier, Vehicle } from '../../types/entities';
 import { ObligationStatus, OriginType } from '../../types/enums';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
+import { MaintenanceClient } from '../../api/maintenanceClient';
+import { DriverClient } from '../../api/driverClient';
+import { VehicleClient } from '../../api/vehicleClient';
+import { ContractClient } from '../../api/contractClient';
+import { formatDateBR, getCurrentISODate } from '../../shared/utils/date';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
 import { CreditCard, Search, Filter, X, Plus } from 'lucide-react';
@@ -9,6 +17,7 @@ import { AttachmentModal } from '../documents/AttachmentModal';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { FolderOpen } from 'lucide-react';
 import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog } from '../ui';
+import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from '../../domain/finance/payableInstallmentOrder';
 
 interface PayablesViewProps {
   onOpenPaymentModal: (payable: AccountPayable) => void;
@@ -32,7 +41,7 @@ const originLabel = (origin: string): string => {
 
 const statusLabel = (status: string): string => {
   const labels: Record<string, string> = {
-    PENDING: 'Pendente',
+    PENDING: 'Em aberto',
     PARTIALLY_PAID: 'Pago parcialmente',
     PAID: 'Pago',
     OVERDUE: 'Vencido',
@@ -53,6 +62,10 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [detailsTarget, setDetailsTarget] = useState<AccountPayable | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
 
   // Manual Creation State
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
@@ -60,6 +73,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>('');
   const [competenceDate, setCompetenceDate] = useState<string>('');
+  const [competenceMode, setCompetenceMode] = useState<InstallmentCompetenceMode>('SINGLE_EVENT');
+  const [installmentCompetenceDates, setInstallmentCompetenceDates] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState<string>('');
   const [installmentsCount, setInstallmentsCount] = useState<string>('1');
   const [supplierId, setSupplierId] = useState<string>('');
@@ -67,6 +82,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const [vehicleId, setVehicleId] = useState<string>('');
   const [contractId, setContractId] = useState<string>('');
   const [createLoading, setCreateLoading] = useState<boolean>(false);
+
+  const formDraft = useLocalFormDraft('finance-payables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, supplierId }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setSupplierId(draft.supplierId); }, isCreateOpen);
 
   // Cancellation state if any
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
@@ -78,12 +95,20 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
   const loadPayables = async () => {
     setLoading(true);
     try {
-      const [list, categoryList] = await Promise.all([
+      const [list, categoryList, supplierList, driverList, vehicleList, contractList] = await Promise.all([
         FinanceObligationClient.listPayables(),
         TrafficTicketClient.categories(),
+        MaintenanceClient.listSuppliers(),
+        DriverClient.list(),
+        VehicleClient.list(),
+        ContractClient.list(),
       ]);
       const expenseCategories = categoryList.filter((category) => category.type === 'EXPENSE' || category.type === 'BOTH');
       setCategories(expenseCategories);
+      setSuppliers(supplierList.filter((item) => item.status === 'ACTIVE').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+      setDrivers(driverList.filter((item) => !item.isArchived).sort((a, b) => a.fullName.localeCompare(b.fullName, 'pt-BR')));
+      setVehicles(vehicleList.filter((item) => !item.isArchived).sort((a, b) => a.plate.localeCompare(b.plate, 'pt-BR')));
+      setContracts(contractList.filter((item) => !item.isArchived));
       setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));
       setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
     } catch (err) {
@@ -92,6 +117,10 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       alert(message);
       setPayables([]);
       setCategories([]);
+      setSuppliers([]);
+      setDrivers([]);
+      setVehicles([]);
+      setContracts([]);
       setCategoryId('');
     } finally {
       setLoading(false);
@@ -114,12 +143,15 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         totalAmount: parseFloat(totalAmount),
         dueDate,
         competenceDate: competenceDate || dueDate,
+        competenceMode,
+        installmentCompetenceDates: competenceMode === 'PER_INSTALLMENT' ? installmentCompetences({ competenceDate: competenceDate || dueDate, competenceMode, ...(installmentCompetenceDates.length ? { installmentCompetenceDates } : {}) }, Array(Number(installmentsCount)).fill(dueDate)) : undefined,
         installmentsCount: parseInt(installmentsCount) || 1,
         supplierId: supplierId.trim() || undefined,
         driverId: driverId.trim() || undefined,
         vehicleId: vehicleId.trim() || undefined,
         contractId: contractId.trim() || undefined,
       });
+      formDraft.clear();
       setActionMessage('Nova obrigação a pagar criada com sucesso!');
       setIsCreateOpen(false);
       // Reset form
@@ -127,6 +159,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       setTotalAmount('');
       setDueDate('');
       setCompetenceDate('');
+      setCompetenceMode('SINGLE_EVENT');
+      setInstallmentCompetenceDates([]);
       setCategoryId(categories[0]?.id || '');
       setInstallmentsCount('1');
       setSupplierId('');
@@ -163,19 +197,23 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     }
   };
 
+  const today = getCurrentISODate();
   const filtered = payables.filter((p) => {
-    const term = searchTerm.trim().toLowerCase();
+    const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
     const categoryName = categories.find((category) => category.id === p.categoryId)?.name || '';
+    const supplierName = p.supplierId ? suppliers.find((item) => item.id === p.supplierId)?.name || '' : '';
+    const driverName = p.driverId ? drivers.find((item) => item.id === p.driverId)?.fullName || '' : '';
+    const vehicle = p.vehicleId ? vehicles.find((item) => item.id === p.vehicleId) : undefined;
+    const vehicleLabel = vehicle ? `${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : '';
+    const contractNumber = p.contractId ? contracts.find((item) => item.id === p.contractId)?.contractNumber || '' : '';
     const matchesSearch =
       !term ||
-      p.description.toLowerCase().includes(term) ||
-      String(p.originType).toLowerCase().includes(term) ||
-      originLabel(String(p.originType)).toLowerCase().includes(term) ||
-      categoryName.toLowerCase().includes(term) ||
-      (p.supplierId && p.supplierId.toLowerCase().includes(term)) ||
-      (p.vehicleId && p.vehicleId.toLowerCase().includes(term));
+      [p.description, originLabel(String(p.originType)), categoryName, supplierName, driverName, vehicleLabel, contractNumber]
+        .some((value) => value.toLocaleLowerCase('pt-BR').includes(term));
 
-    const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
+    const overdue = p.balanceAmount > 0 && p.dueDate < today &&
+      ![ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED, ObligationStatus.WRITTEN_OFF].includes(p.status);
+    const matchesStatus = statusFilter === 'ALL' || (statusFilter === 'OVERDUE_VIEW' ? overdue : p.status === statusFilter);
     const matchesOrigin = originFilter === 'ALL' || String(p.originType) === originFilter;
     return matchesSearch && matchesStatus && matchesOrigin;
   });
@@ -184,27 +222,32 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     originLabel(a).localeCompare(originLabel(b), 'pt-BR')
   );
 
+  const withInstallmentTotal = (item: AccountPayable) => {
+    const group = item.installmentGroupId ? payables.filter(row => row.installmentGroupId === item.installmentGroupId) : [];
+    return group.length === item.totalInstallments ? { ...item, totalAmount: group.reduce((sum, row) => sum + row.originalAmount, 0) } : item;
+  };
+
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <CreditCard className="w-6 h-6 text-indigo-600" />
-            Contas a Pagar (Payables) & Faturas
+            Contas a Pagar
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Gestão de fornecedores, peças, seguros, rastreadores e faturas de cartão de crédito.
+            Obrigações da empresa, despesas operacionais e pagamentos.
           </p>
         </div>
 
         <Button
           onClick={() => setIsCreateOpen(true)}
-          variant="primary"
+          variant="outline"
           size="sm"
           icon={<Plus className="w-4 h-4" />}
-          className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold"
+          className="font-semibold"
         >
-          Novo Título a Pagar
+          Lançamento manual excepcional
         </Button>
       </div>
 
@@ -230,7 +273,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               aria-label="Filtrar contas a pagar por origem"
@@ -241,7 +284,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               <option value="ALL">Todas as origens</option>
               {originOptions.map((origin) => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
             </select>
-            {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE, ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
+            {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, 'OVERDUE_VIEW', ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
@@ -251,7 +294,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                {st === 'ALL' ? 'Todos' : statusLabel(String(st))}
+                {st === 'ALL' ? 'Todos' : st === 'OVERDUE_VIEW' ? 'Vencidos' : statusLabel(String(st))}
               </button>
             ))}
           </div>
@@ -267,53 +310,79 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
             <Skeleton className="h-10 w-full" />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto md:overflow-x-visible">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                 <tr>
                   <th className="p-3.5">Descrição / Origem</th>
                   <th className="p-3.5">Vencimento</th>
-                  <th className="p-3.5">Valor Original</th>
-                  <th className="p-3.5">Saldo a Pagar</th>
+                  <th className="p-3.5">Despesa Total</th>
+                  <th className="p-3.5">Parcela</th>
+                  <th className="p-3.5">Valor da Parcela</th>
+                  <th className="p-3.5">Saldo Operacional</th>
                   <th className="p-3.5 text-center">Status</th>
                   <th className="p-3.5 text-right">Ação Operacional</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
                 )}
                 {filtered.map((item) => {
-                  const isPending = item.status === ObligationStatus.PENDING || item.status === ObligationStatus.PARTIALLY_PAID;
+                  const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
+                  const blockingInstallment = firstUnpaidPreviousInstallment(item, payables);
                   const isPaid = item.status === ObligationStatus.PAID;
-                  const isOverdue = isPending && item.dueDate < new Date().toISOString().split('T')[0];
+                  const isCancelled = item.status === ObligationStatus.CANCELLED;
+                  const operationalBalance = isCancelled ? 0 : item.balanceAmount;
+                  const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < today;
+                  const supplierName = item.supplierId ? suppliers.find((entry) => entry.id === item.supplierId)?.name : undefined;
+                  const driverName = item.driverId ? drivers.find((entry) => entry.id === item.driverId)?.fullName : undefined;
+                  const vehicle = item.vehicleId ? vehicles.find((entry) => entry.id === item.vehicleId) : undefined;
+                  const contractNumber = item.contractId ? contracts.find((entry) => entry.id === item.contractId)?.contractNumber : undefined;
+                  const context = [
+                    supplierName && `Fornecedor: ${supplierName}`,
+                    vehicle && `Veículo: ${vehicle.plate}`,
+                    driverName && `Responsável: ${driverName}`,
+                    contractNumber && `Contrato: ${contractNumber}`,
+                  ].filter(Boolean);
+                  const groupedInstallments = item.installmentGroupId
+                    ? payables.filter((entry) => entry.installmentGroupId === item.installmentGroupId)
+                    : [item];
+                  const expenseTotal = groupedInstallments.reduce((sum, entry) => sum + Number(entry.originalAmount), 0);
+                  const installmentLabel = item.installmentNumber && item.totalInstallments
+                    ? `${item.installmentNumber}/${item.totalInstallments}`
+                    : 'Única';
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{item.description}</div>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                          {item.description}
+                        </div>
                         <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
                           <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
-                          <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || item.categoryId}</span>
-                          {item.installmentNumber && item.totalInstallments && (
-                            <span className="font-semibold">Parcela {item.installmentNumber}/{item.totalInstallments}</span>
-                          )}
+                          <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || 'Não informada'}</span>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate">
-                          Chave: {item.idempotencyKey}
-                        </div>
+                        {context.length > 0 && <div className="mt-0.5 text-[11px] text-slate-500">{context.join(' • ')}</div>}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums">
-                        {new Date(`${item.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}
+                        {formatDateBR(item.dueDate)}
                         {isOverdue && (
                           <span className="block text-[10px] text-red-600 dark:text-red-400 font-bold">EM ATRASO</span>
                         )}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-semibold">
+                        R$ {expenseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 font-mono tabular-nums font-semibold">
+                        {installmentLabel}
+                      </td>
+                      <td className="p-3.5 font-mono tabular-nums font-semibold">
                         R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
-                        R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <span className="block">R$ {operationalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-slate-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="p-3.5 text-center">
                         <Badge
@@ -327,34 +396,29 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                               : 'neutral'
                           }
                         >
-                          {statusLabel(String(item.status))}
+                          {isOverdue ? 'Vencido' : statusLabel(String(item.status))}
                         </Badge>
                       </td>
-                      <td className="p-3.5 text-right space-x-2">
-                        <Button size="sm" variant="outline" onClick={() => setDetailsTarget(item)}>
-                          Detalhes
-                        </Button>
-                        {isPending && (
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => onOpenPaymentModal(item)}
-                            className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold"
-                          >
-                            Liquidar (Pagar)
-                          </Button>
-                        )}
-
-                        {isPending && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setCancelTargetId(item.id)}
-                            className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 ml-2"
-                          >
-                            Cancelar
-                          </Button>
-                        )}
+                      <td className="p-3.5 text-right">
+                        <div className="flex justify-end gap-2">
+                          {isPending && !blockingInstallment && (
+                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold">
+                              Pagar
+                            </Button>
+                          )}
+                          {isPending && blockingInstallment && (
+                            <span className="text-xs font-semibold text-amber-700" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
+                          {isPending && (
+                            <details className="relative">
+                              <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>
+                              <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
+                              </div>
+                            </details>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -380,12 +444,16 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         <ModalContainer
           isOpen={isCreateOpen}
           onClose={() => setIsCreateOpen(false)}
-          title="Lançar Obrigação a Pagar (Payable Manual)"
-          maxWidth="max-w-lg"
+          title="Lançamento manual excepcional"
+          maxWidth="max-w-2xl"
         >
-          <form onSubmit={handleCreatePayable} className="space-y-4">
+          {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+          <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+              Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
+            </p>
             <Input
-              label="Descrição da Obrigação *"
+              label="Descrição da despesa *"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Peças para Oficina, Seguro Frota, Aluguel Escritório..."
@@ -437,52 +505,48 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Fornecedor / Supplier ID (Opcional)"
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                placeholder="Ex: sup-1"
-              />
-
-              <Input
-                label="Parcelas"
-                type="number"
-                min="1"
-                value={installmentsCount}
-                onChange={(e) => setInstallmentsCount(e.target.value)}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 block">Fornecedor / beneficiário</label>
+                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="control w-full">
+                  <option value="">Sem fornecedor cadastrado</option>
+                  {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                </select>
+              </div>
+              <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
+              <Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(e) => { setInstallmentsCount(e.target.value); setInstallmentCompetenceDates([]); }} />
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <Input
-                label="Motorista ID (Opcional)"
-                value={driverId}
-                onChange={(e) => setDriverId(e.target.value)}
-                placeholder="Ex: drv-1"
-              />
-
-              <Input
-                label="Veículo ID (Opcional)"
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                placeholder="Ex: veh-1"
-              />
-
-              <Input
-                label="Contrato ID (Opcional)"
-                value={contractId}
-                onChange={(e) => setContractId(e.target.value)}
-                placeholder="Ex: ctr-1"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 block">Veículo vinculado</label>
+                <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="control w-full">
+                  <option value="">Sem veículo</option>
+                  {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} • {vehicle.brand} {vehicle.model}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-500 block">Responsável / motorista</label>
+                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="control w-full">
+                  <option value="">Move Flex / empresa</option>
+                  {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500 block">Contrato vinculado</label>
+              <select value={contractId} onChange={(e) => setContractId(e.target.value)} className="control w-full">
+                <option value="">Sem contrato</option>
+                {contracts.filter((contract) => !driverId || contract.driverId === driverId).map((contract) => <option key={contract.id} value={contract.id}>{contract.contractNumber}</option>)}
+              </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
                 Cancelar
               </Button>
               <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white">
-                Lançar Obrigação
+                Criar despesa
               </Button>
             </div>
           </form>

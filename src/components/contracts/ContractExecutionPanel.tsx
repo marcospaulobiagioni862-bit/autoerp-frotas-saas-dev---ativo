@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
 import { ContractTemplateClient } from '../../api/contractTemplateClient';
@@ -116,13 +117,21 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       : 'PDF oficial gerado a partir do modelo vinculado ao contrato.');
   };
 
-  const openAttachment = (attachmentId: string) => {
+  const openAttachment = async (attachmentId: string) => {
     setError(null);
-    const anchor = document.createElement('a');
-    anchor.href = `/api/attachments/${encodeURIComponent(attachmentId)}/content`;
-    anchor.target = '_blank';
-    anchor.rel = 'noopener noreferrer';
-    anchor.click();
+    try {
+      const attachment = await AttachmentClient.get(attachmentId);
+      if (attachment.contentState !== 'AVAILABLE') {
+        setError('O documento está registrado no contrato, mas o arquivo está indisponível no armazenamento.');
+        return;
+      }
+      const blob = await AttachmentClient.content(attachmentId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível abrir o documento do contrato.');
+    }
   };
 
   const setSigned = (nextSigned: boolean) => {
