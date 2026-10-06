@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - staging-app
+      - v2/core-simplified
   push:
     branches:
       - main
       - staging-app
+      # A V2 e a frente de desenvolvimento real desde setembro, e estava fora
+      # dos gatilhos: os 75 steps destes dois jobs nunca rodaram sobre ela.
+      - v2/core-simplified
   workflow_dispatch:
 
 permissions:
