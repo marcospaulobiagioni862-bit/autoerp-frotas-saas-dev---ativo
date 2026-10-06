@@ -188,25 +188,68 @@ async function startServer() {
     })
   );
 
-  // Protecao contra forca bruta no login. skipSuccessfulRequests faz com que
-  // apenas tentativas FALHAS contem para o limite, entao quem trabalha normal
-  // nunca e bloqueado; a janela so enche com senha errada.
-  const loginRateLimiter = rateLimit({
+  // Protecao contra forca bruta no login, em tres camadas.
+  //
+  // POR QUE NAO E SO POR IP: a primeira versao limitava por req.ip com
+  // "trust proxy = 1". Medido no ambiente real, o contador NUNCA avancava -
+  // cinco requisicoes seguidas devolviam RateLimit-Remaining: 9, ou seja cada
+  // uma caia num balde novo. O Render tem mais de um salto de proxy na frente
+  // do servico, entao com um salto confiavel o endereco que sobra e de um
+  // balanceador interno que muda a cada requisicao. Contar saltos seria
+  // frágil, porque depende de infraestrutura que nao controlamos.
+  //
+  // skipSuccessfulRequests faz com que apenas tentativas FALHAS contem, entao
+  // quem trabalha normalmente nunca e bloqueado: a janela so enche com senha
+  // errada.
+  const loginLimiterMessage = {
+    error: 'Muitas tentativas de login. Tente novamente em alguns minutos.',
+  };
+
+  // Camada 1 - POR CONTA. E a que realmente protege, e nao e falsificavel: a
+  // chave vem do corpo da requisicao, nao de cabecalho. Forca bruta ataca uma
+  // conta, e e a conta que precisa ser defendida.
+  const loginAccountRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 10,
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    message: { error: 'Muitas tentativas de login. Tente novamente em alguns minutos.' },
+    keyGenerator: (req) => {
+      const company = String((req.body as { companyDocument?: unknown } | undefined)?.companyDocument ?? '')
+        .trim()
+        .toLowerCase();
+      const email = String((req.body as { email?: unknown } | undefined)?.email ?? '')
+        .trim()
+        .toLowerCase();
+      return `conta:${company}|${email}`;
+    },
+    message: loginLimiterMessage,
+  });
+
+  // Camada 2 - GLOBAL na rota. Limita o estrago total mesmo que o atacante
+  // varie conta e falsifique cabecalho de IP. O teto e alto o bastante para
+  // nao atrapalhar uso legitimo de uma operacao com poucos usuarios.
+  const loginGlobalRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 100,
+    standardHeaders: false,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    keyGenerator: () => 'login:global',
+    message: loginLimiterMessage,
   });
 
   // Provisionamento do primeiro admin: mais restrito, porque em operacao
   // normal este endpoint nao deveria ser chamado nenhuma vez.
+  // Mesmo problema de chave por IP do login: chave global, que aqui e o que
+  // faz sentido, porque provisionar o primeiro admin e um evento unico do
+  // sistema inteiro e nao algo por usuario.
   const bootstrapRateLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     limit: 5,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: () => 'bootstrap:global',
     message: { error: 'Muitas tentativas. Tente novamente mais tarde.' },
   });
 
@@ -382,7 +425,7 @@ async function startServer() {
   // Login must be reachable before the protected /api middleware. Tenant is
   // resolved from exactly one ACTIVE company by CNPJ/document or trade name;
   // users and credentials are read only after app.current_tenant is established.
-  app.post('/api/auth/login', loginRateLimiter, async (req: Request, res: Response) => {
+  app.post('/api/auth/login', loginGlobalRateLimiter, loginAccountRateLimiter, async (req: Request, res: Response) => {
     try {
       const principal = await authenticatePasswordLogin(
         {
