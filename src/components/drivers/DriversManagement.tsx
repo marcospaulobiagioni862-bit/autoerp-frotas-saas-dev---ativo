@@ -9,6 +9,7 @@ import {
   Archive,
   RefreshCw,
   ScanLine,
+  MessageSquare,
 } from 'lucide-react';
 import {
   Card,
@@ -22,6 +23,7 @@ import {
 import { LazyModuleErrorBoundary } from '../common/LazyModuleErrorBoundary';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import { WhatsappClient } from '../../api/whatsappClient';
 import type { ApprovedCnhDriverDraft } from '../../api/driverDocumentIntakeClient';
 import { Driver } from '../../types/entities';
 import { DriverStatus, DocumentStatus } from '../../types/enums';
@@ -240,6 +242,15 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
     }
   };
 
+  const handleWaMeCnh = async (driverId: string) => {
+    try {
+      const res = await WhatsappClient.getWaLink('CNH_EXPIRY', driverId);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Falha ao gerar link do WhatsApp para CNH.');
+    }
+  };
+
   const getStatusBadge = (status: DriverStatus) => {
     switch (status) {
       case DriverStatus.ACTIVE:
@@ -442,6 +453,9 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                               <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
                                 <Edit2 className="w-4 h-4" />Editar
                               </button>
+                              <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+                                <MessageSquare className="w-4 h-4" />Avisar CNH (wa.me)
+                              </button>
                               <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30">
                                 <Archive className="w-4 h-4" />Arquivar
                               </button>
@@ -498,6 +512,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                       <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>
                       <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
                         <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Edit2 className="w-4 h-4"/>Editar</button>
+                        <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><MessageSquare className="w-4 h-4"/>Avisar CNH (wa.me)</button>
                         <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-4 h-4"/>Arquivar</button>
                       </div>
                     </details>

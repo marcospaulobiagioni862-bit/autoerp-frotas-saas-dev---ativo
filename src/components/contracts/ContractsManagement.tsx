@@ -1,9 +1,10 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, MessageSquare, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Gauge, MessageSquare, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
 import { Badge, Button, Card, Input, PageHeader } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import { WhatsappClient } from '../../api/whatsappClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import type { AccountReceivable, Contract, Driver, Vehicle } from '../../types/entities';
 import { ContractStatus } from '../../types/enums';
@@ -161,6 +162,19 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     }
   };
 
+  const handleRequestKm = async (contractId: string) => {
+    setActionLoadingId(contractId);
+    setError(null);
+    try {
+      const res = await WhatsappClient.getWaLink('KM_REQUEST', contractId);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar link de pedido de KM.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const activeContracts = contracts.filter((item) => item.status === ContractStatus.ACTIVE);
   const totalVehicles = Object.keys(vehicles).length;
   const occupancyRate = totalVehicles ? ((activeContracts.length / totalVehicles) * 100).toFixed(1) : '0.0';
@@ -301,6 +315,13 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                                 onClick={() => void handleSendWhatsApp(item.id)}
                               >
                                 <MessageSquare className="w-3.5 h-3.5" /> Enviar WhatsApp (wa.me)
+                              </button>
+                              <button
+                                disabled={busy}
+                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                                onClick={() => void handleRequestKm(item.id)}
+                              >
+                                <Gauge className="w-3.5 h-3.5" /> Pedir KM (wa.me)
                               </button>
                               {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && (
                                 <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>

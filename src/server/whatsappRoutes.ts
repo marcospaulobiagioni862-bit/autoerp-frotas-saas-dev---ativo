@@ -571,4 +571,197 @@ export function registerWhatsappRoutes(app: Express): void {
       sendError(res, error);
     }
   });
+
+  app.post('/api/whatsapp/wa-link', async (req: Request, res: Response) => {
+    const principal = requirePrincipal(req, res);
+    if (!principal) return;
+    try {
+      const { templateType, entityId } = req.body || {};
+      if (!['KM_REQUEST', 'TRAFFIC_TICKET', 'CNH_EXPIRY'].includes(templateType) || typeof entityId !== 'string' || !entityId.trim()) {
+        res.status(400).json({ error: 'Parâmetros inválidos para geração de link do WhatsApp' });
+        return;
+      }
+
+      const result = await UnitOfWork.run(principal.companyId, async (context: any) => {
+        const tx = context.getRawTransaction();
+        let phoneRaw = '';
+        let driverName = '';
+        let message = '';
+        let driverIdForAudit = '';
+
+        if (templateType === 'KM_REQUEST') {
+          let contractRow: any = null;
+          let vehicleRow: any = null;
+
+          const contractRes = rows(await tx.execute(sql`
+            SELECT id, driver_id, vehicle_id, contract_number FROM contracts
+            WHERE company_id = ${principal.companyId} AND id = ${entityId}
+            LIMIT 1
+          `));
+
+          if (contractRes.length > 0) {
+            contractRow = contractRes[0];
+            const vRes = rows(await tx.execute(sql`
+              SELECT id, plate FROM vehicles
+              WHERE company_id = ${principal.companyId} AND id = ${contractRow.vehicle_id}
+              LIMIT 1
+            `));
+            vehicleRow = vRes[0];
+            driverIdForAudit = String(contractRow.driver_id);
+          } else {
+            const vRes = rows(await tx.execute(sql`
+              SELECT id, plate, current_driver_id, current_contract_id FROM vehicles
+              WHERE company_id = ${principal.companyId} AND id = ${entityId}
+              LIMIT 1
+            `));
+            if (vRes.length === 0) throw new WhatsappNotFoundError();
+            vehicleRow = vRes[0];
+            driverIdForAudit = String(vehicleRow.current_driver_id || '');
+            if (!driverIdForAudit) {
+              const activeContractRes = rows(await tx.execute(sql`
+                SELECT driver_id FROM contracts
+                WHERE company_id = ${principal.companyId} AND vehicle_id = ${vehicleRow.id} AND status = 'ACTIVE'
+                ORDER BY created_at DESC LIMIT 1
+              `));
+              if (activeContractRes.length > 0) {
+                driverIdForAudit = String(activeContractRes[0].driver_id);
+              }
+            }
+          }
+
+          if (!driverIdForAudit) {
+            throw new WhatsappValidationError();
+          }
+
+          const dRes = rows(await tx.execute(sql`
+            SELECT id, name, phone, whatsapp FROM drivers
+            WHERE company_id = ${principal.companyId} AND id = ${driverIdForAudit}
+            LIMIT 1
+          `));
+          if (dRes.length === 0) throw new WhatsappNotFoundError();
+          const driver = dRes[0];
+          driverName = String(driver.name || 'Motorista');
+          phoneRaw = String(driver.whatsapp || driver.phone || '');
+          const plate = String(vehicleRow?.plate || 'do veículo');
+
+          message = `Olá, ${driverName}! Precisamos atualizar a quilometragem do veículo ${plate}. Por favor, informe a quilometragem atual do veículo e envie uma foto legível do odômetro (painel).`;
+
+        } else if (templateType === 'TRAFFIC_TICKET') {
+          const ticketRes = rows(await tx.execute(sql`
+            SELECT id, vehicle_id, driver_id, auto_number, organ_name, infraction_code, description,
+                   infraction_date, infraction_location, due_date, original_amount, points, status
+            FROM traffic_tickets
+            WHERE company_id = ${principal.companyId} AND id = ${entityId}
+            LIMIT 1
+          `));
+          if (ticketRes.length === 0) throw new WhatsappNotFoundError();
+          const ticket = ticketRes[0];
+          if (!ticket.driver_id) {
+            throw new WhatsappValidationError();
+          }
+          driverIdForAudit = String(ticket.driver_id);
+
+          const dRes = rows(await tx.execute(sql`
+            SELECT id, name, phone, whatsapp FROM drivers
+            WHERE company_id = ${principal.companyId} AND id = ${driverIdForAudit}
+            LIMIT 1
+          `));
+          if (dRes.length === 0) throw new WhatsappNotFoundError();
+          const driver = dRes[0];
+          driverName = String(driver.name || 'Motorista');
+          phoneRaw = String(driver.whatsapp || driver.phone || '');
+
+          const vRes = rows(await tx.execute(sql`
+            SELECT plate FROM vehicles WHERE company_id = ${principal.companyId} AND id = ${String(ticket.vehicle_id)} LIMIT 1
+          `));
+          const plate = String(vRes[0]?.plate || ticket.vehicle_id || '');
+
+          const indicationRes = rows(await tx.execute(sql`
+            SELECT indication_deadline FROM traffic_ticket_driver_indications
+            WHERE company_id = ${principal.companyId} AND traffic_ticket_id = ${entityId}
+            LIMIT 1
+          `));
+          const indicationDeadline = indicationRes[0]?.indication_deadline
+            ? String(indicationRes[0].indication_deadline).slice(0, 10)
+            : 'não informado';
+
+          const amount = Number(ticket.original_amount || 0).toFixed(2).replace('.', ',');
+          const autoNumber = String(ticket.auto_number || '');
+          const infractionDate = String(ticket.infraction_date || '').slice(0, 10);
+          const infractionLocation = String(ticket.infraction_location || 'não informado');
+          const organName = String(ticket.organ_name || '');
+          const infractionCode = String(ticket.infraction_code || '');
+          const description = String(ticket.description || '');
+          const points = String(ticket.points ?? 0);
+          const dueDate = String(ticket.due_date || '').slice(0, 10);
+
+          message = `Olá, ${driverName}! Identificamos a multa ${autoNumber} vinculada ao veículo ${plate}, ocorrida em ${infractionDate} em ${infractionLocation}. Órgão: ${organName} | Código: ${infractionCode} - ${description} | Pontos: ${points} | Valor: R$ ${amount} | Vencimento: ${dueDate} | Prazo para indicação de condutor: ${indicationDeadline}.`;
+
+        } else if (templateType === 'CNH_EXPIRY') {
+          const dRes = rows(await tx.execute(sql`
+            SELECT id, name, phone, whatsapp, cnh_expiration FROM drivers
+            WHERE company_id = ${principal.companyId} AND id = ${entityId}
+            LIMIT 1
+          `));
+          if (dRes.length === 0) throw new WhatsappNotFoundError();
+          const driver = dRes[0];
+          driverIdForAudit = String(driver.id);
+          driverName = String(driver.name || 'Motorista');
+          phoneRaw = String(driver.whatsapp || driver.phone || '');
+          const cnhExpiration = driver.cnh_expiration ? String(driver.cnh_expiration).slice(0, 10) : 'em breve';
+
+          message = `Olá, ${driverName}! Sua CNH vencerá em ${cnhExpiration}. Por favor, providencie a renovação e nos envie a foto da CNH atualizada para manter seu cadastro e contrato regulares.`;
+        }
+
+        let phoneDigits = phoneRaw.replace(/\D/g, '');
+        if (phoneDigits.length >= 10 && phoneDigits.length <= 11 && !phoneDigits.startsWith('55')) {
+          phoneDigits = `55${phoneDigits}`;
+        }
+        if (!/^55\d{10,11}$/.test(phoneDigits) || /^55(\d)\1+$/.test(phoneDigits)) {
+          throw new WhatsappValidationError();
+        }
+
+        const whatsappUrl = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
+        const now = new Date().toISOString();
+
+        await context.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'WhatsappWaLink',
+          entityId,
+          action: AuditAction.UPDATE,
+          userId: principal.userId,
+          userName: principal.name,
+          newState: JSON.stringify({
+            event: 'WHATSAPP_WAME_LINK_GENERATED',
+            templateType,
+            entityId,
+            driverId: driverIdForAudit,
+            phone: phoneDigits,
+            generatedAt: now,
+          }),
+          timestamp: now,
+        });
+
+        return {
+          whatsappUrl,
+          phone: phoneDigits,
+          message,
+          templateType,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      if (error instanceof WhatsappNotFoundError) {
+        res.status(404).json({ error: 'Entidade ou motorista não encontrado' });
+        return;
+      }
+      if (error instanceof WhatsappValidationError) {
+        res.status(400).json({ error: 'Telefone do motorista inválido ou motorista não vinculado' });
+        return;
+      }
+      sendError(res, error);
+    }
+  });
 }

@@ -1,10 +1,11 @@
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, FileText, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, FileText, Gauge, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
 import { Badge, Button, Card, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { VehicleClient } from '../../api/vehicleClient';
+import { WhatsappClient } from '../../api/whatsappClient';
 import { FinanceDepositClient, createDepositReceiptIdempotencyKey } from '../../api/financeDepositClient';
 import { FinanceObligationClient } from '../../api/financeObligationClient';
 import { FinanceSettlementClient, type SettlementOptions } from '../../api/financeSettlementClient';
@@ -246,6 +247,16 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     }
   };
 
+  const requestKmWhatsApp = async () => {
+    if (!contract) return;
+    try {
+      const res = await WhatsappClient.getWaLink('KM_REQUEST', contract.id);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+    }
+  };
+
   if (!contractId) return null;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -275,6 +286,9 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={sendWhatsApp} className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
             <MessageSquare className="w-4 h-4 mr-1" /> Enviar WhatsApp (wa.me)
+          </Button>
+          <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+            <Gauge className="w-4 h-4 mr-1" /> Pedir KM (wa.me)
           </Button>
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
           {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
