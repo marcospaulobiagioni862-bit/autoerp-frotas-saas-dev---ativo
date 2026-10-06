@@ -197,6 +197,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     try {
       const input = {
         contractNumber: contractToEdit ? (form.contractNumber.trim() || undefined) : undefined,
+        status: contractToEdit ? undefined : ('DRAFT' as any),
         vehicleId: form.vehicleId,
         driverId: form.driverId,
         startDate: form.startDate,

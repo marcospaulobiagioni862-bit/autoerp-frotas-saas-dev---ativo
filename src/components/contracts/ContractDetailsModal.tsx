@@ -1,6 +1,6 @@
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, FileText, History, Receipt, ShieldCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, FileText, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
 import { Badge, Button, Card, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
@@ -232,6 +232,20 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     }, 'Caução recebida com sucesso.');
   };
 
+  const sendWhatsApp = async () => {
+    if (!contract) return;
+    try {
+      const res = await ContractClient.getShareLink(contract.id);
+      if (res.whatsappUrl) {
+        window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(`Link do contrato gerado:\n${res.publicPdfUrl}\n\nO motorista não possui telefone válido com DDD cadastrado para abertura direta do WhatsApp.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+    }
+  };
+
   if (!contractId) return null;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -259,6 +273,9 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2.5 dark:border-rose-900 dark:bg-rose-950/20"><p className="text-[11px] text-rose-700 dark:text-rose-300">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={sendWhatsApp} className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+            <MessageSquare className="w-4 h-4 mr-1" /> Enviar WhatsApp (wa.me)
+          </Button>
           {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
           {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
           {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}

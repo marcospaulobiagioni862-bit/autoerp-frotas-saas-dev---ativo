@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, Eye, FileText, MessageSquare, Plus, Search, Settings2, TrendingUp, User } from 'lucide-react';
 import { Badge, Button, Card, Input, PageHeader } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
@@ -144,6 +144,23 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
     return runAction(id, () => ContractClient.archive(id, 'Arquivado via gestão de contratos'));
   };
 
+  const handleSendWhatsApp = async (contractId: string) => {
+    setActionLoadingId(contractId);
+    setError(null);
+    try {
+      const res = await ContractClient.getShareLink(contractId);
+      if (res.whatsappUrl) {
+        window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(`Link do contrato gerado:\n${res.publicPdfUrl}\n\nO motorista não possui telefone válido com DDD cadastrado para abertura direta do WhatsApp.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const activeContracts = contracts.filter((item) => item.status === ContractStatus.ACTIVE);
   const totalVehicles = Object.keys(vehicles).length;
   const occupancyRate = totalVehicles ? ((activeContracts.length / totalVehicles) * 100).toFixed(1) : '0.0';
@@ -273,8 +290,23 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                           <details className="relative">
                             <summary aria-label={`Mais ações do contrato ${item.contractNumber}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
                             <div className="absolute right-0 z-20 mt-1 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                              {item.status === ContractStatus.DRAFT && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>Editar</button>}
-                              {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>Documento / Assinatura</button>}
+                              {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && (
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>
+                                  Editar contrato
+                                </button>
+                              )}
+                              <button
+                                disabled={busy}
+                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                                onClick={() => void handleSendWhatsApp(item.id)}
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" /> Enviar WhatsApp (wa.me)
+                              </button>
+                              {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && (
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>
+                                  Documento / Assinatura
+                                </button>
+                              )}
                               {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
                               {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
                             </div>
