@@ -143,15 +143,48 @@ async function startServer() {
   // do proxy e TODOS os clientes caem no mesmo balde de rate limit.
   app.set('trust proxy', 1);
 
-  // Cabecalhos de seguranca. O CSP fica DESLIGADO de proposito nesta etapa: a
-  // SPA nunca rodou sob um, e uma politica em modo bloqueio deixaria a tela em
-  // branco. Ele entra em etapa separada, com Report-Only primeiro, e precisa
-  // liberar connect-src para viacep.com.br (busca de CEP no cadastro de
-  // motorista) alem de style-src para o Tailwind.
+  // Cabecalhos de seguranca.
+  //
+  // O CSP comeca em REPORT-ONLY: a SPA nunca rodou sob uma politica, entao o
+  // navegador apenas RELATA o que teria bloqueado, sem quebrar nada. As
+  // violacoes chegam em POST /api/csp-report e sao logadas; quando o log
+  // estiver limpo, troca-se reportOnly para false.
+  //
+  // Cada excecao abaixo foi levantada no codigo, nao copiada de receita:
+  // - img-src e frame-src com blob: porque o preview de anexo e a foto do
+  //   motorista alimentam <img> e <iframe> com URL de URL.createObjectURL
+  //   (AttachmentList.tsx, DocumentPreviewModal.tsx, DriverProfilePhoto.tsx).
+  // - img-src com data: porque o logo do contrato e um JPEG em base64
+  //   embutido no codigo (moveflexBrand.ts).
+  // - style-src com unsafe-inline porque ha style={{...}} em 14 componentes,
+  //   e porque a biblioteca de animacao injeta <style> em tempo de execucao.
+  // - connect-src com viacep.com.br porque a busca de CEP do cadastro de
+  //   motorista e feita do NAVEGADOR (DriverFormModal.tsx). A chamada ao
+  //   Gemini NAO entra aqui: ela sai do servidor, nao do navegador.
+  // - script-src fica em 'self' puro: o index.html gerado pelo build nao tem
+  //   nenhum script inline (conferido em dist/index.html).
   app.use(
     helmet({
-      contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: {
+        reportOnly: true,
+        useDefaults: false,
+        directives: {
+          'default-src': ["'self'"],
+          'base-uri': ["'self'"],
+          'connect-src': ["'self'", 'https://viacep.com.br'],
+          'font-src': ["'self'", 'data:'],
+          'form-action': ["'self'"],
+          'frame-ancestors': ["'self'"],
+          'frame-src': ["'self'", 'blob:'],
+          'img-src': ["'self'", 'data:', 'blob:'],
+          'object-src': ["'none'"],
+          'script-src': ["'self'"],
+          'style-src': ["'self'", "'unsafe-inline'"],
+          'worker-src': ["'self'", 'blob:'],
+          'report-uri': ['/api/csp-report'],
+        },
+      },
     })
   );
 
@@ -185,6 +218,46 @@ async function startServer() {
   });
   app.use(express.json());
   const PORT = Number(process.env.PORT || 3000);
+
+  // Coletor de violacoes do CSP. Precisa ficar ANTES do guarda autenticado de
+  // /api, porque o navegador envia o relatorio sem sessao. Limite proprio para
+  // nao virar vetor de inundacao de log, e corpo limitado a 32kb.
+  const cspReportRateLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    limit: 60,
+    standardHeaders: false,
+    legacyHeaders: false,
+  });
+  app.post(
+    '/api/csp-report',
+    cspReportRateLimiter,
+    express.json({
+      type: ['application/csp-report', 'application/reports+json', 'application/json'],
+      limit: '32kb',
+    }),
+    (req: Request, res: Response) => {
+      // Dois formatos chegam aqui. O report-uri classico manda um objeto
+      // {"csp-report": {...}} com chaves em kebab-case; a Reporting API nova
+      // manda um ARRAY de {body: {...}} com chaves em camelCase. Tratar so o
+      // primeiro fazia o segundo virar um registro todo nulo no log, que
+      // parece violacao sem informacao e engana quem le.
+      const payload = req.body ?? {};
+      const entries: Record<string, unknown>[] = Array.isArray(payload)
+        ? payload.map((item) => ((item as Record<string, unknown>)?.body ?? item) as Record<string, unknown>)
+        : [((payload as Record<string, unknown>)['csp-report'] ?? payload) as Record<string, unknown>];
+
+      for (const report of entries) {
+        const directive = report['violated-directive'] ?? report['effectiveDirective'] ?? null;
+        const blocked = report['blocked-uri'] ?? report['blockedURL'] ?? null;
+        const document = report['document-uri'] ?? report['documentURL'] ?? null;
+        if (directive === null && blocked === null && document === null) {
+          continue;
+        }
+        console.warn('AUTOERP_CSP_VIOLATION', JSON.stringify({ directive, blocked, document }));
+      }
+      res.status(204).end();
+    }
+  );
 
   // One-time first-admin credential provisioning. Disabled unless a strong
   // server-only bootstrap secret is explicitly configured. The endpoint never
