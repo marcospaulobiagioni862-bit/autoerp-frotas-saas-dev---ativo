@@ -9,6 +9,14 @@ on:
     branches:
       - main
       - staging-app
+      # A PR #1145 (v2/core-simplified -> staging-app) foi fechada como merged
+      # em 2026-10-06 10:53Z, quando o merge foi empurrado direto para
+      # staging-app. Sem PR aberta, o evento pull_request deixou de disparar e a
+      # branch de desenvolvimento ficou SEM portao nenhum. Como o fluxo de
+      # entrega e merge por push em staging-app, que fecha qualquer PR nova, o
+      # gatilho de push e a unica forma estavel de manter a V2 coberta. Nao
+      # duplica execucao justamente porque nao ha PR aberta com esta origem.
+      - v2/core-simplified
   workflow_dispatch:
 
 permissions:
