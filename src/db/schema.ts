@@ -33,6 +33,7 @@ export const tenantOperationalConfigs = pgTable('tenant_operational_configs', {
   maxDriversLimit: integer('max_drivers_limit').notNull().default(1000),
   documentRedDays: integer('document_red_days').notNull().default(7),
   documentYellowDays: integer('document_yellow_days').notNull().default(15),
+  logoUrl: text('logo_url'),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
   updatedBy: text('updated_by').notNull(),
 });

@@ -6,6 +6,7 @@ export interface TenantProfileDto {
   currency: 'BRL';
   maxVehiclesLimit: number;
   maxDriversLimit: number;
+  logoUrl: string | null;
   updatedAt: string;
   updatedBy: string;
 }
@@ -16,6 +17,14 @@ export interface TenantProfileUpdateInput {
   currency: 'BRL';
   maxVehiclesLimit: number;
   maxDriversLimit: number;
+  logoUrl?: string | null;
+}
+
+export interface TenantBrandingDto {
+  companyId: string;
+  companyName: string;
+  document: string;
+  logoUrl: string | null;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -37,6 +46,7 @@ function parseProfile(value: unknown): TenantProfileDto {
     row.currency !== 'BRL' ||
     typeof row.maxVehiclesLimit !== 'number' || !Number.isInteger(row.maxVehiclesLimit) || row.maxVehiclesLimit < 0 || row.maxVehiclesLimit > 100000 ||
     typeof row.maxDriversLimit !== 'number' || !Number.isInteger(row.maxDriversLimit) || row.maxDriversLimit < 0 || row.maxDriversLimit > 200000 ||
+    (row.logoUrl !== null && row.logoUrl !== undefined && typeof row.logoUrl !== 'string') ||
     typeof row.updatedAt !== 'string' ||
     typeof row.updatedBy !== 'string'
   ) {
@@ -50,6 +60,7 @@ function parseProfile(value: unknown): TenantProfileDto {
     currency: row.currency,
     maxVehiclesLimit: row.maxVehiclesLimit,
     maxDriversLimit: row.maxDriversLimit,
+    logoUrl: typeof row.logoUrl === 'string' ? row.logoUrl : null,
     updatedAt: row.updatedAt,
     updatedBy: row.updatedBy,
   };
@@ -76,6 +87,19 @@ export class TenantProfileClient {
     return parseProfile(payload.item);
   }
 
+  static async getBranding(): Promise<TenantBrandingDto> {
+    const response = await fetch('/api/tenant/branding', { credentials: 'include' });
+    if (!response.ok) throw new Error(`Branding request failed (${response.status})`);
+    const payload = record(await response.json());
+    const row = record(payload.item);
+    return {
+      companyId: String(row.companyId || ''),
+      companyName: String(row.companyName || ''),
+      document: String(row.document || ''),
+      logoUrl: typeof row.logoUrl === 'string' ? row.logoUrl : null,
+    };
+  }
+
   static async update(input: TenantProfileUpdateInput): Promise<TenantProfileDto> {
     const payload = record(await request({
       method: 'PATCH',
@@ -86,6 +110,7 @@ export class TenantProfileClient {
         currency: input.currency,
         maxVehiclesLimit: input.maxVehiclesLimit,
         maxDriversLimit: input.maxDriversLimit,
+        ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
       }),
     }));
     return parseProfile(payload.item);

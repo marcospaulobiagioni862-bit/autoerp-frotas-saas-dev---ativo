@@ -219,7 +219,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
     <div className="p-6 md:p-8 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Centro Administrativo & Saúde do Sistema"
-        description="Administração de produção, políticas operacionais, controle de acessos RBAC, integridade e configurações do MoveFlex"
+        description="Administração de produção, políticas operacionais, controle de acessos RBAC, integridade e configurações da empresa"
         breadcrumb="Administração • Governança SRE & Gov"
         secondaryActions={
           <div className="flex items-center gap-2">

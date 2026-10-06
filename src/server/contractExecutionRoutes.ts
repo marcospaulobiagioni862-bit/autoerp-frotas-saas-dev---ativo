@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { MOVEFLEX_LOGO_JPEG_BASE64 } from '../domain/contracts/moveflexBrand';
 import { db } from '../db/index';
-import { companies } from '../db/schema';
+import { companies, tenantOperationalConfigs } from '../db/schema';
 import { UnitOfWork } from '../db/uow';
 import { AuditAction, ContractStatus, ObligationStatus, OriginType } from '../types/enums';
 import type { Contract, ContractArtifact, ContractSignatureMethod, ContractTemplate, Driver, Vehicle } from '../types/entities';
@@ -463,11 +463,35 @@ function wrapLine(font: any, textValue: string, size: number, maxWidth: number):
   return lines;
 }
 
-async function createPdf(title: string, rendered: string): Promise<Buffer> {
+interface PdfBranding {
+  companyName?: string;
+  logoBase64?: string | null;
+}
+
+async function createPdf(title: string, rendered: string, branding?: PdfBranding): Promise<Buffer> {
   const document = await PDFDocument.create();
   const font = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
-  const logo = await document.embedJpg(Uint8Array.from(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64')));
+  let logoBytes: Uint8Array | null = null;
+  if (branding?.logoBase64) {
+    try {
+      const raw = branding.logoBase64.includes(',') ? branding.logoBase64.split(',')[1] : branding.logoBase64;
+      logoBytes = Uint8Array.from(Buffer.from(raw, 'base64'));
+    } catch {
+      logoBytes = null;
+    }
+  }
+  if (!logoBytes) {
+    logoBytes = Uint8Array.from(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64'));
+  }
+  const logo = await document.embedJpg(logoBytes).catch(async () => {
+    return await document.embedPng(logoBytes!).catch(async () => {
+      return await document.embedJpg(Uint8Array.from(Buffer.from(MOVEFLEX_LOGO_JPEG_BASE64, 'base64')));
+    });
+  });
+
+  const companyName = branding?.companyName || 'MoveFlex';
+  const watermarkName = companyName.toUpperCase().slice(0, 16);
   const pageWidth = 595.28;
   const pageHeight = 841.89;
   const margin = 48;
@@ -480,9 +504,9 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const preparePage = () => {
     page.drawImage(logo, { x: margin, y: pageHeight - 113, width: 176, height: 99 });
     page.drawText('CONTRATO DE LOCAÇÃO DE VEÍCULO', { x: pageWidth - 312, y: pageHeight - 49, size: 12, font: bold, color: rgb(0.30, 0.10, 0.55) });
-    page.drawText('Documento oficial MoveFlex', { x: pageWidth - 312, y: pageHeight - 66, size: 8, font, color: rgb(0.38, 0.41, 0.48) });
+    page.drawText(`Documento oficial ${companyName}`, { x: pageWidth - 312, y: pageHeight - 66, size: 8, font, color: rgb(0.38, 0.41, 0.48) });
     page.drawLine({ start: { x: margin, y: pageHeight - 122 }, end: { x: pageWidth - margin, y: pageHeight - 122 }, thickness: 1.4, color: rgb(0.42, 0.16, 0.75) });
-    page.drawText('MOVEFLEX', { x: 185, y: pageHeight / 2, size: 58, font: bold, color: rgb(0.43, 0.16, 0.85), opacity: 0.035 });
+    page.drawText(watermarkName, { x: 185, y: pageHeight / 2, size: 58, font: bold, color: rgb(0.43, 0.16, 0.85), opacity: 0.035 });
     y = pageHeight - 145;
   };
 
@@ -506,7 +530,7 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const pages = document.getPages();
   pages.forEach((item, index) => {
     item.drawLine({ start: { x: margin, y: 38 }, end: { x: pageWidth - margin, y: 38 }, thickness: 0.7, color: rgb(0.76, 0.70, 0.86) });
-    item.drawText('MoveFlex • Locação de Veículos', { x: margin, y: 22, size: 7.5, font, color: rgb(0.38, 0.41, 0.48) });
+    item.drawText(`${companyName} • Locação de Veículos`, { x: margin, y: 22, size: 7.5, font, color: rgb(0.38, 0.41, 0.48) });
     item.drawText(`Página ${index + 1} de ${pages.length}`, { x: pageWidth - 96, y: 22, size: 7.5, font, color: rgb(0.45, 0.45, 0.5) });
   });
 
@@ -514,6 +538,15 @@ async function createPdf(title: string, rendered: string): Promise<Buffer> {
   const buffer = Buffer.from(bytes);
   if (buffer.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('Generated PDF signature invalid');
   return buffer;
+}
+
+async function getTenantBranding(companyId: string): Promise<PdfBranding> {
+  const company = await getCompany(companyId);
+  const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+  return {
+    companyName: company.tradeName || company.name || 'MoveFlex',
+    logoBase64: configs[0]?.logoUrl || null,
+  };
 }
 
 async function getCompany(companyId: string): Promise<ContractSnapshot['company']> {
@@ -808,7 +841,8 @@ export function registerContractExecutionRoutes(app: Express): void {
         visualPageCount = visual.pageCount;
       } else {
         const rendered = renderContractTemplate(prepared.template.contentMarkdown, templateValues);
-        pdf = await createPdf(`${prepared.template.title} - ${prepared.contract.contractNumber}`, rendered);
+        const branding = await getTenantBranding(principal.companyId);
+        pdf = await createPdf(`${prepared.template.title} - ${prepared.contract.contractNumber}`, rendered, branding);
       }
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, pdf);
@@ -1222,7 +1256,8 @@ export function registerContractExecutionRoutes(app: Express): void {
       ) throw new ExecutionValidationError('Invalid generated DOCX content');
 
       const plainText = extractContractDocxPlainText(docxBytes);
-      const pdf = await createPdf(`Contrato - ${prepared.contract.contractNumber}`, plainText);
+      const branding = await getTenantBranding(principal.companyId);
+      const pdf = await createPdf(`Contrato - ${prepared.contract.contractNumber}`, plainText, branding);
       const attachmentId = randomUUID();
       const stored = await storage.write(principal.companyId, attachmentId, pdf);
       storedKey = stored.storageKey;
