@@ -546,16 +546,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "DocumentAiClient.observability()" src/components/documents/DocumentAiReviewPanel.tsx
-          grep -F "method: 'GET'" src/api/documentAiClient.ts
-          if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" src/components/documents/DocumentAiReviewPanel.tsx src/api/documentAiClient.ts; then
+
+          CLIENT=src/api/documentAiClient.ts
+          PANEL=src/components/documents/DocumentAiReviewPanel.tsx
+
+          # O cliente e codigo vivo (importado por documentAiFocusedClient,
+          # driverCnhPrefill e documentAiStatusFilter): sempre exigido.
+          grep -F "method: 'GET'" "$CLIENT"
+
+          # O painel nao e importado por nenhum componente de produto, so por
+          # um arquivo de teste. As assercoes sobre ele passam a ser
+          # condicionais, para que este portao continue valido quando o painel
+          # for removido na limpeza de codigo morto - antes, a remocao faria o
+          # grep falhar sob "set -e" e quebrar o CI por um motivo que nao e
+          # defeito.
+          TARGETS="$CLIENT"
+          if [ -f "$PANEL" ]; then
+            grep -F "DocumentAiClient.observability()" "$PANEL"
+            TARGETS="$TARGETS $PANEL"
+          else
+            echo "DOC-AI-1B4: $PANEL ausente (removido na limpeza); assercoes do painel ignoradas"
+          fi
+
+          # shellcheck disable=SC2086
+          if grep -Eq "DocumentAiClient\.(retry|review).*observability|api/document-ai/observability.*(POST|PATCH|PUT|DELETE)" $TARGETS; then
             echo "FAIL: DOC-AI observability client must remain read-only"
             exit 1
           fi
-          if grep -Eq "apiKey|storageKey|workerId|companyId|attachmentChecksum" src/components/documents/DocumentAiReviewPanel.tsx | grep -F "Observability"; then
+
+          # CORRECAO DE BUG: aqui o "-q" estava no PRIMEIRO grep, que por
+          # definicao nao imprime nada - logo o segundo grep recebia entrada
+          # vazia e saia 1, e esta checagem NUNCA podia disparar. Era logica
+          # morta que se lia como garantia. O "-q" pertence ao ultimo grep do
+          # cano.
+          if [ -f "$PANEL" ] && grep -E "apiKey|storageKey|workerId|companyId|attachmentChecksum" "$PANEL" | grep -qF "Observability"; then
             echo "FAIL: observability panel may consume protected authority"
             exit 1
           fi
+
           echo "DOC-AI-1B4 fail-closed client observability invariants: PASS"
 
       - name: DOC-AI-1B5 explicit idempotent request invariants
