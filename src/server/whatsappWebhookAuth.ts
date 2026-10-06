@@ -2,6 +2,14 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 
+// Teto de profundidade da canonicalizacao. O corpo real e raso, entao 32
+// e folgado. Existe porque a canonicalizacao e RECURSIVA e rodava ANTES da
+// checagem de tamanho: medido, JSON.parse do V8 aguenta 200.000 niveis de
+// aninhamento (o parser dele e iterativo) enquanto a recursao estoura em
+// 3.213 - e no limiar o corpo tem apenas 6.428 bytes, passando folgado
+// pelo teto de 16 KB. Sem este limite, um corpo pequeno e profundo derruba
+// a verificacao com RangeError antes de qualquer validacao de tamanho.
+const MAX_CANONICAL_DEPTH = 32;
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_AGE_MS = 5 * 60 * 1000;
 const MAX_FUTURE_MS = 60 * 1000;
@@ -32,19 +40,20 @@ function requireHeader(value: unknown): string {
   return value;
 }
 
-function canonicalValue(value: unknown): string {
+function canonicalValue(value: unknown, depth = 0): string {
+  if (depth > MAX_CANONICAL_DEPTH) throw new WhatsappWebhookAuthenticationError('Invalid WhatsApp webhook');
   if (value === null) return 'null';
   if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new WhatsappWebhookAuthenticationError('Invalid WhatsApp webhook');
     return JSON.stringify(value);
   }
-  if (Array.isArray(value)) return `[${value.map(canonicalValue).join(',')}]`;
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalValue(item, depth + 1)).join(',')}]`;
   if (typeof value === 'object') {
     const item = value as Record<string, unknown>;
     return `{${Object.keys(item).sort().map((key) => {
       if (item[key] === undefined) throw new WhatsappWebhookAuthenticationError('Invalid WhatsApp webhook');
-      return `${JSON.stringify(key)}:${canonicalValue(item[key])}`;
+      return `${JSON.stringify(key)}:${canonicalValue(item[key], depth + 1)}`;
     }).join(',')}}`;
   }
   throw new WhatsappWebhookAuthenticationError('Invalid WhatsApp webhook');
