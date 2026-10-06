@@ -660,3 +660,16 @@ export const communicationLogs = pgTable('communication_logs', {
   status: text('status').notNull(),
   sentAt: timestamp('sent_at', { mode: 'string' }).notNull().defaultNow(),
 });
+
+// Violacoes de CSP relatadas pelo navegador, agregadas por assinatura. Nao tem
+// company_id de proposito: o relatorio chega sem sessao, e isto e dado
+// operacional de diagnostico, nao dado de cliente.
+export const cspViolationReports = pgTable('csp_violation_reports', {
+  signature: text('signature').primaryKey(),
+  directive: text('directive').notNull(),
+  blockedUri: text('blocked_uri').notNull(),
+  documentUri: text('document_uri').notNull(),
+  occurrences: integer('occurrences').notNull().default(1),
+  firstSeen: timestamp('first_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  lastSeen: timestamp('last_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+});
