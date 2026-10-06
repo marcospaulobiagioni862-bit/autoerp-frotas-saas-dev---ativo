@@ -20,6 +20,8 @@ import { registerOpsHealthRoutes } from './src/server/opsHealthRoutes';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { db } from './src/db/index';
 import { companies, users } from './src/db/schema';
@@ -136,6 +138,45 @@ async function startServer() {
   FinanceEngine.uowRunner = UnitOfWork.run;
 
   const app = express();
+
+  // Render termina TLS num proxy na frente do servico. Sem isto, req.ip e o IP
+  // do proxy e TODOS os clientes caem no mesmo balde de rate limit.
+  app.set('trust proxy', 1);
+
+  // Cabecalhos de seguranca. O CSP fica DESLIGADO de proposito nesta etapa: a
+  // SPA nunca rodou sob um, e uma politica em modo bloqueio deixaria a tela em
+  // branco. Ele entra em etapa separada, com Report-Only primeiro, e precisa
+  // liberar connect-src para viacep.com.br (busca de CEP no cadastro de
+  // motorista) alem de style-src para o Tailwind.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+
+  // Protecao contra forca bruta no login. skipSuccessfulRequests faz com que
+  // apenas tentativas FALHAS contem para o limite, entao quem trabalha normal
+  // nunca e bloqueado; a janela so enche com senha errada.
+  const loginRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: { error: 'Muitas tentativas de login. Tente novamente em alguns minutos.' },
+  });
+
+  // Provisionamento do primeiro admin: mais restrito, porque em operacao
+  // normal este endpoint nao deveria ser chamado nenhuma vez.
+  const bootstrapRateLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitas tentativas. Tente novamente mais tarde.' },
+  });
+
   app.use(requestCorrelationMiddleware);
   app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'private, no-store');
@@ -148,7 +189,7 @@ async function startServer() {
   // One-time first-admin credential provisioning. Disabled unless a strong
   // server-only bootstrap secret is explicitly configured. The endpoint never
   // creates a session; normal login is required after provisioning.
-  app.post('/api/auth/bootstrap', async (req: Request, res: Response) => {
+  app.post('/api/auth/bootstrap', bootstrapRateLimiter, async (req: Request, res: Response) => {
     try {
       const providedToken = typeof req.headers['x-autoerp-bootstrap-token'] === 'string'
         ? req.headers['x-autoerp-bootstrap-token']
@@ -268,7 +309,7 @@ async function startServer() {
   // Login must be reachable before the protected /api middleware. Tenant is
   // resolved from exactly one ACTIVE company by CNPJ/document or trade name;
   // users and credentials are read only after app.current_tenant is established.
-  app.post('/api/auth/login', async (req: Request, res: Response) => {
+  app.post('/api/auth/login', loginRateLimiter, async (req: Request, res: Response) => {
     try {
       const principal = await authenticatePasswordLogin(
         {
@@ -1202,15 +1243,6 @@ async function startServer() {
     }
   });
 
-  // DB Test endpoint
-  app.get('/api/db-test', async (_req: Request, res: Response) => {
-    try {
-      const result = await db.execute(sql`SELECT 1 as result`);
-      res.json({ status: 'ok', result: result.rows });
-    } catch (e) {
-      res.status(500).json({ error: (e as Error).message });
-    }
-  });
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
