@@ -7,17 +7,13 @@ import {
   BellRing,
   Calendar,
   Car,
-  CheckSquare,
   ChevronDown,
   ChevronRight,
   CreditCard,
   FileText,
   FolderOpen,
-  HardDrive,
   LayoutDashboard,
-  LifeBuoy,
   PieChart,
-  ShieldCheck,
   TrendingUp,
   Users,
   Wrench,
@@ -95,9 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const { user, authMode } = useAuth();
-  const [isAuthorityExpanded, setIsAuthorityExpanded] = useState(false);
   const [runtimeEnvironment, setRuntimeEnvironment] = useState('server');
-  const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
 
   useEffect(() => {
     let cancelled = false;
@@ -155,16 +149,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'dre', label: 'Relatórios Financeiros', icon: PieChart },
       ],
     },
-  ];
-
-  const authorityItems: MenuItem[] = [
-    ...(isAdmin
-      ? [{ id: 'administration' as const, label: 'Administração', icon: Users, badge: 'Admin' }]
-      : []),
-    { id: 'executive-operations', label: 'Central Executiva', icon: ShieldCheck, badge: 'Server' },
-    { id: 'incident-management', label: 'Incidentes', icon: LifeBuoy, badge: 'Server' },
-    { id: 'workflow-center', label: 'Tarefas & Workflow', icon: CheckSquare, badge: 'Server' },
-    { id: 'resilience', label: 'Continuidade & DR', icon: HardDrive, badge: 'Server' },
   ];
 
   const navigate = (tab: NavigationTab) => {

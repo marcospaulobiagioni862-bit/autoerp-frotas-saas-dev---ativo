@@ -103,7 +103,7 @@ export default function App(){
 
   return <div className="h-full min-h-0 overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
     <NewVersionNotice/>
-    <Header testStatus={testStatus} onOpenTestRunner={()=>requestTabChange('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)} onResolveNotification={handleResolveNotification}/>
+    <Header testStatus={testStatus} onOpenTestRunner={()=>requestTabChange('tests')} onToggleMobileSidebar={()=>setIsMobileSidebarOpen(prev=>!prev)} onResolveNotification={handleResolveNotification} onNavigateTab={(tab)=>requestTabChange(tab as NavigationTab)}/>
     <div className="flex-1 min-h-0 flex overflow-hidden"><Sidebar activeTab={activeTab} onTabChange={requestTabChange} pendingReceivablesCount={pendingReceivablesCount} pendingPayablesCount={pendingPayablesCount} pendingPendingsCount={pendingPendingsCount} isMobileOpen={isMobileSidebarOpen} onCloseMobile={()=>setIsMobileSidebarOpen(false)}/>
       <main className="app-content-scrollbar flex-1 min-h-0 overflow-y-scroll overflow-x-hidden bg-slate-50/50 dark:bg-slate-950"><LazyModuleErrorBoundary resetKey={activeTab} onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-6 text-sm text-slate-500">Carregando módulo...</div>}>
         {activeTab==='dashboard'&&<OverviewDashboard key={settlementRefreshVersion} onNavigate={tab=>requestTabChange(tab as NavigationTab)} onOpenReceiptModal={setSelectedReceivableForReceipt} onOpenPaymentModal={setSelectedPayableForPayment} onOpenTransferModal={()=>setIsTransferModalOpen(true)} onOpenTestRunner={()=>requestTabChange('tests')}/>}
