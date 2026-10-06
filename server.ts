@@ -17,7 +17,7 @@ import { hasDriverHealthPermission } from './src/shared/security/driverHealthAut
 import { registerVehicleRoutes } from './src/server/vehicleRoutes';
 import { requestCorrelationMiddleware } from './src/server/requestCorrelation';
 import { registerOpsHealthRoutes } from './src/server/opsHealthRoutes';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import express from 'express';
 import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
@@ -278,7 +278,7 @@ async function startServer() {
       type: ['application/csp-report', 'application/reports+json', 'application/json'],
       limit: '32kb',
     }),
-    (req: Request, res: Response) => {
+    async (req: Request, res: Response) => {
       // Dois formatos chegam aqui. O report-uri classico manda um objeto
       // {"csp-report": {...}} com chaves em kebab-case; a Reporting API nova
       // manda um ARRAY de {body: {...}} com chaves em camelCase. Tratar so o
@@ -290,13 +290,39 @@ async function startServer() {
         : [((payload as Record<string, unknown>)['csp-report'] ?? payload) as Record<string, unknown>];
 
       for (const report of entries) {
-        const directive = report['violated-directive'] ?? report['effectiveDirective'] ?? null;
-        const blocked = report['blocked-uri'] ?? report['blockedURL'] ?? null;
-        const document = report['document-uri'] ?? report['documentURL'] ?? null;
-        if (directive === null && blocked === null && document === null) {
+        const directive = String(report['violated-directive'] ?? report['effectiveDirective'] ?? '').trim();
+        const blocked = String(report['blocked-uri'] ?? report['blockedURL'] ?? '').trim();
+        const documentUri = String(report['document-uri'] ?? report['documentURL'] ?? '').trim();
+        if (!directive && !blocked && !documentUri) {
           continue;
         }
-        console.warn('AUTOERP_CSP_VIOLATION', JSON.stringify({ directive, blocked, document }));
+
+        console.warn(
+          'AUTOERP_CSP_VIOLATION',
+          JSON.stringify({ directive, blocked, document: documentUri })
+        );
+
+        // Alem do log, grava agregado no banco. O log vai para o stdout do
+        // servico, que nao e alcancavel sem painel nem SSH; o banco e. Sem um
+        // lugar legivel, a politica em Report-Only nunca poderia virar bloqueio
+        // com seguranca, porque ninguem saberia o que ela teria barrado.
+        const cut = (value: string) => value.slice(0, 500);
+        const signature = createHash('sha256')
+          .update(`${cut(directive)}|${cut(blocked)}|${cut(documentUri)}`)
+          .digest('hex');
+        try {
+          await db.execute(sql`
+            INSERT INTO csp_violation_reports (signature, directive, blocked_uri, document_uri)
+            VALUES (${signature}, ${cut(directive)}, ${cut(blocked)}, ${cut(documentUri)})
+            ON CONFLICT (signature) DO UPDATE
+              SET occurrences = csp_violation_reports.occurrences + 1,
+                  last_seen = now()
+          `);
+        } catch (error) {
+          // Diagnostico nunca pode derrubar a rota: se o banco falhar, o log
+          // acima ja registrou e a resposta segue 204.
+          console.warn('AUTOERP_CSP_VIOLATION_PERSIST_FAILED', (error as Error).message);
+        }
       }
       res.status(204).end();
     }
