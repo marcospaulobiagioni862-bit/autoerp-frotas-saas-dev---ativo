@@ -52,6 +52,12 @@ export const Header: React.FC<HeaderProps> = ({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // SECURITY-2Q2: a entrada administrativa continua derivando do principal ADMIN
+  // autenticado. O AUTOERP-46 a moveu da barra lateral para o menu do avatar; a
+  // regra de visibilidade tem de viajar junto, senao todo usuario logado passa a
+  // enxergar "Area Administrativa".
+  const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+
   useEffect(() => {
     let cancelled = false;
     if (authMode !== 'server-session') {
@@ -202,10 +208,12 @@ export const Header: React.FC<HeaderProps> = ({
                 </p>
               </div>
 
+              {isAdmin && (
               <div className="py-1">
                 <button
                   type="button"
                   role="menuitem"
+                  aria-label="Area Administrativa"
                   onClick={() => {
                     setIsUserMenuOpen(false);
                     onNavigateTab?.('administration');
@@ -219,6 +227,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </button>
               </div>
+              )}
 
               <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
 

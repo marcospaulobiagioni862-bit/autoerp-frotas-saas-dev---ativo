@@ -773,7 +773,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
                   <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" disabled={whatsappLoading} onClick={handleSendWaMeCnhReminder}>
-                    <MessageSquare className="w-4 h-4 mr-1" /> Avisar CNH (wa.me)
+                    <MessageSquare className="w-4 h-4 mr-1" /> Avisar CNH (WhatsApp)
                   </Button>
                 </div>
               </Card>

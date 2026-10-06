@@ -14,10 +14,12 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main(): Promise<void> {
-  const [vite, boundary, sidebar, app, financeHub, adminAuthority, adminRoutes, adminClient, adminView, tenantAuthority, tenantRoutes, tenantClient, tenantView, cashFlowRoutes] = await Promise.all([
+  const [vite, boundary, sidebar, productionSidebarShim, header, app, financeHub, adminAuthority, adminRoutes, adminClient, adminView, tenantAuthority, tenantRoutes, tenantClient, tenantView, cashFlowRoutes] = await Promise.all([
     readFile('vite.config.ts', 'utf8'),
     readFile('src/components/security/ProductionCockpitBoundary.tsx', 'utf8'),
+    readFile('src/components/layout/Sidebar.tsx', 'utf8'),
     readFile('src/components/layout/ProductionSidebar.tsx', 'utf8'),
+    readFile('src/components/layout/Header.tsx', 'utf8'),
     readFile('src/App.tsx', 'utf8'),
     readFile('src/components/finance/FinanceHubView.tsx', 'utf8'),
     readFile('src/server/adminUserAuthority.ts', 'utf8'),
@@ -34,7 +36,19 @@ async function main(): Promise<void> {
   assert(vite.includes("defineConfig(({ command })"), 'Vite config must distinguish production build from development runtime');
   assert(vite.includes("command === 'build'"), 'Legacy cockpit quarantine must be active for production build');
   assert(vite.includes('ProductionCockpitBoundary.tsx'), 'Production cockpit boundary is not wired');
-  assert(vite.includes('ProductionSidebar.tsx'), 'Production navigation boundary is not wired');
+  // AUTOERP-67 removeu o alias de build que trocava Sidebar.tsx por
+  // ProductionSidebar.tsx: dev e producao passaram a compartilhar UMA fonte de
+  // navegacao. A assercao antiga ('vite menciona ProductionSidebar.tsx') passou a
+  // ser satisfeita por uma const morta no vite.config.ts, entao provava nada.
+  // O que precisa continuar valendo e que o stub nao reintroduza um menu proprio.
+  assert(
+    productionSidebarShim.includes("from './Sidebar'"),
+    'ProductionSidebar must remain a re-export of the single canonical navigation source'
+  );
+  assert(
+    !productionSidebarShim.includes('as NavigationTab, label:'),
+    'ProductionSidebar must not grow a second navigation tree alongside Sidebar.tsx'
+  );
 
   const cockpitEntries = [
     'components/incident-management/IncidentManagementCenterView',
@@ -128,17 +142,28 @@ async function main(): Promise<void> {
     assert(!boundary.includes(marker), `Production boundary reintroduced forbidden marker: ${marker}`);
   }
 
-  const safeProductionRoutes = ['administration', 'executive-operations', 'incident-management', 'workflow-center', 'resilience'];
+  // O menu entregue ao cliente e o do Sidebar.tsx unificado (AUTOERP-67). Estas
+  // sao as rotas operacionais que o usuario final precisa alcancar pela barra
+  // lateral; se alguma sumir, a entrega regride.
+  const safeProductionRoutes = ['dashboard', 'fleet', 'drivers', 'contracts', 'inspections', 'maintenance', 'trafficTickets', 'documentos', 'finance-overview', 'transactions', 'cashflow', 'dre'];
   for (const route of safeProductionRoutes) {
-    assert(sidebar.includes(`id: '${route}'`), `Trusted production route missing: ${route}`);
+    assert(sidebar.includes(`id: '${route}' as NavigationTab`), `Trusted production route missing: ${route}`);
   }
+
+  // AUTOERP-46 moveu a area administrativa da barra lateral para o menu do avatar.
+  // A regra de visibilidade viajou junto: a entrada so existe para o principal
+  // ADMIN autenticado, e continua sendo a unica porta de navegacao para ela.
   assert(
-    sidebar.includes("const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';"),
+    header.includes("const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';"),
     'Production administration navigation must derive visibility from the authenticated ADMIN principal'
   );
   assert(
-    sidebar.includes("label: 'Administração'"),
-    'Production ADMIN navigation label for the promoted Users and Tenant slices is missing'
+    header.includes('{isAdmin && (') && header.includes("onNavigateTab?.('administration')"),
+    'Production ADMIN navigation entry for the promoted Users and Tenant slices is missing or ungated'
+  );
+  assert(
+    !sidebar.includes("id: 'administration'"),
+    'Administration must stay behind the ADMIN-gated avatar menu, not the general sidebar'
   );
 
   const quarantinedNavigationLabels = [
@@ -156,13 +181,13 @@ async function main(): Promise<void> {
 
   assert(!sidebar.includes("id: 'system-health'"), 'Browser-derived system health remains exposed in production navigation');
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
-  assert(sidebar.includes("badge: 'CI'"), 'Production validation entry must point users to CI authority');
-  assert(sidebar.includes('COCKPIT SERVER AUTHORITY'), 'Production cockpit is not clearly identified as server-authoritative');
+  // O submenu de autoridade e o rotulo 'COCKPIT SERVER AUTHORITY' deixaram de
+  // existir com a unificacao: o menu entregue nao tem mais secao de cockpit. O
+  // que precisa continuar valendo e a ausencia dele, ja coberta acima.
   assert(!sidebar.includes('h-dvh max-h-dvh'), 'Production sidebar must not size itself to the full viewport below the fixed header');
   assert(sidebar.includes('h-full max-h-full min-h-0 overflow-hidden'), 'Production sidebar must inherit the available post-header height so its lower menu remains reachable');
-  assert(sidebar.includes('useState(false)'), 'Production authority submenu must start collapsed');
-  assert(sidebar.includes("id: 'transactions', label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
-  assert(sidebar.includes("id: 'cashflow', label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
+  assert(sidebar.includes("label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
+  assert(sidebar.includes("label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
   assert(app.includes("activeTab==='cashflow'&&<FinanceHubView initialSubTab=\"cashflow\""), 'Fluxo de Caixa navigation must select the cashflow sub-tab');
   assert(financeHub.includes("id: 'transactions' as const, label: 'Movimentações'"), 'Finance hub Movimentações sub-tab is missing');
   assert(financeHub.includes("id: 'cashflow' as const, label: 'Fluxo de Caixa'"), 'Finance hub Fluxo de Caixa sub-tab is missing');
