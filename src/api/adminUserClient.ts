@@ -77,4 +77,18 @@ export class AdminUserClient {
     );
     return parseUser(payload.item);
   }
+
+  static async updateUserPermissions(
+    id: string,
+    data: { role: string; permissions: string[] }
+  ): Promise<AdminUserDto> {
+    const payload = record(
+      await request(`/api/admin/users/${encodeURIComponent(id)}/permissions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    );
+    return parseUser(payload.item);
+  }
 }

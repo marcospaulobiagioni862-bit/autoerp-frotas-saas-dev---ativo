@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, LockKeyhole, RefreshCw, ShieldCheck, Users } from 'lucide-react';
+import { AlertTriangle, Building2, LockKeyhole, RefreshCw, Shield, ShieldCheck, Users } from 'lucide-react';
 import { AdminUserClient, type AdminUserDto } from '../../api/adminUserClient';
 import { Badge, Button, Card } from '../ui';
 import { ProductionTenantProfileView } from './ProductionTenantProfileView';
+import { UserPermissionsModal } from './UserPermissionsModal';
 
 type AdministrationTab = 'users' | 'tenant';
 
@@ -11,6 +12,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
   const [users, setUsers] = useState<AdminUserDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [permissionModalUser, setPermissionModalUser] = useState<AdminUserDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -153,22 +155,50 @@ export const ProductionUserAdministrationView: React.FC = () => {
                           : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}>
                           {user.active ? 'ATIVO' : 'INATIVO'}
                         </Badge>
+                        <span className="text-[11px] text-slate-500">
+                          {user.permissions?.includes('*')
+                            ? 'Acesso irrestrito (*)'
+                            : `${user.permissions?.length || 0} permissões concedidas`}
+                        </span>
                       </div>
                       <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">{user.email}</div>
                       <div className="mt-1 text-xs text-slate-400">ID: {user.id}</div>
                     </div>
-                    <Button
-                      variant={user.active ? 'outline' : 'default'}
-                      onClick={() => void toggle(user)}
-                      disabled={mutatingId !== null}
-                    >
-                      {mutatingId === user.id ? 'Salvando...' : user.active ? 'Desativar' : 'Ativar'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPermissionModalUser(user)}
+                        className="gap-1.5"
+                      >
+                        <Shield className="h-3.5 w-3.5 text-indigo-600" /> Permissões
+                      </Button>
+                      <Button
+                        variant={user.active ? 'outline' : 'default'}
+                        size="sm"
+                        onClick={() => void toggle(user)}
+                        disabled={mutatingId !== null}
+                      >
+                        {mutatingId === user.id ? 'Salvando...' : user.active ? 'Desativar' : 'Ativar'}
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </Card>
+
+          {permissionModalUser && (
+            <UserPermissionsModal
+              isOpen
+              onClose={() => setPermissionModalUser(null)}
+              user={permissionModalUser}
+              onSuccess={(updated) => {
+                setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+                setMessage(`Permissões atualizadas com sucesso para ${updated.name} (${updated.role}).`);
+              }}
+            />
+          )}
         </div>
       )}
 

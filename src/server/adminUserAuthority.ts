@@ -162,4 +162,91 @@ export class AdminUserAuthority {
       return sanitizeUser(updated);
     });
   }
+
+  static async setPermissions(
+    actor: AdminUserActor,
+    targetUserId: string,
+    newRole: string,
+    newPermissions: string[]
+  ): Promise<AdminUserRecord> {
+    assertAdmin(actor);
+    if (!targetUserId || targetUserId.trim() === '') throw new AdminUserNotFoundError('Usuário não encontrado');
+    const roleClean = newRole.trim().toUpperCase();
+    if (!roleClean) throw new AdminUserConflictError('Papel do usuário é obrigatório');
+
+    return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
+      const tx = txContext.getRawTransaction();
+
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${actor.companyId}:admin-user-status`})))`
+      );
+
+      const targetRows = await tx
+        .select()
+        .from(users)
+        .where(and(eq(users.companyId, actor.companyId), eq(users.id, targetUserId)))
+        .for('update')
+        .limit(1);
+      const target = targetRows[0];
+      if (!target) throw new AdminUserNotFoundError('Usuário não encontrado');
+
+      // Proteção: não rebaixar o último administrador ativo
+      if (String(target.role || '').toUpperCase() === 'ADMIN' && roleClean !== 'ADMIN') {
+        const activeAdmins = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(
+            and(
+              eq(users.companyId, actor.companyId),
+              eq(users.active, true),
+              sql`upper(${users.role}) = 'ADMIN'`
+            )
+          )
+          .for('update');
+        if (activeAdmins.length <= 1) {
+          throw new AdminUserConflictError('Não é possível remover o perfil de administrador do último administrador ativo');
+        }
+      }
+
+      const cleanPermissions = Array.from(new Set(newPermissions.map((p) => p.trim()).filter(Boolean)));
+      const updatedAt = new Date().toISOString();
+
+      const rows = await tx
+        .update(users)
+        .set({
+          role: roleClean,
+          permissions: cleanPermissions,
+          updatedAt,
+        })
+        .where(and(eq(users.companyId, actor.companyId), eq(users.id, target.id)))
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          active: users.active,
+          permissions: users.permissions,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        });
+
+      const updated = rows[0];
+      if (!updated) throw new AdminUserNotFoundError('Usuário não encontrado');
+
+      await txContext.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId: actor.companyId,
+        entityName: 'User',
+        entityId: target.id,
+        action: AuditAction.UPDATE,
+        previousState: JSON.stringify({ role: target.role, permissions: target.permissions }),
+        newState: JSON.stringify({ role: roleClean, permissions: cleanPermissions, updatedAt }),
+        userId: actor.userId,
+        userName: actor.name,
+        timestamp: updatedAt,
+      });
+
+      return sanitizeUser(updated);
+    });
+  }
 }

@@ -50,6 +50,15 @@ function parseActiveBody(value: unknown): boolean {
   return body.active;
 }
 
+function parsePermissionsBody(value: unknown): { role: string; permissions: string[] } {
+  const body = objectBody(value);
+  if (typeof body.role !== 'string' || body.role.trim() === '') throw new AdminUserValidationError();
+  if (!Array.isArray(body.permissions) || !body.permissions.every((item) => typeof item === 'string')) {
+    throw new AdminUserValidationError();
+  }
+  return { role: body.role.trim(), permissions: body.permissions as string[] };
+}
+
 function sendError(res: Response, error: unknown): void {
   if (error instanceof AdminUserValidationError) {
     res.status(400).json({ error: 'Invalid user administration request' });
@@ -88,6 +97,17 @@ export function registerAdminUserRoutes(app: Express): void {
     try {
       const active = parseActiveBody(req.body);
       res.json({ item: await AdminUserAuthority.setActive(actorFrom(p), req.params.id, active) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.patch('/api/admin/users/:id/permissions', async (req, res) => {
+    const p = requirePrincipal(req, res);
+    if (!p) return;
+    try {
+      const { role, permissions } = parsePermissionsBody(req.body);
+      res.json({ item: await AdminUserAuthority.setPermissions(actorFrom(p), req.params.id, role, permissions) });
     } catch (error) {
       sendError(res, error);
     }
