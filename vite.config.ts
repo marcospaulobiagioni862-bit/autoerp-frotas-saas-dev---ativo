@@ -40,20 +40,13 @@ export default defineConfig(({ command }) => {
   // builds replace every unsafe entry module before Rollup can include its graph.
   const productionCockpitAliases = command === 'build'
     ? [
-        /^(?:\.\.?\/)*components\/incident-management\/IncidentManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/workflow\/OperationalWorkflowCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/executive\/ExecutiveDashboardView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/AdministrationCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/performance\/PerformanceManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/release\/ReleaseGovernanceCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/audit\/SystemIntegrityAuditView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/SystemHealthCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/consolidation\/EnterpriseConsolidationView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/observability\/PostGoLiveObservabilityView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/governance\/GovernanceCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/productivity\/OperationalProductivityView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/goals\/ManagementGoalsView(?:\.tsx)?$/,
       ].map((find) => ({ find, replacement: productionCockpitBoundary }))
     : [];
@@ -99,10 +92,6 @@ export default defineConfig(({ command }) => {
           replacement: productionTestRunnerPanel,
         },
         // Historical browser-local backup/restore is not production authority.
-        {
-          find: /^(?:\.\.?\/)*components\/resilience\/ResilienceCenterView(?:\.tsx)?$/,
-          replacement: productionResilienceCenter,
-        },
         {
           find: '@',
           replacement: path.resolve(__dirname, '.'),

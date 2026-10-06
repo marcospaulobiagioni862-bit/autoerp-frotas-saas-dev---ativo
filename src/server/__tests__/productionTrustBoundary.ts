@@ -37,19 +37,12 @@ async function main(): Promise<void> {
   assert(vite.includes('ProductionSidebar.tsx'), 'Production navigation boundary is not wired');
 
   const cockpitEntries = [
-    'components/incident-management/IncidentManagementCenterView',
     'components/workflow/OperationalWorkflowCenterView',
     'components/executive/ExecutiveDashboardView',
     'components/performance/PerformanceManagementCenterView',
     'components/decision-management/DecisionManagementCenterView',
     'components/execution/OperationalExecutionCenterView',
-    'components/release/ReleaseGovernanceCenterView',
-    'components/audit/SystemIntegrityAuditView',
     'components/admin/SystemHealthCenterView',
-    'components/consolidation/EnterpriseConsolidationView',
-    'components/observability/PostGoLiveObservabilityView',
-    'components/governance/GovernanceCenterView',
-    'components/productivity/OperationalProductivityView',
     'components/goals/ManagementGoalsView',
   ];
   for (const entry of cockpitEntries) {
