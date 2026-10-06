@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AdminUserClient, type AdminUserDto } from '../../api/adminUserClient';
 import { Badge, Button, ModalContainer } from '../ui';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 export interface UserPermissionsModalProps {
   isOpen: boolean;
@@ -287,7 +288,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
           </p>
         </div>
         <button
-          onClick={onClose}
+          onClick={(e) => requestGuardedClose(e, onClose)}
           className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
           aria-label="Fechar modal"
         >
@@ -439,7 +440,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
           Papel configurado: <b className="font-semibold text-slate-700 dark:text-slate-300">{ROLE_PRESETS[selectedRole]?.label || selectedRole}</b>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={loading}>
+          <Button variant="ghost" onClick={(e) => requestGuardedClose(e, onClose)} disabled={loading}>
             Cancelar
           </Button>
           <Button variant="primary" onClick={handleSave} isLoading={loading}>

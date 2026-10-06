@@ -58,14 +58,9 @@ export default defineConfig(({ command }) => {
       ].map((find) => ({ find, replacement: productionCockpitBoundary }))
     : [];
 
-  const productionNavigationAliases = command === 'build'
-    ? [
-        {
-          find: /^(?:\.\.?\/)*components\/layout\/Sidebar(?:\.tsx)?$/,
-          replacement: productionSidebar,
-        },
-      ]
-    : [];
+  // AUTOERP-67: dev e produção compartilham a mesma fonte unificada Sidebar.tsx.
+  // Desativado o alias de navegação para garantir paridade total entre ambientes.
+  const productionNavigationAliases: Array<{ find: RegExp; replacement: string }> = [];
 
   return {
     define: { __AUTOERP_BUILD_ID__: JSON.stringify(buildId) },

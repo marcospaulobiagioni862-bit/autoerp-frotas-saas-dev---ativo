@@ -4,11 +4,15 @@ import {
   Car,
   Users,
   FileText,
+  ClipboardCheck,
+  Wrench,
+  AlertTriangle,
+  FolderOpen,
   TrendingUp,
   CreditCard,
   ArrowRightLeft,
-  Radio,
-  ClipboardCheck,
+  Banknote,
+  PieChart,
   ChevronRight,
   X,
 } from 'lucide-react';
@@ -48,7 +52,7 @@ export type NavigationTab =
   | 'finance-overview'
   | 'tests';
 
-interface SidebarProps {
+export interface SidebarProps {
   activeTab: NavigationTab;
   onTabChange: (tab: NavigationTab) => void;
   pendingReceivablesCount?: number;
@@ -87,18 +91,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      title: 'LOCAÇÃO',
+      title: 'OPERAÇÃO',
       items: [
         { id: 'fleet' as NavigationTab, label: 'Veículos', icon: Car, badge: null },
         { id: 'drivers' as NavigationTab, label: 'Motoristas', icon: Users, badge: null },
         { id: 'contracts' as NavigationTab, label: 'Contratos', icon: FileText, badge: null },
         { id: 'inspections' as NavigationTab, label: 'Vistorias', icon: ClipboardCheck, badge: null },
-        { id: 'trackers' as NavigationTab, label: 'Rastreador', icon: Radio, badge: null },
+        { id: 'maintenance' as NavigationTab, label: 'Manutenção', icon: Wrench, badge: null },
+        { id: 'trafficTickets' as NavigationTab, label: 'Multas', icon: AlertTriangle, badge: null },
+        { id: 'documentos' as NavigationTab, label: 'Documentos', icon: FolderOpen, badge: null },
       ],
     },
     {
       title: 'FINANCEIRO',
       items: [
+        { id: 'finance-overview' as NavigationTab, label: 'Dashboard Financeiro', icon: LayoutDashboard, badge: null },
         {
           id: 'receivables' as NavigationTab,
           label: 'Contas a Receber',
@@ -114,6 +121,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
         },
         { id: 'transactions' as NavigationTab, label: 'Movimentações', icon: ArrowRightLeft, badge: null },
+        { id: 'cashflow' as NavigationTab, label: 'Fluxo de Caixa', icon: Banknote, badge: null },
+        { id: 'dre' as NavigationTab, label: 'Relatórios Financeiros', icon: PieChart, badge: null },
       ],
     },
   ];
@@ -146,7 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <nav className="flex-1 min-h-0 p-3 space-y-4 overflow-y-auto">
+      <nav className="min-h-0 flex-1 p-3 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((category) => (
           <div key={category.title} className="space-y-1">
             <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
@@ -189,25 +198,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
-        <div className="font-semibold text-slate-300">V2 Núcleo Operacional</div>
-        <div className="mt-1">Poucos cliques. Só o essencial.</div>
+      <div className="shrink-0 p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
+        <div className="flex items-center justify-between font-mono">
+          <span>Ambiente:</span>
+          <span className="text-emerald-400 font-semibold">V2 Operacional</span>
+        </div>
       </div>
     </aside>
   );
 
   return (
     <>
-      <div className="hidden md:block h-full min-h-0">{sidebarContent}</div>
+      <div className="hidden md:block h-full max-h-full min-h-0 overflow-hidden">{sidebarContent}</div>
       {isMobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden flex">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50"
-            aria-label="Fechar menu"
+          <div
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
             onClick={onCloseMobile}
+            aria-hidden="true"
           />
-          <div className="relative z-10 h-full">{sidebarContent}</div>
+          <div className="relative z-50 h-full max-h-full min-h-0 overflow-hidden">{sidebarContent}</div>
         </div>
       )}
     </>
