@@ -187,17 +187,11 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
 
     // 3.1 Consulta real da Central de Documentos
     const docAlertsRes = await fetch(`${baseUrl}/api/documents/alerts`);
-    let docEvidence = '';
-    if (docAlertsRes.status === 200) {
-      const docAlertsData = (await docAlertsRes.json()) as { alerts?: any[]; items?: any[] };
-      const count = docAlertsData.alerts?.length || docAlertsData.items?.length || 0;
-      console.log(`  ✓ GET /api/documents/alerts: HTTP 200 OK (${count} alertas calculados dinamicamente na leitura)`);
-      docEvidence = `GET /api/documents/alerts calcula estágios dinâmicos na leitura (HTTP 200, ${count} alertas).`;
-    } else {
-      const docAlertsError = (await docAlertsRes.json()) as { error?: string };
-      console.log(`  ⚠ GET /api/documents/alerts: HTTP ${docAlertsRes.status} (${docAlertsError.error}) - evidencia a fragilidade de fuso horário / formato ISO com timestamp na massa (AUTOERP-15)`);
-      docEvidence = `GET /api/documents/alerts falha com HTTP ${docAlertsRes.status} se houver documentos com timestamp ISO completo (ex: 2026-10-08T22:00:00-03:00) na base, demonstrando a fragilidade de fuso horário do AUTOERP-15.`;
-    }
+    assert.equal(docAlertsRes.status, 200, 'GET /api/documents/alerts deve retornar HTTP 200 na massa homologada');
+    const docAlertsData = (await docAlertsRes.json()) as { alerts?: any[]; items?: any[] };
+    const count = docAlertsData.alerts?.length || docAlertsData.items?.length || 0;
+    console.log(`  ✓ GET /api/documents/alerts: HTTP 200 OK (${count} alertas calculados dinamicamente na leitura)`);
+    const docEvidence = `GET /api/documents/alerts calcula estágios dinâmicos na leitura (HTTP 200, ${count} alertas).`;
 
     // 3.2 Evidência de limitação: status gravado no motorista só recalcula na edição
     console.log(`  ✓ Motorista ID ${sampleDriver.id} (${sampleDriver.name}): cnh=${sampleDriver.cnh}. evaluateCnhStatus roda estritamente no POST/PUT do motorista, sem processo em background.`);
@@ -206,7 +200,7 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
       id: 3,
       requirement: 'Vencimento de documentos',
       verdict: 'FUNCIONA COM RESSALVA',
-      technicalEvidence: `${docEvidence} Além disso, o status persistido nos motoristas só é recalculado na edição manual (evaluateCnhStatus em driverRoutes.ts), ficando desatualizado no tempo.`,
+      technicalEvidence: `${docEvidence} Funciona e está navegável com a massa atual; fragilidade estrutural conhecida no AUTOERP-15: qualquer registro gravado com data em formato timestamp faz a lista inteira responder 400 por falhar no parseIsoDate. Além disso, o status persistido nos motoristas só é recalculado na edição manual (evaluateCnhStatus em driverRoutes.ts), ficando desatualizado no tempo (AUTOERP-16).`,
       associatedCard: 'AUTOERP-15 (Fuso horário de expiração) e AUTOERP-16 (Recalcular status na leitura)',
       cardStatus: 'Abertas (não entregues)',
     });
