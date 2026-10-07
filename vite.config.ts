@@ -22,10 +22,6 @@ export default defineConfig(({ command }) => {
     __dirname,
     'src/components/tests/ProductionTestRunnerPanel.tsx'
   );
-  const productionResilienceCenter = path.resolve(
-    __dirname,
-    'src/components/resilience/ProductionResilienceCenterView.tsx'
-  );
   const productionCockpitBoundary = path.resolve(
     __dirname,
     'src/components/security/ProductionCockpitBoundary.tsx'
@@ -87,10 +83,6 @@ export default defineConfig(({ command }) => {
           replacement: productionTestRunnerPanel,
         },
         // Historical browser-local backup/restore is not production authority.
-        {
-          find: /^(?:\.\.?\/)*components\/resilience\/ResilienceCenterView(?:\.tsx)?$/,
-          replacement: productionResilienceCenter,
-        },
         {
           find: '@',
           replacement: path.resolve(__dirname, '.'),
