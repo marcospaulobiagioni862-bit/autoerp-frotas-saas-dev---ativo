@@ -188,6 +188,20 @@ async function main(): Promise<void> {
 
   assert(!sidebar.includes("id: 'system-health'"), 'Browser-derived system health remains exposed in production navigation');
   assert(!sidebar.includes("badge: '42/42'"), 'Production navigation still fabricates a 42/42 test badge');
+
+  // AUTOERP-67: Decisão registrada sobre os 4 módulos legados (executive-operations,
+  // incident-management, workflow-center, resilience). O cockpit V1 e templates antigos
+  // foram retirados da navegação do cliente e a administração consolidada no avatar (AUTOERP-46).
+  // Eles permanecem ESTRITAMENTE FORA do menu operacional do cliente por ID.
+  const quarantinedModuleIds = [
+    'executive-operations',
+    'incident-management',
+    'workflow-center',
+    'resilience',
+  ];
+  for (const id of quarantinedModuleIds) {
+    assert(!sidebar.includes(`id: '${id}'`), `Legacy cockpit module ${id} must not be present in client navigation menu`);
+  }
   // O submenu de autoridade e o rotulo 'COCKPIT SERVER AUTHORITY' deixaram de
   // existir com a unificacao: o menu entregue nao tem mais secao de cockpit. O
   // que precisa continuar valendo e a ausencia dele, ja coberta acima.

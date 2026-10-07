@@ -23,7 +23,7 @@ View your app in AI Studio: https://ai.studio/apps/5e63dc1b-6a37-40d1-a0d7-6c570
 
 Estes scripts executam validações de ponta a ponta contra o banco Neon de homologação (`staging-company-001`). Eles dependem de credenciais reais configuradas em `~/.config/autoerp-neon.env` ou nas variáveis de ambiente `HOMOLOG_DATABASE_URL` / `DATABASE_URL`.
 
-> **Atenção:** Por dependerem de banco PostgreSQL externo com credenciais de homologação, estes scripts **não rodam no CI** (que utiliza regressões herméticas com PGlite em memória).
+> **Atenção:** Estes scripts **não rodam no CI** exclusivamente por dependerem de credenciais externas do banco Neon e da massa previamente semeada em homologação (`staging-company-001`). O pipeline de CI utiliza seu próprio banco `postgres:16` de serviço efêmero, enquanto o PGlite atua apenas como fallback local de desenvolvimento quando `DATABASE_URL` não está definido.
 
 Comandos disponíveis via npm:
 
