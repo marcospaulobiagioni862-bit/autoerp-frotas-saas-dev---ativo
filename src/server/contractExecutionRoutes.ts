@@ -546,8 +546,15 @@ async function getTenantBranding(companyId: string): Promise<PdfBranding> {
   try {
     const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
     logoBase64 = configs[0]?.logoUrl || null;
-  } catch {
-    // Fallback seguro caso a migration 0085 de logo_url ainda não tenha sido aplicada no ambiente
+  } catch (error: any) {
+    // Estreitar exclusivamente para erro 42703 (coluna logo_url inexistente em ambiente não migrado).
+    // Qualquer outro erro de banco é propagado para não esconder falhas silenciosas.
+    const pgCode = error?.code || error?.cause?.code;
+    if (pgCode === '42703') {
+      logoBase64 = null;
+    } else {
+      throw error;
+    }
   }
   return {
     companyName: company.tradeName || company.name || 'MoveFlex',

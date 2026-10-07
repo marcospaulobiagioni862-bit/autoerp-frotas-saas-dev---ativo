@@ -97,7 +97,19 @@ async function main() {
       updated_at = NOW()
   `);
 
-  // Garantir estado limpo do veículo e motorista para teste
+  // Garantir estado limpo de resíduos anteriores de teste para idempotência total
+  await db.execute(sql`
+    DELETE FROM account_receivables
+    WHERE company_id = ${companyId} AND (origin_id LIKE 'test:pending%' OR contract_id IN (
+      SELECT id FROM contracts WHERE company_id = ${companyId} AND vehicle_id = ${vehicleId} AND id NOT LIKE 'v2demo%'
+    ))
+  `);
+  await db.execute(sql`
+    DELETE FROM contract_artifacts
+    WHERE company_id = ${companyId} AND contract_id IN (
+      SELECT id FROM contracts WHERE company_id = ${companyId} AND vehicle_id = ${vehicleId} AND id NOT LIKE 'v2demo%'
+    )
+  `);
   await db.execute(sql`
     DELETE FROM contracts
     WHERE company_id = ${companyId} AND vehicle_id = ${vehicleId} AND id NOT LIKE 'v2demo%'
@@ -279,6 +291,10 @@ async function main() {
     `);
 
     // Inserir parcela futura PENDENTE
+    await db.execute(sql`
+      DELETE FROM account_receivables
+      WHERE company_id = ${companyId} AND origin_id = 'test:pending'
+    `);
     const pendingRecId = `rec-pending-live-${Date.now()}`;
     await db.execute(sql`
       INSERT INTO account_receivables (
@@ -289,6 +305,16 @@ async function main() {
         ${pendingRecId}, ${companyId}, ${createdContractId}, ${driverId}, ${vehicleId}, 'CONTRACT_RENT', 'test:pending', 'v2demo-ngcompany001-fincat-01',
         'Aluguel Pendente Futuro', 680, 0, 0, 0, 680, 0, 680, '2026-10-25', '2026-10-25', '2026-W43', 'PENDING', NOW(), NOW()
       )
+      ON CONFLICT (company_id, origin_type, origin_id, period_ref) WHERE period_ref IS NOT NULL DO UPDATE SET
+        contract_id = ${createdContractId},
+        driver_id = ${driverId},
+        vehicle_id = ${vehicleId},
+        original_amount = 680,
+        updated_amount = 680,
+        balance_amount = 680,
+        paid_amount = 0,
+        status = 'PENDING',
+        updated_at = NOW()
     `);
 
     // Atualizar valor do contrato ativo para 720
@@ -316,9 +342,30 @@ async function main() {
     console.log('AUTOERP-53: SUCESSO TOTAL EM HOMOLOGAÇÃO REAL (NEON)!');
     console.log(`Contrato de Teste: ${createdContractId}`);
     console.log('Status Final: ACTIVE');
-    console.log('Veículo Vinculado: v2demo-ngcompany001-vehicle-05 (RENTED)');
+    console.log('Veículo Vinculado: v2demo-ngcompany001-vehicle-09 (RENTED)');
     console.log('=============================================================');
   } finally {
+    // Limpeza completa de todos os dados do contrato de teste para garantir zero resíduos
+    if (createdContractId) {
+      await db.execute(sql`
+        DELETE FROM account_receivables
+        WHERE company_id = ${companyId} AND (contract_id = ${createdContractId} OR origin_id LIKE 'test:pending%')
+      `);
+      await db.execute(sql`
+        DELETE FROM contract_artifacts
+        WHERE company_id = ${companyId} AND contract_id = ${createdContractId}
+      `);
+      await db.execute(sql`
+        DELETE FROM contracts
+        WHERE company_id = ${companyId} AND id = ${createdContractId}
+      `);
+    } else {
+      await db.execute(sql`
+        DELETE FROM account_receivables
+        WHERE company_id = ${companyId} AND origin_id LIKE 'test:pending%'
+      `);
+    }
+
     // Restaurar veículo para AVAILABLE para manter o ambiente estável
     await db.execute(sql`
       UPDATE vehicles
