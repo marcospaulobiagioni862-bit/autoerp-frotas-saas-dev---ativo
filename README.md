@@ -45,3 +45,9 @@ Comandos disponíveis via npm:
   ```
   Valida a guarda no servidor de todas as 11 permissões da matriz granular (bloqueio 403 Forbidden quando desmarcado, 200/201 OK quando concedido).
 
+- **Menu do Avatar e Área Administrativa (AUTOERP-46)**:
+  ```bash
+  npm run verify:avatar-menu-real
+  ```
+  Valida a autorização em homologação real: usuário ADMIN (`v2demo-ngcompany001-user-admin`) acessa rotas de administração (`/api/admin/users` e `/api/admin/tenant-profile` com 200 OK), usuário não-ADMIN (`v2demo-ngcompany001-user-operational`) recebe 403 Forbidden estritamente nas rotas administrativas e executa logout limpo (204 No Content), usuário com permissões vazias (`staging-canary-001`) recebe 403 em ambas as rotas, e chamadas sem sessão recebem 401 Unauthorized.
+
