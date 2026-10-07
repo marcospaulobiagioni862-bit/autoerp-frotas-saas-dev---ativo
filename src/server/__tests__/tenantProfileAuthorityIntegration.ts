@@ -342,7 +342,12 @@ async function requestServer(): Promise<{ base: string; close: () => Promise<voi
     const role = typeof req.headers['x-test-role'] === 'string' ? req.headers['x-test-role'] : '';
     if (companyId && userId && role) {
       (req as Request & { principal?: AuthenticatedPrincipal }).principal = {
-        companyId, userId, role, name: `${role} integration`, permissions: ['*'],
+        // O harness dava o curinga '*' a QUALQUER papel, inclusive READONLY, e isso
+        // deixou de ser realista quando o AUTOERP-59 passou a tratar permissao
+        // explicita como autoridade (papel virou fallback legado). Em producao as
+        // permissoes vem do banco e so o preset ADMIN grava '*'. Mesmo ajuste que o
+        // v2InspectionAndDocumentRoutesRegression recebeu; aqui tinha passado batido.
+        companyId, userId, role, name: `${role} integration`, permissions: role.toUpperCase() === 'ADMIN' ? ['*'] : [],
       };
     }
     next();
