@@ -393,12 +393,15 @@ export async function runTenantProfileAuthorityIntegration(): Promise<void> {
       { maxDriversLimit: MAX_DRIVERS_LIMIT + 1 },
       { document: 'forged' } as any,
       { companyId: companyB } as any,
-      // Validação estrita de logoUrl (AUTOERP-33): rejeitar esquemas externos, protocol-relative, não-imagem e lixo
+      // Validação estrita de logoUrl (AUTOERP-33): rejeitar esquemas externos, protocol-relative, barra invertida, não-imagem e lixo
       { logoUrl: 'https://evil.com/logo.png' },
       { logoUrl: 'http://insecure-cdn.com/logo.png' },
       { logoUrl: '//protocol-relative.com/logo.png' },
+      { logoUrl: '/\\evil.com/logo.png' },
       { logoUrl: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' },
       { logoUrl: 'data:application/pdf;base64,JVBERi0=' },
+      { logoUrl: 'data:image/webp;base64,UklGRkAAAABXRUJQVlA4IDQAAADwAQCdASoBAAEAAQAcJaACdLoAAP7/2QAAAA==' },
+      { logoUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCI+PC9zdmc+' },
       { logoUrl: 'javascript:alert(1)' },
       { logoUrl: 'not-a-valid-logo' },
       { logoUrl: 'data:image/png;base64,' },
@@ -469,12 +472,26 @@ export async function runTenantProfileAuthorityIntegration(): Promise<void> {
       });
       assert(externalRes.status === 400, `external logoUrl must return 400, got ${externalRes.status}`);
 
+      const backslashRes = await fetch(`${http.base}/api/admin/tenant-profile`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', 'x-test-company': companyA, 'x-test-user': adminA, 'x-test-role': 'ADMIN' },
+        body: JSON.stringify({ logoUrl: '/\\evil.com/logo.png' }),
+      });
+      assert(backslashRes.status === 400, `backslash logoUrl must return 400, got ${backslashRes.status}`);
+
       const htmlRes = await fetch(`${http.base}/api/admin/tenant-profile`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json', 'x-test-company': companyA, 'x-test-user': adminA, 'x-test-role': 'ADMIN' },
         body: JSON.stringify({ logoUrl: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' }),
       });
       assert(htmlRes.status === 400, `non-image data URI must return 400, got ${htmlRes.status}`);
+
+      const webpRes = await fetch(`${http.base}/api/admin/tenant-profile`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json', 'x-test-company': companyA, 'x-test-user': adminA, 'x-test-role': 'ADMIN' },
+        body: JSON.stringify({ logoUrl: 'data:image/webp;base64,UklGRkAAAABXRUJQVlA4IDQAAADwAQCdASoBAAEAAQAcJaACdLoAAP7/2QAAAA==' }),
+      });
+      assert(webpRes.status === 400, `webp data URI must return 400, got ${webpRes.status}`);
 
       // Atualização de logo válido via HTTP PATCH
       const validPatchRes = await fetch(`${http.base}/api/admin/tenant-profile`, {
