@@ -58,9 +58,6 @@ async function main(): Promise<void> {
     'components/execution/OperationalExecutionCenterView',
     'components/release/ReleaseGovernanceCenterView',
     'components/admin/SystemHealthCenterView',
-    'components/consolidation/EnterpriseConsolidationView',
-    'components/observability/PostGoLiveObservabilityView',
-    'components/governance/GovernanceCenterView',
     'components/productivity/OperationalProductivityView',
     'components/goals/ManagementGoalsView',
   ];
