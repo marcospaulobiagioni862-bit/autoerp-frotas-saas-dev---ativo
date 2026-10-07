@@ -40,7 +40,6 @@ export default defineConfig(({ command }) => {
   // builds replace every unsafe entry module before Rollup can include its graph.
   const productionCockpitAliases = command === 'build'
     ? [
-        /^(?:\.\.?\/)*components\/incident-management\/IncidentManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/workflow\/OperationalWorkflowCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/executive\/ExecutiveDashboardView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/AdministrationCenterView(?:\.tsx)?$/,

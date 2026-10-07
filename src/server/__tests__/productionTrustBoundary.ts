@@ -51,7 +51,6 @@ async function main(): Promise<void> {
   );
 
   const cockpitEntries = [
-    'components/incident-management/IncidentManagementCenterView',
     'components/workflow/OperationalWorkflowCenterView',
     'components/executive/ExecutiveDashboardView',
     'components/performance/PerformanceManagementCenterView',
