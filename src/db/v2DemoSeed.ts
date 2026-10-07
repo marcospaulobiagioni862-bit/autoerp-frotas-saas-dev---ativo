@@ -1138,7 +1138,8 @@ export async function runV2DemoSeed() {
       contractId: contractRows[index].id,
       kmValue: vehicle.currentKm,
       recordDate: isoDate(now),
-      readingType: 'MANUAL',
+      readingType: 'PERIODIC',
+      sourceType: 'MANUAL',
       notes: 'Conferência fictícia de KM oficial para homologação V2.',
     }));
 
@@ -1260,7 +1261,7 @@ export async function runV2DemoSeed() {
         vehicleId: vehicleRows[0].id,
         driverId: driverRows[0].id,
         contractId: contractRows[0].id,
-        inspectionType: 'CHECK_OUT',
+        inspectionType: 'EXIT',
         inspectionDate: isoTimestamp(addDays(now, -45)),
         odometer: vehicleRows[0].currentKm - 3200,
         fuelLevel: 100,
@@ -1279,7 +1280,7 @@ export async function runV2DemoSeed() {
         vehicleId: vehicleRows[1].id,
         driverId: driverRows[1].id,
         contractId: contractRows[1].id,
-        inspectionType: 'CHECK_IN',
+        inspectionType: 'ENTRY',
         inspectionDate: isoTimestamp(addDays(now, -3)),
         odometer: vehicleRows[1].currentKm,
         fuelLevel: 50,
