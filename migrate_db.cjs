@@ -177,7 +177,8 @@ if (require.main === module) {
     console.log('Database migrations skipped for isolated visual preview.');
     process.exit(0);
   }
-  runMigrations().catch((error) => {
+  const dryRun = process.argv.includes('--dryRun') || process.argv.includes('--dry-run');
+  runMigrations({ dryRun }).catch((error) => {
     console.error('DATABASE_MIGRATION_FAILED', error instanceof Error ? error.message : error);
     process.exit(1);
   });
