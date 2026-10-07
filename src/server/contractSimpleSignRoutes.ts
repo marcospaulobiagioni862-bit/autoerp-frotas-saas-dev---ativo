@@ -10,15 +10,24 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
 }
 
+function hasSignPermission(principal: AuthenticatedPrincipal): boolean {
+  if (!principal.userId || !principal.companyId) return false;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes('SIGN_CONTRACT')) return true;
+  // Usuário com lista explícita de permissões sem SIGN_CONTRACT é barrado
+  if (permissions.length > 0) return false;
+  // Fallback para papéis de escrita legados sem personalização explícita de permissões
+  const role = String(principal.role || '').toUpperCase();
+  return WRITE_ROLES.has(role);
+}
+
 function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
   const principal = principalFrom(req);
   if (!principal) {
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  const role = String(principal.role || '').toUpperCase();
-  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (!principal.userId || !principal.companyId || (!permissions.includes('*') && !permissions.includes('EDIT_CONTRACT') && !WRITE_ROLES.has(role))) {
+  if (!hasSignPermission(principal)) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }

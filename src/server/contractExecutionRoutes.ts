@@ -542,10 +542,16 @@ async function createPdf(title: string, rendered: string, branding?: PdfBranding
 
 async function getTenantBranding(companyId: string): Promise<PdfBranding> {
   const company = await getCompany(companyId);
-  const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+  let logoBase64: string | null = null;
+  try {
+    const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+    logoBase64 = configs[0]?.logoUrl || null;
+  } catch {
+    // Fallback seguro caso a migration 0085 de logo_url ainda não tenha sido aplicada no ambiente
+  }
   return {
     companyName: company.tradeName || company.name || 'MoveFlex',
-    logoBase64: configs[0]?.logoUrl || null,
+    logoBase64,
   };
 }
 
