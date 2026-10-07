@@ -23,7 +23,7 @@ import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 
-type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM';
+type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -41,7 +41,13 @@ function hasVehiclePermission(principal: AuthenticatedPrincipal, action: Vehicle
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (permissions.includes('*') || permissions.includes(action)) return true;
+  if (permissions.includes('*')) return true;
+  if (permissions.length > 0) {
+    if (action === 'RECORD_VEHICLE_KM' || action === 'RECORD_KM') {
+      return permissions.includes('RECORD_KM') || permissions.includes('RECORD_VEHICLE_KM');
+    }
+    return permissions.includes(action);
+  }
   if (action === 'VIEW_VEHICLE') return true;
   return DEFAULT_WRITE_ROLES.has(role);
 }

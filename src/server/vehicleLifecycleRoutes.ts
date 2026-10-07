@@ -49,6 +49,28 @@ function requireWritePrincipal(req: Request, res: Response): AuthenticatedPrinci
   return principal;
 }
 
+function requireArchivePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const principal = principalFrom(req);
+  if (!principal?.userId || !principal.companyId) {
+    res.status(401).json({ error: 'Unauthorized: Authentication required' });
+    return null;
+  }
+  const role = String(principal.role || '').toUpperCase();
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes('ARCHIVE_VEHICLE')) {
+    return principal;
+  }
+  if (permissions.length > 0) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  if (!WRITE_ROLES.has(role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return principal;
+}
+
 function requiredText(value: unknown, field: string): string {
   const clean = typeof value === 'string' ? value.trim() : '';
   if (!clean) throw new VehicleLifecycleValidationError(`Missing ${field}`);
@@ -323,7 +345,7 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
   });
 
   app.post('/api/fleet/vehicles/:id/archive', async (req: Request, res: Response) => {
-    const principal = requireWritePrincipal(req, res);
+    const principal = requireArchivePrincipal(req, res);
     if (!principal) return;
 
     let archiveDate: string;

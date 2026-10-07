@@ -33,6 +33,16 @@ function requirePrincipal(req:Request,res:Response,write=false):AuthenticatedPri
   const principal=principalFrom(req);
   if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
   const role=String(principal.role||'').toUpperCase();
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(permissions.includes('*')) return principal;
+  if(permissions.length>0){
+    if(write){
+      if(!permissions.includes('CREATE_INSPECTION')){res.status(403).json({error:'Forbidden'});return null;}
+    }else{
+      if(!permissions.includes('VIEW_INSPECTION')){res.status(403).json({error:'Forbidden'});return null;}
+    }
+    return principal;
+  }
   if(!principal.userId||!principal.companyId||!ROLES.has(role)||(write&&!WRITE_ROLES.has(role))){
     res.status(403).json({error:'Forbidden'});return null;
   }

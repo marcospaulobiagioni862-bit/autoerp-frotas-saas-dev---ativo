@@ -9,6 +9,7 @@ export interface AdminUserActor {
   userId: string;
   name: string;
   role: string;
+  permissions?: string[];
 }
 
 export interface AdminUserRecord {
@@ -27,9 +28,12 @@ export class AdminUserNotFoundError extends Error {}
 export class AdminUserConflictError extends Error {}
 
 function assertAdmin(actor: AdminUserActor): void {
-  if (String(actor.role || '').toUpperCase() !== 'ADMIN') {
-    throw new AdminUserForbiddenError('Acesso negado: administração de usuários requer ADMIN');
+  const role = String(actor.role || '').toUpperCase();
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (role === 'ADMIN' || permissions.includes('*') || permissions.includes('MANAGE_USERS')) {
+    return;
   }
+  throw new AdminUserForbiddenError('Acesso negado: administração de usuários requer ADMIN ou permissão MANAGE_USERS');
 }
 
 function sanitizeUser(row: any): AdminUserRecord {

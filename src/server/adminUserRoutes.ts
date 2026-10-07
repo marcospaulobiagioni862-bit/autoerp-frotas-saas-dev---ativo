@@ -20,7 +20,9 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  if (String(item.role || '').toUpperCase() !== 'ADMIN') {
+  const role = String(item.role || '').toUpperCase();
+  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
+  if (role !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('MANAGE_USERS')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
@@ -33,6 +35,7 @@ function actorFrom(item: AuthenticatedPrincipal): AdminUserActor {
     userId: item.userId,
     name: item.name,
     role: item.role,
+    permissions: Array.isArray(item.permissions) ? item.permissions : [],
   };
 }
 

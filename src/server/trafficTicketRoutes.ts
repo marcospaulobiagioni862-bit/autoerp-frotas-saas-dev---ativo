@@ -18,6 +18,17 @@ const PROTECTED_KEYS=new Set([
 ]);
 function principal(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function requirePrincipal(req:Request,res:Response):AuthenticatedPrincipal|null{const item=principal(req);if(!item){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}return item;}
+function requireReadPrincipal(req:Request,res:Response):AuthenticatedPrincipal|null{
+  const item=principal(req);
+  if(!item?.userId||!item?.companyId){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
+  const role=String(item.role||'').toUpperCase();
+  const permissions=Array.isArray(item.permissions)?item.permissions:[];
+  if(permissions.includes('*')||permissions.includes('VIEW_TRAFFIC_TICKET')) return item;
+  if(permissions.length>0){res.status(403).json({error:'Acesso negado'});return null;}
+  const READ_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
+  if(!READ_ROLES.has(role)){res.status(403).json({error:'Acesso negado'});return null;}
+  return item;
+}
 function hasProtected(body:any):boolean{return Boolean(body&&typeof body==='object'&&Object.keys(body).some(key=>PROTECTED_KEYS.has(key)));}
 function text(value:unknown,max=1000):string{const item=typeof value==='string'?value.trim():'';if(!item||item.length>max)throw new TrafficTicketValidationError();return item;}
 function optionalText(value:unknown,max=1000):string|undefined{if(value===undefined||value===null||value==='')return undefined;const item=String(value).trim();if(!item||item.length>max)throw new TrafficTicketValidationError();return item;}
@@ -49,13 +60,13 @@ function sendError(res:Response,error:unknown):void{
 export function registerTrafficTicketRoutes(app:Express):void{
   registerTrafficTicketDocumentIntakeRoutes(app);
   registerTrafficTicketDocumentIntakeUploadRoutes(app);
-  app.get('/api/traffic-tickets/financial-categories',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{res.json({items:await TrafficTicketAuthorityService.listFinancialCategories(actor.companyId)});}catch(error){sendError(res,error);}});
-  app.get('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
+  app.get('/api/traffic-tickets/financial-categories',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{res.json({items:await TrafficTicketAuthorityService.listFinancialCategories(actor.companyId)});}catch(error){sendError(res,error);}});
+  app.get('/api/traffic-tickets',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{
     const filters={vehicleId:optionalText(req.query.vehicleId,200),driverId:optionalText(req.query.driverId,200),status:status(req.query.status),responsibility:req.query.responsibility?responsibility(req.query.responsibility):undefined};
     res.json({items:await TrafficTicketAuthorityService.list(actor.companyId,filters)});
   }catch(error){sendError(res,error);}});
-  app.get('/api/traffic-tickets/:id',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{const details=await TrafficTicketAuthorityService.getDetails(actor.companyId,req.params.id);if(!details)throw new TrafficTicketNotFoundError();res.json(details);}catch(error){sendError(res,error);}});
-  app.get('/api/traffic-tickets/:id/driver-indication',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{res.json(await TrafficTicketDriverIndicationAuthorityService.get(actor.companyId,req.params.id));}catch(error){sendError(res,error);}});
+  app.get('/api/traffic-tickets/:id',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{const details=await TrafficTicketAuthorityService.getDetails(actor.companyId,req.params.id);if(!details)throw new TrafficTicketNotFoundError();res.json(details);}catch(error){sendError(res,error);}});
+  app.get('/api/traffic-tickets/:id/driver-indication',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{res.json(await TrafficTicketDriverIndicationAuthorityService.get(actor.companyId,req.params.id));}catch(error){sendError(res,error);}});
   app.post('/api/traffic-tickets',async(req,res)=>{const actor=requirePrincipal(req,res);if(!actor)return;try{
     if(hasProtected(req.body))throw new TrafficTicketValidationError();
     const input:CreateTrafficTicketAuthorityInput={

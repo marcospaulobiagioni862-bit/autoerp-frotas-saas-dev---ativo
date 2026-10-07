@@ -73,12 +73,34 @@ function isSecureCookieRuntime(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
-function requireFinancePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
-  if (!req.principal) {
+function requireFinancePrincipal(req: Request, res: Response, requiredPermission?: string): AuthenticatedPrincipal | null {
+  if (!req.principal?.userId || !req.principal?.companyId) {
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  return req.principal;
+  const principal = req.principal;
+  const role = String(principal.role || '').toUpperCase();
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+
+  if (permissions.includes('*')) return principal;
+
+  if (requiredPermission) {
+    if (permissions.length > 0) {
+      if (!FinancialAuthorizationService.matchesPermission(permissions, requiredPermission)) {
+        res.status(403).json({ error: 'Forbidden' });
+        return null;
+      }
+      return principal;
+    }
+
+    const FINANCE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'FINANCIAL_OPERATOR', 'FINANCIAL_VIEWER', 'OPERATIONAL', 'READONLY']);
+    if (!FINANCE_ROLES.has(role)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return null;
+    }
+  }
+
+  return principal;
 }
 
 function sendFinanceCommandError(res: Response, error: unknown): void {
@@ -605,7 +627,7 @@ async function startServer() {
 
   // SECURITY-2G7A: finance overview is server-authoritative and tenant-scoped.
   app.get('/api/finance/overview', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     try {
@@ -641,7 +663,7 @@ async function startServer() {
 
   // SECURITY-2G7B1: DRE is server-authoritative and tenant-scoped.
   app.get('/api/finance/reports/dre', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     const periodStart = typeof req.query.start === 'string' ? req.query.start : '';
@@ -676,7 +698,7 @@ async function startServer() {
 
   // SECURITY-2G7B2: vehicle profitability financial values are server-authoritative.
   app.get('/api/finance/reports/vehicle-profitability', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     const vehicleId = typeof req.query.vehicleId === 'string' ? req.query.vehicleId.trim() : '';
@@ -983,7 +1005,7 @@ async function startServer() {
   // SECURITY-2G5: transaction history, transfers and reversals are server-authoritative.
   // Tenant and audit identity are derived exclusively from the authenticated principal.
   app.get('/api/finance/transactions', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     try {
@@ -1223,7 +1245,7 @@ async function startServer() {
   // SECURITY-2G3: authenticated finance obligation reads use the same
   // UnitOfWork/RLS tenant boundary as the command endpoints.
   app.get('/api/finance/receivables', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     try {
@@ -1237,7 +1259,7 @@ async function startServer() {
   });
 
   app.get('/api/finance/payables', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'VIEW_FINANCE');
     if (!principal) return;
 
     try {
@@ -1254,7 +1276,7 @@ async function startServer() {
   // Tenant and audit identity come only from the authenticated principal; client
   // supplied companyId/userId/userName fields are intentionally not consumed.
   app.post('/api/finance/receivables', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'RECEIVABLE_MUTATE');
     if (!principal) return;
 
     try {
@@ -1292,7 +1314,7 @@ async function startServer() {
   });
 
   app.post('/api/finance/receivables/:id/cancel', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'RECEIVABLE_MUTATE');
     if (!principal) return;
 
     const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
@@ -1319,7 +1341,7 @@ async function startServer() {
   });
 
   app.post('/api/finance/payables', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'PAYABLE_MUTATE');
     if (!principal) return;
 
     try {
@@ -1359,7 +1381,7 @@ async function startServer() {
   });
 
   app.post('/api/finance/payables/:id/cancel', async (req: Request, res: Response) => {
-    const principal = requireFinancePrincipal(req, res);
+    const principal = requireFinancePrincipal(req, res, 'PAYABLE_MUTATE');
     if (!principal) return;
 
     const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';

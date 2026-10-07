@@ -107,6 +107,21 @@ const RECURRING_SYSTEM_USER_ID = 'system-recurring';
 const RECURRING_SYSTEM_PERMISSIONS = new Set(['PAYABLE_CREATE', 'RECEIVABLE_CREATE']);
 
 export class FinancialAuthorizationService {
+  public static matchesPermission(granted: string[], required: string): boolean {
+    if (granted.includes('*')) return true;
+    if (granted.includes(required)) return true;
+    if (required === 'VIEW_FINANCIAL' || required === 'VIEW_FINANCE') {
+      return granted.includes('VIEW_FINANCE') || granted.includes('VIEW_FINANCIAL');
+    }
+    if (required === 'RECEIVABLE_CREATE' || required === 'RECEIVABLE_CANCEL' || required === 'RECEIVABLE_MUTATE') {
+      return granted.includes('RECEIVABLE_MUTATE') || granted.includes('RECEIVABLE_CREATE');
+    }
+    if (required === 'PAYABLE_CREATE' || required === 'PAYABLE_CANCEL' || required === 'PAYABLE_MUTATE') {
+      return granted.includes('PAYABLE_MUTATE') || granted.includes('PAYABLE_CREATE');
+    }
+    return false;
+  }
+
   public static async authorize(
     userId: string,
     companyId: string,
@@ -166,9 +181,18 @@ export class FinancialAuthorizationService {
     }
 
     const role = user.role ? String(user.role).toUpperCase() : '';
+    const userPermissions = Array.isArray((user as any).permissions) ? (user as any).permissions : [];
+    if (userPermissions.length > 0) {
+      if (!FinancialAuthorizationService.matchesPermission(userPermissions, requiredPermission)) {
+        await this.logDeniedAttempt(userId, companyId, requiredPermission, txContext);
+        throw new Error(`Acesso negado: Permissão insuficiente (${requiredPermission}) para a função ${role}`);
+      }
+      return user;
+    }
+
     const permissions = ROLE_PERMISSIONS[role];
 
-    if (!permissions || !permissions.includes(requiredPermission)) {
+    if (!permissions || !FinancialAuthorizationService.matchesPermission(permissions, requiredPermission)) {
       await this.logDeniedAttempt(userId, companyId, requiredPermission, txContext);
       throw new Error(`Acesso negado: Permissão insuficiente (${requiredPermission}) para a função ${role}`);
     }

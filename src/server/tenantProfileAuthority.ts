@@ -18,6 +18,7 @@ export interface TenantProfileActor {
   userId: string;
   name: string;
   role: string;
+  permissions?: string[];
 }
 
 export interface TenantProfile {
@@ -47,9 +48,15 @@ export class TenantProfileValidationError extends Error {}
 export class TenantProfileNotFoundError extends Error {}
 
 function assertAdmin(actor: TenantProfileActor): void {
-  if (!actor.companyId || !actor.userId || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+  const role = String(actor.role || '').toUpperCase();
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (!actor.companyId || !actor.userId) {
     throw new TenantProfileForbiddenError();
   }
+  if (role === 'ADMIN' || permissions.includes('*') || permissions.includes('MANAGE_TENANT')) {
+    return;
+  }
+  throw new TenantProfileForbiddenError();
 }
 
 function validTimezone(value: string): boolean {
