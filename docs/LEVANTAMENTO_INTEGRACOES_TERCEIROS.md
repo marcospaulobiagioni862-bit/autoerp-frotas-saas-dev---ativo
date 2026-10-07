@@ -19,7 +19,7 @@ Esta tabela consolida os caminhos viáveis para uma frota de 13 a 50 veículos, 
 | **1. RENAVAM (Débitos, IPVA, Multas)** | Agregador Comercial (ex: **Infosimples**) | Pré-pago com franquia mínima de R$ 100/mês; R$ 0,08 por consulta de débitos/restrições (Fonte: Infosimples, out/2026). | 1 a 3 dias úteis (ativação imediata de conta). | Média (job agendado de consulta + conciliação em `traffic_tickets`). | *"Existe caminho via agregador que já tem as conexões prontas; o viável para o seu tamanho custa centavos por consulta com franquia mínima de R$ 100/mês; o próximo passo é definir se contratamos a conta da Infosimples para plugar no ERP."* |
 | **2. Validação de CNH (QR Code)** | **App Oficial Vio (Serpro)** no balcão + **IA do AutoERP** | **R$ 0,00** (App Vio é 100% gratuito e offline; OCR/IA já roda no AutoERP). Datavalid via API exige contrato Serpro + Credencia Senatran (Fonte: Serpro, out/2026). | Imediato (download do app Vio na Play Store / App Store). | Zero (processo operacional já apoiado pelo ERP). | *"Existe a API do Serpro (Datavalid), mas ela exige credenciamento na Senatran e contrato estatal; o viável e mais seguro hoje é o app oficial gratuito Vio no celular da equipe, que valida o QR Code offline na hora; o próximo passo é padronizar esse checklist no balcão."* |
 | **3. Assinatura Digital de Contratos** | Provedor SaaS Especializado (ex: **Clicksign** ou **ZapSign**) | Planos com API a partir de ~R$ 39 a R$ 59/mês para franquia de 20 documentos/mês (Fonte: Clicksign/ZapSign, out/2026). | 2 a 5 dias úteis (geração de token de API e templates). | Média (envio de PDF via API + recebimento de webhook de contrato assinado). | *"Existe assinatura eletrônica própria e provedores de mercado; o viável para o seu volume é um provedor como Clicksign ou ZapSign (cerca de R$ 40 a 60/mês); o próximo passo é escolher o provedor para ativarmos o envio automático para o WhatsApp do motorista."* |
-| **4. WhatsApp (Acompanhamento)** | Manter **wa.me de 1 clique** no ERP; avaliar **Meta Cloud API** apenas se exigir chat interno | wa.me: **R$ 0,00**. Meta Cloud API: cobrança por mensagem (~R$ 0,035/msg) com 1.000 msgs de serviço grátis/mês, mas exige infraestrutura de chat e verificação Meta (Fonte: Meta Developers, out/2026). | wa.me: entregue. Meta API: 2 a 4 semanas (Business Verification). | Alta (exige construir tela de chat bidirecional e webhooks). | *"O envio de cobrança com link pronto de um clique nós entregamos sem custo extra; se você quiser ler as respostas do motorista dentro do sistema, isso vira uma central de atendimento que exige a API oficial da Meta e credenciamento comercial."* |
+| **4. WhatsApp (Acompanhamento)** | Manter **wa.me de 1 clique** no ERP; avaliar **Meta Cloud API** apenas se exigir chat interno | wa.me: **R$ 0,00**. Meta Cloud API: quando o cliente responde, abre janela gratuita de conversa (a conversa sai de graça); apenas a primeira mensagem ativa custa (~R$ 0,04 por mensagem). Exige infraestrutura de chat e verificação Meta (Fontes: Monty Mobile 2026, sent.dm). | wa.me: entregue. Meta API: 2 a 4 semanas (Business Verification). | Alta (exige construir tela de chat bidirecional e webhooks). | *"O envio de cobrança com link pronto de um clique nós entregamos sem custo extra; se você quiser ler as respostas do motorista dentro do sistema, isso vira uma central de atendimento que exige a API oficial da Meta e credenciamento comercial."* |
 
 ---
 
@@ -125,15 +125,15 @@ Se o Marcos levantar a necessidade de ler as respostas dos clientes dentro do ER
 1. **Esclarecer a fronteira do produto:**
    - O link de WhatsApp (`wa.me`) abre o WhatsApp oficial do atendente com a mensagem pronta. A conversa continua no celular/WhatsApp Web da empresa.
    - Trazer as respostas de volta para uma tela interna do ERP transforma o módulo em um **CRM / Chatbot de atendimento**, o que constitui um produto à parte.
-2. **Custos e Regras da Meta Cloud API Oficial (Atualizado para outubro/2026):**
-   - *Fonte:* Meta Business Platform Documentation & Rate Cards, consultado em 2026-10-07.
-   - **Novo Modelo de Cobrança por Mensagem ("Per-Message Pricing"):** A Meta encerrou o modelo antigo de cobrança por janelas de 24 horas para templates e passou a cobrar por mensagem entregue.
-   - Mensagens de Utilidade (notificações) e Mensagens de Serviço (respostas de atendimento) no Brasil custam em média **~R$ 0,035 por mensagem entregue** (cerca de 3,5 a 4 centavos).
-   - **Franquia Gratuita:** Cada conta empresarial (WABA) recebe **1.000 mensagens de serviço gratuitas por mês**.
-   - Para o volume de 13 a 50 carros (cerca de 100 a 300 mensagens/mês), o custo da Meta ficaria dentro da franquia gratuita ou em menos de R$ 10 a R$ 20/mês.
-3. **O Custo Real da API Oficial não é a mensagem, é a infraestrutura:**
-   - Exige processo de **Verificação de Empresa na Meta (Meta Business Verification)** com envio de contrato social e conta de consumo do Marcos (prazo de 2 a 4 semanas).
-   - Exige construção de servidor de Webhooks, armazenamento de mensagens e tela de chat bidirecional no AutoERP.
+2. **Custos e Regras da Meta Cloud API Oficial (Atualizado para o modelo pós-julho/2025):**
+   - *Fontes:* Monty Mobile (Guia 2026), sent.dm (WhatsApp Business Platform Pricing Guide), Meta Business Platform Documentation.
+   - **Como Funciona na Prática a Cobrança:**
+     - Quando o sistema envia a notificação/cobrança inicial (template ativo), custa cerca de **R$ 0,04 por mensagem**.
+     - **A grande vantagem para o acompanhamento:** quando o cliente/motorista **responde**, abre-se uma janela de atendimento de serviço. Dentro dessa janela, a troca de mensagens de conversa é **gratuita** (a conversa em si não tem custo adicional por mensagem).
+     - Portanto, o custo da mensageria para a locadora é praticamente irrelevante (centavos por motorista que de fato interage).
+   - **Onde Está o Custo e Esforço Real:** Não é na tarifa da Meta, e sim nos pré-requisitos:
+     - Exige processo formal de **Verificação de Empresa na Meta (Meta Business Verification)** com envio de contrato social e conta de consumo da empresa do Marcos (prazo de 2 a 4 semanas).
+     - Exige construir infraestrutura de Webhooks para receber as mensagens recebidas, banco de dados para armazenar o histórico e interface de chat bidirecional dentro do AutoERP.
 
 ---
 
