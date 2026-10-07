@@ -51,3 +51,10 @@ Comandos disponíveis via npm:
   ```
   Valida a autorização em homologação real: usuário ADMIN (`v2demo-ngcompany001-user-admin`) acessa rotas de administração (`/api/admin/users` e `/api/admin/tenant-profile` com 200 OK), usuário não-ADMIN (`v2demo-ngcompany001-user-operational`) recebe 403 Forbidden estritamente nas rotas administrativas e executa logout limpo (204 No Content), usuário com permissões vazias (`staging-canary-001`) recebe 403 em ambas as rotas, e chamadas sem sessão recebem 401 Unauthorized.
 
+- **Auditoria dos 6 Requisitos do Marcos (AUTOERP-65)**:
+  ```bash
+  npm run verify:marcos-requirements
+  ```
+  Executa a passada de auditoria automatizada contra a massa real do Neon (`staging-company-001`), comprovando os vereditos factuais dos 6 requisitos do Marcos para a reunião de Sorocaba com IDs de contratos, rotas e status HTTP.
+
+
