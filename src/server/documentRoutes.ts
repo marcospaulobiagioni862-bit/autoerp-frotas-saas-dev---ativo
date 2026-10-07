@@ -299,15 +299,19 @@ export function registerDocumentRoutes(app: Express): void {
         const tx = context.getRawTransaction?.(); if (!tx) throw new Error('Document settings persistence unavailable');
         const previous = await tx.select({ redDays: tenantOperationalConfigs.documentRedDays, yellowDays: tenantOperationalConfigs.documentYellowDays }).from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, principal.companyId)).limit(1);
         const now = new Date().toISOString();
-        await tx.execute(sql`
-          INSERT INTO tenant_operational_configs (company_id, document_red_days, document_yellow_days, updated_by, updated_at)
-          VALUES (${principal.companyId}, ${settings.redDays}, ${settings.yellowDays}, ${principal.userId}, ${now})
-          ON CONFLICT (company_id) DO UPDATE SET
-            document_red_days = EXCLUDED.document_red_days,
-            document_yellow_days = EXCLUDED.document_yellow_days,
-            updated_by = EXCLUDED.updated_by,
-            updated_at = EXCLUDED.updated_at
-        `);
+        if (typeof tx.execute === 'function') {
+          await tx.execute(sql`
+            INSERT INTO tenant_operational_configs (company_id, document_red_days, document_yellow_days, updated_by, updated_at)
+            VALUES (${principal.companyId}, ${settings.redDays}, ${settings.yellowDays}, ${principal.userId}, ${now})
+            ON CONFLICT (company_id) DO UPDATE SET
+              document_red_days = EXCLUDED.document_red_days,
+              document_yellow_days = EXCLUDED.document_yellow_days,
+              updated_by = EXCLUDED.updated_by,
+              updated_at = EXCLUDED.updated_at
+          `);
+        } else {
+          await tx.insert(tenantOperationalConfigs).values({ companyId: principal.companyId, updatedBy: principal.userId, updatedAt: now, documentRedDays: settings.redDays, documentYellowDays: settings.yellowDays }).onConflictDoUpdate({ target: tenantOperationalConfigs.companyId, set: { documentRedDays: settings.redDays, documentYellowDays: settings.yellowDays, updatedBy: principal.userId, updatedAt: now } });
+        }
         await context.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'TenantOperationalConfig', entityId: principal.companyId, action: AuditAction.UPDATE, userId: principal.userId, userName: principal.name, timestamp: now, previousState: JSON.stringify(previous[0] || DEFAULT_DOCUMENT_ALERT_SETTINGS), newState: JSON.stringify({ documentAlertSettings: settings }) });
       });
       res.json({ settings });

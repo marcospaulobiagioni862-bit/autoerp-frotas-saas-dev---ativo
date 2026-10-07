@@ -25,7 +25,7 @@ const principal={companyId:'tenant',userId:'user',name:'Tester',role:'ADMIN',per
 async function request(route:string,body:any={},role='ADMIN',authenticated=true) {
   let status=200,payload:any;
   const res={status:(code:number)=>{status=code;return res;},json:(value:any)=>{payload=value;return res;}};
-  await routes.get(route)!({params:{id:'vehicle'},body,principal:authenticated?{...principal,role}:undefined},res);
+  await routes.get(route)!({params:{id:'vehicle'},body,principal:authenticated?{...principal,role,permissions:role==='ADMIN'?['*']:[]}:undefined},res);
   return {status,payload};
 }
 let vehicle:any, saved:any[], updates:any[], readings:any[];

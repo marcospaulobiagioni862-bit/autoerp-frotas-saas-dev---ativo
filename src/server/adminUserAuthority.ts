@@ -27,13 +27,21 @@ export class AdminUserForbiddenError extends Error {}
 export class AdminUserNotFoundError extends Error {}
 export class AdminUserConflictError extends Error {}
 
-function assertAdmin(actor: AdminUserActor): void {
+function assertCanManageUsers(actor: AdminUserActor): void {
   const role = String(actor.role || '').toUpperCase();
   const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
   if (role === 'ADMIN' || permissions.includes('*') || permissions.includes('MANAGE_USERS')) {
     return;
   }
   throw new AdminUserForbiddenError('Acesso negado: administração de usuários requer ADMIN ou permissão MANAGE_USERS');
+}
+
+function assertCanGrantPrivilege(actor: AdminUserActor): void {
+  const role = String(actor.role || '').toUpperCase();
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (String(actor.role || '').toUpperCase() !== 'ADMIN' && !permissions.includes('*')) {
+    throw new AdminUserForbiddenError('Acesso negado: concessão de privilégios requer perfil de administrador');
+  }
 }
 
 function sanitizeUser(row: any): AdminUserRecord {
@@ -72,7 +80,7 @@ async function auditStatusChange(
 
 export class AdminUserAuthority {
   static async list(actor: AdminUserActor): Promise<AdminUserRecord[]> {
-    assertAdmin(actor);
+    assertCanManageUsers(actor);
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       const tx = txContext.getRawTransaction();
       const rows = await tx
@@ -100,7 +108,7 @@ export class AdminUserAuthority {
     targetUserId: string,
     active: boolean
   ): Promise<AdminUserRecord> {
-    assertAdmin(actor);
+    assertCanManageUsers(actor);
     if (!targetUserId || targetUserId.trim() === '') throw new AdminUserNotFoundError('Usuário não encontrado');
 
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
@@ -173,8 +181,11 @@ export class AdminUserAuthority {
     newRole: string,
     newPermissions: string[]
   ): Promise<AdminUserRecord> {
-    assertAdmin(actor);
+    assertCanGrantPrivilege(actor);
     if (!targetUserId || targetUserId.trim() === '') throw new AdminUserNotFoundError('Usuário não encontrado');
+    if (actor.userId === targetUserId) {
+      throw new AdminUserForbiddenError('Não é permitido alterar o próprio papel ou privilégios de administrador');
+    }
     const roleClean = newRole.trim().toUpperCase();
     if (!roleClean) throw new AdminUserConflictError('Papel do usuário é obrigatório');
 

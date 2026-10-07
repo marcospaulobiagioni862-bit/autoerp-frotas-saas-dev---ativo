@@ -203,6 +203,23 @@ async function main(): Promise<void> {
   // credentials must not be returned, and no local/browser repository may appear
   // anywhere in the promoted production path.
   assert(adminAuthority.includes("String(actor.role || '').toUpperCase() !== 'ADMIN'"), 'SECURITY-2Q1 authority must be ADMIN-only');
+  // AUTOERP-59: Invariante de contenção de escalada de privilégio (fatia do método setPermissions).
+  // A concessão de privilégios (papel/permissões) deve ser estritamente guardada por
+  // assertCanGrantPrivilege, jamais pelo guard largo assertCanManageUsers/assertAdmin,
+  // e deve proibir estritamente auto-alteração de privilégios.
+  const setPermStart = adminAuthority.indexOf('static async setPermissions(');
+  assert(setPermStart !== -1, 'SECURITY-2Q1 setPermissions method missing from AdminUserAuthority');
+  const setPermEnd = adminAuthority.indexOf('static async ', setPermStart + 1);
+  const setPermBody = adminAuthority.slice(setPermStart, setPermEnd !== -1 ? setPermEnd : adminAuthority.lastIndexOf('}'));
+
+  assert(setPermBody.includes('assertCanGrantPrivilege(actor)'), 'SECURITY-2Q1 setPermissions must invoke assertCanGrantPrivilege');
+  assert(!setPermBody.includes('assertCanManageUsers'), 'SECURITY-2Q1 setPermissions must NOT use broad assertCanManageUsers guard');
+  assert(!setPermBody.includes('assertAdmin'), 'SECURITY-2Q1 setPermissions must NOT use broad assertAdmin guard');
+  assert(
+    setPermBody.includes('actor.userId === targetUserId') &&
+    setPermBody.includes('Não é permitido alterar o próprio papel ou privilégios de administrador'),
+    'SECURITY-2Q1 setPermissions must strictly forbid self-privilege modification'
+  );
   assert(adminAuthority.includes('pg_advisory_xact_lock'), 'SECURITY-2Q1 must serialize tenant ADMIN status races');
   assert(adminAuthority.includes("eq(users.companyId, actor.companyId)"), 'SECURITY-2Q1 authority lacks explicit tenant predicate');
   assert(adminAuthority.includes("eq(users.id, targetUserId)"), 'SECURITY-2Q1 mutation lacks target row predicate');

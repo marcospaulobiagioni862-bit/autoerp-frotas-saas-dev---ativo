@@ -368,6 +368,34 @@ async function main() {
     assert.equal(usersAllow.status, 200, `MANAGE_USERS concedido esperava 200, obteve ${usersAllow.status}`);
     console.log('✓ MANAGE_USERS validado: 403 quando desmarcado, 200 OK quando presente.');
 
+    // Invariante Crítica: MANAGE_USERS sem papel ADMIN tentando conceder privilégio ADMIN deve ser barrado com 403 (Prevenção de Escalada)
+    const escalateAttempt = await fetch(`${base}/api/admin/users/v2demo-ngcompany001-user-operational/permissions`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-user-id': 'v2demo-ngcompany001-user-manager',
+        'x-role': 'MANAGER',
+        'x-permissions': JSON.stringify(['MANAGE_USERS']),
+      },
+      body: JSON.stringify({ role: 'ADMIN', permissions: ['*'] }),
+    });
+    assert.equal(escalateAttempt.status, 403, `Tentativa de escalada de privilégio por MANAGE_USERS esperava 403, obteve ${escalateAttempt.status}`);
+    console.log('✓ Invariante contra escalada validada: MANAGE_USERS barrado com 403 ao tentar conceder privilégio ADMIN.');
+
+    // Invariante Crítica: Proibição de auto-alteração de privilégios (ator tentando alterar a si mesmo é barrado com 403)
+    const selfAlterAttempt = await fetch(`${base}/api/admin/users/staging-admin-001/permissions`, {
+      method: 'PATCH',
+      headers: {
+        'content-type': 'application/json',
+        'x-user-id': 'staging-admin-001',
+        'x-role': 'ADMIN',
+        'x-permissions': JSON.stringify(['*']),
+      },
+      body: JSON.stringify({ role: 'ADMIN', permissions: ['*'] }),
+    });
+    assert.equal(selfAlterAttempt.status, 403, `Auto-alteração de privilégio esperava 403, obteve ${selfAlterAttempt.status}`);
+    console.log('✓ Invariante de auto-alteração validada: Ator barrado com 403 ao tentar alterar os próprios privilégios.');
+
     // -------------------------------------------------------------
     // 11. MANAGE_TENANT
     // -------------------------------------------------------------

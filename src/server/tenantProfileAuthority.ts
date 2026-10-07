@@ -48,15 +48,13 @@ export class TenantProfileValidationError extends Error {}
 export class TenantProfileNotFoundError extends Error {}
 
 function assertAdmin(actor: TenantProfileActor): void {
-  const role = String(actor.role || '').toUpperCase();
   const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
   if (!actor.companyId || !actor.userId) {
     throw new TenantProfileForbiddenError();
   }
-  if (role === 'ADMIN' || permissions.includes('*') || permissions.includes('MANAGE_TENANT')) {
-    return;
+  if (String(actor.role || '').toUpperCase() !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('MANAGE_TENANT')) {
+    throw new TenantProfileForbiddenError();
   }
-  throw new TenantProfileForbiddenError();
 }
 
 function validTimezone(value: string): boolean {
