@@ -40,7 +40,6 @@ assert.match(seedStub, /BROWSER_SEED_RESET_DISABLED_SERVER_AUTHORITY_REQUIRED/, 
 const migratedRuntimeFiles = [
   'src/app/navigationBadgeLoader.ts',
   'src/components/dashboard/OverviewDashboard.tsx',
-  'src/components/dashboard/PerformanceMetricsWidget.tsx',
   'src/components/operations/PendingCenterView.tsx',
   'src/components/operations/DailyOperationsView.tsx',
   'src/components/rental/RentalLifecycleView.tsx',
