@@ -56,9 +56,7 @@ async function main(): Promise<void> {
     'components/performance/PerformanceManagementCenterView',
     'components/decision-management/DecisionManagementCenterView',
     'components/execution/OperationalExecutionCenterView',
-    'components/release/ReleaseGovernanceCenterView',
     'components/admin/SystemHealthCenterView',
-    'components/productivity/OperationalProductivityView',
     'components/goals/ManagementGoalsView',
   ];
   for (const entry of cockpitEntries) {

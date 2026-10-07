@@ -46,9 +46,7 @@ export default defineConfig(({ command }) => {
         /^(?:\.\.?\/)*components\/performance\/PerformanceManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/release\/ReleaseGovernanceCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/SystemHealthCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/productivity\/OperationalProductivityView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/goals\/ManagementGoalsView(?:\.tsx)?$/,
       ].map((find) => ({ find, replacement: productionCockpitBoundary }))
     : [];
