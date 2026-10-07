@@ -88,13 +88,39 @@ function limit(value: unknown, maximum: number): number {
   return value;
 }
 
+const VALID_IMAGE_DATA_URI_REGEX = /^data:image\/(png|jpeg|webp|svg\+xml);base64,([A-Za-z0-9+/=\r\n]+)$/;
+
 function optionalLogoUrl(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') throw new TenantProfileValidationError();
   const trimmed = value.trim();
   if (trimmed === '') return null;
   if (trimmed.length > 2_000_000) throw new TenantProfileValidationError();
-  return trimmed;
+
+  // 1. Same-origin relative path: ex: /assets/logo.png, /images/brand.svg
+  // Deve iniciar com '/' mas não com '//' (proíbe protocol-relative), e não conter espaços
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !/\s/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // 2. Data URI com MIME de imagem suportada (png, jpeg, webp, svg+xml) e payload base64 decodificável
+  const match = trimmed.match(VALID_IMAGE_DATA_URI_REGEX);
+  if (match) {
+    const rawBase64 = match[2].replace(/[\r\n]/g, '');
+    if (rawBase64.length > 0) {
+      try {
+        const decoded = Buffer.from(rawBase64, 'base64');
+        if (decoded.length > 0) {
+          return trimmed;
+        }
+      } catch {
+        // Falha na decodificação cai na recusa abaixo
+      }
+    }
+  }
+
+  // URLs externas (http://, https://), protocol-relative (//), data URIs não-imagem ou strings arbitrárias são recusadas
+  throw new TenantProfileValidationError();
 }
 
 function sanitize(company: any, config: any): TenantProfile {
