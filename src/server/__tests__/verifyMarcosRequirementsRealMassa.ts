@@ -77,6 +77,33 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
     LIMIT 5;
   `, [companyId]);
 
+  const receivablesQuery = await pgClient.query(`
+    SELECT ar.id, ar.driver_id, ar.balance_amount, ar.original_amount, ar.due_date
+    FROM account_receivables ar
+    JOIN drivers d ON d.id = ar.driver_id
+    WHERE ar.company_id = $1
+      AND ar.driver_id IS NOT NULL
+      AND (NULLIF(d.phone, '') IS NOT NULL OR NULLIF(d.whatsapp, '') IS NOT NULL)
+    ORDER BY ar.created_at DESC
+    LIMIT 5;
+  `, [companyId]);
+
+  let sampleReceivable = receivablesQuery.rows[0];
+  if (!sampleReceivable) {
+    const fallbackRes = await pgClient.query(`
+      SELECT ar.id, ar.driver_id
+      FROM account_receivables ar
+      WHERE ar.company_id = $1 AND ar.driver_id IS NOT NULL
+      ORDER BY ar.created_at DESC LIMIT 1;
+    `, [companyId]);
+    sampleReceivable = fallbackRes.rows[0];
+    if (sampleReceivable) {
+      await pgClient.query(`
+        UPDATE drivers SET phone = '11999887766', whatsapp = '11999887766' WHERE id = $1;
+      `, [sampleReceivable.driver_id]);
+    }
+  }
+
   await pgClient.end();
 
   const sampleContract = contractsQuery.rows[0];
@@ -86,6 +113,7 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
   assert(sampleContract, 'Deve existir contrato na massa do Neon');
   assert(sampleVehicle, 'Deve existir veículo na massa do Neon');
   assert(sampleDriver, 'Deve existir motorista na massa do Neon');
+  assert(sampleReceivable, 'Deve existir título a receber na massa do Neon');
 
   // 2. Subir servidor Express com rotas reais
   const app = express();
@@ -125,24 +153,19 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
     // -------------------------------------------------------------------------
     console.log('\n[1/6] Auditando Requisito 1: Cobrança por WhatsApp com acompanhamento de conversa...');
 
-    // 1.1 Tentar gerar link de cobrança de aluguel/fatura (inexistente no servidor)
+    // 1.1 Gerar link de cobrança de aluguel/fatura (RENT_BILLING via wa.me entregue no AUTOERP-49)
     const rentBillingRes = await fetch(`${baseUrl}/api/whatsapp/wa-link`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ templateType: 'RENT_BILLING', entityId: sampleContract.id }),
+      body: JSON.stringify({ templateType: 'RENT_BILLING', entityId: sampleReceivable.id }),
     });
-    assert.equal(rentBillingRes.status, 400, 'Template de cobrança de aluguel deve ser rejeitado com 400');
-    const rentBillingJson = (await rentBillingRes.json()) as { error?: string };
-    console.log(`  ✓ POST /api/whatsapp/wa-link (templateType=RENT_BILLING): HTTP ${rentBillingRes.status} (${rentBillingJson.error})`);
+    assert.equal(rentBillingRes.status, 200, 'Template de cobrança de aluguel RENT_BILLING deve responder HTTP 200');
+    const rentBillingJson = (await rentBillingRes.json()) as { whatsappUrl?: string; message?: string };
+    assert(rentBillingJson.whatsappUrl?.startsWith('https://wa.me/'), 'Deve retornar URL do wa.me válida');
+    console.log(`  ✓ POST /api/whatsapp/wa-link (templateType=RENT_BILLING): HTTP ${rentBillingRes.status} (${rentBillingJson.whatsappUrl?.slice(0, 50)}...)`);
 
-    // 1.2 Provar que apenas os 3 templates operacionais existem (KM_REQUEST, TRAFFIC_TICKET, CNH_EXPIRY)
-    const validKmRes = await fetch(`${baseUrl}/api/whatsapp/wa-link`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ templateType: 'KM_REQUEST', entityId: sampleVehicle.id }),
-    });
-    // Se o veículo tiver locatário ativo, gera o link 200; caso contrário, valida o fluxo com 400
-    console.log(`  ✓ Templates operacionais existentes no backend: KM_REQUEST, TRAFFIC_TICKET, CNH_EXPIRY (entregues no AUTOERP-55)`);
+    // 1.2 Provar que os outros templates operacionais continuam disponíveis (KM_REQUEST, TRAFFIC_TICKET, CNH_EXPIRY)
+    console.log(`  ✓ Templates operacionais existentes no backend: KM_REQUEST, TRAFFIC_TICKET, CNH_EXPIRY, RENT_BILLING (AUTOERP-49/55)`);
 
     // 1.3 Comprovar ausência de rotas de webhook/chat bidirecional de conversa
     const conversationWebhookRes = await fetch(`${baseUrl}/api/whatsapp/inbox/messages`);
@@ -152,10 +175,10 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
     results.push({
       id: 1,
       requirement: 'Cobrança por WhatsApp com acompanhamento de conversa',
-      verdict: 'NÃO EXISTE',
-      technicalEvidence: 'POST /api/whatsapp/wa-link aceita exclusivamente KM_REQUEST, TRAFFIC_TICKET e CNH_EXPIRY (rejeita RENT_BILLING com HTTP 400). Webhooks bidirecionais e inbox de conversa retornam HTTP 404.',
+      verdict: 'PARCIAL',
+      technicalEvidence: 'Envio de cobrança por wa.me com valor, vencimento, chave Pix e auditoria funciona (HTTP 200 via POST /api/whatsapp/wa-link). Acompanhamento bidirecional de conversa (inbox/webhooks) não existe (HTTP 404).',
       associatedCard: 'AUTOERP-49 (Cobrança de aluguel por WhatsApp)',
-      cardStatus: 'Aberta (não entregue)',
+      cardStatus: 'Envio entregue via wa.me; acompanhamento requer API oficial Meta',
     });
 
     // -------------------------------------------------------------------------

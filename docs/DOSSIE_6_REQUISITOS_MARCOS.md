@@ -13,7 +13,7 @@ Esta matriz foi consolidada a partir da execução automatizada contra a API e o
 
 | # | Requisito do Marcos | Veredito Factual | O que Existe Hoje | O que NÃO Existe / O que Falta | Card de Referência no Gestão |
 |---|---|---|---|---|---|
-| **1** | Cobrança por WhatsApp com acompanhamento de conversa | **NÃO EXISTE** | Templates operacionais de link WhatsApp (`KM_REQUEST`, `TRAFFIC_TICKET`, `CNH_EXPIRY`) com dados e locatário reais (`AUTOERP-55`). | Cobrança de aluguel/fatura por WhatsApp não existe (retorna HTTP 400). Acompanhamento de conversa (chat bidirecional/CRM) não existe. | `AUTOERP-49` (Aberta, não entregue) |
+| **1** | Cobrança por WhatsApp com acompanhamento de conversa | **PARCIAL** | Envio de cobrança via link `wa.me` com mensagem formatada, valor, vencimento, chave Pix e auditoria no ERP (`AUTOERP-49`). Templates operacionais de link WhatsApp (`KM_REQUEST`, `TRAFFIC_TICKET`, `CNH_EXPIRY`, `RENT_BILLING`) com dados e locatário reais (`AUTOERP-55`/`49`). | Acompanhamento de conversa (leitura de respostas do motorista dentro do ERP) não existe. Requer a API Oficial da Meta (Cloud API com webhook autenticado). | `AUTOERP-49` (Concluída: envio entregue via wa.me) |
 | **2** | Controle de KM contra o limite do contrato | **PARCIAL** | Colunas `franchise_km` e `excess_km_rate` no banco; campo na interface; cláusula impressa no PDF assinado; cálculo no relatório de rentabilidade. | Encerramento de contrato (`/api/contracts/:id/close`) aceita apenas `{ closeDate, reason }`. Não exige odômetro final nem gera cobrança automática de KM excedente na liquidação. `ContractService` é código morto. | `AUTOERP-09` (Aberta, não entregue) |
 | **3** | Vencimento de documentos | **FUNCIONA COM RESSALVA** | Central de Documentos (`/api/documents/alerts`) calcula vencimentos por estágios dinâmicos na leitura (HTTP 200 na massa homologada). Alerta de CNH via WhatsApp (`AUTOERP-55`). | Funciona e está navegável com a massa atual; status persistido no motorista (`cnh_status`) só é calculado na criação/edição manual (`evaluateCnhStatus`), ficando estático com o tempo (`AUTOERP-16`). Fragilidade estrutural conhecida no `AUTOERP-15`: qualquer registro gravado com data em formato timestamp faz a lista inteira responder 400 por falhar no `parseIsoDate`. | `AUTOERP-15` e `AUTOERP-16` (Abertas, não entregues) |
 | **4** | Botão de sair do sistema (Logout) | **FUNCIONA** | Botão "Sair da conta" no menu do avatar (`Header.tsx:240`), encerramento de sessão real (`POST /api/auth/logout` $\rightarrow$ 204 com `Set-Cookie` expirado), limpeza de rascunhos e redirecionamento. | Nada. 100% entregue e aprovado com testes unitários, mutação e homologação real Neon. | `AUTOERP-46` (Concluída, 10/10) |
@@ -27,16 +27,20 @@ Esta matriz foi consolidada a partir da execução automatizada contra a API e o
 ---
 
 ### Requisito 1: Cobrança por WhatsApp com Acompanhamento de Conversa
-- **Veredito Factual:** **NÃO EXISTE**
+- **Veredito Factual:** **PARCIAL (Envio de cobrança com chave Pix funciona; acompanhamento de conversa não)**
 - **Evidência no Código & Banco:**
-  - Rota `POST /api/whatsapp/wa-link`: aceita estritamente `KM_REQUEST`, `TRAFFIC_TICKET` e `CNH_EXPIRY`. Qualquer envio de `templateType: 'RENT_BILLING'` ou fatura retorna **HTTP 400 Bad Request** (`Parâmetros inválidos para geração de link do WhatsApp`).
-  - Rotas de webhook de conversa/chat (`/api/whatsapp/inbox/*`): retornam **HTTP 404 Not Found**.
-  - O card que constrói a régua de cobrança de aluguel é o `AUTOERP-49` e está em aberto.
+  - Rota `POST /api/whatsapp/wa-link`: aceita `RENT_BILLING`, `KM_REQUEST`, `TRAFFIC_TICKET` e `CNH_EXPIRY`. Gera URL do `wa.me` com telefone validado (+55), nome do motorista, valor formatado em R$, vencimento brasileiro e chave Pix cadastrada da empresa em `financial_accounts` (`HTTP 200 OK`).
+  - Auditoria no ERP: cada disparo gera evento unificado `WHATSAPP_WAME_LINK_GENERATED` com `templateType: 'RENT_BILLING'` gravado na tabela `audit_logs`.
+  - Interface: botões "Cobrar WhatsApp" integrados no grid de Contas a Receber (`ReceivablesView.tsx`) e no modal de detalhes da obrigação (`FinancialObligationDetailsModal.tsx`).
+  - Rotas de webhook de conversa/chat bidirecional (`/api/whatsapp/inbox/*`): retornam **HTTP 404 Not Found** (acompanhamento de conversa não existe nesta fase).
 - **Roteiro para a Demonstração na Tela:**
-  1. Abrir a aba **Veículos** ou **Motoristas**.
-  2. Demonstrar o botão de WhatsApp nos alertas de KM ou Multas: clicar para abrir o WhatsApp Web e mostrar a mensagem pré-formatada com a placa, data e locatário reais.
+  1. Abrir a aba **Contas a Receber**.
+  2. Localizar um título a receber em aberto ou vencido vinculado a um motorista.
+  3. Clicar nos três pontos de ações ⋮ e selecionar **"Cobrar WhatsApp"** (ou abrir os **Detalhes** e clicar no botão **"Cobrar via WhatsApp"**).
+  4. Mostrar a nova aba abrindo o WhatsApp Web com o texto pré-formatado contendo o valor exato, data de vencimento e chave Pix cadastrada da locadora.
+  5. Mostrar o feedback visual na tela confirmando que o link foi gerado e auditado no ERP.
 - **O que Falar para o Marcos:**
-  > *"Marcos, os alertas operacionais de WhatsApp para pedir KM, avisar de multas e lembrar da CNH já geram o link pronto com o número do locatário e os dados do carro. A régua de cobrança de aluguel com link de boleto/Pix e o acompanhamento de conversa de duas vias estão no card AUTOERP-49, que requer a contratação de uma API de WhatsApp (como Evolution API ou Z-API) para receber as respostas do cliente dentro do ERP."*
+  > *"Marcos, o envio rápido da cobrança por WhatsApp está 100% funcional com 1 clique: você clica no título a receber e o sistema abre o WhatsApp com o texto pronto, o nome do motorista, o valor exato, o vencimento e a chave Pix da locadora, além de registrar no sistema que a cobrança foi disparada. O acompanhamento de conversa (ou seja, receber e ler as mensagens que o motorista responde diretamente dentro de uma caixa de entrada no ERP) não existe pelo wa.me; ele depende da contratação e credenciamento da API oficial da Meta (WhatsApp Business Cloud API), conforme detalhamos no levantamento técnico do AUTOERP-50."*
 
 ---
 

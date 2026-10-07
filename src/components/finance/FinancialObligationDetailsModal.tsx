@@ -9,6 +9,8 @@ import { ContractClient } from '../../api/contractClient';
 import { MaintenanceClient } from '../../api/maintenanceClient';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { Badge, Button, ModalContainer, Skeleton } from '../ui';
+import { MessageSquare } from 'lucide-react';
+import { WhatsappClient } from '../../api/whatsappClient';
 
 type FinancialObligation = AccountReceivable | AccountPayable;
 type ObligationKind = 'RECEIVABLE' | 'PAYABLE';
@@ -69,6 +71,24 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const [linkedEntities, setLinkedEntities] = useState<Array<[string, string]>>([]);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waFeedback, setWaFeedback] = useState<string | null>(null);
+
+  const handleSendWaCharge = async () => {
+    if (!obligation?.id) return;
+    setWaLoading(true);
+    setWaFeedback(null);
+    try {
+      const res = await WhatsappClient.getWaLink('RENT_BILLING', obligation.id);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+      setWaFeedback('Link do WhatsApp gerado e registrado no sistema com sucesso.');
+    } catch (err) {
+      if (isAuthenticationExpiredError(err)) return;
+      setWaFeedback(err instanceof Error ? err.message : 'Falha ao gerar link do WhatsApp.');
+    } finally {
+      setWaLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -271,7 +291,26 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
           )}
         </section>
 
-        <div className="flex justify-end border-t border-slate-200 pt-3 dark:border-slate-800">
+        {waFeedback && (
+          <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+            {waFeedback}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-800">
+          <div>
+            {type === 'RECEIVABLE' && obligation && ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'].includes(obligation.status) && obligation.driverId && (
+              <Button
+                type="button"
+                variant="outline"
+                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30 flex items-center gap-1.5"
+                onClick={handleSendWaCharge}
+                isLoading={waLoading}
+              >
+                <MessageSquare className="w-4 h-4 mr-1" /> Cobrar via WhatsApp
+              </Button>
+            )}
+          </div>
           <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>Fechar</Button>
         </div>
       </div>

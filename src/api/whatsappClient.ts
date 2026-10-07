@@ -345,7 +345,7 @@ export class WhatsappClient {
   }
 
   static async getWaLink(
-    templateType: 'KM_REQUEST' | 'TRAFFIC_TICKET' | 'CNH_EXPIRY',
+    templateType: 'KM_REQUEST' | 'TRAFFIC_TICKET' | 'CNH_EXPIRY' | 'RENT_BILLING',
     entityId: string,
   ): Promise<WhatsappWaLinkResult> {
     const response = await fetch('/api/whatsapp/wa-link', {
@@ -363,5 +363,5 @@ export interface WhatsappWaLinkResult {
   whatsappUrl: string;
   phone: string;
   message: string;
-  templateType: 'KM_REQUEST' | 'TRAFFIC_TICKET' | 'CNH_EXPIRY';
+  templateType: 'KM_REQUEST' | 'TRAFFIC_TICKET' | 'CNH_EXPIRY' | 'RENT_BILLING';
 }

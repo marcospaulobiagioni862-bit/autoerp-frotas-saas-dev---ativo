@@ -577,7 +577,7 @@ export function registerWhatsappRoutes(app: Express): void {
     if (!principal) return;
     try {
       const { templateType, entityId } = req.body || {};
-      if (!['KM_REQUEST', 'TRAFFIC_TICKET', 'CNH_EXPIRY'].includes(templateType) || typeof entityId !== 'string' || !entityId.trim()) {
+      if (!['KM_REQUEST', 'TRAFFIC_TICKET', 'CNH_EXPIRY', 'RENT_BILLING'].includes(templateType) || typeof entityId !== 'string' || !entityId.trim()) {
         res.status(400).json({ error: 'Parâmetros inválidos para geração de link do WhatsApp' });
         return;
       }
@@ -711,6 +711,57 @@ export function registerWhatsappRoutes(app: Express): void {
           const cnhExpiration = driver.cnh_expiration ? String(driver.cnh_expiration).slice(0, 10) : 'em breve';
 
           message = `Olá, ${driverName}! Sua CNH vencerá em ${cnhExpiration}. Por favor, providencie a renovação e nos envie a foto da CNH atualizada para manter seu cadastro e contrato regulares.`;
+        } else if (templateType === 'RENT_BILLING') {
+          const rRes = rows(await tx.execute(sql`
+            SELECT id, company_id, driver_id, vehicle_id, contract_id, origin_type, description,
+                   due_date, original_amount, balance_amount, status
+            FROM account_receivables
+            WHERE company_id = ${principal.companyId} AND id = ${entityId}
+            LIMIT 1
+          `));
+          if (rRes.length === 0) throw new WhatsappNotFoundError();
+          const receivable = rRes[0];
+          if (!receivable.driver_id) {
+            throw new WhatsappValidationError();
+          }
+          driverIdForAudit = String(receivable.driver_id);
+
+          const dRes = rows(await tx.execute(sql`
+            SELECT id, name, phone, whatsapp FROM drivers
+            WHERE company_id = ${principal.companyId} AND id = ${driverIdForAudit}
+            LIMIT 1
+          `));
+          if (dRes.length === 0) throw new WhatsappNotFoundError();
+          const driver = dRes[0];
+          driverName = String(driver.name || 'Motorista');
+          phoneRaw = String(driver.whatsapp || driver.phone || '');
+
+          let contextDesc = receivable.description ? String(receivable.description) : 'Aluguel';
+          if (receivable.contract_id) {
+            const cRes = rows(await tx.execute(sql`
+              SELECT contract_number FROM contracts
+              WHERE company_id = ${principal.companyId} AND id = ${receivable.contract_id}
+              LIMIT 1
+            `));
+            if (cRes.length > 0 && cRes[0].contract_number) {
+              contextDesc = `Contrato ${cRes[0].contract_number}`;
+            }
+          }
+
+          const bankRes = rows(await tx.execute(sql`
+            SELECT pix_key FROM financial_accounts
+            WHERE company_id = ${principal.companyId} AND type = 'BANK' AND status = 'ACTIVE' AND pix_key IS NOT NULL AND pix_key <> ''
+            LIMIT 1
+          `));
+          const pixKey = bankRes[0]?.pix_key ? String(bankRes[0].pix_key).trim() : '';
+
+          const amountVal = Number(receivable.balance_amount ?? receivable.original_amount ?? 0);
+          const amountStr = amountVal.toFixed(2).replace('.', ',');
+          const rawDueDate = receivable.due_date ? String(receivable.due_date).slice(0, 10) : '';
+          const dueDateBR = rawDueDate.includes('-') ? rawDueDate.split('-').reverse().join('/') : rawDueDate;
+
+          const pixClause = pixKey ? ` Chave Pix para pagamento: ${pixKey}.` : '';
+          message = `Olá, ${driverName}! Lembramos sobre o título referente a ${contextDesc}, no valor de R$ ${amountStr}, com vencimento em ${dueDateBR}.${pixClause} Caso já tenha efetuado o pagamento, por favor desconsidere esta mensagem.`;
         }
 
         let phoneDigits = phoneRaw.replace(/\D/g, '');

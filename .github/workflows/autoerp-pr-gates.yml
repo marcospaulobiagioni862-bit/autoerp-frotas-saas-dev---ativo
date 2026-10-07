@@ -301,24 +301,24 @@ jobs:
             echo "FAIL: driver UI must not require internal consent registration"
             exit 1
           fi
-          if grep -Fq "wa.me/" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must not bypass the auditable outbox through wa.me"
-            exit 1
-          fi
-          # AUTOERP-55 (aprovado por Pedro em 2026-10-06): enquanto a Cloud API oficial
-          # nao esta ligada, a tela do motorista PODE abrir o WhatsApp, porque sem isso
-          # o cliente nao consegue disparar nada pelo ERP. O que a invariante passa a
-          # exigir, no lugar da proibicao antiga, e que o destino nunca seja montado no
-          # navegador: o link vem do servidor, que valida o telefone, confere o tenant e
-          # grava auditoria. Trade-off registrado: o ERP audita "link gerado", nao
-          # "mensagem enviada"; quando a Cloud API entrar, volta a auditar o envio.
+          # AUTOERP-49 / AUTOERP-55: telas operacionais e financeiras que disparam WhatsApp
+          # podem abrir o WhatsApp apenas com destino retornado pelo servidor (wa-link auditado),
+          # NUNCA montando URLs literais no navegador nem contornando a auditoria.
+          for ui_file in src/components/drivers/DriverDetailsModal.tsx src/components/finance/ReceivablesView.tsx src/components/finance/FinancialObligationDetailsModal.tsx; do
+            if grep -Fq "wa.me/" "$ui_file"; then
+              echo "FAIL: $ui_file must not bypass the auditable outbox through wa.me"
+              exit 1
+            fi
+            if grep -Eq "window\\.open\\(\\s*[\"'\`]" "$ui_file"; then
+              echo "FAIL: $ui_file must open only a server-issued destination, never a literal URL"
+              exit 1
+            fi
+          done
           grep -F "WhatsappClient.getWaLink(" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "WhatsappClient.getWaLink(" src/components/finance/ReceivablesView.tsx
+          grep -F "WhatsappClient.getWaLink(" src/components/finance/FinancialObligationDetailsModal.tsx
           grep -F "WHATSAPP_WAME_LINK_GENERATED" src/server/whatsappRoutes.ts
           grep -F "entityName: 'WhatsappWaLink'" src/server/whatsappRoutes.ts
-          if grep -Eq "window\\.open\\(\\s*[\"'\`]" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must open only a server-issued destination, never a literal URL"
-            exit 1
-          fi
           echo "WHATSAPP-1B client source invariants: PASS"
 
       - name: WHATSAPP-1B2 template catalog invariants
