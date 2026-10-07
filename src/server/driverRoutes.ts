@@ -5,6 +5,7 @@ import type { AuthenticatedPrincipal } from './auth';
 import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import { hasDriverHealthPermission } from '../shared/security/driverHealthAuthorization';
+import { evaluateCnhStatus } from './driverCnhStatus';
 
 type DriverAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'EDIT_DRIVER' | 'CHANGE_DRIVER_STATUS' | 'ARCHIVE_DRIVER';
 
@@ -150,16 +151,6 @@ function normalizeIsoDate(value: unknown, field: string, allowFuture: boolean): 
     if (date > today) throw new DriverValidationError(`Invalid ${field}`);
   }
   return date;
-}
-
-function evaluateCnhStatus(expiration: string): DocumentStatus {
-  const end = new Date(`${expiration}T00:00:00Z`).getTime();
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const days = Math.ceil((end - today) / 86_400_000);
-  if (days < 0) return DocumentStatus.EXPIRED;
-  if (days <= 30) return DocumentStatus.EXPIRING_SOON;
-  return DocumentStatus.VALID;
 }
 
 function addressFrom(value: unknown, fallback?: Driver['address']): Driver['address'] {

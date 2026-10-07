@@ -5,6 +5,7 @@ import { UnitOfWork } from '../db/uow';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { decideDriverCnhRenewal } from './driverCnhRenewalPolicy';
+import { evaluateCnhStatus } from './driverCnhStatus';
 import { projectApprovedCnhDriverDraft } from './driverDocumentIntakeApprovedCnhDraft';
 import type { DriverDocumentIntakeState } from './driverDocumentIntakeAuthority';
 import {
@@ -132,16 +133,6 @@ function sanitizeExtraction(item: any) {
     createdAt: iso(item.createdAt),
     updatedAt: iso(item.updatedAt),
   };
-}
-
-function evaluateCnhStatus(expiration: string): DocumentStatus {
-  const end = new Date(`${expiration}T00:00:00Z`).getTime();
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const days = Math.ceil((end - today) / 86_400_000);
-  if (days < 0) return DocumentStatus.EXPIRED;
-  if (days <= 30) return DocumentStatus.EXPIRING_SOON;
-  return DocumentStatus.VALID;
 }
 
 function scheduleDocumentAiExtraction(companyId: string, extractionId: string): void {
