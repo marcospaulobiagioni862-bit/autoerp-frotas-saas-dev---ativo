@@ -63,6 +63,14 @@ export interface SidebarProps {
   onCloseMobile?: () => void;
 }
 
+export function getBrowserTabTitle(brand?: string | null): string {
+  const clean = (brand || '').trim();
+  if (clean && clean !== 'AutoERP') {
+    return `${clean} · AutoERP`;
+  }
+  return 'AutoERP';
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onTabChange,
@@ -81,6 +89,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       .catch(() => { /* fail closed: fallback below */ });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.title = getBrowserTabTitle(companyName || branding?.companyName);
+  }, [companyName, branding?.companyName]);
 
   const displayName = companyName || branding?.companyName || 'AutoERP';
   const categories = [
