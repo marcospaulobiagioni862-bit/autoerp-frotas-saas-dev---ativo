@@ -145,7 +145,14 @@ async function main(): Promise<void> {
   // O menu entregue ao cliente e o do Sidebar.tsx unificado (AUTOERP-67). Estas
   // sao as rotas operacionais que o usuario final precisa alcancar pela barra
   // lateral; se alguma sumir, a entrega regride.
-  const safeProductionRoutes = ['dashboard', 'fleet', 'drivers', 'contracts', 'inspections', 'maintenance', 'trafficTickets', 'documentos', 'finance-overview', 'transactions', 'cashflow', 'dre'];
+  // As 14 entradas do menu unificado entregue ao cliente. 'receivables' e 'payables'
+  // ficaram de fora quando esta lista foi escrita (8672e1e2) por erro meu de medicao:
+  // elas sao declaradas em varias linhas, porque carregam badge com contagem, e o
+  // levantamento que originou a lista casava id e label na MESMA linha. Duas entradas
+  // que o cliente ve ficaram sem tripwire. Ao mexer no menu, esta lista, os marcadores
+  // exigidos no 'Production bundle authority guard' e as assercoes negativas de
+  // quarentena tem de ser revistos no MESMO commit.
+  const safeProductionRoutes = ['dashboard', 'fleet', 'drivers', 'contracts', 'inspections', 'maintenance', 'trafficTickets', 'documentos', 'finance-overview', 'receivables', 'payables', 'transactions', 'cashflow', 'dre'];
   for (const route of safeProductionRoutes) {
     assert(sidebar.includes(`id: '${route}' as NavigationTab`), `Trusted production route missing: ${route}`);
   }
