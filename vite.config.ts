@@ -48,7 +48,6 @@ export default defineConfig(({ command }) => {
         /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/release\/ReleaseGovernanceCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/audit\/SystemIntegrityAuditView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/SystemHealthCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/consolidation\/EnterpriseConsolidationView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/observability\/PostGoLiveObservabilityView(?:\.tsx)?$/,
