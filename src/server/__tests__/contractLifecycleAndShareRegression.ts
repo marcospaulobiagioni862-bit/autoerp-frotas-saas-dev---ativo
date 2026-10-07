@@ -79,7 +79,9 @@ async function setupFixtures(): Promise<void> {
 
 export async function runContractLifecycleAndShareRegression(): Promise<void> {
   const originalStorageDir = process.env.ATTACHMENT_STORAGE_DIR;
+  const originalJwtSecret = process.env.JWT_SECRET;
   process.env.ATTACHMENT_STORAGE_DIR = await mkdtemp(join(tmpdir(), 'autoerp-lifecycle-53-54-'));
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-regression-53-54';
   await setupFixtures();
 
   const app = express();
@@ -257,10 +259,33 @@ export async function runContractLifecycleAndShareRegression(): Promise<void> {
     const badTokenRes = await fetch(`${base}/api/public/contracts/${contract.id}/pdf?token=invalid.token.signature`);
     assert(badTokenRes.status === 401, `Tampered token request expected 401, got ${badTokenRes.status}`);
 
+    const tamperedChar = shareData.token.endsWith('X') ? 'Y' : 'X';
+    const singleCharTamperedToken = shareData.token.slice(0, -1) + tamperedChar;
+    const singleCharTamperedRes = await fetch(`${base}/api/public/contracts/${contract.id}/pdf?token=${singleCharTamperedToken}`);
+    assert(singleCharTamperedRes.status === 401, `Single-char tampered token request expected 401, got ${singleCharTamperedRes.status}`);
+
+    // 10. Segurança (AUTOERP-54): falhar fechado se JWT_SECRET não estiver configurado (sem fallback público)
+    const prevSecret = process.env.JWT_SECRET;
+    try {
+      delete process.env.JWT_SECRET;
+      const unconfiguredShareRes = await fetch(`${base}/api/contracts/${contract.id}/share-link`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      });
+      assert(unconfiguredShareRes.status === 500, `Expected 500 when JWT_SECRET is missing, got ${unconfiguredShareRes.status}`);
+
+      const unconfiguredVerifyRes = await fetch(`${base}/api/public/contracts/${contract.id}/pdf?token=${shareData.token}`);
+      assert(unconfiguredVerifyRes.status === 401, `Expected 401 when verifying without JWT_SECRET, got ${unconfiguredVerifyRes.status}`);
+    } finally {
+      if (prevSecret !== undefined) process.env.JWT_SECRET = prevSecret;
+    }
+
     console.log('AUTOERP-53 & AUTOERP-54 INTEGRATION REGRESSION: ALL CHECKS PASSED.');
   } finally {
     if (originalStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
     else process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;
+    if (originalJwtSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalJwtSecret;
     server.close();
   }
 }

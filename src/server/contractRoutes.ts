@@ -24,21 +24,29 @@ import { contractConflictResponse } from './contractConflictResponse';
 import { getOperationalISODate } from '../shared/utils/date';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
 
-const CONTRACT_SHARE_SECRET = process.env.JWT_SECRET || 'autoerp-contract-share-secret-2026';
+function getContractShareSecret(): string {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required to generate or verify contract share tokens.');
+  }
+  return secret;
+}
 
 function createContractShareToken(companyId: string, contractId: string, expiresInDays = 30): string {
+  const secret = getContractShareSecret();
   const exp = Math.floor(Date.now() / 1000) + (expiresInDays * 24 * 3600);
   const payload = Buffer.from(JSON.stringify({ companyId, contractId, exp })).toString('base64url');
-  const signature = createHmac('sha256', CONTRACT_SHARE_SECRET).update(payload).digest('base64url');
+  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
   return `${payload}.${signature}`;
 }
 
 function verifyContractShareToken(token: string): { companyId: string; contractId: string; exp: number } | null {
   try {
+    const secret = getContractShareSecret();
     const parts = token.split('.');
     if (parts.length !== 2) return null;
     const [payloadB64, signature] = parts;
-    const expectedSignature = createHmac('sha256', CONTRACT_SHARE_SECRET).update(payloadB64).digest('base64url');
+    const expectedSignature = createHmac('sha256', secret).update(payloadB64).digest('base64url');
     if (signature.length !== expectedSignature.length) return null;
     if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) return null;
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
