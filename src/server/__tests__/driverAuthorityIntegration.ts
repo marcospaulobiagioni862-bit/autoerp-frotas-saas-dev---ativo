@@ -2,6 +2,7 @@ import express, { type Request, type Response as ExpressResponse, type NextFunct
 import { createServer } from 'node:http';
 import { registerDriverRoutes } from '../driverRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { DriverStatus } from '../../types/enums';
 import { PostgresAuditLogRepository } from '../../db/repositories/postgresRepositories';
 import { runDriverDocumentIntakePromotionChecks } from './driverDocumentIntakePromotionTestRunner';
@@ -37,7 +38,7 @@ export class DriverAuthorityIntegrationRunner {
           userId: `${companyId}-user`,
           name: `${role} Integration User`,
           role,
-          permissions: [],
+          permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

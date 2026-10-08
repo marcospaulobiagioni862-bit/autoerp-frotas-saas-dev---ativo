@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const categories = [
     {
-      title: '',
+      title: 'INÍCIO',
       items: [
         { id: 'dashboard' as NavigationTab, label: 'Início', icon: LayoutDashboard, badge: null },
       ],

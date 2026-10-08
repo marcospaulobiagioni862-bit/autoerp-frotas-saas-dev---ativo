@@ -50,6 +50,7 @@ function hasAttachmentPermission(principal:AuthenticatedPrincipal,action:Attachm
   if(role==='ADMIN')return true;
   const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
   if(permissions.includes('*')||permissions.includes(action))return true;
+  if(action==='VIEW_ATTACHMENT'&&permissions.includes('VIEW_DOCUMENT'))return true;
   return false;
 }
 function requireAttachmentPrincipal(req:Request,res:Response,action:AttachmentAction):AuthenticatedPrincipal|null{
@@ -338,8 +339,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);
       if(!found||found.isArchived)throw new AttachmentNotFoundError();
       await validateEntity(tx,principal,found.entityType,found.entityId,false);
-      if(found.storageProvider==='LEGACY_BROWSER')throw new AttachmentStorageLegacyContentError();
-      if(found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();
+      if(found.storageProvider==='LEGACY_BROWSER'||found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();
       return found;
     });
     const bytes=await storage.read(principal.companyId,item.storageKey!,item.storageProvider as any);
