@@ -22,6 +22,8 @@ type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 
 interface FinanceHubViewProps {
   refreshVersion?: number;
   initialSubTab?: FinanceSubTab;
+  pendingReceivablesCount?: number;
+  pendingPayablesCount?: number;
   onOpenReceiptModal: (rec: AccountReceivable) => void;
   onOpenPaymentModal: (pay: AccountPayable) => void;
   onOpenTransferModal: () => void;
@@ -31,6 +33,8 @@ interface FinanceHubViewProps {
 export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   initialSubTab = 'overview',
   refreshVersion = 0,
+  pendingReceivablesCount = 0,
+  pendingPayablesCount = 0,
   onOpenReceiptModal,
   onOpenPaymentModal,
   onOpenTransferModal,
@@ -40,13 +44,25 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
 
   const subTabs = [
-    { id: 'overview' as const, label: 'Resumo', icon: LayoutDashboard },
-    { id: 'receivables' as const, label: 'A Receber', icon: TrendingUp },
-    { id: 'payables' as const, label: 'A Pagar', icon: CreditCard },
-    { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
-    { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
-    { id: 'dre' as const, label: 'DRE', icon: PieChart },
-    { id: 'settings' as const, label: 'Configurações', icon: Settings },
+    { id: 'overview' as const, label: 'Resumo', icon: LayoutDashboard, badge: null, badgeColor: '' },
+    {
+      id: 'receivables' as const,
+      label: 'A Receber',
+      icon: TrendingUp,
+      badge: pendingReceivablesCount > 0 ? pendingReceivablesCount : null,
+      badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
+    },
+    {
+      id: 'payables' as const,
+      label: 'A Pagar',
+      icon: CreditCard,
+      badge: pendingPayablesCount > 0 ? pendingPayablesCount : null,
+      badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
+    },
+    { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft, badge: null, badgeColor: '' },
+    { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote, badge: null, badgeColor: '' },
+    { id: 'dre' as const, label: 'DRE', icon: PieChart, badge: null, badgeColor: '' },
+    { id: 'settings' as const, label: 'Configurações', icon: Settings, badge: null, badgeColor: '' },
   ];
 
   return (
@@ -73,6 +89,17 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
+              {tab.badge !== null && tab.badge !== undefined && (
+                <span
+                  className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : tab.badgeColor || 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
             </button>
           );
         })}

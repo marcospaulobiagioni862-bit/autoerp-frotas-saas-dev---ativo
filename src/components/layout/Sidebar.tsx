@@ -103,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const categories = [
     {
-      title: 'INÍCIO',
+      title: '',
       items: [
         { id: 'dashboard' as NavigationTab, label: 'Início', icon: LayoutDashboard, badge: null },
       ],
@@ -164,10 +164,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <nav className="min-h-0 flex-1 p-3 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {categories.map((category) => (
-          <div key={category.title} className="space-y-1">
-            <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
-              {category.title}
-            </div>
+          <div key={category.title || 'principal'} className="space-y-1">
+            {Boolean(category.title) && (
+              <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
+                {category.title}
+              </div>
+            )}
             <div className="space-y-0.5">
               {category.items.map((item) => {
                 const Icon = item.icon;

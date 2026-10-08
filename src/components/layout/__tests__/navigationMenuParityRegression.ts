@@ -61,7 +61,13 @@ function checkNavigationParity(): void {
   assert.match(sidebarContent, /TenantProfileClient\.getBranding/, 'Sidebar deve carregar branding dinâmico');
   assert.match(sidebarContent, /\[scrollbar-width:none\]/, 'Sidebar deve ter classe de scrollbar invisível');
 
-  console.log('✔ AUTOERP-67: Paridade de navegação entre Dev e Produção validada com sucesso.');
+  // 5. Garantir acabamento de UX (sem cabeçalho textual redundante 'INÍCIO' e com badges de pendências no FinanceHub)
+  assert.doesNotMatch(sidebarContent, /title:\s*'INÍCIO'/, 'Sidebar não deve exibir cabeçalho textual redundante INÍCIO');
+  const financeHubContent = readFileSync(join(projectRoot, 'src/components/finance/FinanceHubView.tsx'), 'utf8');
+  assert.match(financeHubContent, /pendingReceivablesCount/, 'FinanceHubView deve suportar pendingReceivablesCount');
+  assert.match(financeHubContent, /pendingPayablesCount/, 'FinanceHubView deve suportar pendingPayablesCount');
+
+  console.log('✔ AUTOERP-67 / AUTOERP-48: Paridade e acabamento de navegação validados com sucesso.');
 }
 
 checkNavigationParity();
