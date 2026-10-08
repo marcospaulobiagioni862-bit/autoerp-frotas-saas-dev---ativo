@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from './index';
 import {
@@ -313,6 +313,8 @@ export async function runV2DemoSeed() {
     name,
     cpf: cpfFromSequence(index + 1),
     cnh: String(91000000000 + index + 1),
+    phone: index === 0 ? '11999887766' : '119888800' + String(index + 1).padStart(2, '0'),
+    whatsapp: index === 0 ? '11999887766' : '119888800' + String(index + 1).padStart(2, '0'),
     maritalStatus: index % 2 === 0 ? 'SOLTEIRO' : 'CASADO',
     profession: 'Motorista de aplicativo',
     pixKey: 'demo.motorista.' + String(index + 1) + '@example.invalid',
@@ -577,6 +579,10 @@ export async function runV2DemoSeed() {
           active: driver.active,
         })
         .where(and(eq(drivers.id, driver.id), eq(drivers.companyId, companyId)));
+
+      await tx.execute(
+        sql`UPDATE drivers SET phone = ${driver.phone}, whatsapp = ${driver.whatsapp} WHERE id = ${driver.id} AND company_id = ${companyId}`
+      );
     }
 
     await tx.insert(vehicles).values(vehicleRows).onConflictDoNothing();
