@@ -281,14 +281,62 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
           source.contentState !== 'AVAILABLE' || !source.storageKey || !source.checksum ||
           (source.storageProvider !== 'SERVER_FS' && source.storageProvider !== 'R2')) throw new ConflictError();
         const now = new Date().toISOString();
+        const rawOwner = typeof fields.ownerName === 'string' ? fields.ownerName.trim() : '';
+        let intakeOwnerType = 'COMPANY';
+        let intakePossessionType = 'PROPRIO';
+        let intakeFinRestriction = 'NONE';
+        let intakeFinInstitution: string | undefined = undefined;
+        let intakeSne = 'COBERTO_CNPJ';
+        if (rawOwner.toUpperCase().includes('BRADESCO')) {
+          intakeOwnerType = 'FINANCED_LEASING';
+          intakePossessionType = 'FINANCIAMENTO_LEASING';
+          intakeFinRestriction = 'ARRENDAMENTO_MERCANTIL';
+          intakeFinInstitution = 'Banco Bradesco Financiamentos S.A.';
+          intakeSne = 'DESCOBERTO_BANCO_LEASING';
+        } else if (rawOwner.toUpperCase().includes('MARCOS PAULO')) {
+          intakeOwnerType = 'PARTNER';
+          intakePossessionType = 'CESSAO_SOCIO';
+          intakeFinRestriction = 'NONE';
+          intakeSne = 'PENDENTE_CPF_TITULAR';
+        } else if (rawOwner && !rawOwner.toUpperCase().includes('TRIFLEX')) {
+          intakeOwnerType = 'THIRD_PARTY';
+          intakePossessionType = 'SUBLOCACAO_TERCEIRO';
+          intakeFinRestriction = 'NONE';
+          intakeSne = 'DESCOBERTO_TERCEIRO';
+        }
+
         const created = await vehicleRepo.create({
           id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: completion.version,
           yearFabrication: draftYear(fields, 'manufactureYear'), yearModel: draftYear(fields, 'modelYear'),
           color: completion.color, renavam, chassis, currentKm: completion.currentKm, nextMaintenanceKm: completion.nextMaintenanceKm,
           fuelType, category: completion.category, acquisitionValue: completion.acquisitionValue, currentValue: completion.currentValue,
-          rentalValueBase: completion.rentalValueBase, status: VehicleStatus.AVAILABLE,
-          notes: [typeof fields.ownerName === 'string' && fields.ownerName.trim() ? `Titular no documento: ${fields.ownerName.trim()}` : '', completion.notes||''].filter(Boolean).join(' | ')||undefined,
+          rentalValueBase: completion.rentalValueBase,
+          ownerType: intakeOwnerType,
+          ownerName: rawOwner || undefined,
+          possessionType: intakePossessionType,
+          financialRestriction: intakeFinRestriction,
+          financialInstitution: intakeFinInstitution,
+          sneCoverageStatus: intakeSne,
+          status: VehicleStatus.AVAILABLE,
+          notes: completion.notes || undefined,
           isArchived: false, createdAt: now, updatedAt: now,
+        });
+
+        await vehicleRepo.createOwnershipHistory({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: created.id,
+          ownerType: intakeOwnerType,
+          ownerName: rawOwner || 'Empresa (Cadastro)',
+          possessionType: intakePossessionType,
+          financialRestriction: intakeFinRestriction,
+          financialInstitution: intakeFinInstitution,
+          effectiveFrom: now,
+          effectiveTo: undefined,
+          reason: 'INTAKE_CRLV_APROVADO',
+          documentAttachmentId: source.id,
+          createdBy: principal.userId,
+          createdAt: now,
         });
         const promoted = await attachmentRepo.create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityType: 'Vehicle', entityId: created.id,

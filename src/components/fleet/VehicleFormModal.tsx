@@ -35,6 +35,17 @@ interface VehicleFormData {
   acquisitionValue: NumericField;
   currentValue: NumericField;
   rentalValueBase: NumericField;
+  ownerType: string;
+  ownerName: string;
+  ownerDocument: string;
+  possessionType: string;
+  financialRestriction: string;
+  financialInstitution: string;
+  crlvExerciseYear: NumericField;
+  registrationState: string;
+  registrationCity: string;
+  claSecurityCode: string;
+  ownershipChangeReason?: string;
   notes?: string;
 }
 
@@ -58,6 +69,17 @@ const emptyVehicleForm = (): VehicleFormData => ({
   acquisitionValue: '',
   currentValue: '',
   rentalValueBase: '',
+  ownerType: 'COMPANY',
+  ownerName: '',
+  ownerDocument: '',
+  possessionType: 'PROPRIO',
+  financialRestriction: 'NONE',
+  financialInstitution: '',
+  crlvExerciseYear: new Date().getFullYear(),
+  registrationState: 'SP',
+  registrationCity: '',
+  claSecurityCode: '',
+  ownershipChangeReason: '',
   notes: '',
 });
 
@@ -99,6 +121,17 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         acquisitionValue: vehicleToEdit.acquisitionValue,
         currentValue: vehicleToEdit.currentValue,
         rentalValueBase: vehicleToEdit.rentalValueBase,
+        ownerType: vehicleToEdit.ownerType || 'COMPANY',
+        ownerName: vehicleToEdit.ownerName || '',
+        ownerDocument: vehicleToEdit.ownerDocument || '',
+        possessionType: vehicleToEdit.possessionType || 'PROPRIO',
+        financialRestriction: vehicleToEdit.financialRestriction || 'NONE',
+        financialInstitution: vehicleToEdit.financialInstitution || '',
+        crlvExerciseYear: vehicleToEdit.crlvExerciseYear || new Date().getFullYear(),
+        registrationState: vehicleToEdit.registrationState || 'SP',
+        registrationCity: vehicleToEdit.registrationCity || '',
+        claSecurityCode: vehicleToEdit.claSecurityCode || '',
+        ownershipChangeReason: '',
         notes: vehicleToEdit.notes || '',
       });
     } else {
@@ -136,6 +169,19 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     if (formData.acquisitionValue !== '' && formData.acquisitionValue !== existing.acquisitionValue) changes.acquisitionValue = formData.acquisitionValue;
     if (formData.currentValue !== '' && formData.currentValue !== existing.currentValue) changes.currentValue = formData.currentValue;
     if (formData.rentalValueBase !== '' && formData.rentalValueBase !== existing.rentalValueBase) changes.rentalValueBase = formData.rentalValueBase;
+
+    if (formData.ownerType !== existing.ownerType) changes.ownerType = formData.ownerType;
+    if (cleanText(formData.ownerName) !== cleanText(existing.ownerName)) changes.ownerName = cleanText(formData.ownerName);
+    if (cleanText(formData.ownerDocument) !== cleanText(existing.ownerDocument)) changes.ownerDocument = cleanText(formData.ownerDocument);
+    if (formData.possessionType !== existing.possessionType) changes.possessionType = formData.possessionType;
+    if (formData.financialRestriction !== existing.financialRestriction) changes.financialRestriction = formData.financialRestriction;
+    if (cleanText(formData.financialInstitution) !== cleanText(existing.financialInstitution)) changes.financialInstitution = cleanText(formData.financialInstitution);
+    if (formData.crlvExerciseYear !== '' && formData.crlvExerciseYear !== existing.crlvExerciseYear) changes.crlvExerciseYear = Number(formData.crlvExerciseYear);
+    if (cleanText(formData.registrationState) !== cleanText(existing.registrationState)) changes.registrationState = cleanText(formData.registrationState);
+    if (cleanText(formData.registrationCity) !== cleanText(existing.registrationCity)) changes.registrationCity = cleanText(formData.registrationCity);
+    if (cleanText(formData.claSecurityCode) !== cleanText(existing.claSecurityCode)) changes.claSecurityCode = cleanText(formData.claSecurityCode);
+    if (cleanText(formData.ownershipChangeReason)) changes.ownershipChangeReason = cleanText(formData.ownershipChangeReason);
+
     if (cleanText(formData.notes) !== cleanText(existing.notes)) changes.notes = cleanText(formData.notes);
 
     return changes;
@@ -170,6 +216,16 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           acquisitionValue: requiredNumber(formData.acquisitionValue, 'o valor de aquisição'),
           currentValue: requiredNumber(formData.currentValue, 'o valor comercial atual'),
           rentalValueBase: requiredNumber(formData.rentalValueBase, 'o valor do aluguel semanal'),
+          ownerType: formData.ownerType,
+          ownerName: cleanText(formData.ownerName) || undefined,
+          ownerDocument: cleanText(formData.ownerDocument) || undefined,
+          possessionType: formData.possessionType,
+          financialRestriction: formData.financialRestriction,
+          financialInstitution: cleanText(formData.financialInstitution) || undefined,
+          crlvExerciseYear: optionalNumber(formData.crlvExerciseYear),
+          registrationState: cleanText(formData.registrationState) || undefined,
+          registrationCity: cleanText(formData.registrationCity) || undefined,
+          claSecurityCode: cleanText(formData.claSecurityCode) || undefined,
           notes: cleanText(formData.notes),
         });
       }
@@ -253,6 +309,128 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
               ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category })),
             ]}
           />
+        </div>
+
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Titularidade e Propriedade (Frota Mista)
+            </h4>
+            {formData.ownerType === 'COMPANY' && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleChange('ownerName', 'TRIFLEX ASSISTENCIA TECNICA DE MAQUINAS');
+                  handleChange('ownerDocument', '22.791.551/0001-53');
+                }}
+                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
+              >
+                Preencher dados da empresa
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Select
+              label="Tipo de Titular *"
+              required
+              value={formData.ownerType}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleChange('ownerType', val);
+                if (val === 'COMPANY') {
+                  handleChange('possessionType', 'PROPRIO');
+                  handleChange('financialRestriction', 'NONE');
+                } else if (val === 'FINANCED_LEASING') {
+                  handleChange('possessionType', 'FINANCIAMENTO_LEASING');
+                  handleChange('financialRestriction', 'ARRENDAMENTO_MERCANTIL');
+                  handleChange('financialInstitution', 'Banco Bradesco Financiamentos S.A.');
+                } else if (val === 'PARTNER') {
+                  handleChange('possessionType', 'CESSAO_SOCIO');
+                  handleChange('financialRestriction', 'NONE');
+                } else if (val === 'THIRD_PARTY') {
+                  handleChange('possessionType', 'SUBLOCACAO_TERCEIRO');
+                  handleChange('financialRestriction', 'NONE');
+                }
+              }}
+              options={[
+                { value: 'COMPANY', label: 'Próprio da Empresa' },
+                { value: 'FINANCED_LEASING', label: 'Financiado / Leasing (Banco)' },
+                { value: 'PARTNER', label: 'Veículo de Sócio (Pessoa Física)' },
+                { value: 'THIRD_PARTY', label: 'Terceiro (Sublocação / Cessão)' },
+              ]}
+            />
+            <Input
+              label="Nome do Proprietário no CRLV"
+              placeholder="Ex: TRIFLEX ou Banco..."
+              value={formData.ownerName}
+              onChange={(e) => handleChange('ownerName', e.target.value)}
+            />
+            <Input
+              label="CPF ou CNPJ do Proprietário"
+              placeholder="00.000.000/0000-00"
+              value={formData.ownerDocument}
+              onChange={(e) => handleChange('ownerDocument', e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Select
+              label="Restrição Financeira / Gravame"
+              value={formData.financialRestriction}
+              onChange={(e) => handleChange('financialRestriction', e.target.value)}
+              options={[
+                { value: 'NONE', label: 'Nenhuma' },
+                { value: 'ALIENACAO_FIDUCIARIA', label: 'Alienação Fiduciária' },
+                { value: 'ARRENDAMENTO_MERCANTIL', label: 'Arrendamento Mercantil (Leasing)' },
+                { value: 'OUTRO', label: 'Outro Gravame' },
+              ]}
+            />
+            <Input
+              label="Instituição Financeira / Banco"
+              placeholder="Ex: Banco Bradesco Financiamentos"
+              value={formData.financialInstitution}
+              onChange={(e) => handleChange('financialInstitution', e.target.value)}
+            />
+            <Input
+              label="Exercício CRLV (Ano)"
+              type="number"
+              placeholder="2026"
+              value={formData.crlvExerciseYear}
+              onChange={(e) => handleNumericChange('crlvExerciseYear', e.target.value)}
+              helperText="Ano do licenciamento vigente"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input
+              label="UF Emplacamento"
+              placeholder="SP"
+              value={formData.registrationState}
+              onChange={(e) => handleChange('registrationState', e.target.value.toUpperCase().slice(0, 2))}
+            />
+            <Input
+              label="Município Emplacamento"
+              placeholder="Ex: Sorocaba"
+              value={formData.registrationCity}
+              onChange={(e) => handleChange('registrationCity', e.target.value)}
+            />
+            <Input
+              label="Cód. Segurança CLA"
+              placeholder="11 dígitos do CRLV"
+              value={formData.claSecurityCode}
+              onChange={(e) => handleChange('claSecurityCode', e.target.value)}
+            />
+          </div>
+
+          {vehicleToEdit && (
+            <Input
+              label="Motivo da Alteração de Titularidade (se houver transferência)"
+              placeholder="Ex: Quitação de leasing, compra pelo sócio, etc."
+              value={formData.ownershipChangeReason || ''}
+              onChange={(e) => handleChange('ownershipChangeReason', e.target.value)}
+              helperText="Ficará registrado na linha do tempo histórica do veículo."
+            />
+          )}
         </div>
 
         <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">

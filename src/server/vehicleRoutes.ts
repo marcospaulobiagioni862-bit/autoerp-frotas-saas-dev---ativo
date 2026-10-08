@@ -146,6 +146,111 @@ function appendStatusReason(existing: Vehicle, reason?: string): string | undefi
   return `${existing.notes || ''}\n[Status]: ${reason}`.trim();
 }
 
+function optionalVehicleYear(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  return requiredVehicleYear(value, field);
+}
+
+function optionalState(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const state = String(value).trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(state)) throw new VehicleValidationError('UF deve ter 2 letras');
+  return state;
+}
+
+function optionalSecurityCode(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const code = String(value).replace(/\D/g, '');
+  if (!code) return undefined;
+  if (code.length < 9 || code.length > 11) throw new VehicleValidationError('Código de segurança do CLA inválido');
+  return code;
+}
+
+function isValidCpf(digits: string): boolean {
+  if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(digits[i]) * (10 - i);
+  let rem = (sum * 10) % 11;
+  if (rem === 10 || rem === 11) rem = 0;
+  if (rem !== Number(digits[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += Number(digits[i]) * (11 - i);
+  rem = (sum * 10) % 11;
+  if (rem === 10 || rem === 11) rem = 0;
+  return rem === Number(digits[10]);
+}
+
+function isValidCnpj(digits: string): boolean {
+  if (digits.length !== 14 || /^(\d)\1{13}$/.test(digits)) return false;
+  const weights1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const weights2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += Number(digits[i]) * weights1[i];
+  let rem = sum % 11;
+  const d1 = rem < 2 ? 0 : 11 - rem;
+  if (d1 !== Number(digits[12])) return false;
+  sum = 0;
+  for (let i = 0; i < 13; i++) sum += Number(digits[i]) * weights2[i];
+  rem = sum % 11;
+  const d2 = rem < 2 ? 0 : 11 - rem;
+  return d2 === Number(digits[13]);
+}
+
+function normalizeOwnerDocument(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const cleaned = String(value).replace(/\D/g, '');
+  if (!cleaned) return undefined;
+  if (cleaned.length === 11) {
+    if (!isValidCpf(cleaned)) throw new VehicleValidationError('CPF do proprietário inválido');
+    return cleaned;
+  }
+  if (cleaned.length === 14) {
+    if (!isValidCnpj(cleaned)) throw new VehicleValidationError('CNPJ do proprietário inválido');
+    return cleaned;
+  }
+  throw new VehicleValidationError('Documento do proprietário deve ser CPF (11 dígitos) ou CNPJ (14 dígitos)');
+}
+
+const VALID_OWNER_TYPES = new Set(['COMPANY', 'FINANCED_LEASING', 'PARTNER', 'THIRD_PARTY']);
+const VALID_POSSESSION_TYPES = new Set(['PROPRIO', 'FINANCIAMENTO_LEASING', 'CESSAO_SOCIO', 'SUBLOCACAO_TERCEIRO']);
+const VALID_FINANCIAL_RESTRICTIONS = new Set(['NONE', 'ALIENACAO_FIDUCIARIA', 'ARRENDAMENTO_MERCANTIL', 'OUTRO']);
+
+function normalizeOwnerType(value: unknown): string {
+  if (value === undefined || value === null || value === '') return 'COMPANY';
+  const val = String(value).trim().toUpperCase();
+  if (!VALID_OWNER_TYPES.has(val)) throw new VehicleValidationError('Tipo de proprietário inválido');
+  return val;
+}
+
+function normalizePossessionType(value: unknown, ownerType: string): string {
+  if (value === undefined || value === null || value === '') {
+    if (ownerType === 'FINANCED_LEASING') return 'FINANCIAMENTO_LEASING';
+    if (ownerType === 'PARTNER') return 'CESSAO_SOCIO';
+    if (ownerType === 'THIRD_PARTY') return 'SUBLOCACAO_TERCEIRO';
+    return 'PROPRIO';
+  }
+  const val = String(value).trim().toUpperCase();
+  if (!VALID_POSSESSION_TYPES.has(val)) throw new VehicleValidationError('Tipo de posse inválido');
+  return val;
+}
+
+function normalizeFinancialRestriction(value: unknown): string {
+  if (value === undefined || value === null || value === '') return 'NONE';
+  const val = String(value).trim().toUpperCase();
+  if (!VALID_FINANCIAL_RESTRICTIONS.has(val)) throw new VehicleValidationError('Restrição financeira inválida');
+  return val;
+}
+
+function calculateSneCoverage(ownerType: string): string {
+  switch (ownerType) {
+    case 'COMPANY': return 'COBERTO_CNPJ';
+    case 'PARTNER': return 'PENDENTE_CPF_TITULAR';
+    case 'FINANCED_LEASING': return 'DESCOBERTO_BANCO_LEASING';
+    case 'THIRD_PARTY': return 'DESCOBERTO_TERCEIRO';
+    default: return 'NAO_ADERIDO';
+  }
+}
+
 export function registerVehicleRoutes(app: Express): void {
   registerCompanyProfileRoutes(app);
   registerVehicleInspectionRoutes(app);
@@ -235,12 +340,77 @@ export function registerVehicleRoutes(app: Express): void {
       const yearFabrication = requiredVehicleYear(req.body?.yearFabrication, 'yearFabrication');
       const yearModel = requiredVehicleYear(req.body?.yearModel, 'yearModel');
       const category = normalizeVehicleCategory(requiredText(req.body?.category, 'category'));
+      const ownerType = normalizeOwnerType(req.body?.ownerType);
+      const ownerName = optionalText(req.body?.ownerName);
+      const ownerDocument = normalizeOwnerDocument(req.body?.ownerDocument);
+      const possessionType = normalizePossessionType(req.body?.possessionType, ownerType);
+      const financialRestriction = normalizeFinancialRestriction(req.body?.financialRestriction);
+      const financialInstitution = optionalText(req.body?.financialInstitution);
+      const crlvExerciseYear = optionalVehicleYear(req.body?.crlvExerciseYear, 'crlvExerciseYear');
+      const registrationCity = optionalText(req.body?.registrationCity);
+      const registrationState = optionalState(req.body?.registrationState);
+      const claSecurityCode = optionalSecurityCode(req.body?.claSecurityCode);
+      const sneCoverageStatus = calculateSneCoverage(ownerType);
+
       const item = await UnitOfWork.run(principal.companyId, async (txContext) => {
         const repo = txContext.getVehicleRepo();
         const identityConflict = await findVehicleIdentityConflict(txContext, principal.companyId, plate, renavam, chassis);
         if (identityConflict) throw new VehicleConflictError(vehicleIdentityConflictMessage(identityConflict));
         const now = new Date().toISOString();
-        const created = await repo.create({ id: randomUUID(), companyId: principal.companyId, plate, brand, model, version: optionalText(req.body?.version), yearFabrication, yearModel, color, renavam, chassis, currentKm, nextMaintenanceKm, fuelType, category, acquisitionValue, currentValue, rentalValueBase, status: VehicleStatus.AVAILABLE, notes: optionalText(req.body?.notes), isArchived: false, createdAt: now, updatedAt: now });
+        const created = await repo.create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          plate,
+          brand,
+          model,
+          version: optionalText(req.body?.version),
+          yearFabrication,
+          yearModel,
+          color,
+          renavam,
+          chassis,
+          currentKm,
+          nextMaintenanceKm,
+          fuelType,
+          category,
+          acquisitionValue,
+          currentValue,
+          rentalValueBase,
+          ownerType,
+          ownerName: ownerName || undefined,
+          ownerDocument: ownerDocument || undefined,
+          possessionType,
+          financialRestriction,
+          financialInstitution: financialInstitution || undefined,
+          crlvExerciseYear,
+          registrationCity: registrationCity || undefined,
+          registrationState: registrationState || undefined,
+          claSecurityCode: claSecurityCode || undefined,
+          sneCoverageStatus,
+          status: VehicleStatus.AVAILABLE,
+          notes: optionalText(req.body?.notes),
+          isArchived: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        await repo.createOwnershipHistory({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: created.id,
+          ownerType,
+          ownerName: ownerName || 'Empresa (Cadastro)',
+          ownerDocument: ownerDocument || undefined,
+          possessionType,
+          financialRestriction,
+          financialInstitution: financialInstitution || undefined,
+          effectiveFrom: now,
+          effectiveTo: undefined,
+          reason: 'CADASTRO_INICIAL',
+          createdBy: principal.userId,
+          createdAt: now,
+        });
+
         await txContext.getKmRecordRepo().create({ id: randomUUID(), companyId: principal.companyId, vehicleId: created.id, kmValue: created.currentKm, recordDate: now.split('T')[0], readingType: 'PERIODIC', notes: 'Cadastro inicial do veículo', createdAt: now });
         await MaintenancePlanTemplateAuthority.applyToVehicleContext(txContext, principal, created);
         const available = await repo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
@@ -283,13 +453,88 @@ export function registerVehicleRoutes(app: Express): void {
         if (req.body?.acquisitionValue !== undefined) changes.acquisitionValue = requiredPositive(req.body.acquisitionValue, 'acquisitionValue');
         if (req.body?.currentValue !== undefined) changes.currentValue = requiredPositive(req.body.currentValue, 'currentValue');
         if (req.body?.rentalValueBase !== undefined) changes.rentalValueBase = requiredPositive(req.body.rentalValueBase, 'rentalValueBase');
+
+        let ownershipChanged = false;
+        if (req.body?.ownerType !== undefined) {
+          const ot = normalizeOwnerType(req.body.ownerType);
+          if (ot !== existing.ownerType) ownershipChanged = true;
+          changes.ownerType = ot;
+          changes.sneCoverageStatus = calculateSneCoverage(ot);
+        }
+        if (req.body?.ownerName !== undefined) {
+          const on = optionalText(req.body.ownerName) || undefined;
+          if (on !== existing.ownerName) ownershipChanged = true;
+          changes.ownerName = on;
+        }
+        if (req.body?.ownerDocument !== undefined) {
+          const od = normalizeOwnerDocument(req.body.ownerDocument);
+          if (od !== existing.ownerDocument) ownershipChanged = true;
+          changes.ownerDocument = od;
+        }
+        if (req.body?.possessionType !== undefined) {
+          changes.possessionType = normalizePossessionType(req.body.possessionType, changes.ownerType || existing.ownerType);
+        }
+        if (req.body?.financialRestriction !== undefined) {
+          changes.financialRestriction = normalizeFinancialRestriction(req.body.financialRestriction);
+        }
+        if (req.body?.financialInstitution !== undefined) {
+          changes.financialInstitution = optionalText(req.body.financialInstitution) || undefined;
+        }
+        if (req.body?.crlvExerciseYear !== undefined) {
+          changes.crlvExerciseYear = optionalVehicleYear(req.body.crlvExerciseYear, 'crlvExerciseYear');
+        }
+        if (req.body?.registrationCity !== undefined) {
+          changes.registrationCity = optionalText(req.body.registrationCity) || undefined;
+        }
+        if (req.body?.registrationState !== undefined) {
+          changes.registrationState = optionalState(req.body.registrationState);
+        }
+        if (req.body?.claSecurityCode !== undefined) {
+          changes.claSecurityCode = optionalSecurityCode(req.body.claSecurityCode);
+        }
+
         if (Object.keys(changes).length === 1) throw new VehicleValidationError('No editable fields');
+
+        if (ownershipChanged) {
+          await repo.closeActiveOwnershipHistory(principal.companyId, existing.id, changes.updatedAt!);
+          await repo.createOwnershipHistory({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            vehicleId: existing.id,
+            ownerType: changes.ownerType || existing.ownerType,
+            ownerName: changes.ownerName || existing.ownerName || 'Não informado',
+            ownerDocument: changes.ownerDocument !== undefined ? changes.ownerDocument : existing.ownerDocument,
+            possessionType: changes.possessionType || existing.possessionType,
+            financialRestriction: changes.financialRestriction || existing.financialRestriction,
+            financialInstitution: changes.financialInstitution !== undefined ? changes.financialInstitution : existing.financialInstitution,
+            effectiveFrom: changes.updatedAt!,
+            effectiveTo: undefined,
+            reason: optionalText(req.body?.ownershipChangeReason) || 'ALTERACAO_CADASTRO',
+            createdBy: principal.userId,
+            createdAt: changes.updatedAt!,
+          });
+        }
+
         const updated = await repo.updateForCompany(principal.companyId, existing.id, changes);
         if (!updated) throw new VehicleNotFoundError();
         await txContext.getAuditLogRepo().create({ id: randomUUID(), companyId: principal.companyId, entityName: 'Vehicle', entityId: existing.id, action: AuditAction.UPDATE, previousState: JSON.stringify(existing), newState: JSON.stringify(updated), userId: principal.userId, userName: principal.name, timestamp: changes.updatedAt! });
         return updated;
       });
       res.json({ item });
+    } catch (error) { sendVehicleError(res, error); }
+  });
+
+  app.get('/api/fleet/vehicles/:id/ownership-history', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const items = await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        const vehicle = await repo.findByIdForCompany(principal.companyId, req.params.id);
+        if (!vehicle) throw new VehicleNotFoundError();
+        return await repo.getOwnershipHistoryForVehicle(principal.companyId, vehicle.id);
+      });
+      res.json({ items });
     } catch (error) { sendVehicleError(res, error); }
   });
 

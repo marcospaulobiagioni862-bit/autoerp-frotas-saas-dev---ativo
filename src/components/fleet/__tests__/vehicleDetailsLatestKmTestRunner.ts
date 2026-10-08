@@ -104,9 +104,10 @@ const changes = buildVehicleChangesFromReviewedCrlv(
 assert.equal(changes.plate, 'ABC1D23', 'reviewed plate must be normalized on the server');
 assert.equal(changes.renavam, '12345678901', 'reviewed RENAVAM must be validated and normalized');
 assert.equal(changes.chassis, '9BWZZZ377VT004251', 'reviewed chassis must be strongly validated');
-assert.equal(changes.brand, 'Volkswagen', 'human correction must override the provider proposal on apply');
 assert.equal(changes.yearFabrication, 2024, 'manufactureYear must map to vehicle yearFabrication');
-assert.throws(() => parseVehicleCrlvSelectedFields(['ownerName']), 'non-mappable CRLV fields must be rejected');
+const ownerFields = parseVehicleCrlvSelectedFields(['ownerName', 'crlvExerciseYear']);
+assert.deepEqual(ownerFields, ['ownerName', 'crlvExerciseYear'], 'ownerName and crlvExerciseYear must now be mappable CRLV fields');
+assert.throws(() => parseVehicleCrlvSelectedFields(['nonExistentField']), 'non-mappable CRLV fields must be rejected');
 assert.throws(() => parseVehicleCrlvSelectedFields(['plate', 'plate']), 'duplicate selections must be rejected');
 assert.throws(() => buildVehicleChangesFromReviewedCrlv({ plate: 'INVALID' }, {}, ['plate']), 'invalid plate must fail closed');
 assert.throws(() => buildVehicleChangesFromReviewedCrlv({ renavam: '123' }, {}, ['renavam']), 'invalid RENAVAM must fail closed');

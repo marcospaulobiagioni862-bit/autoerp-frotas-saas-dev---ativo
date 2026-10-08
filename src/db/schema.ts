@@ -69,6 +69,17 @@ export const vehicles = pgTable('vehicles', {
   acquisitionValue: numeric('acquisition_value', { precision: 12, scale: 2 }).notNull().default('0'),
   currentValue: numeric('current_value', { precision: 12, scale: 2 }).notNull().default('0'),
   rentalValueBase: numeric('rental_value_base', { precision: 12, scale: 2 }).notNull().default('0'),
+  ownerType: text('owner_type').notNull().default('COMPANY'),
+  ownerName: text('owner_name'),
+  ownerDocument: text('owner_document'),
+  possessionType: text('possession_type').notNull().default('PROPRIO'),
+  financialRestriction: text('financial_restriction').notNull().default('NONE'),
+  financialInstitution: text('financial_institution'),
+  crlvExerciseYear: integer('crlv_exercise_year'),
+  registrationCity: text('registration_city'),
+  registrationState: text('registration_state'),
+  claSecurityCode: text('cla_security_code'),
+  sneCoverageStatus: text('sne_coverage_status').notNull().default('NAO_ADERIDO'),
   status: text('status').notNull(),
   notes: text('notes'),
   currentDriverId: text('current_driver_id'),
@@ -81,6 +92,32 @@ export const vehicles = pgTable('vehicles', {
   unq_renavam: unique().on(t.companyId, t.renavam),
   idx_company_status: index('idx_veh_company_status').on(t.companyId, t.status),
 }));
+
+export const vehicleOwnershipHistory = pgTable('vehicle_ownership_history', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  ownerType: text('owner_type').notNull(),
+  ownerName: text('owner_name').notNull(),
+  ownerDocument: text('owner_document'),
+  possessionType: text('possession_type').notNull(),
+  financialRestriction: text('financial_restriction').notNull().default('NONE'),
+  financialInstitution: text('financial_institution'),
+  effectiveFrom: timestamp('effective_from', { mode: 'string' }).notNull(),
+  effectiveTo: timestamp('effective_to', { mode: 'string' }),
+  reason: text('reason'),
+  documentAttachmentId: text('document_attachment_id'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  vehicleIdx: index('idx_voh_vehicle').on(t.companyId, t.vehicleId),
+  effectiveIdx: index('idx_voh_effective').on(t.companyId, t.effectiveFrom, t.effectiveTo),
+  tenantPolicy: pgPolicy('tenant_isolation_vehicle_ownership_history', {
+    for: 'all',
+    using: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+    withCheck: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+  }),
+})).enableRLS();
 
 export const vehicleInspections = pgTable('vehicle_inspections', {
   id: text('id').primaryKey(),
