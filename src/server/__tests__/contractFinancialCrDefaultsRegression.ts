@@ -74,6 +74,8 @@ const reconcileRoutes = readFileSync(`${root}src/server/contractFinanceReconcile
 const contractClient = readFileSync(`${root}src/api/contractClient.ts`, 'utf8');
 const depositClient = readFileSync(`${root}src/api/financeDepositClient.ts`, 'utf8');
 
+const contractRoutes = readFileSync(`${root}src/server/contractRoutes.ts`, 'utf8');
+const conflictResponse = readFileSync(`${root}src/server/contractConflictResponse.ts`, 'utf8');
 assert.match(financeAuthority, /OriginType\.CONTRACT_RENT/);
 assert.match(financeAuthority, /OriginType\.SECURITY_DEPOSIT/);
 assert.match(financeAuthority, /OriginType\.KM_EXCESS/);
@@ -84,7 +86,10 @@ assert.match(financeAuthority, /`\$\{contract\.id\}:deposit`/);
 assert.match(financeAuthority, /originId:`\$\{contract\.id\}:close`/);
 assert.match(reconcileRoutes, /ContractStatus\.CLOSED/);
 assert.match(reconcileRoutes, /findByContractId\(contract\.id\)/);
-assert.match(contractClient, /reconcile-close-finance/);
+assert.match(contractRoutes, /ensureContractCloseReceivables/);
+assert.match(contractRoutes, /Odometer reading required for contract close/);
+assert.match(conflictResponse, /Encerramento bloqueado: é obrigatório registrar a leitura do odômetro/);
+assert.match(contractClient, /\/api\/contracts\/\$\{encodeURIComponent\(id\)\}\/close/);
 assert.match(depositClient, /reconcile-deposit-receivable/);
 
 console.log('contract financial CR defaults regression: ok');

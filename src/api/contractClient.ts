@@ -157,15 +157,10 @@ export class ContractClient {
     return { item: validateContract(payload.item), receivables: payload.receivables.map(validateReceivable) };
   }
 
-  static async close(id: string, input: { closeDate?: string; reason?: string } = {}): Promise<Contract> {
-    const item = await requestItem(`/api/contracts/${encodeURIComponent(id)}/close`, {
+  static async close(id: string, input: { closeDate?: string; reason?: string; finalKm?: number; notes?: string } = {}): Promise<Contract> {
+    return requestItem(`/api/contracts/${encodeURIComponent(id)}/close`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
-    const reconciliation = await fetch(`/api/contracts/${encodeURIComponent(id)}/reconcile-close-finance`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}',
-    });
-    if (!reconciliation.ok) throw await apiError(reconciliation);
-    return item;
   }
 
   static async cancel(id: string, reason: string): Promise<Contract> {

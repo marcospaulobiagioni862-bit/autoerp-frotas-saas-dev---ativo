@@ -185,9 +185,18 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
 
   const action = async (task: () => Promise<unknown>, message: string) => {
     setActionLoading(true); setError(null); setSuccess(null);
-    try { await task(); setSuccess(message); await load(); onRefresh(); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : 'Falha na operação do contrato.'); }
-    finally { setActionLoading(false); }
+    try {
+      await task();
+      setSuccess(message);
+      await load();
+      onRefresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Falha na operação do contrato.');
+      await load();
+      onRefresh();
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const createRentalIncomeCategory = () => { void action(() => FinanceMasterDataClient.createCategory({ name: 'Aluguel de veículos', type: 'INCOME' }), 'Categoria financeira “Aluguel de veículos” criada e selecionada.'); };
@@ -198,8 +207,25 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
     void action(() => ContractClient.activate(contract.id, incomeCategoryId), 'Contrato ativado com vínculo e cobrança confirmados.');
   };
   const closeContract = () => {
-    if (!contract || !confirm('Deseja encerrar este contrato e liberar o veículo?')) return;
-    void action(() => ContractClient.close(contract.id, { reason: 'Encerrado manualmente no painel' }), 'Contrato encerrado e veículo liberado.');
+    if (!contract) return;
+    const hasKm = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
+    let finalKm: number | undefined = undefined;
+    if (hasKm) {
+      const promptKm = prompt(`Informe o odômetro final de devolução do veículo ${vehicle ? `(${vehicle.plate})` : ''} [Odômetro atual: ${vehicle?.currentKm ?? 0}]:`);
+      if (promptKm === null) return;
+      if (!promptKm.trim()) {
+        setError('O encerramento deste contrato exige o odômetro final para apuração do KM excedente. Solicite ao motorista via WhatsApp se necessário.');
+        return;
+      }
+      finalKm = Number(promptKm);
+      if (!Number.isFinite(finalKm) || finalKm < (vehicle?.currentKm ?? 0)) {
+        setError(`Odômetro final inválido. Deve ser um número maior ou igual ao KM atual do veículo (${vehicle?.currentKm ?? 0}).`);
+        return;
+      }
+    } else {
+      if (!confirm('Deseja encerrar este contrato e liberar o veículo?')) return;
+    }
+    void action(() => ContractClient.close(contract.id, { reason: 'Encerrado manualmente no painel', finalKm }), 'Contrato encerrado e apuração financeira concluída.');
   };
   const cancelContract = () => {
     if (!contract) return;
@@ -297,7 +323,22 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
       </div>}
 
       <div className="px-5 pt-3 space-y-2">
-        {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertTriangle className="w-4 h-4" />{error}</div>}
+        {error && (
+          <div className="flex flex-col gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-300">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            {(error.toLowerCase().includes('odômetro') || error.toLowerCase().includes('km') || error.toLowerCase().includes('check-in')) && (
+              <div className="mt-1 flex items-center justify-between border-t border-rose-200/80 pt-2 dark:border-rose-900/40">
+                <span className="font-medium">Precisa da leitura do motorista para apuração?</span>
+                <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="h-7 text-xs bg-white text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:bg-slate-900 dark:text-emerald-300">
+                  <Gauge className="w-3.5 h-3.5 mr-1" /> Pedir KM via WhatsApp
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
       </div>
 

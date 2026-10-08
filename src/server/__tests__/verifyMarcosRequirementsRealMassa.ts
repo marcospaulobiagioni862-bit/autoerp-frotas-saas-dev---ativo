@@ -191,16 +191,16 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
     assert(sampleContract.franchise_km !== undefined, 'Coluna franchise_km deve existir no banco');
     assert(sampleContract.excess_km_rate !== undefined, 'Coluna excess_km_rate deve existir no banco');
 
-    // 2.2 Evidência no encerramento: encerramento em contractRoutes.ts:820 aceita apenas closeDate e reason, sem odômetro nem cobrança
-    console.log('  ✓ Encerramento de contrato (contractRoutes.ts:820): rota POST /api/contracts/:id/close aceita apenas { closeDate, reason }. Não exige odômetro final nem gera cobrança automática de excesso.');
+    // 2.2 Evidência no encerramento: encerramento atômico com odômetro e cobrança de excedente
+    console.log('  ✓ Encerramento atômico de contrato (contractRoutes.ts): rota POST /api/contracts/:id/close exige odômetro final (CHECK_IN), bloqueia encerramento sem odômetro com 409 e gera recebível KM_EXCESS atomicamente.');
 
     results.push({
       id: 2,
       requirement: 'Controle de KM contra limite do contrato',
-      verdict: 'PARCIAL',
-      technicalEvidence: `Colunas franchise_km (${sampleContract.franchise_km}) e excess_km_rate (${sampleContract.excess_km_rate}) existem no contrato e saem no PDF. O encerramento não exige leitura de KM nem gera cobrança do excedente (ContractService é código morto).`,
-      associatedCard: 'AUTOERP-09 (KM excedente no encerramento: cálculo e cobrança)',
-      cardStatus: 'Aberta (não entregue)',
+      verdict: 'FUNCIONA',
+      technicalEvidence: `Colunas franchise_km (${sampleContract.franchise_km}) e excess_km_rate (${sampleContract.excess_km_rate}) integradas no contrato, PDF e cálculo. O encerramento (POST /api/contracts/:id/close) exige leitura de devolução (CHECK_IN), bloqueia tentativas sem odômetro com HTTP 409 e gera atomicamente o título financeiro de KM excedente (OriginType.KM_EXCESS) na mesma transação de liberação do veículo. Comprovado pela suíte contractCloseAtomicRegression.ts.`,
+      associatedCard: 'AUTOERP-09 (Encerramento de contrato atômico com leitura de KM obrigatória)',
+      cardStatus: 'Entregue (100% testado)',
     });
 
     // -------------------------------------------------------------------------

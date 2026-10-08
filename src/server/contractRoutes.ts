@@ -18,7 +18,7 @@ import {
 } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
-import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
+import { cancelUnpaidContractReceivables, ensureContractCloseReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
 import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
 import { contractConflictResponse } from './contractConflictResponse';
 import { getOperationalISODate } from '../shared/utils/date';
@@ -695,6 +695,19 @@ export function registerContractRoutes(app: Express): void {
         });
         if (!boundVehicle) throw new ContractNotFoundError();
 
+        await tx.getKmRecordRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: vehicle.id,
+          driverId: contract.driverId,
+          contractId: active.id,
+          kmValue: vehicle.currentKm,
+          recordDate: period.effectiveStartDate,
+          readingType: 'CHECK_OUT',
+          notes: 'Registro inicial de entrega do veículo (check-out) na ativação do contrato',
+          createdAt: now,
+        });
+
         const receivables = await ensureInitialContractReceivable(active, principal, tx);
 
         await tx.getAuditLogRepo().create({
@@ -822,10 +835,17 @@ export function registerContractRoutes(app: Express): void {
       const today = new Date().toISOString().slice(0, 10);
       if (closeDate > today) throw new ContractConflictError('Close date cannot be in the future');
       const reason = optionalText(req.body?.reason);
+      const rawFinalKm = req.body?.finalKm !== undefined ? req.body.finalKm : req.body?.odometer;
+      const finalKm = rawFinalKm !== undefined && rawFinalKm !== null && rawFinalKm !== '' ? Number(rawFinalKm) : undefined;
+      if (finalKm !== undefined && (!Number.isFinite(finalKm) || finalKm < 0)) {
+        throw new ContractConflictError('Odômetro final inválido');
+      }
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
-        if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) return contract;
+        if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) {
+          return { item: contract, receivables: [] };
+        }
         if (contract.status !== ContractStatus.ACTIVE) {
           throw new ContractConflictError('Contract lifecycle does not allow close');
         }
@@ -837,7 +857,44 @@ export function registerContractRoutes(app: Express): void {
           throw new ContractConflictError('Contract binding mismatch');
         }
         const now = new Date().toISOString();
+        let kmRecords = await tx.getKmRecordRepo().findByVehicleIdForCompany(principal.companyId, vehicle.id);
+
+        if (finalKm !== undefined) {
+          if (finalKm < vehicle.currentKm) {
+            throw new ContractConflictError('Odometer reading cannot be lower than current');
+          }
+          const createdCheckin = await tx.getKmRecordRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            vehicleId: vehicle.id,
+            driverId: contract.driverId,
+            contractId: contract.id,
+            kmValue: finalKm,
+            recordDate: closeDate,
+            readingType: 'CHECK_IN',
+            notes: optionalText(req.body?.notes) || 'Leitura de devolução no encerramento do contrato',
+            createdAt: now,
+          });
+          kmRecords = [createdCheckin, ...kmRecords];
+        }
+
+        const hasKmFranchise = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
+        const contractCheckins = kmRecords.filter(
+          (item) => item.companyId === contract.companyId &&
+            item.vehicleId === contract.vehicleId &&
+            item.contractId === contract.id &&
+            item.readingType === 'CHECK_IN' &&
+            item.recordDate >= period.effectiveStartDate &&
+            item.recordDate <= closeDate
+        );
+
+        if (hasKmFranchise && contractCheckins.length === 0) {
+          throw new ContractConflictError('Odometer reading required for contract close');
+        }
+
         const endDate = contract.endDate && contract.endDate < closeDate ? contract.endDate : closeDate;
+        const closeReceivables = await ensureContractCloseReceivables(contract, endDate, principal, tx);
+
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           status: ContractStatus.CLOSED,
           endDate,
@@ -845,21 +902,26 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
+
+        const updatedVehicleKm = finalKm !== undefined ? Math.max(vehicle.currentKm, finalKm) : vehicle.currentKm;
         const released = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
           status: VehicleStatus.AVAILABLE,
           currentDriverId: '',
           currentContractId: '',
+          currentKm: updatedVehicleKm,
           updatedAt: now,
         });
         if (!released) throw new ContractNotFoundError();
+
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
           userId: principal.userId, userName: principal.name, timestamp: now,
         });
-        return saved;
+
+        return { item: saved, receivables: closeReceivables };
       });
-      res.json({ item });
+      res.json(item);
     } catch (error) {
       sendContractError(res, error);
     }

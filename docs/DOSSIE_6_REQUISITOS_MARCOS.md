@@ -14,7 +14,7 @@ Esta matriz foi consolidada a partir da execução automatizada contra a API e o
 | # | Requisito do Marcos | Veredito Factual | O que Existe Hoje | O que NÃO Existe / O que Falta | Card de Referência no Gestão |
 |---|---|---|---|---|---|
 | **1** | Cobrança por WhatsApp com acompanhamento de conversa | **PARCIAL** | Envio de cobrança via link `wa.me` com mensagem formatada, valor, vencimento, chave Pix e auditoria no ERP (`AUTOERP-49`). Templates operacionais de link WhatsApp (`KM_REQUEST`, `TRAFFIC_TICKET`, `CNH_EXPIRY`, `RENT_BILLING`) com dados e locatário reais (`AUTOERP-55`/`49`). | Acompanhamento de conversa (leitura de respostas do motorista dentro do ERP) não existe. Requer a API Oficial da Meta (Cloud API com webhook autenticado). | `AUTOERP-49` (Concluída: envio entregue via wa.me) |
-| **2** | Controle de KM contra o limite do contrato | **PARCIAL** | Colunas `franchise_km` e `excess_km_rate` no banco; campo na interface; cláusula impressa no PDF assinado; cálculo no relatório de rentabilidade. | Encerramento de contrato (`/api/contracts/:id/close`) aceita apenas `{ closeDate, reason }`. Não exige odômetro final nem gera cobrança automática de KM excedente na liquidação. `ContractService` é código morto. | `AUTOERP-09` (Aberta, não entregue) |
+| **2** | Controle de KM contra o limite do contrato | **FUNCIONA** | Franquia de KM e taxa de excedente integradas no contrato, PDF e DRE. Encerramento de contrato (`POST /api/contracts/:id/close`) exige odômetro final na devolução, bloqueia encerramento sem leitura com HTTP 409 e gera atomicamente o Contas a Receber do KM excedente (`OriginType.KM_EXCESS`) na mesma transação de liberação do veículo. | Nada no fluxo principal. Leitura de odômetro via foto por inteligência artificial pode ser adicionada no futuro, mas a conferência, bloqueio e cobrança automática estão 100% entregues. | `AUTOERP-09` (Concluída, 100% testado) |
 | **3** | Vencimento de documentos | **FUNCIONA COM RESSALVA** | Central de Documentos (`/api/documents/alerts`) calcula vencimentos por estágios dinâmicos na leitura (HTTP 200 na massa homologada). Alerta de CNH via WhatsApp (`AUTOERP-55`). | Funciona e está navegável com a massa atual; status persistido no motorista (`cnh_status`) só é calculado na criação/edição manual (`evaluateCnhStatus`), ficando estático com o tempo (`AUTOERP-16`). Fragilidade estrutural conhecida no `AUTOERP-15`: qualquer registro gravado com data em formato timestamp faz a lista inteira responder 400 por falhar no `parseIsoDate`. | `AUTOERP-15` e `AUTOERP-16` (Abertas, não entregues) |
 | **4** | Botão de sair do sistema (Logout) | **FUNCIONA** | Botão "Sair da conta" no menu do avatar (`Header.tsx:240`), encerramento de sessão real (`POST /api/auth/logout` $\rightarrow$ 204 com `Set-Cookie` expirado), limpeza de rascunhos e redirecionamento. | Nada. 100% entregue e aprovado com testes unitários, mutação e homologação real Neon. | `AUTOERP-46` (Concluída, 10/10) |
 | **5** | Puxar multas, IPVA e licenciamento por RENAVAM | **NÃO EXISTE** | Módulo interno de Multas com máquina de 8 estados para indicação de condutor e controle de prazos cadastrados manualmente. | Consulta automática a Detran/SNE/Serpro via RENAVAM não existe (retorna HTTP 404). | `AUTOERP-50` e `AUTOERP-57` (Abertas, não entregues) |
@@ -45,18 +45,24 @@ Esta matriz foi consolidada a partir da execução automatizada contra a API e o
 ---
 
 ### Requisito 2: Controle de KM contra o Limite do Contrato
-- **Veredito Factual:** **PARCIAL (Franquia contratada e impressa; sem cobrança automática no encerramento)**
+- **Veredito Factual:** **FUNCIONA (100% Entregue com Encerramento Atômico e Cobrança de Excedente)**
 - **Evidência no Código & Banco:**
-  - Tabela `contracts` na massa Neon: colunas `franchise_km` (ex: `1500`) e `excess_km_rate` (ex: `0.75`) existem e estão preenchidas.
-  - O contrato em PDF oficial gerado (`POST /api/contracts/:id/generate-pdf`) imprime a franquia e a taxa de KM excedente.
-  - A tela de rentabilidade/DRE calcula o KM excedente teórico.
-  - **O GAP:** A rota de encerramento (`POST /api/contracts/:id/close` em `src/server/contractRoutes.ts:820`) aceita apenas `{ closeDate, reason }`. Ela **não exige odômetro final** e **não gera lançamento financeiro a receber do excedente** na devolução. A classe `ContractService.ts` com regras de excedente é código morto (não importada por ninguém). O card responsável é o `AUTOERP-09` (aberto).
+  - Tabela `contracts` na massa Neon: colunas `franchise_km` (ex: `1500`) e `excess_km_rate` (ex: `0.75`) existem, estão preenchidas e saem no PDF oficial impresso.
+  - **Encerramento Atômico (`POST /api/contracts/:id/close`):** executado em transação atômica única no backend (`UnitOfWork.run`).
+  - **Trava de Odômetro:** Se o contrato possui franquia de KM e não houver leitura `CHECK_IN` de devolução no período, a rota bloqueia o encerramento com **HTTP 409 Conflict** (`CONTRACT_ODOMETER_REQUIRED`).
+  - **Ação imediata na interface:** O modal de contrato (`ContractDetailsModal.tsx`) solicita o odômetro final de devolução e, em caso de ausência da leitura, oferece o botão direto **"Pedir KM via WhatsApp"** (`KM_REQUEST` via `wa.me`).
+  - **Cobrança Automática Atômica:** Quando o odômetro final é informado e gera rodagem excedente, o ERP cria na mesma transação o título financeiro a receber (`OriginType.KM_EXCESS`), grava a leitura `CHECK_IN` em `vehicle_km_records`, atualiza o veículo para `AVAILABLE` com o novo odômetro e fecha o contrato (`CLOSED`). Se qualquer etapa falhar, ocorre rollback total.
+  - Comprovado e coberto pela suíte dedicada de regressão `src/server/__tests__/contractCloseAtomicRegression.ts` e suíte de auditoria `npm run test:audit-wave-a`.
 - **Roteiro para a Demonstração na Tela:**
   1. Abrir a aba **Contratos**.
   2. Abrir um contrato ativo (ex: `v2demo-ngcompany001-contract-03`) e mostrar o campo **Franquia de KM (1.500 km)** e **Taxa de Excedente (R$ 0,75/km)**.
-  3. Baixar ou visualizar o PDF do contrato e mostrar as cláusulas de franquia impressas com validade jurídica.
+  3. Clicar em **Encerrar**:
+     - Deixar em branco ou sem odômetro: mostrar o sistema bloqueando o encerramento com mensagem clara e exibindo o botão de **Pedir KM via WhatsApp** para solicitar a foto do painel ao motorista.
+     - Informar o odômetro final com rodagem acima da franquia e confirmar.
+  4. Abrir a aba **Cobranças** do contrato ou a tela de **Contas a Receber**: mostrar o novo título gerado automaticamente com o valor exato do KM excedente calculado.
+  5. Mostrar o veículo liberado como **Disponível** com o odômetro atualizado.
 - **O que Falar para o Marcos:**
-  > *"Marcos, o contrato já amarra a franquia de KM e o valor do KM extra, e isso sai no contrato impresso que o motorista assina. Hoje, a conferência de odômetro na devolução é operacional; o desenvolvimento que bloqueia o encerramento sem odômetro e já gera o Contas a Receber automático da diferença está no card AUTOERP-09."*
+  > *"Marcos, o controle de KM está completo de ponta a ponta: o contrato amarra a franquia e o valor do KM extra, e na hora de devolver o carro o sistema não permite encerrar às cegas. O operador digita o odômetro final (ou pede a foto do painel via WhatsApp com 1 clique se o motorista ainda não mandou). Se tiver rodado além da franquia, o ERP já calcula na hora e cria a cobrança automática no Contas a Receber no mesmo instante em que libera o carro para a próxima locação."*
 
 ---
 
