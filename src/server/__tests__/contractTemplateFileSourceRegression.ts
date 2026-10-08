@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { registerAttachmentRoutes } from '../attachmentRoutes';
 import { registerContractTemplateRoutes } from '../contractTemplateRoutes';
 
@@ -56,7 +57,7 @@ export async function runContractTemplateFileSourceRegression(): Promise<void> {
     const userId = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'] : '';
     if (companyId && role && userId) {
       (req as Request & { principal?: AuthenticatedPrincipal }).principal = {
-        companyId, userId, name: `${role} Contract Template File`, role, permissions: [],
+        companyId, userId, name: `${role} Contract Template File`, role, permissions: getDefaultPermissionsForRole(role),
       };
     }
     next();

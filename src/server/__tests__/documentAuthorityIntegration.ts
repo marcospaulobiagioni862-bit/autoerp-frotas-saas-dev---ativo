@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { registerDocumentRoutes } from '../documentRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { PostgresAuditLogRepository } from '../../db/repositories/postgresRepositories';
 
 const companyA = 'security-2i4b-company-a';
@@ -96,7 +97,7 @@ export class DocumentAuthorityIntegrationRunner {
           userId,
           name: `${role} Document Integration`,
           role,
-          permissions: [],
+          permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

@@ -12,6 +12,7 @@ import { registerContractTemplateRoutes } from '../contractTemplateRoutes';
 import { registerContractExecutionRoutes } from '../contractExecutionRoutes';
 import { registerContractSimpleSignRoutes } from '../contractSimpleSignRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { RecurringFrequency, VehicleStatus } from '../../types/enums';
 
 const companyA = 'security-2i4c-company-a';
@@ -167,7 +168,7 @@ export class ContractExecutionAuthorityIntegrationRunner {
       const userId = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'] : '';
       if (companyId && role && userId) {
         (req as Request & { principal?: AuthenticatedPrincipal }).principal = {
-          companyId, userId, name: `${role} I4C Integration`, role, permissions: [],
+          companyId, userId, name: `${role} I4C Integration`, role, permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

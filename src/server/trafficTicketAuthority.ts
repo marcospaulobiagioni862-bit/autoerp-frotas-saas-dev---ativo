@@ -67,29 +67,135 @@ async function validateCategory(rawTx:any,companyId:string,categoryId:string,kin
   const allowed=kind==='EXPENSE'?['EXPENSE','BOTH']:['INCOME','BOTH'];
   if(!allowed.includes(String(category.type)))throw new TrafficTicketConflictError('Categoria financeira incompatível');
 }
-async function resolveContract(rawTx:any,companyId:string,vehicleId:string,infractionDate:string,contractId?:string,driverId?:string):Promise<{contractId?:string;driverId?:string}>{
-  if(contractId){
-    const result=await rawTx.execute(sql`
-      SELECT id,driver_id,vehicle_id,start_date,end_date,status,is_archived FROM contracts
-      WHERE company_id=${companyId} AND id=${contractId} LIMIT 1
+export interface InfractionMatchContext {
+  vehicle: {
+    id: string;
+    plate: string;
+    brand?: string;
+    model?: string;
+    ownerType: string;
+    ownerName?: string;
+    ownerDocument?: string;
+    sneCoverageStatus: string;
+  };
+  matchStatus: 'MATCHED_CONTRACT' | 'VEHICLE_IN_MAINTENANCE' | 'NO_ACTIVE_CONTRACT' | 'AMBIGUOUS';
+  matchedContract?: {
+    id: string;
+    contractNumber: string;
+    startDate: string;
+    endDate?: string;
+    status: string;
+    driverId: string;
+    driverName: string;
+    driverCnh?: string;
+    driverCpf?: string;
+    driverPhone?: string;
+    checkOutDate?: string;
+    checkInDate?: string;
+  };
+  inMaintenance?: boolean;
+  maintenanceOrder?: {
+    id: string;
+    type: string;
+    status: string;
+    description?: string;
+    date?: string;
+  };
+  ownershipFlow: {
+    flowType: 'CNPJ_DIRECT' | 'LEASING_INSTITUTION' | 'INDIVIDUAL_PARTNER' | 'THIRD_PARTY_OWNER';
+    riskOfNic: boolean;
+    instructions: string;
+  };
+  explanation: string;
+}
+
+async function resolveContract(
+  rawTx: any,
+  companyId: string,
+  vehicleId: string,
+  infractionDate: string,
+  infractionTime?: string,
+  contractId?: string,
+  driverId?: string,
+): Promise<{ contractId?: string; driverId?: string }> {
+  if (contractId) {
+    const result = await rawTx.execute(sql`
+      SELECT id, driver_id, vehicle_id, start_date, end_date, status, is_archived, contract_number
+      FROM contracts
+      WHERE company_id = ${companyId} AND id = ${contractId} LIMIT 1
     `);
-    const contract=rows(result)[0];if(!contract)throw new TrafficTicketNotFoundError('Contrato não encontrado');
-    if(String(contract.vehicle_id)!==vehicleId||contract.is_archived||['DRAFT','AWAITING_SIGNATURE','CANCELLED','ARCHIVED'].includes(String(contract.status)))throw new TrafficTicketConflictError('Contrato incompatível com a multa');
-    const start=String(contract.start_date).slice(0,10),end=contract.end_date?String(contract.end_date).slice(0,10):'9999-12-31';
-    if(infractionDate<start||infractionDate>end)throw new TrafficTicketConflictError('Contrato não cobre a data da infração');
-    if(driverId&&String(contract.driver_id)!==driverId)throw new TrafficTicketConflictError('Motorista divergente do contrato');
-    return {contractId:String(contract.id),driverId:driverId||String(contract.driver_id)};
+    const contract = rows(result)[0];
+    if (!contract) throw new TrafficTicketNotFoundError('Contrato não encontrado');
+    if (String(contract.vehicle_id) !== vehicleId || contract.is_archived || ['DRAFT', 'AWAITING_SIGNATURE', 'CANCELLED', 'ARCHIVED'].includes(String(contract.status))) {
+      throw new TrafficTicketConflictError('Contrato incompatível com a multa');
+    }
+    const start = String(contract.start_date).slice(0, 10);
+    const end = contract.end_date ? String(contract.end_date).slice(0, 10) : '9999-12-31';
+    if (infractionDate < start || infractionDate > end) {
+      throw new TrafficTicketConflictError(`Contrato #${contract.contract_number} não cobre a data da infração (${infractionDate})`);
+    }
+    if (driverId && String(contract.driver_id) !== driverId) {
+      throw new TrafficTicketConflictError(`Motorista divergente do contrato #${contract.contract_number}`);
+    }
+    return { contractId: String(contract.id), driverId: driverId || String(contract.driver_id) };
   }
-  const result=await rawTx.execute(sql`
-    SELECT id,driver_id FROM contracts
-    WHERE company_id=${companyId} AND vehicle_id=${vehicleId} AND is_archived=false
-      AND status NOT IN ('DRAFT','AWAITING_SIGNATURE','CANCELLED','ARCHIVED')
-      AND start_date<=${infractionDate} AND (end_date IS NULL OR end_date>=${infractionDate})
-    ORDER BY start_date DESC,id
+
+  const result = await rawTx.execute(sql`
+    SELECT c.id, c.driver_id, c.contract_number, c.start_date, c.end_date, d.name as driver_name
+    FROM contracts c
+    JOIN drivers d ON d.id = c.driver_id
+    WHERE c.company_id = ${companyId} AND c.vehicle_id = ${vehicleId} AND c.is_archived = false
+      AND c.status NOT IN ('DRAFT', 'AWAITING_SIGNATURE', 'CANCELLED', 'ARCHIVED')
+      AND c.start_date <= ${infractionDate} AND (c.end_date IS NULL OR c.end_date >= ${infractionDate})
+    ORDER BY c.start_date DESC, c.id
   `);
-  const matches=rows(result);if(matches.length!==1)return {};
-  const match=matches[0];if(driverId&&String(match.driver_id)!==driverId)return {};
-  return {contractId:String(match.id),driverId:driverId||String(match.driver_id)};
+  const matches = rows(result);
+  if (matches.length === 0) return {};
+
+  let selectedMatch = matches.length === 1 ? matches[0] : null;
+
+  // Se houver mais de 1 contrato cobrindo o mesmo dia (troca de motorista no mesmo dia),
+  // e foi fornecido infractionTime, tenta desempatar pelas vistorias de check-out e check-in
+  if (!selectedMatch && infractionTime) {
+    const infractionTimestamp = `${infractionDate}T${infractionTime}:00`;
+    for (const candidate of matches) {
+      const inspResult = await rawTx.execute(sql`
+        SELECT inspection_type, inspection_date
+        FROM vehicle_inspections
+        WHERE company_id = ${companyId} AND contract_id = ${candidate.id}
+        ORDER BY inspection_date ASC
+      `);
+      const inspections = rows(inspResult);
+      const checkOut = inspections.find((i: any) => i.inspection_type === 'CHECK_OUT');
+      const checkIn = inspections.find((i: any) => i.inspection_type === 'CHECK_IN');
+
+      let covered = true;
+      if (checkOut?.inspection_date && new Date(infractionTimestamp) < new Date(checkOut.inspection_date)) {
+        covered = false;
+      }
+      if (checkIn?.inspection_date && new Date(infractionTimestamp) > new Date(checkIn.inspection_date)) {
+        covered = false;
+      }
+      if (covered) {
+        if (selectedMatch) {
+          selectedMatch = null;
+          break;
+        }
+        selectedMatch = candidate;
+      }
+    }
+  }
+
+  if (!selectedMatch) return {};
+
+  // Se o contrato casado tem um motorista diferente do que o operador tentou passar:
+  if (driverId && String(selectedMatch.driver_id) !== driverId) {
+    throw new TrafficTicketConflictError(
+      `O veículo estava locado para ${selectedMatch.driver_name} (Contrato #${selectedMatch.contract_number}) na data da infração. Não é permitido atribuir a infração a motorista divergente.`
+    );
+  }
+
+  return { contractId: String(selectedMatch.id), driverId: driverId || String(selectedMatch.driver_id) };
 }
 async function currentFinancial(tx:any,ticket:TrafficTicket):Promise<TrafficTicketFinancialState>{
   const basePayable=ticket.payableId?await tx.getPayableRepo().findById(ticket.payableId):null;
@@ -212,7 +318,7 @@ export class TrafficTicketAuthorityService {
       let driverId: string|undefined;
       let contractId: string|undefined;
       if(input.responsibility===TicketResponsibility.DRIVER){
-        const resolved=vehicleId?await resolveContract(rawTx,principal.companyId,vehicleId,input.infractionDate,input.contractId,input.driverId):{};
+        const resolved=vehicleId?await resolveContract(rawTx,principal.companyId,vehicleId,input.infractionDate,input.infractionTime,input.contractId,input.driverId):{};
         driverId=input.driverId||resolved.driverId;
         contractId=vehicleId?(input.contractId||resolved.contractId):undefined;
         if(!driverId)throw new TrafficTicketConflictError('Motorista deve ser identificado sem ambiguidade');
@@ -269,7 +375,7 @@ export class TrafficTicketAuthorityService {
       const rawTx=tx.getRawTransaction?.();if(!rawTx)throw new Error('Traffic ticket persistence unavailable');const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED)throw new TrafficTicketConflictError('Multa cancelada');
       if(input.driverId){const driver=await tx.getDriverRepo().findByIdForCompany(principal.companyId,input.driverId);if(!driver||driver.isArchived)throw new TrafficTicketNotFoundError('Motorista não encontrado');}
       const resolved=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId
-        ?await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,input.contractId,input.driverId)
+        ?await resolveContract(rawTx,principal.companyId,current.vehicleId,current.infractionDate,current.infractionTime,input.contractId,input.driverId)
         :{};
       let driverId=input.responsibility===TicketResponsibility.DRIVER?input.driverId:undefined;
       let contractId=input.responsibility===TicketResponsibility.DRIVER&&current.vehicleId?(input.contractId||resolved.contractId):undefined;
@@ -320,5 +426,192 @@ export class TrafficTicketAuthorityService {
   static async cancel(principal:AuthenticatedPrincipal,id:string,reason:string):Promise<TrafficTicketDetails>{
     assertWrite(principal);const clean=reason.trim();if(!clean)throw new TrafficTicketValidationError('Motivo obrigatório');
     return await UnitOfWork.run(principal.companyId,async tx=>{const repo=tx.getTrafficTicketRepo();const current=await repo.findByIdForCompanyWithLock(principal.companyId,id);if(!current)throw new TrafficTicketNotFoundError();if(current.status===TicketStatus.CANCELLED){const financial=await currentFinancial(tx,current);return {item:current,financial};}await cancelReceivableIfOpen(tx,principal,current.receivableId);await cancelPayableIfOpen(tx,principal,current.nicPayableId);await cancelPayableIfOpen(tx,principal,current.payableId);const now=new Date().toISOString();const saved=await repo.save({...current,status:TicketStatus.CANCELLED,cancelReason:clean,cancelledAt:now,updatedAt:now});await audit(tx,principal,AuditAction.CANCEL,current,saved);await syncOperationalAlert(tx,principal,saved,true);const financial=await currentFinancial(tx,saved);return {item:saved,financial};},{financialPeriodLock:'SHARED'});
+  }
+
+  static async getMatchContext(
+    companyId: string,
+    vehicleId: string,
+    infractionDate: string,
+    infractionTime?: string,
+  ): Promise<InfractionMatchContext> {
+    return await UnitOfWork.run(companyId, async tx => {
+      const rawTx = tx.getRawTransaction?.();
+      if (!rawTx) throw new Error('Traffic ticket persistence unavailable');
+
+      const vRes = await rawTx.execute(sql`
+        SELECT id, plate, brand, model, owner_type, owner_name, owner_document, sne_coverage_status
+        FROM vehicles
+        WHERE company_id = ${companyId} AND id = ${vehicleId} AND is_archived = false
+        LIMIT 1
+      `);
+      const vehicle = rows(vRes)[0];
+      if (!vehicle) throw new TrafficTicketNotFoundError('Veículo não encontrado');
+
+      const ownerType = String(vehicle.owner_type || 'COMPANY');
+      let flowType: 'CNPJ_DIRECT' | 'LEASING_INSTITUTION' | 'INDIVIDUAL_PARTNER' | 'THIRD_PARTY_OWNER' = 'CNPJ_DIRECT';
+      let riskOfNic = true;
+      let instructions = '';
+
+      if (ownerType === 'FINANCED_LEASING') {
+        flowType = 'LEASING_INSTITUTION';
+        riskOfNic = true;
+        instructions = 'Veículo sob Arrendamento Mercantil/Leasing. Notificação emitida à arrendadora; indicação do locatário é mandatória para evitar repasse de encargos e retenção financeira.';
+      } else if (ownerType === 'PARTNER') {
+        flowType = 'INDIVIDUAL_PARTNER';
+        riskOfNic = false;
+        instructions = 'Veículo em nome de sócio (Pessoa Física). Não incide multa NIC; no entanto, os pontos da infração irão diretamente para a CNH do sócio caso o condutor locatário não seja indicado.';
+      } else if (ownerType === 'THIRD_PARTY') {
+        flowType = 'THIRD_PARTY_OWNER';
+        riskOfNic = false;
+        instructions = 'Veículo de terceiro/investidor. Formalize a indicação do condutor para preservar a pontuação da CNH do proprietário registrado no documento.';
+      } else {
+        flowType = 'CNPJ_DIRECT';
+        riskOfNic = true;
+        instructions = 'Veículo de titularidade direta da empresa (CNPJ). Risco de multa NIC (em dobro) caso o condutor não seja indicado tempestivamente junto ao órgão autuador.';
+      }
+
+      // Check maintenance (work orders)
+      const woRes = await rawTx.execute(sql`
+        SELECT id, number, status, description, service_date, opened_at, completed_at
+        FROM work_orders
+        WHERE company_id = ${companyId}
+          AND vehicle_id = ${vehicleId}
+          AND status NOT IN ('CANCELLED')
+          AND (
+            (service_date = ${infractionDate}::date)
+            OR (opened_at::date <= ${infractionDate}::date AND (completed_at IS NULL OR completed_at::date >= ${infractionDate}::date))
+          )
+        ORDER BY opened_at DESC
+        LIMIT 1
+      `);
+      const wo = rows(woRes)[0];
+      const inMaintenance = Boolean(wo);
+      const maintenanceOrder = wo ? {
+        id: String(wo.id),
+        type: String(wo.number),
+        status: String(wo.status),
+        description: wo.description ? String(wo.description) : undefined,
+        date: wo.service_date ? String(wo.service_date).slice(0, 10) : String(wo.opened_at).slice(0, 10),
+      } : undefined;
+
+      // Query active contracts covering infractionDate
+      const cRes = await rawTx.execute(sql`
+        SELECT c.id, c.driver_id, c.contract_number, c.start_date, c.end_date, c.status,
+               d.name as driver_name, d.cpf as driver_cpf, d.cnh as driver_cnh
+        FROM contracts c
+        JOIN drivers d ON d.id = c.driver_id
+        WHERE c.company_id = ${companyId} AND c.vehicle_id = ${vehicleId} AND c.is_archived = false
+          AND c.status NOT IN ('DRAFT', 'AWAITING_SIGNATURE', 'CANCELLED', 'ARCHIVED')
+          AND c.start_date <= ${infractionDate} AND (c.end_date IS NULL OR c.end_date >= ${infractionDate})
+        ORDER BY c.start_date DESC, c.id
+      `);
+      const matches = rows(cRes);
+
+      let selectedMatch = matches.length === 1 ? matches[0] : null;
+      let ambiguous = false;
+
+      if (!selectedMatch && matches.length > 1) {
+        if (infractionTime) {
+          const infractionTimestamp = `${infractionDate}T${infractionTime}:00`;
+          for (const candidate of matches) {
+            const inspResult = await rawTx.execute(sql`
+              SELECT inspection_type, inspection_date
+              FROM vehicle_inspections
+              WHERE company_id = ${companyId} AND contract_id = ${candidate.id}
+              ORDER BY inspection_date ASC
+            `);
+            const inspections = rows(inspResult);
+            const checkOut = inspections.find((i: any) => i.inspection_type === 'CHECK_OUT');
+            const checkIn = inspections.find((i: any) => i.inspection_type === 'CHECK_IN');
+
+            let covered = true;
+            if (checkOut?.inspection_date && new Date(infractionTimestamp) < new Date(checkOut.inspection_date)) {
+              covered = false;
+            }
+            if (checkIn?.inspection_date && new Date(infractionTimestamp) > new Date(checkIn.inspection_date)) {
+              covered = false;
+            }
+            if (covered) {
+              if (selectedMatch) {
+                selectedMatch = null;
+                ambiguous = true;
+                break;
+              }
+              selectedMatch = candidate;
+            }
+          }
+          if (!selectedMatch) ambiguous = true;
+        } else {
+          ambiguous = true;
+        }
+      }
+
+      let matchStatus: 'MATCHED_CONTRACT' | 'VEHICLE_IN_MAINTENANCE' | 'NO_ACTIVE_CONTRACT' | 'AMBIGUOUS';
+      let matchedContract: InfractionMatchContext['matchedContract'] | undefined;
+      let explanation = '';
+
+      if (selectedMatch) {
+        matchStatus = 'MATCHED_CONTRACT';
+        const inspResult = await rawTx.execute(sql`
+          SELECT inspection_type, inspection_date
+          FROM vehicle_inspections
+          WHERE company_id = ${companyId} AND contract_id = ${selectedMatch.id}
+          ORDER BY inspection_date ASC
+        `);
+        const inspections = rows(inspResult);
+        const checkOut = inspections.find((i: any) => i.inspection_type === 'CHECK_OUT');
+        const checkIn = inspections.find((i: any) => i.inspection_type === 'CHECK_IN');
+
+        matchedContract = {
+          id: String(selectedMatch.id),
+          contractNumber: String(selectedMatch.contract_number),
+          startDate: String(selectedMatch.start_date).slice(0, 10),
+          endDate: selectedMatch.end_date ? String(selectedMatch.end_date).slice(0, 10) : undefined,
+          status: String(selectedMatch.status),
+          driverId: String(selectedMatch.driver_id),
+          driverName: String(selectedMatch.driver_name),
+          driverCnh: selectedMatch.driver_cnh ? String(selectedMatch.driver_cnh) : undefined,
+          driverCpf: selectedMatch.driver_cpf ? String(selectedMatch.driver_cpf) : undefined,
+          checkOutDate: checkOut?.inspection_date ? String(checkOut.inspection_date) : undefined,
+          checkInDate: checkIn?.inspection_date ? String(checkIn.inspection_date) : undefined,
+        };
+
+        explanation = `Contrato #${selectedMatch.contract_number} ativo na data da infração para o locatário ${selectedMatch.driver_name}.${
+          inMaintenance ? ' Atenção: Veículo também possuía ordem de serviço de manutenção na mesma data.' : ''
+        }`;
+      } else if (ambiguous) {
+        matchStatus = 'AMBIGUOUS';
+        explanation = `Existem ${matches.length} contratos concorrentes na data da infração. Informe o horário exato da infração para desempate via vistorias de check-out/check-in.`;
+      } else if (inMaintenance) {
+        matchStatus = 'VEHICLE_IN_MAINTENANCE';
+        explanation = `Veículo encontrava-se em manutenção/oficina (OS #${maintenanceOrder?.type}) na data da infração, sem contrato de locação ativo. A responsabilidade deve recair sobre a empresa ou oficina.`;
+      } else {
+        matchStatus = 'NO_ACTIVE_CONTRACT';
+        explanation = 'Nenhum contrato ativo cobrindo a data da infração (veículo em pátio). A infração deve ser tratada como responsabilidade da Empresa.';
+      }
+
+      return {
+        vehicle: {
+          id: String(vehicle.id),
+          plate: String(vehicle.plate),
+          brand: vehicle.brand ? String(vehicle.brand) : undefined,
+          model: vehicle.model ? String(vehicle.model) : undefined,
+          ownerType,
+          ownerName: vehicle.owner_name ? String(vehicle.owner_name) : undefined,
+          ownerDocument: vehicle.owner_document ? String(vehicle.owner_document) : undefined,
+          sneCoverageStatus: String(vehicle.sne_coverage_status || 'NAO_ADERIDO'),
+        },
+        matchStatus,
+        matchedContract,
+        inMaintenance,
+        maintenanceOrder,
+        ownershipFlow: {
+          flowType,
+          riskOfNic,
+          instructions,
+        },
+        explanation,
+      };
+    });
   }
 }

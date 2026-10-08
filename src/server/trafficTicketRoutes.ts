@@ -60,6 +60,7 @@ export function registerTrafficTicketRoutes(app:Express):void{
   registerTrafficTicketDocumentIntakeRoutes(app);
   registerTrafficTicketDocumentIntakeUploadRoutes(app);
   app.get('/api/traffic-tickets/financial-categories',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{res.json({items:await TrafficTicketAuthorityService.listFinancialCategories(actor.companyId)});}catch(error){sendError(res,error);}});
+  app.get('/api/traffic-tickets/match-context',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{const vehicleId=text(req.query.vehicleId,200);const infractionDate=date(req.query.infractionDate,true)!;const infractionTime=optionalText(req.query.infractionTime,5);res.json(await TrafficTicketAuthorityService.getMatchContext(actor.companyId,vehicleId,infractionDate,infractionTime));}catch(error){sendError(res,error);}});
   app.get('/api/traffic-tickets',async(req,res)=>{const actor=requireReadPrincipal(req,res);if(!actor)return;try{
     const filters={vehicleId:optionalText(req.query.vehicleId,200),driverId:optionalText(req.query.driverId,200),status:status(req.query.status),responsibility:req.query.responsibility?responsibility(req.query.responsibility):undefined};
     res.json({items:await TrafficTicketAuthorityService.list(actor.companyId,filters)});
