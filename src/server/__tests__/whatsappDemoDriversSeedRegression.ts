@@ -74,13 +74,13 @@ async function run() {
       {
         driverId: 'v2demo-ngcompany001-driver-02',
         receivableId: 'v2demo-ngcompany001-receivable-rent-02',
-        expectedPhone: '5511988880002',
+        expectedPhone: '5511900010002',
         namePrefix: 'Bruno Martins',
       },
       {
         driverId: 'v2demo-ngcompany001-driver-03',
         receivableId: 'v2demo-ngcompany001-receivable-rent-03',
-        expectedPhone: '5511988880003',
+        expectedPhone: '5511900010003',
         namePrefix: 'Carla Oliveira',
       },
     ];

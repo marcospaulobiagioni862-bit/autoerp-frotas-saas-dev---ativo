@@ -132,6 +132,9 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploadCount, setUploadCount] = useState(0);
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [closeFinalKm, setCloseFinalKm] = useState('');
+  const [closeReason, setCloseReason] = useState('Encerrado manualmente no painel');
 
   const load = async () => {
     if (!isOpen || !contractId) return;
@@ -208,24 +211,30 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
   };
   const closeContract = () => {
     if (!contract) return;
+    setCloseFinalKm(vehicle ? String(vehicle.currentKm) : '');
+    setCloseReason('Encerrado manualmente no painel');
+    setCloseDialogOpen(true);
+  };
+  const confirmCloseContract = () => {
+    if (!contract) return;
     const hasKm = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
     let finalKm: number | undefined = undefined;
     if (hasKm) {
-      const promptKm = prompt(`Informe o odômetro final de devolução do veículo ${vehicle ? `(${vehicle.plate})` : ''} [Odômetro atual: ${vehicle?.currentKm ?? 0}]:`);
-      if (promptKm === null) return;
-      if (!promptKm.trim()) {
-        setError('O encerramento deste contrato exige o odômetro final para apuração do KM excedente. Solicite ao motorista via WhatsApp se necessário.');
+      if (!closeFinalKm.trim()) {
+        setError('O encerramento deste contrato exige o odômetro final para apuração do KM excedente.');
         return;
       }
-      finalKm = Number(promptKm);
+      finalKm = Number(closeFinalKm);
       if (!Number.isFinite(finalKm) || finalKm < (vehicle?.currentKm ?? 0)) {
         setError(`Odômetro final inválido. Deve ser um número maior ou igual ao KM atual do veículo (${vehicle?.currentKm ?? 0}).`);
         return;
       }
-    } else {
-      if (!confirm('Deseja encerrar este contrato e liberar o veículo?')) return;
     }
-    void action(() => ContractClient.close(contract.id, { reason: 'Encerrado manualmente no painel', finalKm }), 'Contrato encerrado e apuração financeira concluída.');
+    setCloseDialogOpen(false);
+    void action(
+      () => ContractClient.close(contract.id, { reason: closeReason.trim() || 'Encerrado manualmente no painel', finalKm }),
+      'Contrato encerrado e apuração financeira concluída.'
+    );
   };
   const cancelContract = () => {
     if (!contract) return;
@@ -403,6 +412,108 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/30"><h4 className="mb-3 flex items-center gap-2 text-xs font-bold"><ShieldCheck className="w-4 h-4 text-emerald-600" />Arquivos e anexos do contrato</h4><FileUpload entityType="Contract" entityId={contract.id} documentType="CONTRACT_DOCUMENT" onUploadComplete={() => setUploadCount((value) => value + 1)} multiple={true} /><div className="mt-4" key={uploadCount}><AttachmentList entityType="Contract" entityId={contract.id} /></div></div>
         </>}
       </div>
+
+      {closeDialogOpen && contract && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" data-unsaved-ignore="true">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Gauge className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">Encerrar Contrato &amp; Liberar Veículo</h3>
+              </div>
+              <button type="button" onClick={() => setCloseDialogOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5 text-xs space-y-2 dark:border-emerald-950 dark:bg-emerald-950/20">
+                <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                  <span>Veículo / Placa:</span>
+                  <span className="font-semibold text-slate-900 dark:text-white">{vehicle ? `${vehicle.brand} ${vehicle.model} (${vehicle.plate})` : 'Não localizado'}</span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                  <span>Odômetro atual / devolução mínima:</span>
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{vehicle?.currentKm ?? 0} km</span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                  <span>Franquia contratada:</span>
+                  <span className="font-semibold">{contract.franchiseKm} km</span>
+                </div>
+                <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                  <span>Taxa por KM excedente:</span>
+                  <span className="font-semibold">{formatCurrencyBRL(contract.excessKmRate)}/km</span>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) ? (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Odômetro final na devolução (km) <span className="text-rose-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { void requestKmWhatsApp(); }}
+                      className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 flex items-center gap-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" /> Pedir KM via WhatsApp
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    min={vehicle?.currentKm ?? 0}
+                    placeholder={`Ex: ${(vehicle?.currentKm ?? 0) + 100}`}
+                    value={closeFinalKm}
+                    onChange={(e) => setCloseFinalKm(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm font-mono dark:border-slate-700 dark:text-white"
+                  />
+                  {closeFinalKm && Number(closeFinalKm) < (vehicle?.currentKm ?? 0) && (
+                    <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                      O odômetro final não pode ser menor que o atual ({vehicle?.currentKm ?? 0} km).
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Este contrato não possui franquia de KM. O veículo será liberado para o status disponível imediatamente.
+                </p>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Motivo do encerramento
+                </label>
+                <input
+                  type="text"
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  placeholder="Ex: Devolução de rotina, rescisão amigável..."
+                  className="w-full rounded-lg border border-slate-200 bg-transparent px-3 py-2 text-sm dark:border-slate-700 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" size="sm" variant="ghost" onClick={() => setCloseDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                isLoading={actionLoading}
+                disabled={Boolean(((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (!closeFinalKm || Number(closeFinalKm) < (vehicle?.currentKm ?? 0)))}
+                onClick={confirmCloseContract}
+              >
+                Confirmar Encerramento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ModalContainer>
   );
 };

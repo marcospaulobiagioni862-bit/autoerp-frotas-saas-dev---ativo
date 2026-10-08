@@ -326,7 +326,7 @@ export async function ensureContractCloseReceivables(
     driverId:contract.driverId,
     contractId:contract.id,
     categoryId,
-    description:`KM excedente - Contrato ${contract.contractNumber}: ${charge.excessKm} km × R$ ${contract.excessKmRate.toFixed(2)}`,
+    description:`KM excedente - Contrato ${contract.contractNumber}: ${charge.excessKm} km × R$ ${contract.excessKmRate.toFixed(2)}${!hasCheckout ? ' [Marco inicial sintetizado]' : ''}`,
     totalAmount:charge.amount,
     dueDate:closeDate,
     competenceDate:closeDate,
