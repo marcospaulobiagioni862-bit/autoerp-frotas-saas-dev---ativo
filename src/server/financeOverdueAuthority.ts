@@ -352,7 +352,7 @@ async function processType(
     const outstandingPrincipal = roundCurrency(Math.max(0, originalAmount - paidAmount));
     const chargeable = daysOverdue > rule.gracePeriodDays;
     // Preserve operation-specific charges and never accrue global charges on CP.
-    const preserveCharges = type === 'PAYABLE' || Boolean((await tx.execute(sql`SELECT 1 FROM audit_logs WHERE company_id=${actor.companyId} AND entity_type='FinancialSettlement' AND (changes::jsonb->>'newState')::jsonb->>'obligationId'=${row.id} LIMIT 1`)).rows?.length);
+    const preserveCharges = type === 'PAYABLE' || Boolean((await tx.execute(sql`SELECT 1 FROM settlement_compositions WHERE company_id=${actor.companyId} AND obligation_id=${row.id} LIMIT 1`)).rows?.length);
     const fineAmount = preserveCharges ? numberValue(row.fineAmount) : chargeable ? roundCurrency(outstandingPrincipal * (rule.finePercent / 100)) : 0;
     const interestAmount = preserveCharges ? numberValue(row.interestAmount) : chargeable
       ? roundCurrency(outstandingPrincipal * (rule.dailyInterestPercent / 100) * daysOverdue)

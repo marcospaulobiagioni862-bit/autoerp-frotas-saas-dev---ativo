@@ -1,5 +1,5 @@
 import { isNotNull, sql } from 'drizzle-orm';
-import { pgTable, text, date, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -674,3 +674,29 @@ export const cspViolationReports = pgTable('csp_violation_reports', {
   firstSeen: timestamp('first_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   lastSeen: timestamp('last_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 });
+
+// Composicao de baixa: o retrato do titulo antes e depois, mais os ajustes
+// aplicados. E o que torna o estorno reversivel.
+//
+// Vivia dentro de audit_logs, e por isso limpar uma tabela chamada "logs"
+// destruia a capacidade de estornar dinheiro. Aqui o nome e as constraints
+// dizem o que o dado e: chave composta impede duplicata (que antes bloqueava o
+// estorno para sempre), e os dois CHECK movem para o banco validacoes que
+// antes eram feitas em codigo na hora da leitura.
+export const settlementCompositions = pgTable('settlement_compositions', {
+  companyId: text('company_id').notNull(),
+  transactionId: text('transaction_id').notNull(),
+  obligationId: text('obligation_id').notNull(),
+  composition: jsonb('composition').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.transactionId], name: 'settlement_compositions_pkey' }),
+  obligationIdx: index('idx_settlement_compositions_company_obligation').on(t.companyId, t.obligationId),
+  versionCheck: check('settlement_compositions_version_chk', sql`coalesce(${t.composition}->>'version','') = '1'`),
+  transactionCheck: check('settlement_compositions_transaction_chk', sql`coalesce(${t.composition}->>'transactionId','') = ${t.transactionId}`),
+  tenantPolicy: pgPolicy('tenant_isolation_settlement_compositions', {
+    for: 'all',
+    using: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+    withCheck: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+  }),
+})).enableRLS();

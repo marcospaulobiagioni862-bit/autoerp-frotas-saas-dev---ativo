@@ -64,14 +64,27 @@ export class UnitOfWork {
       await tx.execute(sql`SELECT set_config('app.current_tenant', ${companyId}, true)`);
       await applyFinancialPeriodLock(tx,companyId,options?.financialPeriodLock);
       const txContext:any={
+        // Le da tabela propria, e NAO de audit_logs. Sem fallback de proposito:
+        // fallback manteria viva a dependencia que o AUTOERP-24 existe para
+        // cortar. O historico foi migrado pela 0086_settlement_compositions.
+        //
+        // A checagem de "mais de uma linha" desapareceu porque a chave primaria
+        // composta (company_id, transaction_id) torna a duplicata impossivel -
+        // antes ela so era detectada aqui, e bloqueava o estorno para sempre.
         findSettlementComposition: async (transactionId: string) => {
-          const result = await tx.execute(sql`SELECT changes FROM audit_logs WHERE company_id=${companyId} AND entity_type='FinancialSettlement' AND entity_id=${transactionId}`);
+          const result = await tx.execute(sql`SELECT composition FROM settlement_compositions WHERE company_id=${companyId} AND transaction_id=${transactionId}`);
           if (!result.rows?.length) return null;
-          if (result.rows.length !== 1) throw new Error('Auditoria da liquidação ambígua');
-          const changes = typeof result.rows[0].changes === 'string' ? JSON.parse(result.rows[0].changes) : result.rows[0].changes;
-          const value = typeof changes.newState === 'string' ? JSON.parse(changes.newState) : changes.newState;
+          const raw = result.rows[0].composition;
+          const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
           if (value?.version !== 1 || value.transactionId !== transactionId) throw new Error('Composição da liquidação inválida');
           return value;
+        },
+        saveSettlementComposition: async (composition: any) => {
+          await tx.execute(sql`
+            INSERT INTO settlement_compositions (company_id, transaction_id, obligation_id, composition, created_at)
+            VALUES (${companyId}, ${composition.transactionId}, ${composition.obligationId}, ${JSON.stringify(composition)}::jsonb, now())
+            ON CONFLICT (company_id, transaction_id) DO NOTHING
+          `);
         },
         findLastReceivableSettlementDate: async (obligationId: string) => {
           const result = await tx.execute(sql`

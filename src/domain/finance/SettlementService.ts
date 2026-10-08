@@ -170,6 +170,17 @@ export class SettlementService {
       balanceReduction: roundCurrency(params.paymentAmount - applied.fineAmount - applied.interestAmount - applied.additionalAmount + applied.discountAmount),
       before: settlementState(before), after: settlementState(after),
     };
+    // A tabela e a AUTORIDADE do dado; a linha de auditoria continua existindo
+    // como auditoria (e o settlementResidualRegression.ts afirma que ela
+    // existe). Falha fechado: contexto transacional sem a capacidade de gravar
+    // a composicao e erro, nao silencio - perder a composicao significa perder
+    // a capacidade de estornar aquela baixa.
+    if (tx) {
+      if (!tx.saveSettlementComposition) {
+        throw new Error('Autoridade transacional de composição de baixa indisponível');
+      }
+      await tx.saveSettlementComposition(composition);
+    }
     await AuditLogger.logAction(params.companyId, 'FinancialSettlement', transaction.id, AuditAction.CREATE, params.userId, params.userName, undefined, composition, tx);
   }
 
