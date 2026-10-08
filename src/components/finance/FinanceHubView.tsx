@@ -40,12 +40,12 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
   const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
 
   const subTabs = [
-    { id: 'overview' as const, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'receivables' as const, label: 'Contas a Receber', icon: TrendingUp },
-    { id: 'payables' as const, label: 'Contas a Pagar', icon: CreditCard },
+    { id: 'overview' as const, label: 'Resumo', icon: LayoutDashboard },
+    { id: 'receivables' as const, label: 'A Receber', icon: TrendingUp },
+    { id: 'payables' as const, label: 'A Pagar', icon: CreditCard },
     { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote },
-    { id: 'dre' as const, label: 'Relatórios / Rentabilidade', icon: PieChart },
+    { id: 'dre' as const, label: 'DRE', icon: PieChart },
     { id: 'settings' as const, label: 'Configurações', icon: Settings },
   ];
 

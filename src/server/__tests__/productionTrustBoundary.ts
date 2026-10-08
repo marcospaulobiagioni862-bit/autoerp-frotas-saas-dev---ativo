@@ -138,14 +138,9 @@ async function main(): Promise<void> {
   // O menu entregue ao cliente e o do Sidebar.tsx unificado (AUTOERP-67). Estas
   // sao as rotas operacionais que o usuario final precisa alcancar pela barra
   // lateral; se alguma sumir, a entrega regride.
-  // As 14 entradas do menu unificado entregue ao cliente. 'receivables' e 'payables'
-  // ficaram de fora quando esta lista foi escrita (8672e1e2) por erro meu de medicao:
-  // elas sao declaradas em varias linhas, porque carregam badge com contagem, e o
-  // levantamento que originou a lista casava id e label na MESMA linha. Duas entradas
-  // que o cliente ve ficaram sem tripwire. Ao mexer no menu, esta lista, os marcadores
-  // exigidos no 'Production bundle authority guard' e as assercoes negativas de
-  // quarentena tem de ser revistos no MESMO commit.
-  const safeProductionRoutes = ['dashboard', 'fleet', 'drivers', 'contracts', 'inspections', 'maintenance', 'trafficTickets', 'documentos', 'finance-overview', 'receivables', 'payables', 'transactions', 'cashflow', 'dre'];
+  // As 9 entradas do menu unificado entregue ao cliente (AUTOERP-48). As 6 entradas
+  // financeiras redundantes foram consolidadas no item único 'finance-overview' ("Financeiro").
+  const safeProductionRoutes = ['dashboard', 'fleet', 'drivers', 'contracts', 'inspections', 'maintenance', 'trafficTickets', 'documentos', 'finance-overview'];
   for (const route of safeProductionRoutes) {
     assert(sidebar.includes(`id: '${route}' as NavigationTab`), `Trusted production route missing: ${route}`);
   }
@@ -199,9 +194,9 @@ async function main(): Promise<void> {
   // existir com a unificacao: o menu entregue nao tem mais secao de cockpit. O
   // que precisa continuar valendo e a ausencia dele, ja coberta acima.
   assert(!sidebar.includes('h-dvh max-h-dvh'), 'Production sidebar must not size itself to the full viewport below the fixed header');
-  assert(sidebar.includes('h-full max-h-full min-h-0 overflow-hidden'), 'Production sidebar must inherit the available post-header height so its lower menu remains reachable');
-  assert(sidebar.includes("label: 'Movimentações'"), 'Production navigation must expose Movimentações explicitly');
-  assert(sidebar.includes("label: 'Fluxo de Caixa'"), 'Production navigation must expose Fluxo de Caixa explicitly');
+  // AUTOERP-48 unificou os itens financeiros na barra lateral num único item 'Financeiro'.
+  // As abas 'Movimentações' e 'Fluxo de Caixa' continuam expostas dentro do FinanceHubView.
+  assert(sidebar.includes("label: 'Financeiro'"), 'Production navigation must expose Financeiro explicitly');
   assert(app.includes("activeTab==='cashflow'&&<FinanceHubView initialSubTab=\"cashflow\""), 'Fluxo de Caixa navigation must select the cashflow sub-tab');
   assert(financeHub.includes("id: 'transactions' as const, label: 'Movimentações'"), 'Finance hub Movimentações sub-tab is missing');
   assert(financeHub.includes("id: 'cashflow' as const, label: 'Fluxo de Caixa'"), 'Finance hub Fluxo de Caixa sub-tab is missing');

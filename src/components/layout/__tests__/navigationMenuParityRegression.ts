@@ -27,9 +27,9 @@ function checkNavigationParity(): void {
     'ProductionSidebar deve re-exportar o Sidebar canônico'
   );
 
-  // 3. Garantir itens operacionais presentes no Sidebar.tsx unificado
+  // 3. Garantir itens operacionais presentes no Sidebar.tsx unificado (AUTOERP-48: 9 itens canônicos simplificados)
   const expectedItems = [
-    { id: 'dashboard', label: 'Visão Geral' },
+    { id: 'dashboard', label: 'Início' },
     { id: 'fleet', label: 'Veículos' },
     { id: 'drivers', label: 'Motoristas' },
     { id: 'contracts', label: 'Contratos' },
@@ -37,12 +37,7 @@ function checkNavigationParity(): void {
     { id: 'maintenance', label: 'Manutenção' },
     { id: 'trafficTickets', label: 'Multas' },
     { id: 'documentos', label: 'Documentos' },
-    { id: 'finance-overview', label: 'Dashboard Financeiro' },
-    { id: 'receivables', label: 'Contas a Receber' },
-    { id: 'payables', label: 'Contas a Pagar' },
-    { id: 'transactions', label: 'Movimentações' },
-    { id: 'cashflow', label: 'Fluxo de Caixa' },
-    { id: 'dre', label: 'Relatórios Financeiros' },
+    { id: 'finance-overview', label: 'Financeiro' },
   ];
 
   for (const item of expectedItems) {

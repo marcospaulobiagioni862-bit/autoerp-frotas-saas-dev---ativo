@@ -96,11 +96,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [companyName, branding?.companyName]);
 
   const displayName = companyName || branding?.companyName || 'AutoERP';
+  const totalFinancePending = (pendingReceivablesCount || 0) + (pendingPayablesCount || 0);
+  const financeBadgeColor = pendingPayablesCount > 0
+    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
+    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300';
+
   const categories = [
     {
       title: 'INÍCIO',
       items: [
-        { id: 'dashboard' as NavigationTab, label: 'Visão Geral', icon: LayoutDashboard, badge: null },
+        { id: 'dashboard' as NavigationTab, label: 'Início', icon: LayoutDashboard, badge: null },
       ],
     },
     {
@@ -116,26 +121,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
-      title: 'FINANCEIRO',
+      title: 'GESTÃO',
       items: [
-        { id: 'finance-overview' as NavigationTab, label: 'Dashboard Financeiro', icon: LayoutDashboard, badge: null },
         {
-          id: 'receivables' as NavigationTab,
-          label: 'Contas a Receber',
-          icon: TrendingUp,
-          badge: pendingReceivablesCount > 0 ? pendingReceivablesCount : null,
-          badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
+          id: 'finance-overview' as NavigationTab,
+          label: 'Financeiro',
+          icon: Banknote,
+          badge: totalFinancePending > 0 ? totalFinancePending : null,
+          badgeColor: financeBadgeColor,
         },
-        {
-          id: 'payables' as NavigationTab,
-          label: 'Contas a Pagar',
-          icon: CreditCard,
-          badge: pendingPayablesCount > 0 ? pendingPayablesCount : null,
-          badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
-        },
-        { id: 'transactions' as NavigationTab, label: 'Movimentações', icon: ArrowRightLeft, badge: null },
-        { id: 'cashflow' as NavigationTab, label: 'Fluxo de Caixa', icon: Banknote, badge: null },
-        { id: 'dre' as NavigationTab, label: 'Relatórios Financeiros', icon: PieChart, badge: null },
       ],
     },
   ];
@@ -177,7 +171,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="space-y-0.5">
               {category.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeTab === item.id;
+                const isFinanceTab = ['finance-overview', 'receivables', 'payables', 'transactions', 'cashflow', 'dre'].includes(activeTab);
+                const isActive = item.id === 'finance-overview' ? isFinanceTab : activeTab === item.id;
                 return (
                   <button
                     key={item.id}
