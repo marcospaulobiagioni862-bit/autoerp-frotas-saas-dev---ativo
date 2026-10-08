@@ -1160,7 +1160,7 @@ export function registerContractRoutes(app: Express): void {
         return;
       }
 
-      const bytes = await storage.read(verified.companyId, result.attachment.storageKey);
+      const bytes = await storage.read(verified.companyId, result.attachment.storageKey, result.attachment.storageProvider as any);
       const safeContractNumber = result.contract.contractNumber.replace(/[\r\n"]/g, '_');
       res.setHeader('content-type', 'application/pdf');
       res.setHeader('content-length', String(bytes.length));

@@ -178,8 +178,7 @@ async function operationalTemplate(tx: any, template: ContractTemplate) {
   if (classified?.source) {
     try {
       const storage = createAttachmentStorageFromEnvironment();
-      if (classified.source.storageProvider !== storage.provider) throw new Error('Source storage mismatch');
-      const bytes = await storage.read(template.companyId, classified.source.storageKey!);
+      const bytes = await storage.read(template.companyId, classified.source.storageKey!, classified.source.storageProvider as any);
       if (bytes.length !== classified.source.fileSize || createHash('sha256').update(bytes).digest('hex') !== classified.source.checksum) throw new Error('Source checksum mismatch');
       if (classified.mode === 'DOCX') {
         renderContractDocxPackage(bytes, Object.fromEntries([...CONTRACT_TEMPLATE_PLACEHOLDERS].map((key) => [key, 'validation'])));
