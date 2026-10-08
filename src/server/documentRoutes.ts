@@ -36,16 +36,13 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 function hasPermission(principal: AuthenticatedPrincipal, action: DocumentAction): boolean {
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*')) return true;
-  if (permissions.length > 0) {
-    if (action === 'VIEW_DOCUMENT') {
-      return permissions.includes('VIEW_DOCUMENT');
-    }
-    return permissions.includes('MUTATE_DOCUMENT') || permissions.includes(action);
+  if (action === 'VIEW_DOCUMENT') {
+    return permissions.includes('VIEW_DOCUMENT');
   }
-  if (action === 'VIEW_DOCUMENT') return true;
-  return DEFAULT_WRITE_ROLES.has(role);
+  return permissions.includes('MUTATE_DOCUMENT') || permissions.includes(action);
 }
 
 function requirePrincipal(req: Request, res: Response, action: DocumentAction): AuthenticatedPrincipal | null {

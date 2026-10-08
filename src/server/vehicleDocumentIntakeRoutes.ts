@@ -37,11 +37,12 @@ function requirePrincipal(req: Request, res: Response, action: Action): Authenti
   const principal = principalFrom(req);
   if (!principal) { res.status(401).json({ error: 'Unauthorized: Authentication required' }); return null; }
   const role = String(principal.role || '').toUpperCase();
+  if (!principal.userId || !principal.companyId || !ROLES.has(role)) { res.status(403).json({ error: 'Forbidden' }); return null; }
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  const allowed = !!principal.userId && !!principal.companyId && ROLES.has(role) &&
-    (permissions.includes('*') || permissions.includes(action) || action === 'VIEW_VEHICLE' || WRITE_ROLES.has(role));
-  if (!allowed) { res.status(403).json({ error: 'Forbidden' }); return null; }
-  return principal;
+  if (permissions.includes('*') || permissions.includes(action)) return principal;
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 function documentType(value: unknown): string {
   const normalized = typeof value === 'string' ? value.trim().toUpperCase().replace(/[-/ ]/g, '_') : '';

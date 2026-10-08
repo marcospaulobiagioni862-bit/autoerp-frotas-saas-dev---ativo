@@ -12,13 +12,11 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 
 function hasSignPermission(principal: AuthenticatedPrincipal): boolean {
   if (!principal.userId || !principal.companyId) return false;
+  const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes('SIGN_CONTRACT')) return true;
-  // Usuário com lista explícita de permissões sem SIGN_CONTRACT é barrado
-  if (permissions.length > 0) return false;
-  // Fallback para papéis de escrita legados sem personalização explícita de permissões
-  const role = String(principal.role || '').toUpperCase();
-  return WRITE_ROLES.has(role);
+  return false;
 }
 
 function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {

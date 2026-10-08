@@ -17,8 +17,10 @@ const CONFIG:Record<TrafficTicketVehicleOperationalCause,{category:TrafficTicket
 };
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function assertWrite(principal:AuthenticatedPrincipal):void{
-  const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
-  if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE')&&!permissions.includes('OPERATIONS_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: pendência operacional sem permissão de escrita');
+  const role=String(principal.role||'').toUpperCase();
+  if(role==='ADMIN') return;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE')&&!permissions.includes('OPERATIONS_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: pendência operacional sem permissão de escrita');
 }
 function cause(value:unknown):TrafficTicketVehicleOperationalCause{
   const item=String(value||'') as TrafficTicketVehicleOperationalCause;

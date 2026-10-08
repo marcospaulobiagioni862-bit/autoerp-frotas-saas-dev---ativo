@@ -43,8 +43,10 @@ function normalizePlate(value?:string):string|undefined{
   return plate&&plate.length>=5&&plate.length<=10?plate:undefined;
 }
 function assertWrite(principal:AuthenticatedPrincipal):void{
-  const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
-  if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
+  const role=String(principal.role||'').toUpperCase();
+  if(role==='ADMIN') return;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
 }
 function validateDate(value:string,label:string):void{
   if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new TrafficTicketValidationError(`${label} inválida`);

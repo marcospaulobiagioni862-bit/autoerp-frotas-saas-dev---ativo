@@ -115,4 +115,19 @@ export function registerAdminUserRoutes(app: Express): void {
       sendError(res, error);
     }
   });
+
+  app.post('/api/admin/users', async (req, res) => {
+    const p = requirePrincipal(req, res);
+    if (!p) return;
+    try {
+      const { name, email, role, permissions } = req.body || {};
+      if (!name || !email || !role) {
+        res.status(400).json({ error: 'Nome, email e papel são obrigatórios' });
+        return;
+      }
+      res.status(201).json({ item: await AdminUserAuthority.provisionUser(actorFrom(p), { name, email, role, permissions }) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 }

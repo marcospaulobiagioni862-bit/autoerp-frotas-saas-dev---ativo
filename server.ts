@@ -82,19 +82,10 @@ function requireFinancePrincipal(req: Request, res: Response, requiredPermission
   const role = String(principal.role || '').toUpperCase();
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
 
-  if (permissions.includes('*')) return principal;
+  if (role === 'ADMIN' || permissions.includes('*')) return principal;
 
   if (requiredPermission) {
-    if (permissions.length > 0) {
-      if (!FinancialAuthorizationService.matchesPermission(permissions, requiredPermission)) {
-        res.status(403).json({ error: 'Forbidden' });
-        return null;
-      }
-      return principal;
-    }
-
-    const FINANCE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'FINANCIAL_MANAGER', 'FINANCIAL_OPERATOR', 'FINANCIAL_VIEWER', 'OPERATIONAL', 'READONLY']);
-    if (!FINANCE_ROLES.has(role)) {
+    if (!FinancialAuthorizationService.matchesPermission(permissions, requiredPermission)) {
       res.status(403).json({ error: 'Forbidden' });
       return null;
     }

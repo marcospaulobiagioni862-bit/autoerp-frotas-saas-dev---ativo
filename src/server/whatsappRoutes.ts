@@ -59,12 +59,14 @@ function requirePrincipal(req: Request, res: Response, write = false): Authentic
     return null;
   }
   const role = String(principal.role || '').toUpperCase();
-  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (!principal.companyId || !principal.userId || !CANONICAL_ROLES.has(role)) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
-  if (write && !WRITE_ROLES.has(role) && !permissions.includes('*') && !permissions.includes('MANAGE_WHATSAPP')) {
+  if (role === 'ADMIN') return principal;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*')) return principal;
+  if (write && !permissions.includes('MANAGE_WHATSAPP')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }

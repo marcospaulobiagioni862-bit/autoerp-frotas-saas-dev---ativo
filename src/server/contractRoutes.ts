@@ -87,11 +87,10 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 function hasContractPermission(principal: AuthenticatedPrincipal, action: ContractAction): boolean {
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes(action)) return true;
-  if (action === 'VIEW_CONTRACT') return true;
-  if (action === 'BILL_CONTRACT') return BILL_ROLES.has(role);
-  return DEFAULT_WRITE_ROLES.has(role);
+  return false;
 }
 
 function requireContractPrincipal(req: Request, res: Response, action: ContractAction): AuthenticatedPrincipal | null {

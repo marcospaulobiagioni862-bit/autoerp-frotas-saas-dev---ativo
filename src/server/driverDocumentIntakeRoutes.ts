@@ -53,10 +53,10 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 function hasPermission(principal: AuthenticatedPrincipal, action: DriverIntakeAction): boolean {
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes(action)) return true;
-  if (action === 'VIEW_DRIVER') return true;
-  return DEFAULT_WRITE_ROLES.has(role);
+  return false;
 }
 
 function requirePrincipal(req: Request, res: Response, action: DriverIntakeAction): AuthenticatedPrincipal | null {

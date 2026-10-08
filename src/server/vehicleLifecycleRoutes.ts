@@ -41,12 +41,13 @@ function requireWritePrincipal(req: Request, res: Response): AuthenticatedPrinci
     return null;
   }
   const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (!WRITE_ROLES.has(role) && !permissions.includes('*') && !permissions.includes('CHANGE_VEHICLE_STATUS')) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
+  if (permissions.includes('*') || permissions.includes('CHANGE_VEHICLE_STATUS')) {
+    return principal;
   }
-  return principal;
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function requireArchivePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
@@ -56,19 +57,13 @@ function requireArchivePrincipal(req: Request, res: Response): AuthenticatedPrin
     return null;
   }
   const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes('ARCHIVE_VEHICLE')) {
     return principal;
   }
-  if (permissions.length > 0) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
-  }
-  if (!WRITE_ROLES.has(role)) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
-  }
-  return principal;
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function requiredText(value: unknown, field: string): string {

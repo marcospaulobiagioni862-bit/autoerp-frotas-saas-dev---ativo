@@ -46,10 +46,10 @@ class ApprovedContractMasterAttachmentError extends Error{}
 function principalFrom(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function hasAttachmentPermission(principal:AuthenticatedPrincipal,action:AttachmentAction):boolean{
   const role=String(principal.role||'').toUpperCase();if(!principal.userId||!principal.companyId||!CANONICAL_ROLES.has(role))return false;
-  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];if(permissions.includes('*')||permissions.includes(action))return true;
-  if(action==='VIEW_ATTACHMENT')return true;
-  if(action==='DELETE_ATTACHMENT')return role==='ADMIN';
-  return DEFAULT_WRITE_ROLES.has(role);
+  if(role==='ADMIN')return true;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(permissions.includes('*')||permissions.includes(action))return true;
+  return false;
 }
 function requireAttachmentPrincipal(req:Request,res:Response,action:AttachmentAction):AuthenticatedPrincipal|null{
   const principal=principalFrom(req);if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}

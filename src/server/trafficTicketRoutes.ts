@@ -22,12 +22,11 @@ function requireReadPrincipal(req:Request,res:Response):AuthenticatedPrincipal|n
   const item=principal(req);
   if(!item?.userId||!item?.companyId){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
   const role=String(item.role||'').toUpperCase();
+  if(role==='ADMIN') return item;
   const permissions=Array.isArray(item.permissions)?item.permissions:[];
   if(permissions.includes('*')||permissions.includes('VIEW_TRAFFIC_TICKET')) return item;
-  if(permissions.length>0){res.status(403).json({error:'Acesso negado'});return null;}
-  const READ_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','FINANCIAL_MANAGER','OPERATIONAL','READONLY']);
-  if(!READ_ROLES.has(role)){res.status(403).json({error:'Acesso negado'});return null;}
-  return item;
+  res.status(403).json({error:'Acesso negado'});
+  return null;
 }
 function hasProtected(body:any):boolean{return Boolean(body&&typeof body==='object'&&Object.keys(body).some(key=>PROTECTED_KEYS.has(key)));}
 function text(value:unknown,max=1000):string{const item=typeof value==='string'?value.trim():'';if(!item||item.length>max)throw new TrafficTicketValidationError();return item;}

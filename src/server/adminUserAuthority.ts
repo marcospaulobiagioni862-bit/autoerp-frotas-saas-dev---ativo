@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { users } from '../db/schema';
 import { AuditAction } from '../types/enums';
+import { getDefaultPermissionsForRole } from './rolePresets';
 
 export interface AdminUserActor {
   companyId: string;
@@ -262,6 +263,62 @@ export class AdminUserAuthority {
       });
 
       return sanitizeUser(updated);
+    });
+  }
+
+  static async provisionUser(
+    actor: AdminUserActor,
+    input: { id?: string; name: string; email: string; role: string; permissions?: string[] }
+  ): Promise<AdminUserRecord> {
+    assertCanManageUsers(actor);
+    const roleClean = input.role.trim().toUpperCase();
+    if (!roleClean) throw new AdminUserConflictError('Papel do usuário é obrigatório');
+    const assignedPermissions = (Array.isArray(input.permissions) && input.permissions.length > 0)
+      ? Array.from(new Set(input.permissions.map((p) => p.trim()).filter(Boolean)))
+      : getDefaultPermissionsForRole(roleClean);
+
+    return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
+      const tx = txContext.getRawTransaction();
+      const userId = input.id || randomUUID();
+      const now = new Date().toISOString();
+
+      const inserted = await tx
+        .insert(users)
+        .values({
+          id: userId,
+          companyId: actor.companyId,
+          name: input.name.trim(),
+          email: input.email.trim().toLowerCase(),
+          role: roleClean,
+          active: true,
+          permissions: assignedPermissions,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          active: users.active,
+          permissions: users.permissions,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt,
+        });
+
+      await txContext.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId: actor.companyId,
+        entityName: 'User',
+        entityId: userId,
+        action: AuditAction.CREATE,
+        newState: JSON.stringify({ name: input.name, email: input.email, role: roleClean, permissions: assignedPermissions }),
+        userId: actor.userId,
+        userName: actor.name,
+        timestamp: now,
+      });
+
+      return sanitizeUser(inserted[0]);
     });
   }
 }

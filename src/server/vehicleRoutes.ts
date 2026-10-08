@@ -40,16 +40,13 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 function hasVehiclePermission(principal: AuthenticatedPrincipal, action: VehicleAction): boolean {
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*')) return true;
-  if (permissions.length > 0) {
-    if (action === 'RECORD_VEHICLE_KM' || action === 'RECORD_KM') {
-      return permissions.includes('RECORD_KM') || permissions.includes('RECORD_VEHICLE_KM');
-    }
-    return permissions.includes(action);
+  if (action === 'RECORD_VEHICLE_KM' || action === 'RECORD_KM') {
+    return permissions.includes('RECORD_KM') || permissions.includes('RECORD_VEHICLE_KM');
   }
-  if (action === 'VIEW_VEHICLE') return true;
-  return DEFAULT_WRITE_ROLES.has(role);
+  return permissions.includes(action);
 }
 
 function requireVehiclePrincipal(req: Request, res: Response, action: VehicleAction): AuthenticatedPrincipal | null {

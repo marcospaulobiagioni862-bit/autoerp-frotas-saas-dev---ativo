@@ -200,14 +200,13 @@ function requirePrincipal(req: Request, res: Response, action: ExecutionAction):
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes(action)) return principal;
-  if (action === 'VIEW_CONTRACT_ARTIFACT') return principal;
-  if (!WRITE_ROLES.has(role)) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
-  }
-  return principal;
+  if (action === 'VIEW_CONTRACT_ARTIFACT' && permissions.includes('VIEW_CONTRACT')) return principal;
+  if (action !== 'VIEW_CONTRACT_ARTIFACT' && (permissions.includes('EDIT_CONTRACT') || permissions.includes('SIGN_CONTRACT'))) return principal;
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function text(value: unknown, field: string, min = 1, max = 180): string {

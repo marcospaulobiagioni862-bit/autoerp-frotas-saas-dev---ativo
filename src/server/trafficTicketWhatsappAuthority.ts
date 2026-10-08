@@ -24,8 +24,10 @@ export class TrafficTicketWhatsappConsentRequiredError extends Error{}
 
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function assertWrite(principal:AuthenticatedPrincipal):void{
-  const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
-  if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('MANAGE_WHATSAPP')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado');
+  const role=String(principal.role||'').toUpperCase();
+  if(role==='ADMIN') return;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(!permissions.includes('*')&&!permissions.includes('MANAGE_WHATSAPP')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado');
 }
 function normalizeBrazilPhone(value:unknown):string{
   const digits=typeof value==='string'?value.replace(/\D/g,''):'';

@@ -49,8 +49,10 @@ function optional(value:unknown):string|undefined{return value===null||value===u
 function iso(value:unknown):string{return value instanceof Date?value.toISOString():new Date(String(value)).toISOString();}
 function dateOnly(value:unknown):string|undefined{return value===null||value===undefined||value===''?undefined:String(value).slice(0,10);}
 function assertWrite(principal:AuthenticatedPrincipal):void{
-  const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
-  if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
+  const role=String(principal.role||'').toUpperCase();
+  if(role==='ADMIN') return;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE'))throw new TrafficTicketForbiddenError('Acesso negado: Multas sem permissão de escrita');
 }
 function validateDate(value?:string):void{
   if(!value)return;

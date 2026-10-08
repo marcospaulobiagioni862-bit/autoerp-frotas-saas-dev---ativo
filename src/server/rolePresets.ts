@@ -1,0 +1,91 @@
+/**
+ * Role preset permissions for AutoERP V2 backend.
+ * Aligned with frontend UserPermissionsModal.tsx ROLE_PRESETS.
+ */
+
+export const ROLE_PRESET_PERMISSIONS: Record<string, string[]> = {
+  ADMIN: ['*'],
+  MANAGER: [
+    'VIEW_VEHICLE',
+    'CREATE_VEHICLE',
+    'EDIT_VEHICLE',
+    'CHANGE_VEHICLE_STATUS',
+    'RECORD_KM',
+    'ARCHIVE_VEHICLE',
+    'VIEW_DRIVER',
+    'CREATE_DRIVER',
+    'EDIT_DRIVER',
+    'VIEW_CONTRACT',
+    'CREATE_CONTRACT',
+    'EDIT_CONTRACT',
+    'CHANGE_CONTRACT_STATUS',
+    'SIGN_CONTRACT',
+    'CANCEL_CONTRACT',
+    'ARCHIVE_CONTRACT',
+    'BILL_CONTRACT',
+    'VIEW_INSPECTION',
+    'CREATE_INSPECTION',
+    'VIEW_MAINTENANCE',
+    'MUTATE_MAINTENANCE',
+    'VIEW_TRAFFIC_TICKET',
+    'TRAFFIC_TICKET_WRITE',
+    'VIEW_FINANCE',
+    'RECEIPT_REGISTER',
+    'PAYMENT_REGISTER',
+    'RECEIVABLE_MUTATE',
+    'PAYABLE_MUTATE',
+    'MANAGE_WHATSAPP',
+    'VIEW_DOCUMENT',
+    'PROCESS_DOCUMENT_AI',
+  ],
+  OPERATIONAL: [
+    'VIEW_VEHICLE',
+    'CREATE_VEHICLE',
+    'EDIT_VEHICLE',
+    'CHANGE_VEHICLE_STATUS',
+    'RECORD_KM',
+    'VIEW_DRIVER',
+    'CREATE_DRIVER',
+    'EDIT_DRIVER',
+    'VIEW_CONTRACT',
+    'VIEW_INSPECTION',
+    'CREATE_INSPECTION',
+    'VIEW_MAINTENANCE',
+    'MUTATE_MAINTENANCE',
+    'VIEW_TRAFFIC_TICKET',
+    'VIEW_FINANCE',
+    'MANAGE_WHATSAPP',
+    'VIEW_DOCUMENT',
+    'PROCESS_DOCUMENT_AI',
+  ],
+  FINANCIAL: [
+    'VIEW_FINANCE',
+    'RECEIPT_REGISTER',
+    'PAYMENT_REGISTER',
+    'RECEIVABLE_MUTATE',
+    'PAYABLE_MUTATE',
+    'VIEW_CONTRACT',
+    'VIEW_TRAFFIC_TICKET',
+    'TRAFFIC_TICKET_WRITE',
+    'VIEW_DRIVER',
+    'VIEW_VEHICLE',
+    'VIEW_DOCUMENT',
+    'MANAGE_WHATSAPP',
+  ],
+  READONLY: [
+    'VIEW_VEHICLE',
+    'VIEW_DRIVER',
+    'VIEW_CONTRACT',
+    'VIEW_INSPECTION',
+    'VIEW_MAINTENANCE',
+    'VIEW_TRAFFIC_TICKET',
+    'VIEW_FINANCE',
+    'VIEW_DOCUMENT',
+  ],
+};
+
+export function getDefaultPermissionsForRole(role: string): string[] {
+  const normalized = String(role || '').toUpperCase().trim();
+  const preset = ROLE_PRESET_PERMISSIONS[normalized];
+  return preset ? [...preset] : [];
+}

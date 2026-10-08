@@ -43,7 +43,14 @@ function requirePrincipal(req: Request, res: Response, write = false): Authentic
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
-  if (write && !WRITE_ROLES.has(role) && !principal.permissions?.includes('*') && !principal.permissions?.includes('PROCESS_DOCUMENT_AI')) {
+  if (role === 'ADMIN') return principal;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*')) return principal;
+  if (write && !permissions.includes('PROCESS_DOCUMENT_AI')) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  if (!write && !permissions.includes('VIEW_DOCUMENT') && !permissions.includes('PROCESS_DOCUMENT_AI')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
