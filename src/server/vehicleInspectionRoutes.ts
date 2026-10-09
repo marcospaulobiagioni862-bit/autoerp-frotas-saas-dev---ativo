@@ -81,8 +81,10 @@ function deriveInspectionResult(items:Record<string,string>):string{
   if(TECHNICAL_KEYS.some(key=>items[key]==='ATTENTION')) return 'APPROVED_WITH_RESERVATIONS';
   return 'APPROVED';
 }
-function inspectionChecklistPayload(legacy:Record<string,boolean>,technical:Record<string,string>,result:string,equipment:Record<string,string>):Record<string,unknown>{
-  return {...legacy,technical,result,equipment};
+import { calculateInspectionSettlement, VehicleInspectionSettlementAuthority } from './vehicleInspectionSettlementAuthority';
+
+function inspectionChecklistPayload(legacy:Record<string,boolean>,technical:Record<string,string>,result:string,equipment:Record<string,string>,extra?:Record<string,unknown>):Record<string,unknown>{
+  return {...legacy,technical,result,equipment,...(extra||{})};
 }
 function optionalText(value:unknown,max=2000):string|undefined{
   if(value===undefined||value===null||value==='') return undefined;
@@ -112,6 +114,17 @@ function item(row:any){
     inspectionType:String(row.inspectionType),inspectionDate:String(row.inspectionDate),
     odometer:Number(row.odometer),fuelLevel:Number(row.fuelLevel),
     checklist:legacy,technicalChecklist:technical,equipmentSnapshot,result,notes:row.notes||undefined,
+    photos:Array.isArray(stored.photos)?stored.photos:undefined,
+    damages:Array.isArray(stored.damages)?stored.damages:undefined,
+    settlement:stored.settlement&&typeof stored.settlement==='object'?stored.settlement:undefined,
+    signedAt:typeof stored.signedAt==='string'?stored.signedAt:undefined,
+    driverSignatureUrl:typeof stored.driverSignatureUrl==='string'?stored.driverSignatureUrl:undefined,
+    signatureRefused:stored.signatureRefused===true,
+    signatureRefusalReason:typeof stored.signatureRefusalReason==='string'?stored.signatureRefusalReason:undefined,
+    isRemoteDropoff:stored.isRemoteDropoff===true,
+    washType:typeof stored.washType==='string'?stored.washType:undefined,
+    washCost:typeof stored.washCost==='number'?stored.washCost:undefined,
+    insuranceClaimRequired:stored.insuranceClaimRequired===true,
     createdBy:String(row.createdBy),createdAt:String(row.createdAt),updatedAt:String(row.updatedAt),
   };
 }
@@ -170,10 +183,23 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         const result=deriveInspectionResult(technical);
         const now=new Date().toISOString();
         const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
+        const extra:Record<string,unknown>={};
+        if(Array.isArray(req.body?.photos)) extra.photos=req.body.photos;
+        if(Array.isArray(req.body?.damages)) extra.damages=req.body.damages;
+        if(req.body?.settlement&&typeof req.body.settlement==='object') extra.settlement=req.body.settlement;
+        if(req.body?.signedAt) extra.signedAt=String(req.body.signedAt);
+        if(req.body?.driverSignatureUrl) extra.driverSignatureUrl=String(req.body.driverSignatureUrl);
+        if(req.body?.signatureRefused!==undefined) extra.signatureRefused=Boolean(req.body.signatureRefused);
+        if(req.body?.signatureRefusalReason) extra.signatureRefusalReason=String(req.body.signatureRefusalReason);
+        if(req.body?.isRemoteDropoff!==undefined) extra.isRemoteDropoff=Boolean(req.body.isRemoteDropoff);
+        if(req.body?.washType) extra.washType=String(req.body.washType);
+        if(req.body?.washCost!==undefined) extra.washCost=Number(req.body.washCost);
+        if(req.body?.insuranceClaimRequired!==undefined) extra.insuranceClaimRequired=Boolean(req.body.insuranceClaimRequired);
+
         const rows=await tx.insert(vehicleInspections).values({
           id:randomUUID(),companyId:principal.companyId,vehicleId:vehicle.id,driverId,contractId,
           inspectionType:type,inspectionDate:now,odometer,fuelLevel,
-          checklist:inspectionChecklistPayload(checklist(req.body?.checklist),technical,result,equipment),
+          checklist:inspectionChecklistPayload(checklist(req.body?.checklist),technical,result,equipment,extra),
           notes:optionalText(req.body?.notes),createdBy:principal.userId,createdAt:now,updatedAt:now,
         }).returning();
         const created=rows[0];if(!created) throw new Error('Inspection create failed');
@@ -202,6 +228,122 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         return created;
       });
       res.status(201).json({item:item(created)});
+    }catch(error){sendError(res,error);}
+  });
+
+  app.get('/api/fleet/contracts/:id/inspection-comparison',async(req,res)=>{
+    const principal=requirePrincipal(req,res);if(!principal)return;
+    try{
+      const comparison=await UnitOfWork.run(principal.companyId,async context=>{
+        const contract=await context.getContractRepo().findByIdForCompany(principal.companyId,req.params.id);
+        if(!contract||contract.isArchived) throw new NotFoundError();
+
+        const vehicle=await context.getVehicleRepo().findByIdForCompany(principal.companyId,contract.vehicleId);
+        if(!vehicle) throw new NotFoundError();
+
+        const driver=await context.getDriverRepo().findByIdForCompany(principal.companyId,contract.driverId);
+        if(!driver) throw new NotFoundError();
+
+        const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
+        const rows=await tx.select().from(vehicleInspections).where(and(
+          eq(vehicleInspections.companyId,principal.companyId),
+          eq(vehicleInspections.vehicleId,contract.vehicleId),
+        )).orderBy(desc(vehicleInspections.inspectionDate),desc(vehicleInspections.createdAt));
+
+        const inspections=rows.map(item);
+        // Localiza a vistoria de saída (EXIT) e entrada (ENTRY) associadas a este contrato (ou as mais recentes do veículo)
+        const exitInspection=inspections.find(i=>i.inspectionType==='EXIT'&&(i.contractId===contract.id||!i.contractId));
+        const entryInspection=inspections.find(i=>i.inspectionType==='ENTRY'&&(i.contractId===contract.id||!i.contractId));
+
+        const startKm=exitInspection?.odometer??vehicle.currentKm;
+        const endKm=entryInspection?.odometer??vehicle.currentKm;
+        const startFuel=exitInspection?.fuelLevel??100;
+        const endFuel=entryInspection?.fuelLevel??100;
+
+        const preExistingDamages=exitInspection?.damages||[];
+        const entryDamages=entryInspection?.damages||[];
+        const preExistingIds=new Set(preExistingDamages.map((d:any)=>d.id));
+        const newDamages=entryDamages.filter((d:any)=>!preExistingIds.has(d.id));
+
+        const damagesCost=newDamages.reduce((acc:number,d:any)=>acc+(Number(d.estimatedCost)||0),0);
+        const washCost=Number(entryInspection?.washCost)||0;
+
+        const settlement=calculateInspectionSettlement({
+          startOdometer:startKm,
+          endOdometer:endKm,
+          franchiseKm:contract.franchiseKm||0,
+          excessKmRate:Number(contract.excessKmRate)||0,
+          startFuelLevel:startFuel,
+          endFuelLevel:endFuel,
+          damagesCost,
+          washCost,
+          securityDepositAvailable:Number(contract.securityDepositAmount)||0,
+        });
+
+        const SLOTS=['DASHBOARD','FRONT','REAR','RIGHT','LEFT','SPARE_TIRE'] as const;
+        const SLOT_LABELS:Record<string,string>={
+          DASHBOARD:'Painel & Odômetro',FRONT:'Frente',REAR:'Traseira',
+          RIGHT:'Lateral Direita',LEFT:'Lateral Esquerda',SPARE_TIRE:'Estepe & Ferramentas',
+        };
+
+        const photoPairs=SLOTS.map(slot=>{
+          const exitPhoto=exitInspection?.photos?.find((p:any)=>p.slot===slot);
+          const entryPhoto=entryInspection?.photos?.find((p:any)=>p.slot===slot);
+          return {
+            slot,
+            label:SLOT_LABELS[slot]||slot,
+            exitPhotoUrl:exitPhoto?.url,
+            entryPhotoUrl:entryPhoto?.url,
+          };
+        });
+
+        return {
+          contractId:contract.id,
+          vehicle:{id:vehicle.id,plate:vehicle.plate,model:vehicle.model,brand:vehicle.brand,currentKm:vehicle.currentKm},
+          driver:{id:driver.id,name:driver.name,cpf:driver.cpf},
+          exitInspection,
+          entryInspection,
+          deltaKm:settlement.deltaKm,
+          excessKm:settlement.excessKm,
+          excessKmRate:Number(contract.excessKmRate)||0,
+          excessKmCost:settlement.excessKmCost,
+          deltaFuel:settlement.deltaFuelPercent,
+          fuelCost:settlement.fuelCost,
+          preExistingDamages,
+          newDamages,
+          photoPairs,
+          settlement,
+        };
+      });
+
+      res.json(comparison);
+    }catch(error){sendError(res,error);}
+  });
+
+  app.post('/api/fleet/inspections/:id/settlement',async(req,res)=>{
+    const principal=requirePrincipal(req,res,true);if(!principal)return;
+    try{
+      const result=await UnitOfWork.run(principal.companyId,async context=>{
+        return await VehicleInspectionSettlementAuthority.settle(
+          context,
+          principal.companyId,
+          principal,
+          req.params.id,
+          req.body?.settlement||{}
+        );
+      });
+      res.json(result);
+    }catch(error){sendError(res,error);}
+  });
+
+  app.get('/api/fleet/inspections/retention-status',async(req,res)=>{
+    const principal=requirePrincipal(req,res);if(!principal)return;
+    try{
+      const items=await UnitOfWork.run(principal.companyId,async context=>{
+        const raw=context.getRawTransaction?.();if(!raw) throw new Error('Raw transaction unavailable');
+        return await VehicleInspectionSettlementAuthority.listEligiblePurgeAttachments(raw,principal.companyId,90);
+      });
+      res.json({retentionWindowDays:90,eligiblePurgeCount:items.length,items});
     }catch(error){sendError(res,error);}
   });
 }

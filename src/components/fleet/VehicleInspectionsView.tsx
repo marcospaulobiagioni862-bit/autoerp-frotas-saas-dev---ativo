@@ -56,7 +56,14 @@ export function VehicleInspectionsView(){
 
     {error&&<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
     {loading?<div className="p-6 text-center text-sm text-slate-500">Carregando veículos...</div>:selectedVehicle?
-      <VehicleInspectionPanel vehicleId={selectedVehicle.id} currentKm={selectedVehicle.currentKm}/>:
+      <VehicleInspectionPanel
+        vehicleId={selectedVehicle.id}
+        currentKm={selectedVehicle.currentKm}
+        vehiclePlate={selectedVehicle.plate}
+        vehicleModel={`${selectedVehicle.brand} ${selectedVehicle.model}`}
+        contractId={selectedVehicle.currentContractId}
+        driverId={selectedVehicle.currentDriverId}
+      />:
       <div className="rounded-xl border p-6 text-center text-sm text-slate-500">Nenhum veículo disponível para vistoria.</div>}
   </div>;
 }
