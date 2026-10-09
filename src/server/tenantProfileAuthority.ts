@@ -18,6 +18,7 @@ export interface TenantProfileActor {
   userId: string;
   name: string;
   role: string;
+  permissions?: string[];
 }
 
 export interface TenantProfile {
@@ -47,7 +48,11 @@ export class TenantProfileValidationError extends Error {}
 export class TenantProfileNotFoundError extends Error {}
 
 function assertAdmin(actor: TenantProfileActor): void {
-  if (!actor.companyId || !actor.userId || String(actor.role || '').toUpperCase() !== 'ADMIN') {
+  const permissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+  if (!actor.companyId || !actor.userId) {
+    throw new TenantProfileForbiddenError();
+  }
+  if (String(actor.role || '').toUpperCase() !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('MANAGE_TENANT')) {
     throw new TenantProfileForbiddenError();
   }
 }
@@ -88,13 +93,47 @@ function limit(value: unknown, maximum: number): number {
   return value;
 }
 
+const VALID_IMAGE_DATA_URI_REGEX = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\r\n]+)$/;
+
 function optionalLogoUrl(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') throw new TenantProfileValidationError();
   const trimmed = value.trim();
   if (trimmed === '') return null;
   if (trimmed.length > 2_000_000) throw new TenantProfileValidationError();
-  return trimmed;
+
+  // 1. Same-origin relative path: ex: /assets/logo.png, /images/brand.png
+  // Deve iniciar com '/', não conter barra invertida '\' e resolver com hostname preservado na base dummy
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\') && !/\s/.test(trimmed)) {
+    try {
+      const dummyOrigin = 'https://placeholder.invalid';
+      const resolved = new URL(trimmed, dummyOrigin);
+      if (resolved.origin === dummyOrigin && resolved.hostname === 'placeholder.invalid') {
+        return trimmed;
+      }
+    } catch {
+      // URL inválida cai na recusa
+    }
+  }
+
+  // 2. Data URI com MIME de imagem suportada pelo pdf-lib (apenas png e jpeg) e payload base64 decodificável
+  const match = trimmed.match(VALID_IMAGE_DATA_URI_REGEX);
+  if (match) {
+    const rawBase64 = match[2].replace(/[\r\n]/g, '');
+    if (rawBase64.length > 0) {
+      try {
+        const decoded = Buffer.from(rawBase64, 'base64');
+        if (decoded.length > 0) {
+          return trimmed;
+        }
+      } catch {
+        // Falha na decodificação cai na recusa abaixo
+      }
+    }
+  }
+
+  // URLs externas (http://, https://), protocol-relative (//), barra invertida (/\evil.com), WebP/SVG ou payloads arbitrários são recusados
+  throw new TenantProfileValidationError();
 }
 
 function sanitize(company: any, config: any): TenantProfile {

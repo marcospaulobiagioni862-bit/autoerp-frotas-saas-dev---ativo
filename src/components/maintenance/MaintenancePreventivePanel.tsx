@@ -33,6 +33,9 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
   const[templateName,setTemplateName]=useState(''),[templateCategory,setTemplateCategory]=useState<MaintenancePlanTemplate['category']>('GENERAL'),[templateAction,setTemplateAction]=useState<MaintenancePlanTemplate['actionType']>('INSPECT'),[templateKm,setTemplateKm]=useState(''),[templateDays,setTemplateDays]=useState(''),[templatePriority,setTemplatePriority]=useState<'LOW'|'MEDIUM'|'HIGH'|'CRITICAL'>('MEDIUM'),[templateCost,setTemplateCost]=useState(''),[templateActive,setTemplateActive]=useState(false),[templateNotes,setTemplateNotes]=useState('');
   const[oilVehicle,setOilVehicle]=useState(''),[oilKm,setOilKm]=useState(''),[oilType,setOilType]=useState('5W30'),[oilBrand,setOilBrand]=useState(''),[oilQty,setOilQty]=useState('4'),[oilNextKm,setOilNextKm]=useState(''),[oilWo,setOilWo]=useState('');
   const[tireVehicle,setTireVehicle]=useState(''),[tirePosition,setTirePosition]=useState('DIANTEIRO_ESQUERDO'),[tireBrand,setTireBrand]=useState(''),[tireModel,setTireModel]=useState(''),[tireKm,setTireKm]=useState(''),[tireCost,setTireCost]=useState('0');
+  const[linkTargetPlan,setLinkTargetPlan]=useState<MaintenancePlan|null>(null),[linkWorkOrderId,setLinkWorkOrderId]=useState(''),[linkModalError,setLinkModalError]=useState<string|null>(null);
+  const[rotateTargetTire,setRotateTargetTire]=useState<TireRecord|null>(null),[rotateKm,setRotateKm]=useState(''),[rotatePosition,setRotatePosition]=useState(''),[rotateIntervalKm,setRotateIntervalKm]=useState('10000'),[rotateDate,setRotateDate]=useState(''),[rotateModalError,setRotateModalError]=useState<string|null>(null);
+  const[removeTargetTire,setRemoveTargetTire]=useState<TireRecord|null>(null),[removeKm,setRemoveKm]=useState(''),[removeDate,setRemoveDate]=useState(''),[removeStatus,setRemoveStatus]=useState<'REMOVED'|'REPLACED'|'DAMAGED'>('REMOVED'),[removeReason,setRemoveReason]=useState(''),[removeModalError,setRemoveModalError]=useState<string|null>(null);
   const label=(id:string)=>{const v=vehicles.find(x=>x.id===id);return v?`${v.plate} — ${v.brand} ${v.model}`:id;};
   const load=async()=>{setLoading(true);setError(null);try{const[tpl,p,o,t,r]=await Promise.all([MaintenancePreventiveClient.listTemplates(),MaintenancePreventiveClient.listPlans(),MaintenancePreventiveClient.listOilChanges(),MaintenancePreventiveClient.listTires(),MaintenancePreventiveClient.getGlobalRule()]);setTemplates(tpl);setPlans(p);setOils(o);setTires(t);setGlobalRule(r);setRuleWarningKm(String(r.warningKm));setRuleUrgentKm(String(r.urgentKm));setRuleWarningDays(String(r.warningDays));setRuleUrgentDays(String(r.urgentDays));setRuleToleranceKm(String(r.toleranceKm));setRuleToleranceDays(String(r.toleranceDays));const first=vehicles[0];if(first){if(!planVehicle)setPlanVehicle(first.id);if(!applyVehicle||!vehicles.some(v=>v.id===applyVehicle))setApplyVehicle(first.id);if(!oilVehicle){setOilVehicle(first.id);setOilKm(String(first.currentKm));setOilNextKm(String(first.currentKm+10000));}if(!tireVehicle){setTireVehicle(first.id);setTireKm(String(first.currentKm));}}else if(applyVehicle)setApplyVehicle('');const activeTemplate=tpl.find(item=>item.active);if(!applyTemplate||!tpl.some(item=>item.id===applyTemplate&&item.active))setApplyTemplate(activeTemplate?.id||'');}catch(e){setError(e instanceof Error?e.message:'Falha ao carregar preventivas.');setTemplates([]);setPlans([]);setOils([]);setTires([]);setGlobalRule(null);}finally{setLoading(false);}};
   useEffect(()=>{void load();},[]);
@@ -79,9 +82,83 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
   const saveGlobalRule=async(e:React.FormEvent)=>{e.preventDefault();const values=[ruleWarningKm,ruleUrgentKm,ruleWarningDays,ruleUrgentDays,ruleToleranceKm,ruleToleranceDays].map(Number);if(values.some(v=>!Number.isInteger(v)||v<0)){setError('Informe valores inteiros iguais ou maiores que zero no Banco de Regras.');return;}const[warningKm,urgentKm,warningDays,urgentDays,toleranceKm,toleranceDays]=values;if(warningKm<urgentKm||warningDays<urgentDays){setError('O aviso antecipado deve ser maior ou igual ao aviso urgente.');return;}await run(async()=>{await MaintenancePreventiveClient.updateGlobalRule({warningKm,urgentKm,warningDays,urgentDays,toleranceKm,toleranceDays,active:true});});};
   const createOil=async(e:React.FormEvent)=>{e.preventDefault();await run(async()=>{await MaintenancePreventiveClient.createOilChange({vehicleId:oilVehicle,workOrderId:oilWo||undefined,km:Number(oilKm),date:today(),oilType,oilBrand,quantity:Number(oilQty),filterChanged:true,nextKm:Number(oilNextKm)});});};
   const createTire=async(e:React.FormEvent)=>{e.preventDefault();await run(async()=>{await MaintenancePreventiveClient.createTire({vehicleId:tireVehicle,position:tirePosition,brand:tireBrand,model:tireModel,installationDate:today(),installationKm:Number(tireKm),cost:Number(tireCost)});});};
-  const linkPlan=async(p:MaintenancePlan)=>{const candidates=workOrders.filter(w=>w.vehicleId===p.vehicleId&&!['COMPLETED','CANCELLED','ARCHIVED'].includes(w.status));if(!candidates.length){setError('Não há OS aberta para este veículo. Em Manutenção → Ordens de serviço, clique em Nova OS, selecione este veículo e salve. Depois retorne ao plano e clique em Vincular OS.');return;}const raw=window.prompt(`Informe número ou ID da OS:\n${candidates.map(w=>`${w.number} — ${w.id}`).join('\n')}`);if(!raw)return;const wo=candidates.find(w=>w.id===raw||w.number===raw);if(!wo){setError('OS não encontrada entre as opções elegíveis.');return;}await run(()=>MaintenancePreventiveClient.linkWorkOrder(p.id,wo.id));};
-  const rotate=async(t:TireRecord)=>{const km=Number(window.prompt('KM do rodízio:',String(vehicles.find(v=>v.id===t.vehicleId)?.currentKm??t.installationKm)));if(!Number.isFinite(km))return;const position=window.prompt('Nova posição:',t.position);if(!position)return;await run(async()=>{await MaintenancePreventiveClient.rotateTire(t.id,{position,km,date:today(),intervalKm:10000});});};
-  const remove=async(t:TireRecord)=>{const km=Number(window.prompt('KM da remoção:',String(vehicles.find(v=>v.id===t.vehicleId)?.currentKm??t.installationKm)));if(!Number.isFinite(km))return;const reason=window.prompt('Motivo da remoção:');if(!reason)return;await run(async()=>{await MaintenancePreventiveClient.removeTire(t.id,{status:'REMOVED',km,date:today(),reason});});};
+  const eligibleWorkOrdersForPlan=useMemo(()=>{
+    if(!linkTargetPlan)return[];
+    return workOrders.filter(w=>w.vehicleId===linkTargetPlan.vehicleId&&!['COMPLETED','CANCELLED','ARCHIVED'].includes(w.status));
+  },[workOrders,linkTargetPlan]);
+  const openLinkPlan=(p:MaintenancePlan)=>{
+    setLinkTargetPlan(p);
+    setLinkModalError(null);
+    const eligible=workOrders.filter(w=>w.vehicleId===p.vehicleId&&!['COMPLETED','CANCELLED','ARCHIVED'].includes(w.status));
+    setLinkWorkOrderId(eligible[0]?.id||'');
+  };
+  const submitLinkPlan=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(!linkTargetPlan)return;
+    if(!linkWorkOrderId){setLinkModalError('Selecione uma ordem de serviço elegível.');return;}
+    setLinkModalError(null);
+    await run(async()=>{
+      await MaintenancePreventiveClient.linkWorkOrder(linkTargetPlan.id,linkWorkOrderId);
+      setLinkTargetPlan(null);
+    });
+  };
+  const openRotate=(t:TireRecord)=>{
+    const v=vehicles.find(x=>x.id===t.vehicleId);
+    const currentKm=v?.currentKm??t.installationKm;
+    const initialKm=Math.max(currentKm,t.installationKm,t.lastRotationKm??0);
+    setRotateTargetTire(t);
+    setRotateKm(String(initialKm));
+    const nextPos=Object.keys(TIRE_POSITION_LABELS).find(pos=>pos!==t.position)||'DIANTEIRO_DIREITO';
+    setRotatePosition(nextPos);
+    setRotateIntervalKm('10000');
+    setRotateDate(today());
+    setRotateModalError(null);
+  };
+  const submitRotate=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(!rotateTargetTire)return;
+    const v=vehicles.find(x=>x.id===rotateTargetTire.vehicleId);
+    const kmNum=Number(rotateKm);
+    if(!Number.isInteger(kmNum)||kmNum<0){setRotateModalError('Informe uma quilometragem válida.');return;}
+    if(kmNum<rotateTargetTire.installationKm){setRotateModalError(`KM não pode ser menor que a instalação (${rotateTargetTire.installationKm.toLocaleString('pt-BR')} km).`);return;}
+    if(v&&kmNum<v.currentKm){setRotateModalError(`KM não pode ser inferior ao odômetro atual do veículo (${v.currentKm.toLocaleString('pt-BR')} km).`);return;}
+    if(!rotatePosition){setRotateModalError('Selecione a nova posição do pneu.');return;}
+    if(rotatePosition===rotateTargetTire.position){setRotateModalError('A nova posição deve ser diferente da posição atual.');return;}
+    const intervalKmNum=rotateIntervalKm.trim()?Number(rotateIntervalKm):10000;
+    if(!Number.isInteger(intervalKmNum)||intervalKmNum<=0){setRotateModalError('Informe um intervalo de rodízio positivo.');return;}
+    setRotateModalError(null);
+    await run(async()=>{
+      await MaintenancePreventiveClient.rotateTire(rotateTargetTire.id,{position:rotatePosition,km:kmNum,date:rotateDate||today(),intervalKm:intervalKmNum});
+      setRotateTargetTire(null);
+    });
+  };
+  const openRemove=(t:TireRecord)=>{
+    const v=vehicles.find(x=>x.id===t.vehicleId);
+    const currentKm=v?.currentKm??t.installationKm;
+    const initialKm=Math.max(currentKm,t.installationKm,t.lastRotationKm??0);
+    setRemoveTargetTire(t);
+    setRemoveKm(String(initialKm));
+    setRemoveDate(today());
+    setRemoveStatus('REMOVED');
+    setRemoveReason('');
+    setRemoveModalError(null);
+  };
+  const submitRemove=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(!removeTargetTire)return;
+    const v=vehicles.find(x=>x.id===removeTargetTire.vehicleId);
+    const kmNum=Number(removeKm);
+    if(!Number.isInteger(kmNum)||kmNum<0){setRemoveModalError('Informe uma quilometragem válida.');return;}
+    if(kmNum<removeTargetTire.installationKm){setRemoveModalError(`KM não pode ser menor que a instalação (${removeTargetTire.installationKm.toLocaleString('pt-BR')} km).`);return;}
+    if(v&&kmNum<v.currentKm){setRemoveModalError(`KM não pode ser inferior ao odômetro atual do veículo (${v.currentKm.toLocaleString('pt-BR')} km).`);return;}
+    if(!removeReason.trim()){setRemoveModalError('Informe a justificativa da remoção do pneu.');return;}
+    setRemoveModalError(null);
+    await run(async()=>{
+      await MaintenancePreventiveClient.removeTire(removeTargetTire.id,{status:removeStatus,km:kmNum,date:removeDate||today(),reason:removeReason.trim()});
+      setRemoveTargetTire(null);
+    });
+  };
+  const occupyingTire=rotateTargetTire&&rotatePosition?tires.find(other=>other.vehicleId===rotateTargetTire.vehicleId&&other.id!==rotateTargetTire.id&&other.status==='ACTIVE'&&other.position===rotatePosition):null;
   return <div className="space-y-4">
     <div className="flex items-center justify-between"><div><h3 className="font-semibold flex items-center gap-2"><Wrench className="w-4 h-4"/>Preventivas, óleo e pneus</h3><p className="text-xs text-slate-500">Operação diária separada das configurações da frota.</p></div><Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="w-4 h-4"/>}>Atualizar</Button></div>
     <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 p-2 dark:border-slate-800"><Button size="sm" variant={section==='overview'?'primary':'ghost'} onClick={()=>setSection('overview')}>Visão rápida</Button><Button size="sm" variant={section==='vehicles'?'primary':'ghost'} onClick={()=>setSection('vehicles')}>Por veículo</Button><Button size="sm" variant={section==='settings'?'primary':'ghost'} onClick={()=>setSection('settings')}>Configuração</Button></div>
@@ -112,10 +189,10 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
         <Input type="number" min="0" value={filterKm} onChange={e=>setFilterKm(e.target.value)} placeholder="Até X km restantes"/>
         <Input type="number" min="0" value={filterDays} onChange={e=>setFilterDays(e.target.value)} placeholder="Até X dias restantes"/>
         <div className="flex gap-2"><Input value={filterSearch} onChange={e=>setFilterSearch(e.target.value)} placeholder="Buscar plano, veículo..."/><Button size="sm" variant="ghost" type="button" onClick={()=>{setFilterVehicle('');setFilterCategory('');setFilterType('');setFilterAction('');setFilterStatus('');setFilterKm('');setFilterDays('');setFilterSearch('');}}>Limpar</Button></div>
-      </div></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Plano</th><th className="p-3 text-left">Próximo</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{displayedPlans.map(p=><tr key={p.id} className="border-t"><td className="p-3">{label(p.vehicleId)}</td><td className="p-3"><strong>{p.name}</strong><div className="text-slate-500">{p.maintenanceType.replaceAll('_',' ')}</div><div className="text-[10px] text-slate-400">{CATEGORY_LABELS[(templateByPlan(p)?.category||'GENERAL') as keyof typeof CATEGORY_LABELS]} • {ACTION_LABELS[(templateByPlan(p)?.actionType||'SERVICE') as keyof typeof ACTION_LABELS]}</div></td><td className="p-3 font-mono">{p.nextDueKm!==undefined?`${p.nextDueKm.toLocaleString('pt-BR')} km`:''}{p.nextDueKm!==undefined&&p.nextDueDate?' • ':''}{p.nextDueDate?formatDateBR(p.nextDueDate):''}</td><td className="p-3">{planBadge(p)}<div className="text-[10px] text-slate-500 mt-1">{dueDetail(p)}</div></td><td className="p-3"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={()=>void linkPlan(p)} icon={<Route className="w-3.5 h-3.5"/>}>Vincular OS</Button>{p.status==='ACTIVE'?<Button size="sm" variant="ghost" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.pausePlan(p.id);})}>Pausar</Button>:p.status==='PAUSED'?<Button size="sm" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.resumePlan(p.id);})}>Retomar</Button>:null}</div></td></tr>)}{displayedPlans.length===0&&<tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhum plano corresponde aos filtros selecionados.</td></tr>}</tbody></table></div></Card>
+      </div></div><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Plano</th><th className="p-3 text-left">Próximo</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Ações</th></tr></thead><tbody>{displayedPlans.map(p=><tr key={p.id} className="border-t"><td className="p-3">{label(p.vehicleId)}</td><td className="p-3"><strong>{p.name}</strong><div className="text-slate-500">{p.maintenanceType.replaceAll('_',' ')}</div><div className="text-[10px] text-slate-400">{CATEGORY_LABELS[(templateByPlan(p)?.category||'GENERAL') as keyof typeof CATEGORY_LABELS]} • {ACTION_LABELS[(templateByPlan(p)?.actionType||'SERVICE') as keyof typeof ACTION_LABELS]}</div></td><td className="p-3 font-mono">{p.nextDueKm!==undefined?`${p.nextDueKm.toLocaleString('pt-BR')} km`:''}{p.nextDueKm!==undefined&&p.nextDueDate?' • ':''}{p.nextDueDate?formatDateBR(p.nextDueDate):''}</td><td className="p-3">{planBadge(p)}<div className="text-[10px] text-slate-500 mt-1">{dueDetail(p)}</div></td><td className="p-3"><div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={()=>openLinkPlan(p)} icon={<Route className="w-3.5 h-3.5"/>}>Vincular OS</Button>{p.status==='ACTIVE'?<Button size="sm" variant="ghost" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.pausePlan(p.id);})}>Pausar</Button>:p.status==='PAUSED'?<Button size="sm" onClick={()=>void run(async()=>{await MaintenancePreventiveClient.resumePlan(p.id);})}>Retomar</Button>:null}</div></td></tr>)}{displayedPlans.length===0&&<tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhum plano corresponde aos filtros selecionados.</td></tr>}</tbody></table></div></Card>
       }
       {section==='vehicles'&&
-      <div className="grid lg:grid-cols-2 gap-3"><Card padding="none"><div className="p-3 font-semibold">Histórico de óleo</div>{oils.slice(0,12).map(o=><div key={o.id} className="p-3 border-t text-xs flex justify-between"><span>{label(o.vehicleId)} • {o.oilBrand} {o.oilType}</span><span className="font-mono">{o.km.toLocaleString('pt-BR')} → {o.nextKm.toLocaleString('pt-BR')} km</span></div>)}</Card><Card padding="none"><div className="p-3 font-semibold">Pneus</div>{tires.slice(0,16).map(t=><div key={t.id} className="p-3 border-t text-xs flex items-center justify-between gap-2"><div><strong>{label(t.vehicleId)}</strong><div className="text-slate-500">{TIRE_POSITION_LABELS[t.position]||'Posição não informada'} • {t.brand} {t.model} • {TIRE_STATUS_LABELS[t.status]||'Status não informado'}</div></div>{t.status==='ACTIVE'&&<div className="flex gap-1"><Button size="sm" variant="ghost" onClick={()=>void rotate(t)}>Rodízio</Button><Button size="sm" variant="danger" onClick={()=>void remove(t)}>Remover</Button></div>}</div>)}</Card></div>}
+      <div className="grid lg:grid-cols-2 gap-3"><Card padding="none"><div className="p-3 font-semibold">Histórico de óleo</div>{oils.slice(0,12).map(o=><div key={o.id} className="p-3 border-t text-xs flex justify-between"><span>{label(o.vehicleId)} • {o.oilBrand} {o.oilType}</span><span className="font-mono">{o.km.toLocaleString('pt-BR')} → {o.nextKm.toLocaleString('pt-BR')} km</span></div>)}</Card><Card padding="none"><div className="p-3 font-semibold">Pneus</div>{tires.slice(0,16).map(t=><div key={t.id} className="p-3 border-t text-xs flex items-center justify-between gap-2"><div><strong>{label(t.vehicleId)}</strong><div className="text-slate-500">{TIRE_POSITION_LABELS[t.position]||'Posição não informada'} • {t.brand} {t.model} • {TIRE_STATUS_LABELS[t.status]||'Status não informado'}</div></div>{t.status==='ACTIVE'&&<div className="flex gap-1"><Button size="sm" variant="ghost" onClick={()=>openRotate(t)}>Rodízio</Button><Button size="sm" variant="danger" onClick={()=>openRemove(t)}>Remover</Button></div>}</div>)}</Card></div>}
     </>}
     {templateEditorOpen&&<ModalContainer isOpen={templateEditorOpen} onClose={()=>{if(!busy)setTemplateEditorOpen(false);}} title={templateEditing?'Editar item do plano':'Novo item do plano'} maxWidth="md"><form onSubmit={saveTemplate} className="space-y-4">
       <div><label className="mb-1 block text-xs font-semibold">Nome do item *</label><Input value={templateName} onChange={e=>setTemplateName(e.target.value)} placeholder="Ex.: Limpeza de bicos" required/></div>
@@ -125,6 +202,100 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={templateActive} onChange={e=>setTemplateActive(e.target.checked)}/>Ativo para a frota</label>
       <div><label className="mb-1 block text-xs font-semibold">Observações</label><textarea className="min-h-20 w-full rounded-lg border border-slate-300 bg-transparent p-2 text-sm dark:border-slate-700" value={templateNotes} onChange={e=>setTemplateNotes(e.target.value)} placeholder="Observações opcionais"/></div>
       <div className="flex justify-end gap-2"><Button type="button" variant="ghost" disabled={busy} onClick={()=>setTemplateEditorOpen(false)}>Cancelar</Button><Button type="submit" isLoading={busy}>Salvar item</Button></div>
+    </form></ModalContainer>}
+    {linkTargetPlan&&<ModalContainer isOpen={Boolean(linkTargetPlan)} onClose={()=>{if(!busy)setLinkTargetPlan(null);}} title="Vincular Ordem de Serviço ao Plano" maxWidth="md"><form onSubmit={submitLinkPlan} className="space-y-4">
+      <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1">
+        <div className="font-semibold text-slate-800 dark:text-slate-200">{label(linkTargetPlan.vehicleId)}</div>
+        <div className="text-slate-600 dark:text-slate-400">Plano: <strong>{linkTargetPlan.name}</strong> ({linkTargetPlan.maintenanceType.replaceAll('_',' ')})</div>
+        {linkTargetPlan.nextDueKm!==undefined&&<div className="text-slate-500 font-mono">Vencimento previsto: {linkTargetPlan.nextDueKm.toLocaleString('pt-BR')} km</div>}
+      </div>
+      {linkModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{linkModalError}</div>}
+      {eligibleWorkOrdersForPlan.length===0?<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 space-y-2">
+        <p>Não há ordem de serviço aberta para este veículo no momento.</p>
+        <p className="text-[11px] text-amber-700 dark:text-amber-400">Para vincular, acesse a aba de Ordens de Serviço, clique em Nova OS para este veículo e depois retorne para vincular.</p>
+      </div>:<div className="space-y-1">
+        <label className="mb-1 block text-xs font-semibold">Ordem de Serviço elegível *</label>
+        <select className="w-full rounded-lg border border-slate-300 bg-transparent p-2 text-xs dark:border-slate-700 text-slate-900 dark:text-slate-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-slate-900 dark:[&>option]:text-slate-100" value={linkWorkOrderId} onChange={e=>setLinkWorkOrderId(e.target.value)} required>
+          {eligibleWorkOrdersForPlan.map(w=><option key={w.id} value={w.id}>OS #{w.number} — {w.description||'Serviço em andamento'} (Aberta em {formatDateBR(w.openedAt||w.createdAt)} • KM {w.entryKm?.toLocaleString('pt-BR')})</option>)}
+        </select>
+        <p className="text-[11px] text-slate-500 mt-1">Ao vincular, a execução desta OS avançará o ciclo preventivo deste plano.</p>
+      </div>}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="ghost" disabled={busy} onClick={()=>setLinkTargetPlan(null)}>Cancelar</Button>
+        <Button type="submit" isLoading={busy} disabled={eligibleWorkOrdersForPlan.length===0||!linkWorkOrderId}>Vincular OS</Button>
+      </div>
+    </form></ModalContainer>}
+    {rotateTargetTire&&<ModalContainer isOpen={Boolean(rotateTargetTire)} onClose={()=>{if(!busy)setRotateTargetTire(null);}} title="Rodízio de Pneu" maxWidth="md"><form onSubmit={submitRotate} className="space-y-4">
+      <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1">
+        <div className="font-semibold">{label(rotateTargetTire.vehicleId)}</div>
+        <div className="text-slate-600 dark:text-slate-400">Pneu: <strong>{rotateTargetTire.brand} {rotateTargetTire.model}</strong> • Posição atual: <strong>{TIRE_POSITION_LABELS[rotateTargetTire.position]||rotateTargetTire.position}</strong></div>
+        <div className="text-[11px] text-slate-500 font-mono">Instalado aos {rotateTargetTire.installationKm.toLocaleString('pt-BR')} km • Último rodízio: {rotateTargetTire.lastRotationKm!==undefined?`${rotateTargetTire.lastRotationKm.toLocaleString('pt-BR')} km`:'Nenhum'}</div>
+      </div>
+      {rotateModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{rotateModalError}</div>}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold">Nova posição *</label>
+          <select className="w-full rounded-lg border border-slate-300 bg-transparent p-2 text-xs dark:border-slate-700 text-slate-900 dark:text-slate-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-slate-900 dark:[&>option]:text-slate-100" value={rotatePosition} onChange={e=>setRotatePosition(e.target.value)} required>
+            {Object.entries(TIRE_POSITION_LABELS).map(([key,text])=><option key={key} value={key} disabled={key===rotateTargetTire.position}>{text}{key===rotateTargetTire.position?' (Atual)':''}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold">KM do rodízio *</label>
+          <Input type="number" min={rotateTargetTire.installationKm} value={rotateKm} onChange={e=>setRotateKm(e.target.value)} placeholder="KM atual" required/>
+        </div>
+      </div>
+      {occupyingTire&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+        ⚠️ A posição <strong>{TIRE_POSITION_LABELS[rotatePosition]||rotatePosition}</strong> já possui o pneu <strong>{occupyingTire.brand} {occupyingTire.model}</strong>. Lembre-se de rodiciar a outra unidade para manter o controle coerente.
+      </div>}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold">Data do rodízio</label>
+          <Input type="date" value={rotateDate} onChange={e=>setRotateDate(e.target.value)} required/>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold">Próximo rodízio (a cada X km)</label>
+          <Input type="number" min="1000" step="1000" value={rotateIntervalKm} onChange={e=>setRotateIntervalKm(e.target.value)} placeholder="10000"/>
+        </div>
+      </div>
+      <p className="text-[11px] text-slate-500">O rodízio registrará leitura oficial de KM no histórico do veículo.</p>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="ghost" disabled={busy} onClick={()=>setRotateTargetTire(null)}>Cancelar</Button>
+        <Button type="submit" isLoading={busy}>Confirmar rodízio</Button>
+      </div>
+    </form></ModalContainer>}
+    {removeTargetTire&&<ModalContainer isOpen={Boolean(removeTargetTire)} onClose={()=>{if(!busy)setRemoveTargetTire(null);}} title="Remover Pneu" maxWidth="md"><form onSubmit={submitRemove} className="space-y-4">
+      <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1">
+        <div className="font-semibold">{label(removeTargetTire.vehicleId)}</div>
+        <div className="text-slate-600 dark:text-slate-400">Pneu: <strong>{removeTargetTire.brand} {removeTargetTire.model}</strong> • Posição: <strong>{TIRE_POSITION_LABELS[removeTargetTire.position]||removeTargetTire.position}</strong></div>
+        <div className="text-[11px] text-slate-500 font-mono">Instalação: {removeTargetTire.installationKm.toLocaleString('pt-BR')} km ({formatDateBR(removeTargetTire.installationDate)})</div>
+      </div>
+      {removeModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{removeModalError}</div>}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-semibold">Destino / Situação *</label>
+          <select className="w-full rounded-lg border border-slate-300 bg-transparent p-2 text-xs dark:border-slate-700 text-slate-900 dark:text-slate-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-slate-900 dark:[&>option]:bg-slate-900 dark:[&>option]:text-slate-100" value={removeStatus} onChange={e=>setRemoveStatus(e.target.value as 'REMOVED'|'REPLACED'|'DAMAGED')} required>
+            <option value="REMOVED">Removido (Estoque / Reserva)</option>
+            <option value="REPLACED">Substituído por novo</option>
+            <option value="DAMAGED">Danificado / Descarte</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold">KM da remoção *</label>
+          <Input type="number" min={removeTargetTire.installationKm} value={removeKm} onChange={e=>setRemoveKm(e.target.value)} placeholder="KM remoção" required/>
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold">Data da remoção *</label>
+        <Input type="date" value={removeDate} onChange={e=>setRemoveDate(e.target.value)} required/>
+      </div>
+      <div>
+        <label className="mb-1 block text-xs font-semibold">Motivo da remoção *</label>
+        <Input value={removeReason} onChange={e=>setRemoveReason(e.target.value)} placeholder="Ex.: Desgaste por quilometragem, furo irrecuperável, bolha..." required/>
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="ghost" disabled={busy} onClick={()=>setRemoveTargetTire(null)}>Cancelar</Button>
+        <Button type="submit" variant="danger" isLoading={busy}>Confirmar remoção</Button>
+      </div>
     </form></ModalContainer>}
   </div>;
 };

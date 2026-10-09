@@ -48,6 +48,11 @@ assert.match(source, /Cancelar \{cancelTarget\.number\}/, 'maintenance cancellat
 assert.match(source, /Informe o motivo do cancelamento da OS\./, 'maintenance cancellation must require a reason');
 assert.match(source, /Confirmar cancelamento/, 'maintenance cancellation modal must expose an explicit confirmation action');
 
+assert.doesNotMatch(preventiveSource, /window\.prompt\(|prompt\(/, 'preventive operations must not depend on native browser prompt');
+assert.match(preventiveSource, /Vincular Ordem de Serviço ao Plano/, 'preventive OS linking must use an in-app modal');
+assert.match(preventiveSource, /Rodízio de Pneu/, 'tire rotation must use an in-app modal');
+assert.match(preventiveSource, /Remover Pneu/, 'tire removal must use an in-app modal');
+
 for (const ruleLabel of ['Aviso KM', 'Urgente KM', 'Aviso dias', 'Urgente dias', 'Tolerância KM', 'Tolerância dias']) {
   assert.match(
     preventiveSource,

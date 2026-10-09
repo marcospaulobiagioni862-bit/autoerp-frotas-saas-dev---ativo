@@ -242,7 +242,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <PageHeader
-        title="Dashboard"
+        title="Início"
         description="Visão operacional e financeira da frota"
       />
 

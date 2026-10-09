@@ -50,15 +50,24 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
       setLoading(true);
       setError(null);
       try {
-        const [vehicle, kmRecords, lifecycleResult] = await Promise.all([
-          VehicleClient.get(vehicleId),
-          VehicleClient.listKm(vehicleId),
+        const [aggregated, lifecycleResult] = await Promise.all([
+          VehicleClient.getDetailsSummary(vehicleId),
           VehicleClient.lifecycle(vehicleId),
         ]);
-        setSummary(await new VehicleLegacyDetailsBridge().compose(vehicle, kmRecords));
+        setSummary(aggregated);
         setLifecycle(lifecycleResult.lifecycle);
       } catch (err: any) {
-        setError(err.message || 'Não foi possível carregar o histórico do veículo.');
+        try {
+          const [vehicle, kmRecords, lifecycleResult] = await Promise.all([
+            VehicleClient.get(vehicleId),
+            VehicleClient.listKm(vehicleId),
+            VehicleClient.lifecycle(vehicleId),
+          ]);
+          setSummary(await new VehicleLegacyDetailsBridge().compose(vehicle, kmRecords));
+          setLifecycle(lifecycleResult.lifecycle);
+        } catch (fallbackErr: any) {
+          setError(err.message || 'Não foi possível carregar o histórico do veículo.');
+        }
       } finally {
         setLoading(false);
       }

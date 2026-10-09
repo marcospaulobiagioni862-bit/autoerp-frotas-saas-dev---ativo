@@ -8,7 +8,13 @@ export type VehicleCrlvField =
   | 'model'
   | 'manufactureYear'
   | 'modelYear'
-  | 'fuel';
+  | 'fuel'
+  | 'ownerName'
+  | 'ownerDocument'
+  | 'crlvExerciseYear'
+  | 'registrationState'
+  | 'registrationCity'
+  | 'claSecurityCode';
 
 export const VEHICLE_CRLV_FIELDS: readonly VehicleCrlvField[] = [
   'plate',
@@ -19,6 +25,12 @@ export const VEHICLE_CRLV_FIELDS: readonly VehicleCrlvField[] = [
   'manufactureYear',
   'modelYear',
   'fuel',
+  'ownerName',
+  'ownerDocument',
+  'crlvExerciseYear',
+  'registrationState',
+  'registrationCity',
+  'claSecurityCode',
 ] as const;
 
 const FIELD_SET = new Set<string>(VEHICLE_CRLV_FIELDS);
@@ -147,6 +159,41 @@ export function buildVehicleChangesFromReviewedCrlv(
     else if (field === 'manufactureYear') changes.yearFabrication = normalizedYear(value, 'manufactureYear');
     else if (field === 'modelYear') changes.yearModel = normalizedYear(value, 'modelYear');
     else if (field === 'fuel') changes.fuelType = normalizedText(value, 'fuel');
+    else if (field === 'ownerName') {
+      const name = normalizedText(value, 'ownerName');
+      changes.ownerName = name;
+      if (name.toUpperCase().includes('BRADESCO')) {
+        changes.ownerType = 'FINANCED_LEASING';
+        changes.possessionType = 'FINANCIAMENTO_LEASING';
+        changes.financialRestriction = 'ARRENDAMENTO_MERCANTIL';
+        changes.financialInstitution = 'Banco Bradesco Financiamentos S.A.';
+        changes.sneCoverageStatus = 'DESCOBERTO_BANCO_LEASING';
+      } else if (name.toUpperCase().includes('MARCOS PAULO')) {
+        changes.ownerType = 'PARTNER';
+        changes.possessionType = 'CESSAO_SOCIO';
+        changes.financialRestriction = 'NONE';
+        changes.sneCoverageStatus = 'PENDENTE_CPF_TITULAR';
+      } else if (name.toUpperCase().includes('TRIFLEX')) {
+        changes.ownerType = 'COMPANY';
+        changes.possessionType = 'PROPRIO';
+        changes.financialRestriction = 'NONE';
+        changes.sneCoverageStatus = 'COBERTO_CNPJ';
+      }
+    } else if (field === 'ownerDocument') {
+      changes.ownerDocument = String(value).replace(/\D/g, '');
+    } else if (field === 'crlvExerciseYear') {
+      changes.crlvExerciseYear = normalizedYear(value, 'crlvExerciseYear');
+    } else if (field === 'registrationState') {
+      const state = String(value).trim().toUpperCase();
+      if (!/^[A-Z]{2}$/.test(state)) throw new VehicleCrlvApplyValidationError('Invalid reviewed CRLV registrationState');
+      changes.registrationState = state;
+    } else if (field === 'registrationCity') {
+      changes.registrationCity = normalizedText(value, 'registrationCity');
+    } else if (field === 'claSecurityCode') {
+      const code = String(value).replace(/\D/g, '');
+      if (code.length < 9 || code.length > 11) throw new VehicleCrlvApplyValidationError('Invalid reviewed CRLV claSecurityCode');
+      changes.claSecurityCode = code;
+    }
   }
 
   return changes;

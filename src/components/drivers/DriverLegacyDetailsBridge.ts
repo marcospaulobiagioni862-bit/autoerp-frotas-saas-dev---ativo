@@ -6,6 +6,7 @@ import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import type { CommunicationLog, DocumentRecord, Driver } from '../../types/entities';
 import { DocumentStatus, DriverStatus, ObligationStatus } from '../../types/enums';
 import { selectCurrentBlockingContract } from '../../domain/operations/fleetOperationalState';
+import { evaluateCnhCompliance } from '../../shared/utils/civilDate';
 
 export interface DriverLegacyDetailedSummary {
   driver: Driver;
@@ -37,28 +38,22 @@ function evaluateExpiration(expirationDate: string): {
   daysToExpiration: number;
   message: string;
 } {
-  const parsed = new Date(`${expirationDate}T00:00:00Z`).getTime();
-  if (!Number.isFinite(parsed)) {
-    return { status: DocumentStatus.PENDING, daysToExpiration: 0, message: 'Data de validade não informada.' };
+  const result = evaluateCnhCompliance(expirationDate);
+  let message = 'CNH Válida.';
+  if (result.status === DocumentStatus.PENDING) {
+    message = 'Data de validade não informada.';
+  } else if (result.status === DocumentStatus.EXPIRED) {
+    message = result.inGracePeriod
+      ? `CNH Vencida (${result.graceDaysRemaining} dias de tolerância CTB).`
+      : `CNH Vencida há ${Math.abs(result.daysToExpiration)} dias.`;
+  } else if (result.status === DocumentStatus.EXPIRING_SOON) {
+    message = `CNH Vence em ${result.daysToExpiration} dias.`;
   }
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const daysToExpiration = Math.ceil((parsed - today) / 86_400_000);
-  if (daysToExpiration < 0) {
-    return {
-      status: DocumentStatus.EXPIRED,
-      daysToExpiration,
-      message: `CNH Vencida há ${Math.abs(daysToExpiration)} dias.`,
-    };
-  }
-  if (daysToExpiration <= 30) {
-    return {
-      status: DocumentStatus.EXPIRING_SOON,
-      daysToExpiration,
-      message: `CNH Vence em ${daysToExpiration} dias.`,
-    };
-  }
-  return { status: DocumentStatus.VALID, daysToExpiration, message: 'CNH Válida.' };
+  return {
+    status: result.status,
+    daysToExpiration: result.daysToExpiration,
+    message,
+  };
 }
 
 function obligationBalance(item: any): number {

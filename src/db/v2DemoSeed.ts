@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { db } from './index';
 import {
@@ -21,7 +21,10 @@ import {
   vehicleKmRecords,
   vehicles,
   documents,
+  fileAttachments,
 } from './schema';
+import { userCredentials } from './authSchema';
+import { hashPassword } from '../server/password';
 
 const DEMO_TARGETS = new Set(['development', 'test', 'preview']);
 const FORBIDDEN_BRANCHES = new Set(['main', 'staging-app']);
@@ -178,40 +181,118 @@ export async function runV2DemoSeed() {
     trafficFineExpense: prefix + '-cat-traffic-fine-expense',
   };
 
+  const demoUsers = [
+    {
+      id: prefix + '-user-admin',
+      name: 'Admin Demo V2',
+      email: 'demo.admin.' + companyKey(companyId) + '@example.invalid',
+      role: 'ADMIN',
+      permissions: ['*'],
+    },
+    {
+      id: prefix + '-user-manager',
+      name: 'Gestor Demo V2',
+      email: 'demo.manager.' + companyKey(companyId) + '@example.invalid',
+      role: 'MANAGER',
+      permissions: [
+        'VIEW_VEHICLE',
+        'EDIT_VEHICLE',
+        'VIEW_DRIVER',
+        'EDIT_DRIVER',
+        'VIEW_CONTRACT',
+        'EDIT_CONTRACT',
+        'VIEW_FINANCIAL',
+        'EDIT_FINANCIAL',
+      ],
+    },
+    {
+      id: prefix + '-user-operational',
+      name: 'Operador Demo V2',
+      email: 'demo.operational.' + companyKey(companyId) + '@example.invalid',
+      role: 'OPERATIONAL',
+      permissions: [
+        'VIEW_VEHICLE',
+        'VIEW_DRIVER',
+        'VIEW_CONTRACT',
+        'CHANGE_VEHICLE_STATUS',
+        'OPERATIONS_WRITE',
+      ],
+    },
+    {
+      id: prefix + '-user-financial',
+      name: 'Financeiro Demo V2',
+      email: 'demo.financial.' + companyKey(companyId) + '@example.invalid',
+      role: 'FINANCIAL',
+      permissions: ['VIEW_FINANCIAL', 'EDIT_FINANCIAL'],
+    },
+    {
+      id: prefix + '-user-readonly',
+      name: 'Leitura Demo V2',
+      email: 'demo.readonly.' + companyKey(companyId) + '@example.invalid',
+      role: 'READONLY',
+      permissions: ['VIEW_VEHICLE', 'VIEW_DRIVER', 'VIEW_CONTRACT', 'VIEW_FINANCIAL'],
+    },
+  ];
+
+  const demoPassword = 'DemoSenha@123456';
+  const demoPasswordHash = await hashPassword(demoPassword);
+
   const vehicleSpecs = [
     ['DMO1A01', 'Chevrolet', 'Onix 1.0', 2024, 32840, 850, 'RENTED'],
     ['DMO1B02', 'Hyundai', 'HB20 1.0', 2024, 41120, 820, 'RENTED'],
     ['DMO1C03', 'Fiat', 'Cronos 1.3', 2024, 27650, 900, 'RENTED'],
     ['DMO1D04', 'Renault', 'Kwid 1.0', 2023, 55300, 750, 'RENTED'],
     ['DMO1E05', 'Volkswagen', 'Polo 1.0', 2024, 18440, 880, 'AVAILABLE'],
-    ['DMO1F06', 'Nissan', 'Versa 1.6', 2023, 62410, 950, 'AVAILABLE'],
+    ['DMO1F06', 'Nissan', 'Versa 1.6', 2023, 62410, 950, 'RENTED'],
     ['DMO1G07', 'Toyota', 'Yaris Sedan', 2024, 36880, 990, 'MAINTENANCE'],
     ['DMO1H08', 'Chevrolet', 'Onix Plus', 2023, 71620, 920, 'BLOCKED'],
+    ['DMO1M09', 'Honda', 'CG 160 Fan', 2024, 12400, 350, 'AVAILABLE'],
+    ['DMO1T10', 'Triumph', 'Tiger 1200', 2024, 8500, 1100, 'AVAILABLE'],
   ] as const;
 
-  const vehicleRows = vehicleSpecs.map((spec, index) => ({
-    id: prefix + '-vehicle-' + String(index + 1).padStart(2, '0'),
-    companyId,
-    plate: spec[0],
-    renavam: String(98000000000 + index + 1),
-    brand: spec[1],
-    model: spec[2],
-    version: 'Demo V2',
-    yearFabrication: spec[3] - 1,
-    yearModel: spec[3],
-    color: index % 2 === 0 ? 'Branco' : 'Prata',
-    chassis: '9BDV2DEMO000' + String(index + 1).padStart(5, '0'),
-    currentKm: spec[4],
-    nextMaintenanceKm: spec[4] + 10000,
-    fuelType: 'Flex',
-    category: index === 2 || index === 5 ? 'Sedan Médio' : 'Hatch / Sedan Compacto',
-    acquisitionValue: money(69000 + index * 3500),
-    currentValue: money(63000 + index * 3200),
-    rentalValueBase: money(spec[5]),
-    status: spec[6],
-    notes: 'Dado fictício V2 para homologação.',
-    isArchived: false,
-  }));
+  const vehicleRows = vehicleSpecs.map((spec, index) => {
+    let category = 'Hatch / Sedan Compacto';
+    if (spec[0] === 'DMO1M09' || spec[0] === 'DMO1T10') {
+      category = 'Moto';
+    } else if (index === 2 || index === 5) {
+      category = 'Sedan Médio';
+    }
+
+    let notes = 'Dado fictício V2 para homologação.';
+    if (spec[0] === 'DMO1A01') {
+      notes = 'Proprietário: TRIFLEX LOCADORA LTDA (CNPJ: 12.345.678/0001-90). Dado fictício V2 para homologação.';
+    } else if (spec[0] === 'DMO1B02') {
+      notes = 'Proprietário: Marcos Vinicius (CPF: 123.456.789-00). Dado fictício V2 para homologação.';
+    } else if (spec[0] === 'DMO1M09') {
+      notes = 'Motocicleta Honda CG 160 Fan para homologação de categoria Moto (AUTOERP-20). Proprietário: MOVEFLEX LOCADORA LTDA (CNPJ: 12.345.678/0001-90).';
+    } else if (spec[0] === 'DMO1T10') {
+      notes = 'Motocicleta Triumph Tiger 1200 para homologação de categoria Moto (AUTOERP-20). Proprietário: Marcos Vinicius (CPF: 123.456.789-00).';
+    }
+
+    return {
+      id: prefix + '-vehicle-' + String(index + 1).padStart(2, '0'),
+      companyId,
+      plate: spec[0],
+      renavam: String(98000000000 + index + 1),
+      brand: spec[1],
+      model: spec[2],
+      version: 'Demo V2',
+      yearFabrication: spec[3] - 1,
+      yearModel: spec[3],
+      color: index % 2 === 0 ? 'Branco' : 'Prata',
+      chassis: '9BDV2DEMO000' + String(index + 1).padStart(5, '0'),
+      currentKm: spec[4],
+      nextMaintenanceKm: spec[4] + 10000,
+      fuelType: spec[0] === 'DMO1T10' ? 'Gasolina' : 'Flex',
+      category,
+      acquisitionValue: money(69000 + index * 3500),
+      currentValue: money(63000 + index * 3200),
+      rentalValueBase: money(spec[5]),
+      status: spec[6],
+      notes,
+      isArchived: false,
+    };
+  });
 
   const driverNames = [
     'Ana Souza Demo',
@@ -232,17 +313,67 @@ export async function runV2DemoSeed() {
     name,
     cpf: cpfFromSequence(index + 1),
     cnh: String(91000000000 + index + 1),
+    phone: index === 0 ? '11999887766' : '119000100' + String(index + 1).padStart(2, '0'),
+    whatsapp: index === 0 ? '11999887766' : '119000100' + String(index + 1).padStart(2, '0'),
     maritalStatus: index % 2 === 0 ? 'SOLTEIRO' : 'CASADO',
     profession: 'Motorista de aplicativo',
     pixKey: 'demo.motorista.' + String(index + 1) + '@example.invalid',
     active: index < 8,
   }));
 
-  const contractIds = [1, 2, 3, 4].map(
+  const contractIds = [1, 2, 3, 4, 5, 6].map(
     (index) => prefix + '-contract-' + String(index).padStart(2, '0')
   );
 
   await database.transaction(async (tx: any) => {
+    const userInsertRows = demoUsers.map((u) => ({
+      id: u.id,
+      companyId,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      active: true,
+      permissions: u.permissions,
+    }));
+
+    await tx.insert(users).values(userInsertRows).onConflictDoNothing();
+
+    for (const u of userInsertRows) {
+      await tx
+        .update(users)
+        .set({
+          name: u.name,
+          role: u.role,
+          active: true,
+          permissions: u.permissions,
+        })
+        .where(and(eq(users.id, u.id), eq(users.companyId, companyId)));
+    }
+
+    const credentialRows = demoUsers.map((u) => ({
+      companyId,
+      userId: u.id,
+      passwordHash: demoPasswordHash,
+      passwordUpdatedAt: isoTimestamp(now),
+    }));
+
+    await tx.insert(userCredentials).values(credentialRows).onConflictDoNothing();
+
+    for (const cred of credentialRows) {
+      await tx
+        .update(userCredentials)
+        .set({
+          passwordHash: cred.passwordHash,
+          passwordUpdatedAt: cred.passwordUpdatedAt,
+        })
+        .where(
+          and(
+            eq(userCredentials.companyId, companyId),
+            eq(userCredentials.userId, cred.userId)
+          )
+        );
+    }
+
     const existingDemoContracts = await tx
       .select({ id: contracts.id, contractNumber: contracts.contractNumber })
       .from(contracts)
@@ -269,32 +400,89 @@ export async function runV2DemoSeed() {
       return 'CNT-' + String(nextSequence).padStart(6, '0');
     });
 
-    const contractRows = contractIds.map((id, index) => ({
-      id,
-      companyId,
-      driverId: driverRows[index].id,
-      vehicleId: vehicleRows[index].id,
-      status: 'ACTIVE',
-      contractNumber: contractNumbers[index],
-      startDate: isoDate(addDays(now, -45 - index * 7)),
-      rentalAmount: vehicleRows[index].rentalValueBase,
-      billingPeriodicity: 'WEEKLY',
-      billingDueDayOfWeek: 1,
-      billingDueDayOfMonth: 1,
-      securityDepositAmount: money([1000, 1200, 1500, 1000][index]),
-      securityDepositId: prefix + '-deposit-' + String(index + 1).padStart(2, '0'),
-      franchiseKm: 1500,
-      excessKmRate: money(0.75),
-      paymentMethodId: methodIds.pix,
-      signatureRequired: false,
-      notes: 'Contrato fictício V2 para homologação.',
-      isArchived: false,
-    }));
+    const contractRows = contractIds.map((id, index) => {
+      if (index === 4) {
+        return {
+          id,
+          companyId,
+          driverId: driverRows[index].id,
+          vehicleId: vehicleRows[index].id,
+          status: 'DRAFT',
+          contractNumber: contractNumbers[index],
+          startDate: isoDate(addDays(now, 2)),
+          endDate: null,
+          rentalAmount: vehicleRows[index].rentalValueBase,
+          billingPeriodicity: 'WEEKLY',
+          billingDueDayOfWeek: 1,
+          billingDueDayOfMonth: 1,
+          securityDepositAmount: money(1000),
+          securityDepositId: prefix + '-deposit-' + String(index + 1).padStart(2, '0'),
+          franchiseKm: 1500,
+          excessKmRate: money(0.75),
+          paymentMethodId: methodIds.pix,
+          signatureRequired: true,
+          notes: 'Contrato em rascunho (DRAFT) para homologação do ciclo de ativação e versionamento (AUTOERP-53).',
+          isArchived: false,
+        };
+      }
+
+      if (index === 5) {
+        return {
+          id,
+          companyId,
+          driverId: driverRows[index].id,
+          vehicleId: vehicleRows[index].id,
+          status: 'ACTIVE',
+          contractNumber: contractNumbers[index],
+          startDate: isoDate(addDays(now, -60)),
+          endDate: isoDate(now),
+          rentalAmount: vehicleRows[index].rentalValueBase,
+          billingPeriodicity: 'WEEKLY',
+          billingDueDayOfWeek: 1,
+          billingDueDayOfMonth: 1,
+          securityDepositAmount: money(1200),
+          securityDepositId: prefix + '-deposit-' + String(index + 1).padStart(2, '0'),
+          franchiseKm: 1500,
+          excessKmRate: money(0.75),
+          paymentMethodId: methodIds.pix,
+          signatureRequired: false,
+          notes: 'Contrato ativo pronto para encerramento sem leitura de KM final de check-in (AUTOERP-09).',
+          isArchived: false,
+        };
+      }
+
+      return {
+        id,
+        companyId,
+        driverId: driverRows[index].id,
+        vehicleId: vehicleRows[index].id,
+        status: 'ACTIVE',
+        contractNumber: contractNumbers[index],
+        startDate: isoDate(addDays(now, -45 - index * 7)),
+        endDate: null,
+        rentalAmount: vehicleRows[index].rentalValueBase,
+        billingPeriodicity: 'WEEKLY',
+        billingDueDayOfWeek: 1,
+        billingDueDayOfMonth: 1,
+        securityDepositAmount: money([1000, 1200, 1500, 1000][index]),
+        securityDepositId: prefix + '-deposit-' + String(index + 1).padStart(2, '0'),
+        franchiseKm: 1500,
+        excessKmRate: money(0.75),
+        paymentMethodId: methodIds.pix,
+        signatureRequired: false,
+        notes: 'Contrato fictício V2 para homologação.',
+        isArchived: false,
+      };
+    });
 
     vehicleRows.slice(0, 4).forEach((vehicle, index) => {
       (vehicle as any).currentDriverId = driverRows[index].id;
       (vehicle as any).currentContractId = contractRows[index].id;
     });
+
+    (vehicleRows[5] as any).currentDriverId = driverRows[5].id;
+    (vehicleRows[5] as any).currentContractId = contractRows[5].id;
+    (vehicleRows[5] as any).status = 'RENTED';
 
     await tx.insert(financialAccounts).values([
       {
@@ -391,6 +579,10 @@ export async function runV2DemoSeed() {
           active: driver.active,
         })
         .where(and(eq(drivers.id, driver.id), eq(drivers.companyId, companyId)));
+
+      await tx.execute(
+        sql`UPDATE drivers SET phone = ${driver.phone}, whatsapp = ${driver.whatsapp} WHERE id = ${driver.id} AND company_id = ${companyId}`
+      );
     }
 
     await tx.insert(vehicles).values(vehicleRows).onConflictDoNothing();
@@ -434,6 +626,7 @@ export async function runV2DemoSeed() {
           vehicleId: contract.vehicleId,
           status: contract.status,
           startDate: contract.startDate,
+          endDate: contract.endDate || null,
           rentalAmount: contract.rentalAmount,
           billingPeriodicity: contract.billingPeriodicity,
           billingDueDayOfWeek: contract.billingDueDayOfWeek,
@@ -442,15 +635,15 @@ export async function runV2DemoSeed() {
           franchiseKm: contract.franchiseKm,
           excessKmRate: contract.excessKmRate,
           paymentMethodId: contract.paymentMethodId,
-          signatureRequired: false,
+          signatureRequired: contract.signatureRequired,
           notes: contract.notes,
           isArchived: false,
         })
         .where(and(eq(contracts.id, contract.id), eq(contracts.companyId, companyId)));
     }
 
-    const depositAmounts = [1000, 1200, 1500, 1000];
-    const depositReceived = [1000, 1200, 500, 0];
+    const depositAmounts = [1000, 1200, 1500, 1000, 1000, 1200];
+    const depositReceived = [1000, 1200, 500, 0, 0, 1200];
 
     const depositRows = contractRows.map((contract, index) => ({
       id: prefix + '-deposit-' + String(index + 1).padStart(2, '0'),
@@ -497,6 +690,9 @@ export async function runV2DemoSeed() {
         paid: 0,
         dueOffset: 3,
         status: 'PENDING',
+        installmentNumber: 1,
+        totalInstallments: 1,
+        installmentGroupId: prefix + '-rent-group-01',
       },
       {
         id: prefix + '-receivable-rent-02',
@@ -508,6 +704,9 @@ export async function runV2DemoSeed() {
         paid: 0,
         dueOffset: -6,
         status: 'OVERDUE',
+        installmentNumber: 1,
+        totalInstallments: 1,
+        installmentGroupId: prefix + '-rent-group-02',
       },
       {
         id: prefix + '-receivable-rent-03',
@@ -519,6 +718,9 @@ export async function runV2DemoSeed() {
         paid: 300,
         dueOffset: 1,
         status: 'PARTIALLY_PAID',
+        installmentNumber: 1,
+        totalInstallments: 1,
+        installmentGroupId: prefix + '-rent-group-03',
       },
       {
         id: prefix + '-receivable-rent-04',
@@ -528,13 +730,48 @@ export async function runV2DemoSeed() {
         interest: 0,
         additional: 0,
         paid: 750,
-        dueOffset: -2,
+        dueOffset: -7,
         status: 'PAID',
+        installmentNumber: 1,
+        totalInstallments: 2,
+        installmentGroupId: prefix + '-rent-group-04',
+      },
+      {
+        id: prefix + '-receivable-rent-04-p2',
+        contract: contractRows[3],
+        original: 750,
+        fine: 0,
+        interest: 0,
+        additional: 0,
+        paid: 0,
+        dueOffset: 5,
+        status: 'PENDING',
+        installmentNumber: 2,
+        totalInstallments: 2,
+        installmentGroupId: prefix + '-rent-group-04',
+      },
+      {
+        id: prefix + '-receivable-rent-06',
+        contract: contractRows[5],
+        original: 950,
+        fine: 0,
+        interest: 0,
+        additional: 0,
+        paid: 950,
+        dueOffset: -14,
+        status: 'PAID',
+        installmentNumber: 1,
+        totalInstallments: 1,
+        installmentGroupId: prefix + '-rent-group-06',
       },
     ];
 
     const receivableRows: any[] = rentReceivables.map((item, index) => {
       const updated = item.original + item.fine + item.interest + item.additional;
+      const installmentNumber = item.installmentNumber || 1;
+      const totalInstallments = item.totalInstallments || 1;
+      const installmentSuffix = totalInstallments > 1 ? ' (' + installmentNumber + '/' + totalInstallments + ')' : '';
+
       return {
         id: item.id,
         companyId,
@@ -544,7 +781,7 @@ export async function runV2DemoSeed() {
         driverId: item.contract.driverId,
         contractId: item.contract.id,
         categoryId: categoryIds.rent,
-        description: 'Aluguel semanal ' + item.contract.contractNumber + ' - Demo V2',
+        description: 'Aluguel semanal ' + item.contract.contractNumber + ' - Demo V2' + installmentSuffix,
         originalAmount: money(item.original),
         discountAmount: money(0),
         fineAmount: money(item.fine),
@@ -556,11 +793,11 @@ export async function runV2DemoSeed() {
         dueDate: isoTimestamp(addDays(now, item.dueOffset)),
         competenceDate: isoTimestamp(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))),
         status: item.status,
-        installmentGroupId: prefix + '-rent-group-' + String(index + 1),
-        installmentNumber: 1,
-        totalInstallments: 1,
+        installmentGroupId: item.installmentGroupId || prefix + '-rent-group-' + String(index + 1),
+        installmentNumber,
+        totalInstallments,
         periodRef: isoDate(now).slice(0, 7) + '-demo-' + String(index + 1),
-        idempotencyKey: prefix + ':rent:' + String(index + 1),
+        idempotencyKey: prefix + ':rent:' + item.id,
         notes: 'Título fictício para homologação do fluxo CR -> Recebimento.',
       };
     });
@@ -767,6 +1004,23 @@ export async function runV2DemoSeed() {
         createdById,
         idempotencyKey: prefix + ':tx:rent-paid',
       },
+      {
+        id: prefix + '-tx-rent-paid-06',
+        companyId,
+        financialAccountId: accountIds.bank,
+        receivableId: prefix + '-receivable-rent-06',
+        type: 'INCOME',
+        amount: money(950),
+        paymentMethodId: methodIds.pix,
+        transactionDate: isoTimestamp(addDays(now, -14)),
+        competenceDate: isoTimestamp(now),
+        description: 'Recebimento integral aluguel Contrato 6 Demo V2',
+        isReversed: false,
+        vehicleId: contractRows[5].vehicleId,
+        driverId: contractRows[5].driverId,
+        createdById,
+        idempotencyKey: prefix + ':tx:rent-paid:06',
+      },
       ...depositReceived
         .map((amount, index) => ({ amount, index }))
         .filter((item) => item.amount > 0)
@@ -890,7 +1144,8 @@ export async function runV2DemoSeed() {
       contractId: contractRows[index].id,
       kmValue: vehicle.currentKm,
       recordDate: isoDate(now),
-      readingType: 'MANUAL',
+      readingType: 'PERIODIC',
+      sourceType: 'MANUAL',
       notes: 'Conferência fictícia de KM oficial para homologação V2.',
     }));
 
@@ -1012,7 +1267,7 @@ export async function runV2DemoSeed() {
         vehicleId: vehicleRows[0].id,
         driverId: driverRows[0].id,
         contractId: contractRows[0].id,
-        inspectionType: 'CHECK_OUT',
+        inspectionType: 'EXIT',
         inspectionDate: isoTimestamp(addDays(now, -45)),
         odometer: vehicleRows[0].currentKm - 3200,
         fuelLevel: 100,
@@ -1031,7 +1286,7 @@ export async function runV2DemoSeed() {
         vehicleId: vehicleRows[1].id,
         driverId: driverRows[1].id,
         contractId: contractRows[1].id,
-        inspectionType: 'CHECK_IN',
+        inspectionType: 'ENTRY',
         inspectionDate: isoTimestamp(addDays(now, -3)),
         odometer: vehicleRows[1].currentKm,
         fuelLevel: 50,
@@ -1065,6 +1320,53 @@ export async function runV2DemoSeed() {
         .where(and(eq(vehicleInspections.id, row.id), eq(vehicleInspections.companyId, companyId)));
     }
 
+    const attachmentRows = [
+      {
+        id: prefix + '-attachment-legacy-r2-01',
+        companyId,
+        entityType: 'Vehicle',
+        entityName: 'Vehicle',
+        entityId: vehicleRows[0].id,
+        documentType: 'CRLV',
+        fileName: 'crlv_2024_dmo1a01_r2_legacy.pdf',
+        mimeType: 'application/pdf',
+        url: 'https://r2.example.invalid/crlv_2024_dmo1a01.pdf',
+        size: 154200,
+        fileSize: 154200,
+        storageProvider: 'R2',
+        storageKey: 'tenants/' + companyKey(companyId) + '/vehicles/' + vehicleRows[0].id + '/crlv_legacy.pdf',
+        checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        description: 'Anexo de CRLV gravado no provedor R2 antes da migração para SERVER_FS (AUTOERP-07).',
+        issueDate: isoDate(addDays(now, -180)),
+        expirationDate: isoDate(addDays(now, 120)),
+        createdBy: createdById,
+        isArchived: false,
+        contentState: 'AVAILABLE',
+      },
+    ];
+
+    await tx.insert(fileAttachments).values(attachmentRows).onConflictDoNothing();
+    for (const att of attachmentRows) {
+      await tx
+        .update(fileAttachments)
+        .set({
+          fileName: att.fileName,
+          mimeType: att.mimeType,
+          url: att.url,
+          size: att.size,
+          fileSize: att.fileSize,
+          storageProvider: att.storageProvider,
+          storageKey: att.storageKey,
+          checksum: att.checksum,
+          description: att.description,
+          issueDate: att.issueDate,
+          expirationDate: att.expirationDate,
+          contentState: att.contentState,
+          isArchived: false,
+        })
+        .where(and(eq(fileAttachments.id, att.id), eq(fileAttachments.companyId, companyId)));
+    }
+
     const documentRows = [
       {
         id: prefix + '-document-crlv-01',
@@ -1076,11 +1378,12 @@ export async function runV2DemoSeed() {
         referenceYear: now.getUTCFullYear(),
         issueDate: isoDate(addDays(now, -180)),
         expirationDate: isoDate(addDays(now, 120)),
+        attachmentId: prefix + '-attachment-legacy-r2-01',
         versionNumber: 1,
         isCurrent: true,
         isArchived: false,
         cost: money(0),
-        notes: 'CRLV fictício válido para homologação.',
+        notes: 'CRLV fictício válido para homologação com anexo legado em R2 (AUTOERP-07).',
         createdBy: createdById,
       },
       {
@@ -1093,6 +1396,7 @@ export async function runV2DemoSeed() {
         referenceYear: now.getUTCFullYear(),
         issueDate: isoDate(addDays(now, -330)),
         expirationDate: isoDate(addDays(now, 12)),
+        attachmentId: null,
         versionNumber: 1,
         isCurrent: true,
         isArchived: false,
@@ -1110,11 +1414,84 @@ export async function runV2DemoSeed() {
         referenceYear: now.getUTCFullYear(),
         issueDate: isoDate(addDays(now, -900)),
         expirationDate: isoDate(addDays(now, 6)),
+        attachmentId: null,
         versionNumber: 1,
         isCurrent: true,
         isArchived: false,
         cost: money(0),
         notes: 'CNH fictícia em faixa crítica de vencimento.',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-exp-07d',
+        companyId,
+        subjectType: 'VEHICLE',
+        subjectId: vehicleRows[2].id,
+        documentType: 'CRLV',
+        documentNumber: 'CRLV-DEMO-003',
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -358)),
+        expirationDate: isoDate(addDays(now, 7)),
+        attachmentId: null,
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'Documento CRLV vencendo em 7 dias (limiar crítico vermelho).',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-exp-15d',
+        companyId,
+        subjectType: 'DRIVER',
+        subjectId: driverRows[1].id,
+        documentType: 'CNH',
+        documentNumber: driverRows[1].cnh,
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -900)),
+        expirationDate: isoDate(addDays(now, 15)),
+        attachmentId: null,
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'Documento CNH vencendo em 15 dias (limiar de atenção amarelo).',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-exp-30d',
+        companyId,
+        subjectType: 'VEHICLE',
+        subjectId: vehicleRows[3].id,
+        documentType: 'CRLV',
+        documentNumber: 'CRLV-DEMO-004',
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -335)),
+        expirationDate: isoDate(addDays(now, 30)),
+        attachmentId: null,
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'Documento CRLV vencendo em 30 dias (limiar informativo).',
+        createdBy: createdById,
+      },
+      {
+        id: prefix + '-document-exp-22h-brt',
+        companyId,
+        subjectType: 'VEHICLE',
+        subjectId: vehicleRows[4].id,
+        documentType: 'CRLV',
+        documentNumber: 'CRLV-DEMO-005',
+        referenceYear: now.getUTCFullYear(),
+        issueDate: isoDate(addDays(now, -360)),
+        expirationDate: isoDate(addDays(now, 1)),
+        attachmentId: null,
+        versionNumber: 1,
+        isCurrent: true,
+        isArchived: false,
+        cost: money(0),
+        notes: 'Documento CRLV vencendo em 1 dia (estágio D1 para alerta imediato).',
         createdBy: createdById,
       },
     ];
@@ -1131,6 +1508,7 @@ export async function runV2DemoSeed() {
           referenceYear: row.referenceYear,
           issueDate: row.issueDate,
           expirationDate: row.expirationDate,
+          attachmentId: (row as any).attachmentId || null,
           versionNumber: row.versionNumber,
           isCurrent: row.isCurrent,
           isArchived: row.isArchived,
@@ -1238,12 +1616,14 @@ export async function runV2DemoSeed() {
     vehicles: vehicleRows.length,
     drivers: driverRows.length,
     contracts: contractIds.length,
-    receivables: 9,
+    receivables: 13,
     payables: 5,
     maintenance: 3,
     trackers: 6,
     inspections: 2,
-    documents: 3,
+    documents: 7,
+    attachments: 1,
+    demoUsers: 5,
     trafficTickets: 1,
     target: process.env.V2_DEMO_SEED_TARGET,
   }, null, 2));

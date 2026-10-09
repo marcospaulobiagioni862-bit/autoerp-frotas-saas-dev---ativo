@@ -12,9 +12,12 @@ const FORBIDDEN=new Set(['companyId','userId','userName','role','status','recurr
 function principal(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function requirePrincipal(req:Request,res:Response,action:TrackerAction):AuthenticatedPrincipal|null{
   const actor=principal(req); if(!actor){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
-  const role=String(actor.role||'').toUpperCase(),permissions=Array.isArray(actor.permissions)?actor.permissions:[];
-  const explicit=permissions.includes('*')||permissions.includes(action),allowed=action==='VIEW_TRACKER'?READ_ROLES.has(role):WRITE_ROLES.has(role);
-  if(!explicit&&!allowed){res.status(403).json({error:'Forbidden'});return null;} return actor;
+  const role=String(actor.role||'').toUpperCase();
+  if(role==='ADMIN') return actor;
+  const permissions=Array.isArray(actor.permissions)?actor.permissions:[];
+  if(permissions.includes('*')||permissions.includes(action)) return actor;
+  res.status(403).json({error:'Forbidden'});
+  return null;
 }
 function rejectProtected(body:unknown):void{
   if(!body||typeof body!=='object'||Array.isArray(body))throw new TrackerValidationError('Invalid payload');

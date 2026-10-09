@@ -6,6 +6,7 @@ import {
   AttachmentStorageValidationError,
   MAX_ATTACHMENT_BYTES,
   ServerAttachmentStorage,
+  MultiProviderAttachmentStorage,
   type AttachmentByteStorage,
   type AttachmentStorageConfiguration,
   type StoredAttachmentBytes,
@@ -210,7 +211,16 @@ export function createAttachmentStorageFromEnvironment(
   environment: R2Environment = process.env,
 ): AttachmentByteStorage {
   const provider = value(environment, 'ATTACHMENT_STORAGE_PROVIDER').toUpperCase();
-  if (!provider || provider === 'SERVER_FS') return new ServerAttachmentStorage();
-  if (provider === 'R2') return new R2AttachmentStorage(environment);
-  throw new AttachmentStorageUnavailableError('Unsupported attachment storage provider');
+  if (provider && provider !== 'SERVER_FS' && provider !== 'R2') {
+    throw new AttachmentStorageUnavailableError('Unsupported attachment storage provider');
+  }
+
+  const serverDriver = new ServerAttachmentStorage();
+  const r2Driver = new R2AttachmentStorage(environment);
+  const primaryDriver = provider === 'R2' ? r2Driver : serverDriver;
+
+  const composite = new MultiProviderAttachmentStorage(primaryDriver);
+  composite.registerDriver(serverDriver);
+  composite.registerDriver(r2Driver);
+  return composite;
 }

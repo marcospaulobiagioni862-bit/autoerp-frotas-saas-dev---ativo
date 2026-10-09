@@ -5,6 +5,7 @@ import { db } from '../../db';
 import { seedContractSignedFixture } from './contractSignedFixture';
 import { ContractStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { registerContractRoutes } from '../contractRoutes';
 
 const companyA = 'contract-suspend-company-a';
@@ -101,7 +102,7 @@ export async function runContractSuspendRegression(): Promise<void> {
     const userId = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'] : '';
     if (companyId && role && userId) {
       (req as Request & { principal?: AuthenticatedPrincipal }).principal = {
-        companyId, userId, name: `${role} Suspend Regression`, role, permissions: [],
+        companyId, userId, name: `${role} Suspend Regression`, role, permissions: getDefaultPermissionsForRole(role),
       };
     }
     next();

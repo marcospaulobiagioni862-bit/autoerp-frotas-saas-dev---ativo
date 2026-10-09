@@ -19,8 +19,8 @@ function assert(condition:unknown,message:string):asserts condition{if(!conditio
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 async function one(query:any):Promise<any>{return rows(await db.execute(query))[0];}
 const admin:AuthenticatedPrincipal={companyId:companyA,userId:adminA,name:'K Admin',role:'ADMIN',permissions:['*']};
-const operational:AuthenticatedPrincipal={companyId:companyA,userId:operationalA,name:'K Operacional',role:'OPERATIONAL',permissions:[]};
-const readonly:AuthenticatedPrincipal={companyId:companyA,userId:readonlyA,name:'K Viewer',role:'READONLY',permissions:[]};
+const operational:AuthenticatedPrincipal={companyId:companyA,userId:operationalA,name:'K Operacional',role:'OPERATIONAL',permissions:['VIEW_TRACKER','MUTATE_TRACKER']};
+const readonly:AuthenticatedPrincipal={companyId:companyA,userId:readonlyA,name:'K Viewer',role:'READONLY',permissions:['VIEW_TRACKER']};
 
 async function seed():Promise<void>{
   await db.execute(sql`INSERT INTO companies(id,name,status,created_at,updated_at) VALUES (${companyA},'K A','ACTIVE',NOW(),NOW()),(${companyB},'K B','ACTIVE',NOW(),NOW()) ON CONFLICT(id) DO NOTHING`);

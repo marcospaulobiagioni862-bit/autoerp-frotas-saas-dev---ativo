@@ -9,6 +9,14 @@ on:
     branches:
       - main
       - staging-app
+      # A PR #1145 (v2/core-simplified -> staging-app) foi fechada como merged
+      # em 2026-10-06 10:53Z, quando o merge foi empurrado direto para
+      # staging-app. Sem PR aberta, o evento pull_request deixou de disparar e a
+      # branch de desenvolvimento ficou SEM portao nenhum. Como o fluxo de
+      # entrega e merge por push em staging-app, que fecha qualquer PR nova, o
+      # gatilho de push e a unica forma estavel de manter a V2 coberta. Nao
+      # duplica execucao justamente porque nao ha PR aberta com esta origem.
+      - v2/core-simplified
   workflow_dispatch:
 
 permissions:
@@ -293,14 +301,24 @@ jobs:
             echo "FAIL: driver UI must not require internal consent registration"
             exit 1
           fi
-          if grep -Fq "wa.me/" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must not bypass the auditable outbox through wa.me"
-            exit 1
-          fi
-          if grep -Fq "window.open" src/components/drivers/DriverDetailsModal.tsx; then
-            echo "FAIL: driver UI must not open an external WhatsApp destination"
-            exit 1
-          fi
+          # AUTOERP-49 / AUTOERP-55: telas operacionais e financeiras que disparam WhatsApp
+          # podem abrir o WhatsApp apenas com destino retornado pelo servidor (wa-link auditado),
+          # NUNCA montando URLs literais no navegador nem contornando a auditoria.
+          for ui_file in src/components/drivers/DriverDetailsModal.tsx src/components/finance/ReceivablesView.tsx src/components/finance/FinancialObligationDetailsModal.tsx; do
+            if grep -Fq "wa.me/" "$ui_file"; then
+              echo "FAIL: $ui_file must not bypass the auditable outbox through wa.me"
+              exit 1
+            fi
+            if grep -Eq "window\\.open\\(\\s*[\"'\`]" "$ui_file"; then
+              echo "FAIL: $ui_file must open only a server-issued destination, never a literal URL"
+              exit 1
+            fi
+          done
+          grep -F "WhatsappClient.getWaLink(" src/components/drivers/DriverDetailsModal.tsx
+          grep -F "WhatsappClient.getWaLink(" src/components/finance/ReceivablesView.tsx
+          grep -F "WhatsappClient.getWaLink(" src/components/finance/FinancialObligationDetailsModal.tsx
+          grep -F "WHATSAPP_WAME_LINK_GENERATED" src/server/whatsappRoutes.ts
+          grep -F "entityName: 'WhatsappWaLink'" src/server/whatsappRoutes.ts
           echo "WHATSAPP-1B client source invariants: PASS"
 
       - name: WHATSAPP-1B2 template catalog invariants
@@ -782,7 +800,14 @@ jobs:
           ];
           for (const [marker, label] of forbidden) if (chunks.some(({ text }) => text.includes(marker))) { console.error(`FAIL: ${label} found in production frontend bundle (${marker})`); process.exit(1); }
           const required = [
-            ['COCKPIT SERVER AUTHORITY', 'trusted production navigation'],
+            // O marcador 'COCKPIT SERVER AUTHORITY' era o cabecalho da secao de cockpit
+            // do ProductionSidebar, que o AUTOERP-67 removeu ao unificar a navegacao.
+            // Exigi-lo passou a ser exigir a volta de uma secao que foi deliberadamente
+            // tirada. O que prova 'a navegacao confiavel foi entregue' agora sao as tres
+            // secoes do menu unificado.
+            ['INÍCIO', 'trusted production navigation (start section)'],
+            ['OPERAÇÃO', 'trusted production navigation (operations section)'],
+            ['FINANCEIRO', 'trusted production navigation (finance section)'],
             ['Server authority required', 'fail-closed experimental cockpit boundary'],
             ['/api/operations/tasks', 'task authority'],
             ['/api/operations/incidents', 'incident authority'],

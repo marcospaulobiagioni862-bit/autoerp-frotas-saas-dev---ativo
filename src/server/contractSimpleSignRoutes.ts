@@ -10,15 +10,22 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
   return (req as Request & { principal?: AuthenticatedPrincipal }).principal;
 }
 
+function hasSignPermission(principal: AuthenticatedPrincipal): boolean {
+  if (!principal.userId || !principal.companyId) return false;
+  const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return true;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes('SIGN_CONTRACT')) return true;
+  return false;
+}
+
 function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
   const principal = principalFrom(req);
   if (!principal) {
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  const role = String(principal.role || '').toUpperCase();
-  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (!principal.userId || !principal.companyId || (!permissions.includes('*') && !permissions.includes('EDIT_CONTRACT') && !WRITE_ROLES.has(role))) {
+  if (!hasSignPermission(principal)) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }

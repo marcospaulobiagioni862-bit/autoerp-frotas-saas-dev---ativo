@@ -26,6 +26,8 @@ const reasons: Record<string, [string, string]> = {
   'Close date cannot be in the future': ['CONTRACT_CLOSE_IN_FUTURE', 'A data de encerramento não pode estar no futuro.'],
   'Contract financial reconciliation conflict': ['CONTRACT_FINANCE_REVIEW_REQUIRED', 'A conciliação da cobrança exige revisão. Nenhuma alteração desta operação foi aplicada.'],
   'Financial period closed': ['CONTRACT_FINANCIAL_PERIOD_CLOSED', 'O período financeiro está fechado. Regularize o período antes de ajustar a cobrança.'],
+  'Odometer reading required for contract close': ['CONTRACT_ODOMETER_REQUIRED', 'Encerramento bloqueado: é obrigatório registrar a leitura do odômetro de devolução (check-in) para o contrato.'],
+  'Odometer reading cannot be lower than current': ['CONTRACT_ODOMETER_DECREASED', 'O odômetro final informado não pode ser inferior ao odômetro atual do veículo.'],
 };
 
 export function contractConflictResponse(reason?: string): { error: string; code: string } {

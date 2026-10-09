@@ -2,6 +2,7 @@ import express, { type Request, type Response as ExpressResponse, type NextFunct
 import { createServer } from 'node:http';
 import { registerVehicleRoutes } from '../vehicleRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
 
 const companyId = 'fleet-category-pickup-company';
@@ -32,7 +33,7 @@ export class VehicleCategoryAuthorityIntegrationRunner {
           userId: `${requestCompanyId}-user`,
           name: `${role} Vehicle Category Integration User`,
           role,
-          permissions: [],
+          permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

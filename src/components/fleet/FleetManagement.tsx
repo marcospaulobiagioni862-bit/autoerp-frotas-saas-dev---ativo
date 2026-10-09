@@ -30,6 +30,7 @@ export const FleetManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | VehicleStatus>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [ownershipFilter, setOwnershipFilter] = useState<string>('ALL');
   const [sortOption, setSortOption] = useState<'PLATE' | 'MODEL' | 'KM' | 'STATUS'>('PLATE');
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -68,6 +69,7 @@ export const FleetManagement: React.FC = () => {
     setSearchTerm('');
     setStatusFilter('ALL');
     setCategoryFilter('ALL');
+    setOwnershipFilter('ALL');
     setShowArchived((current) => !current);
   };
 
@@ -79,7 +81,8 @@ export const FleetManagement: React.FC = () => {
       v.model.toLowerCase().includes(s);
     const matchesStatus = vehicleMatchesStatusFilter(v.status, statusFilter);
     const matchesCategory = categoryFilter === 'ALL' || v.category === categoryFilter;
-    return matchesSearch && matchesStatus && matchesCategory;
+    const matchesOwnership = ownershipFilter === 'ALL' || v.ownerType === ownershipFilter;
+    return matchesSearch && matchesStatus && matchesCategory && matchesOwnership;
   }).sort((a, b) => {
     if (sortOption === 'MODEL') return `${a.brand} ${a.model}`.localeCompare(`${b.brand} ${b.model}`, 'pt-BR');
     if (sortOption === 'KM') return a.currentKm - b.currentKm;
@@ -186,6 +189,20 @@ export const FleetManagement: React.FC = () => {
             <div className="w-52 shrink-0">
               <Select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} options={[{ value: 'ALL', label: 'Todas as categorias' }, ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))]}/>
             </div>
+            <div className="w-48 shrink-0">
+              <Select
+                aria-label="Filtrar por titularidade"
+                value={ownershipFilter}
+                onChange={(event) => setOwnershipFilter(event.target.value)}
+                options={[
+                  { value: 'ALL', label: 'Todas titularidades' },
+                  { value: 'PROPRIO', label: 'Próprio (CNPJ)' },
+                  { value: 'LEASING', label: 'Leasing / Financiado' },
+                  { value: 'SOCIO', label: 'Sócio (CPF)' },
+                  { value: 'TERCEIRO', label: 'Terceiro' },
+                ]}
+              />
+            </div>
             <div className="w-44 shrink-0">
               <Select aria-label="Ordenar veículos" value={sortOption} onChange={(event) => setSortOption(event.target.value as typeof sortOption)} options={[
                 { value: 'PLATE', label: 'Ordenar: placa' },
@@ -223,6 +240,42 @@ export const FleetManagement: React.FC = () => {
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">{vehicle.plate}</span><Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge></div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
                   <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
+                  
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                      vehicle.ownerType === 'PROPRIO' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' :
+                      vehicle.ownerType === 'SOCIO' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' :
+                      vehicle.ownerType === 'LEASING' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' :
+                      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                    }`}>
+                      {vehicle.ownerType === 'PROPRIO' ? 'Próprio (CNPJ)' :
+                       vehicle.ownerType === 'SOCIO' ? 'Sócio (CPF)' :
+                       vehicle.ownerType === 'LEASING' ? 'Leasing / Banco' :
+                       vehicle.ownerType === 'TERCEIRO' ? 'Terceiro' : 'Titularidade n/d'}
+                    </span>
+
+                    {vehicle.sneCoverageStatus === 'COBERTO_CNPJ' && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" title="Desconto de até 40% em multas via SNE ativo no CNPJ">
+                        SNE 40%
+                      </span>
+                    )}
+                    {vehicle.sneCoverageStatus === 'PENDENTE_CPF_TITULAR' && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" title="SNE requer adesão pelo CPF do titular">
+                        SNE Pendente (CPF)
+                      </span>
+                    )}
+                    {(vehicle.sneCoverageStatus === 'DESCOBERTO_BANCO_LEASING' || vehicle.sneCoverageStatus === 'DESCOBERTO_TERCEIRO') && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" title="Fora da cobertura direta de desconto SNE da empresa">
+                        SNE Descoberto
+                      </span>
+                    )}
+                  </div>
+                  {vehicle.ownerName && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-1">
+                      Titular: <span className="font-medium text-slate-700 dark:text-slate-300">{vehicle.ownerName}</span>
+                    </p>
+                  )}
+
                   <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                     <div className="flex justify-between"><span className="text-slate-400">Quilometragem:</span><strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
                     <div className="flex justify-between"><span className="text-slate-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>

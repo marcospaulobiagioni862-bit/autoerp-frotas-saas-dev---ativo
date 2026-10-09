@@ -17,7 +17,7 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
   };
   const account = { id: 'account-a', companyId: 'tenant-a', status: 'ACTIVE', currentBalance: 1000 };
   const method = { id: 'method-a', companyId: 'tenant-a', active: true };
-  const transactions: any[] = [], audits: any[] = [], depositMovements: any[] = [];
+  const transactions: any[] = [], audits: any[] = [], depositMovements: any[] = [], compositions: any[] = [];
   let deposit: any = null;
   const contract = {
     id: 'contract-a', companyId: 'tenant-a', driverId: 'driver-a', vehicleId: 'vehicle-a',
@@ -39,8 +39,14 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
     findFinancialAccountByIdWithLock: async () => account,
     findFinancialTransactionByIdempotencyKey: async (key: string) => transactions.find(t => t.idempotencyKey === key),
     findSettlementComposition: async (id: string) => {
-      const entry = audits.find(a => a.entityName === 'FinancialSettlement' && a.entityId === id);
-      return entry ? JSON.parse(entry.newState) : null;
+      const entry = compositions.find(c => c.transactionId === id);
+      return entry ? entry.composition : null;
+    },
+    saveSettlementComposition: async (comp: any) => {
+      const existing = compositions.find(c => c.transactionId === comp.transactionId);
+      if (!existing) {
+        compositions.push({ transactionId: comp.transactionId, composition: comp });
+      }
     },
     getTransactionRepo: () => ({ create: async (value: any) => { transactions.push(value); return value; } }),
     getAccountRepo: () => ({ updateBalance: async (_id: string, delta: number) => { account.currentBalance += delta; } }),
@@ -66,7 +72,7 @@ function fixture(kind: 'receipt' | 'payment', originType = OriginType.MANUAL) {
       userId: 'admin-a', userName: 'Admin', ...adjustments };
     return kind === 'receipt' ? SettlementService.registerReceipt(params, tx) : SettlementService.registerPayment(params, tx);
   };
-  return { get obligation() { return obligation; }, get deposit() { return deposit; }, account, method, transactions, audits, depositMovements, settle, tx, contract };
+  return { get obligation() { return obligation; }, get deposit() { return deposit; }, account, method, transactions, audits, depositMovements, compositions, settle, tx, contract };
 }
 
 for (const kind of ['receipt', 'payment'] as const) {
@@ -179,4 +185,26 @@ for (const kind of ['receipt', 'payment'] as const) {
   assert.equal(f.transactions.length, 1, 'retry cannot duplicate an adjusted settlement');
   await assert.rejects(f.settle(133, 'adjusted', { fineAmount: 5, interestAmount: 24, additionalAmount: 8, discountAmount: 3 }), /idempotência/);
   console.log(`PASS ${kind}: explicit fine, interest, additional amount and discount remain separated`);
+}
+
+// Regra 3.2: Invariante fail-closed da autoridade de composição de baixa
+{
+  const f = fixture('receipt');
+  const disabledTx = { ...f.tx, saveSettlementComposition: undefined } as any;
+  await assert.rejects(
+    SettlementService.registerReceipt({
+      companyId: 'tenant-a',
+      obligationId: f.obligation.id,
+      financialAccountId: f.account.id,
+      paymentMethodId: f.method.id,
+      paymentAmount: 50,
+      idempotencyKey: 'fail-closed-check',
+      paymentDate: '2026-09-24',
+      userId: 'admin-a',
+      userName: 'Admin',
+    }, disabledTx),
+    /Autoridade transacional de composição de baixa indisponível/,
+    'contexto transacional sem capacidade de salvar a composição deve falhar fechado'
+  );
+  console.log('PASS fail-closed: recusa liquidar se a autoridade de composição de baixa estiver indisponível');
 }

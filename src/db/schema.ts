@@ -1,5 +1,5 @@
 import { isNotNull, sql } from 'drizzle-orm';
-import { pgTable, text, date, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy } from 'drizzle-orm/pg-core';
+import { pgTable, text, date, timestamp, boolean, integer, numeric, index, uniqueIndex, unique, jsonb, check, foreignKey, pgPolicy, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // Tenants / Companies
@@ -69,6 +69,17 @@ export const vehicles = pgTable('vehicles', {
   acquisitionValue: numeric('acquisition_value', { precision: 12, scale: 2 }).notNull().default('0'),
   currentValue: numeric('current_value', { precision: 12, scale: 2 }).notNull().default('0'),
   rentalValueBase: numeric('rental_value_base', { precision: 12, scale: 2 }).notNull().default('0'),
+  ownerType: text('owner_type').notNull().default('COMPANY'),
+  ownerName: text('owner_name'),
+  ownerDocument: text('owner_document'),
+  possessionType: text('possession_type').notNull().default('PROPRIO'),
+  financialRestriction: text('financial_restriction').notNull().default('NONE'),
+  financialInstitution: text('financial_institution'),
+  crlvExerciseYear: integer('crlv_exercise_year'),
+  registrationCity: text('registration_city'),
+  registrationState: text('registration_state'),
+  claSecurityCode: text('cla_security_code'),
+  sneCoverageStatus: text('sne_coverage_status').notNull().default('NAO_ADERIDO'),
   status: text('status').notNull(),
   notes: text('notes'),
   currentDriverId: text('current_driver_id'),
@@ -81,6 +92,32 @@ export const vehicles = pgTable('vehicles', {
   unq_renavam: unique().on(t.companyId, t.renavam),
   idx_company_status: index('idx_veh_company_status').on(t.companyId, t.status),
 }));
+
+export const vehicleOwnershipHistory = pgTable('vehicle_ownership_history', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  ownerType: text('owner_type').notNull(),
+  ownerName: text('owner_name').notNull(),
+  ownerDocument: text('owner_document'),
+  possessionType: text('possession_type').notNull(),
+  financialRestriction: text('financial_restriction').notNull().default('NONE'),
+  financialInstitution: text('financial_institution'),
+  effectiveFrom: timestamp('effective_from', { mode: 'string' }).notNull(),
+  effectiveTo: timestamp('effective_to', { mode: 'string' }),
+  reason: text('reason'),
+  documentAttachmentId: text('document_attachment_id'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  vehicleIdx: index('idx_voh_vehicle').on(t.companyId, t.vehicleId),
+  effectiveIdx: index('idx_voh_effective').on(t.companyId, t.effectiveFrom, t.effectiveTo),
+  tenantPolicy: pgPolicy('tenant_isolation_vehicle_ownership_history', {
+    for: 'all',
+    using: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+    withCheck: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+  }),
+})).enableRLS();
 
 export const vehicleInspections = pgTable('vehicle_inspections', {
   id: text('id').primaryKey(),
@@ -674,3 +711,29 @@ export const cspViolationReports = pgTable('csp_violation_reports', {
   firstSeen: timestamp('first_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
   lastSeen: timestamp('last_seen', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
 });
+
+// Composicao de baixa: o retrato do titulo antes e depois, mais os ajustes
+// aplicados. E o que torna o estorno reversivel.
+//
+// Vivia dentro de audit_logs, e por isso limpar uma tabela chamada "logs"
+// destruia a capacidade de estornar dinheiro. Aqui o nome e as constraints
+// dizem o que o dado e: chave composta impede duplicata (que antes bloqueava o
+// estorno para sempre), e os dois CHECK movem para o banco validacoes que
+// antes eram feitas em codigo na hora da leitura.
+export const settlementCompositions = pgTable('settlement_compositions', {
+  companyId: text('company_id').notNull(),
+  transactionId: text('transaction_id').notNull(),
+  obligationId: text('obligation_id').notNull(),
+  composition: jsonb('composition').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.companyId, t.transactionId], name: 'settlement_compositions_pkey' }),
+  obligationIdx: index('idx_settlement_compositions_company_obligation').on(t.companyId, t.obligationId),
+  versionCheck: check('settlement_compositions_version_chk', sql`coalesce(${t.composition}->>'version','') = '1'`),
+  transactionCheck: check('settlement_compositions_transaction_chk', sql`coalesce(${t.composition}->>'transactionId','') = ${t.transactionId}`),
+  tenantPolicy: pgPolicy('tenant_isolation_settlement_compositions', {
+    for: 'all',
+    using: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+    withCheck: sql`${t.companyId} = current_setting('app.current_tenant', true)`,
+  }),
+})).enableRLS();

@@ -26,8 +26,10 @@ const WRITE_ROLES=new Set(['ADMIN','MANAGER','OPERATIONAL_MANAGER','FINANCIAL','
 function rows(result:any):any[]{return Array.isArray(result?.rows)?result.rows:[];}
 function normalizePolicy(value:string):string{return value.trim().toUpperCase().replace(/\s+/g,' ');}
 function assertWrite(principal:AuthenticatedPrincipal):void{
-  const role=String(principal.role||'').toUpperCase();const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
-  if(!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('INSURANCE_WRITE'))throw new InsuranceForbiddenError('Acesso negado: Seguro sem permissão de escrita');
+  const role=String(principal.role||'').toUpperCase();
+  if(role==='ADMIN') return;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(!permissions.includes('*')&&!permissions.includes('INSURANCE_WRITE'))throw new InsuranceForbiddenError('Acesso negado: Seguro sem permissão de escrita');
 }
 function validateDate(value:string,label:string):void{
   if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new InsuranceValidationError(`${label} inválida`);

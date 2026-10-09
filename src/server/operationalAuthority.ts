@@ -140,8 +140,9 @@ function assertRead(principal: AuthenticatedPrincipal): void {
 function assertWrite(principal: AuthenticatedPrincipal): void {
   assertRead(principal);
   const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (!WRITE_ROLES.has(role) && !permissions.includes('*') && !permissions.includes('OPERATIONS_WRITE')) {
+  if (!permissions.includes('*') && !permissions.includes('OPERATIONS_WRITE')) {
     throw new OperationalForbiddenError('Acesso negado: operações sem permissão de escrita');
   }
 }

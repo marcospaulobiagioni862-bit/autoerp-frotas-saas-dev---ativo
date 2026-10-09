@@ -78,7 +78,16 @@ async function apiError(response: Response): Promise<ContractApiError> {
   return new ContractApiError(response.status, message);
 }
 
+export interface ContractShareLinkResult {
+  token: string;
+  publicPdfUrl: string;
+  whatsappUrl: string;
+  phone: string;
+  message: string;
+}
+
 export interface ContractCreateInput {
+  status?: ContractStatus;
   contractNumber?: string;
   driverId: string;
   vehicleId: string;
@@ -148,15 +157,10 @@ export class ContractClient {
     return { item: validateContract(payload.item), receivables: payload.receivables.map(validateReceivable) };
   }
 
-  static async close(id: string, input: { closeDate?: string; reason?: string } = {}): Promise<Contract> {
-    const item = await requestItem(`/api/contracts/${encodeURIComponent(id)}/close`, {
+  static async close(id: string, input: { closeDate?: string; reason?: string; finalKm?: number; notes?: string } = {}): Promise<Contract> {
+    return requestItem(`/api/contracts/${encodeURIComponent(id)}/close`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
-    const reconciliation = await fetch(`/api/contracts/${encodeURIComponent(id)}/reconcile-close-finance`, {
-      method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}',
-    });
-    if (!reconciliation.ok) throw await apiError(reconciliation);
-    return item;
   }
 
   static async cancel(id: string, reason: string): Promise<Contract> {
@@ -182,5 +186,25 @@ export class ContractClient {
     const payload = asApiRecord(await response.json(), 'Contract');
     if (!Array.isArray(payload.items)) throw new Error('Invalid Contract billing payload');
     return payload.items.map(validateReceivable);
+  }
+
+  static async getShareLink(id: string): Promise<ContractShareLinkResult> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}/share-link`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) throw await apiError(response);
+    return await response.json();
+  }
+
+  static async setManualSignStatus(id: string, signed: boolean): Promise<any> {
+    const response = await fetch(`/api/contracts/${encodeURIComponent(id)}/sign-status`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ signed }),
+    });
+    if (!response.ok) throw await apiError(response);
+    return await response.json();
   }
 }

@@ -227,6 +227,8 @@ export type TrustedSystemActor = 'RECURRING';
 
 export interface ITransactionContext {
   findSettlementComposition?(transactionId: string): Promise<import('./settlementComposition').SettlementComposition | null>;
+  /** Grava a composicao de baixa na tabela propria. Idempotente por (empresa, transacao). */
+  saveSettlementComposition?(composition: import('./settlementComposition').SettlementComposition): Promise<void>;
   /** Latest active receipt date for a receivable; used as the next daily-interest period start. */
   findLastReceivableSettlementDate?(obligationId: string): Promise<string | null>;
   getDriverRepo(): ITransactionDriverRepository;

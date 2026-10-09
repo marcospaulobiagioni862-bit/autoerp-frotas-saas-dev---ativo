@@ -1,5 +1,6 @@
 import { DocumentStatus } from '../../types/enums';
 import type { DocumentAlertStage } from '../../types/entities';
+import { diffCivilDays, DEFAULT_CIVIL_TIMEZONE } from '../../shared/utils/civilDate';
 
 export class DocumentPolicyValidationError extends Error {}
 
@@ -43,12 +44,14 @@ export function parseReferenceYear(value: unknown, required = false): number | u
   return year;
 }
 
-export function daysUntilExpiration(expirationDate?: string, now = new Date()): number | undefined {
+export function daysUntilExpiration(
+  expirationDate?: string,
+  now = new Date(),
+  timeZone = DEFAULT_CIVIL_TIMEZONE
+): number | undefined {
   if (!expirationDate) return undefined;
   const parsed = parseIsoDate(expirationDate, 'expirationDate', true)!;
-  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const expiration = Date.parse(`${parsed}T00:00:00Z`);
-  return Math.round((expiration - today) / 86_400_000);
+  return diffCivilDays(parsed, now, timeZone);
 }
 
 export function alertStageForDays(days?: number): DocumentAlertStage {
@@ -67,9 +70,10 @@ export function alertStageForDays(days?: number): DocumentAlertStage {
 export function evaluateDocumentCompliance(
   expirationDate: string | undefined,
   hasAttachment: boolean,
-  now = new Date()
+  now = new Date(),
+  timeZone = DEFAULT_CIVIL_TIMEZONE
 ): { complianceStatus: DocumentStatus; daysToExpiration?: number; alertStage: DocumentAlertStage } {
-  const daysToExpiration = daysUntilExpiration(expirationDate, now);
+  const daysToExpiration = daysUntilExpiration(expirationDate, now, timeZone);
   const alertStage = alertStageForDays(daysToExpiration);
   if (!hasAttachment) return { complianceStatus: DocumentStatus.PENDING, daysToExpiration, alertStage };
   if (daysToExpiration !== undefined && daysToExpiration < 0) {

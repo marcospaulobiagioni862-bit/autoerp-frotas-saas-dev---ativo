@@ -29,15 +29,17 @@ function requireEditPrincipal(req: Request, res: Response): AuthenticatedPrincip
     return null;
   }
   const role = String(principal.role || '').toUpperCase();
-  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  const allowed = Boolean(principal.userId && principal.companyId) && (
-    permissions.includes('*') || permissions.includes('EDIT_VEHICLE') || WRITE_ROLES.has(role)
-  );
-  if (!allowed) {
+  if (!principal.userId || !principal.companyId) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
-  return principal;
+  if (role === 'ADMIN') return principal;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes('EDIT_VEHICLE')) {
+    return principal;
+  }
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function parseBody(value: unknown): { extractionId: string; fields: unknown } {

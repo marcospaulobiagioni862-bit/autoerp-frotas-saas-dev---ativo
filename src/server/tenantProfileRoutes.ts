@@ -18,7 +18,9 @@ function requireAdmin(req: Request, res: Response): AuthenticatedPrincipal | nul
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  if (String(item.role || '').toUpperCase() !== 'ADMIN') {
+  const role = String(item.role || '').toUpperCase();
+  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
+  if (role !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('MANAGE_TENANT')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
@@ -26,7 +28,13 @@ function requireAdmin(req: Request, res: Response): AuthenticatedPrincipal | nul
 }
 
 function actor(item: AuthenticatedPrincipal): TenantProfileActor {
-  return { companyId: item.companyId, userId: item.userId, name: item.name, role: item.role };
+  return {
+    companyId: item.companyId,
+    userId: item.userId,
+    name: item.name,
+    role: item.role,
+    permissions: Array.isArray(item.permissions) ? item.permissions : [],
+  };
 }
 
 function updateBody(value: unknown): Record<string, unknown> {

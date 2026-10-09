@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { db } from '../../db';
 import { registerAttachmentRoutes } from '../attachmentRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { PostgresAuditLogRepository } from '../../db/repositories/postgresRepositories';
 
 const companyA = 'security-2i4a-company-a';
@@ -117,7 +118,7 @@ export class AttachmentAuthorityIntegrationRunner {
           userId,
           name: `${role} Attachment Integration`,
           role,
-          permissions: [],
+          permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

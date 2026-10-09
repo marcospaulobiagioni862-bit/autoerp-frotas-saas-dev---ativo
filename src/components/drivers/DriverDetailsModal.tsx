@@ -410,6 +410,20 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
     }
   };
 
+  const handleSendWaMeCnhReminder = async () => {
+    if (!driverId) return;
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      const res = await WhatsappClient.getWaLink('CNH_EXPIRY', driverId);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: unknown) {
+      setWhatsappError(err instanceof Error ? err.message : 'Erro ao gerar link de WhatsApp.');
+    } finally {
+      setWhatsappLoading(false);
+    }
+  };
+
   const handleWhatsappTaskProposalReview = async (proposal: WhatsappTaskProposal, decision: 'APPROVE' | 'REJECT') => {
     const reason = window.prompt(
       decision === 'APPROVE'
@@ -580,7 +594,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 )}
               </div>
 
-              <DriverCnhDocumentCard driverId={driver.id} />
+              <DriverCnhDocumentCard driverId={driver.id} refreshKey={driverAttachmentRefresh} />
 
               <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
@@ -756,7 +770,12 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               <Card className="p-4 space-y-3">
                 <h3 className="text-sm font-bold">Lembrete de vencimento da CNH</h3>
                 <p className="text-xs text-slate-500">Modelo fixo, com nome e validade derivados do cadastro pelo servidor. O ERP não exige registro de consentimento para preparar a comunicação.</p>
-                <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
+                  <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" disabled={whatsappLoading} onClick={handleSendWaMeCnhReminder}>
+                    <MessageSquare className="w-4 h-4 mr-1" /> Avisar CNH (WhatsApp)
+                  </Button>
+                </div>
               </Card>
 
               <Card className="p-4 space-y-3">

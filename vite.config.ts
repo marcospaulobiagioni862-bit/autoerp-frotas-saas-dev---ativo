@@ -22,10 +22,6 @@ export default defineConfig(({ command }) => {
     __dirname,
     'src/components/tests/ProductionTestRunnerPanel.tsx'
   );
-  const productionResilienceCenter = path.resolve(
-    __dirname,
-    'src/components/resilience/ProductionResilienceCenterView.tsx'
-  );
   const productionCockpitBoundary = path.resolve(
     __dirname,
     'src/components/security/ProductionCockpitBoundary.tsx'
@@ -40,32 +36,20 @@ export default defineConfig(({ command }) => {
   // builds replace every unsafe entry module before Rollup can include its graph.
   const productionCockpitAliases = command === 'build'
     ? [
-        /^(?:\.\.?\/)*components\/incident-management\/IncidentManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/workflow\/OperationalWorkflowCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/executive\/ExecutiveDashboardView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/AdministrationCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/performance\/PerformanceManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/decision-management\/DecisionManagementCenterView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/execution\/OperationalExecutionCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/release\/ReleaseGovernanceCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/audit\/SystemIntegrityAuditView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/admin\/SystemHealthCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/consolidation\/EnterpriseConsolidationView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/observability\/PostGoLiveObservabilityView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/governance\/GovernanceCenterView(?:\.tsx)?$/,
-        /^(?:\.\.?\/)*components\/productivity\/OperationalProductivityView(?:\.tsx)?$/,
         /^(?:\.\.?\/)*components\/goals\/ManagementGoalsView(?:\.tsx)?$/,
       ].map((find) => ({ find, replacement: productionCockpitBoundary }))
     : [];
 
-  const productionNavigationAliases = command === 'build'
-    ? [
-        {
-          find: /^(?:\.\.?\/)*components\/layout\/Sidebar(?:\.tsx)?$/,
-          replacement: productionSidebar,
-        },
-      ]
-    : [];
+  // AUTOERP-67: dev e produção compartilham a mesma fonte unificada Sidebar.tsx.
+  // Desativado o alias de navegação para garantir paridade total entre ambientes.
+  const productionNavigationAliases: Array<{ find: RegExp; replacement: string }> = [];
 
   return {
     define: { __AUTOERP_BUILD_ID__: JSON.stringify(buildId) },
@@ -99,10 +83,6 @@ export default defineConfig(({ command }) => {
           replacement: productionTestRunnerPanel,
         },
         // Historical browser-local backup/restore is not production authority.
-        {
-          find: /^(?:\.\.?\/)*components\/resilience\/ResilienceCenterView(?:\.tsx)?$/,
-          replacement: productionResilienceCenter,
-        },
         {
           find: '@',
           replacement: path.resolve(__dirname, '.'),

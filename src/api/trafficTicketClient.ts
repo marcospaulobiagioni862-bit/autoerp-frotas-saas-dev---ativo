@@ -7,6 +7,47 @@ export interface TrafficTicketDriverIndication{id:string;companyId:string;traffi
 export interface TrafficTicketDriverCommunication{outboxId:string;created:boolean;status:'HELD_PROVIDER_DISABLED';providerCallApplied:false;}
 export type TrafficTicketVehicleOperationalCause='DOCUMENTATION'|'TECHNICAL_CONDITION'|'OTHER_OPERATIONAL';
 export interface TrafficTicketVehicleOperationalAction{taskId:string;created:boolean;cause:TrafficTicketVehicleOperationalCause;category:'DOCUMENT'|'MAINTENANCE'|'OPERATIONAL_GENERAL';}
+export interface InfractionMatchContext {
+  vehicle: {
+    id: string;
+    plate: string;
+    brand?: string;
+    model?: string;
+    ownerType: string;
+    ownerName?: string;
+    ownerDocument?: string;
+    sneCoverageStatus: string;
+  };
+  matchStatus: 'MATCHED_CONTRACT' | 'VEHICLE_IN_MAINTENANCE' | 'NO_ACTIVE_CONTRACT' | 'AMBIGUOUS';
+  matchedContract?: {
+    id: string;
+    contractNumber: string;
+    startDate: string;
+    endDate?: string;
+    status: string;
+    driverId: string;
+    driverName: string;
+    driverCnh?: string;
+    driverCpf?: string;
+    driverPhone?: string;
+    checkOutDate?: string;
+    checkInDate?: string;
+  };
+  inMaintenance?: boolean;
+  maintenanceOrder?: {
+    id: string;
+    type: string;
+    status: string;
+    description?: string;
+    date?: string;
+  };
+  ownershipFlow: {
+    flowType: 'CNPJ_DIRECT' | 'LEASING_INSTITUTION' | 'INDIVIDUAL_PARTNER' | 'THIRD_PARTY_OWNER';
+    riskOfNic: boolean;
+    instructions: string;
+  };
+  explanation: string;
+}
 type JsonRecord=Record<string,unknown>;
 function record(value:unknown):JsonRecord{if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid traffic ticket payload');return value as JsonRecord;}
 function boolean(value:unknown,field:string):boolean{if(typeof value!=='boolean')throw new Error(`Invalid traffic ticket boolean field: ${field}`);return value;}
@@ -38,4 +79,5 @@ export class TrafficTicketClient{
   static async updateDriverIndication(id:string,input:{status:TrafficTicketDriverIndicationStatus;indicationDeadline?:string;notes?:string}):Promise<TrafficTicketDriverIndication>{return indicationRequest(`/api/traffic-tickets/${encodeURIComponent(id)}/driver-indication`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});}
   static async prepareDriverCommunication(id:string):Promise<TrafficTicketDriverCommunication>{const response=await fetch(`/api/traffic-tickets/${encodeURIComponent(id)}/driver-communication`,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:'{}'});if(!response.ok)throw await error(response);return communication(await response.json());}
   static async createVehicleOperationalAction(id:string,cause:TrafficTicketVehicleOperationalCause):Promise<TrafficTicketVehicleOperationalAction>{const response=await fetch(`/api/traffic-tickets/${encodeURIComponent(id)}/vehicle-operational-action`,{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({cause})});if(!response.ok)throw await error(response);return vehicleOperationalAction(await response.json());}
+  static async getMatchContext(vehicleId:string,infractionDate:string,infractionTime?:string):Promise<InfractionMatchContext>{const params=new URLSearchParams({vehicleId,infractionDate});if(infractionTime)params.set('infractionTime',infractionTime);const response=await fetch(`/api/traffic-tickets/match-context?${params.toString()}`,{credentials:'include'});if(!response.ok)throw await error(response);return (await response.json()) as InfractionMatchContext;}
 }

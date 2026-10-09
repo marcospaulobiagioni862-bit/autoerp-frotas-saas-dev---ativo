@@ -43,9 +43,12 @@ function principalFrom(req:Request):AuthenticatedPrincipal|undefined {
 function requirePrincipal(req:Request,res:Response,write=false):AuthenticatedPrincipal|null {
   const principal=principalFrom(req);
   if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
-  const role=String(principal.role||'').toUpperCase(),permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  const role=String(principal.role||'').toUpperCase();
   if(!principal.companyId||!principal.userId||!ROLES.has(role)){res.status(403).json({error:'Forbidden'});return null;}
-  if(write&&!WRITE_ROLES.has(role)&&!permissions.includes('*')&&!permissions.includes('TRAFFIC_TICKET_WRITE')&&!permissions.includes('PROCESS_DOCUMENT_AI')){
+  if(role==='ADMIN') return principal;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(permissions.includes('*')) return principal;
+  if(write&&!permissions.includes('TRAFFIC_TICKET_WRITE')&&!permissions.includes('PROCESS_DOCUMENT_AI')){
     res.status(403).json({error:'Forbidden'});return null;
   }
   return principal;

@@ -33,7 +33,9 @@ const REVIEW_FIELDS: readonly ReviewField[] = [
   { extractionKey: 'manufactureYear', vehicleKey: 'yearFabrication', label: 'Ano fabricação' },
   { extractionKey: 'modelYear', vehicleKey: 'yearModel', label: 'Ano modelo' },
   { extractionKey: 'fuel', vehicleKey: 'fuelType', label: 'Combustível' },
-  { extractionKey: 'ownerName', label: 'Titular no CRLV' },
+  { extractionKey: 'ownerName', vehicleKey: 'ownerName', label: 'Nome do Titular' },
+  { extractionKey: 'ownerDocument', vehicleKey: 'ownerDocument', label: 'CPF/CNPJ do Titular' },
+  { extractionKey: 'crlvExerciseYear', vehicleKey: 'crlvExerciseYear', label: 'Exercício CRLV' },
 ] as const;
 
 const positiveNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;

@@ -7,6 +7,18 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export class AttachmentStorageUnavailableError extends Error {}
 export class AttachmentStorageValidationError extends Error {}
 export class AttachmentStorageNotFoundError extends Error {}
+export class AttachmentStorageProviderUnconfiguredError extends Error {
+  constructor(public readonly provider: string) {
+    super(`O provedor de armazenamento ${provider} não está configurado neste ambiente.`);
+    this.name = 'AttachmentStorageProviderUnconfiguredError';
+  }
+}
+export class AttachmentStorageLegacyContentError extends Error {
+  constructor() {
+    super('Este registro é um anexo legado e não possui conteúdo persistido no servidor.');
+    this.name = 'AttachmentStorageLegacyContentError';
+  }
+}
 
 export type AttachmentStorageProvider = 'SERVER_FS' | 'R2';
 
@@ -90,9 +102,11 @@ export interface AttachmentByteStorage {
   readonly provider: AttachmentStorageProvider;
   getConfiguration(): AttachmentStorageConfiguration;
   write(companyId: string, attachmentId: string, bytes: Buffer): Promise<StoredAttachmentBytes>;
-  read(companyId: string, storageKey: string): Promise<Buffer>;
-  remove(companyId: string, storageKey: string): Promise<void>;
-  exists(companyId: string, storageKey: string): Promise<boolean>;
+  read(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<Buffer>;
+  remove(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<void>;
+  exists(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<boolean>;
+  isProviderConfigured?(provider: AttachmentStorageProvider): boolean;
+  getDriver?(provider: AttachmentStorageProvider): AttachmentByteStorage | undefined;
 }
 
 export class ServerAttachmentStorage implements AttachmentByteStorage {
@@ -173,5 +187,121 @@ export class ServerAttachmentStorage implements AttachmentByteStorage {
       }
     }
     return false;
+  }
+}
+
+export class MultiProviderAttachmentStorage implements AttachmentByteStorage {
+  readonly provider: AttachmentStorageProvider;
+
+  constructor(
+    private readonly primaryDriver: AttachmentByteStorage,
+    private readonly drivers: Map<AttachmentStorageProvider, AttachmentByteStorage> = new Map(),
+  ) {
+    this.provider = primaryDriver.provider;
+    if (!this.drivers.has(primaryDriver.provider)) {
+      this.drivers.set(primaryDriver.provider, primaryDriver);
+    }
+  }
+
+  registerDriver(driver: AttachmentByteStorage): void {
+    this.drivers.set(driver.provider, driver);
+  }
+
+  getDriver(provider: AttachmentStorageProvider): AttachmentByteStorage | undefined {
+    return this.drivers.get(provider);
+  }
+
+  isProviderConfigured(provider: AttachmentStorageProvider): boolean {
+    const driver = this.drivers.get(provider);
+    if (!driver) return false;
+    return driver.getConfiguration().configured;
+  }
+
+  getConfiguration(): AttachmentStorageConfiguration {
+    return this.primaryDriver.getConfiguration();
+  }
+
+  async write(companyId: string, attachmentId: string, bytes: Buffer): Promise<StoredAttachmentBytes> {
+    return this.primaryDriver.write(companyId, attachmentId, bytes);
+  }
+
+  async read(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<Buffer> {
+    if (preferredProvider) {
+      if (preferredProvider === ('LEGACY_BROWSER' as any)) {
+        throw new AttachmentStorageLegacyContentError();
+      }
+      const driver = this.drivers.get(preferredProvider);
+      if (!driver || !driver.getConfiguration().configured) {
+        throw new AttachmentStorageProviderUnconfiguredError(preferredProvider);
+      }
+      return driver.read(companyId, storageKey);
+    }
+
+    if (this.primaryDriver.getConfiguration().configured) {
+      try {
+        if (await this.primaryDriver.exists(companyId, storageKey)) {
+          return await this.primaryDriver.read(companyId, storageKey);
+        }
+      } catch (error) {
+        if (!(error instanceof AttachmentStorageNotFoundError)) {
+          // Ignora falha transitória do primário e tenta os demais drivers
+        }
+      }
+    }
+
+    for (const [providerName, driver] of this.drivers.entries()) {
+      if (providerName === this.primaryDriver.provider) continue;
+      if (!driver.getConfiguration().configured) continue;
+      try {
+        if (await driver.exists(companyId, storageKey)) {
+          return await driver.read(companyId, storageKey);
+        }
+      } catch {
+        // Tenta o próximo driver
+      }
+    }
+
+    throw new AttachmentStorageNotFoundError('Attachment content not found');
+  }
+
+  async exists(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<boolean> {
+    if (preferredProvider) {
+      if (preferredProvider === ('LEGACY_BROWSER' as any)) return false;
+      const driver = this.drivers.get(preferredProvider);
+      if (!driver || !driver.getConfiguration().configured) return false;
+      return driver.exists(companyId, storageKey);
+    }
+
+    if (this.primaryDriver.getConfiguration().configured) {
+      try {
+        if (await this.primaryDriver.exists(companyId, storageKey)) return true;
+      } catch {
+        // Tenta os demais
+      }
+    }
+
+    for (const [providerName, driver] of this.drivers.entries()) {
+      if (providerName === this.primaryDriver.provider) continue;
+      if (!driver.getConfiguration().configured) continue;
+      try {
+        if (await driver.exists(companyId, storageKey)) return true;
+      } catch {
+        // Segue
+      }
+    }
+    return false;
+  }
+
+  async remove(companyId: string, storageKey: string, preferredProvider?: AttachmentStorageProvider): Promise<void> {
+    if (preferredProvider) {
+      const driver = this.drivers.get(preferredProvider);
+      if (driver && driver.getConfiguration().configured) {
+        await driver.remove(companyId, storageKey);
+        return;
+      }
+    }
+    if (this.primaryDriver.getConfiguration().configured) {
+      await this.primaryDriver.remove(companyId, storageKey);
+    }
   }
 }

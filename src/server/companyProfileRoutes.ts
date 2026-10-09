@@ -17,8 +17,18 @@ function requirePrincipal(req: Request, res: Response, write = false): Authentic
   const principal = principalFrom(req);
   if (!principal) { res.status(401).json({ error:'Unauthorized: Authentication required' }); return null; }
   const role=String(principal.role||'').toUpperCase();
-  if(!principal.userId||!principal.companyId||!ROLES.has(role)||(write&&!WRITE_ROLES.has(role))){
-    res.status(403).json({error:'Forbidden'}); return null;
+  if (!principal.userId || !principal.companyId || !ROLES.has(role)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  if (role === 'ADMIN') return principal;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*')) return principal;
+  if (write) {
+    if (!permissions.includes('MANAGE_TENANT')) {
+      res.status(403).json({ error: 'Forbidden' });
+      return null;
+    }
   }
   return principal;
 }

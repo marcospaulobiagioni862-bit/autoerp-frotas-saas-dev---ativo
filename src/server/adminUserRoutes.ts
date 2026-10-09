@@ -20,7 +20,9 @@ function requirePrincipal(req: Request, res: Response): AuthenticatedPrincipal |
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  if (String(item.role || '').toUpperCase() !== 'ADMIN') {
+  const role = String(item.role || '').toUpperCase();
+  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
+  if (role !== 'ADMIN' && !permissions.includes('*') && !permissions.includes('MANAGE_USERS')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
@@ -33,6 +35,7 @@ function actorFrom(item: AuthenticatedPrincipal): AdminUserActor {
     userId: item.userId,
     name: item.name,
     role: item.role,
+    permissions: Array.isArray(item.permissions) ? item.permissions : [],
   };
 }
 
@@ -48,6 +51,15 @@ function parseActiveBody(value: unknown): boolean {
   }
   if (typeof body.active !== 'boolean') throw new AdminUserValidationError();
   return body.active;
+}
+
+function parsePermissionsBody(value: unknown): { role: string; permissions: string[] } {
+  const body = objectBody(value);
+  if (typeof body.role !== 'string' || body.role.trim() === '') throw new AdminUserValidationError();
+  if (!Array.isArray(body.permissions) || !body.permissions.every((item) => typeof item === 'string')) {
+    throw new AdminUserValidationError();
+  }
+  return { role: body.role.trim(), permissions: body.permissions as string[] };
 }
 
 function sendError(res: Response, error: unknown): void {
@@ -88,6 +100,32 @@ export function registerAdminUserRoutes(app: Express): void {
     try {
       const active = parseActiveBody(req.body);
       res.json({ item: await AdminUserAuthority.setActive(actorFrom(p), req.params.id, active) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.patch('/api/admin/users/:id/permissions', async (req, res) => {
+    const p = requirePrincipal(req, res);
+    if (!p) return;
+    try {
+      const { role, permissions } = parsePermissionsBody(req.body);
+      res.json({ item: await AdminUserAuthority.setPermissions(actorFrom(p), req.params.id, role, permissions) });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  app.post('/api/admin/users', async (req, res) => {
+    const p = requirePrincipal(req, res);
+    if (!p) return;
+    try {
+      const { name, email, role, permissions } = req.body || {};
+      if (!name || !email || !role) {
+        res.status(400).json({ error: 'Nome, email e papel são obrigatórios' });
+        return;
+      }
+      res.status(201).json({ item: await AdminUserAuthority.provisionUser(actorFrom(p), { name, email, role, permissions }) });
     } catch (error) {
       sendError(res, error);
     }

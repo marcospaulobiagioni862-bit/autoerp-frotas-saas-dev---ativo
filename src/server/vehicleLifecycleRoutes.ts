@@ -41,12 +41,29 @@ function requireWritePrincipal(req: Request, res: Response): AuthenticatedPrinci
     return null;
   }
   const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
-  if (!WRITE_ROLES.has(role) && !permissions.includes('*') && !permissions.includes('CHANGE_VEHICLE_STATUS')) {
-    res.status(403).json({ error: 'Forbidden' });
+  if (permissions.includes('*') || permissions.includes('CHANGE_VEHICLE_STATUS')) {
+    return principal;
+  }
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
+}
+
+function requireArchivePrincipal(req: Request, res: Response): AuthenticatedPrincipal | null {
+  const principal = principalFrom(req);
+  if (!principal?.userId || !principal.companyId) {
+    res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  return principal;
+  const role = String(principal.role || '').toUpperCase();
+  if (role === 'ADMIN') return principal;
+  const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
+  if (permissions.includes('*') || permissions.includes('ARCHIVE_VEHICLE')) {
+    return principal;
+  }
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function requiredText(value: unknown, field: string): string {
@@ -323,7 +340,7 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
   });
 
   app.post('/api/fleet/vehicles/:id/archive', async (req: Request, res: Response) => {
-    const principal = requireWritePrincipal(req, res);
+    const principal = requireArchivePrincipal(req, res);
     if (!principal) return;
 
     let archiveDate: string;

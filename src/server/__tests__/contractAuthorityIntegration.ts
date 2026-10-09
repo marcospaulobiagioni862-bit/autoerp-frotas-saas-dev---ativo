@@ -5,6 +5,7 @@ import { db } from '../../db';
 import { seedContractSignedFixture } from './contractSignedFixture';
 import { registerContractRoutes } from '../contractRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
+import { getDefaultPermissionsForRole } from '../rolePresets';
 import { AuditAction, ContractStatus, ObligationStatus, RecurringFrequency, VehicleStatus } from '../../types/enums';
 import { UnitOfWork } from '../../db/uow';
 import { PostgresAuditLogRepository, PostgresVehicleRepository } from '../../db/repositories/postgresRepositories';
@@ -128,7 +129,7 @@ export class ContractAuthorityIntegrationRunner {
       const userId = typeof req.headers['x-user-id'] === 'string' ? req.headers['x-user-id'] : '';
       if (companyId && role && userId) {
         (req as Request & { principal?: AuthenticatedPrincipal }).principal = {
-          companyId, userId, name: `${role} Contract Integration`, role, permissions: [],
+          companyId, userId, name: `${role} Contract Integration`, role, permissions: getDefaultPermissionsForRole(role),
         };
       }
       next();

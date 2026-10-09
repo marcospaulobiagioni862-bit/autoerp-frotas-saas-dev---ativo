@@ -12,8 +12,9 @@ import { ContractClient } from '../../api/contractClient';
 import { formatDateBR, getCurrentISODate } from '../../shared/utils/date';
 import { isAuthenticationExpiredError } from '../../auth/sessionExpiry';
 import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../api/trafficTicketClient';
+import { WhatsappClient } from '../../api/whatsappClient';
 import { roundCurrency } from '../../shared/utils/currency';
-import { TrendingUp, Search, Filter, RefreshCw, X, Plus } from 'lucide-react';
+import { TrendingUp, Search, Filter, RefreshCw, X, Plus, MessageSquare } from 'lucide-react';
 import { FinancialObligationDetailsModal } from './FinancialObligationDetailsModal';
 import { Card, Button, Badge, Input, ConfirmDialog, Skeleton, ModalContainer } from '../ui';
 
@@ -239,6 +240,17 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
     }
   };
 
+  const handleSendWhatsApp = async (receivableId: string) => {
+    try {
+      const res = await WhatsappClient.getWaLink('RENT_BILLING', receivableId);
+      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+      setActionMessage('Link do WhatsApp gerado e registrado no sistema com sucesso.');
+    } catch (err) {
+      if (isAuthenticationExpiredError(err)) return;
+      setActionMessage(err instanceof Error ? err.message : 'Falha ao gerar link do WhatsApp.');
+    }
+  };
+
   const toggleSelect = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const selectedReceivables = receivables.filter((item) => selectedIds.includes(item.id));
   const filtered = receivables.filter((item) => {
@@ -321,7 +333,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
                     {item.paidAmount > 0 && <span className="block text-[10px] font-normal text-slate-500">Recebido R$ {formatMoney(item.paidAmount)}</span>}
                   </td>
                   <td className="p-3.5 text-center"><Badge variant={isPaid ? 'success' : isOverdue ? 'danger' : isPending ? 'warning' : 'neutral'}>{statusLabel(item.status, isOverdue)}</Badge></td>
-                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(withInstallmentTotal(item))}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900"><button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
+                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(withInstallmentTotal(item))}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">{item.driverId && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30 flex items-center gap-1.5 mb-1" onClick={() => handleSendWhatsApp(item.id)}><MessageSquare className="w-3.5 h-3.5" /> Cobrar WhatsApp</button>}<button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
                 </tr>;
               })}
             </tbody>

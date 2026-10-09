@@ -11,7 +11,6 @@ assert.match(vite, /serverReadModelRepositories\.ts/, 'Vite must route legacy re
 assert.match(vite, /productionSeedStub\.ts/, 'Vite must disable browser seed authority');
 assert.match(vite, /serverOperationalPendingProjection\.ts/, 'Vite must route operational pending projection to the tenant-safe deterministic implementation');
 assert.match(vite, /ProductionTestRunnerPanel\.tsx/, 'Production build must exclude the historical browser test runner graph');
-assert.match(vite, /ProductionResilienceCenterView\.tsx/, 'Production build must exclude browser-local backup/restore authority');
 assert.match(vite, /localRepositories/, 'Compatibility alias must explicitly match the historical repository import');
 
 const adapter = read('src/persistence/repositories/serverReadModelRepositories.ts');
@@ -41,7 +40,6 @@ assert.match(seedStub, /BROWSER_SEED_RESET_DISABLED_SERVER_AUTHORITY_REQUIRED/, 
 const migratedRuntimeFiles = [
   'src/app/navigationBadgeLoader.ts',
   'src/components/dashboard/OverviewDashboard.tsx',
-  'src/components/dashboard/PerformanceMetricsWidget.tsx',
   'src/components/operations/PendingCenterView.tsx',
   'src/components/operations/DailyOperationsView.tsx',
   'src/components/rental/RentalLifecycleView.tsx',

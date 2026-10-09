@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Building2, Sun, Moon, Menu } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Building2, Sun, Moon, Menu, ShieldCheck, LogOut, ChevronDown, Settings } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
 import type { NotificationItem } from '../../api/notificationClient';
@@ -13,6 +13,7 @@ interface HeaderProps {
   onResetSeedData?: () => void;
   onToggleMobileSidebar?: () => void;
   onResolveNotification?: (item: NotificationItem) => void | Promise<void>;
+  onNavigateTab?: (tab: string) => void;
 }
 
 function initials(name: string): string {
@@ -40,12 +41,22 @@ function roleLabel(role: string): string {
 export const Header: React.FC<HeaderProps> = ({
   onToggleMobileSidebar,
   onResolveNotification,
+  onNavigateTab,
 }) => {
-  const { user, authMode } = useAuth();
+  const { user, authMode, logout } = useAuth();
   const [buildIdentity, setBuildIdentity] = useState<OpsBuildIdentity | null>(null);
   const [isDark, setIsDark] = useState<boolean>(() => {
     return document.documentElement.classList.contains('dark');
   });
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // SECURITY-2Q2: a entrada administrativa continua derivando do principal ADMIN
+  // autenticado. O AUTOERP-46 a moveu da barra lateral para o menu do avatar; a
+  // regra de visibilidade tem de viajar junto, senao todo usuario logado passa a
+  // enxergar "Area Administrativa".
+  const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +70,26 @@ export const Header: React.FC<HeaderProps> = ({
     return () => { cancelled = true; };
   }, [authMode]);
 
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isUserMenuOpen]);
+
   const toggleDarkMode = () => {
     if (document.documentElement.classList.contains('dark')) {
       document.documentElement.classList.remove('dark');
@@ -66,6 +97,18 @@ export const Header: React.FC<HeaderProps> = ({
     } else {
       document.documentElement.classList.add('dark');
       setIsDark(true);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      setIsUserMenuOpen(false);
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -123,14 +166,85 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 hidden sm:block" />
 
-        <div className="flex items-center gap-2 pl-1">
-          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-600 shrink-0">
-            {initials(user.name)}
-          </div>
-          <div className="hidden xl:block text-left max-w-48">
-            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-none truncate" title={user.name}>{user.name}</p>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400">{roleLabel(user.role)}</span>
-          </div>
+        <div className="relative" ref={userMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsUserMenuOpen((prev) => !prev)}
+            aria-expanded={isUserMenuOpen}
+            aria-haspopup="menu"
+            aria-label={`Menu do usuário: ${user.name}`}
+            className="flex items-center gap-2 p-1 sm:px-2 sm:py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 text-left group"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-slate-800 dark:text-slate-100 font-bold text-xs border border-slate-300/80 dark:border-slate-600 shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+              {initials(user.name)}
+            </div>
+            <div className="hidden xl:block text-left max-w-44">
+              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-none truncate" title={user.name}>
+                {user.name}
+              </p>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+                {roleLabel(user.role)}
+              </span>
+            </div>
+            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isUserMenuOpen && (
+            <div
+              role="menu"
+              aria-orientation="vertical"
+              className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-2 z-50"
+            >
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                  {user.name}
+                </p>
+                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>{roleLabel(user.role)}</span>
+                </p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">
+                  Empresa: {user.companyId}
+                </p>
+              </div>
+
+              {isAdmin && (
+              <div className="py-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-label="Area Administrativa"
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    onNavigateTab?.('administration');
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 transition-colors text-left"
+                >
+                  <Settings className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                  <div>
+                    <span className="font-semibold block">Área Administrativa</span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-tight">Configurações, usuários e sistema</span>
+                  </div>
+                </button>
+              </div>
+              )}
+
+              <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+              <div className="py-1 px-1.5">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={isLoggingOut}
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors text-left disabled:opacity-50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

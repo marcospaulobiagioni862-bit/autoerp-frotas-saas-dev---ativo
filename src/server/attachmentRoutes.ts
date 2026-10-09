@@ -8,6 +8,7 @@ import {AuditAction} from '../types/enums';
 import {hasDriverHealthPermission} from '../shared/security/driverHealthAuthorization';
 import {
   AttachmentStorageNotFoundError,AttachmentStorageUnavailableError,AttachmentStorageValidationError,
+  AttachmentStorageProviderUnconfiguredError,AttachmentStorageLegacyContentError,
   MAX_ATTACHMENT_BYTES,type AttachmentByteStorage,
 } from './attachmentStorage';
 import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
@@ -46,10 +47,11 @@ class ApprovedContractMasterAttachmentError extends Error{}
 function principalFrom(req:Request):AuthenticatedPrincipal|undefined{return (req as Request&{principal?:AuthenticatedPrincipal}).principal;}
 function hasAttachmentPermission(principal:AuthenticatedPrincipal,action:AttachmentAction):boolean{
   const role=String(principal.role||'').toUpperCase();if(!principal.userId||!principal.companyId||!CANONICAL_ROLES.has(role))return false;
-  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];if(permissions.includes('*')||permissions.includes(action))return true;
-  if(action==='VIEW_ATTACHMENT')return true;
-  if(action==='DELETE_ATTACHMENT')return role==='ADMIN';
-  return DEFAULT_WRITE_ROLES.has(role);
+  if(role==='ADMIN')return true;
+  const permissions=Array.isArray(principal.permissions)?principal.permissions:[];
+  if(permissions.includes('*')||permissions.includes(action))return true;
+  if(action==='VIEW_ATTACHMENT'&&permissions.includes('VIEW_DOCUMENT'))return true;
+  return false;
 }
 function requireAttachmentPrincipal(req:Request,res:Response,action:AttachmentAction):AuthenticatedPrincipal|null{
   const principal=principalFrom(req);if(!principal){res.status(401).json({error:'Unauthorized: Authentication required'});return null;}
@@ -142,6 +144,8 @@ function sendAttachmentError(res:Response,error:unknown):void{
   if(error instanceof ApprovedContractMasterAttachmentError){res.status(400).json({error:'O arquivo não corresponde ao arquivo mestre aprovado da MoveFlex.'});return;}
   if(error instanceof AttachmentForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof AttachmentConflictError){res.status(409).json({error:error.message||'Attachment is linked and cannot be deleted'});return;}
+  if(error instanceof AttachmentStorageProviderUnconfiguredError){res.status(503).json({error:`Este arquivo está armazenado no provedor ${error.provider}, que não está configurado neste ambiente. O registro permanece íntegro no banco de dados.`,code:'STORAGE_PROVIDER_UNCONFIGURED',provider:error.provider});return;}
+  if(error instanceof AttachmentStorageLegacyContentError){res.status(410).json({error:'Este anexo é um registro legado anterior à migração e não possui arquivo persistido no servidor.',code:'LEGACY_BROWSER_ATTACHMENT'});return;}
   if(error instanceof AttachmentNotFoundError||error instanceof AttachmentStorageNotFoundError){res.status(404).json({error:'Not found'});return;}
   if(error instanceof AttachmentValidationError||error instanceof AttachmentStorageValidationError){res.status(400).json({error:'Invalid attachment request'});return;}
   if(error instanceof AttachmentStorageUnavailableError){res.status(503).json({error:'Attachment storage unavailable'});return;}
@@ -210,9 +214,14 @@ async function assertPermanentDeleteAllowed(tx:any,principal:AuthenticatedPrinci
 async function projectStorageAvailability(storage:AttachmentByteStorage,companyId:string,items:FileAttachment[]):Promise<FileAttachment[]>{
   return await Promise.all(items.map(async item=>{
     if(item.isArchived||item.contentState!=='AVAILABLE')return item;
-    if(item.storageProvider!==storage.provider||!item.storageKey)return {...item,contentState:'MISSING' as const};
+    if(!item.storageKey)return {...item,contentState:'MISSING' as const};
+    if(item.storageProvider==='LEGACY_BROWSER')return item;
+    if(typeof storage.isProviderConfigured==='function'&&!storage.isProviderConfigured(item.storageProvider as any)){
+      return item;
+    }
     try{
-      return await storage.exists(companyId,item.storageKey)?item:{...item,contentState:'MISSING' as const};
+      const exists=await storage.exists(companyId,item.storageKey,item.storageProvider as any);
+      return exists?item:{...item,contentState:'MISSING' as const};
     }catch{
       // A storage outage is not evidence that the object is missing.
       return item;
@@ -326,14 +335,23 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     }catch(error){if(storageKey)await storage.remove(principal.companyId,storageKey).catch(cleanup=>console.error('AUTOERP_ATTACHMENT_COMPENSATION_FAILURE',cleanup));sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/:id/content',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{
-    const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found||found.isArchived)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);if(found.storageProvider!==storage.provider||found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();return found;});
-    const bytes=await storage.read(principal.companyId,item.storageKey!),checksum=createHash('sha256').update(bytes).digest('hex');if(bytes.length!==item.fileSize||!item.checksum||checksum!==item.checksum)throw new Error('Attachment integrity mismatch');
+    const item=await UnitOfWork.run(principal.companyId,async tx=>{
+      const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);
+      if(!found||found.isArchived)throw new AttachmentNotFoundError();
+      await validateEntity(tx,principal,found.entityType,found.entityId,false);
+      if(found.storageProvider==='LEGACY_BROWSER'||found.contentState!=='AVAILABLE'||!found.storageKey)throw new AttachmentNotFoundError();
+      return found;
+    });
+    const bytes=await storage.read(principal.companyId,item.storageKey!,item.storageProvider as any);
+    const checksum=createHash('sha256').update(bytes).digest('hex');
+    if(bytes.length!==item.fileSize||!item.checksum||checksum!==item.checksum)throw new Error('Attachment integrity mismatch');
     await UnitOfWork.run(principal.companyId,async tx=>{await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:item.id,action:AuditAction.UPDATE,userId:principal.userId,userName:principal.name,newState:JSON.stringify({event:'DOWNLOAD',checksum}),timestamp:new Date().toISOString()});});
     const safeName=item.fileName.replace(/[\r\n"]/g,'_');res.setHeader('content-type',item.mimeType);res.setHeader('content-length',String(bytes.length));res.setHeader('content-disposition',`inline; filename="${safeName}"`);res.setHeader('x-content-type-options','nosniff');res.send(bytes);
   }catch(error){sendAttachmentError(res,error);}});
   app.delete('/api/attachments/:id',async(req,res)=>{
     const principal=requireAttachmentPrincipal(req,res,'DELETE_ATTACHMENT');if(!principal)return;
     let deletedItem:FileAttachment|undefined;
+    let hasSharedStorage=false;
     try{
       deletedItem=await UnitOfWork.run(principal.companyId,async tx=>{
         const existing=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);
@@ -343,15 +361,29 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
         }
         await assertPermanentDeleteAllowed(tx,principal,existing);
         const raw=tx.getRawTransaction?.();if(!raw)throw new AttachmentForbiddenError();
+        const sharedRefs:any=await raw.execute(sql`
+          SELECT 1 FROM file_attachments
+          WHERE company_id=${principal.companyId}
+            AND id<>${existing.id}
+            AND storage_key=${existing.storageKey}
+            AND storage_provider=${existing.storageProvider}
+          LIMIT 1
+        `);
+        hasSharedStorage=Boolean(sharedRefs.rows?.[0]);
         const removed:any=await raw.execute(sql`DELETE FROM file_attachments WHERE company_id=${principal.companyId} AND id=${existing.id} RETURNING id`);
         if(!removed.rows?.[0])throw new AttachmentNotFoundError();
         await tx.getAuditLogRepo().create({id:randomUUID(),companyId:principal.companyId,entityName:'FileAttachment',entityId:existing.id,action:AuditAction.DELETE,previousState:auditState(existing),newState:JSON.stringify({event:'PERMANENT_DELETE'}),userId:principal.userId,userName:principal.name,timestamp:new Date().toISOString()});
         return existing;
       });
-      let storageRemoved=true;
-      if(deletedItem.storageProvider===storage.provider&&deletedItem.contentState==='AVAILABLE'&&deletedItem.storageKey){
-        try{await storage.remove(principal.companyId,deletedItem.storageKey);}
-        catch(storageError){storageRemoved=false;console.error('AUTOERP_ATTACHMENT_DELETE_STORAGE_FAILURE',storageError);}
+      let storageRemoved=false;
+      if(deletedItem.contentState==='AVAILABLE'&&deletedItem.storageKey&&!hasSharedStorage&&(deletedItem.storageProvider==='SERVER_FS'||deletedItem.storageProvider==='R2')){
+        try{
+          await storage.remove(principal.companyId,deletedItem.storageKey,deletedItem.storageProvider as any);
+          storageRemoved=true;
+        }catch(storageError){
+          storageRemoved=false;
+          console.error('AUTOERP_ATTACHMENT_DELETE_STORAGE_FAILURE',storageError);
+        }
       }
       res.json({deleted:true,storageRemoved});
     }catch(error){sendAttachmentError(res,error);}

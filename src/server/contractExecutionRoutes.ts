@@ -43,6 +43,7 @@ import { contractConflictResponse } from './contractConflictResponse';
 
 type ExecutionAction = 'VIEW_CONTRACT_ARTIFACT' | 'GENERATE_CONTRACT_PDF' | 'GENERATE_CONTRACT_DOCX' | 'REGISTER_CONTRACT_REVIEWED_FINAL_PDF' | 'REGISTER_CONTRACT_SIGNATURE_EVIDENCE' | 'RECONCILE_CONTRACT_FINANCE';
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
+const isSupportedDurableProvider = (p?: string): boolean => p === 'SERVER_FS' || p === 'R2';
 const WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
 const SIGNATURE_METHODS = new Set<ContractSignatureMethod>(['SIGNED_PDF_UPLOAD', 'GOV_BR', 'NOTARY']);
 const STANDARD_TEMPLATE_KEYS = new Set<string>(
@@ -200,14 +201,13 @@ function requirePrincipal(req: Request, res: Response, action: ExecutionAction):
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }
+  if (role === 'ADMIN') return principal;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes(action)) return principal;
-  if (action === 'VIEW_CONTRACT_ARTIFACT') return principal;
-  if (!WRITE_ROLES.has(role)) {
-    res.status(403).json({ error: 'Forbidden' });
-    return null;
-  }
-  return principal;
+  if (action === 'VIEW_CONTRACT_ARTIFACT' && permissions.includes('VIEW_CONTRACT')) return principal;
+  if (action !== 'VIEW_CONTRACT_ARTIFACT' && (permissions.includes('EDIT_CONTRACT') || permissions.includes('SIGN_CONTRACT'))) return principal;
+  res.status(403).json({ error: 'Forbidden' });
+  return null;
 }
 
 function text(value: unknown, field: string, min = 1, max = 180): string {
@@ -542,10 +542,23 @@ async function createPdf(title: string, rendered: string, branding?: PdfBranding
 
 async function getTenantBranding(companyId: string): Promise<PdfBranding> {
   const company = await getCompany(companyId);
-  const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+  let logoBase64: string | null = null;
+  try {
+    const configs = await db.select().from(tenantOperationalConfigs).where(eq(tenantOperationalConfigs.companyId, companyId)).limit(1);
+    logoBase64 = configs[0]?.logoUrl || null;
+  } catch (error: any) {
+    // Estreitar exclusivamente para erro 42703 (coluna logo_url inexistente em ambiente não migrado).
+    // Qualquer outro erro de banco é propagado para não esconder falhas silenciosas.
+    const pgCode = error?.code || error?.cause?.code;
+    if (pgCode === '42703') {
+      logoBase64 = null;
+    } else {
+      throw error;
+    }
+  }
   return {
     companyName: company.tradeName || company.name || 'MoveFlex',
-    logoBase64: configs[0]?.logoUrl || null,
+    logoBase64,
   };
 }
 
@@ -791,7 +804,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         if (!template.isCurrent || !template.isActive) throw new ExecutionConflictError();
         const attachments = template.contentMarkdown.trim() ? [] : await tx.getAttachmentRepo().findByEntity(principal.companyId, 'ContractTemplate', template.id);
         const classified = classifyContractTemplateSource(template, attachments);
-        if (classified?.mode !== 'PDF' || (classified.source && classified.source.storageProvider !== storage.provider)) throw new ExecutionConflictError();
+        if (classified?.mode !== 'PDF' || (classified.source && !isSupportedDurableProvider(classified.source.storageProvider))) throw new ExecutionConflictError();
         const { master: approvedMaster, source } = classified;
         const signed = await tx.getContractArtifactRepo().findCurrentForContract(principal.companyId, contract.id, 'SIGNED_EVIDENCE');
         if (signed) throw new ExecutionConflictError();
@@ -827,7 +840,7 @@ export function registerContractExecutionRoutes(app: Express): void {
         const missingFields = getMoveFlexVisualFixedMissingFields(prepared.approvedMaster.templateKey, templateValues);
         if (missingFields.length) throw new ExecutionRequiredDataError(missingFields);
         if (!prepared.source?.storageKey) throw new ExecutionConflictError();
-        const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey);
+        const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey, prepared.source.storageProvider as any);
         sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');
         if (
           sourceChecksum !== prepared.approvedMaster.sha256 ||
@@ -885,7 +898,7 @@ export function registerContractExecutionRoutes(app: Express): void {
             source.documentType !== 'CONTRACT_TEMPLATE_SOURCE' ||
             source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
             source.contentState !== 'AVAILABLE' ||
-            source.storageProvider !== storage.provider ||
+            !isSupportedDurableProvider(source.storageProvider) ||
             source.storageKey !== prepared.source.storageKey ||
             source.checksum !== sourceChecksum ||
             source.checksum !== currentApprovedMaster.sha256 ||
@@ -1026,14 +1039,14 @@ export function registerContractExecutionRoutes(app: Express): void {
           item.documentType === 'CONTRACT_TEMPLATE_SOURCE' &&
           item.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' &&
           item.contentState === 'AVAILABLE' &&
-          item.storageProvider === storage.provider &&
+          isSupportedDurableProvider(item.storageProvider) &&
           Boolean(item.storageKey)
         );
         if (sources.length !== 1 || classifyContractTemplateSource(template, attachments)?.mode !== 'DOCX') throw new ExecutionConflictError();
         return { contract, template, driver, vehicle, vehicleInsurance, vehicleTracker, source: sources[0] };
       });
 
-      const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!);
+      const sourceBytes = await storage.read(principal.companyId, prepared.source.storageKey!, prepared.source.storageProvider as any);
       const sourceChecksum = createHash('sha256').update(sourceBytes).digest('hex');
       if (
         !prepared.source.checksum || sourceChecksum !== prepared.source.checksum ||
@@ -1065,7 +1078,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
           attachment.entityId !== prepared.contract.id || attachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
           attachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-          attachment.contentState !== 'AVAILABLE' || attachment.storageProvider !== storage.provider ||
+          attachment.contentState !== 'AVAILABLE' || !isSupportedDurableProvider(attachment.storageProvider) ||
           !attachment.storageKey || !attachment.checksum
         ) throw new ExecutionConflictError();
         return { artifact, attachment, contract: prepared.contract };
@@ -1106,7 +1119,7 @@ export function registerContractExecutionRoutes(app: Express): void {
           !source || source.isArchived || source.entityType !== 'ContractTemplate' || source.entityId !== template.id ||
           source.documentType !== 'CONTRACT_TEMPLATE_SOURCE' ||
           source.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-          source.contentState !== 'AVAILABLE' || source.storageProvider !== storage.provider ||
+          source.contentState !== 'AVAILABLE' || !isSupportedDurableProvider(source.storageProvider) ||
           source.storageKey !== prepared.source.storageKey || source.checksum !== sourceChecksum
         ) throw new ExecutionConflictError();
 
@@ -1124,7 +1137,7 @@ export function registerContractExecutionRoutes(app: Express): void {
             !currentAttachment || currentAttachment.isArchived || currentAttachment.entityType !== 'Contract' ||
             currentAttachment.entityId !== contract.id || currentAttachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
             currentAttachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-            currentAttachment.contentState !== 'AVAILABLE' || currentAttachment.storageProvider !== storage.provider ||
+            currentAttachment.contentState !== 'AVAILABLE' || !isSupportedDurableProvider(currentAttachment.storageProvider) ||
             !currentAttachment.storageKey || !currentAttachment.checksum
           ) throw new ExecutionConflictError();
           return { artifact: currentDocx, attachment: currentAttachment, contract, replayed: true as const };
@@ -1242,13 +1255,13 @@ export function registerContractExecutionRoutes(app: Express): void {
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
           attachment.entityId !== contract.id || attachment.documentType !== 'CONTRACT_GENERATED_DOCX' ||
           attachment.mimeType !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-          attachment.contentState !== 'AVAILABLE' || attachment.storageProvider !== storage.provider ||
+          attachment.contentState !== 'AVAILABLE' || !isSupportedDurableProvider(attachment.storageProvider) ||
           !attachment.storageKey || !attachment.checksum
         ) throw new ExecutionConflictError();
         return { contract, generatedDocx, attachment };
       });
 
-      const docxBytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const docxBytes = await storage.read(principal.companyId, prepared.attachment.storageKey!, prepared.attachment.storageProvider as any);
       const docxChecksum = createHash('sha256').update(docxBytes).digest('hex');
       if (
         docxBytes.length !== prepared.attachment.fileSize ||
@@ -1384,12 +1397,12 @@ export function registerContractExecutionRoutes(app: Express): void {
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
           attachment.entityId !== contract.id || attachment.documentType !== 'CONTRACT_FINAL_PDF' ||
           attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
-          attachment.storageProvider !== storage.provider || !attachment.storageKey
+          !isSupportedDurableProvider(attachment.storageProvider) || !attachment.storageKey
         ) throw new ExecutionConflictError();
         return { contract, generated, attachment };
       });
 
-      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!, prepared.attachment.storageProvider as any);
       const checksum = createHash('sha256').update(bytes).digest('hex');
       if (
         !bytes.length || bytes.length > 10 * 1024 * 1024 ||
@@ -1481,12 +1494,12 @@ export function registerContractExecutionRoutes(app: Express): void {
           !attachment || attachment.isArchived || attachment.entityType !== 'Contract' ||
           attachment.entityId !== contract.id || attachment.documentType !== 'SIGNED_CONTRACT' ||
           attachment.mimeType !== 'application/pdf' || attachment.contentState !== 'AVAILABLE' ||
-          attachment.storageProvider !== storage.provider || !attachment.storageKey
+          !isSupportedDurableProvider(attachment.storageProvider) || !attachment.storageKey
         ) throw new ExecutionConflictError();
         return { contract, source, attachment };
       });
 
-      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!);
+      const bytes = await storage.read(principal.companyId, prepared.attachment.storageKey!, prepared.attachment.storageProvider as any);
       const checksum = createHash('sha256').update(bytes).digest('hex');
       if (
         !bytes.length || bytes.length > 10 * 1024 * 1024 ||

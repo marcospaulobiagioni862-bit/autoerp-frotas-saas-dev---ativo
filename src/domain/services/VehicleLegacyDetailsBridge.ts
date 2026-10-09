@@ -8,7 +8,7 @@ import { TrackerClient } from '../../api/trackerClient';
 import { InsuranceClient } from '../../api/insuranceClient';
 import { TrafficTicketClient } from '../../api/trafficTicketClient';
 import { DetailAuthorityClient } from '../../api/detailAuthorityClient';
-import type { Vehicle, KmRecord, AuditLog } from '../../types/entities';
+import type { Vehicle, KmRecord, AuditLog, VehicleOwnershipHistory } from '../../types/entities';
 import { ObligationStatus } from '../../types/enums';
 
 export interface VehicleDetailedSummary {
@@ -24,6 +24,25 @@ export interface VehicleDetailedSummary {
   kmRecords: KmRecord[];
   historyLogs: AuditLog[];
   financialSummary: { totalRevenue:number; totalExpenses:number; netProfit:number; profitMargin:number; };
+  ownershipHistory?: VehicleOwnershipHistory[];
+  inspectionsSummary?: {
+    total: number;
+    latest?: {
+      id: string;
+      inspectionType: string;
+      inspectionDate: string;
+      km: number;
+      result: string;
+      inspectorName?: string;
+    };
+  };
+  filesCount?: number;
+  complianceAlerts?: {
+    isMaintenanceOverdue: boolean;
+    isInsuranceExpired: boolean;
+    hasPendingTickets: boolean;
+    isCrlvOutdated: boolean;
+  };
 }
 
 /**

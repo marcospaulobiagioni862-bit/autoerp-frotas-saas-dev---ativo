@@ -288,7 +288,33 @@ export async function ensureContractCloseReceivables(
   tx:ITransactionContext
 ){
   const period=await requireContractEffectivePeriod(contract,tx);
-  const kmRecords=await tx.getKmRecordRepo().findByVehicleIdForCompany(contract.companyId,contract.vehicleId);
+  let kmRecords=await tx.getKmRecordRepo().findByVehicleIdForCompany(contract.companyId,contract.vehicleId);
+  const hasCheckout = kmRecords.some((item) =>
+    item.companyId === contract.companyId &&
+    item.vehicleId === contract.vehicleId &&
+    item.contractId === contract.id &&
+    item.readingType === 'CHECK_OUT' &&
+    item.recordDate >= period.effectiveStartDate &&
+    item.recordDate <= closeDate
+  );
+  if (!hasCheckout) {
+    const vehicle = await tx.getVehicleRepo().findByIdForCompany(contract.companyId, contract.vehicleId);
+    if (vehicle) {
+      const synthesizedCheckout = await tx.getKmRecordRepo().create({
+        id: randomUUID(),
+        companyId: contract.companyId,
+        vehicleId: contract.vehicleId,
+        driverId: contract.driverId,
+        contractId: contract.id,
+        kmValue: vehicle.currentKm,
+        recordDate: period.effectiveStartDate,
+        readingType: 'CHECK_OUT',
+        notes: 'Registro inicial de entrega (check-out) sintetizado para apuração de encerramento',
+        createdAt: new Date().toISOString(),
+      });
+      kmRecords = [synthesizedCheckout, ...kmRecords];
+    }
+  }
   const charge=calculateContractExcessKmCharge({...contract,startDate:period.effectiveStartDate},closeDate,kmRecords);
   if(!charge||charge.amount<=0)return [];
   const categoryId=await ensureExcessKmCategory(contract.companyId,principal,tx);
@@ -300,7 +326,7 @@ export async function ensureContractCloseReceivables(
     driverId:contract.driverId,
     contractId:contract.id,
     categoryId,
-    description:`KM excedente - Contrato ${contract.contractNumber}: ${charge.excessKm} km × R$ ${contract.excessKmRate.toFixed(2)}`,
+    description:`KM excedente - Contrato ${contract.contractNumber}: ${charge.excessKm} km × R$ ${contract.excessKmRate.toFixed(2)}${!hasCheckout ? ' [Marco inicial sintetizado]' : ''}`,
     totalAmount:charge.amount,
     dueDate:closeDate,
     competenceDate:closeDate,

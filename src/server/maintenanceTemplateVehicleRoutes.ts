@@ -12,9 +12,10 @@ function principal(req: Request, res: Response): AuthenticatedPrincipal | null {
     res.status(401).json({ error: 'Unauthorized: Authentication required' });
     return null;
   }
-  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
   const role = String(item.role || '').toUpperCase();
-  if (!permissions.includes('*') && !permissions.includes('MUTATE_MAINTENANCE') && !WRITE_ROLES.has(role)) {
+  if (role === 'ADMIN') return item;
+  const permissions = Array.isArray(item.permissions) ? item.permissions : [];
+  if (!permissions.includes('*') && !permissions.includes('MUTATE_MAINTENANCE')) {
     res.status(403).json({ error: 'Forbidden' });
     return null;
   }

@@ -1,11 +1,13 @@
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React,{useEffect,useMemo,useState} from 'react';
-import { ClipboardCheck,Plus } from 'lucide-react';
-import { VehicleInspectionClient,type VehicleInspectionChecklist,type VehicleInspectionType,type VehicleInspection,type VehicleInspectionItemStatus,type VehicleInspectionTechnicalChecklist,type VehicleInspectionTechnicalKey,type VehicleInspectionResult } from '../../api/vehicleInspectionClient';
+import { ClipboardCheck,Plus,Smartphone,ArrowRightLeft } from 'lucide-react';
+import { VehicleInspectionClient,type VehicleInspectionChecklist,type VehicleInspectionType,type VehicleInspection,type VehicleInspectionItemStatus,type VehicleInspectionTechnicalChecklist,type VehicleInspectionTechnicalKey,type VehicleInspectionResult,type InspectionComparisonPair } from '../../api/vehicleInspectionClient';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { FileUpload } from '../documents/FileUpload';
 import { AttachmentList } from '../documents/AttachmentList';
+import { VehicleInspectionWizardModal } from './VehicleInspectionWizardModal';
+import { InspectionComparatorModal } from './InspectionComparatorModal';
 
 const ITEMS=[
   ['keyMain','Chave principal'],['keySpare','Chave reserva'],['crlvPrinted','CRLV impresso'],
@@ -57,7 +59,23 @@ function emptyChecklist():VehicleInspectionChecklist{
   return Object.fromEntries(ITEMS.map(([key])=>[key,false])) as unknown as VehicleInspectionChecklist;
 }
 
-export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;currentKm:number}){
+export function VehicleInspectionPanel({
+  vehicleId,
+  currentKm,
+  vehiclePlate='VEÍCULO',
+  vehicleModel='',
+  contractId,
+  driverId,
+  driverName,
+}:{
+  vehicleId:string;
+  currentKm:number;
+  vehiclePlate?:string;
+  vehicleModel?:string;
+  contractId?:string;
+  driverId?:string;
+  driverName?:string;
+}){
   const[items,setItems]=useState<VehicleInspection[]>([]);
   const[type,setType]=useState<VehicleInspectionType>('EXIT');
   const[odometer,setOdometer]=useState(String(currentKm));
@@ -70,6 +88,10 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState<string|null>(null);
   const[expanded,setExpanded]=useState<string|null>(null);
+  const[wizardOpen,setWizardOpen]=useState(false);
+  const[comparatorOpen,setComparatorOpen]=useState(false);
+  const[comparisonData,setComparisonData]=useState<InspectionComparisonPair|null>(null);
+  const[comparatorLoading,setComparatorLoading]=useState(false);
 
   const load=async()=>{try{setItems(await VehicleInspectionClient.list(vehicleId));}catch(e){setError(e instanceof Error?e.message:'Falha ao carregar vistorias.');}};
   useEffect(()=>{void load();},[vehicleId]);
@@ -101,7 +123,84 @@ export function VehicleInspectionPanel({vehicleId,currentKm}:{vehicleId:string;c
     finally{setLoading(false);}
   };
 
+  const openComparator = async () => {
+    setComparatorLoading(true);
+    try {
+      const targetContractId = contractId || (items[0]?.contractId);
+      if (!targetContractId) throw new Error('Nenhum contrato vinculado identificado para comparação.');
+      const data = await VehicleInspectionClient.getComparison(targetContractId);
+      setComparisonData(data);
+      setComparatorOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao carregar comparador de vistoria.');
+    } finally {
+      setComparatorLoading(false);
+    }
+  };
+
   return <div data-draft-dirty={formDraft.dirty} className="space-y-4">
+    {/* Banner de Destaque: Vistoria Mobile no Pátio */}
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 p-4 text-white shadow-lg">
+      <div className="space-y-0.5">
+        <h4 className="flex items-center gap-2 font-bold text-base text-white">
+          <Smartphone className="w-5 h-5 text-violet-200" /> Vistoria Mobile no Pátio (Wizard 6 Passos)
+        </h4>
+        <p className="text-xs text-violet-100">
+          Câmera nativa traseira, fotos obrigatórias por ângulo, odômetro, diagrama de avarias e assinatura na tela.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setWizardOpen(true)}
+          className="bg-white text-violet-900 hover:bg-violet-50 font-bold gap-1.5 shadow"
+        >
+          <Smartphone className="w-4 h-4" /> Iniciar Vistoria Mobile
+        </Button>
+        {items.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void openComparator()}
+            isLoading={comparatorLoading}
+            className="border-white/40 text-white hover:bg-white/10 font-bold gap-1.5"
+          >
+            <ArrowRightLeft className="w-4 h-4" /> Comparador Lado a Lado
+          </Button>
+        )}
+      </div>
+    </div>
+
+    {wizardOpen && (
+      <VehicleInspectionWizardModal
+        vehicleId={vehicleId}
+        vehiclePlate={vehiclePlate}
+        vehicleModel={vehicleModel}
+        currentKm={currentKm}
+        contractId={contractId}
+        driverId={driverId}
+        driverName={driverName}
+        onClose={() => setWizardOpen(false)}
+        onSuccess={(newItem) => {
+          setWizardOpen(false);
+          setItems((curr) => [newItem, ...curr]);
+          setExpanded(newItem.id);
+        }}
+      />
+    )}
+
+    {comparatorOpen && comparisonData && (
+      <InspectionComparatorModal
+        comparison={comparisonData}
+        onClose={() => setComparatorOpen(false)}
+        onSettle={() => {
+          setComparatorOpen(false);
+          void load();
+        }}
+      />
+    )}
+
     <div className="rounded-xl border p-4 space-y-4">
       {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">

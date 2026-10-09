@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Download, FileSignature, FileText, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Download, FileSignature, FileText, MessageSquare, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { ContractClient } from '../../api/contractClient';
 import { ContractExecutionClient } from '../../api/contractExecutionClient';
@@ -140,6 +140,19 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
     }, nextSigned ? 'Contrato marcado como assinado.' : 'Contrato marcado como não assinado.');
   };
 
+  const sendWhatsApp = async () => {
+    try {
+      const res = await ContractClient.getShareLink(contract.id);
+      if (res.whatsappUrl) {
+        window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(`Link do contrato gerado:\n${res.publicPdfUrl}\n\nO motorista não possui telefone válido com DDD cadastrado para abertura direta do WhatsApp.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+    }
+  };
+
   const activate = () => {
     if (!incomeCategoryId) {
       setError('Selecione a categoria financeira de receita do aluguel antes de ativar.');
@@ -198,6 +211,9 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                     <Download className="w-4 h-4" />Abrir PDF gerado
                   </Button>
                 )}
+                <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
+                  <MessageSquare className="w-4 h-4 mr-1" />Enviar via WhatsApp
+                </Button>
               </div>
             </div>
           ) : (
@@ -218,7 +234,12 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               <p>Registro: <b>{signatureMethodLabel(signed.signatureMethod)}</b></p>
               <p>Confirmado por: <b>{signed.signedByName || '—'}</b></p>
               <p>Data/hora: {signed.signedAt ? new Date(signed.signedAt).toLocaleString('pt-BR') : '—'}</p>
-              <Button size="sm" variant="secondary" onClick={() => void openAttachment(signed.attachmentId)}><Download className="w-4 h-4" />Abrir documento associado</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" onClick={() => void openAttachment(signed.attachmentId)}><Download className="w-4 h-4" />Abrir documento associado</Button>
+                <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
+                  <MessageSquare className="w-4 h-4 mr-1" />Enviar link no WhatsApp
+                </Button>
+              </div>
               {canChangeSignStatus && (
                 <Button size="sm" variant="secondary" isLoading={loading} onClick={() => setSigned(false)}>Marcar como não assinado</Button>
               )}

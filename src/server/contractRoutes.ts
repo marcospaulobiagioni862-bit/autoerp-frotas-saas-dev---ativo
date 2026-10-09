@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import { UnitOfWork } from '../db/uow';
 import { ReceivableService } from '../domain/finance/ReceivableService';
@@ -11,16 +11,55 @@ import {
   ContractStatus,
   DocumentStatus,
   DriverStatus,
+  ObligationStatus,
   OriginType,
   RecurringFrequency,
   VehicleStatus,
 } from '../types/enums';
 import type { AuthenticatedPrincipal } from './auth';
 import { ensureVehicleInsuranceEligible } from './contractInsuranceGate';
-import { cancelUnpaidContractReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
+import { cancelUnpaidContractReceivables, ensureContractCloseReceivables, ensureInitialContractReceivable } from './contractFinanceAuthority';
 import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '../domain/contracts/contractEffectivePeriod';
 import { contractConflictResponse } from './contractConflictResponse';
 import { getOperationalISODate } from '../shared/utils/date';
+import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
+import { evaluateCnhStatus } from './driverCnhStatus';
+import { todayCivilDate } from '../shared/utils/civilDate';
+
+function getContractShareSecret(): string {
+  const secret = String(process.env.JWT_SECRET || '').trim();
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required to generate or verify contract share tokens.');
+  }
+  return secret;
+}
+
+function createContractShareToken(companyId: string, contractId: string, expiresInDays = 30): string {
+  const secret = getContractShareSecret();
+  const exp = Math.floor(Date.now() / 1000) + (expiresInDays * 24 * 3600);
+  const payload = Buffer.from(JSON.stringify({ companyId, contractId, exp })).toString('base64url');
+  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function verifyContractShareToken(token: string): { companyId: string; contractId: string; exp: number } | null {
+  try {
+    const secret = getContractShareSecret();
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    const [payloadB64, signature] = parts;
+    const expectedSignature = createHmac('sha256', secret).update(payloadB64).digest('base64url');
+    if (signature.length !== expectedSignature.length) return null;
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) return null;
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    if (!payload || typeof payload !== 'object') return null;
+    if (typeof payload.exp !== 'number' || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    if (typeof payload.companyId !== 'string' || typeof payload.contractId !== 'string') return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 type ContractAction =
   | 'VIEW_CONTRACT'
@@ -50,11 +89,10 @@ function principalFrom(req: Request): AuthenticatedPrincipal | undefined {
 function hasContractPermission(principal: AuthenticatedPrincipal, action: ContractAction): boolean {
   const role = String(principal.role || '').toUpperCase();
   if (!principal.userId || !principal.companyId || !CANONICAL_ROLES.has(role)) return false;
+  if (role === 'ADMIN') return true;
   const permissions = Array.isArray(principal.permissions) ? principal.permissions : [];
   if (permissions.includes('*') || permissions.includes(action)) return true;
-  if (action === 'VIEW_CONTRACT') return true;
-  if (action === 'BILL_CONTRACT') return BILL_ROLES.has(role);
-  return DEFAULT_WRITE_ROLES.has(role);
+  return false;
 }
 
 function requireContractPrincipal(req: Request, res: Response, action: ContractAction): AuthenticatedPrincipal | null {
@@ -244,7 +282,10 @@ function appendNote(existing: string | undefined, label: string, text?: string):
 
 function ensureDriverEligible(driver: Driver): void {
   if (driver.isArchived || driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver unavailable');
-  if (![DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(driver.cnhStatus)) throw new ContractConflictError('Driver CNH invalid');
+  const liveCnhStatus = evaluateCnhStatus(driver.cnhExpiration);
+  if (![DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(liveCnhStatus)) {
+    throw new ContractConflictError('Driver CNH invalid');
+  }
 }
 
 function ensureVehicleEligible(vehicle: Vehicle): void {
@@ -324,7 +365,7 @@ export function registerContractRoutes(app: Express): void {
     if (!principal) return;
     const body = editableBody(req);
     try {
-      forbidAuthorityFields(body, ['companyId','userId','userName','role','status','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl','signatureRequired']);
+      forbidAuthorityFields(body, ['companyId','userId','userName','role','isArchived','securityDepositId','generatedPdfUrl','signedContractUrl','signatureRequired']);
       const vehicleId = requiredText(body.vehicleId, 'vehicleId');
       const driverId = requiredText(body.driverId, 'driverId');
       const startDate = normalizeDate(body.startDate, 'startDate');
@@ -342,6 +383,7 @@ export function registerContractRoutes(app: Express): void {
       const excessKmRate = nonNegative(body.excessKmRate, 'excessKmRate', 0);
       const requestedNumber = normalizeContractNumber(body.contractNumber);
       const requestedTemplateId = optionalText(body.templateId);
+      const initialStatus = body.status === ContractStatus.DRAFT ? ContractStatus.DRAFT : ContractStatus.ACTIVE;
 
       const idempotencyKey = typeof req.headers['x-idempotency-key'] === 'string'
         ? req.headers['x-idempotency-key'].trim()
@@ -368,7 +410,9 @@ export function registerContractRoutes(app: Express): void {
         if (replayId) {
           const existing = await tx.getContractRepo().findByIdForCompany(principal.companyId, String(replayId));
           if (existing) {
-            const receivables = await tx.getReceivableRepo().findByContractId(existing.id);
+            const receivables = existing.status === ContractStatus.ACTIVE
+              ? await tx.getReceivableRepo().findByContractId(existing.id)
+              : [];
             return { item: existing, receivables };
           }
         }
@@ -380,10 +424,7 @@ export function registerContractRoutes(app: Express): void {
         // Compare civil dates in the operating timezone, without parsing CNH as a timestamp.
         if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
         if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
-        const civilParts = new Intl.DateTimeFormat('en', {
-          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
-        }).formatToParts(new Date());
-        const today = ['year', 'month', 'day'].map(type => civilParts.find(part => part.type === type)!.value).join('-');
+        const today = todayCivilDate('America/Sao_Paulo');
         if (driver.cnhExpiration && driver.cnhExpiration < today) throw new ContractConflictError('Driver CNH invalid');
         const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
         const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);
@@ -409,7 +450,7 @@ export function registerContractRoutes(app: Express): void {
           vehicleId,
           startDate,
           endDate,
-          status: ContractStatus.ACTIVE,
+          status: initialStatus,
           rentalAmount,
           billingPeriodicity,
           billingDueDayOfWeek,
@@ -425,15 +466,18 @@ export function registerContractRoutes(app: Express): void {
           createdAt: now,
           updatedAt: now,
         });
-        const boundVehicle = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
-          status: VehicleStatus.RENTED,
-          currentDriverId: driverId,
-          currentContractId: created.id,
-          updatedAt: now,
-        });
-        if (!boundVehicle) throw new ContractNotFoundError();
 
-        const receivables = await ensureInitialContractReceivable(created, principal, tx);
+        let receivables: any[] = [];
+        if (initialStatus === ContractStatus.ACTIVE) {
+          const boundVehicle = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
+            status: VehicleStatus.RENTED,
+            currentDriverId: driverId,
+            currentContractId: created.id,
+            updatedAt: now,
+          });
+          if (!boundVehicle) throw new ContractNotFoundError();
+          receivables = await ensureInitialContractReceivable(created, principal, tx);
+        }
 
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: created.id,
@@ -460,16 +504,28 @@ export function registerContractRoutes(app: Express): void {
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const existing = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!existing || existing.isArchived) throw new ContractNotFoundError();
-        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(existing.status)) {
+        if (![ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(existing.status)) {
           throw new ContractConflictError('Contract is not editable');
         }
+        const now = new Date().toISOString();
         const generatedPdf = await tx.getContractArtifactRepo().findCurrentForContract(
           principal.companyId, existing.id, 'GENERATED_PDF', true
         );
         const generatedDocx = await tx.getContractArtifactRepo().findCurrentForContract(
           principal.companyId, existing.id, 'GENERATED_DOCX', true
         );
-        if (generatedPdf || generatedDocx) throw new ContractConflictError('Contract terms are locked after document generation');
+        if (generatedPdf) {
+          await tx.getContractArtifactRepo().updateForCompany(principal.companyId, generatedPdf.id, {
+            isCurrent: false,
+            updatedAt: now,
+          });
+        }
+        if (generatedDocx) {
+          await tx.getContractArtifactRepo().updateForCompany(principal.companyId, generatedDocx.id, {
+            isCurrent: false,
+            updatedAt: now,
+          });
+        }
 
         const vehicleId = body.vehicleId === undefined ? existing.vehicleId : requiredText(body.vehicleId, 'vehicleId');
         const driverId = body.driverId === undefined ? existing.driverId : requiredText(body.driverId, 'driverId');
@@ -502,14 +558,14 @@ export function registerContractRoutes(app: Express): void {
           body.billingDueDayOfWeek === undefined && billingPeriodicity === existing.billingPeriodicity ? existing.billingDueDayOfWeek : body.billingDueDayOfWeek,
           body.billingDueDayOfMonth === undefined && billingPeriodicity === existing.billingPeriodicity ? existing.billingDueDayOfMonth : body.billingDueDayOfMonth,
         );
-        const now = new Date().toISOString();
+        const nextRentalAmount = body.rentalAmount === undefined ? existing.rentalAmount : positive(body.rentalAmount, 'rentalAmount');
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, existing.id, {
           contractNumber,
           vehicleId,
           driverId,
           startDate,
           endDate,
-          rentalAmount: body.rentalAmount === undefined ? existing.rentalAmount : positive(body.rentalAmount, 'rentalAmount'),
+          rentalAmount: nextRentalAmount,
           billingPeriodicity,
           billingDueDayOfWeek: dueDays.billingDueDayOfWeek,
           billingDueDayOfMonth: dueDays.billingDueDayOfMonth,
@@ -522,6 +578,55 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
+
+        // Se o contrato for ACTIVE e os vínculos ou aluguel mudaram:
+        if (existing.status === ContractStatus.ACTIVE) {
+          if (vehicleId !== existing.vehicleId) {
+            await tx.getVehicleRepo().updateForCompany(principal.companyId, existing.vehicleId, {
+              status: VehicleStatus.AVAILABLE,
+              currentDriverId: '',
+              currentContractId: '',
+              updatedAt: now,
+            });
+            await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicleId, {
+              status: VehicleStatus.RENTED,
+              currentDriverId: driverId,
+              currentContractId: existing.id,
+              updatedAt: now,
+            });
+          } else if (driverId !== existing.driverId) {
+            await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicleId, {
+              currentDriverId: driverId,
+              updatedAt: now,
+            });
+          }
+
+          if (nextRentalAmount !== existing.rentalAmount) {
+            const contractReceivables = await tx.getReceivableRepo().findByContractId(existing.id);
+            for (const rec of contractReceivables) {
+              if (rec.originType === OriginType.CONTRACT_RENT) {
+                const paid = Number(rec.paidAmount || 0);
+                // Regra de ouro: parcelas pagas (PAID) ou parcialmente pagas permanecem 100% intocadas
+                if (rec.status === ObligationStatus.PAID || paid > 0) {
+                  continue;
+                }
+                if ([ObligationStatus.PENDING, ObligationStatus.OVERDUE].includes(rec.status) && paid === 0) {
+                  const discount = Number(rec.discountAmount || 0);
+                  const fine = Number(rec.fineAmount || 0);
+                  const interest = Number(rec.interestAmount || 0);
+                  const newUpdatedAmount = nextRentalAmount + fine + interest - discount;
+                  const newBalanceAmount = newUpdatedAmount;
+                  await tx.getReceivableRepo().update(rec.id, {
+                    originalAmount: String(nextRentalAmount),
+                    updatedAmount: String(newUpdatedAmount),
+                    balanceAmount: String(newBalanceAmount),
+                    updatedAt: now,
+                  });
+                }
+              }
+            }
+          }
+        }
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: existing.id,
           action: AuditAction.UPDATE, previousState: auditState(existing), newState: auditState(saved),
@@ -590,6 +695,19 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!boundVehicle) throw new ContractNotFoundError();
+
+        await tx.getKmRecordRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          vehicleId: vehicle.id,
+          driverId: contract.driverId,
+          contractId: active.id,
+          kmValue: vehicle.currentKm,
+          recordDate: period.effectiveStartDate,
+          readingType: 'CHECK_OUT',
+          notes: 'Registro inicial de entrega do veículo (check-out) na ativação do contrato',
+          createdAt: now,
+        });
 
         const receivables = await ensureInitialContractReceivable(active, principal, tx);
 
@@ -718,10 +836,17 @@ export function registerContractRoutes(app: Express): void {
       const today = new Date().toISOString().slice(0, 10);
       if (closeDate > today) throw new ContractConflictError('Close date cannot be in the future');
       const reason = optionalText(req.body?.reason);
+      const rawFinalKm = req.body?.finalKm !== undefined ? req.body.finalKm : req.body?.odometer;
+      const finalKm = rawFinalKm !== undefined && rawFinalKm !== null && rawFinalKm !== '' ? Number(rawFinalKm) : undefined;
+      if (finalKm !== undefined && (!Number.isFinite(finalKm) || finalKm < 0)) {
+        throw new ContractConflictError('Odômetro final inválido');
+      }
       const item = await UnitOfWork.run(principal.companyId, async (tx) => {
         const contract = await tx.getContractRepo().findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!contract || contract.isArchived) throw new ContractNotFoundError();
-        if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) return contract;
+        if (contract.status === ContractStatus.CLOSED || contract.status === ContractStatus.FINISHED) {
+          return { item: contract, receivables: [] };
+        }
         if (contract.status !== ContractStatus.ACTIVE) {
           throw new ContractConflictError('Contract lifecycle does not allow close');
         }
@@ -733,7 +858,44 @@ export function registerContractRoutes(app: Express): void {
           throw new ContractConflictError('Contract binding mismatch');
         }
         const now = new Date().toISOString();
+        let kmRecords = await tx.getKmRecordRepo().findByVehicleIdForCompany(principal.companyId, vehicle.id);
+
+        if (finalKm !== undefined) {
+          if (finalKm < vehicle.currentKm) {
+            throw new ContractConflictError('Odometer reading cannot be lower than current');
+          }
+          const createdCheckin = await tx.getKmRecordRepo().create({
+            id: randomUUID(),
+            companyId: principal.companyId,
+            vehicleId: vehicle.id,
+            driverId: contract.driverId,
+            contractId: contract.id,
+            kmValue: finalKm,
+            recordDate: closeDate,
+            readingType: 'CHECK_IN',
+            notes: optionalText(req.body?.notes) || 'Leitura de devolução no encerramento do contrato',
+            createdAt: now,
+          });
+          kmRecords = [createdCheckin, ...kmRecords];
+        }
+
+        const hasKmFranchise = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
+        const contractCheckins = kmRecords.filter(
+          (item) => item.companyId === contract.companyId &&
+            item.vehicleId === contract.vehicleId &&
+            item.contractId === contract.id &&
+            item.readingType === 'CHECK_IN' &&
+            item.recordDate >= period.effectiveStartDate &&
+            item.recordDate <= closeDate
+        );
+
+        if (hasKmFranchise && contractCheckins.length === 0) {
+          throw new ContractConflictError('Odometer reading required for contract close');
+        }
+
         const endDate = contract.endDate && contract.endDate < closeDate ? contract.endDate : closeDate;
+        const closeReceivables = await ensureContractCloseReceivables(contract, endDate, principal, tx);
+
         const saved = await tx.getContractRepo().updateForCompany(principal.companyId, contract.id, {
           status: ContractStatus.CLOSED,
           endDate,
@@ -741,21 +903,26 @@ export function registerContractRoutes(app: Express): void {
           updatedAt: now,
         });
         if (!saved) throw new ContractNotFoundError();
+
+        const updatedVehicleKm = finalKm !== undefined ? Math.max(vehicle.currentKm, finalKm) : vehicle.currentKm;
         const released = await tx.getVehicleRepo().updateForCompany(principal.companyId, vehicle.id, {
           status: VehicleStatus.AVAILABLE,
           currentDriverId: '',
           currentContractId: '',
+          currentKm: updatedVehicleKm,
           updatedAt: now,
         });
         if (!released) throw new ContractNotFoundError();
+
         await tx.getAuditLogRepo().create({
           id: randomUUID(), companyId: principal.companyId, entityName: 'Contract', entityId: contract.id,
           action: AuditAction.UPDATE, previousState: auditState(contract), newState: auditState(saved),
           userId: principal.userId, userName: principal.name, timestamp: now,
         });
-        return saved;
+
+        return { item: saved, receivables: closeReceivables };
       });
-      res.json({ item });
+      res.json(item);
     } catch (error) {
       sendContractError(res, error);
     }
@@ -899,6 +1066,112 @@ export function registerContractRoutes(app: Express): void {
       res.json({ items });
     } catch (error) {
       sendContractError(res, error);
+    }
+  });
+
+  app.post('/api/contracts/:id/share-link', async (req: Request, res: Response) => {
+    const principal = requireContractPrincipal(req, res, 'VIEW_CONTRACT');
+    if (!principal) return;
+    try {
+      const result = await UnitOfWork.run(principal.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompany(principal.companyId, req.params.id);
+        if (!contract || contract.isArchived) throw new ContractNotFoundError();
+
+        const driver = await tx.getDriverRepo().findByIdForCompany(principal.companyId, contract.driverId);
+        if (!driver || driver.isArchived) throw new ContractNotFoundError();
+
+        const token = createContractShareToken(principal.companyId, contract.id);
+        const host = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
+        const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+        const publicPdfUrl = `${proto}://${host}/api/public/contracts/${contract.id}/pdf?token=${token}`;
+
+        let phone = (driver.phone || '').replace(/\D/g, '');
+        if (phone && phone.length >= 10 && phone.length <= 11 && !phone.startsWith('55')) {
+          phone = `55${phone}`;
+        }
+
+        const message = `Olá, ${driver.fullName}! Segue o link para visualizar seu contrato de locação (${contract.contractNumber}): ${publicPdfUrl}`;
+        const whatsappUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '';
+
+        const now = new Date().toISOString();
+        await tx.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Contract',
+          entityId: contract.id,
+          action: AuditAction.UPDATE,
+          userId: principal.userId,
+          userName: principal.name,
+          newState: JSON.stringify({
+            event: 'CONTRACT_SHARE_LINK_GENERATED',
+            contractId: contract.id,
+            phone,
+            sharedAt: now,
+          }),
+          timestamp: now,
+        });
+
+        return {
+          token,
+          publicPdfUrl,
+          whatsappUrl,
+          phone,
+          message,
+        };
+      });
+      res.json(result);
+    } catch (error) {
+      sendContractError(res, error);
+    }
+  });
+
+  app.get('/api/public/contracts/:id/pdf', async (req: Request, res: Response) => {
+    const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+    if (!token) {
+      res.status(401).json({ error: 'Token de compartilhamento não fornecido.' });
+      return;
+    }
+    const verified = verifyContractShareToken(token);
+    if (!verified || verified.contractId !== req.params.id) {
+      res.status(401).json({ error: 'Token de compartilhamento inválido ou expirado.' });
+      return;
+    }
+
+    try {
+      const storage = createAttachmentStorageFromEnvironment();
+      const result = await UnitOfWork.run(verified.companyId, async (tx) => {
+        const contract = await tx.getContractRepo().findByIdForCompany(verified.companyId, req.params.id);
+        if (!contract || contract.isArchived) return null;
+
+        const signed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'SIGNED_EVIDENCE', true);
+        const reviewed = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'REVIEWED_FINAL_PDF', true);
+        const generated = await tx.getContractArtifactRepo().findCurrentForContract(verified.companyId, contract.id, 'GENERATED_PDF', true);
+        const artifact = signed || reviewed || generated;
+        if (!artifact || !artifact.attachmentId) return { contract, attachment: null };
+
+        const attachment = await tx.getAttachmentRepo().findByIdForCompany(verified.companyId, artifact.attachmentId);
+        return { contract, attachment };
+      });
+
+      if (!result || !result.contract) {
+        res.status(404).json({ error: 'Contrato não encontrado.' });
+        return;
+      }
+      if (!result.attachment || !result.attachment.storageKey || result.attachment.contentState !== 'AVAILABLE') {
+        res.status(404).json({ error: 'PDF do contrato ainda não foi gerado ou está indisponível.' });
+        return;
+      }
+
+      const bytes = await storage.read(verified.companyId, result.attachment.storageKey, result.attachment.storageProvider as any);
+      const safeContractNumber = result.contract.contractNumber.replace(/[\r\n"]/g, '_');
+      res.setHeader('content-type', 'application/pdf');
+      res.setHeader('content-length', String(bytes.length));
+      res.setHeader('content-disposition', `inline; filename="Contrato_${safeContractNumber}.pdf"`);
+      res.setHeader('x-content-type-options', 'nosniff');
+      res.send(bytes);
+    } catch (error) {
+      console.error('AUTOERP_PUBLIC_CONTRACT_PDF_FAILURE', error);
+      res.status(500).json({ error: 'Falha ao carregar o PDF do contrato.' });
     }
   });
 }

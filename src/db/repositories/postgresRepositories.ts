@@ -2,10 +2,11 @@ import { db } from '../index';
 import {
   users, companies, accountReceivables, accountPayables,
   financialTransactions, financialAccounts, paymentMethods, auditLogs, contracts, financialPeriods,
-  securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles, vehicleKmRecords
+  securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles, vehicleKmRecords,
+  vehicleOwnershipHistory
 } from '../schema';
-import { eq, and, sql, lt, desc } from 'drizzle-orm';
-import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle, KmRecord } from '../../types/entities';
+import { eq, and, sql, lt, desc, isNull } from 'drizzle-orm';
+import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle, KmRecord, VehicleOwnershipHistory } from '../../types/entities';
 
 // Basic wrapper around Drizzle ORM to satisfy IBaseRepository requirements
 export class PostgresBaseRepository<T extends { id: string; companyId?: string }> {
@@ -107,6 +108,17 @@ export class PostgresVehicleRepository {
       acquisitionValue: Number(row.acquisitionValue || 0),
       currentValue: Number(row.currentValue || 0),
       rentalValueBase: Number(row.rentalValueBase || 0),
+      ownerType: row.ownerType || 'COMPANY',
+      ownerName: row.ownerName || undefined,
+      ownerDocument: row.ownerDocument || undefined,
+      possessionType: row.possessionType || 'PROPRIO',
+      financialRestriction: row.financialRestriction || 'NONE',
+      financialInstitution: row.financialInstitution || undefined,
+      crlvExerciseYear: row.crlvExerciseYear == null ? undefined : Number(row.crlvExerciseYear),
+      registrationCity: row.registrationCity || undefined,
+      registrationState: row.registrationState || undefined,
+      claSecurityCode: row.claSecurityCode || undefined,
+      sneCoverageStatus: row.sneCoverageStatus || 'NAO_ADERIDO',
       status: row.status as Vehicle['status'],
       currentDriverId: row.currentDriverId || undefined,
       currentContractId: row.currentContractId || undefined,
@@ -114,6 +126,26 @@ export class PostgresVehicleRepository {
       isArchived: Boolean(row.isArchived),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+    };
+  }
+
+  private mapOwnershipHistory(row: any): VehicleOwnershipHistory {
+    return {
+      id: row.id,
+      companyId: row.companyId,
+      vehicleId: row.vehicleId,
+      ownerType: row.ownerType,
+      ownerName: row.ownerName,
+      ownerDocument: row.ownerDocument || undefined,
+      possessionType: row.possessionType,
+      financialRestriction: row.financialRestriction || 'NONE',
+      financialInstitution: row.financialInstitution || undefined,
+      effectiveFrom: row.effectiveFrom,
+      effectiveTo: row.effectiveTo || undefined,
+      reason: row.reason || undefined,
+      documentAttachmentId: row.documentAttachmentId || undefined,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
     };
   }
 
@@ -165,6 +197,17 @@ export class PostgresVehicleRepository {
       acquisitionValue: String(item.acquisitionValue),
       currentValue: String(item.currentValue),
       rentalValueBase: String(item.rentalValueBase),
+      ownerType: item.ownerType || 'COMPANY',
+      ownerName: item.ownerName || null,
+      ownerDocument: item.ownerDocument || null,
+      possessionType: item.possessionType || 'PROPRIO',
+      financialRestriction: item.financialRestriction || 'NONE',
+      financialInstitution: item.financialInstitution || null,
+      crlvExerciseYear: item.crlvExerciseYear ?? null,
+      registrationCity: item.registrationCity || null,
+      registrationState: item.registrationState || null,
+      claSecurityCode: item.claSecurityCode || null,
+      sneCoverageStatus: item.sneCoverageStatus || 'NAO_ADERIDO',
       status: item.status,
       currentDriverId: item.currentDriverId || null,
       currentContractId: item.currentContractId || null,
@@ -194,6 +237,17 @@ export class PostgresVehicleRepository {
     if (item.acquisitionValue !== undefined) values.acquisitionValue = String(item.acquisitionValue);
     if (item.currentValue !== undefined) values.currentValue = String(item.currentValue);
     if (item.rentalValueBase !== undefined) values.rentalValueBase = String(item.rentalValueBase);
+    if (item.ownerType !== undefined) values.ownerType = item.ownerType;
+    if (item.ownerName !== undefined) values.ownerName = item.ownerName || null;
+    if (item.ownerDocument !== undefined) values.ownerDocument = item.ownerDocument || null;
+    if (item.possessionType !== undefined) values.possessionType = item.possessionType;
+    if (item.financialRestriction !== undefined) values.financialRestriction = item.financialRestriction;
+    if (item.financialInstitution !== undefined) values.financialInstitution = item.financialInstitution || null;
+    if (item.crlvExerciseYear !== undefined) values.crlvExerciseYear = item.crlvExerciseYear ?? null;
+    if (item.registrationCity !== undefined) values.registrationCity = item.registrationCity || null;
+    if (item.registrationState !== undefined) values.registrationState = item.registrationState || null;
+    if (item.claSecurityCode !== undefined) values.claSecurityCode = item.claSecurityCode || null;
+    if (item.sneCoverageStatus !== undefined) values.sneCoverageStatus = item.sneCoverageStatus;
     if (item.status !== undefined) values.status = item.status;
     if (item.currentDriverId !== undefined) values.currentDriverId = item.currentDriverId || null;
     if (item.currentContractId !== undefined) values.currentContractId = item.currentContractId || null;
@@ -205,6 +259,48 @@ export class PostgresVehicleRepository {
       .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id)))
       .returning();
     return rows[0] ? this.map(rows[0]) : null;
+  }
+
+  async createOwnershipHistory(entry: VehicleOwnershipHistory): Promise<VehicleOwnershipHistory> {
+    const rows = await this.tx.insert(vehicleOwnershipHistory).values({
+      id: entry.id,
+      companyId: entry.companyId,
+      vehicleId: entry.vehicleId,
+      ownerType: entry.ownerType,
+      ownerName: entry.ownerName,
+      ownerDocument: entry.ownerDocument || null,
+      possessionType: entry.possessionType,
+      financialRestriction: entry.financialRestriction || 'NONE',
+      financialInstitution: entry.financialInstitution || null,
+      effectiveFrom: entry.effectiveFrom,
+      effectiveTo: entry.effectiveTo || null,
+      reason: entry.reason || null,
+      documentAttachmentId: entry.documentAttachmentId || null,
+      createdBy: entry.createdBy,
+      createdAt: entry.createdAt,
+    }).returning();
+    return this.mapOwnershipHistory(rows[0]);
+  }
+
+  async closeActiveOwnershipHistory(companyId: string, vehicleId: string, effectiveTo: string): Promise<void> {
+    await this.tx.update(vehicleOwnershipHistory)
+      .set({ effectiveTo })
+      .where(and(
+        eq(vehicleOwnershipHistory.companyId, companyId),
+        eq(vehicleOwnershipHistory.vehicleId, vehicleId),
+        isNull(vehicleOwnershipHistory.effectiveTo)
+      ));
+  }
+
+  async getOwnershipHistoryForVehicle(companyId: string, vehicleId: string): Promise<VehicleOwnershipHistory[]> {
+    const rows = await this.tx.select()
+      .from(vehicleOwnershipHistory)
+      .where(and(
+        eq(vehicleOwnershipHistory.companyId, companyId),
+        eq(vehicleOwnershipHistory.vehicleId, vehicleId)
+      ))
+      .orderBy(desc(vehicleOwnershipHistory.effectiveFrom));
+    return rows.map((r: any) => this.mapOwnershipHistory(r));
   }
 }
 
