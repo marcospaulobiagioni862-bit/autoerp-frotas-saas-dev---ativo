@@ -2,6 +2,7 @@ import type { AccountReceivable, Contract } from '../types/entities';
 import { ContractStatus, ObligationStatus, RecurringFrequency } from '../types/enums';
 import { runIdempotentMutation } from './idempotentMutation';
 import { asApiRecord, normalizeNumericFields } from './apiPayloadNormalization';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export class ContractApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -115,11 +116,13 @@ async function requestItem(url: string, init?: RequestInit): Promise<Contract> {
 
 export class ContractClient {
   static async list(): Promise<Contract[]> {
-    const response = await fetch('/api/contracts', { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
-    const payload = asApiRecord(await response.json(), 'Contract');
-    if (!Array.isArray(payload.items)) throw new Error('Invalid Contract list payload');
-    return payload.items.map(validateContract);
+    return cachedRead('contracts:list', async () => {
+        const response = await fetch('/api/contracts', { credentials: 'include' });
+        if (!response.ok) throw await apiError(response);
+        const payload = asApiRecord(await response.json(), 'Contract');
+        if (!Array.isArray(payload.items)) throw new Error('Invalid Contract list payload');
+        return payload.items.map(validateContract);
+    });
   }
 
   static async get(id: string): Promise<Contract> {
@@ -127,6 +130,7 @@ export class ContractClient {
   }
 
   static async create(input: ContractCreateInput): Promise<Contract> {
+    invalidateCache('contracts');
     return runIdempotentMutation(`contract:create:${JSON.stringify(input)}`, (token) =>
       requestItem('/api/contracts', {
         method: 'POST',
@@ -137,6 +141,7 @@ export class ContractClient {
   }
 
   static async update(id: string, input: ContractUpdateInput): Promise<Contract> {
+    invalidateCache('contracts');
     return requestItem(`/api/contracts/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
@@ -145,6 +150,7 @@ export class ContractClient {
   }
 
   static async activate(id: string, categoryId: string): Promise<{ item: Contract; receivables: AccountReceivable[] }> {
+    invalidateCache('contracts');
     const response = await fetch(`/api/contracts/${encodeURIComponent(id)}/activate`, {
       method: 'POST',
       credentials: 'include',
@@ -158,18 +164,21 @@ export class ContractClient {
   }
 
   static async close(id: string, input: { closeDate?: string; reason?: string; finalKm?: number; notes?: string } = {}): Promise<Contract> {
+    invalidateCache('contracts');
     return requestItem(`/api/contracts/${encodeURIComponent(id)}/close`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
   }
 
   static async cancel(id: string, reason: string): Promise<Contract> {
+    invalidateCache('contracts');
     return requestItem(`/api/contracts/${encodeURIComponent(id)}/cancel`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason }),
     });
   }
 
   static async archive(id: string, reason?: string): Promise<Contract> {
+    invalidateCache('contracts');
     return requestItem(`/api/contracts/${encodeURIComponent(id)}/archive`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason }),
     });

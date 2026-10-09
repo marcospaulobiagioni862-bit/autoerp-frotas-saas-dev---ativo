@@ -1,5 +1,6 @@
 import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { DocumentStatus, DriverStatus } from '../types/enums';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export class DriverApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -122,11 +123,13 @@ export type DriverUpdateInput = Partial<Omit<DriverCreateInput, 'fullName' | 'cp
 
 export class DriverClient {
   static async list(): Promise<Driver[]> {
-    const response = await fetch('/api/drivers', { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
-    if (!Array.isArray(payload.items)) throw new Error('Invalid Driver list payload');
-    return payload.items.map(validateDriver);
+    return cachedRead('drivers:list', async () => {
+        const response = await fetch('/api/drivers', { credentials: 'include' });
+        if (!response.ok) throw await apiError(response);
+        const payload = asRecord(await response.json());
+        if (!Array.isArray(payload.items)) throw new Error('Invalid Driver list payload');
+        return payload.items.map(validateDriver);
+    });
   }
 
   static async get(id: string): Promise<Driver> {
@@ -136,6 +139,7 @@ export class DriverClient {
   }
 
   static async create(input: DriverCreateInput): Promise<Driver> {
+    invalidateCache('drivers');
     const response = await fetch('/api/drivers', {
       method: 'POST',
       credentials: 'include',
@@ -147,6 +151,7 @@ export class DriverClient {
   }
 
   static async update(id: string, input: DriverUpdateInput): Promise<Driver> {
+    invalidateCache('drivers');
     const response = await fetch(`/api/drivers/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -174,6 +179,7 @@ export class DriverClient {
   }
 
   static async archive(id: string): Promise<Driver> {
+    invalidateCache('drivers');
     const response = await fetch(`/api/drivers/${encodeURIComponent(id)}/archive`, {
       method: 'POST',
       credentials: 'include',
