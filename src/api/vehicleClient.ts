@@ -1,6 +1,7 @@
 import type { Vehicle, KmRecord, VehicleOwnershipHistory } from '../types/entities';
 import type { VehicleDetailedSummary } from '../domain/services/VehicleLegacyDetailsBridge';
 import { VehicleStatus } from '../types/enums';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export class VehicleApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -235,11 +236,13 @@ function validateLifecycle(value: unknown): VehicleLifecycleEvent {
 
 export class VehicleClient {
   static async list(): Promise<Vehicle[]> {
-    const response = await fetch('/api/fleet/vehicles', { credentials: 'include' });
-    if (!response.ok) throw await apiError(response);
-    const payload = asRecord(await response.json());
-    if (!Array.isArray(payload.items)) throw new Error('Invalid vehicle list');
-    return payload.items.map(validateVehicle);
+    return cachedRead('vehicles:list', async () => {
+        const response = await fetch('/api/fleet/vehicles', { credentials: 'include' });
+        if (!response.ok) throw await apiError(response);
+        const payload = asRecord(await response.json());
+        if (!Array.isArray(payload.items)) throw new Error('Invalid vehicle list');
+        return payload.items.map(validateVehicle);
+    });
   }
 
   static async listArchived(): Promise<Vehicle[]> {
@@ -288,6 +291,7 @@ export class VehicleClient {
   }
 
   static async create(input: VehicleCreateInput): Promise<Vehicle> {
+    invalidateCache('vehicles');
     const response = await fetch('/api/fleet/vehicles', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
@@ -296,6 +300,7 @@ export class VehicleClient {
   }
 
   static async update(id: string, input: VehicleUpdateInput): Promise<Vehicle> {
+    invalidateCache('vehicles');
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}`, {
       method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
@@ -330,6 +335,7 @@ export class VehicleClient {
   }
 
   static async changeStatus(id: string, status: VehicleStatus, reason?: string): Promise<Vehicle> {
+    invalidateCache('vehicles');
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/status`, {
       method: 'PATCH', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, reason }),
     });
@@ -347,6 +353,7 @@ export class VehicleClient {
   }
 
   static async archive(id: string, input: VehicleArchiveInput): Promise<VehicleArchiveResult> {
+    invalidateCache('vehicles');
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}/archive`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
@@ -373,6 +380,7 @@ export class VehicleClient {
   }
 
   static async recordKm(vehicleId: string, input: VehicleKmInput): Promise<VehicleKmResult> {
+    invalidateCache('vehicles');
     const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/km-records`, {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });
@@ -382,6 +390,7 @@ export class VehicleClient {
   }
 
   static async recordKmBatch(input: VehicleKmBatchInput): Promise<VehicleKmBatchResult> {
+    invalidateCache('vehicles');
     const response = await fetch('/api/fleet/vehicles/km-records/batch', {
       method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
     });

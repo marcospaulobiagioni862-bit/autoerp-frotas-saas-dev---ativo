@@ -21,6 +21,7 @@
     "test:api-payload-normalization": "tsx src/api/__tests__/apiPayloadNormalizationRegression.ts",
     "test:audit-wave-a": "tsx src/api/__tests__/apiPayloadNormalizationRegression.ts && tsx src/domain/operations/__tests__/erpWaveASourceOfTruthTestRunner.ts && tsx src/server/__tests__/contractSimpleSignStatusRegression.ts && tsx src/server/__tests__/contractIdempotencyRegression.ts && tsx src/server/__tests__/contractFinancialCrDefaultsRegression.ts && tsx src/server/__tests__/contractSequentialNumberRegression.ts && tsx src/components/finance/__tests__/manualReceivablesUiRegression.ts && tsx src/server/__tests__/maintenanceWorkOrderArchiveRegression.ts && tsx src/components/fleet/__tests__/vehicleKmDocCompatibilityRegression.ts && tsx src/server/__tests__/maintenancePartStockRegression.ts",
     "test:audit-wave-a-activation": "tsx src/domain/operations/__tests__/erpWaveAActivationFinanceIntegration.ts",
+    "test:request-cache": "tsx src/api/__tests__/requestCacheRegression.ts",
     "test:whatsapp-demo-seed": "tsx src/server/__tests__/whatsappDemoDriversSeedRegression.ts",
     "verify:whatsapp-demo-seed": "tsx src/server/__tests__/whatsappDemoDriversSeedRegression.ts",
     "verify:whatsapp-real": "tsx src/server/__tests__/verifyWhatsappRealMassa.ts",
