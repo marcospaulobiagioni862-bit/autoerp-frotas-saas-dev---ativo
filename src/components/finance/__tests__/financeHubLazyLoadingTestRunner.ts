@@ -47,7 +47,7 @@ assert.doesNotMatch(reconciliation, /updateBalance|createTransaction|localReposi
 
 assert.match(cards, /CreditCardStatementClient\.listProfiles\(\)/, 'card UI must read profiles from server authority');
 assert.match(cards, /CreditCardStatementClient\.listStatements\(\)/, 'card UI must read statements from server authority');
-assert.match(cards, /Status, saldo e atraso são exibidos exatamente como retornados/, 'card UI must preserve server-derived state semantics');
+assert.match(cards, /Status, saldo e atraso seguem os lançamentos confirmados/, 'card UI must preserve server-derived state semantics');
 assert.match(cards, /CreditCardStatementClient\.getStatementDetail\(statementId\)/, 'statement detail must load only through an explicit user action');
 assert.match(cards, /Carregado sob demanda; valores exibidos sem recomposição local/, 'statement detail must preserve read-only server authority semantics');
 assert.match(cards, /detail\.items\.length === 0/, 'statement detail must expose an explicit empty item state');
@@ -58,7 +58,7 @@ assert.match(cards, /Ciclo da fatura/, 'cycle filter must be visible to the oper
 assert.match(cards, /statement\.status !== statusFilter/, 'status filtering must use the server-returned statement status');
 assert.match(cards, /dueFilter === 'OVERDUE' && !statement\.isOverdue/, 'overdue filtering must use only server-derived isOverdue');
 assert.match(cards, /dueFilter === 'CURRENT' && statement\.isOverdue/, 'current filtering must use only server-derived isOverdue');
-assert.match(cards, /Filtros atuam somente sobre o read-model já retornado pelo servidor/, 'filter semantics must remain presentation-only');
+assert.match(cards, /Os filtros organizam as informações exibidas e não alteram os lançamentos financeiros/, 'filter semantics must remain presentation-only');
 assert.match(cards, /Nenhuma fatura encontrada para o filtro atual/, 'filtered empty state must remain explicit');
 assert.doesNotMatch(cards, /new Date\(statement\.dueDate\)|Date\.now\(\)/, 'card UI must not derive overdue state from client clock');
 assert.match(cards, /CreditCardStatementClient\.closeStatement\(statement\.id\)/, 'statement close must call only the authoritative client');
