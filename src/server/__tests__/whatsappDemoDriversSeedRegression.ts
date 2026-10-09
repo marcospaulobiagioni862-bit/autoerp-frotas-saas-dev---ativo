@@ -1,12 +1,36 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from 'node:http';
 import express, { type Request, type Response as ExpressResponse, type NextFunction } from 'express';
 import { sql } from 'drizzle-orm';
-import { db } from '../../db/index';
-import { registerWhatsappRoutes } from '../whatsappRoutes';
 import type { AuthenticatedPrincipal } from '../auth';
 
+// Carregar variáveis Neon ANTES de inicializar o banco ou rotas
+try {
+  const envContent = readFileSync(join(homedir(), '.config/autoerp-neon.env'), 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = /^([A-Z0-9_]+)="?([^"]*)"?$/.exec(trimmed);
+    if (match) {
+      process.env[match[1]] = match[2];
+    }
+  }
+} catch (e) {
+  // Ignora se não existir
+}
+
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
+if (neonUrl && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = neonUrl;
+  process.env.USE_PGLITE = 'false';
+}
+
 async function run() {
+  const { db } = await import('../../db/index');
+  const { registerWhatsappRoutes } = await import('../whatsappRoutes');
   console.log('================================================================================');
   console.log('=== AUTOERP-81: REGRESSÃO DA MASSA DEMO DE MOTORISTAS & COBRANÇA WHATSAPP ===');
   console.log('================================================================================');
