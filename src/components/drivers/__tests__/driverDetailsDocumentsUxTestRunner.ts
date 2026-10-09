@@ -21,7 +21,7 @@ assert.match(driverDetails, /excludeAttachmentIds=\{summary\.documents\.map/, 'd
 assert.match(driverDetails, /Histórico e auditoria do motorista/, 'driver history must identify the server audit view');
 assert.match(driverDetails, /Responsável:/, 'driver history must expose the responsible user');
 assert.match(driverDetails, /Campos alterados:/, 'driver history must summarize changed fields');
-assert.match(driverDetails, /Valores brutos não são exibidos/, 'driver history must avoid exposing raw audit payload values');
+assert.match(driverDetails, /dados técnicos completos não aparecem nesta tela/, 'driver history must avoid exposing raw audit payload values');
 
 
 console.log('Driver details document UX regression PASS');
