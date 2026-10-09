@@ -1,4 +1,5 @@
 import type { Part, Supplier, WorkOrder, WorkOrderFinancialComponent, WorkOrderStatus } from '../types/entities';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export class MaintenanceApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -101,14 +102,21 @@ export type PartUpdateRequest = Partial<Omit<PartCreateRequest,'currentStock'>> 
 
 export class MaintenanceClient {
   static async listWorkOrders(filters?:{vehicleId?:string}):Promise<WorkOrder[]> {
-    const query=filters?.vehicleId?`?vehicleId=${encodeURIComponent(filters.vehicleId)}`:''; return list(await request(`/api/maintenance/work-orders${query}`),validateWorkOrder);
+    return cachedRead(`workorders:list:${JSON.stringify(filters ?? {})}`, async () => {
+      const query=filters?.vehicleId?`?vehicleId=${encodeURIComponent(filters.vehicleId)}`:''; return list(await request(`/api/maintenance/work-orders${query}`),validateWorkOrder);
+    });
   }
   static async getWorkOrder(id:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}`)).item); }
-  static async createWorkOrder(input:WorkOrderCreateRequest):Promise<WorkOrder>{ return validateWorkOrder((await request('/api/maintenance/work-orders',json('POST',input))).item); }
-  static async startWorkOrder(id:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/start`,json('POST',{}))).item); }
-  static async completeWorkOrder(id:string,input:WorkOrderCompleteRequest):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/complete`,json('POST',input))).item); }
-  static async cancelWorkOrder(id:string,reason:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/cancel`,json('POST',{reason}))).item); }
-  static async archiveWorkOrder(id:string,reason:string):Promise<WorkOrder>{ return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/archive`,json('POST',{reason}))).item); }
+  static async createWorkOrder(input:WorkOrderCreateRequest):Promise<WorkOrder>{
+    invalidateCache('workorders'); return validateWorkOrder((await request('/api/maintenance/work-orders',json('POST',input))).item); }
+  static async startWorkOrder(id:string):Promise<WorkOrder>{
+    invalidateCache('workorders'); return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/start`,json('POST',{}))).item); }
+  static async completeWorkOrder(id:string,input:WorkOrderCompleteRequest):Promise<WorkOrder>{
+    invalidateCache('workorders'); return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/complete`,json('POST',input))).item); }
+  static async cancelWorkOrder(id:string,reason:string):Promise<WorkOrder>{
+    invalidateCache('workorders'); return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/cancel`,json('POST',{reason}))).item); }
+  static async archiveWorkOrder(id:string,reason:string):Promise<WorkOrder>{
+    invalidateCache('workorders'); return validateWorkOrder((await request(`/api/maintenance/work-orders/${encodeURIComponent(id)}/archive`,json('POST',{reason}))).item); }
   static async listSuppliers():Promise<Supplier[]>{ return list(await request('/api/maintenance/suppliers'),validateSupplier); }
   static async createSupplier(input:SupplierCreateRequest):Promise<Supplier>{ return validateSupplier((await request('/api/maintenance/suppliers',json('POST',input))).item); }
   static async updateSupplier(id:string,input:Partial<SupplierCreateRequest>&{status?:'ACTIVE'|'INACTIVE'}):Promise<Supplier>{ return validateSupplier((await request(`/api/maintenance/suppliers/${encodeURIComponent(id)}`,json('PATCH',input))).item); }
