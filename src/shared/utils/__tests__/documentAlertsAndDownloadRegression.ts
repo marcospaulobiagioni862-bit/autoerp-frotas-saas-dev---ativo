@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { documentExpirationState, validateDocumentAlertSettings } from '../documentAlertSettings';
 import { downloadBlob } from '../downloadBlob';
-const today = new Date(2026,8,1);
+const today = new Date('2026-09-01T12:00:00Z');
 for (const [date,color] of [['2026-08-31','RED'],['2026-09-08','RED'],['2026-09-09','YELLOW'],['2026-09-16','YELLOW'],['2026-09-17','GREEN']] as const) assert.equal(documentExpirationState(date,undefined,today)?.color,color);
 assert.equal(documentExpirationState('2026-09-10',{redDays:10,yellowDays:20},today)?.color,'RED');
 assert.equal(documentExpirationState('2026-09-18',{redDays:10,yellowDays:20},today)?.color,'YELLOW');
