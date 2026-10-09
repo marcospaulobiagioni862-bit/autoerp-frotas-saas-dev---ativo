@@ -27,6 +27,8 @@
     "verify:contract-lifecycle-real": "tsx src/server/__tests__/verifyContractLifecycleRealMassa.ts",
     "verify:user-permissions-fail-closed": "tsx src/server/__tests__/userPermissionsFailClosedRegression.ts",
     "test:user-permissions-fail-closed": "tsx src/server/__tests__/userPermissionsFailClosedRegression.ts",
+    "test:vehicle-ownership": "tsx src/server/__tests__/vehicleOwnershipRegression.ts",
+    "verify:vehicle-ownership": "tsx src/server/__tests__/vehicleOwnershipRegression.ts",
     "verify:user-permissions-real": "tsx src/server/__tests__/verifyUserPermissionsRealMassa.ts",
     "verify:avatar-menu-real": "tsx src/server/__tests__/verifyAvatarMenuRealMassa.ts",
     "verify:marcos-requirements": "tsx src/server/__tests__/verifyMarcosRequirementsRealMassa.ts",
