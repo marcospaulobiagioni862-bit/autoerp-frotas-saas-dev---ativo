@@ -23,7 +23,7 @@ import {
   documents,
   fileAttachments,
 } from './schema';
-import { userCredentials } from './authSchema';
+import { userCompanyMemberships, userCredentials } from './authSchema';
 import { hashPassword } from '../server/password';
 
 const DEMO_TARGETS = new Set(['development', 'test', 'preview']);
@@ -350,6 +350,16 @@ export async function runV2DemoSeed() {
         .where(and(eq(users.id, u.id), eq(users.companyId, companyId)));
     }
 
+    const membershipRows = demoUsers.map((u) => ({
+      userId: u.id,
+      companyId,
+      role: u.role,
+      permissions: u.permissions,
+      active: true,
+    }));
+
+    await tx.insert(userCompanyMemberships).values(membershipRows).onConflictDoNothing();
+
     const credentialRows = demoUsers.map((u) => ({
       companyId,
       userId: u.id,
@@ -366,12 +376,7 @@ export async function runV2DemoSeed() {
           passwordHash: cred.passwordHash,
           passwordUpdatedAt: cred.passwordUpdatedAt,
         })
-        .where(
-          and(
-            eq(userCredentials.companyId, companyId),
-            eq(userCredentials.userId, cred.userId)
-          )
-        );
+        .where(eq(userCredentials.userId, cred.userId));
     }
 
     const existingDemoContracts = await tx
