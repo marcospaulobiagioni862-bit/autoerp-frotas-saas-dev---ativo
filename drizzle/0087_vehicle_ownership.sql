@@ -57,6 +57,19 @@ CREATE POLICY tenant_isolation_vehicle_ownership_history ON vehicle_ownership_hi
   WITH CHECK (company_id = current_setting('app.current_tenant', true));
 
 -- 3. Backfill defensivo e inteligente para veiculos existentes a partir de document_ai_extractions
+--
+-- [AVISO ARQUITETURAL / LIÇÃO APRENDIDA - REVISÃO AUTOERP-56 / CLAUDE 2026-10-09]:
+-- O bloco DO $$ abaixo realizou um backfill ad-hoc no estado de staging de 2026-10-08,
+-- cruzando a placa diretamente com document_ai_extractions (WHERE proposed_fields->>'plate' = v.plate)
+-- SEM filtrar por `company_id = v.company_id`.
+-- Em um ambiente multi-tenant estrito com múltiplos clientes, duas empresas podem eventualmente
+-- cadastrar a mesma placa, o que causaria vazamento/atribuição cruzada de titularidade entre tenants.
+-- O código vivo da aplicação (vehicleRoutes.ts, postgresRepositories.ts, vehicleDocumentIntakeRoutes.ts)
+-- está devidamente blindado com escopo obrigatório de `company_id`.
+-- REGRA PARA MIGRAÇÕES FUTURAS: NUNCA reproduzir este padrão sem filtro de `company_id`.
+-- Todo backfill, JOIN ou subquery em migrações que acesse dados de negócio DEVE ser restrito por tenant.
+-- Além disso, os literais ('TRIFLEX', 'MARCOS PAULO', 'MARIZETE') foram usados exclusivamente como
+-- bootstrap temporário ad-hoc da frota inicial do cliente e NÃO constituem padrão de infraestrutura geral.
 DO $$
 DECLARE
   v RECORD;
