@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq,sql} from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { recordVehicleKm, VehicleKmError } from './vehicleKmAuthority';
 import { vehicleInspections } from '../db/schema';
@@ -90,7 +90,7 @@ function optionalText(value:unknown,max=2000):string|undefined{
   if(value===undefined||value===null||value==='') return undefined;
   const v=String(value).trim(); if(v.length>max) throw new ValidationError(); return v||undefined;
 }
-function item(row:any){
+function item(row:any,midia?:{photos:any[];signatureUrl?:string}){
   const stored=(row.checklist&&typeof row.checklist==='object'&&!Array.isArray(row.checklist))?row.checklist as Record<string,unknown>:{};
   const legacy=Object.fromEntries(CHECKLIST_KEYS.map(k=>[k,stored[k]===true]));
   const technicalRaw=stored.technical;
@@ -114,11 +114,11 @@ function item(row:any){
     inspectionType:String(row.inspectionType),inspectionDate:String(row.inspectionDate),
     odometer:Number(row.odometer),fuelLevel:Number(row.fuelLevel),
     checklist:legacy,technicalChecklist:technical,equipmentSnapshot,result,notes:row.notes||undefined,
-    photos:Array.isArray(stored.photos)?stored.photos:undefined,
+    photos:(midia&&midia.photos.length>0)?midia.photos:withoutInlineContent(stored.photos),
     damages:Array.isArray(stored.damages)?stored.damages:undefined,
     settlement:stored.settlement&&typeof stored.settlement==='object'?stored.settlement:undefined,
     signedAt:typeof stored.signedAt==='string'?stored.signedAt:undefined,
-    driverSignatureUrl:typeof stored.driverSignatureUrl==='string'?stored.driverSignatureUrl:undefined,
+    driverSignatureUrl:midia?.signatureUrl ?? (typeof stored.driverSignatureUrl==='string'&&!stored.driverSignatureUrl.startsWith('data:')?stored.driverSignatureUrl:undefined),
     signatureRefused:stored.signatureRefused===true,
     signatureRefusalReason:typeof stored.signatureRefusalReason==='string'?stored.signatureRefusalReason:undefined,
     isRemoteDropoff:stored.isRemoteDropoff===true,
@@ -137,6 +137,54 @@ function sendError(res:Response,error:unknown){
   res.status(500).json({error:'Falha ao processar a vistoria do veículo'});
 }
 
+
+// AUTOERP-61/62. As fotos da vistoria passam a viver em file_attachments, nao
+// mais como base64 dentro do JSONB da propria vistoria. Motivo triplo: o envio
+// em base64 estourava o limite de 100kb do express.json (era impossivel salvar
+// vistoria com foto real de celular); a listagem devolvia todas as fotos
+// inteiras, o que faria a tela travar assim que a massa crescesse; e a retencao
+// juridica de 90 dias procura em file_attachments, entao nunca achava nada.
+// A url entregue aponta para o endpoint autenticado do anexo - nunca o conteudo.
+const PHOTO_DOCUMENT_TYPE='INSPECTION_PHOTO';
+const SIGNATURE_DOCUMENT_TYPE='INSPECTION_SIGNATURE';
+
+function attachmentUrl(id:string):string{return `/api/attachments/${encodeURIComponent(id)}/content`;}
+
+/** Remove qualquer conteudo embutido (data:) de fotos legadas antes de responder. */
+function withoutInlineContent(photos:unknown):any[]|undefined{
+  if(!Array.isArray(photos)) return undefined;
+  return photos.map((p:any)=>{
+    const url=typeof p?.url==='string'?p.url:undefined;
+    return url&&url.startsWith('data:') ? {...p,url:undefined,inlineLegacy:true} : p;
+  });
+}
+
+async function loadInspectionMedia(tx:any,companyId:string,inspectionIds:string[]):Promise<Map<string,{photos:any[];signatureUrl?:string}>> {
+  const mapa=new Map<string,{photos:any[];signatureUrl?:string}>();
+  if(inspectionIds.length===0) return mapa;
+  const res:any=await tx.execute(sql`
+    SELECT id, entity_id, document_type, description, created_at
+    FROM file_attachments
+    WHERE company_id=${companyId}
+      AND entity_type='VehicleInspection'
+      AND entity_id = ANY(${inspectionIds})
+      AND is_archived=false
+      AND document_type IN (${PHOTO_DOCUMENT_TYPE}, ${SIGNATURE_DOCUMENT_TYPE})
+    ORDER BY created_at ASC
+  `);
+  for(const row of (res.rows||res||[])){
+    const alvo=String(row.entity_id);
+    const atual=mapa.get(alvo)||{photos:[]};
+    if(String(row.document_type)===SIGNATURE_DOCUMENT_TYPE){
+      atual.signatureUrl=attachmentUrl(String(row.id));
+    } else {
+      atual.photos.push({slot:String(row.description||''),label:String(row.description||''),url:attachmentUrl(String(row.id)),attachmentId:String(row.id)});
+    }
+    mapa.set(alvo,atual);
+  }
+  return mapa;
+}
+
 export function registerVehicleInspectionRoutes(app:Express):void{
   app.get('/api/fleet/vehicles/:id/inspections',async(req,res)=>{
     const principal=requirePrincipal(req,res);if(!principal)return;
@@ -145,12 +193,15 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         const vehicle=await context.getVehicleRepo().findByIdForCompany(principal.companyId,req.params.id);
         if(!vehicle) throw new NotFoundError();
         const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
-        return await tx.select().from(vehicleInspections).where(and(
+        const rows=await tx.select().from(vehicleInspections).where(and(
           eq(vehicleInspections.companyId,principal.companyId),
           eq(vehicleInspections.vehicleId,vehicle.id),
         )).orderBy(desc(vehicleInspections.inspectionDate),desc(vehicleInspections.createdAt));
+        // uma consulta so para a midia de todas as vistorias da lista, nao uma por vistoria
+        const midia=await loadInspectionMedia(tx,principal.companyId,rows.map((r:any)=>String(r.id)));
+        return rows.map((r:any)=>item(r,midia.get(String(r.id))));
       });
-      res.json({items:items.map(item)});
+      res.json({items});
     }catch(error){sendError(res,error);}
   });
 
@@ -184,11 +235,16 @@ export function registerVehicleInspectionRoutes(app:Express):void{
         const now=new Date().toISOString();
         const tx=context.getRawTransaction?.();if(!tx) throw new Error('Raw tenant transaction unavailable');
         const extra:Record<string,unknown>={};
-        if(Array.isArray(req.body?.photos)) extra.photos=req.body.photos;
+        // AUTOERP-61: metadado da foto pode vir (slot/label/timestamp), mas conteudo
+        // embutido (data:) nunca e guardado - a foto vai para file_attachments.
+        if(Array.isArray(req.body?.photos)) extra.photos=req.body.photos.map((f:any)=>{
+          const {url,...resto}=f||{};
+          return typeof url==='string'&&url.startsWith('data:')?resto:(f||{});
+        });
         if(Array.isArray(req.body?.damages)) extra.damages=req.body.damages;
         if(req.body?.settlement&&typeof req.body.settlement==='object') extra.settlement=req.body.settlement;
         if(req.body?.signedAt) extra.signedAt=String(req.body.signedAt);
-        if(req.body?.driverSignatureUrl) extra.driverSignatureUrl=String(req.body.driverSignatureUrl);
+        if(req.body?.driverSignatureUrl&&!String(req.body.driverSignatureUrl).startsWith('data:')) extra.driverSignatureUrl=String(req.body.driverSignatureUrl);
         if(req.body?.signatureRefused!==undefined) extra.signatureRefused=Boolean(req.body.signatureRefused);
         if(req.body?.signatureRefusalReason) extra.signatureRefusalReason=String(req.body.signatureRefusalReason);
         if(req.body?.isRemoteDropoff!==undefined) extra.isRemoteDropoff=Boolean(req.body.isRemoteDropoff);
