@@ -13,6 +13,7 @@ import {
   type InspectionWashType,
 } from '../../api/vehicleInspectionClient';
 import { compressImage } from '../../utils/imageCompressor';
+import { AttachmentClient } from '../../api/attachmentClient';
 import { InspectionCarDamageDiagram } from './InspectionCarDamageDiagram';
 import { Button } from '../ui/Button';
 import {
@@ -215,7 +216,10 @@ export function VehicleInspectionWizardModal({
       ).map(([key, item]) => ({
         slot: key,
         label: PHOTO_SLOTS.find((s) => s.key === key)?.label || key,
-        url: item.dataUrl || undefined,
+        // AUTOERP-61: o conteudo NAO vai aqui. A foto sobe como anexo logo apos a
+        // criacao da vistoria. Antes isso ia em base64 dentro do JSON e estourava o
+        // limite de 100kb do express.json - era impossivel salvar com foto real.
+
         timestamp: new Date().toISOString(),
       }));
 
@@ -242,11 +246,51 @@ export function VehicleInspectionWizardModal({
         insuranceClaimRequired: isInsuranceClaim,
         notes: notes.trim() || undefined,
         signedAt: new Date().toISOString(),
-        driverSignatureUrl: signatureDataUrl || undefined,
         signatureRefused,
         signatureRefusalReason: signatureRefused ? signatureRefusalReason.trim() : undefined,
       });
 
+      // Fotos e assinatura sobem pelo caminho de anexo do proprio sistema (corpo
+      // binario, limite proprio de 10MB), nunca dentro do JSON da vistoria.
+      const falhas: string[] = [];
+      for (const [slot, item] of Object.entries(photos) as Array<[InspectionPhotoSlotKey, { dataUrl: string; file?: File }]>) {
+        if (!item.file) continue;
+        try {
+          await AttachmentClient.upload({
+            entityType: 'VehicleInspection',
+            entityId: created.id,
+            fileName: `vistoria-${slot.toLowerCase()}.jpg`,
+            mimeType: 'image/jpeg',
+            documentType: 'INSPECTION_PHOTO',
+            description: slot,
+            content: item.file,
+          });
+        } catch {
+          falhas.push(PHOTO_SLOTS.find((s) => s.key === slot)?.label || slot);
+        }
+      }
+      if (signatureDataUrl) {
+        try {
+          const blob = await (await fetch(signatureDataUrl)).blob();
+          await AttachmentClient.upload({
+            entityType: 'VehicleInspection',
+            entityId: created.id,
+            fileName: 'assinatura-motorista.png',
+            mimeType: 'image/png',
+            documentType: 'INSPECTION_SIGNATURE',
+            description: 'ASSINATURA',
+            content: blob,
+          });
+        } catch {
+          falhas.push('Assinatura do motorista');
+        }
+      }
+      if (falhas.length > 0) {
+        // A vistoria FOI salva; o que falhou foi o envio de imagem. Dizer isso com
+        // clareza vale mais do que um erro generico: o operador precisa saber que
+        // nao deve refazer tudo, e sim reenviar as imagens que faltaram.
+        setError(`Vistoria salva, mas estas imagens nao subiram: ${falhas.join(', ')}. Abra a vistoria e reenvie.`);
+      }
       onSuccess(created);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha ao salvar vistoria.');
