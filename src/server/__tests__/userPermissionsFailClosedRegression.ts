@@ -354,7 +354,17 @@ async function runRegression() {
       201,
       `Administrador deve conseguir provisionar usuário com 201 Created, recebeu ${legitimateAdminRes.status}`
     );
-    console.log('  ✓ POST /api/admin/users por ADMIN legítimo: 201 Created (permitido com sucesso!)\n');
+    const createdItem = ((await legitimateAdminRes.json()) as any).item;
+    if (createdItem?.id) {
+      const cleanupClient = new Client({ connectionString: neonUrl });
+      await cleanupClient.connect();
+      try {
+        await cleanupClient.query('DELETE FROM users WHERE id = $1', [createdItem.id]);
+      } finally {
+        await cleanupClient.end();
+      }
+    }
+    console.log('  ✓ POST /api/admin/users por ADMIN legítimo: 201 Created (permitido e limpo com sucesso!)\n');
 
     console.log('\n=============================================================');
     console.log('AUTOERP-78: REGRESSÃO FAIL-CLOSED 100% COMPROVADA E VALIDADA!');
