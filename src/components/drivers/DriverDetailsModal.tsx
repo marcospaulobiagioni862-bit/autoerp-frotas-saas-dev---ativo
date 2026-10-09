@@ -594,7 +594,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 )}
               </div>
 
-              <DriverCnhDocumentCard driverId={driver.id} />
+              <DriverCnhDocumentCard driverId={driver.id} refreshKey={driverAttachmentRefresh} />
 
               <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">

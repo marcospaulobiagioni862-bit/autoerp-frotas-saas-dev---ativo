@@ -23,6 +23,8 @@ import { ContractSignatureRequiredError, requireContractEffectivePeriod } from '
 import { contractConflictResponse } from './contractConflictResponse';
 import { getOperationalISODate } from '../shared/utils/date';
 import { createAttachmentStorageFromEnvironment } from './r2AttachmentStorage';
+import { evaluateCnhStatus } from './driverCnhStatus';
+import { todayCivilDate } from '../shared/utils/civilDate';
 
 function getContractShareSecret(): string {
   const secret = String(process.env.JWT_SECRET || '').trim();
@@ -280,7 +282,10 @@ function appendNote(existing: string | undefined, label: string, text?: string):
 
 function ensureDriverEligible(driver: Driver): void {
   if (driver.isArchived || driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver unavailable');
-  if (![DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(driver.cnhStatus)) throw new ContractConflictError('Driver CNH invalid');
+  const liveCnhStatus = evaluateCnhStatus(driver.cnhExpiration);
+  if (![DocumentStatus.VALID, DocumentStatus.EXPIRING_SOON].includes(liveCnhStatus)) {
+    throw new ContractConflictError('Driver CNH invalid');
+  }
 }
 
 function ensureVehicleEligible(vehicle: Vehicle): void {
@@ -419,10 +424,7 @@ export function registerContractRoutes(app: Express): void {
         // Compare civil dates in the operating timezone, without parsing CNH as a timestamp.
         if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
         if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
-        const civilParts = new Intl.DateTimeFormat('en', {
-          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
-        }).formatToParts(new Date());
-        const today = ['year', 'month', 'day'].map(type => civilParts.find(part => part.type === type)!.value).join('-');
+        const today = todayCivilDate('America/Sao_Paulo');
         if (driver.cnhExpiration && driver.cnhExpiration < today) throw new ContractConflictError('Driver CNH invalid');
         const vehicleBinding = await tx.getContractRepo().findBlockingByVehicle(principal.companyId, vehicleId);
         const driverBinding = await tx.getContractRepo().findBlockingByDriver(principal.companyId, driverId);

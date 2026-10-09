@@ -1,11 +1,32 @@
 import { DocumentStatus } from '../types/enums';
+import {
+  evaluateCnhCompliance,
+  type CnhEvaluationResult,
+  DEFAULT_CIVIL_TIMEZONE,
+} from '../shared/utils/civilDate';
 
-export function evaluateCnhStatus(expiration: string): DocumentStatus {
-  const end = new Date(`${expiration}T00:00:00Z`).getTime();
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const days = Math.ceil((end - today) / 86_400_000);
-  if (days < 0) return DocumentStatus.EXPIRED;
-  if (days <= 30) return DocumentStatus.EXPIRING_SOON;
-  return DocumentStatus.VALID;
+export { type CnhEvaluationResult };
+
+export function evaluateCnhStatus(
+  expiration?: string | null,
+  options?: {
+    now?: Date;
+    timeZone?: string;
+    yellowDays?: number;
+    redDays?: number;
+  }
+): DocumentStatus {
+  return evaluateCnhCompliance(expiration, options).status;
+}
+
+export function evaluateCnhStatusDetailed(
+  expiration?: string | null,
+  options?: {
+    now?: Date;
+    timeZone?: string;
+    yellowDays?: number;
+    redDays?: number;
+  }
+): CnhEvaluationResult {
+  return evaluateCnhCompliance(expiration, options);
 }

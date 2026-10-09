@@ -29,6 +29,7 @@ import { Driver } from '../../types/entities';
 import { DriverStatus, DocumentStatus } from '../../types/enums';
 import { matchesDriverSearch } from './driverSearch';
 import { formatDateBR } from '../../shared/utils/date';
+import { evaluateCnhCompliance } from '../../shared/utils/civilDate';
 
 const DriverFormModal = lazy(() => import('./DriverFormModal').then(module => ({ default: module.DriverFormModal })));
 const DriverDetailsModal = lazy(() => import('./DriverDetailsModal').then(module => ({ default: module.DriverDetailsModal })));
@@ -60,15 +61,8 @@ function earLabel(value: boolean | undefined): string {
   return value === true ? 'EAR: Sim' : value === false ? 'EAR: Não' : 'EAR: Pendente';
 }
 
-function evaluateCnhStatus(expiration: string): { status: DocumentStatus; daysToExpiration: number } {
-  const parsed = new Date(`${expiration}T00:00:00Z`).getTime();
-  if (!Number.isFinite(parsed)) return { status: DocumentStatus.PENDING, daysToExpiration: 0 };
-  const now = new Date();
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const daysToExpiration = Math.ceil((parsed - today) / 86_400_000);
-  if (daysToExpiration < 0) return { status: DocumentStatus.EXPIRED, daysToExpiration };
-  if (daysToExpiration <= 30) return { status: DocumentStatus.EXPIRING_SOON, daysToExpiration };
-  return { status: DocumentStatus.VALID, daysToExpiration };
+function evaluateCnhStatus(expiration: string) {
+  return evaluateCnhCompliance(expiration);
 }
 
 export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVehicle }) => {
@@ -86,6 +80,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
   const [cnhDraft, setCnhDraft] = useState<ApprovedCnhDriverDraft | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [cnhRefreshCount, setCnhRefreshCount] = useState(0);
   const [deletingDriver, setDeletingDriver] = useState<Driver | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -217,6 +212,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
     setIsCnhIntakeOpen(false);
     setCnhRenewalDriverId(null);
     setSelectedDriverId(driverId);
+    setCnhRefreshCount((c) => c + 1);
     setIsDetailsOpen(true);
     void loadData();
   };
@@ -416,10 +412,21 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                       <td className="p-3.5">
                         <div className="font-mono text-slate-800 dark:text-slate-200">{formatDateBR(driver.cnhExpiration)}</div>
                         {cnhEval.status === DocumentStatus.EXPIRED && (
-                          <span className="text-[10px] font-semibold text-rose-600 block">Vencida há {Math.abs(cnhEval.daysToExpiration)}d</span>
+                          cnhEval.inGracePeriod ? (
+                            <span className="text-[10px] font-semibold text-amber-600 block">
+                              Vencida ({cnhEval.graceDaysRemaining}d tolerância CTB)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-rose-600 block">
+                              Vencida há {Math.abs(cnhEval.daysToExpiration)}d
+                            </span>
+                          )
                         )}
                         {cnhEval.status === DocumentStatus.EXPIRING_SOON && (
                           <span className="text-[10px] font-semibold text-amber-600 block">Vence em {cnhEval.daysToExpiration}d</span>
+                        )}
+                        {cnhEval.status === DocumentStatus.VALID && (
+                          <span className="text-[10px] font-medium text-emerald-600 block">Válida ({cnhEval.daysToExpiration}d)</span>
                         )}
                       </td>
                       <td className="p-3.5">{getStatusBadge(driver.status)}</td>
@@ -472,6 +479,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
 
           <div className="md:hidden space-y-3">
             {filteredDrivers.map((driver) => {
+              const cnhEval = evaluateCnhStatus(driver.cnhExpiration);
               const vehicleName = driver.currentVehicleId ? vehiclesMap[driver.currentVehicleId] : null;
               return (
                 <Card
@@ -494,6 +502,17 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                     <div>
                       <span className="text-slate-400 block text-[10px]">Validade CNH</span>
                       <strong className="font-mono">{formatDateBR(driver.cnhExpiration)}</strong>
+                      {cnhEval.status === DocumentStatus.EXPIRED && (
+                        <span className={`block text-[10px] font-semibold ${cnhEval.inGracePeriod ? 'text-amber-600' : 'text-rose-600'}`}>
+                          {cnhEval.inGracePeriod ? `Tolerância CTB: ${cnhEval.graceDaysRemaining}d` : `Vencida há ${Math.abs(cnhEval.daysToExpiration)}d`}
+                        </span>
+                      )}
+                      {cnhEval.status === DocumentStatus.EXPIRING_SOON && (
+                        <span className="block text-[10px] font-semibold text-amber-600">Vence em {cnhEval.daysToExpiration}d</span>
+                      )}
+                      {cnhEval.status === DocumentStatus.VALID && (
+                        <span className="block text-[10px] font-medium text-emerald-600">Válida ({cnhEval.daysToExpiration}d)</span>
+                      )}
                     </div>
                   </div>
                   {vehicleName && (
@@ -548,6 +567,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
             onSuccess={loadData}
           />}
           {isDetailsOpen && selectedDriverId && <DriverDetailsModal
+            key={`driver-details-${selectedDriverId}-${cnhRefreshCount}`}
             isOpen
             onClose={() => setIsDetailsOpen(false)}
             driverId={selectedDriverId}

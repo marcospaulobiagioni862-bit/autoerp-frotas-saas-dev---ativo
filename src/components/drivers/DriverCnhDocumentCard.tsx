@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Download, Eye, FileText } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Download, Eye, FileText } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { DriverClient } from '../../api/driverClient';
 import type { Driver, FileAttachment } from '../../types/entities';
+import { DocumentStatus } from '../../types/enums';
+import { evaluateCnhCompliance } from '../../shared/utils/civilDate';
 import { Button } from '../ui/Button';
 import { DocumentPreviewModal } from '../documents/DocumentPreviewModal';
 
 interface DriverCnhDocumentCardProps {
   driverId: string;
+  refreshKey?: string | number;
 }
 
 function dateLabel(value?: string): string {
@@ -16,7 +19,7 @@ function dateLabel(value?: string): string {
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString('pt-BR') : value;
 }
 
-export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) {
+export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumentCardProps) {
   const [attachment, setAttachment] = useState<FileAttachment | null>(null);
   const [driver, setDriver] = useState<Driver | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [driverId]);
+  }, [driverId, refreshKey]);
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -91,6 +94,45 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
   };
 
   const earLabel = driver?.cnhEar === true ? 'Sim' : driver?.cnhEar === false ? 'Não' : 'Pendente';
+  const cnhEval = driver?.cnhExpiration ? evaluateCnhCompliance(driver.cnhExpiration) : null;
+  const isExpired = cnhEval?.status === DocumentStatus.EXPIRED;
+  const isExpiring = cnhEval?.status === DocumentStatus.EXPIRING_SOON;
+
+  const cardBorderClass = isExpired
+    ? (cnhEval?.inGracePeriod
+      ? 'border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
+      : 'border-rose-300 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20')
+    : isExpiring
+    ? 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20'
+    : 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/20';
+
+  const iconColorClass = isExpired
+    ? (cnhEval?.inGracePeriod ? 'text-amber-600' : 'text-rose-600')
+    : isExpiring
+    ? 'text-amber-600'
+    : 'text-emerald-600';
+
+  const statusBadge = cnhEval ? (
+    isExpired ? (
+      cnhEval.inGracePeriod ? (
+        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+          <Clock className="h-3 w-3" /> Vencida ({cnhEval.graceDaysRemaining}d de tolerância CTB)
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-200">
+          <AlertTriangle className="h-3 w-3" /> Vencida há {Math.abs(cnhEval.daysToExpiration)}d
+        </span>
+      )
+    ) : isExpiring ? (
+      <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+        <Clock className="h-3 w-3" /> Vence em {cnhEval.daysToExpiration}d
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+        <CheckCircle2 className="h-3 w-3" /> Válida ({cnhEval.daysToExpiration}d restantes)
+      </span>
+    )
+  ) : null;
 
   if (loading) {
     return <div className="rounded-lg border p-3 text-xs text-slate-500">Carregando CNH vigente…</div>;
@@ -99,7 +141,10 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
   if (!attachment) {
     return (
       <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-        <strong>CNH — arquivo vigente pendente</strong>
+        <div className="flex items-center gap-2">
+          <strong>CNH — arquivo vigente pendente</strong>
+          {statusBadge}
+        </div>
         <div className="mt-1">Validade cadastrada: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}</div>
         {error && <div className="mt-1 text-rose-600">{error}</div>}
       </div>
@@ -108,11 +153,14 @@ export function DriverCnhDocumentCard({ driverId }: DriverCnhDocumentCardProps) 
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20 sm:flex-row sm:items-center sm:justify-between">
+      <div className={`flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between ${cardBorderClass}`}>
         <div className="flex min-w-0 items-center gap-3">
-          <FileText className="h-5 w-5 shrink-0 text-emerald-600" />
+          <FileText className={`h-5 w-5 shrink-0 ${iconColorClass}`} />
           <div className="min-w-0">
-            <div className="text-sm font-semibold">CNH vigente</div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">CNH vigente</span>
+              {statusBadge}
+            </div>
             <div className="truncate text-[11px] text-slate-500">
               Validade: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}
             </div>

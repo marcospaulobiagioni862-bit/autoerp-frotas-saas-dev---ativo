@@ -2,17 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { ITransactionDriverRepository } from '../../domain/finance/ITransactionContext';
 import type { Driver } from '../../types/entities';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
-
-function evaluateCnhStatus(expiration: string): DocumentStatus {
-  const end = new Date(`${expiration}T00:00:00Z`);
-  if (!Number.isFinite(end.getTime())) return DocumentStatus.PENDING;
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  const days = Math.ceil((end.getTime() - todayUtc) / 86_400_000);
-  if (days < 0) return DocumentStatus.EXPIRED;
-  if (days <= 30) return DocumentStatus.EXPIRING_SOON;
-  return DocumentStatus.VALID;
-}
+import { evaluateCnhStatus } from '../../server/driverCnhStatus';
 
 function rowsOf(result: any): any[] {
   return Array.isArray(result?.rows) ? result.rows : [];

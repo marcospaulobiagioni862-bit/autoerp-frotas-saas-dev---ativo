@@ -479,6 +479,17 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
           }
 
           const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, target.id);
+          await tx.execute(sql`
+            UPDATE file_attachments
+            SET is_archived = true,
+                updated_at = ${now}
+            WHERE company_id = ${principal.companyId}
+              AND entity_type = 'Driver'
+              AND entity_id = ${target.id}
+              AND UPPER(document_type) = 'CNH'
+              AND id != ${promotion.attachmentId}
+              AND is_archived = false
+          `);
           return {
             driverId: target.id,
             attachmentId: promotion.attachmentId,
@@ -537,6 +548,17 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         });
 
         const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, materialized.id);
+        await tx.execute(sql`
+          UPDATE file_attachments
+          SET is_archived = true,
+              updated_at = ${now}
+          WHERE company_id = ${principal.companyId}
+            AND entity_type = 'Driver'
+            AND entity_id = ${materialized.id}
+            AND UPPER(document_type) = 'CNH'
+            AND id != ${promotion.attachmentId}
+            AND is_archived = false
+        `);
         return {
           driverId: materialized.id,
           attachmentId: promotion.attachmentId,
