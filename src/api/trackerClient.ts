@@ -1,4 +1,5 @@
 import type { Tracker } from '../types/entities';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export class TrackerApiError extends Error { constructor(public readonly status:number,message:string){super(message);this.name='TrackerApiError';} }
 type JsonRecord=Record<string,unknown>;
@@ -41,7 +42,7 @@ async function request(path:string,init?:RequestInit):Promise<JsonRecord>{const 
 function json(method:string,body:unknown):RequestInit{return{method,headers:{'content-type':'application/json'},body:JSON.stringify(body)};}
 function list<T>(payload:JsonRecord,validator:(value:unknown)=>T):T[]{if(!Array.isArray(payload.items))throw new Error('Invalid tracker list');return payload.items.map(validator);}
 export class TrackerClient {
-  static async list(filters?:{vehicleId?:string}):Promise<Tracker[]>{const query=filters?.vehicleId?`?vehicleId=${encodeURIComponent(filters.vehicleId)}`:'';return list(await request(`/api/trackers${query}`),validateTracker);}
+  static async list(filters?:{vehicleId?:string}):Promise<Tracker[]>{return cachedRead(`trackers:list:${JSON.stringify(filters ?? {})}`, async () => {const query=filters?.vehicleId?`?vehicleId=${encodeURIComponent(filters.vehicleId)}`:'';return list(await request(`/api/trackers${query}`),validateTracker);});}
   static async listByVehicle(vehicleId:string):Promise<Tracker[]>{return list(await request(`/api/vehicles/${encodeURIComponent(vehicleId)}/trackers`),validateTracker);}
   static async get(id:string):Promise<Tracker>{return validateTracker((await request(`/api/trackers/${encodeURIComponent(id)}`)).item);}
   static async listExpenseCategories():Promise<TrackerExpenseCategory[]>{return list(await request('/api/trackers/expense-categories'),validateCategory);}
@@ -50,7 +51,7 @@ export class TrackerClient {
   static async getTelemetryObservability(trackerId:string):Promise<TelemetryObservabilitySummary>{return parseTelemetryObservabilitySummary((await request(`/api/trackers/${encodeURIComponent(trackerId)}/telemetry/observability`,{headers:{Accept:'application/json'}})).item);}
   static async getTelemetryKmDivergence(trackerId:string):Promise<TelemetryKmDivergenceSummary>{return parseTelemetryKmDivergenceSummary((await request(`/api/trackers/${encodeURIComponent(trackerId)}/telemetry/km-divergence`,{headers:{Accept:'application/json'}})).item);}
   static async reviewTelemetry(trackerId:string,eventId:string,decision:TelemetryReviewDecision,reason:string):Promise<{item:TelemetryEventSummary;changed:boolean}>{const response=await request(`/api/trackers/${encodeURIComponent(trackerId)}/telemetry/${encodeURIComponent(eventId)}/review`,json('POST',{decision,reason}));const allowed=new Set(['item','changed']);if(Object.keys(response).some(key=>!allowed.has(key))||typeof response.changed!=='boolean')throw new Error('Unsafe telemetry review response');return{item:exactTelemetry(response.item),changed:response.changed};}
-  static async create(input:TrackerCreateRequest):Promise<Tracker>{return validateTracker((await request('/api/trackers',json('POST',input))).item);}
-  static async update(id:string,input:TrackerUpdateRequest):Promise<Tracker>{return validateTracker((await request(`/api/trackers/${encodeURIComponent(id)}`,json('PATCH',input))).item);}
-  static async remove(id:string,reason:string):Promise<Tracker>{return validateTracker((await request(`/api/trackers/${encodeURIComponent(id)}/remove`,json('POST',{reason}))).item);}
+  static async create(input:TrackerCreateRequest):Promise<Tracker>{invalidateCache('trackers');return validateTracker((await request('/api/trackers',json('POST',input))).item);}
+  static async update(id:string,input:TrackerUpdateRequest):Promise<Tracker>{invalidateCache('trackers');return validateTracker((await request(`/api/trackers/${encodeURIComponent(id)}`,json('PATCH',input))).item);}
+  static async remove(id:string,reason:string):Promise<Tracker>{invalidateCache('trackers');return validateTracker((await request(`/api/trackers/${encodeURIComponent(id)}/remove`,json('POST',{reason}))).item);}
 }

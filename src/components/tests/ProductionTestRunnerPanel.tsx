@@ -26,13 +26,13 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = () => (
         <div>
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Testes de produção protegidos</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            O AutoERP não executa seeds, persistência de teste ou mutações de banco no browser. Os gates oficiais rodam no GitHub Actions contra PostgreSQL isolado.
+            Esta tela não altera os dados da empresa. As verificações do sistema são realizadas em ambiente separado.
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
         <GitBranch className="w-4 h-4" />
-        Consulte o workflow da wave atual para o resultado técnico autoritativo.
+        Consulte a área de validação para ver os resultados mais recentes.
       </div>
     </Card>
   </div>

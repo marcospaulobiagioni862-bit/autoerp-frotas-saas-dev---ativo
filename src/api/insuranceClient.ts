@@ -1,4 +1,5 @@
 import type { Insurance } from '../types/entities';
+import { cachedRead, invalidateCache } from './requestCache';
 
 export interface InsuranceExpenseCategory{id:string;name:string;type:string;}
 export interface CreateInsuranceRequest{
@@ -20,10 +21,10 @@ function assertInsurance(value:any):Insurance{
 function assertItems(body:any):Insurance[]{if(!Array.isArray(body?.items))throw new Error('Invalid insurance list response');return body.items.map(assertInsurance);}
 
 export class InsuranceClient{
-  static async list(filters:{vehicleId?:string;status?:'ACTIVE'|'EXPIRED'|'CANCELLED'}={}):Promise<Insurance[]>{const query=new URLSearchParams();if(filters.vehicleId)query.set('vehicleId',filters.vehicleId);if(filters.status)query.set('status',filters.status);const body=await request(`/api/insurances${query.size?`?${query}`:''}`);return assertItems(body);}
+  static async list(filters:{vehicleId?:string;status?:'ACTIVE'|'EXPIRED'|'CANCELLED'}={}):Promise<Insurance[]>{return cachedRead(`insurances:list:${JSON.stringify(filters)}`, async () => {const query=new URLSearchParams();if(filters.vehicleId)query.set('vehicleId',filters.vehicleId);if(filters.status)query.set('status',filters.status);const body=await request(`/api/insurances${query.size?`?${query}`:''}`);return assertItems(body);});}
   static async listByVehicle(vehicleId:string):Promise<Insurance[]>{return await this.list({vehicleId});}
   static async get(id:string):Promise<Insurance>{return assertInsurance((await request(`/api/insurances/${encodeURIComponent(id)}`)).item);}
-  static async create(input:CreateInsuranceRequest):Promise<Insurance>{return assertInsurance((await request('/api/insurances',{method:'POST',body:JSON.stringify(input)})).item);}
-  static async cancel(id:string,reason:string):Promise<Insurance>{return assertInsurance((await request(`/api/insurances/${encodeURIComponent(id)}/cancel`,{method:'POST',body:JSON.stringify({reason})})).item);}
+  static async create(input:CreateInsuranceRequest):Promise<Insurance>{invalidateCache('insurances');return assertInsurance((await request('/api/insurances',{method:'POST',body:JSON.stringify(input)})).item);}
+  static async cancel(id:string,reason:string):Promise<Insurance>{invalidateCache('insurances');return assertInsurance((await request(`/api/insurances/${encodeURIComponent(id)}/cancel`,{method:'POST',body:JSON.stringify({reason})})).item);}
   static async listExpenseCategories():Promise<InsuranceExpenseCategory[]>{const body=await request('/api/insurances/expense-categories');if(!Array.isArray(body?.items))throw new Error('Invalid insurance category response');return body.items.map((item:any)=>{if(!item||typeof item.id!=='string'||typeof item.name!=='string')throw new Error('Invalid insurance category');return item as InsuranceExpenseCategory;});}
 }

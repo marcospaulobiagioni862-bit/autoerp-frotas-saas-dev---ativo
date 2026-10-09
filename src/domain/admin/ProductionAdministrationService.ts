@@ -24,7 +24,7 @@ export class ProductionAdministrationService {
         id: `alt-bkp-${Date.now()}`,
         severity: 'P1',
         category: 'BACKUP',
-        message: 'Nenhum snapshot de backup registrado para este tenant.',
+        message: 'Nenhum registro de cópia de segurança foi encontrado para esta empresa.',
         companyId,
         createdAt: new Date().toISOString(),
         correlationId: `corr-alt-1`,

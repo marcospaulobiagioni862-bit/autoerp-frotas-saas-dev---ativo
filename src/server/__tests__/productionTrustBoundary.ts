@@ -233,7 +233,7 @@ async function main(): Promise<void> {
   assert(adminRoutes.includes("Object.keys(body).length !== 1"), 'SECURITY-2Q1 route must reject forged extra authority fields');
   assert(adminClient.includes("credentials: 'include'"), 'SECURITY-2Q1 client must use authenticated cookie transport');
   assert(adminView.includes("type AdministrationTab = 'users' | 'tenant'"), 'SECURITY-2Q2 UI must expose exactly Users and Tenant tabs');
-  assert(adminView.includes('Empresa / Tenant foram promovidos'), 'SECURITY-2Q2 UI must keep unpromoted admin slices visibly fail-closed');
+  assert(adminView.includes('As demais funções administrativas permanecem bloqueadas'), 'SECURITY-2Q2 UI must keep unpromoted admin slices visibly fail-closed');
   assert(adminView.includes('ProductionTenantProfileView'), 'SECURITY-2Q2 tenant profile view is not mounted in production administration');
   assert(cashFlowRoutes.includes('registerAdminUserRoutes(app)'), 'SECURITY-2Q1 routes are not mounted in production bootstrap');
   assert(cashFlowRoutes.includes('registerTenantProfileRoutes(app)'), 'SECURITY-2Q2 routes are not mounted in production bootstrap');

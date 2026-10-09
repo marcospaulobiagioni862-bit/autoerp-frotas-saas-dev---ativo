@@ -64,7 +64,7 @@ export const DelinquencyView: React.FC = () => {
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100">
             <AlertTriangle className="h-5 w-5 text-red-600" /> Inadimplência
           </h2>
-          <p className="mt-1 text-xs text-slate-500">Visão somente leitura baseada nos read-models financeiros autoritativos do PostgreSQL.</p>
+          <p className="mt-1 text-xs text-slate-500">Visão para consulta, atualizada a partir dos lançamentos financeiros confirmados.</p>
         </div>
         <Card padding="sm">
           <div className="flex flex-wrap items-center gap-3 text-xs">

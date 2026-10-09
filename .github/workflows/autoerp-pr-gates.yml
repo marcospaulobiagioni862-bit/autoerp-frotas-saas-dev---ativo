@@ -817,7 +817,7 @@ jobs:
             ['INÍCIO', 'trusted production navigation (start section)'],
             ['OPERAÇÃO', 'trusted production navigation (operations section)'],
             ['FINANCEIRO', 'trusted production navigation (finance section)'],
-            ['Server authority required', 'fail-closed experimental cockpit boundary'],
+            ['Este recurso está temporariamente indisponível', 'fail-closed experimental cockpit boundary'],
             ['/api/operations/tasks', 'task authority'],
             ['/api/operations/incidents', 'incident authority'],
             ['/api/operations/executive/snapshot', 'executive authority'],

@@ -177,7 +177,7 @@ export class TenantConfigurationService {
       return {
         success: false,
         config: this.getServerSourceUnavailableConfig(''),
-        message: 'Ação bloqueada: companyId é obrigatório.',
+        message: 'Não foi possível identificar a empresa.',
       };
     }
 
@@ -185,7 +185,7 @@ export class TenantConfigurationService {
       return {
         success: false,
         config: this.getServerSourceUnavailableConfig(companyId),
-        message: 'Operação indisponível: configuração local de tenant é permitida somente em desenvolvimento.',
+        message: 'Esta configuração não pode ser alterada neste ambiente.',
       };
     }
 

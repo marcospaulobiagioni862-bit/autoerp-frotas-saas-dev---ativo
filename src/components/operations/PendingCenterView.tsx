@@ -343,7 +343,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
             </h3>
           </div>
           <span className="text-[11px] text-slate-400 font-mono">
-            Empresa Tenant: {companyId}
+            Pendências da empresa
           </span>
         </div>
 

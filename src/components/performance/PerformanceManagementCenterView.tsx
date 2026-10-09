@@ -335,7 +335,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <span className="text-3xl font-extrabold text-slate-900">{analysis?.kpiHealthScore || 0}%</span>
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                {data.kpis.length} indicadores ativos no tenant
+                {data.kpis.length} indicadores ativos na empresa
               </p>
             </div>
 

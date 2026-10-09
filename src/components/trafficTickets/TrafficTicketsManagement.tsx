@@ -61,7 +61,7 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
     <div className="p-4 sm:p-6 pt-1 space-y-6 max-w-7xl mx-auto">
       <PageHeader
         title="Multas de Trânsito"
-        description="Autoridade server-side, vínculo financeiro e NIC auditável"
+        description="Registro vinculado ao financeiro e com histórico de alterações"
         breadcrumb="Operação • Gestão de Multas"
         secondaryActions={<Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button>}
         primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}

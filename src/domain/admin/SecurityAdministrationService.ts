@@ -169,7 +169,7 @@ export class SecurityAdministrationService {
     const users = this.listUsers(companyId);
     const userIndex = users.findIndex(u => u.id === targetUserId);
     if (userIndex === -1) {
-      return { success: false, message: 'Usuário não encontrado para este tenant.' };
+      return { success: false, message: 'Usuário não encontrado para esta empresa.' };
     }
 
     users[userIndex].status = newStatus;

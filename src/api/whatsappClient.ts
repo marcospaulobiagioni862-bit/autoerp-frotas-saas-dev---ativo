@@ -63,7 +63,7 @@ const PROPOSAL_ID = /^wrp_[a-f0-9]{32}$/;
 const OBSERVABILITY_WINDOWS = new Set([7, 30, 90, 365]);
 
 function invalid(): never {
-  throw new Error('Resposta inválida da autoridade de WhatsApp.');
+  throw new Error('Não foi possível validar os dados recebidos para esta ação.');
 }
 
 function exactRecord(value: unknown, allowed: readonly string[]): JsonRecord {
@@ -238,7 +238,7 @@ export function parseWhatsappTaskProposal(value: unknown): WhatsappTaskProposal 
 }
 
 async function responseError(response: Response): Promise<Error> {
-  let message = `Falha na autoridade de WhatsApp (${response.status}).`;
+  let message = `Não foi possível concluir a ação de comunicação (${response.status}).`;
   try {
     const payload = exactRecord(await response.json(), ['error']);
     if (typeof payload.error === 'string') message = payload.error;

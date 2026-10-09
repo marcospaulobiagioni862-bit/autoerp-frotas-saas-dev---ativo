@@ -84,7 +84,7 @@ export const CashFlowView: React.FC = () => {
             Fluxo de Caixa
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Caixa realizado e projeções de Contas a Receber/Pagar com dados autoritativos do PostgreSQL.
+            Caixa realizado e projeções de Contas a Receber e a Pagar com base nos lançamentos confirmados.
           </p>
         </div>
 
