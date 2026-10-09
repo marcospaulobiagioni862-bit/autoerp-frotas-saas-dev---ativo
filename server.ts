@@ -15,7 +15,8 @@ import path from 'path';
 import { db } from './src/db/index';
 import { companies, users } from './src/db/schema';
 import { PostgresAuthCredentialRepository } from './src/db/repositories/postgresAuthRepository';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { verifyPassword } from './src/server/password';
 import { createServer as createViteServer } from 'vite';
 import {
   authenticateBearerPrincipal,
@@ -174,7 +175,7 @@ async function startServer() {
       const email = String((req.body as { email?: unknown } | undefined)?.email ?? '')
         .trim()
         .toLowerCase();
-      return `conta:${company}|${email}`;
+      return `conta:${company ? `${company}|` : ''}${email}`;
     },
     message: loginLimiterMessage,
   });
@@ -406,27 +407,195 @@ async function startServer() {
   // users and credentials are read only after app.current_tenant is established.
   app.post('/api/auth/login', loginGlobalRateLimiter, loginAccountRateLimiter, async (req: Request, res: Response) => {
     try {
+      const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      const companyDocument = typeof req.body?.companyDocument === 'string' && req.body.companyDocument.trim() !== ''
+        ? req.body.companyDocument.trim()
+        : undefined;
+      const companyId = typeof req.body?.companyId === 'string' && req.body.companyId.trim() !== ''
+        ? req.body.companyId.trim()
+        : undefined;
+
+      if (!email || !password) {
+        throw new InvalidLoginError();
+      }
+
+      // Se nem companyDocument nem companyId foram informados, verificar se o email
+      // pertence a mais de uma empresa ativa antes de emitir a sessão definitiva.
+      if (!companyDocument && !companyId) {
+        const matchingUsers = await db
+          .select({
+            id: users.id,
+            companyId: users.companyId,
+            name: users.name,
+            email: users.email,
+            role: users.role,
+            active: users.active,
+          })
+          .from(users)
+          .where(and(eq(users.active, true), sql`lower(${users.email}) = ${email}`));
+
+        if (matchingUsers.length === 0) {
+          throw new InvalidLoginError();
+        }
+
+        const companyIds: string[] = Array.from(new Set(matchingUsers.map((u) => u.companyId)));
+        const activeCompanies = await db
+          .select({
+            id: companies.id,
+            name: companies.name,
+            document: companies.document,
+            tradeName: companies.tradeName,
+          })
+          .from(companies)
+          .where(and(eq(companies.status, 'ACTIVE'), inArray(companies.id, companyIds)));
+
+        if (activeCompanies.length === 0) {
+          throw new InvalidLoginError();
+        }
+
+        if (activeCompanies.length > 1) {
+          // Validar a senha antes de devolver as empresas para evitar enumeração
+          const firstUser = matchingUsers.find((u) => u.companyId === activeCompanies[0].id) || matchingUsers[0];
+          const credential = await db.transaction(async (tx) => {
+            const credentialRepo = new PostgresAuthCredentialRepository(tx);
+            return await credentialRepo.findByUserId(firstUser.companyId, firstUser.id);
+          });
+          if (!credential?.passwordHash || !(await verifyPassword(password, credential.passwordHash))) {
+            throw new InvalidLoginError();
+          }
+          return res.json({
+            requiresCompanySelection: true,
+            availableCompanies: activeCompanies.map((c) => ({
+              id: c.id,
+              name: c.name,
+              document: c.document,
+              tradeName: c.tradeName || null,
+            })),
+          });
+        }
+      }
+
       const principal = await authenticatePasswordLogin(
         {
-          companyDocument: req.body?.companyDocument,
-          email: req.body?.email,
-          password: req.body?.password,
+          companyDocument,
+          email,
+          password,
+          companyId,
         },
-        async ({ companyDocument, email }) => {
-          const companyIdentifier = companyDocument.trim().toLowerCase();
+        async ({ companyDocument, companyId, email }) => {
+          if (companyDocument) {
+            const companyIdentifier = companyDocument.trim().toLowerCase();
+            const companyRows = await db
+              .select()
+              .from(companies)
+              .where(
+                and(
+                  eq(companies.status, 'ACTIVE'),
+                  sql`(
+                    lower(${companies.document}) = ${companyIdentifier}
+                    OR lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}
+                  )`
+                )
+              )
+              .limit(2);
+
+            if (companyRows.length !== 1) {
+              return null;
+            }
+            const company = companyRows[0];
+
+            return await db.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
+              );
+
+              const userRows = await tx
+                .select()
+                .from(users)
+                .where(
+                  and(
+                    eq(users.companyId, company.id),
+                    sql`lower(${users.email}) = ${email}`
+                  )
+                )
+                .limit(1);
+
+              const user = userRows[0];
+              if (!user) {
+                return null;
+              }
+
+              const credentialRepo = new PostgresAuthCredentialRepository(tx);
+              const credential = await credentialRepo.findByUserId(company.id, user.id);
+
+              return {
+                user,
+                passwordHash: credential?.passwordHash || null,
+              };
+            });
+          }
+
+          if (companyId) {
+            const companyRows = await db
+              .select()
+              .from(companies)
+              .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, companyId)))
+              .limit(1);
+
+            if (companyRows.length !== 1) {
+              return null;
+            }
+            const company = companyRows[0];
+
+            return await db.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
+              );
+
+              const userRows = await tx
+                .select()
+                .from(users)
+                .where(
+                  and(
+                    eq(users.companyId, company.id),
+                    sql`lower(${users.email}) = ${email}`
+                  )
+                )
+                .limit(1);
+
+              const user = userRows[0];
+              if (!user) {
+                return null;
+              }
+
+              const credentialRepo = new PostgresAuthCredentialRepository(tx);
+              const credential = await credentialRepo.findByUserId(company.id, user.id);
+
+              return {
+                user,
+                passwordHash: credential?.passwordHash || null,
+              };
+            });
+          }
+
+          // Fluxo direto por email (empresa única ativa):
+          const userRows = await db
+            .select()
+            .from(users)
+            .where(and(eq(users.active, true), sql`lower(${users.email}) = ${email}`))
+            .limit(2);
+
+          if (userRows.length !== 1) {
+            return null;
+          }
+          const user = userRows[0];
+
           const companyRows = await db
             .select()
             .from(companies)
-            .where(
-              and(
-                eq(companies.status, 'ACTIVE'),
-                sql`(
-                  lower(${companies.document}) = ${companyIdentifier}
-                  OR lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}
-                )`
-              )
-            )
-            .limit(2);
+            .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, user.companyId)))
+            .limit(1);
 
           if (companyRows.length !== 1) {
             return null;
@@ -437,22 +606,6 @@ async function startServer() {
             await tx.execute(
               sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
             );
-
-            const userRows = await tx
-              .select()
-              .from(users)
-              .where(
-                and(
-                  eq(users.companyId, company.id),
-                  sql`lower(${users.email}) = ${email}`
-                )
-              )
-              .limit(1);
-
-            const user = userRows[0];
-            if (!user) {
-              return null;
-            }
 
             const credentialRepo = new PostgresAuthCredentialRepository(tx);
             const credential = await credentialRepo.findByUserId(company.id, user.id);

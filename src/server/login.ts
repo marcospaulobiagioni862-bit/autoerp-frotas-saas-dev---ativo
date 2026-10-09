@@ -2,9 +2,10 @@ import { AuthenticatedPrincipal, AuthenticatedUserRecord } from './auth';
 import { verifyPassword } from './password';
 
 export interface PasswordLoginInput {
-  companyDocument: string;
+  companyDocument?: string;
   email: string;
   password: string;
+  companyId?: string;
 }
 
 export interface PasswordLoginMaterial {
@@ -13,8 +14,9 @@ export interface PasswordLoginMaterial {
 }
 
 export interface NormalizedPasswordLoginIdentity {
-  companyDocument: string;
+  companyDocument?: string;
   email: string;
+  companyId?: string;
 }
 
 export type PasswordLoginMaterialLookup = (
@@ -31,21 +33,25 @@ export class InvalidLoginError extends Error {
 function normalizeIdentity(input: PasswordLoginInput): NormalizedPasswordLoginIdentity {
   if (
     !input ||
-    typeof input.companyDocument !== 'string' ||
     typeof input.email !== 'string' ||
     typeof input.password !== 'string'
   ) {
     throw new InvalidLoginError();
   }
 
-  const companyDocument = input.companyDocument.trim();
   const email = input.email.trim().toLowerCase();
+  const companyDocument = typeof input.companyDocument === 'string' && input.companyDocument.trim() !== ''
+    ? input.companyDocument.trim()
+    : undefined;
+  const companyId = typeof input.companyId === 'string' && input.companyId.trim() !== ''
+    ? input.companyId.trim()
+    : undefined;
 
-  if (!companyDocument || !email || !input.password) {
+  if (!email || !input.password) {
     throw new InvalidLoginError();
   }
 
-  return { companyDocument, email };
+  return { companyDocument, email, companyId };
 }
 
 export async function authenticatePasswordLogin(

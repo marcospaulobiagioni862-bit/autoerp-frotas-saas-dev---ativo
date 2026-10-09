@@ -11,10 +11,23 @@ export interface AuthUser {
 }
 
 export interface LoginCredentials {
-  companyDocument: string;
+  companyDocument?: string;
   email: string;
   password: string;
+  companyId?: string;
 }
+
+export interface AvailableCompanyOption {
+  id: string;
+  name: string;
+  document: string;
+  tradeName?: string | null;
+}
+
+export type LoginResult = AuthUser & {
+  requiresCompanySelection?: boolean;
+  availableCompanies?: AvailableCompanyOption[];
+};
 
 export interface AuthContextValue {
   user: AuthUser;
@@ -24,7 +37,7 @@ export interface AuthContextValue {
 
 export interface AuthSessionClient {
   restore(): Promise<AuthUser | null>;
-  login(credentials: LoginCredentials): Promise<AuthUser>;
+  login(credentials: LoginCredentials): Promise<LoginResult>;
   logout(): Promise<void>;
 }
 
@@ -138,7 +151,18 @@ export function createAuthSessionClient(fetchImpl: FetchLike): AuthSessionClient
       return await parseUserResponse(response);
     },
 
-    async login(credentials: LoginCredentials): Promise<AuthUser> {
+    async login(credentials: LoginCredentials): Promise<LoginResult> {
+      const payload: Record<string, string> = {
+        email: credentials.email.trim().toLowerCase(),
+        password: credentials.password,
+      };
+      if (typeof credentials.companyDocument === 'string' && credentials.companyDocument.trim()) {
+        payload.companyDocument = credentials.companyDocument.trim();
+      }
+      if (typeof credentials.companyId === 'string' && credentials.companyId.trim()) {
+        payload.companyId = credentials.companyId.trim();
+      }
+
       const response = await fetchImpl('/api/auth/login', {
         method: 'POST',
         credentials: 'include',
@@ -146,16 +170,35 @@ export function createAuthSessionClient(fetchImpl: FetchLike): AuthSessionClient
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
-        body: JSON.stringify({
-          companyDocument: credentials.companyDocument.trim(),
-          email: credentials.email.trim().toLowerCase(),
-          password: credentials.password,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         throw new Error('AUTH_LOGIN_FAILED');
       }
+
+      const cloned = response.clone();
+      let rawJson: any;
+      try {
+        rawJson = await cloned.json();
+      } catch {
+        rawJson = null;
+      }
+
+      if (rawJson && typeof rawJson === 'object' && rawJson.requiresCompanySelection === true) {
+        return {
+          id: '',
+          userId: '',
+          name: '',
+          role: '',
+          active: false,
+          companyId: '',
+          permissions: [],
+          requiresCompanySelection: true,
+          availableCompanies: Array.isArray(rawJson.availableCompanies) ? rawJson.availableCompanies : [],
+        };
+      }
+
       return await parseUserResponse(response);
     },
 

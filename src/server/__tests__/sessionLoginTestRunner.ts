@@ -281,17 +281,19 @@ export class SessionLoginTestRunner {
       }
     });
 
-    await run('SL15', 'Login UI accepts textual company alias as well as CNPJ', async () => {
+    await run('SL15', 'Login UI provides clean email and password authentication with multi-tenant company selection support', async () => {
       const loginViewSource = await import('node:fs/promises').then(({ readFile }) =>
         readFile(new URL('../../components/auth/LoginView.tsx', import.meta.url), 'utf8')
       );
       for (const requiredSource of [
-        'Empresa ou CNPJ',
-        'inputMode="text"',
-        'Minha Locadora ou 00.000.000/0001-00',
+        'type="email"',
+        'autoComplete="username"',
+        'autoComplete="current-password"',
+        'Selecione a empresa',
+        'Conexão criptografada ponta a ponta',
       ]) {
         if (!loginViewSource.includes(requiredSource)) {
-          throw new Error(`Company alias login UI invariant missing: ${requiredSource}`);
+          throw new Error(`Login UI invariant missing: ${requiredSource}`);
         }
       }
     });
