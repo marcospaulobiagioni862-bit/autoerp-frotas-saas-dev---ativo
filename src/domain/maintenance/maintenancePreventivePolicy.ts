@@ -57,7 +57,7 @@ export function projectMaintenancePlan(plan:MaintenancePlan,currentKm:number,tod
   if(plan.status==='PAUSED')return{projectedStatus:'PAUSED',projectedStage:'NONE',dueReference};
   if(plan.status==='COMPLETED')return{projectedStatus:'COMPLETED',projectedStage:'NONE',dueReference};
   const remainingKm=plan.nextDueKm===undefined?undefined:plan.nextDueKm-currentKm;
-  const remainingDays=plan.nextDueDate?daysUntilExpiration(plan.nextDueDate,new Date(`${today}T00:00:00Z`)):undefined;
+  const remainingDays=plan.nextDueDate?daysUntilExpiration(plan.nextDueDate,new Date(`${today}T12:00:00Z`)):undefined;
   const k=kmStage(remainingKm,rule),d=plan.nextDueDate?dayStage(remainingDays,rule):'NONE';
   const projectedStage=rank(k)>rank(d)?k:d;
   const projectedStatus:MaintenanceProjectedStatus=(projectedStage==='POST_DUE'||projectedStage==='OVERDUE_KM')?'OVERDUE':(projectedStage==='DUE_TODAY'||projectedStage==='DUE_KM')?'DUE':projectedStage==='NONE'?'OK':'UPCOMING';
