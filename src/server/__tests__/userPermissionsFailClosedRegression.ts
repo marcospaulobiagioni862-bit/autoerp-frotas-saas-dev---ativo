@@ -49,13 +49,13 @@ async function runRegression() {
   const { getDefaultPermissionsForRole } = await import('../rolePresets');
 
   // 1. Conferência nos dados reais do Neon
-  console.log('[1/5] Verificando integridade da massa de usuários no banco...');
+  console.log('[1/6] Verificando integridade da massa de usuários no banco...');
   const pgClient = new Client({ connectionString: neonUrl });
   await pgClient.connect();
 
   try {
     const res = await pgClient.query<{ id: string; role: string; permissions: string[] | null }>(`
-      SELECT id, role, permissions FROM users ORDER BY id;
+      SELECT id, role, permissions FROM users WHERE company_id = 'staging-company-001' ORDER BY id;
     `);
     const allUsers = res.rows;
 
@@ -82,7 +82,7 @@ async function runRegression() {
   }
 
   // 2. Configurar servidor Express de teste com rotas reais
-  console.log('[2/5] Inicializando servidor de teste com rotas reais protegidas...');
+  console.log('[2/6] Inicializando servidor de teste com rotas reais protegidas...');
   const app = express();
   app.use(express.json());
 
@@ -117,7 +117,7 @@ async function runRegression() {
 
   try {
     // 3. SENTIDO NEGATIVO (Fail-Closed na lista vazia)
-    console.log('[3/5] Testando sentido negativo (Fail-Closed): usuário OPERATIONAL com permissões vazias...');
+    console.log('[3/6] Testando sentido negativo (Fail-Closed): usuário OPERATIONAL com permissões vazias...');
     currentActor = {
       companyId: 'v2demo-ngcompany001',
       userId: 'test-canary-unconfigured',
@@ -210,7 +210,7 @@ async function runRegression() {
     console.log('  ✓ GET /api/drivers: 403 Forbidden (bloqueado com sucesso!)\n');
 
     // 4. SENTIDO POSITIVO (Sem lockout para usuários legítimos configurados)
-    console.log('[4/5] Testando sentido positivo: usuários configurados e admin...');
+    console.log('[4/6] Testando sentido positivo: usuários configurados e admin...');
 
     // 4.1 Usuário com permissão explícita CREATE_INSPECTION consegue acessar a guarda de vistoria
     currentActor = {
@@ -252,7 +252,7 @@ async function runRegression() {
     console.log('  ✓ GET /api/traffic-tickets como ADMIN: 200 OK\n');
 
     // 5. PROVISIONAMENTO DE NOVOS USUÁRIOS COM PRESETS DO PAPEL
-    console.log('[5/5] Testando provisionamento automático com ROLE_PRESETS...');
+    console.log('[5/6] Testando provisionamento automático com ROLE_PRESETS...');
     const operationalPreset = getDefaultPermissionsForRole('OPERATIONAL');
     assert(operationalPreset.length > 5, 'Preset de OPERATIONAL deve conter as permissões padrão');
     assert(operationalPreset.includes('CREATE_INSPECTION'), 'Preset de OPERATIONAL deve incluir CREATE_INSPECTION');
@@ -267,6 +267,95 @@ async function runRegression() {
 
     console.log(`  ✓ Presets verificados: OPERATIONAL (${operationalPreset.length} perms), MANAGER (${managerPreset.length} perms), ADMIN (*)`);
 
+    // 6. BLOQUEIO DE ESCALADA DE PRIVILÉGIOS EM POST /api/admin/users (Regra 3.2-a e pedido Claude 2026-10-09)
+    console.log('\n[6/6] Testando bloqueio contra escalada de privilégios em POST /api/admin/users...');
+
+    // Ator com apenas permissão MANAGE_USERS (não-admin)
+    currentActor = {
+      companyId: 'staging-company-001',
+      userId: 'test-user-manager-only',
+      name: 'Operador com MANAGE_USERS',
+      role: 'OPERATIONAL',
+      permissions: ['MANAGE_USERS'],
+    };
+
+    // Cenário A: Operador tenta criar usuário com role ADMIN -> 403 Forbidden
+    const escalateRoleRes = await fetch(`${baseUrl}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Tentativa Hacker Admin',
+        email: `hacker-admin-${Date.now()}@teste.com`,
+        role: 'ADMIN',
+      }),
+    });
+    assert.equal(
+      escalateRoleRes.status,
+      403,
+      `Operador com MANAGE_USERS tentando criar ADMIN deve receber 403 Forbidden, recebeu ${escalateRoleRes.status}`
+    );
+    console.log('  ✓ POST /api/admin/users com role ADMIN por operador MANAGE_USERS: 403 Forbidden (bloqueado com sucesso!)');
+
+    // Cenário B: Operador tenta conceder permissão wildcard '*' -> 403 Forbidden
+    const escalateWildcardRes = await fetch(`${baseUrl}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Tentativa Hacker Wildcard',
+        email: `hacker-wildcard-${Date.now()}@teste.com`,
+        role: 'OPERATIONAL',
+        permissions: ['*'],
+      }),
+    });
+    assert.equal(
+      escalateWildcardRes.status,
+      403,
+      `Operador com MANAGE_USERS tentando conceder '*' deve receber 403 Forbidden, recebeu ${escalateWildcardRes.status}`
+    );
+    console.log('  ✓ POST /api/admin/users com permissions [*] por operador MANAGE_USERS: 403 Forbidden (bloqueado com sucesso!)');
+
+    // Cenário C: Operador tenta conceder permissão além do preset do papel -> 403 Forbidden
+    const escalateExcessiveRes = await fetch(`${baseUrl}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Tentativa Hacker Excessivo',
+        email: `hacker-excessivo-${Date.now()}@teste.com`,
+        role: 'OPERATIONAL',
+        permissions: ['MANAGE_USERS', 'SPECIAL_SUPER_POWER'],
+      }),
+    });
+    assert.equal(
+      escalateExcessiveRes.status,
+      403,
+      `Operador tentando conceder permissões além do preset deve receber 403 Forbidden, recebeu ${escalateExcessiveRes.status}`
+    );
+    console.log('  ✓ POST /api/admin/users com permissões excessivas: 403 Forbidden (bloqueado com sucesso!)');
+
+    // Cenário D: Administrador autêntico consegue provisionar normalmente com 201 Created
+    currentActor = {
+      companyId: 'staging-company-001',
+      userId: 'test-admin',
+      name: 'Admin Legítimo',
+      role: 'ADMIN',
+      permissions: ['*'],
+    };
+    const legitimateAdminRes = await fetch(`${baseUrl}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Operador Legítimo',
+        email: `operador-legitimo-${Date.now()}@teste.com`,
+        role: 'OPERATIONAL',
+      }),
+    });
+    assert.equal(
+      legitimateAdminRes.status,
+      201,
+      `Administrador deve conseguir provisionar usuário com 201 Created, recebeu ${legitimateAdminRes.status}`
+    );
+    console.log('  ✓ POST /api/admin/users por ADMIN legítimo: 201 Created (permitido com sucesso!)\n');
+
     console.log('\n=============================================================');
     console.log('AUTOERP-78: REGRESSÃO FAIL-CLOSED 100% COMPROVADA E VALIDADA!');
     console.log('=============================================================');
@@ -275,7 +364,9 @@ async function runRegression() {
   }
 }
 
-runRegression().catch((err) => {
-  console.error('FALHA NA REGRESSÃO AUTOERP-78:', err);
-  process.exit(1);
-});
+runRegression()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('FALHA NA REGRESSÃO AUTOERP-78:', err);
+    process.exit(1);
+  });

@@ -277,6 +277,27 @@ export class AdminUserAuthority {
       ? Array.from(new Set(input.permissions.map((p) => p.trim()).filter(Boolean)))
       : getDefaultPermissionsForRole(roleClean);
 
+    // Guarda de privilégios estrita (Regra 3.2-a do CLAUDE.md):
+    // Somente administradores autênticos ou portadores de '*' podem provisionar outro ADMIN
+    // ou conceder privilégio irrestrito '*'
+    if (roleClean === 'ADMIN' || assignedPermissions.includes('*')) {
+      assertCanGrantPrivilege(actor);
+    }
+
+    // Operadores sem perfil ADMIN só podem criar usuários até o teto do preset do papel correspondente
+    const actorRole = String(actor.role || '').toUpperCase();
+    const actorPermissions = Array.isArray(actor.permissions) ? actor.permissions : [];
+    const isFullAdmin = actorRole === 'ADMIN' || actorPermissions.includes('*');
+    if (!isFullAdmin) {
+      const allowedPreset = getDefaultPermissionsForRole(roleClean);
+      const hasExcessivePermission = assignedPermissions.some((p) => !allowedPreset.includes(p));
+      if (hasExcessivePermission) {
+        throw new AdminUserForbiddenError(
+          'Acesso negado: operadores sem perfil de administrador só podem atribuir permissões até o limite do perfil padrão'
+        );
+      }
+    }
+
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       const tx = txContext.getRawTransaction();
       const userId = input.id || randomUUID();
