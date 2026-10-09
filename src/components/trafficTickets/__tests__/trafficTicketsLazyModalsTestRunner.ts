@@ -88,7 +88,7 @@ assert.match(
 );
 assert.match(source, /Pedágios \/ Free Flow/, 'traffic operations must expose the Free Flow entry');
 assert.match(tollSource, /Nenhuma cobrança financeira é criada nesta etapa\./, 'Free Flow UI must disclose the current UI no-finance boundary');
-assert.match(tollSource, /Motorista, contrato, tenant e chave de idempotência não são enviados pelo formulário/, 'browser must not claim authority over derived toll links');
+assert.match(tollSource, /Motorista, contrato e empresa são vinculados automaticamente pelo sistema/, 'browser must not claim authority over derived toll links');
 assert.match(tollClient, /JSON\.stringify\(input\)/, 'toll client must use the explicit create DTO');
 const createInputStart=tollClient.indexOf('export interface CreateTollPassageInput');
 const createInputEnd=tollClient.indexOf('export interface TollPassageListFilters',createInputStart);
@@ -126,7 +126,7 @@ assert.match(tollSource, /CSV contém cabeçalho não permitido/, 'CSV import mu
 assert.match(tollSource, /const rows=parseCsv\(await file\.text\(\)\)/, 'CSV must be fully parsed before the first create request');
 assert.match(tollSource, /source:'CSV'/, 'CSV rows must be explicitly tagged as CSV origin');
 assert.match(tollSource, /for\(const row of rows\)\{const result=await TollPassageClient\.create\(row\)/, 'validated CSV rows must reuse authoritative create semantics');
-assert.match(tollSource, /Tenant, contrato, motorista e chave de idempotência continuam sob autoridade do servidor/, 'CSV UI must disclose protected server authority');
+assert.match(tollSource, /A empresa, o contrato e o motorista são vinculados automaticamente pelo sistema/, 'CSV UI must disclose protected server authority');
 const csvParserStart=tollSource.indexOf('function parseCsv');
 const csvParserEnd=tollSource.indexOf('export const TollPassagesManagement',csvParserStart);
 const csvImportStart=tollSource.indexOf('const importCsv=');
