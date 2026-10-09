@@ -22,6 +22,7 @@ import { registerVehicleInspectionRoutes } from './vehicleInspectionRoutes';
 import { registerCompanyProfileRoutes } from './companyProfileRoutes';
 import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAuthority';
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
+import { getVehicleDetailsSummary, VehicleDetailsNotFoundError } from './vehicleDetailsAuthority';
 
 type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE';
 
@@ -522,6 +523,21 @@ export function registerVehicleRoutes(app: Express): void {
       });
       res.json({ item });
     } catch (error) { sendVehicleError(res, error); }
+  });
+
+  app.get('/api/fleet/vehicles/:id/details-summary', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'VIEW_VEHICLE');
+    if (!principal) return;
+    try {
+      const summary = await getVehicleDetailsSummary(principal.companyId, req.params.id);
+      res.json({ summary });
+    } catch (error) {
+      if (error instanceof VehicleDetailsNotFoundError) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+      sendVehicleError(res, error);
+    }
   });
 
   app.get('/api/fleet/vehicles/:id/ownership-history', async (req: Request, res: Response) => {

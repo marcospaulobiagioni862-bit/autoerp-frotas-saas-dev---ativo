@@ -1,4 +1,5 @@
 import type { Vehicle, KmRecord, VehicleOwnershipHistory } from '../types/entities';
+import type { VehicleDetailedSummary } from '../domain/services/VehicleLegacyDetailsBridge';
 import { VehicleStatus } from '../types/enums';
 
 export class VehicleApiError extends Error {
@@ -401,5 +402,13 @@ export class VehicleClient {
     const payload = asRecord(await response.json());
     if (!Array.isArray(payload.items)) throw new Error('Invalid ownership history list');
     return payload.items as VehicleOwnershipHistory[];
+  }
+
+  static async getDetailsSummary(vehicleId: string): Promise<VehicleDetailedSummary> {
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(vehicleId)}/details-summary`, { credentials: 'include' });
+    if (!response.ok) throw await apiError(response);
+    const payload = asRecord(await response.json());
+    if (!payload.summary || typeof payload.summary !== 'object') throw new Error('Invalid vehicle details summary');
+    return payload.summary as unknown as VehicleDetailedSummary;
   }
 }
