@@ -219,6 +219,6 @@ assert.match(
 assert.match(detailsModal, /Histórico e auditoria do contrato/, 'contract audit tab must identify the server audit view');
 assert.match(detailsModal, /Responsável:/, 'contract audit tab must expose the responsible user');
 assert.match(detailsModal, /Campos alterados:/, 'contract audit tab must summarize changed fields');
-assert.match(detailsModal, /Valores brutos não são exibidos/, 'contract audit tab must avoid raw audit payload values');
+assert.match(detailsModal, /dados técnicos completos não aparecem nesta tela/, 'contract audit tab must avoid raw audit payload values');
 
 console.log('Deferred contract modals regression: PASS');

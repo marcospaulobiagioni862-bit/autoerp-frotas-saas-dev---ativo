@@ -45,7 +45,7 @@ assert.ok(source.includes("Histórico e auditoria do veículo"), 'vehicle audit 
 assert.ok(source.includes("Responsável: {log.userName}"), 'vehicle audit must show the responsible user');
 assert.ok(source.includes("Campos alterados:"), 'vehicle audit must summarize changed fields');
 assert.ok(source.includes("Transição de status:"), 'vehicle audit must expose status transitions when present');
-assert.ok(source.includes("Valores brutos não são exibidos nesta visão."), 'vehicle audit must not expose raw state payloads');
+assert.ok(source.includes("dados técnicos completos não aparecem nesta tela."), 'vehicle audit must not expose raw state payloads');
 assert.ok(source.includes("Nenhum evento de auditoria registrado."), 'vehicle audit must preserve an explicit empty state');
 
 assert.ok(vehicleDetailsBridgeSource.includes('MaintenanceClient.listSuppliers()'), 'vehicle maintenance history must resolve suppliers from the authorized catalog');
