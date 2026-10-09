@@ -14,6 +14,7 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { db } from './src/db/index';
 import { companies, users } from './src/db/schema';
+import { userCompanyMemberships } from './src/db/authSchema';
 import { PostgresAuthCredentialRepository } from './src/db/repositories/postgresAuthRepository';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { verifyPassword } from './src/server/password';
@@ -402,6 +403,15 @@ async function startServer() {
     }
   });
 
+  async function hasMembershipsTable(): Promise<boolean> {
+    try {
+      const res: any = await db.execute(sql`SELECT to_regclass('user_company_memberships') AS reg`);
+      return Boolean(res.rows?.[0]?.reg || res[0]?.reg);
+    } catch {
+      return false;
+    }
+  }
+
   // Login must be reachable before the protected /api middleware. Tenant is
   // resolved from exactly one ACTIVE company by CNPJ/document or trade name;
   // users and credentials are read only after app.current_tenant is established.
@@ -420,203 +430,176 @@ async function startServer() {
         throw new InvalidLoginError();
       }
 
-      // Se nem companyDocument nem companyId foram informados, verificar se o email
-      // pertence a mais de uma empresa ativa antes de emitir a sessão definitiva.
-      if (!companyDocument && !companyId) {
-        const matchingUsers = await db
-          .select({
-            id: users.id,
-            companyId: users.companyId,
-            name: users.name,
-            email: users.email,
-            role: users.role,
-            active: users.active,
-          })
-          .from(users)
-          .where(and(eq(users.active, true), sql`lower(${users.email}) = ${email}`));
+      let resolvedCompany: { id: string; name: string; document: string; tradeName?: string | null } | null = null;
 
-        if (matchingUsers.length === 0) {
+      if (companyDocument) {
+        const companyIdentifier = companyDocument.trim().toLowerCase();
+        const companyRows = await db
+          .select()
+          .from(companies)
+          .where(
+            and(
+              eq(companies.status, 'ACTIVE'),
+              sql`(
+                lower(${companies.document}) = ${companyIdentifier}
+                OR lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}
+              )`
+            )
+          )
+          .limit(2);
+
+        if (companyRows.length !== 1) {
+          throw new InvalidLoginError();
+        }
+        resolvedCompany = companyRows[0];
+      } else if (companyId) {
+        const companyRows = await db
+          .select()
+          .from(companies)
+          .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, companyId)))
+          .limit(1);
+
+        if (companyRows.length !== 1) {
+          throw new InvalidLoginError();
+        }
+        resolvedCompany = companyRows[0];
+      }
+
+      // 1. Identidade única do usuário em users
+      const userRows = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          active: users.active,
+          legacyCompanyId: users.companyId,
+          legacyRole: users.role,
+          legacyPermissions: users.permissions,
+        })
+        .from(users)
+        .where(and(eq(users.active, true), sql`lower(${users.email}) = ${email}`))
+        .limit(2);
+
+      if (userRows.length !== 1) {
+        throw new InvalidLoginError();
+      }
+      const user = userRows[0];
+
+      // 2. Validação da credencial única do usuário em user_credentials
+      const credential = await db.transaction(async (tx) => {
+        const credentialRepo = new PostgresAuthCredentialRepository(tx);
+        return await credentialRepo.findByUserId(user.id);
+      });
+
+      if (!credential?.passwordHash || !(await verifyPassword(password, credential.passwordHash))) {
+        throw new InvalidLoginError();
+      }
+
+      let principal: AuthenticatedPrincipal | null = null;
+
+      const hasTable = await hasMembershipsTable();
+
+      if (resolvedCompany) {
+        const memberRows = hasTable ? await db
+          .select({
+            companyId: userCompanyMemberships.companyId,
+            role: userCompanyMemberships.role,
+            permissions: userCompanyMemberships.permissions,
+            active: userCompanyMemberships.active,
+          })
+          .from(userCompanyMemberships)
+          .where(
+            and(
+              eq(userCompanyMemberships.userId, user.id),
+              eq(userCompanyMemberships.companyId, resolvedCompany.id),
+              eq(userCompanyMemberships.active, true)
+            )
+          )
+          .limit(1) : [];
+
+        let targetRole: string | undefined = memberRows[0]?.role;
+        let targetPermissions: string[] = memberRows[0]?.permissions || [];
+
+        if (!targetRole && user.legacyCompanyId === resolvedCompany.id) {
+          targetRole = user.legacyRole;
+          targetPermissions = Array.isArray(user.legacyPermissions) ? user.legacyPermissions : [];
+        }
+
+        if (!targetRole) {
           throw new InvalidLoginError();
         }
 
-        const companyIds: string[] = Array.from(new Set(matchingUsers.map((u) => u.companyId)));
-        const activeCompanies = await db
+        principal = {
+          userId: user.id,
+          companyId: resolvedCompany.id,
+          name: user.name,
+          role: targetRole,
+          permissions: Array.isArray(targetPermissions) ? [...targetPermissions] : [],
+        };
+      } else {
+        // Consulta todas as empresas ativas às quais o usuário está vinculado
+        const activeMemberships = hasTable ? await db
           .select({
-            id: companies.id,
+            companyId: userCompanyMemberships.companyId,
+            role: userCompanyMemberships.role,
+            permissions: userCompanyMemberships.permissions,
             name: companies.name,
             document: companies.document,
             tradeName: companies.tradeName,
           })
-          .from(companies)
-          .where(and(eq(companies.status, 'ACTIVE'), inArray(companies.id, companyIds)));
+          .from(userCompanyMemberships)
+          .innerJoin(companies, eq(companies.id, userCompanyMemberships.companyId))
+          .where(
+            and(
+              eq(userCompanyMemberships.userId, user.id),
+              eq(userCompanyMemberships.active, true),
+              eq(companies.status, 'ACTIVE')
+            )
+          ) : [];
 
-        if (activeCompanies.length === 0) {
+        if (activeMemberships.length === 0 && user.legacyCompanyId) {
+          const compRows = await db
+            .select()
+            .from(companies)
+            .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, user.legacyCompanyId)))
+            .limit(1);
+          if (compRows.length === 1) {
+            activeMemberships.push({
+              companyId: compRows[0].id,
+              role: user.legacyRole || 'ADMIN',
+              permissions: Array.isArray(user.legacyPermissions) ? user.legacyPermissions : [],
+              name: compRows[0].name,
+              document: compRows[0].document,
+              tradeName: compRows[0].tradeName,
+            });
+          }
+        }
+
+        if (activeMemberships.length === 0) {
           throw new InvalidLoginError();
         }
 
-        if (activeCompanies.length > 1) {
-          // Validar a senha antes de devolver as empresas para evitar enumeração
-          const firstUser = matchingUsers.find((u) => u.companyId === activeCompanies[0].id) || matchingUsers[0];
-          const credential = await db.transaction(async (tx) => {
-            const credentialRepo = new PostgresAuthCredentialRepository(tx);
-            return await credentialRepo.findByUserId(firstUser.companyId, firstUser.id);
-          });
-          if (!credential?.passwordHash || !(await verifyPassword(password, credential.passwordHash))) {
-            throw new InvalidLoginError();
-          }
+        if (activeMemberships.length > 1) {
           return res.json({
             requiresCompanySelection: true,
-            availableCompanies: activeCompanies.map((c) => ({
-              id: c.id,
-              name: c.name,
-              document: c.document,
-              tradeName: c.tradeName || null,
+            availableCompanies: activeMemberships.map((m) => ({
+              id: m.companyId,
+              name: m.name,
+              document: m.document,
+              tradeName: m.tradeName || null,
             })),
           });
         }
+
+        const targetMembership = activeMemberships[0];
+        principal = {
+          userId: user.id,
+          companyId: targetMembership.companyId,
+          name: user.name,
+          role: targetMembership.role,
+          permissions: Array.isArray(targetMembership.permissions) ? [...targetMembership.permissions] : [],
+        };
       }
-
-      const principal = await authenticatePasswordLogin(
-        {
-          companyDocument,
-          email,
-          password,
-          companyId,
-        },
-        async ({ companyDocument, companyId, email }) => {
-          if (companyDocument) {
-            const companyIdentifier = companyDocument.trim().toLowerCase();
-            const companyRows = await db
-              .select()
-              .from(companies)
-              .where(
-                and(
-                  eq(companies.status, 'ACTIVE'),
-                  sql`(
-                    lower(${companies.document}) = ${companyIdentifier}
-                    OR lower(coalesce(${companies.tradeName}, '')) = ${companyIdentifier}
-                  )`
-                )
-              )
-              .limit(2);
-
-            if (companyRows.length !== 1) {
-              return null;
-            }
-            const company = companyRows[0];
-
-            return await db.transaction(async (tx) => {
-              await tx.execute(
-                sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
-              );
-
-              const userRows = await tx
-                .select()
-                .from(users)
-                .where(
-                  and(
-                    eq(users.companyId, company.id),
-                    sql`lower(${users.email}) = ${email}`
-                  )
-                )
-                .limit(1);
-
-              const user = userRows[0];
-              if (!user) {
-                return null;
-              }
-
-              const credentialRepo = new PostgresAuthCredentialRepository(tx);
-              const credential = await credentialRepo.findByUserId(company.id, user.id);
-
-              return {
-                user,
-                passwordHash: credential?.passwordHash || null,
-              };
-            });
-          }
-
-          if (companyId) {
-            const companyRows = await db
-              .select()
-              .from(companies)
-              .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, companyId)))
-              .limit(1);
-
-            if (companyRows.length !== 1) {
-              return null;
-            }
-            const company = companyRows[0];
-
-            return await db.transaction(async (tx) => {
-              await tx.execute(
-                sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
-              );
-
-              const userRows = await tx
-                .select()
-                .from(users)
-                .where(
-                  and(
-                    eq(users.companyId, company.id),
-                    sql`lower(${users.email}) = ${email}`
-                  )
-                )
-                .limit(1);
-
-              const user = userRows[0];
-              if (!user) {
-                return null;
-              }
-
-              const credentialRepo = new PostgresAuthCredentialRepository(tx);
-              const credential = await credentialRepo.findByUserId(company.id, user.id);
-
-              return {
-                user,
-                passwordHash: credential?.passwordHash || null,
-              };
-            });
-          }
-
-          // Fluxo direto por email (empresa única ativa):
-          const userRows = await db
-            .select()
-            .from(users)
-            .where(and(eq(users.active, true), sql`lower(${users.email}) = ${email}`))
-            .limit(2);
-
-          if (userRows.length !== 1) {
-            return null;
-          }
-          const user = userRows[0];
-
-          const companyRows = await db
-            .select()
-            .from(companies)
-            .where(and(eq(companies.status, 'ACTIVE'), eq(companies.id, user.companyId)))
-            .limit(1);
-
-          if (companyRows.length !== 1) {
-            return null;
-          }
-          const company = companyRows[0];
-
-          return await db.transaction(async (tx) => {
-            await tx.execute(
-              sql`SELECT set_config('app.current_tenant', ${company.id}, true)`
-            );
-
-            const credentialRepo = new PostgresAuthCredentialRepository(tx);
-            const credential = await credentialRepo.findByUserId(company.id, user.id);
-
-            return {
-              user,
-              passwordHash: credential?.passwordHash || null,
-            };
-          });
-        }
-      );
 
       const sessionToken = await issueSessionToken(principal, getJwtConfig());
       res.setHeader(
@@ -667,10 +650,44 @@ async function startServer() {
         typeof req.headers.cookie === 'string' ? req.headers.cookie : undefined
       );
 
-      const findCurrentUser = async (userId: string, verifiedCompanyId: string) =>
-        await UnitOfWork.run(verifiedCompanyId, async (transactionContext) =>
+      const findCurrentUser = async (userId: string, verifiedCompanyId: string) => {
+        const hasTable = await hasMembershipsTable();
+        const rows = hasTable ? await db
+          .select({
+            id: users.id,
+            name: users.name,
+            userActive: users.active,
+            role: userCompanyMemberships.role,
+            membershipActive: userCompanyMemberships.active,
+            permissions: userCompanyMemberships.permissions,
+            companyId: userCompanyMemberships.companyId,
+          })
+          .from(userCompanyMemberships)
+          .innerJoin(users, eq(userCompanyMemberships.userId, users.id))
+          .where(
+            and(
+              eq(userCompanyMemberships.userId, userId),
+              eq(userCompanyMemberships.companyId, verifiedCompanyId)
+            )
+          )
+          .limit(1) : [];
+
+        if (rows.length > 0) {
+          const row = rows[0];
+          return {
+            id: row.id,
+            companyId: row.companyId,
+            name: row.name,
+            role: row.role,
+            active: Boolean(row.userActive && row.membershipActive),
+            permissions: Array.isArray(row.permissions) ? [...row.permissions] : [],
+          };
+        }
+
+        return await UnitOfWork.run(verifiedCompanyId, async (transactionContext) =>
           await transactionContext.getUserRepo().findById(userId)
         );
+      };
 
       if (sessionToken) {
         req.principal = await authenticateTokenPrincipal(

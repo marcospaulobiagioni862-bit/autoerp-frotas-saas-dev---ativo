@@ -5,6 +5,7 @@ import {
   securityDeposits, securityDepositMovements, driverHealthProfiles, vehicles, vehicleKmRecords,
   vehicleOwnershipHistory
 } from '../schema';
+import { userCompanyMemberships } from '../authSchema';
 import { eq, and, sql, lt, desc, isNull } from 'drizzle-orm';
 import { AuditLog, SecurityDeposit, SecurityDepositMovement, Vehicle, KmRecord, VehicleOwnershipHistory } from '../../types/entities';
 
@@ -351,6 +352,49 @@ export class PostgresKmRecordRepository {
 
 export class PostgresUserRepository extends PostgresBaseRepository<any> {
   constructor(tx: any, companyId: string) { super(users, tx, companyId); }
+
+  override async findById(id: string): Promise<any | null> {
+    try {
+      const regRes: any = await this.tx.execute(sql`SELECT to_regclass('user_company_memberships') AS reg`);
+      if (regRes.rows?.[0]?.reg || regRes[0]?.reg) {
+        const memberRows = await this.tx
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        companyId: userCompanyMemberships.companyId,
+        role: userCompanyMemberships.role,
+        permissions: userCompanyMemberships.permissions,
+        active: userCompanyMemberships.active,
+        userActive: users.active,
+        createdAt: userCompanyMemberships.createdAt,
+        updatedAt: userCompanyMemberships.updatedAt,
+      })
+      .from(userCompanyMemberships)
+      .innerJoin(users, eq(users.id, userCompanyMemberships.userId))
+      .where(
+        and(
+          eq(userCompanyMemberships.companyId, this.companyId),
+          eq(userCompanyMemberships.userId, id)
+        )
+      )
+      .limit(1);
+
+    if (memberRows.length > 0) {
+      const m = memberRows[0];
+      return {
+        ...m,
+        active: Boolean(m.active && m.userActive),
+        permissions: Array.isArray(m.permissions) ? [...m.permissions] : [],
+      };
+    }
+      }
+    } catch {
+      // Ignora erro e usa fallback
+    }
+
+    return await super.findById(id);
+  }
 }
 
 export class PostgresAccountReceivableRepository extends PostgresBaseRepository<any> {

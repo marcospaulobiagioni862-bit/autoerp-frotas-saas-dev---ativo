@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { users } from '../db/schema';
+import { userCompanyMemberships } from '../db/authSchema';
 import { AuditAction } from '../types/enums';
 import { getDefaultPermissionsForRole } from './rolePresets';
 
@@ -79,26 +80,50 @@ async function auditStatusChange(
   });
 }
 
+async function hasMembershipsTable(tx: any): Promise<boolean> {
+  try {
+    const res: any = await tx.execute(sql`SELECT to_regclass('user_company_memberships') AS reg`);
+    return Boolean(res.rows?.[0]?.reg || res[0]?.reg);
+  } catch {
+    return false;
+  }
+}
+
 export class AdminUserAuthority {
   static async list(actor: AdminUserActor): Promise<AdminUserRecord[]> {
     assertCanManageUsers(actor);
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       const tx = txContext.getRawTransaction();
-      const rows = await tx
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-          active: users.active,
-          permissions: users.permissions,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        })
+      const hasTable = await hasMembershipsTable(tx);
+      if (hasTable) {
+        const rows = await tx
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            role: userCompanyMemberships.role,
+            active: userCompanyMemberships.active,
+            permissions: userCompanyMemberships.permissions,
+            createdAt: userCompanyMemberships.createdAt,
+            updatedAt: userCompanyMemberships.updatedAt,
+          })
+          .from(userCompanyMemberships)
+          .innerJoin(users, eq(userCompanyMemberships.userId, users.id))
+          .where(eq(userCompanyMemberships.companyId, actor.companyId));
+
+        if (rows.length > 0) {
+          return rows.map(sanitizeUser).sort((a: AdminUserRecord, b: AdminUserRecord) =>
+            a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCompare(b.id)
+          );
+        }
+      }
+
+      const fallbackRows = await tx
+        .select()
         .from(users)
         .where(eq(users.companyId, actor.companyId));
 
-      return rows.map(sanitizeUser).sort((a: AdminUserRecord, b: AdminUserRecord) =>
+      return fallbackRows.map(sanitizeUser).sort((a: AdminUserRecord, b: AdminUserRecord) =>
         a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCompare(b.id)
       );
     });
@@ -121,13 +146,44 @@ export class AdminUserAuthority {
         sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${actor.companyId}:admin-user-status`})))`
       );
 
-      const targetRows = await tx
-        .select()
-        .from(users)
-        .where(and(eq(users.companyId, actor.companyId), eq(users.id, targetUserId)))
-        .for('update')
-        .limit(1);
-      const target = targetRows[0];
+      const hasTable = await hasMembershipsTable(tx);
+      let target: any = null;
+
+      if (hasTable) {
+        const memberRows = await tx
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            role: userCompanyMemberships.role,
+            active: userCompanyMemberships.active,
+            permissions: userCompanyMemberships.permissions,
+            createdAt: userCompanyMemberships.createdAt,
+            updatedAt: userCompanyMemberships.updatedAt,
+          })
+          .from(userCompanyMemberships)
+          .innerJoin(users, eq(userCompanyMemberships.userId, users.id))
+          .where(
+            and(
+              eq(userCompanyMemberships.companyId, actor.companyId),
+              eq(userCompanyMemberships.userId, targetUserId)
+            )
+          )
+          .for('update')
+          .limit(1);
+        target = memberRows[0];
+      }
+
+      if (!target) {
+        const legacyRows = await tx
+          .select()
+          .from(users)
+          .where(and(eq(users.companyId, actor.companyId), eq(users.id, targetUserId)))
+          .for('update')
+          .limit(1);
+        target = legacyRows[0];
+      }
+
       if (!target) throw new AdminUserNotFoundError('Usuário não encontrado');
 
       if (!active && target.id === actor.userId) {
@@ -135,18 +191,38 @@ export class AdminUserAuthority {
       }
 
       if (!active && Boolean(target.active) && String(target.role || '').toUpperCase() === 'ADMIN') {
-        const activeAdmins = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(
-            and(
-              eq(users.companyId, actor.companyId),
-              eq(users.active, true),
-              sql`upper(${users.role}) = 'ADMIN'`
+        let activeAdminCount = 0;
+        if (hasTable) {
+          const activeMembers = await tx
+            .select({ id: userCompanyMemberships.userId })
+            .from(userCompanyMemberships)
+            .where(
+              and(
+                eq(userCompanyMemberships.companyId, actor.companyId),
+                eq(userCompanyMemberships.active, true),
+                sql`upper(${userCompanyMemberships.role}) = 'ADMIN'`
+              )
             )
-          )
-          .for('update');
-        if (activeAdmins.length <= 1) {
+            .for('update');
+          activeAdminCount = activeMembers.length;
+        }
+
+        if (activeAdminCount === 0) {
+          const activeUsers = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(
+              and(
+                eq(users.companyId, actor.companyId),
+                eq(users.active, true),
+                sql`upper(${users.role}) = 'ADMIN'`
+              )
+            )
+            .for('update');
+          activeAdminCount = activeUsers.length;
+        }
+
+        if (activeAdminCount <= 1) {
           throw new AdminUserConflictError('Não é possível desativar o último administrador ativo');
         }
       }
@@ -154,25 +230,30 @@ export class AdminUserAuthority {
       if (Boolean(target.active) === active) return sanitizeUser(target);
 
       const updatedAt = new Date().toISOString();
-      const rows = await tx
+
+      if (hasTable) {
+        await tx
+          .update(userCompanyMemberships)
+          .set({ active, updatedAt })
+          .where(
+            and(
+              eq(userCompanyMemberships.companyId, actor.companyId),
+              eq(userCompanyMemberships.userId, target.id)
+            )
+          );
+      }
+
+      await tx
         .update(users)
         .set({ active, updatedAt })
-        .where(and(eq(users.companyId, actor.companyId), eq(users.id, target.id)))
-        .returning({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-          active: users.active,
-          permissions: users.permissions,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        });
+        .where(and(eq(users.companyId, actor.companyId), eq(users.id, target.id)));
 
-      const updated = rows[0];
-      if (!updated) throw new AdminUserNotFoundError('Usuário não encontrado');
       await auditStatusChange(txContext, actor, target, active, updatedAt);
-      return sanitizeUser(updated);
+      return sanitizeUser({
+        ...target,
+        active,
+        updatedAt,
+      });
     });
   }
 
@@ -197,29 +278,80 @@ export class AdminUserAuthority {
         sql`SELECT pg_advisory_xact_lock(abs(hashtext(${`${actor.companyId}:admin-user-status`})))`
       );
 
-      const targetRows = await tx
-        .select()
-        .from(users)
-        .where(and(eq(users.companyId, actor.companyId), eq(users.id, targetUserId)))
-        .for('update')
-        .limit(1);
-      const target = targetRows[0];
+      const hasTable = await hasMembershipsTable(tx);
+      let target: any = null;
+
+      if (hasTable) {
+        const memberRows = await tx
+          .select({
+            id: users.id,
+            name: users.name,
+            email: users.email,
+            role: userCompanyMemberships.role,
+            active: userCompanyMemberships.active,
+            permissions: userCompanyMemberships.permissions,
+            createdAt: userCompanyMemberships.createdAt,
+            updatedAt: userCompanyMemberships.updatedAt,
+          })
+          .from(userCompanyMemberships)
+          .innerJoin(users, eq(userCompanyMemberships.userId, users.id))
+          .where(
+            and(
+              eq(userCompanyMemberships.companyId, actor.companyId),
+              eq(userCompanyMemberships.userId, targetUserId)
+            )
+          )
+          .for('update')
+          .limit(1);
+        target = memberRows[0];
+      }
+
+      if (!target) {
+        const legacyRows = await tx
+          .select()
+          .from(users)
+          .where(and(eq(users.companyId, actor.companyId), eq(users.id, targetUserId)))
+          .for('update')
+          .limit(1);
+        target = legacyRows[0];
+      }
+
       if (!target) throw new AdminUserNotFoundError('Usuário não encontrado');
 
       // Proteção: não rebaixar o último administrador ativo
       if (String(target.role || '').toUpperCase() === 'ADMIN' && roleClean !== 'ADMIN') {
-        const activeAdmins = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(
-            and(
-              eq(users.companyId, actor.companyId),
-              eq(users.active, true),
-              sql`upper(${users.role}) = 'ADMIN'`
+        let activeAdminCount = 0;
+        if (hasTable) {
+          const activeMembers = await tx
+            .select({ id: userCompanyMemberships.userId })
+            .from(userCompanyMemberships)
+            .where(
+              and(
+                eq(userCompanyMemberships.companyId, actor.companyId),
+                eq(userCompanyMemberships.active, true),
+                sql`upper(${userCompanyMemberships.role}) = 'ADMIN'`
+              )
             )
-          )
-          .for('update');
-        if (activeAdmins.length <= 1) {
+            .for('update');
+          activeAdminCount = activeMembers.length;
+        }
+
+        if (activeAdminCount === 0) {
+          const activeUsers = await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(
+              and(
+                eq(users.companyId, actor.companyId),
+                eq(users.active, true),
+                sql`upper(${users.role}) = 'ADMIN'`
+              )
+            )
+            .for('update');
+          activeAdminCount = activeUsers.length;
+        }
+
+        if (activeAdminCount <= 1) {
           throw new AdminUserConflictError('Não é possível remover o perfil de administrador do último administrador ativo');
         }
       }
@@ -227,27 +359,30 @@ export class AdminUserAuthority {
       const cleanPermissions = Array.from(new Set(newPermissions.map((p) => p.trim()).filter(Boolean)));
       const updatedAt = new Date().toISOString();
 
-      const rows = await tx
+      if (hasTable) {
+        await tx
+          .update(userCompanyMemberships)
+          .set({
+            role: roleClean,
+            permissions: cleanPermissions,
+            updatedAt,
+          })
+          .where(
+            and(
+              eq(userCompanyMemberships.companyId, actor.companyId),
+              eq(userCompanyMemberships.userId, target.id)
+            )
+          );
+      }
+
+      await tx
         .update(users)
         .set({
           role: roleClean,
           permissions: cleanPermissions,
           updatedAt,
         })
-        .where(and(eq(users.companyId, actor.companyId), eq(users.id, target.id)))
-        .returning({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-          active: users.active,
-          permissions: users.permissions,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        });
-
-      const updated = rows[0];
-      if (!updated) throw new AdminUserNotFoundError('Usuário não encontrado');
+        .where(and(eq(users.companyId, actor.companyId), eq(users.id, target.id)));
 
       await txContext.getAuditLogRepo().create({
         id: randomUUID(),
@@ -262,15 +397,26 @@ export class AdminUserAuthority {
         timestamp: updatedAt,
       });
 
-      return sanitizeUser(updated);
+      return sanitizeUser({
+        ...target,
+        role: roleClean,
+        permissions: cleanPermissions,
+        updatedAt,
+      });
     });
   }
 
   static async provisionUser(
     actor: AdminUserActor,
-    input: { id?: string; name: string; email: string; role: string; permissions?: string[] }
+    input: { id?: string; name: string; email: string; role: string; permissions?: string[]; companyId?: string }
   ): Promise<AdminUserRecord> {
     assertCanManageUsers(actor);
+    // Guarda de seguranca multi-tenant estrita (AUTOERP-82):
+    // Um ADMIN da empresa A NAO pode criar ou alterar vinculo de ninguem na empresa B.
+    if (input.companyId && input.companyId.trim() !== '' && input.companyId.trim() !== actor.companyId) {
+      throw new AdminUserForbiddenError('Acesso negado: não é permitido gerenciar usuários de outra empresa');
+    }
+
     const roleClean = input.role.trim().toUpperCase();
     if (!roleClean) throw new AdminUserConflictError('Papel do usuário é obrigatório');
     const assignedPermissions = (Array.isArray(input.permissions) && input.permissions.length > 0)
@@ -300,46 +446,84 @@ export class AdminUserAuthority {
 
     return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
       const tx = txContext.getRawTransaction();
-      const userId = input.id || randomUUID();
       const now = new Date().toISOString();
+      const cleanEmail = input.email.trim().toLowerCase();
 
-      const inserted = await tx
-        .insert(users)
-        .values({
-          id: userId,
-          companyId: actor.companyId,
-          name: input.name.trim(),
-          email: input.email.trim().toLowerCase(),
-          role: roleClean,
-          active: true,
-          permissions: assignedPermissions,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-          role: users.role,
-          active: users.active,
-          permissions: users.permissions,
-          createdAt: users.createdAt,
-          updatedAt: users.updatedAt,
-        });
+      // 1. Localiza ou cria a identidade do usuário em users
+      const existingUserRows = await tx
+        .select()
+        .from(users)
+        .where(sql`lower(${users.email}) = ${cleanEmail}`)
+        .limit(1);
+
+      let userRecord: any = existingUserRows[0];
+      if (!userRecord) {
+        const userId = input.id || randomUUID();
+        const inserted = await tx
+          .insert(users)
+          .values({
+            id: userId,
+            companyId: actor.companyId,
+            name: input.name.trim(),
+            email: cleanEmail,
+            role: roleClean,
+            active: true,
+            permissions: assignedPermissions,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+        userRecord = inserted[0];
+      } else if (input.name && input.name.trim()) {
+        await tx
+          .update(users)
+          .set({ name: input.name.trim(), updatedAt: now })
+          .where(eq(users.id, userRecord.id));
+      }
+
+      // 2. Insere ou atualiza o vinculo multi-tenant em user_company_memberships
+      const hasTable = await hasMembershipsTable(tx);
+      if (hasTable) {
+        await tx
+          .insert(userCompanyMemberships)
+          .values({
+            userId: userRecord.id,
+            companyId: actor.companyId,
+            role: roleClean,
+            permissions: assignedPermissions,
+            active: true,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [userCompanyMemberships.userId, userCompanyMemberships.companyId],
+            set: {
+              role: roleClean,
+              permissions: assignedPermissions,
+              active: true,
+              updatedAt: now,
+            },
+          });
+      }
 
       await txContext.getAuditLogRepo().create({
         id: randomUUID(),
         companyId: actor.companyId,
         entityName: 'User',
-        entityId: userId,
+        entityId: userRecord.id,
         action: AuditAction.CREATE,
+        previousState: null,
         newState: JSON.stringify({ name: input.name, email: input.email, role: roleClean, permissions: assignedPermissions }),
         userId: actor.userId,
         userName: actor.name,
         timestamp: now,
       });
 
-      return sanitizeUser(inserted[0]);
+      return sanitizeUser({
+        ...userRecord,
+        role: roleClean,
+        permissions: assignedPermissions,
+      });
     });
   }
 }
