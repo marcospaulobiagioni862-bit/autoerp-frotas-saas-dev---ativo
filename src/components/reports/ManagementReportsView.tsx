@@ -636,7 +636,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                       </div>
                       <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
                       <div className="text-[10px] text-slate-500 mt-2">
-                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'PostgreSQL do ERP' : 'Documento aprovado'}
+                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'dados do sistema' : 'Documento aprovado'}
                         {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
                       </div>
                     </div>
@@ -802,7 +802,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                       </div>
                       <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
                       <div className="text-[10px] text-slate-500 mt-2">
-                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'PostgreSQL do ERP' : 'Documento aprovado'}
+                        Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'dados do sistema' : 'Documento aprovado'}
                         {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
                       </div>
                     </div>

@@ -156,7 +156,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
           cpf: legalRepresentativeCpfInput,
         },
       });
-      setActionMsg('Dados oficiais da empresa salvos no servidor.');
+      setActionMsg('Dados oficiais da empresa salvos.');
       await loadData();
     } catch (caught) {
       setActionMsg(caught instanceof Error ? caught.message : 'Falha ao salvar dados oficiais da empresa.');
@@ -164,7 +164,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
   };
 
   const handleSaveConfig = async () => {
-    setActionMsg('Salvando configurações do tenant...');
+    setActionMsg('Salvando configurações da empresa...');
     const res = await TenantConfigurationService.updateConfig(
       companyId,
       {
@@ -204,7 +204,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
   const tabs: { id: AdminTab; label: string; icon: any }[] = [
     { id: 'overview', label: 'Visão Geral', icon: Activity },
     { id: 'health', label: 'Saúde do Sistema', icon: ShieldCheck },
-    { id: 'tenant', label: 'Empresa / Tenant', icon: Building2 },
+    { id: 'tenant', label: 'Empresa', icon: Building2 },
     { id: 'users', label: 'Usuários', icon: Users },
     { id: 'rbac', label: 'RBAC', icon: Lock },
     { id: 'security', label: 'Segurança', icon: ShieldAlert },
@@ -273,7 +273,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             </Card>
 
             <Card className="p-5 border-l-4 border-l-emerald-600">
-              <p className="text-xs font-medium uppercase text-slate-500">Tenant Ativo</p>
+              <p className="text-xs font-medium uppercase text-slate-500">Empresa ativa</p>
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1 truncate">{summary.companyName}</h3>
               <p className="text-xs text-slate-500 mt-2">ID: {companyId}</p>
             </Card>
@@ -324,7 +324,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
           <Card className="p-6 space-y-5">
             <div>
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Dados oficiais da empresa</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Fonte server-side usada em contratos e documentos oficiais.</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">Esta informação é usada em contratos e documentos oficiais.</p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-300 block mb-1">Razão Social *</label><Input value={companyNameInput} onChange={(e) => setCompanyNameInput(e.target.value)} /></div>
@@ -350,7 +350,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             <div className="pt-2"><Button onClick={() => void handleSaveCompanyProfile()} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"><Save className="w-4 h-4" />Salvar dados oficiais</Button></div>
           </Card>
           <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Configuração operacional do Tenant</h3>
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Configuração operacional da empresa</h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Fuso Horário (Timezone)</label><Input value={timezoneInput} onChange={(e) => setTimezoneInput(e.target.value)} /></div>
               <div><label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">Limite Máximo de Veículos</label><Input type="number" value={maxVehiclesInput} onChange={(e) => setMaxVehiclesInput(Number(e.target.value))} /></div>

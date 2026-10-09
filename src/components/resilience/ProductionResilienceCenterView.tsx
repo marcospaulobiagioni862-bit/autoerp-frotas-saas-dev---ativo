@@ -11,7 +11,7 @@ export const ResilienceCenterView: React.FC = () => (
   <div className="p-4 sm:p-6 space-y-6 max-w-5xl mx-auto">
     <PageHeader
       title="Continuidade Operacional"
-      description="Backup e restauração exigem autoridade do servidor."
+      description="O acesso a cópias de segurança e restaurações depende da validação dos procedimentos de segurança."
       breadcrumb="Resiliência & Disaster Recovery"
     />
     <Card padding="md" className="space-y-4">
@@ -22,7 +22,7 @@ export const ResilienceCenterView: React.FC = () => (
         <div>
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Backup local do navegador desabilitado</h3>
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            O build de produção não permite criar, restaurar ou validar backups a partir de IndexedDB/localStorage. A funcionalidade permanecerá bloqueada até existir persistência, autenticação, auditoria e restore server-side próprios.
+            A criação, restauração e validação de cópias de segurança estão temporariamente indisponíveis. A função será liberada quando o armazenamento e a recuperação segura dos dados estiverem prontos.
           </p>
         </div>
       </div>
@@ -31,7 +31,7 @@ export const ResilienceCenterView: React.FC = () => (
           <ShieldCheck className="w-4 h-4 text-emerald-600" /> Fail-closed no browser
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-          <Database className="w-4 h-4 text-blue-600" /> Próxima autoridade: servidor/PostgreSQL
+          <Database className="w-4 h-4 text-blue-600" /> Próxima etapa: validar a segurança dos dados
         </div>
       </div>
     </Card>

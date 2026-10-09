@@ -405,8 +405,8 @@ export const OperationalWorkflowCenterView: React.FC = () => {
               className="bg-transparent font-semibold text-slate-700 focus:outline-none"
             >
               <option value="company-1">Empresa Alpha (ID: company-1)</option>
-              <option value="company-test-tenant-a">Tenant Teste A</option>
-              <option value="company-test-tenant-b">Tenant Teste B</option>
+              <option value="company-test-tenant-a">Empresa de teste A</option>
+              <option value="company-test-tenant-b">Empresa de teste B</option>
             </select>
           </div>
 

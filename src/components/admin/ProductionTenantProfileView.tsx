@@ -39,7 +39,7 @@ export const ProductionTenantProfileView: React.FC = () => {
     } catch (cause) {
       setProfile(null);
       setForm(null);
-      setError(cause instanceof Error ? cause.message : 'Falha ao carregar Empresa / Tenant.');
+      setError(cause instanceof Error ? cause.message : 'Falha ao carregar dados da empresa.');
     } finally {
       setLoading(false);
     }
@@ -97,9 +97,9 @@ export const ProductionTenantProfileView: React.FC = () => {
       });
       setProfile(updated);
       setForm(formFrom(updated));
-      setMessage('Empresa / Tenant atualizado com autoridade PostgreSQL e auditoria server-side.');
+      setMessage('Dados da empresa atualizados. A alteração ficou registrada no histórico.');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Falha ao atualizar Empresa / Tenant.');
+      setError(cause instanceof Error ? cause.message : 'Falha ao atualizar dados da empresa.');
     } finally {
       setSaving(false);
     }
@@ -114,13 +114,13 @@ export const ProductionTenantProfileView: React.FC = () => {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Empresa / Tenant</h2>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Empresa</h2>
               <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                PostgreSQL autoritativo
+                Dados protegidos
               </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Perfil operacional do tenant autenticado. Tenant e ator são derivados exclusivamente da sessão do servidor.
+              Perfil da empresa vinculada à sua sessão. O sistema identifica a empresa e registra o responsável pelas alterações.
             </p>
           </div>
         </div>
@@ -143,12 +143,12 @@ export const ProductionTenantProfileView: React.FC = () => {
       <Card className="overflow-hidden">
         <div className="border-b border-slate-200 p-4 dark:border-slate-800">
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Configuração operacional</h3>
-          <p className="text-xs text-slate-500">O documento da empresa é exibido a partir do PostgreSQL, mas permanece imutável nesta wave.</p>
+          <p className="text-xs text-slate-500">O documento da empresa está disponível para consulta e não pode ser editado por enquanto.</p>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center p-12 text-slate-500">
-            <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> Carregando Empresa / Tenant...
+            <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> Carregando dados da empresa...
           </div>
         ) : profile && form ? (
           <div className="grid gap-5 p-5 md:grid-cols-2">
@@ -184,8 +184,8 @@ export const ProductionTenantProfileView: React.FC = () => {
 
             <label className="space-y-1.5">
               <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Moeda</span>
-              <input className={inputClass} value="BRL" readOnly disabled aria-label="Moeda BRL somente leitura nesta wave" />
-              <span className="block text-xs text-slate-500">Esta wave suporta exclusivamente BRL.</span>
+              <input className={inputClass} value="BRL" readOnly disabled aria-label="Moeda BRL, somente leitura" />
+              <span className="block text-xs text-slate-500">A moeda disponível é o real (BRL).</span>
             </label>
 
             <label className="space-y-1.5">
@@ -251,7 +251,7 @@ export const ProductionTenantProfileView: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="p-10 text-center text-sm text-slate-500">Perfil Empresa / Tenant indisponível.</div>
+          <div className="p-10 text-center text-sm text-slate-500">Perfil da empresa indisponível.</div>
         )}
       </Card>
     </div>

@@ -733,7 +733,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="text-sm font-bold">Observabilidade sanitizada</h3>
-                    <p className="text-xs text-slate-500">Somente totais por período. Não há telefone, conteúdo, tenant, provedor ou ação automática nesta tela.</p>
+                    <p className="text-xs text-slate-500">Somente totais por período. Esta tela não exibe telefone ou conteúdo das mensagens e não realiza ações automaticamente.</p>
                   </div>
                   <Select
                     label="Período"
@@ -847,7 +847,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
               {summary.communicationLogs.length > 0 && (
                 <Card className="p-4 space-y-3">
-                  <h3 className="text-sm font-bold">Histórico anterior à autoridade atual</h3>
+                  <h3 className="text-sm font-bold">Histórico de registros anteriores</h3>
                   <p className="text-xs text-slate-500">Somente leitura. Confirmações manuais e abertura direta do WhatsApp foram desativadas nesta tela.</p>
                   {summary.communicationLogs.map((log) => (
                     <div key={log.id} className="p-2 border rounded-lg text-xs">
@@ -886,7 +886,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-semibold">Histórico e auditoria do motorista</h3>
-                <p className="text-[11px] text-slate-500">Eventos registrados pela autoridade do servidor. Valores brutos não são exibidos nesta visão.</p>
+                <p className="text-[11px] text-slate-500">Os eventos são registrados automaticamente no histórico. Os dados técnicos completos não aparecem nesta tela.</p>
               </div>
               {summary.historyLogs.length === 0 ? <p className="text-xs text-slate-400">Nenhum evento de auditoria registrado.</p> : summary.historyLogs.map((log) => {
                 const change = auditChangeSummary(log.previousState, log.newState);

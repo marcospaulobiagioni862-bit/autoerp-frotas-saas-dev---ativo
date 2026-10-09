@@ -79,10 +79,10 @@ export const SystemHealthCenterView: React.FC<{ companyId?: string }> = ({ compa
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Activity className="w-6 h-6 text-indigo-400" />
-            <h2 className="text-2xl font-bold tracking-tight">Centro de Saúde e Diagnóstico Técnico</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Centro de Saúde do Sistema</h2>
           </div>
           <p className="text-sm text-slate-300 max-w-2xl">
-            Monitoramento determinístico em tempo real da integridade estrutural, persistência, resiliência, isolamento multi-tenant e segurança do sistema.
+            Monitoramento determinístico em tempo real da integridade estrutural, persistência, resiliência, separação entre empresas e segurança do sistema.
           </p>
         </div>
 
@@ -160,7 +160,7 @@ export const SystemHealthCenterView: React.FC<{ companyId?: string }> = ({ compa
         <Card className="p-4 border-l-4 border-l-slate-500">
           <p className="text-xs text-slate-500 font-medium truncate">10. Configuração</p>
           <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-1">{health.configuration.score}%</p>
-          <span className="text-[10px] text-slate-400">Tenant Válido</span>
+          <span className="text-[10px] text-slate-400">Empresa válida</span>
         </Card>
       </div>
 

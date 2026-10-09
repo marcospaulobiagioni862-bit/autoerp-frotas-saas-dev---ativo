@@ -391,7 +391,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
         },
         {
           id: 'test-f352-feature-flags',
-          name: 'Fase 3.52 — Feature Flags & Tenant Isolation',
+          name: 'Fase 3.52 — Feature Flags e isolamento entre empresas',
           passed: featureFlagRes.passed,
           message: featureFlagRes.logs.join(' | '),
         },

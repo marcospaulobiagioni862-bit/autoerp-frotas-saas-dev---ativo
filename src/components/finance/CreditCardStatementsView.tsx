@@ -69,7 +69,7 @@ export const CreditCardStatementsView: React.FC = () => {
   };
 
   const closeStatement = async (statement: CreditCardStatementSummary) => {
-    if (!window.confirm(`Fechar a fatura do ciclo ${statement.cycleRef}? Esta ação será executada pela autoridade financeira do servidor.`)) return;
+    if (!window.confirm(`Fechar a fatura do ciclo ${statement.cycleRef}? A ação será registrada após sua confirmação.`)) return;
     setClosingStatementId(statement.id);
     setMessage(null);
     try {
@@ -77,7 +77,7 @@ export const CreditCardStatementsView: React.FC = () => {
       await load();
       if (detail?.statement.id === statement.id) await loadDetail(statement.id);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Não foi possível fechar a fatura pela autoridade financeira.');
+      setMessage(error instanceof Error ? error.message : 'Não foi possível fechar a fatura.');
     } finally {
       setClosingStatementId(null);
     }
@@ -110,7 +110,7 @@ export const CreditCardStatementsView: React.FC = () => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100"><CreditCard className="h-6 w-6 text-blue-600" /> Cartões / Faturas</h2>
-          <p className="mt-1 text-xs text-slate-500">Status, saldo e atraso são exibidos exatamente como retornados pela autoridade financeira do servidor; fechamento e pagamento exigem confirmação explícita.</p>
+          <p className="mt-1 text-xs text-slate-500">Status, saldo e atraso seguem os lançamentos confirmados. O fechamento e o pagamento exigem sua confirmação.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
       </div>
@@ -152,7 +152,7 @@ export const CreditCardStatementsView: React.FC = () => {
             </select>
           </label>
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">Filtros atuam somente sobre o read-model já retornado pelo servidor; nenhum status financeiro é recalculado no navegador.</p>
+        <p className="mt-2 text-[11px] text-slate-500">Os filtros organizam as informações exibidas e não alteram os lançamentos financeiros.</p>
       </Card>
 
       {loading ? (
@@ -206,7 +206,7 @@ export const CreditCardStatementsView: React.FC = () => {
         </Card>
       )}
 
-      <p className="text-[11px] text-slate-500">Fechamento e pagamento usam exclusivamente endpoints autoritativos e recarregam o read-model após sucesso. Nenhuma transferência, valor, saldo ou status é criado ou recalculado pelo navegador.</p>
+      <p className="text-[11px] text-slate-500">Após o fechamento ou pagamento, o sistema atualiza as informações da fatura. Nenhum valor ou saldo é alterado sem sua confirmação.</p>
     </div>
   );
 };

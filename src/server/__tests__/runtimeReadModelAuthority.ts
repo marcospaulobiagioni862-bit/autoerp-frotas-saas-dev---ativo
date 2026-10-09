@@ -86,7 +86,7 @@ assert.match(documentCenterSource, /setSearchTerm\(focusFileName\)/, 'Document c
 
 const testPanel = read('src/components/tests/ProductionTestRunnerPanel.tsx');
 assert.doesNotMatch(testPanel, /PersistenceTestRunner|StorageAdapter|seedAutoERPTestData/, 'Production test panel must not pull browser test persistence');
-assert.match(testPanel, /GitHub Actions/, 'Production test panel must direct technical authority to CI');
+assert.match(testPanel, /Consulte a área de validação para ver os resultados mais recentes/, 'Production test panel must direct users to current validation results');
 
 const resiliencePanel = read('src/components/resilience/ProductionResilienceCenterView.tsx');
 assert.doesNotMatch(resiliencePanel, /BackupService|StorageAdapter|company-default|admin-user-01/, 'Production resilience panel must not load local backup authority or simulated tenant identity');

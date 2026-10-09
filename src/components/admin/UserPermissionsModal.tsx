@@ -136,7 +136,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     icon: ShieldCheck,
     permissions: [
       { key: 'MANAGE_USERS', label: 'Gerenciar usuários', description: 'Ativar, inativar e editar permissões de usuários' },
-      { key: 'MANAGE_TENANT', label: 'Configurar empresa / tenant', description: 'Editar parâmetros globais e perfil da empresa' },
+      { key: 'MANAGE_TENANT', label: 'Configurar empresa', description: 'Editar parâmetros globais e perfil da empresa' },
     ],
   },
 ];

@@ -157,7 +157,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
       category.active && (category.type === 'INCOME' || category.type === 'BOTH') &&
       category.name.trim().toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR')
     );
-    if (!created) throw new Error('A categoria foi solicitada, mas não pôde ser confirmada pela autoridade financeira.');
+    if (!created) throw new Error('A categoria não foi confirmada. Tente novamente.');
     const refreshed = masterData.categories
       .filter((category) => category.active && (category.type === 'INCOME' || category.type === 'BOTH'))
       .map((category) => ({ id: category.id, name: category.name, type: category.type } as TrafficTicketFinancialCategory));
@@ -362,7 +362,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
           <div className="space-y-1"><label className="text-xs font-semibold text-slate-500 block">Categoria *</label><select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="control w-full" required><option value="">Selecione uma categoria de receita</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}<option value={OTHER_CATEGORY}>Outros / Diversos…</option></select></div>
           {categoryId === OTHER_CATEGORY && <Input label="Qual categoria? *" value={otherCategoryName} onChange={(event) => setOtherCategoryName(event.target.value)} placeholder="Ex: Avaria, taxa administrativa, outros" required />}
 
-          {preview.length > 1 && <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 text-xs font-semibold">Prévia das parcelas</div><div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">{preview.map((item) => <div key={item.number} className="flex items-center justify-between px-3 py-2 text-xs"><span>Parcela {item.number}/{preview.length} • vencimento {item.dueDate}</span><b>R$ {formatMoney(item.amount)}</b></div>)}</div><div className="px-3 py-2 text-[11px] text-slate-500">Soma: R$ {formatMoney(preview.reduce((sum, item) => roundCurrency(sum + item.amount), 0))}. As parcelas seguintes usam periodicidade mensal, igual à autoridade financeira atual.</div></div>}
+          {preview.length > 1 && <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"><div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 text-xs font-semibold">Prévia das parcelas</div><div className="max-h-48 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">{preview.map((item) => <div key={item.number} className="flex items-center justify-between px-3 py-2 text-xs"><span>Parcela {item.number}/{preview.length} • vencimento {item.dueDate}</span><b>R$ {formatMoney(item.amount)}</b></div>)}</div><div className="px-3 py-2 text-[11px] text-slate-500">Soma: R$ {formatMoney(preview.reduce((sum, item) => roundCurrency(sum + item.amount), 0))}. As parcelas seguintes vencem mensalmente.</div></div>}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800"><Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>Cancelar</Button><Button type="submit" variant="primary" isLoading={createLoading} disabled={manualOptionsLoading}>Criar cobrança</Button></div>
         </form>

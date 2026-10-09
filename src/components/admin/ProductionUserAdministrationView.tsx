@@ -55,7 +55,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Administração</h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Usuários e perfil operacional da empresa com autoridade PostgreSQL autenticada.
+              Os dados da empresa e dos usuários são protegidos e validados pelo sistema.
             </p>
           </div>
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950/60">
@@ -73,7 +73,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
               onClick={() => setActiveTab('tenant')}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'tenant' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}
             >
-              <Building2 className="h-4 w-4" /> Empresa / Tenant
+              <Building2 className="h-4 w-4" /> Empresa
             </button>
           </div>
         </div>
@@ -82,7 +82,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
       <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <strong>Escopo SECURITY-2Q2:</strong> Usuários e Empresa / Tenant foram promovidos para produção. Backup/restore, observabilidade, políticas de segurança, SLA e demais funções administrativas continuam bloqueadas até receberem autoridade server-side própria.
+          <strong>Disponível:</strong> administração de usuários e dados da empresa. As demais funções administrativas permanecem bloqueadas até estarem prontas e seguras para uso.
         </div>
       </div>
 
@@ -99,11 +99,11 @@ export const ProductionUserAdministrationView: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Usuários</h2>
                   <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    PostgreSQL autoritativo
+                    Dados protegidos
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  Listagem e ativação/inativação de usuários do tenant autenticado. Disponível somente para ADMIN.
+                  Usuários vinculados à empresa. Disponível somente para administradores.
                 </p>
               </div>
             </div>
@@ -115,7 +115,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
           <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              Credenciais e hashes de senha nunca são retornados por esta API. Tenant e ator são derivados exclusivamente da sessão autenticada do servidor.
+              Senhas e dados de acesso nunca são exibidos. A empresa e o responsável são identificados pela sessão ativa.
             </div>
           </div>
 
@@ -132,8 +132,8 @@ export const ProductionUserAdministrationView: React.FC = () => {
 
           <Card className="overflow-hidden">
             <div className="border-b border-slate-200 p-4 dark:border-slate-800">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Usuários do tenant</h3>
-              <p className="text-xs text-slate-500">Ações de status são validadas e auditadas pela autoridade PostgreSQL.</p>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Usuários da empresa</h3>
+              <p className="text-xs text-slate-500">As alterações de status são validadas e registradas no histórico.</p>
             </div>
 
             {loading ? (

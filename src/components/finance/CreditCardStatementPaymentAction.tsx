@@ -67,7 +67,7 @@ export const CreditCardStatementPaymentAction: React.FC<CreditCardStatementPayme
       await onSuccess();
     } catch (error) {
       // Preserve the same idempotency key on uncertain retry.
-      setMessage(error instanceof Error ? error.message : 'Não foi possível registrar o pagamento pela autoridade financeira.');
+      setMessage(error instanceof Error ? error.message : 'Não foi possível registrar o pagamento.');
     } finally {
       setPaying(false);
     }
@@ -121,7 +121,7 @@ export const CreditCardStatementPaymentAction: React.FC<CreditCardStatementPayme
               {paying ? 'Registrando...' : 'Confirmar pagamento'}
             </Button>
           </div>
-          <p className="mt-2 text-[10px] text-slate-500">O navegador não envia valor, saldo, status, tenant ou ator. Em falha incerta, a mesma chave idempotente é preservada para retry.</p>
+          <p className="mt-2 text-[10px] text-slate-500">O sistema confirma os valores, saldos e vínculos antes de registrar o pagamento. Se houver uma falha, a tentativa pode ser refeita sem duplicar o lançamento.</p>
         </div>
       )}
     </div>

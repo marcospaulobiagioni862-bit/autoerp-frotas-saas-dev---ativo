@@ -391,7 +391,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
           {tab === 'AUDIT' && <div className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold">Histórico e auditoria do contrato</h3>
-              <p className="text-[11px] text-slate-500">Eventos registrados pela autoridade do servidor. Valores brutos não são exibidos nesta visão.</p>
+              <p className="text-[11px] text-slate-500">Os eventos são registrados automaticamente no histórico. Os dados técnicos completos não aparecem nesta tela.</p>
             </div>
             {history.length === 0 ? <Card padding="md"><p className="text-center text-xs text-slate-400">Nenhum evento de auditoria registrado.</p></Card> : history.map((item) => {
               const change = contractAuditChangeSummary(item.previousState, item.newState);

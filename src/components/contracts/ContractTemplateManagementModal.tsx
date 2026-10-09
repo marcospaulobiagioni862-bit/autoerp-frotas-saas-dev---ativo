@@ -302,7 +302,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       onClose={onClose}
       size="5xl"
       title="Modelos de contrato"
-      subtitle="Os modelos oficiais MoveFlex ficam separados dos modelos personalizados e preservam a autoridade documental."
+      subtitle="Os modelos oficiais da MoveFlex permanecem separados dos modelos personalizados."
     >
       <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
         <div className="flex gap-2">

@@ -31,7 +31,7 @@ type JsonRecord = Record<string, unknown>;
 
 function record(value: unknown): JsonRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Invalid tenant profile response');
+    throw new Error('Não foi possível validar os dados do perfil da empresa');
   }
   return value as JsonRecord;
 }
@@ -50,7 +50,7 @@ function parseProfile(value: unknown): TenantProfileDto {
     typeof row.updatedAt !== 'string' ||
     typeof row.updatedBy !== 'string'
   ) {
-    throw new Error('Invalid tenant profile response');
+    throw new Error('Não foi possível validar os dados do perfil da empresa');
   }
   return {
     companyId: row.companyId,
@@ -69,7 +69,7 @@ function parseProfile(value: unknown): TenantProfileDto {
 async function request(init?: RequestInit): Promise<unknown> {
   const response = await fetch('/api/admin/tenant-profile', { ...init, credentials: 'include' });
   if (!response.ok) {
-    let message = `Tenant profile request failed (${response.status})`;
+    let message = `Não foi possível concluir a solicitação do perfil da empresa (${response.status})`;
     try {
       const payload = record(await response.json());
       if (typeof payload.error === 'string') message = payload.error;
