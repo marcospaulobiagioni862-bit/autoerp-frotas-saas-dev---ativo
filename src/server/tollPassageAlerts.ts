@@ -16,7 +16,7 @@ function message(plate:string,concessionaire:string,days:number):string{
 }
 
 export async function materializeTollPassageAlerts(companyId:string,today:string):Promise<number>{
-  const now=new Date(`${today}T00:00:00Z`);if(!Number.isFinite(now.getTime()))throw new Error('Invalid toll alert date');
+  const now=new Date(`${today}T12:00:00Z`);if(!Number.isFinite(now.getTime()))throw new Error('Invalid toll alert date');
   return UnitOfWork.run(companyId,async tx=>{
     const raw=tx.getRawTransaction?.();if(!raw)throw new Error('Toll notification persistence unavailable');
     const passages=rows(await raw.execute(sql`

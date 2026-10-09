@@ -451,8 +451,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "TrackerClient.listTelemetry" src/components/fleet/FleetComplianceManagement.tsx
-          grep -F "Consulta e triagem humana; nenhuma decisão altera KM, manutenção, contratos ou financeiro." src/components/fleet/FleetComplianceManagement.tsx
+          if grep -Eq "listTelemetry|telemetryEventTriage" src/components/fleet/FleetComplianceManagement.tsx; then
+            echo "FAIL: telemetry UI must not return to the frontend bundle"
+            exit 1
+          fi
           grep -F "Unsafe telemetry response" src/api/trackerClient.ts
           grep -F "credentials:'include'" src/api/trackerClient.ts
           if grep -Fq "rawPayload" src/components/fleet/FleetComplianceManagement.tsx; then
@@ -467,8 +469,10 @@ jobs:
           set -euo pipefail
           grep -F "deriveTelemetryHealthStatus" src/server/telemetryAuthority.ts
           grep -F "/api/trackers/:trackerId/telemetry/health" src/server/telemetryRoutes.ts
-          grep -F "TrackerClient.getTelemetryHealth" src/components/fleet/FleetComplianceManagement.tsx
-          grep -F "O odômetro exibido não altera a quilometragem oficial do veículo." src/components/fleet/FleetComplianceManagement.tsx
+          if grep -Fq "getTelemetryHealth" src/components/fleet/FleetComplianceManagement.tsx; then
+            echo "FAIL: telemetry health UI must not return to frontend bundle"
+            exit 1
+          fi
           grep -F "Unsafe telemetry health response" src/api/trackerClient.ts
           if grep -Eq "POST.+telemetry/health|PATCH.+telemetry/health|PUT.+telemetry/health|DELETE.+telemetry/health" src/api/trackerClient.ts src/server/telemetryRoutes.ts; then
             echo "FAIL: TELEMETRY-1C health must remain read-only"
@@ -485,7 +489,10 @@ jobs:
           grep -F "FOR UPDATE" src/server/telemetryAuthority.ts
           grep -F "/api/trackers/:trackerId/telemetry/:eventId/review" src/server/telemetryRoutes.ts
           grep -F "exact(req.body,['decision','reason'])" src/server/telemetryRoutes.ts
-          grep -F "A triagem apenas registra a análise humana; não altera KM nem financeiro." src/components/fleet/FleetComplianceManagement.tsx
+          if grep -Fq "A triagem apenas registra a análise humana" src/components/fleet/FleetComplianceManagement.tsx; then
+            echo "FAIL: telemetry review UI must not return to frontend bundle"
+            exit 1
+          fi
           grep -F "Unsafe telemetry review response" src/api/trackerClient.ts
           if grep -Eq "writeRoles=.*READONLY" src/server/telemetryRoutes.ts; then
             echo "FAIL: READONLY role must not review telemetry"
@@ -526,8 +533,10 @@ jobs:
           grep -F "COUNT(*) FILTER (WHERE received_at<" src/server/telemetryAuthority.ts
           grep -F "/api/trackers/:trackerId/telemetry/observability" src/server/telemetryRoutes.ts
           grep -F "Unsafe telemetry observability response" src/api/trackerClient.ts
-          grep -F "TrackerClient.getTelemetryObservability" src/components/fleet/FleetComplianceManagement.tsx
-          grep -F "Somente observabilidade: nenhuma telemetria é excluída automaticamente." src/components/fleet/FleetComplianceManagement.tsx
+          if grep -Fq "getTelemetryObservability" src/components/fleet/FleetComplianceManagement.tsx; then
+            echo "FAIL: telemetry observability UI must not return to frontend bundle"
+            exit 1
+          fi
           if grep -Eq "app\.(post|patch|put|delete).*telemetry/observability" src/server/telemetryRoutes.ts; then
             echo "FAIL: telemetry observability must remain read-only"
             exit 1

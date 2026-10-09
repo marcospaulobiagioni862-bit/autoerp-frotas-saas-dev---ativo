@@ -12,7 +12,7 @@ function severity(stage:string):'INFO'|'WARNING'|'DANGER'{if(stage==='POST_DUE')
 function message(company:string,policy:string,days:number):string{if(days<0)return `Seguro ${company} — apólice ${policy} está vencido e requer renovação.`;if(days===0)return `Seguro ${company} — apólice ${policy} vence hoje.`;return `Seguro ${company} — apólice ${policy} vence em ${days} dia(s).`;}
 
 export async function materializeInsuranceAlerts(companyId:string,today:string):Promise<number>{
-  const now=new Date(`${today}T00:00:00Z`);if(!Number.isFinite(now.getTime()))throw new Error('Invalid insurance alert date');
+  const now=new Date(`${today}T12:00:00Z`);if(!Number.isFinite(now.getTime()))throw new Error('Invalid insurance alert date');
   const insuranceInserted=await UnitOfWork.run(companyId,async txContext=>{
     const rawTx=txContext.getRawTransaction?.();if(!rawTx)throw new Error('Notification persistence unavailable');
     const insuranceResult=await rawTx.execute(sql`SELECT id,insurance_company,policy_number,end_date,status FROM insurances WHERE company_id=${companyId} AND status <> 'CANCELLED' ORDER BY end_date,id`);
