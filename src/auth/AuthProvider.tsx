@@ -6,6 +6,7 @@ import {
   AuthUser,
   createAuthSessionClient,
   LoginCredentials,
+  LoginResult,
   resolveEmbeddedAuthUser,
 } from '../hooks/useAuth';
 import { createSessionAwareFetch } from './sessionExpiry';
@@ -64,9 +65,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [client, embeddedDevelopmentUser]);
 
-  const login = useCallback(async (credentials: LoginCredentials) => {
-    const authenticatedUser = await client.login(credentials);
-    setUser(authenticatedUser);
+  const login = useCallback(async (credentials: LoginCredentials): Promise<LoginResult> => {
+    const result = await client.login(credentials);
+    if (!('requiresCompanySelection' in result && result.requiresCompanySelection)) {
+      setUser(result as AuthUser);
+    }
+    return result;
   }, [client]);
 
   const logout = useCallback(async () => {
