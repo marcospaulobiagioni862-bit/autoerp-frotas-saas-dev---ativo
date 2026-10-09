@@ -3,7 +3,14 @@ import { SignJWT } from 'jose';
 import { JwtAuthenticationConfig } from './auth';
 
 export const SESSION_COOKIE_NAME = 'autoerp_session';
-export const SESSION_TTL_SECONDS = 15 * 60;
+// AUTOERP-90. Era 15 minutos, sem nenhuma renovacao - o usuario era deslogado a
+// cada 15 minutos mesmo usando o sistema o tempo todo (nao e inatividade: e tempo
+// de vida fixo). Quem ficava numa tela durante uma reuniao perdia a sessao no
+// clique seguinte. Decisao do Pedro em 2026-10-09: no minimo 1 hora.
+// A renovacao deslizante (reemitir o cookie a cada requisicao autenticada) fica
+// como passo seguinte deste mesmo card: ela exige mexer no middleware do
+// server.ts, que esta sendo reescrito pelo AUTOERP-82 neste momento.
+export const SESSION_TTL_SECONDS = 60 * 60;
 
 function requireConfiguredValue(value: string, name: string): string {
   if (!value || value.trim() === '') {
