@@ -16,7 +16,9 @@ assert.match(
 );
 assert.match(
   source,
-  /\{error&&<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700/,
+  // AUTOERP-91: a caixa de erro passou a usar os tokens semanticos (error-*),
+  // que ja trocam sozinhos no modo escuro - por isso sumiram os pares dark:.
+  /\{error&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text/,
   'work-order modal must show command errors inside the modal',
 );
 assert.match(

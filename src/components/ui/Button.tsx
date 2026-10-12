@@ -21,7 +21,7 @@ export const Button: React.FC<ButtonProps> = ({
  // secundario e contorno. Nada de indigo/blue/rose soltos. O anel de foco usa
  // :focus-visible (nao :focus) para nao aparecer em clique de mouse, e os tokens
  // semanticos ja trocam sozinhos no modo escuro - por isso nao ha par dark: aqui.
- const baseStyles = 'inline-flex items-center justify-center font-medium rounded transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed whitespace-nowrap';
+ const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed whitespace-nowrap';
 
  const variantStyles: Record<string, string> = {
  primary: 'bg-action-primary text-on-action-primary hover:bg-action-primary-hover active:bg-action-primary-active disabled:bg-action-disabled disabled:text-fg-disabled',

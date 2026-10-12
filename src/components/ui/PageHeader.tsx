@@ -42,7 +42,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
  {primaryAction && (
  <button
  onClick={primaryAction.onClick}
- className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 active:bg-purple-800 shadow-sm transition-all focus:outline-none focus:ring-2 focus:border-border focus:ring-offset-2"
+ className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-on-action-primary bg-action-primary hover:bg-action-primary-hover active:bg-action-primary-active active:bg-action-primary shadow-sm transition-all focus:outline-none focus:ring-2 focus:border-border focus:ring-offset-2"
  >
  {primaryAction.icon}
  <span>{primaryAction.label}</span>
