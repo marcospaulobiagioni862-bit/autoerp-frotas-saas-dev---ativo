@@ -65,13 +65,13 @@ export function LoginView({ onLogin }: LoginViewProps) {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
+    <main className="min-h-screen bg-gradient-to-br from-graphite-900 via-graphite-950 to-graphite-900 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
       {/* Luzes ambiente de fundo */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[300px] bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-72 h-72 bg-indigo-600/10 rounded-full blur-2xl pointer-events-none" />
 
       <section
-        className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl shadow-black/70 relative z-10 transition-all duration-200"
+        className="w-full max-w-md rounded-2xl border border-graphite-800 bg-graphite-900/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl shadow-black/70 relative z-10 transition-all duration-200"
         aria-labelledby="login-title"
       >
         {/* Logo / Header */}
@@ -86,7 +86,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
               <h1 id="login-title" className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
                 Acesse sua conta
               </h1>
-              <p className="mt-2 text-sm text-slate-400">
+              <p className="mt-2 text-sm text-graphite-400">
                 Entre com seu e-mail e senha para acessar a plataforma.
               </p>
             </>
@@ -97,7 +97,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   type="button"
                   onClick={handleBackToLogin}
                   disabled={isSubmitting}
-                  className="p-1 -ml-1 text-slate-400 hover:text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="p-1 -ml-1 text-graphite-400 hover:text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
                   aria-label="Voltar para login"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -106,7 +106,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   Selecione a empresa
                 </h1>
               </div>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-graphite-400">
                 Seu usuário possui acesso a mais de uma locadora. Escolha qual deseja acessar:
               </p>
             </>
@@ -128,11 +128,11 @@ export function LoginView({ onLogin }: LoginViewProps) {
         {!availableCompanies ? (
           <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit} autoComplete="on">
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-1.5" htmlFor="login-email">
+              <label className="block text-xs font-medium uppercase tracking-wider text-graphite-300 mb-1.5" htmlFor="login-email">
                 E-mail corporativo
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-500">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -147,17 +147,17 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   placeholder="seu.email@empresa.com.br"
                   required
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-slate-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-slate-950/30 disabled:opacity-50 text-sm"
+                  className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wider text-slate-300 mb-1.5" htmlFor="login-password">
+              <label className="block text-xs font-medium uppercase tracking-wider text-graphite-300 mb-1.5" htmlFor="login-password">
                 Senha de acesso
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-500">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -170,14 +170,14 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   placeholder="••••••••••••"
                   required
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-slate-700/80 bg-slate-950/70 pl-10 pr-10 py-2.5 text-white placeholder-slate-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-slate-950/30 disabled:opacity-50 text-sm"
+                  className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-10 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
                   disabled={isSubmitting}
                   aria-label={showPassword ? 'Ocultar senha' : 'Ver senha'}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-graphite-400 hover:text-graphite-200 transition-colors focus:outline-none"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -211,7 +211,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 type="button"
                 onClick={() => handleSelectCompany(company)}
                 disabled={isSubmitting}
-                className="w-full p-3.5 rounded-xl border border-slate-800 bg-slate-950/50 hover:bg-slate-800/80 hover:border-violet-500/80 text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-50"
+                className="w-full p-3.5 rounded-xl border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-violet-500/80 text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-50"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 group-hover:bg-violet-500/20 transition-colors shrink-0">
@@ -221,12 +221,12 @@ export function LoginView({ onLogin }: LoginViewProps) {
                     <span className="text-sm font-semibold text-white block truncate">
                       {company.tradeName || company.name}
                     </span>
-                    <span className="text-xs text-slate-400 block truncate">
+                    <span className="text-xs text-graphite-400 block truncate">
                       CNPJ: {company.document}
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
+                <ChevronRight className="w-4 h-4 text-graphite-500 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
               </button>
             ))}
 
@@ -234,7 +234,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
               type="button"
               onClick={handleBackToLogin}
               disabled={isSubmitting}
-              className="w-full mt-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+              className="w-full mt-4 py-2 text-xs font-medium text-graphite-400 hover:text-white transition-colors"
             >
               Entrar com outra conta
             </button>
@@ -242,8 +242,8 @@ export function LoginView({ onLogin }: LoginViewProps) {
         )}
 
         {/* Rodapé de Confiança e Segurança */}
-        <div className="mt-8 pt-6 border-t border-slate-800/80 flex items-center justify-center gap-2 text-xs text-slate-500">
-          <Lock className="w-3.5 h-3.5 text-slate-500" />
+        <div className="mt-8 pt-6 border-t border-graphite-800/80 flex items-center justify-center gap-2 text-xs text-graphite-500">
+          <Lock className="w-3.5 h-3.5 text-graphite-500" />
           <span>Conexão criptografada ponta a ponta</span>
         </div>
       </section>

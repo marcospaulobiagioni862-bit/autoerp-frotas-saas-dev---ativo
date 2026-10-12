@@ -160,17 +160,17 @@ export const FleetManagement: React.FC = () => {
 
       {!showArchived && (
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Total Frota</span><strong className="text-lg font-mono font-bold text-slate-900 dark:text-slate-100">{totalCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl"><span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl"><span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-900/50 rounded-xl"><span className="text-xs text-violet-600 dark:text-violet-400 block font-semibold">Reservados</span><strong className="text-lg font-mono font-bold text-violet-700 dark:text-violet-300">{reservedCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-xl"><span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl"><span className="text-xs text-slate-400 block">Inativos</span><strong className="text-lg font-mono font-bold text-slate-600 dark:text-slate-400">{inactiveCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl"><span className="text-xs text-graphite-400 block">Total Frota</span><strong className="text-lg font-mono font-bold text-graphite-900 dark:text-graphite-100">{totalCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl"><span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-blue-200 dark:border-blue-900/50 rounded-xl"><span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-violet-200 dark:border-violet-900/50 rounded-xl"><span className="text-xs text-violet-600 dark:text-violet-400 block font-semibold">Reservados</span><strong className="text-lg font-mono font-bold text-violet-700 dark:text-violet-300">{reservedCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-amber-200 dark:border-amber-900/50 rounded-xl"><span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl"><span className="text-xs text-graphite-400 block">Inativos</span><strong className="text-lg font-mono font-bold text-graphite-600 dark:text-graphite-400">{inactiveCount}</strong></div>
         </div>
       )}
 
       {showArchived && (
-        <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-xs text-slate-600 dark:text-slate-300">
+        <div className="p-3 rounded-xl border border-graphite-200 dark:border-graphite-700 bg-graphite-50 dark:bg-graphite-800/40 text-xs text-graphite-600 dark:text-graphite-300">
           {totalCount} veículo(s) vendido(s) ou arquivado(s). O histórico é preservado; apenas veículos vendidos e ainda não arquivados podem retornar ao estoque.
         </div>
       )}
@@ -178,13 +178,13 @@ export const FleetManagement: React.FC = () => {
       <Card padding="sm">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="w-full md:max-w-xl md:flex-1">
-            <Input type="text" placeholder="Buscar por placa, marca ou modelo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} icon={<Search className="w-4 h-4 text-slate-400" />}/>
+            <Input type="text" placeholder="Buscar por placa, marca ou modelo..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} icon={<Search className="w-4 h-4 text-graphite-400" />}/>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 w-full md:w-auto">
             <Button variant="outline" size="sm" onClick={toggleArchivedView}>{showArchived ? 'Voltar à frota ativa' : 'Ver vendidos / arquivados'}</Button>
-            {!showArchived && <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0 mr-1" />}
+            {!showArchived && <Filter className="w-3.5 h-3.5 text-graphite-400 shrink-0 mr-1" />}
             {!showArchived && VEHICLE_STATUS_FILTERS.map((st) => (
-              <button key={st.id} onClick={() => setStatusFilter(st.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusFilter === st.id ? 'bg-blue-600 text-white font-semibold shadow-2xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>{st.label}</button>
+              <button key={st.id} onClick={() => setStatusFilter(st.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusFilter === st.id ? 'bg-blue-600 text-white font-semibold shadow-2xs' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'}`}>{st.label}</button>
             ))}
             <div className="w-52 shrink-0">
               <Select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} options={[{ value: 'ALL', label: 'Todas as categorias' }, ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))]}/>
@@ -218,10 +218,10 @@ export const FleetManagement: React.FC = () => {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"><Skeleton className="h-56 w-full"/><Skeleton className="h-56 w-full"/><Skeleton className="h-56 w-full"/></div>
       ) : filteredVehicles.length === 0 ? (
-        <div className="p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
-          <Car className="w-12 h-12 text-slate-300 mx-auto mb-3"/>
-          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">{showArchived ? 'Nenhum veículo vendido ou arquivado' : 'Nenhum veículo encontrado'}</h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">{showArchived ? 'Veículos vendidos ou arquivados aparecem aqui sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
+        <div className="p-12 text-center bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-2xl">
+          <Car className="w-12 h-12 text-graphite-300 mx-auto mb-3"/>
+          <h3 className="text-base font-bold text-graphite-900 dark:text-graphite-100">{showArchived ? 'Nenhum veículo vendido ou arquivado' : 'Nenhum veículo encontrado'}</h3>
+          <p className="text-xs text-graphite-500 mt-1 max-w-md mx-auto">{showArchived ? 'Veículos vendidos ou arquivados aparecem aqui sem perder seus históricos.' : 'Ajuste os filtros de busca ou cadastre um novo veículo para sua frota de locação.'}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -235,15 +235,15 @@ export const FleetManagement: React.FC = () => {
             const isReadOnlyTerminal = showArchived || vehicle.status === VehicleStatus.SOLD || vehicle.status === VehicleStatus.ARCHIVED;
 
             return (
-              <Card key={vehicle.id} padding="md" hoverEffect className="flex flex-col justify-between border-slate-200 dark:border-slate-800">
+              <Card key={vehicle.id} padding="md" hoverEffect className="flex flex-col justify-between border-graphite-200 dark:border-graphite-800">
                 <div>
-                  <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-black px-2.5 py-1 bg-slate-900 text-white rounded-md tracking-wider">{vehicle.plate}</span><Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge></div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
-                  <p className="text-xs text-slate-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
+                  <div className="flex items-center justify-between gap-2"><span className="font-mono text-sm font-black px-2.5 py-1 bg-graphite-900 text-white rounded-md tracking-wider">{vehicle.plate}</span><Badge variant={vehicleStatusBadgeVariant(vehicle.status)}>{vehicleStatusLabel(vehicle.status)}</Badge></div>
+                  <h3 className="text-base font-bold text-graphite-900 dark:text-graphite-100 mt-3">{vehicle.brand} {vehicle.model}</h3>
+                  <p className="text-xs text-graphite-500">Ano: {vehicle.yearFabrication}/{vehicle.yearModel} • Cor: {vehicle.color} • {vehicle.fuelType}</p>
                   
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                      vehicle.ownerType === 'PROPRIO' ? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' :
+                      vehicle.ownerType === 'PROPRIO' ? 'bg-graphite-100 text-graphite-700 border-graphite-200 dark:bg-graphite-800 dark:text-graphite-300 dark:border-graphite-700' :
                       vehicle.ownerType === 'SOCIO' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' :
                       vehicle.ownerType === 'LEASING' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' :
                       'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
@@ -271,23 +271,23 @@ export const FleetManagement: React.FC = () => {
                     )}
                   </div>
                   {vehicle.ownerName && (
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-1">
-                      Titular: <span className="font-medium text-slate-700 dark:text-slate-300">{vehicle.ownerName}</span>
+                    <p className="text-[11px] text-graphite-500 dark:text-graphite-400 truncate mt-1">
+                      Titular: <span className="font-medium text-graphite-700 dark:text-graphite-300">{vehicle.ownerName}</span>
                     </p>
                   )}
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                    <div className="flex justify-between"><span className="text-slate-400">Quilometragem:</span><strong className="font-mono tabular-nums text-slate-900 dark:text-slate-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>
+                  <div className="mt-4 pt-3 border-t border-graphite-100 dark:border-graphite-800 space-y-1.5 text-xs text-graphite-600 dark:text-graphite-400">
+                    <div className="flex justify-between"><span className="text-graphite-400">Quilometragem:</span><strong className="font-mono tabular-nums text-graphite-900 dark:text-graphite-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
+                    <div className="flex justify-between"><span className="text-graphite-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-2 text-xs">
-                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-slate-700 dark:text-slate-300">{isReadOnlyTerminal ? 'Histórico do veículo' : 'Ações do veículo'}</span></div>
+                <div className="mt-4 pt-3 border-t border-graphite-100 dark:border-graphite-800 flex flex-col gap-2 text-xs">
+                  <div className="flex items-center justify-between gap-2"><span className="font-semibold text-graphite-700 dark:text-graphite-300">{isReadOnlyTerminal ? 'Histórico do veículo' : 'Ações do veículo'}</span></div>
 
                   {isReadOnlyTerminal ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold border rounded-lg hover:bg-graphite-50 dark:hover:bg-graphite-800">
                         <Eye className="w-3.5 h-3.5"/> Abrir histórico somente leitura
                       </button>
                       {vehicle.status === VehicleStatus.SOLD && !vehicle.isArchived && (
@@ -301,8 +301,8 @@ export const FleetManagement: React.FC = () => {
                     <div className="flex items-center justify-between gap-2">
                       <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"><Eye className="w-3.5 h-3.5"/> Detalhes</button>
                       <details className="relative">
-                        <summary aria-label={`Mais ações para ${vehicle.plate}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
-                        <div className="absolute right-0 z-20 mt-1 w-56 space-y-1 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                        <summary aria-label={`Mais ações para ${vehicle.plate}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-2 text-base font-bold text-graphite-600 hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800">⋮</summary>
+                        <div className="absolute right-0 z-20 mt-1 w-56 space-y-1 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
                           {(manualStatusOptions.length > 0 || canMarkSold) && (
                             <Select
                               aria-label={`Alterar status do veículo ${vehicle.plate}`}
@@ -322,11 +322,11 @@ export const FleetManagement: React.FC = () => {
                               ]}
                             />
                           )}
-                          <button onClick={() => setVehicleForKmRecord(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Gauge className="w-4 h-4"/>Registrar KM</button>
-                          <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Edit className="w-4 h-4"/>Editar</button>
+                          <button onClick={() => setVehicleForKmRecord(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Gauge className="w-4 h-4"/>Registrar KM</button>
+                          <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Edit className="w-4 h-4"/>Editar</button>
                           {isAvailable && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40">Enviar para manutenção</button>}
-                          {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Colocar fora de uso</button>}
-                          {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Marcar como vendido</button>}
+                          {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Colocar fora de uso</button>}
+                          {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Marcar como vendido</button>}
                           {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>}
                         </div>
                       </details>
@@ -340,7 +340,7 @@ export const FleetManagement: React.FC = () => {
       )}
 
       <LazyModuleErrorBoundary resetKey={fleetModalResetKey} onRetry={()=>window.location.reload()}>
-        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do veículo...</div></div>}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-graphite-600 shadow-xl dark:bg-graphite-900 dark:text-graphite-300">Carregando dados do veículo...</div></div>}>
           {isVehicleAiOpen&&<VehicleDocumentIntakeModal
             isOpen
             onClose={() => setIsVehicleAiOpen(false)}

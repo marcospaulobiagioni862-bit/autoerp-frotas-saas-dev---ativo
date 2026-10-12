@@ -274,22 +274,22 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl">
-      <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
+      <div className="flex items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
         <div>
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-indigo-600" />
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-bold text-graphite-900 dark:text-graphite-100">
               Matriz de Permissões de Acesso
             </h2>
             <Badge variant="outline">{user.name}</Badge>
           </div>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-graphite-500">
             {user.email} • ID: {user.id} • Ativo: {user.active ? 'Sim' : 'Não'}
           </p>
         </div>
         <button
           onClick={(e) => requestGuardedClose(e, onClose)}
-          className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          className="rounded-lg p-1 text-graphite-400 hover:bg-graphite-100 hover:text-graphite-600 dark:hover:bg-graphite-800"
           aria-label="Fechar modal"
         >
           <X className="w-5 h-5" />
@@ -311,7 +311,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-200">
                 1. Selecionar Perfil Operacional (Preset)
               </h3>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-graphite-500">
                 Escolha um perfil para aplicar os padrões recomendados da locadora. Você pode ajustar permissões individuais abaixo.
               </p>
             </div>
@@ -330,17 +330,17 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
                   onClick={() => applyPreset(key)}
                   className={`flex flex-col text-left p-3 rounded-xl border transition-all ${
                     isSelected
-                      ? 'border-indigo-600 bg-white shadow-sm ring-2 ring-indigo-500/20 dark:border-indigo-400 dark:bg-slate-900'
-                      : 'border-slate-200 bg-white/70 hover:bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-900'
+                      ? 'border-indigo-600 bg-white shadow-sm ring-2 ring-indigo-500/20 dark:border-indigo-400 dark:bg-graphite-900'
+                      : 'border-graphite-200 bg-white/70 hover:bg-white hover:border-graphite-300 dark:border-graphite-800 dark:bg-graphite-900/60 dark:hover:bg-graphite-900'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-1">
-                    <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                    <span className="font-bold text-xs text-graphite-900 dark:text-graphite-100">
                       {preset.label}
                     </span>
                     {isSelected && <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />}
                   </div>
-                  <p className="text-[10px] text-slate-500 leading-snug">
+                  <p className="text-[10px] text-graphite-500 leading-snug">
                     {preset.description}
                   </p>
                 </button>
@@ -352,7 +352,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
         {/* Seção 2: Matriz por Módulo */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-graphite-600 dark:text-graphite-400">
               2. Matriz Granular de Acessos por Módulo
             </h3>
             {selectedRole === 'ADMIN' && (
@@ -372,17 +372,17 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
               return (
                 <div
                   key={group.id}
-                  className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+                  className="rounded-xl border border-graphite-200 bg-white p-3.5 shadow-xs dark:border-graphite-800 dark:bg-graphite-900"
                 >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-graphite-100 dark:border-graphite-800">
                     <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-slate-100 p-1.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <div className="rounded-lg bg-graphite-100 p-1.5 text-graphite-600 dark:bg-graphite-800 dark:text-graphite-300">
                         <GroupIcon className="w-4 h-4" />
                       </div>
-                      <span className="font-bold text-xs text-slate-900 dark:text-slate-100">
+                      <span className="font-bold text-xs text-graphite-900 dark:text-graphite-100">
                         {group.name}
                       </span>
-                      <span className="text-[11px] text-slate-400">
+                      <span className="text-[11px] text-graphite-400">
                         ({selectedGroupCount}/{groupKeys.length})
                       </span>
                     </div>
@@ -404,23 +404,23 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
                           className={`flex items-start gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition ${
                             isChecked
                               ? 'border-indigo-200 bg-indigo-50/30 dark:border-indigo-900 dark:bg-indigo-950/20'
-                              : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50 dark:border-slate-800/60 dark:bg-slate-900/40'
+                              : 'border-graphite-100 bg-graphite-50/50 hover:bg-graphite-50 dark:border-graphite-800/60 dark:bg-graphite-900/40'
                           }`}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => togglePermission(perm.key)}
-                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-700"
+                            className="mt-0.5 rounded border-graphite-300 text-indigo-600 focus:ring-indigo-500 dark:border-graphite-700"
                           />
                           <div className="min-w-0">
-                            <span className="font-semibold text-slate-800 dark:text-slate-200 block text-xs">
+                            <span className="font-semibold text-graphite-800 dark:text-graphite-200 block text-xs">
                               {perm.label}
                             </span>
-                            <span className="text-[10px] text-slate-500 block leading-tight">
+                            <span className="text-[10px] text-graphite-500 block leading-tight">
                               {perm.description}
                             </span>
-                            <span className="text-[9px] font-mono text-slate-400 block mt-0.5">
+                            <span className="text-[9px] font-mono text-graphite-400 block mt-0.5">
                               {perm.key}
                             </span>
                           </div>
@@ -435,9 +435,9 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3.5 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="text-xs text-slate-500">
-          Papel configurado: <b className="font-semibold text-slate-700 dark:text-slate-300">{ROLE_PRESETS[selectedRole]?.label || selectedRole}</b>
+      <div className="flex items-center justify-between border-t border-graphite-100 px-5 py-3.5 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-900/50">
+        <div className="text-xs text-graphite-500">
+          Papel configurado: <b className="font-semibold text-graphite-700 dark:text-graphite-300">{ROLE_PRESETS[selectedRole]?.label || selectedRole}</b>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={(e) => requestGuardedClose(e, onClose)} disabled={loading}>

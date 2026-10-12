@@ -58,22 +58,22 @@ export const VehicleArchiveModal: React.FC<VehicleArchiveModalProps> = ({ isOpen
         <Input label="Data do arquivamento *" type="date" required value={archiveDate} onChange={(e) => setArchiveDate(e.target.value)} />
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Motivo do arquivamento *</label>
+          <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Motivo do arquivamento *</label>
           <textarea
             required
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Informe por que o veículo está sendo arquivado."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-300">
+        <div className="rounded-lg border border-graphite-200 dark:border-graphite-700 p-3 text-xs text-graphite-600 dark:text-graphite-300">
           O histórico não será apagado. KM, contratos, manutenções, multas, documentos e dados financeiros vinculados continuarão consultáveis.
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
           <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>Confirmar arquivamento</Button>
         </div>

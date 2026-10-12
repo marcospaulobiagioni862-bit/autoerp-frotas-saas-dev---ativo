@@ -104,8 +104,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   if (isRestoring) {
     return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6" aria-live="polite">
-        <div className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-sm">
+      <main className="min-h-screen bg-graphite-50 flex items-center justify-center p-6" aria-live="polite">
+        <div className="rounded-xl border border-graphite-200 bg-white px-6 py-5 text-sm text-graphite-600 shadow-sm">
           Verificando sessão segura...
         </div>
       </main>

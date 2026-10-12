@@ -61,17 +61,17 @@ export const DelinquencyView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100">
             <AlertTriangle className="h-5 w-5 text-red-600" /> Inadimplência
           </h2>
-          <p className="mt-1 text-xs text-slate-500">Visão para consulta, atualizada a partir dos lançamentos financeiros confirmados.</p>
+          <p className="mt-1 text-xs text-graphite-500">Visão para consulta, atualizada a partir dos lançamentos financeiros confirmados.</p>
         </div>
         <Card padding="sm">
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <CalendarRange className="h-4 w-4 text-slate-400" />
-            <label className="text-slate-500">Data de referência</label>
-            <input type="date" value={processingDate} onChange={(e) => setProcessingDate(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-mono dark:border-slate-700 dark:bg-slate-900" />
-            <select value={agingType} onChange={(e) => setAgingType(e.target.value as AgingObligationType)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-900">
+            <CalendarRange className="h-4 w-4 text-graphite-400" />
+            <label className="text-graphite-500">Data de referência</label>
+            <input type="date" value={processingDate} onChange={(e) => setProcessingDate(e.target.value)} className="rounded-lg border border-graphite-200 bg-white px-2.5 py-1.5 font-mono dark:border-graphite-700 dark:bg-graphite-900" />
+            <select value={agingType} onChange={(e) => setAgingType(e.target.value as AgingObligationType)} className="rounded-lg border border-graphite-200 bg-white px-2.5 py-1.5 dark:border-graphite-700 dark:bg-graphite-900">
               <option value="RECEIVABLE">Aging — Contas a Receber</option>
               <option value="PAYABLE">Aging — Contas a Pagar</option>
             </select>
@@ -84,22 +84,22 @@ export const DelinquencyView: React.FC = () => {
       {loading ? <div className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-72 w-full" /></div> : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card padding="md"><span className="text-[11px] font-semibold uppercase text-slate-500">Recebíveis vencidos</span><strong className="mt-1 block text-xl font-mono">{items.length}</strong></Card>
+            <Card padding="md"><span className="text-[11px] font-semibold uppercase text-graphite-500">Recebíveis vencidos</span><strong className="mt-1 block text-xl font-mono">{items.length}</strong></Card>
             <Card padding="md"><span className="text-[11px] font-semibold uppercase text-red-600">Saldo inadimplente</span><strong className="mt-1 block text-xl font-mono text-red-700 dark:text-red-400">{formatCurrencyBRL(totals.outstanding)}</strong></Card>
-            <Card padding="md"><span className="text-[11px] font-semibold uppercase text-slate-500">Já recebido</span><strong className="mt-1 block text-xl font-mono">{formatCurrencyBRL(totals.received)}</strong></Card>
+            <Card padding="md"><span className="text-[11px] font-semibold uppercase text-graphite-500">Já recebido</span><strong className="mt-1 block text-xl font-mono">{formatCurrencyBRL(totals.received)}</strong></Card>
             <Card padding="md"><span className="text-[11px] font-semibold uppercase text-amber-600">Multa + juros</span><strong className="mt-1 block text-xl font-mono text-amber-700 dark:text-amber-400">{formatCurrencyBRL(totals.charges)}</strong></Card>
           </div>
 
           <Card padding="md">
-            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-sm font-bold">Aging autoritativo — {agingType === 'RECEIVABLE' ? 'Contas a Receber' : 'Contas a Pagar'}</h3><span className="text-xs font-mono text-slate-500">{processingDate}</span></div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">{buckets.map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60"><span className="block text-[10px] font-bold uppercase text-slate-500">{label}</span><strong className="mt-1 block font-mono text-sm">{formatCurrencyBRL(value)}</strong></div>)}</div>
+            <div className="mb-4 flex items-center justify-between gap-3"><h3 className="text-sm font-bold">Aging autoritativo — {agingType === 'RECEIVABLE' ? 'Contas a Receber' : 'Contas a Pagar'}</h3><span className="text-xs font-mono text-graphite-500">{processingDate}</span></div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">{buckets.map(([label, value]) => <div key={label} className="rounded-lg bg-graphite-50 p-3 dark:bg-graphite-800/60"><span className="block text-[10px] font-bold uppercase text-graphite-500">{label}</span><strong className="mt-1 block font-mono text-sm">{formatCurrencyBRL(value)}</strong></div>)}</div>
           </Card>
 
           <Card padding="none">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] text-xs">
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-800 dark:bg-slate-800/60"><tr><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Origem / vínculos</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Recebido</th><th className="p-3 text-right">Multa</th><th className="p-3 text-right">Juros</th><th className="p-3 text-right">Saldo</th></tr></thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{items.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-500">Nenhum recebível inadimplente na data selecionada.</td></tr> : items.map((item) => <tr key={item.receivableId}><td className="p-3 font-mono">{item.dueDate}<span className="ml-2 font-bold text-red-600">{item.daysOverdue}d</span></td><td className="p-3"><div className="font-semibold">{item.originType} · {item.originId}</div><div className="text-[10px] text-slate-400">Motorista: {item.driverId || '—'} · Veículo: {item.vehicleId || '—'} · Contrato: {item.contractId || '—'}</div></td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.originalAmount)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.receivedAmount)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.lateFee)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.interest)}</td><td className="p-3 text-right font-mono font-bold text-red-700 dark:text-red-400">{formatCurrencyBRL(item.updatedOutstandingAmount)}</td></tr>)}</tbody>
+                <thead className="border-b border-graphite-200 bg-graphite-50 text-graphite-500 dark:border-graphite-800 dark:bg-graphite-800/60"><tr><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Origem / vínculos</th><th className="p-3 text-right">Original</th><th className="p-3 text-right">Recebido</th><th className="p-3 text-right">Multa</th><th className="p-3 text-right">Juros</th><th className="p-3 text-right">Saldo</th></tr></thead>
+                <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">{items.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-graphite-500">Nenhum recebível inadimplente na data selecionada.</td></tr> : items.map((item) => <tr key={item.receivableId}><td className="p-3 font-mono">{item.dueDate}<span className="ml-2 font-bold text-red-600">{item.daysOverdue}d</span></td><td className="p-3"><div className="font-semibold">{item.originType} · {item.originId}</div><div className="text-[10px] text-graphite-400">Motorista: {item.driverId || '—'} · Veículo: {item.vehicleId || '—'} · Contrato: {item.contractId || '—'}</div></td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.originalAmount)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.receivedAmount)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.lateFee)}</td><td className="p-3 text-right font-mono">{formatCurrencyBRL(item.interest)}</td><td className="p-3 text-right font-mono font-bold text-red-700 dark:text-red-400">{formatCurrencyBRL(item.updatedOutstandingAmount)}</td></tr>)}</tbody>
               </table>
             </div>
           </Card>

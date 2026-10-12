@@ -88,10 +88,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <ModalContainer isOpen={isOpen} onClose={handleClose} title={resolvedTitle} maxWidth="md">
       <div className="flex items-start gap-4">
-        <div className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 shrink-0">
+        <div className="p-2.5 rounded-full bg-graphite-100 dark:bg-graphite-800 shrink-0">
           {iconMap[variant as keyof typeof iconMap] || iconMap.danger}
         </div>
-        <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300 w-full">
+        <div className="space-y-3 text-sm text-graphite-600 dark:text-graphite-300 w-full">
           {resolvedMessage && <p>{resolvedMessage}</p>}
           {children}
 
@@ -113,7 +113,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800 mt-4">
+      <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800 mt-4">
         <Button variant="outline" onClick={handleClose} disabled={isLoading}>
           {resolvedCancelLabel}
         </Button>

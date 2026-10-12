@@ -90,21 +90,21 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
           </div>
         )}
 
-        <div className="max-h-[55vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="max-h-[55vh] overflow-y-auto rounded-xl border border-graphite-200 dark:border-graphite-800">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-slate-50 text-slate-500 dark:bg-slate-900">
+            <thead className="sticky top-0 bg-graphite-50 text-graphite-500 dark:bg-graphite-900">
               <tr>
                 <th className="px-3 py-2 text-left">Veículo</th>
                 <th className="px-3 py-2 text-right">KM atual</th>
                 <th className="px-3 py-2 text-left">Nova KM</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">
               {editableVehicles.map((vehicle) => (
                 <tr key={vehicle.id}>
                   <td className="px-3 py-2">
-                    <div className="font-semibold text-slate-800 dark:text-slate-100">{vehicle.plate}</div>
-                    <div className="text-[10px] text-slate-500">{vehicle.brand} {vehicle.model}</div>
+                    <div className="font-semibold text-graphite-800 dark:text-graphite-100">{vehicle.plate}</div>
+                    <div className="text-[10px] text-graphite-500">{vehicle.brand} {vehicle.model}</div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums">{vehicle.currentKm.toLocaleString('pt-BR')} km</td>
                   <td className="px-3 py-2">
@@ -116,7 +116,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
                       value={values[vehicle.id] || ''}
                       onChange={(event) => setValues((current) => ({ ...current, [vehicle.id]: event.target.value }))}
                       placeholder="Deixe vazio para ignorar"
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                      className="w-full rounded-lg border border-graphite-300 bg-white px-3 py-2 text-xs text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100"
                     />
                   </td>
                 </tr>
@@ -126,7 +126,7 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+          <label className="mb-1 block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
             Observação comum
           </label>
           <textarea
@@ -134,12 +134,12 @@ export const VehicleKmBatchModal: React.FC<VehicleKmBatchModalProps> = ({
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             placeholder="Ex.: leitura semanal da frota"
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="w-full rounded-lg border border-graphite-300 bg-white px-3 py-2 text-xs text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100"
           />
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+        <div className="flex items-center justify-between border-t border-graphite-200 pt-4 dark:border-graphite-800">
+          <div className="flex items-center gap-2 text-[11px] text-graphite-500">
             <Gauge className="h-4 w-4" />
             {entries.length} veículo(s) selecionado(s)
           </div>

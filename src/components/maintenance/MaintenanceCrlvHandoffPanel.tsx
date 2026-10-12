@@ -61,20 +61,20 @@ export function MaintenanceCrlvHandoffPanel({ workOrderId }: { workOrderId: stri
       <div className="flex items-start gap-3">
         <FileCheck2 className="mt-0.5 h-5 w-5 text-blue-600" />
         <div className="min-w-0 flex-1">
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">CRLV anexado na manutenção</h4>
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+          <h4 className="text-sm font-semibold text-graphite-800 dark:text-graphite-100">CRLV anexado na manutenção</h4>
+          <p className="mt-1 text-xs text-graphite-600 dark:text-graphite-300">
             Anexar aqui não altera o cadastro do veículo. Se um destes arquivos for o CRLV, reutilize os mesmos bytes na ficha do veículo, sem fazer outro upload.
           </p>
 
-          {loading ? <p className="mt-3 text-xs text-slate-500">Verificando anexos elegíveis...</p> : eligible.length === 0 ? (
-            <p className="mt-3 text-xs text-slate-500">Nenhum PDF ou imagem disponível nesta OS para reutilização como CRLV.</p>
+          {loading ? <p className="mt-3 text-xs text-graphite-500">Verificando anexos elegíveis...</p> : eligible.length === 0 ? (
+            <p className="mt-3 text-xs text-graphite-500">Nenhum PDF ou imagem disponível nesta OS para reutilização como CRLV.</p>
           ) : (
             <div className="mt-3 space-y-2">
               {eligible.map((attachment) => (
-                <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-white p-2 dark:border-blue-900 dark:bg-slate-950">
+                <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-white p-2 dark:border-blue-900 dark:bg-graphite-950">
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium text-slate-800 dark:text-slate-100">{attachment.fileName}</p>
-                    <p className="text-[11px] text-slate-500">{attachment.mimeType} · {(attachment.fileSize / 1024).toFixed(1)} KB</p>
+                    <p className="truncate text-xs font-medium text-graphite-800 dark:text-graphite-100">{attachment.fileName}</p>
+                    <p className="text-[11px] text-graphite-500">{attachment.mimeType} · {(attachment.fileSize / 1024).toFixed(1)} KB</p>
                   </div>
                   <Button
                     type="button"

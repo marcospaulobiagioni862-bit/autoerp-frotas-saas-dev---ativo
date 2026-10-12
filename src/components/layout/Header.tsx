@@ -113,13 +113,13 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
+    <header className="h-16 bg-white dark:bg-graphite-900 border-b border-graphite-200 dark:border-graphite-800 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-2xs">
       <div className="flex items-center gap-3 sm:gap-4">
         {onToggleMobileSidebar && (
           <button
             onClick={onToggleMobileSidebar}
             aria-label="Abrir menu de navegação"
-            className="p-2 md:hidden text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-2 md:hidden text-graphite-600 dark:text-graphite-300 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -130,14 +130,14 @@ export const Header: React.FC<HeaderProps> = ({
             AE
           </div>
           <div>
-            <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
+            <h1 className="text-sm sm:text-base font-bold text-graphite-900 dark:text-graphite-100 leading-tight flex items-center gap-1.5">
               <span>AutoERP</span>
               <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                 V2 Preview
               </span>
             </h1>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:flex items-center gap-1">
-              <Building2 className="w-3 h-3 text-slate-400" />
+            <p className="text-[11px] text-graphite-500 dark:text-graphite-400 hidden sm:flex items-center gap-1">
+              <Building2 className="w-3 h-3 text-graphite-400" />
               <span>{authMode === 'server-session' ? 'Ambiente isolado para revisão' : 'Ambiente de desenvolvimento'}</span>
               {authMode === 'server-session' && (
                 <span
@@ -158,13 +158,13 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={toggleDarkMode}
           aria-label={isDark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
-          className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="p-2 text-graphite-500 hover:text-graphite-700 dark:text-graphite-400 dark:hover:text-graphite-200 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
           title={isDark ? 'Tema Claro' : 'Tema Escuro'}
         >
-          {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+          {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-graphite-600" />}
         </button>
 
-        <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 hidden sm:block" />
+        <div className="h-6 w-px bg-graphite-200 dark:bg-graphite-800 mx-0.5 hidden sm:block" />
 
         <div className="relative" ref={userMenuRef}>
           <button
@@ -173,37 +173,37 @@ export const Header: React.FC<HeaderProps> = ({
             aria-expanded={isUserMenuOpen}
             aria-haspopup="menu"
             aria-label={`Menu do usuário: ${user.name}`}
-            className="flex items-center gap-2 p-1 sm:px-2 sm:py-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 text-left group"
+            className="flex items-center gap-2 p-1 sm:px-2 sm:py-1.5 rounded-xl hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 text-left group"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center text-slate-800 dark:text-slate-100 font-bold text-xs border border-slate-300/80 dark:border-slate-600 shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-graphite-200 to-graphite-300 dark:from-graphite-700 dark:to-graphite-600 flex items-center justify-center text-graphite-800 dark:text-graphite-100 font-bold text-xs border border-graphite-300/80 dark:border-graphite-600 shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
               {initials(user.name)}
             </div>
             <div className="hidden xl:block text-left max-w-44">
-              <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-none truncate" title={user.name}>
+              <p className="text-xs font-semibold text-graphite-800 dark:text-graphite-200 leading-none truncate" title={user.name}>
                 {user.name}
               </p>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">
+              <span className="text-[10px] text-graphite-500 dark:text-graphite-400 block mt-0.5">
                 {roleLabel(user.role)}
               </span>
             </div>
-            <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3.5 h-3.5 text-graphite-400 group-hover:text-graphite-600 dark:group-hover:text-graphite-200 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {isUserMenuOpen && (
             <div
               role="menu"
               aria-orientation="vertical"
-              className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl py-2 z-50"
+              className="absolute right-0 mt-2 w-64 rounded-2xl bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 shadow-xl py-2 z-50"
             >
-              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+              <div className="px-4 py-3 border-b border-graphite-100 dark:border-graphite-800">
+                <p className="text-xs font-bold text-graphite-900 dark:text-graphite-100 truncate">
                   {user.name}
                 </p>
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                <p className="text-[11px] font-medium text-graphite-500 dark:text-graphite-400 mt-0.5 flex items-center gap-1.5">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
                   <span>{roleLabel(user.role)}</span>
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 truncate">
+                <p className="text-[10px] text-graphite-400 dark:text-graphite-500 mt-1 truncate">
                   Empresa: {user.companyId}
                 </p>
               </div>
@@ -218,18 +218,18 @@ export const Header: React.FC<HeaderProps> = ({
                     setIsUserMenuOpen(false);
                     onNavigateTab?.('administration');
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-graphite-700 dark:text-graphite-300 hover:bg-graphite-50 dark:hover:bg-graphite-800/60 hover:text-blue-600 dark:text-graphite-300 dark:hover:text-blue-400 transition-colors text-left"
                 >
-                  <Settings className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                  <Settings className="w-4 h-4 text-graphite-400 dark:text-graphite-500" />
                   <div>
                     <span className="font-semibold block">Área Administrativa</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 block leading-tight">Configurações, usuários e sistema</span>
+                    <span className="text-[10px] text-graphite-400 dark:text-graphite-500 block leading-tight">Configurações, usuários e sistema</span>
                   </div>
                 </button>
               </div>
               )}
 
-              <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+              <div className="my-1 border-t border-graphite-100 dark:border-graphite-800" />
 
               <div className="py-1 px-1.5">
                 <button

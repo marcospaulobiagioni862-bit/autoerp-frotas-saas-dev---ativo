@@ -66,9 +66,9 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
         <div className="flex items-center gap-2 font-bold"><Wrench className="w-4 h-4 text-amber-600 shrink-0"/><span>Veículo em Manutenção/Oficina na data da infração (OS #{matchContext.maintenanceOrder?.type})</span></div>
         <div className="text-[11px] text-amber-800">{matchContext.maintenanceOrder?.description&&<span>Serviço: {matchContext.maintenanceOrder.description} • </span>}<span>Status da OS: {matchContext.maintenanceOrder?.status}. Sem contrato de locação ativo. A responsabilidade deve ser atribuída à MoveFlex (Empresa).</span></div>
       </div>}
-      {matchContext.matchStatus==='NO_ACTIVE_CONTRACT'&&<div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 flex flex-col gap-1 text-xs">
-        <div className="flex items-center gap-2 font-bold"><Info className="w-4 h-4 text-slate-600 shrink-0"/><span>Veículo sem locação ativa na data da infração (em pátio)</span></div>
-        <div className="text-[11px] text-slate-600">Nenhum contrato ativo cobrindo {infractionDate}. Recomenda-se registrar a responsabilidade para a MoveFlex (Empresa) para evitar imputação indevida de débitos.</div>
+      {matchContext.matchStatus==='NO_ACTIVE_CONTRACT'&&<div className="p-3 rounded-xl bg-graphite-50 border border-graphite-200 text-graphite-800 flex flex-col gap-1 text-xs">
+        <div className="flex items-center gap-2 font-bold"><Info className="w-4 h-4 text-graphite-600 shrink-0"/><span>Veículo sem locação ativa na data da infração (em pátio)</span></div>
+        <div className="text-[11px] text-graphite-600">Nenhum contrato ativo cobrindo {infractionDate}. Recomenda-se registrar a responsabilidade para a MoveFlex (Empresa) para evitar imputação indevida de débitos.</div>
       </div>}
       {matchContext.matchStatus==='AMBIGUOUS'&&<div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col gap-1 text-xs">
         <div className="flex items-center gap-2 font-bold"><AlertTriangle className="w-4 h-4 text-amber-600 shrink-0"/><span>Mais de um contrato ativo no mesmo dia</span></div>

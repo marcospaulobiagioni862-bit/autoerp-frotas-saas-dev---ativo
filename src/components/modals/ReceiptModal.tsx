@@ -193,15 +193,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
-        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
               <CheckCircle className="w-5 h-5 text-emerald-600" />
               Registrar recebimento
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-graphite-500 mt-0.5">
               Liquidação de Conta a Receber • {receivable.description}
             </p>
           </div>
@@ -209,7 +209,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             aria-label="Fechar modal"
             disabled={isSubmitting || confirmOpen}
             onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -226,8 +226,8 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
           <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-3 rounded-lg flex justify-between items-center text-xs">
             <div>
-              <span className="text-slate-500 block">Valor Original / Restante:</span>
-              <span className="font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-300">
+              <span className="text-graphite-500 block">Valor Original / Restante:</span>
+              <span className="font-semibold font-mono tabular-nums text-graphite-700 dark:text-graphite-300">
                 R$ {receivable.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /{' '}
                 <strong className="text-emerald-700 dark:text-emerald-400 font-mono tabular-nums">
                   R$ {receivable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -235,17 +235,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               </span>
             </div>
             <div className="text-right">
-              <span className="text-slate-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatDateBR(receivable.dueDate)}</span>
+              <span className="text-graphite-500 block">Vencimento:</span>
+              <span className="font-medium font-mono tabular-nums text-graphite-700 dark:text-graphite-300">{formatDateBR(receivable.dueDate)}</span>
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 space-y-3">
-            <div className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-xl border border-graphite-200 dark:border-graphite-700 bg-graphite-50/60 dark:bg-graphite-800/30 p-3 space-y-3">
+            <div className="text-xs font-bold uppercase tracking-wide text-graphite-500 dark:text-graphite-400">
               Composição desta baixa
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                 Diária de atraso (R$)
                 <input
                   aria-label="Diária de atraso (R$)"
@@ -258,10 +258,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                     if (parseCurrencyDraft(draft) > 0) setManualInterest('0,00');
                     rotateCommandKey();
                   }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                 Juros manual (R$)
                 <input
                   aria-label="Juros manual (R$)"
@@ -274,10 +274,10 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                     if (parseCurrencyDraft(draft) > 0) setDailyInterest('0,00');
                     rotateCommandKey();
                   }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                 Acréscimo (R$)
                 <input
                   aria-label="Acréscimo (R$)"
@@ -289,17 +289,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                     setAdditionalAmount(draft);
                     rotateCommandKey();
                   }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
                 />
               </label>
             </div>
             {dailyQuoteLoading && dailyInterestValue > 0 ? (
-              <div className="rounded-lg border border-amber-200 p-3 text-xs text-slate-500">Calculando diária de atraso...</div>
+              <div className="rounded-lg border border-amber-200 p-3 text-xs text-graphite-500">Calculando diária de atraso...</div>
             ) : (
               <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
             )}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Valor recebido agora (R$) *
               </label>
               <input
@@ -311,32 +311,32 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                   const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
                 }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               />
-              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+              <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-graphite-200 bg-white/70 p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900/40 sm:grid-cols-5">
                 <div>
-                  <span className="block text-slate-500">Saldo atual</span>
+                  <span className="block text-graphite-500">Saldo atual</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(receivable.balanceAmount)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Ajustes desta baixa</span>
+                  <span className="block text-graphite-500">Ajustes desta baixa</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Valor total a receber</span>
+                  <span className="block text-graphite-500">Valor total a receber</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Recebido agora</span>
+                  <span className="block text-graphite-500">Recebido agora</span>
                   <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
                 </div>
                 <div>
-                  <span className="block text-slate-500">Saldo devedor após recebimento</span>
+                  <span className="block text-graphite-500">Saldo devedor após recebimento</span>
                   <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
                 </div>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">
+              <span className="text-[11px] text-graphite-500 mt-1 block">
                 Permite liquidação parcial se o valor for menor que {formatCurrencyBRL(settlementTotal)}
               </span>
             </div>
@@ -345,11 +345,11 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
           <div className="grid grid-cols-2 gap-3">
             {([['Multa (R$)', fineAmount, setFineAmount], ['Desconto (R$)', discountAmount, setDiscountAmount]] as const).map(([label, value, setter]) => (
-              <label key={label} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label key={label} className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                 {label}
                 <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
                   onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg" />
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg" />
               </label>
             ))}
           </div>
@@ -368,13 +368,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Conta Financeira de Destino *
               </label>
               <select
                 value={selectedAccountId}
                 onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
                 {accounts.map((acc) => (
@@ -386,13 +386,13 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Meio de Pagamento *
               </label>
               <select
                 value={selectedMethodId}
                 onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 required
               >
                 {methods.map((m) => (
@@ -405,35 +405,35 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Data Efetiva de Recebimento *
             </label>
             <input
               type="date"
               value={paymentDate}
               onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Observações / Comprovante
             </label>
             <textarea
               value={notes}
               onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
               placeholder="Ex: Recebido via Pix, comprovante anexado..."
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none h-16"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none h-16"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
             <button
               type="button"
               onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>

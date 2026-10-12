@@ -311,9 +311,9 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           />
         </div>
 
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
+        <div className="p-3 bg-graphite-50 dark:bg-graphite-800/40 rounded-xl space-y-3 border border-graphite-200 dark:border-graphite-800">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <h4 className="text-xs font-bold text-graphite-700 dark:text-graphite-300 uppercase tracking-wider">
               Titularidade e Propriedade (Frota Mista)
             </h4>
             {formData.ownerType === 'COMPANY' && (
@@ -433,8 +433,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
           )}
         </div>
 
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
-          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Valores Financeiros</h4>
+        <div className="p-3 bg-graphite-50 dark:bg-graphite-800/40 rounded-xl space-y-3 border border-graphite-200 dark:border-graphite-800">
+          <h4 className="text-xs font-bold text-graphite-700 dark:text-graphite-300 uppercase tracking-wider">Valores Financeiros</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleNumericChange('acquisitionValue', e.target.value)} />
             <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleNumericChange('currentValue', e.target.value)} />
@@ -443,17 +443,17 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações</label>
+          <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Observações</label>
           <textarea
             rows={2}
             value={formData.notes || ''}
             onChange={(e) => handleChange('notes', e.target.value)}
             placeholder="Anotações gerais do veículo..."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
           <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>{vehicleToEdit ? 'Atualizar Veículo' : 'Cadastrar Veículo'}</Button>
         </div>

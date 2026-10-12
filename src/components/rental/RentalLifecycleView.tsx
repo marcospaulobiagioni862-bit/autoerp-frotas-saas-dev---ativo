@@ -150,18 +150,18 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
+      <div className="bg-gradient-to-r from-graphite-950 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.38 • Ciclo Completo de Vida da Locação
             </span>
-            <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+            <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
               <Lock className="w-3 h-3 text-emerald-400" /> Núcleo Financeiro Congelado
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">Gestão Ponta a Ponta de Locações</h2>
-          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+          <p className="text-xs text-graphite-300 mt-1 max-w-3xl">
             Acompanhe o ciclo operacional desde a reserva, preparação e entrega até o check-out, ocorrências e encerramento definitivo.
           </p>
         </div>
@@ -189,7 +189,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card padding="sm" className="border-l-4 border-l-blue-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Reservas / Pré</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Reservas / Pré</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-blue-600 font-mono">{counts.reserved}</h3>
             <Calendar className="w-4 h-4 text-blue-500" />
@@ -197,7 +197,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Em Preparação</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Em Preparação</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-amber-600 font-mono">{counts.preparing}</h3>
             <Clock className="w-4 h-4 text-amber-500" />
@@ -205,7 +205,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-teal-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Pronto p/ Entrega</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Pronto p/ Entrega</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-teal-600 font-mono">{counts.readyForDelivery}</h3>
             <CheckSquare className="w-4 h-4 text-teal-500" />
@@ -221,26 +221,26 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-indigo-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Devolução Pendente</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Devolução Pendente</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-indigo-600 font-mono">{counts.returnPending}</h3>
             <FileCheck2 className="w-4 h-4 text-indigo-500" />
           </div>
         </Card>
 
-        <Card padding="sm" className="border-l-4 border-l-slate-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Encerradas / Total</span>
+        <Card padding="sm" className="border-l-4 border-l-graphite-500">
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Encerradas / Total</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-slate-700 dark:text-slate-300 font-mono">{counts.closed} / {counts.total}</h3>
-            <Layers className="w-4 h-4 text-slate-500" />
+            <h3 className="text-2xl font-black text-graphite-700 dark:text-graphite-300 font-mono">{counts.closed} / {counts.total}</h3>
+            <Layers className="w-4 h-4 text-graphite-500" />
           </div>
         </Card>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white dark:bg-graphite-900 p-4 rounded-xl border border-graphite-200 dark:border-graphite-800 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase text-slate-500 mr-2 flex items-center gap-1">
+          <span className="text-xs font-bold uppercase text-graphite-500 mr-2 flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" /> Estágio:
           </span>
           {[
@@ -257,7 +257,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 stageFilter === f.id
                   ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
               {f.label}
@@ -266,13 +266,13 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         </div>
 
         <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por contrato, placa ou motorista..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100"
+            className="w-full pl-9 pr-4 py-2 text-xs bg-graphite-50 dark:bg-graphite-800 border border-graphite-200 dark:border-graphite-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-graphite-900 dark:text-graphite-100"
           />
         </div>
       </div>
@@ -281,25 +281,25 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Contract List */}
         <div className="lg:col-span-2 space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-600" /> Contratos no Ciclo Operacional ({filteredItems.length})
           </h3>
 
           {filteredItems.length === 0 ? (
             <Card className="text-center py-12">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">Nenhum contrato encontrado</h4>
-              <p className="text-xs text-slate-500 mt-1">Ajuste os filtros ou crie um novo contrato no módulo de Contratos.</p>
+              <h4 className="text-base font-bold text-graphite-900 dark:text-graphite-100">Nenhum contrato encontrado</h4>
+              <p className="text-xs text-graphite-500 mt-1">Ajuste os filtros ou crie um novo contrato no módulo de Contratos.</p>
             </Card>
           ) : (
             filteredItems.map(item => (
               <div
                 key={item.contractId}
                 onClick={() => setSelectedItem(item)}
-                className={`p-4 rounded-xl border bg-white dark:bg-slate-900 cursor-pointer transition-all hover:shadow-md ${
+                className={`p-4 rounded-xl border bg-white dark:bg-graphite-900 cursor-pointer transition-all hover:shadow-md ${
                   selectedItem?.contractId === item.contractId
                     ? 'border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/10'
-                    : 'border-slate-200 dark:border-slate-800'
+                    : 'border-graphite-200 dark:border-graphite-800'
                 }`}
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -312,19 +312,19 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
                         {item.contractNumber}
                       </span>
                       {item.vehiclePlate && (
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <span className="px-2 py-0.5 rounded bg-graphite-100 dark:bg-graphite-800 font-mono text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                           {item.vehiclePlate} ({item.vehicleModel})
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-slate-400" /> Motorista: <strong className="text-slate-900 dark:text-slate-100">{item.driverName || 'Não atribuído'}</strong>
+                    <div className="text-xs text-graphite-600 dark:text-graphite-400 flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5 text-graphite-400" /> Motorista: <strong className="text-graphite-900 dark:text-graphite-100">{item.driverName || 'Não atribuído'}</strong>
                     </div>
                   </div>
 
-                  <div className="text-right flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Início / Fim</span>
-                    <span className="text-xs font-mono font-medium text-slate-700 dark:text-slate-300">{item.startDate} {item.endDate ? `→ ${item.endDate}` : ''}</span>
+                  <div className="text-right flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-graphite-100 dark:border-graphite-800">
+                    <span className="text-[10px] text-graphite-400 uppercase font-bold">Início / Fim</span>
+                    <span className="text-xs font-mono font-medium text-graphite-700 dark:text-graphite-300">{item.startDate} {item.endDate ? `→ ${item.endDate}` : ''}</span>
                   </div>
                 </div>
 
@@ -342,9 +342,9 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         {/* Right Col: Timeline & Detail Inspection */}
         <div>
           <Card className="sticky top-6 space-y-4">
-            <div className="border-b pb-3 border-slate-100 dark:border-slate-800">
+            <div className="border-b pb-3 border-graphite-100 dark:border-graphite-800">
               <span className="text-[10px] font-bold uppercase text-indigo-600 dark:text-indigo-400 tracking-wider">Inspeção do Ciclo</span>
-              <h3 className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5">
+              <h3 className="text-base font-black text-graphite-900 dark:text-graphite-100 mt-0.5">
                 {selectedItem ? selectedItem.contractNumber : 'Selecione um Contrato'}
               </h3>
             </div>
@@ -352,20 +352,20 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
             {selectedItem ? (
               <div className="space-y-4">
                 <div className="space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Estágio Atual:</span>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Estágio Atual:</span>
                     <Badge variant={getStageBadgeVariant(selectedItem.currentStage)}>{selectedItem.currentStage}</Badge>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Veículo:</span>
-                    <strong className="text-slate-800 dark:text-slate-200 font-mono">{selectedItem.vehiclePlate || 'N/A'}</strong>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Veículo:</span>
+                    <strong className="text-graphite-800 dark:text-graphite-200 font-mono">{selectedItem.vehiclePlate || 'N/A'}</strong>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Motorista:</span>
-                    <strong className="text-slate-800 dark:text-slate-200">{selectedItem.driverName || 'N/A'}</strong>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Motorista:</span>
+                    <strong className="text-graphite-800 dark:text-graphite-200">{selectedItem.driverName || 'N/A'}</strong>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Prontidão entrega:</span>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Prontidão entrega:</span>
                     <span className={selectedItem.isReadyForDelivery ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>
                       {selectedItem.isReadyForDelivery ? 'Pronto (OK)' : 'Com Pendências'}
                     </span>
@@ -374,14 +374,14 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
 
                 {/* Timeline History */}
                 <div>
-                  <h4 className="text-xs font-bold uppercase text-slate-500 mb-2">Linha do Tempo Operacional</h4>
+                  <h4 className="text-xs font-bold uppercase text-graphite-500 mb-2">Linha do Tempo Operacional</h4>
                   <div className="space-y-3 pl-3 border-l-2 border-indigo-500/30">
                     {selectedItem.timeline.map((ev, idx) => (
                       <div key={ev.id || idx} className="relative text-xs">
-                        <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-white dark:ring-slate-900" />
-                        <span className="text-[10px] font-mono text-slate-400">{ev.timestamp.split('T')[0]}</span>
-                        <h5 className="font-bold text-slate-900 dark:text-slate-100">{ev.title}</h5>
-                        <p className="text-slate-600 dark:text-slate-400">{ev.description}</p>
+                        <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-white dark:ring-graphite-900" />
+                        <span className="text-[10px] font-mono text-graphite-400">{ev.timestamp.split('T')[0]}</span>
+                        <h5 className="font-bold text-graphite-900 dark:text-graphite-100">{ev.title}</h5>
+                        <p className="text-graphite-600 dark:text-graphite-400">{ev.description}</p>
                       </div>
                     ))}
                   </div>
@@ -400,7 +400,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-slate-500 text-center py-8">Clique em um contrato à esquerda para inspecionar o ciclo de vida e linha do tempo.</p>
+              <p className="text-xs text-graphite-500 text-center py-8">Clique em um contrato à esquerda para inspecionar o ciclo de vida e linha do tempo.</p>
             )}
           </Card>
         </div>

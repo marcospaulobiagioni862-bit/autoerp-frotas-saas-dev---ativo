@@ -7,7 +7,7 @@ import {
 } from '../../api/tenantProfileClient';
 import { Badge, Button, Card } from '../ui';
 
-const inputClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-900 dark:disabled:text-slate-500';
+const inputClass = 'w-full rounded-lg border border-graphite-300 bg-white px-3 py-2 text-sm text-graphite-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-graphite-100 disabled:text-graphite-500 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100 dark:disabled:bg-graphite-900 dark:disabled:text-graphite-500';
 
 function formFrom(profile: TenantProfileDto): TenantProfileUpdateInput {
   return {
@@ -107,19 +107,19 @@ export const ProductionTenantProfileView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 rounded-2xl border border-graphite-200 bg-white p-6 shadow-sm dark:border-graphite-800 dark:bg-graphite-900 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-blue-50 p-3 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
             <Building2 className="h-6 w-6" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Empresa</h2>
+              <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100">Empresa</h2>
               <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                 Dados protegidos
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            <p className="mt-1 text-sm text-graphite-600 dark:text-graphite-300">
               Perfil da empresa vinculada à sua sessão. O sistema identifica a empresa e registra o responsável pelas alterações.
             </p>
           </div>
@@ -141,19 +141,19 @@ export const ProductionTenantProfileView: React.FC = () => {
       )}
 
       <Card className="overflow-hidden">
-        <div className="border-b border-slate-200 p-4 dark:border-slate-800">
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Configuração operacional</h3>
-          <p className="text-xs text-slate-500">O documento da empresa está disponível para consulta e não pode ser editado por enquanto.</p>
+        <div className="border-b border-graphite-200 p-4 dark:border-graphite-800">
+          <h3 className="font-semibold text-graphite-900 dark:text-graphite-100">Configuração operacional</h3>
+          <p className="text-xs text-graphite-500">O documento da empresa está disponível para consulta e não pode ser editado por enquanto.</p>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center p-12 text-slate-500">
+          <div className="flex items-center justify-center p-12 text-graphite-500">
             <RefreshCw className="mr-2 h-5 w-5 animate-spin" /> Carregando dados da empresa...
           </div>
         ) : profile && form ? (
           <div className="grid gap-5 p-5 md:grid-cols-2">
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Nome da empresa</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Nome da empresa</span>
               <input
                 className={inputClass}
                 value={form.companyName}
@@ -165,13 +165,13 @@ export const ProductionTenantProfileView: React.FC = () => {
             </label>
 
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Documento da empresa</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Documento da empresa</span>
               <input className={inputClass} value={profile.document} readOnly disabled aria-label="Documento da empresa somente leitura" />
-              <span className="block text-xs text-slate-500">Somente leitura. Não pode ser alterado por esta tela.</span>
+              <span className="block text-xs text-graphite-500">Somente leitura. Não pode ser alterado por esta tela.</span>
             </label>
 
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fuso horário</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Fuso horário</span>
               <input
                 className={inputClass}
                 value={form.timezone}
@@ -183,13 +183,13 @@ export const ProductionTenantProfileView: React.FC = () => {
             </label>
 
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Moeda</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Moeda</span>
               <input className={inputClass} value="BRL" readOnly disabled aria-label="Moeda BRL, somente leitura" />
-              <span className="block text-xs text-slate-500">A moeda disponível é o real (BRL).</span>
+              <span className="block text-xs text-graphite-500">A moeda disponível é o real (BRL).</span>
             </label>
 
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Limite de veículos</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Limite de veículos</span>
               <input
                 className={inputClass}
                 type="number"
@@ -202,7 +202,7 @@ export const ProductionTenantProfileView: React.FC = () => {
             </label>
 
             <label className="space-y-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Limite de motoristas</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Limite de motoristas</span>
               <input
                 className={inputClass}
                 type="number"
@@ -216,7 +216,7 @@ export const ProductionTenantProfileView: React.FC = () => {
 
             <div className="md:col-span-2 space-y-2">
               <label className="space-y-1.5 block">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Logotipo da empresa (URL ou Data URL)</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">Logotipo da empresa (URL ou Data URL)</span>
                 <input
                   className={inputClass}
                   value={form.logoUrl || ''}
@@ -224,25 +224,25 @@ export const ProductionTenantProfileView: React.FC = () => {
                   onChange={(event) => setText('logoUrl', event.target.value)}
                   placeholder="https://exemplo.com/logo.png ou data:image/jpeg;base64,..."
                 />
-                <span className="block text-xs text-slate-500">
+                <span className="block text-xs text-graphite-500">
                   URL da imagem ou string Base64 (JPEG/PNG) da marca que será exibida nos cabeçalhos e documentos.
                 </span>
               </label>
               {form.logoUrl && form.logoUrl.trim() && (
-                <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
-                  <span className="text-xs text-slate-500">Prévia do logo:</span>
+                <div className="flex items-center gap-3 rounded-lg border border-graphite-200 bg-graphite-50 p-3 dark:border-graphite-800 dark:bg-graphite-900/50">
+                  <span className="text-xs text-graphite-500">Prévia do logo:</span>
                   <img
                     src={form.logoUrl.trim()}
                     alt="Prévia do logo da empresa"
-                    className="h-10 max-w-[160px] object-contain rounded border border-slate-200 bg-white p-1 dark:border-slate-700"
+                    className="h-10 max-w-[160px] object-contain rounded border border-graphite-200 bg-white p-1 dark:border-graphite-700"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
               )}
             </div>
 
-            <div className="md:col-span-2 flex flex-col gap-3 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-slate-500">
+            <div className="md:col-span-2 flex flex-col gap-3 border-t border-graphite-200 pt-5 dark:border-graphite-800 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-graphite-500">
                 Alterações válidas são persistidas atomicamente e auditadas pelo servidor. Valores inválidos falham sem gravação.
               </p>
               <Button onClick={() => void save()} disabled={!valid || !dirty || saving} className="gap-2">
@@ -251,7 +251,7 @@ export const ProductionTenantProfileView: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="p-10 text-center text-sm text-slate-500">Perfil da empresa indisponível.</div>
+          <div className="p-10 text-center text-sm text-graphite-500">Perfil da empresa indisponível.</div>
         )}
       </Card>
     </div>

@@ -56,7 +56,7 @@ assert.match(preventiveSource, /Remover Pneu/, 'tire removal must use an in-app 
 for (const ruleLabel of ['Aviso KM', 'Urgente KM', 'Aviso dias', 'Urgente dias', 'Tolerância KM', 'Tolerância dias']) {
   assert.match(
     preventiveSource,
-    new RegExp(`<span className="mb-1 block text-\\[10px\\] font-semibold text-slate-500">${ruleLabel}<\\/span><Input aria-label="${ruleLabel}"`),
+    new RegExp(`<span className="mb-1 block text-\\[10px\\] font-semibold text-graphite-500">${ruleLabel}<\\/span><Input aria-label="${ruleLabel}"`),
     `${ruleLabel} must remain visible and accessible when the rule field has a value`,
   );
 }

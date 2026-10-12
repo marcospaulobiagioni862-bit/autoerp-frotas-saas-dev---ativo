@@ -32,30 +32,30 @@ export function VehicleInspectionsView(){
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Operação • Vistorias</p>
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold"><ClipboardCheck className="h-6 w-6"/>Vistorias de Veículos</h1>
-        <p className="mt-1 text-sm text-slate-500">Check-in/check-out, KM, checklist técnico, pneus, bateria e evidências.</p>
+        <p className="mt-1 text-sm text-graphite-500">Check-in/check-out, KM, checklist técnico, pneus, bateria e evidências.</p>
       </div>
       <Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="h-4 w-4"/>}>Atualizar</Button>
     </div>
 
     <Card padding="md">
-      <label className="block text-xs font-semibold text-slate-500">Veículo para vistoria</label>
+      <label className="block text-xs font-semibold text-graphite-500">Veículo para vistoria</label>
       <select
         aria-label="Veículo para vistoria"
-        className="mt-2 w-full rounded-lg border border-slate-300 bg-transparent p-2 text-sm dark:border-slate-700"
+        className="mt-2 w-full rounded-lg border border-graphite-300 bg-transparent p-2 text-sm dark:border-graphite-700"
         value={selectedVehicleId}
         onChange={event=>setSelectedVehicleId(event.target.value)}
       >
         {vehicles.map(vehicle=><option key={vehicle.id} value={vehicle.id}>{vehicle.plate} — {vehicle.brand} {vehicle.model}</option>)}
       </select>
-      {selectedVehicle&&<div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-        <span><strong className="text-slate-700 dark:text-slate-200">Placa:</strong> {selectedVehicle.plate}</span>
-        <span><strong className="text-slate-700 dark:text-slate-200">KM atual:</strong> {selectedVehicle.currentKm.toLocaleString('pt-BR')}</span>
-        <span><strong className="text-slate-700 dark:text-slate-200">Status:</strong> {selectedVehicle.status}</span>
+      {selectedVehicle&&<div className="mt-3 grid gap-2 text-xs text-graphite-500 sm:grid-cols-3">
+        <span><strong className="text-graphite-700 dark:text-graphite-200">Placa:</strong> {selectedVehicle.plate}</span>
+        <span><strong className="text-graphite-700 dark:text-graphite-200">KM atual:</strong> {selectedVehicle.currentKm.toLocaleString('pt-BR')}</span>
+        <span><strong className="text-graphite-700 dark:text-graphite-200">Status:</strong> {selectedVehicle.status}</span>
       </div>}
     </Card>
 
     {error&&<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
-    {loading?<div className="p-6 text-center text-sm text-slate-500">Carregando veículos...</div>:selectedVehicle?
+    {loading?<div className="p-6 text-center text-sm text-graphite-500">Carregando veículos...</div>:selectedVehicle?
       <VehicleInspectionPanel
         vehicleId={selectedVehicle.id}
         currentKm={selectedVehicle.currentKm}
@@ -64,6 +64,6 @@ export function VehicleInspectionsView(){
         contractId={selectedVehicle.currentContractId}
         driverId={selectedVehicle.currentDriverId}
       />:
-      <div className="rounded-xl border p-6 text-center text-sm text-slate-500">Nenhum veículo disponível para vistoria.</div>}
+      <div className="rounded-xl border p-6 text-center text-sm text-graphite-500">Nenhum veículo disponível para vistoria.</div>}
   </div>;
 }

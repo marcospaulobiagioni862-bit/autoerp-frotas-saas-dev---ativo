@@ -24,9 +24,9 @@ export function AttachmentModal({ isOpen, onClose, entityType, entityId, documen
     <ModalContainer isOpen={isOpen} onClose={onClose} title={title} maxWidth="max-w-2xl">
       <div className="space-y-6">
         <div>
-          <h4 className="text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Fazer Upload</h4>
-          {documentTypeOptions&&documentTypeOptions.length>0&&<label className="mb-3 block text-xs font-semibold text-slate-600 dark:text-slate-300">Tipo do anexo
-            <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" value={selectedDocumentType} onChange={e=>setSelectedDocumentType(e.target.value)}>
+          <h4 className="text-sm font-medium mb-2 text-graphite-700 dark:text-graphite-300">Fazer Upload</h4>
+          {documentTypeOptions&&documentTypeOptions.length>0&&<label className="mb-3 block text-xs font-semibold text-graphite-600 dark:text-graphite-300">Tipo do anexo
+            <select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2.5 text-sm dark:border-graphite-700 dark:bg-graphite-900" value={selectedDocumentType} onChange={e=>setSelectedDocumentType(e.target.value)}>
               {documentTypeOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>}
@@ -41,7 +41,7 @@ export function AttachmentModal({ isOpen, onClose, entityType, entityId, documen
           />
         </div>
         <div>
-          <h4 className="text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Anexos Existentes</h4>
+          <h4 className="text-sm font-medium mb-2 text-graphite-700 dark:text-graphite-300">Anexos Existentes</h4>
           <div key={uploadCount}><AttachmentList entityType={entityType} entityId={entityId} /></div>
         </div>
         {entityType === 'MaintenanceWorkOrder' && (

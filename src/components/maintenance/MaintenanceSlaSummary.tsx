@@ -44,12 +44,12 @@ export const MaintenanceSlaSummary: React.FC<Props> = ({ vehicles, workOrders })
 
   return (
     <Card padding="none">
-      <div className="p-3 border-b border-slate-200 dark:border-slate-800">
+      <div className="p-3 border-b border-graphite-200 dark:border-graphite-800">
         <div className="flex items-center gap-2 font-semibold">
           <Clock3 className="w-4 h-4" />
           Tempo real de oficina
         </div>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-graphite-500">
           Métricas consultivas derivadas dos timestamps autoritativos da OS. Estados de espera não têm duração histórica estimada nesta etapa.
         </p>
       </div>
@@ -66,19 +66,19 @@ export const MaintenanceSlaSummary: React.FC<Props> = ({ vehicles, workOrders })
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="p-6 text-center text-slate-500">Nenhuma OS para medir.</td></tr>
+              <tr><td colSpan={5} className="p-6 text-center text-graphite-500">Nenhuma OS para medir.</td></tr>
             )}
             {rows.map(({ workOrder, metrics }) => (
-              <tr key={workOrder.id} className="border-t border-slate-100 dark:border-slate-800">
+              <tr key={workOrder.id} className="border-t border-graphite-100 dark:border-graphite-800">
                 <td className="p-3">
                   <strong>{workOrder.number}</strong>
-                  <div className="text-slate-500">{vehicleLabel(workOrder.vehicleId)}</div>
+                  <div className="text-graphite-500">{vehicleLabel(workOrder.vehicleId)}</div>
                 </td>
                 <td className="p-3">
                   <Badge variant={workOrder.status === 'COMPLETED' ? 'success' : workOrder.status === 'CANCELLED' ? 'danger' : workOrder.status === 'OPEN' ? 'neutral' : 'warning'}>
                     {statusLabel(workOrder.status)}
                   </Badge>
-                  {metrics.isFrozen && <div className="mt-1 text-[10px] text-slate-500">tempo encerrado</div>}
+                  {metrics.isFrozen && <div className="mt-1 text-[10px] text-graphite-500">tempo encerrado</div>}
                 </td>
                 <td className="p-3 font-mono">{formatMaintenanceDuration(metrics.waitToStartMs)}</td>
                 <td className="p-3 font-mono">{formatMaintenanceDuration(metrics.activeWorkMs)}</td>

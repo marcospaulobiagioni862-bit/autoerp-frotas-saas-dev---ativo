@@ -49,7 +49,7 @@ function extractionStatusLabel(status: DocumentAiAttachmentStatus['status']): { 
   if (status === 'PROCESSING') return { text: 'Processando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' };
   if (status === 'REVIEW_REQUIRED') return { text: 'Revisar extração', className: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' };
   if (status === 'APPROVED') return { text: 'Extração aprovada', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
-  if (status === 'REJECTED') return { text: 'Extração rejeitada', className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' };
+  if (status === 'REJECTED') return { text: 'Extração rejeitada', className: 'bg-graphite-100 text-graphite-600 dark:bg-graphite-800 dark:text-graphite-300' };
   return { text: 'Extração falhou', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
 }
 
@@ -394,7 +394,7 @@ export function AttachmentList({
                     size="sm"
                     onClick={() => setDeleteId(att.id)}
                     disabled={att.id === latestDriverCnhId}
-                    className="text-amber-500 hover:text-amber-700 disabled:text-slate-400"
+                    className="text-amber-500 hover:text-amber-700 disabled:text-graphite-400"
                     title={att.id === latestDriverCnhId ? 'CNH vigente: substitua pelo fluxo Nova CNH / Renovar CNH' : 'Arquivar'}
                   ><Archive className="h-4 w-4" /></Button>
                   {canDeletePermanently && (
@@ -403,7 +403,7 @@ export function AttachmentList({
                       size="sm"
                       onClick={() => setPermanentDeleteId(att.id)}
                       disabled={att.id === latestDriverCnhId}
-                      className="text-red-500 hover:text-red-700 disabled:text-slate-400"
+                      className="text-red-500 hover:text-red-700 disabled:text-graphite-400"
                       title={att.id === latestDriverCnhId ? 'CNH vigente: exclusão permanente bloqueada' : 'Excluir definitivamente'}
                     ><Trash2 className="h-4 w-4" /></Button>
                   )}
@@ -415,10 +415,10 @@ export function AttachmentList({
       )}
 
       {historyAttachmentId && (
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-900/40">
-          <div className="mb-2 flex items-center gap-2 font-medium text-slate-800 dark:text-slate-100"><History className="h-4 w-4" /> Histórico sanitizado da extração</div>
-          {historyLoading ? <p className="text-slate-500">Carregando histórico...</p> : historyError ? <p className="text-red-600 dark:text-red-300">{historyError}</p> : historyItems.length === 0 ? <p className="text-slate-500">Nenhum evento sanitizado disponível para este anexo.</p> : (
-            <ol className="space-y-1 text-slate-600 dark:text-slate-300">{historyItems.map((item, index) => <li key={`${item.updatedAt}-${index}`}>{item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}{item.failureCode ? ` · ${item.failureCode}` : ''}</li>)}</ol>
+        <div className="rounded-md border border-graphite-200 bg-graphite-50 p-3 text-sm dark:border-graphite-700 dark:bg-graphite-900/40">
+          <div className="mb-2 flex items-center gap-2 font-medium text-graphite-800 dark:text-graphite-100"><History className="h-4 w-4" /> Histórico sanitizado da extração</div>
+          {historyLoading ? <p className="text-graphite-500">Carregando histórico...</p> : historyError ? <p className="text-red-600 dark:text-red-300">{historyError}</p> : historyItems.length === 0 ? <p className="text-graphite-500">Nenhum evento sanitizado disponível para este anexo.</p> : (
+            <ol className="space-y-1 text-graphite-600 dark:text-graphite-300">{historyItems.map((item, index) => <li key={`${item.updatedAt}-${index}`}>{item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}{item.failureCode ? ` · ${item.failureCode}` : ''}</li>)}</ol>
           )}
         </div>
       )}

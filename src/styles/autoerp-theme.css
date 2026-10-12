@@ -1,0 +1,541 @@
+/* =====================================================================
+   AutoERP — tema Tailwind CSS v4 (CSS-first). Gerado do design system.
+   Importar DEPOIS de @import "tailwindcss";
+   Os nomes das escalas (navy, gold, graphite, jade, crimson, flame, azure,
+   petrol, plum) NÃO colidem com a paleta padrão do Tailwind: slate,
+   emerald, amber etc. continuam funcionando durante a migração.
+   ===================================================================== */
+
+/* Se o modo escuro for por classe .dark no <html> (provável, dado o uso de dark:),
+   mantenha esta linha. Se for por prefers-color-scheme, apague-a. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* navy — Estrutura e marca: barra lateral, ação primária, seleção, selos 'em aberto'. */
+  --color-navy-50: #f2f5fa;
+  --color-navy-100: #e3e9f3;
+  --color-navy-200: #c6d2e6;
+  --color-navy-300: #9bb0d1;
+  --color-navy-400: #6a86b4;
+  --color-navy-500: #46639a;
+  --color-navy-600: #334d80;
+  --color-navy-700: #263c68;
+  --color-navy-800: #1b2d52;
+  --color-navy-900: #13213e;
+  --color-navy-950: #0b152a;
+
+  /* gold — Acento decorativo exclusivo. Nunca em estado, alerta ou selo. */
+  --color-gold-50: #fbf7ee;
+  --color-gold-100: #f4ead2;
+  --color-gold-200: #e8d4a4;
+  --color-gold-300: #d8b873;
+  --color-gold-400: #c79d4b;
+  --color-gold-500: #ad8333;
+  --color-gold-600: #8d6a28;
+  --color-gold-700: #705322;
+  --color-gold-800: #57411c;
+  --color-gold-900: #3e2f15;
+  --color-gold-950: #251b0b;
+
+  /* graphite — Neutros: superfícies, texto, bordas, selos 'encerrado' e vencimento distante. */
+  --color-graphite-0: #ffffff;
+  --color-graphite-25: #fafbfc;
+  --color-graphite-50: #f5f6f8;
+  --color-graphite-100: #eceef2;
+  --color-graphite-200: #dde1e7;
+  --color-graphite-300: #c3c9d2;
+  --color-graphite-400: #7e8695;
+  --color-graphite-500: #6b7383;
+  --color-graphite-600: #535a69;
+  --color-graphite-700: #3e4451;
+  --color-graphite-800: #2a2f3a;
+  --color-graphite-850: #1f242e;
+  --color-graphite-900: #181c25;
+  --color-graphite-925: #12151c;
+  --color-graphite-950: #0c0f14;
+
+  /* jade — Sucesso de operação (mensagens). Não usar em selos. */
+  --color-jade-50: #effaf3;
+  --color-jade-100: #d7f2e1;
+  --color-jade-200: #ade3c3;
+  --color-jade-300: #74cc9b;
+  --color-jade-400: #3fae74;
+  --color-jade-500: #23905a;
+  --color-jade-600: #187548;
+  --color-jade-700: #145e3b;
+  --color-jade-800: #124a30;
+  --color-jade-900: #0f3a27;
+  --color-jade-950: #082116;
+
+  /* crimson — Perigo: ação destrutiva, erro, vence hoje / vencido, cobrança vencida. */
+  --color-crimson-50: #fef3f2;
+  --color-crimson-100: #fde3e1;
+  --color-crimson-200: #fbc7c3;
+  --color-crimson-300: #f69a93;
+  --color-crimson-400: #ee6a61;
+  --color-crimson-500: #e0453b;
+  --color-crimson-600: #c42d23;
+  --color-crimson-700: #a3221a;
+  --color-crimson-800: #851e18;
+  --color-crimson-900: #6e1d18;
+  --color-crimson-950: #3c0b08;
+
+  /* flame — Aviso e vencimento se aproximando (D15–D1). Não confundir com o dourado. */
+  --color-flame-50: #fff6ed;
+  --color-flame-100: #ffead5;
+  --color-flame-200: #fdd0a8;
+  --color-flame-300: #fbae72;
+  --color-flame-400: #f7853b;
+  --color-flame-500: #ea6a1a;
+  --color-flame-600: #c95410;
+  --color-flame-700: #a34110;
+  --color-flame-800: #823614;
+  --color-flame-900: #6a2e14;
+  --color-flame-950: #3a1507;
+
+  /* azure — Informação e anel de foco. */
+  --color-azure-50: #f0f7ff;
+  --color-azure-100: #dcecfe;
+  --color-azure-200: #b9d8fc;
+  --color-azure-300: #86bbf8;
+  --color-azure-400: #4f97f1;
+  --color-azure-500: #2b78e0;
+  --color-azure-600: #1d5fc2;
+  --color-azure-700: #1a4c9d;
+  --color-azure-800: #1b417f;
+  --color-azure-900: #1c3a69;
+  --color-azure-950: #132545;
+
+  /* petrol — Selos 'em operação' (veículo) e 'liquidado' (cobrança). */
+  --color-petrol-50: #effaf8;
+  --color-petrol-100: #d4f2ec;
+  --color-petrol-200: #a9e4d9;
+  --color-petrol-300: #72cdbf;
+  --color-petrol-400: #3fb0a2;
+  --color-petrol-500: #249387;
+  --color-petrol-600: #1b766d;
+  --color-petrol-700: #1a5f59;
+  --color-petrol-800: #194d49;
+  --color-petrol-900: #18403d;
+  --color-petrol-950: #082524;
+
+  /* plum — Selos 'parado' (veículo fora de operação). */
+  --color-plum-50: #faf5fa;
+  --color-plum-100: #f3e7f3;
+  --color-plum-200: #e7cfe7;
+  --color-plum-300: #d4aad4;
+  --color-plum-400: #bb7fbb;
+  --color-plum-500: #9f5f9f;
+  --color-plum-600: #844a84;
+  --color-plum-700: #6c3d6c;
+  --color-plum-800: #5a345a;
+  --color-plum-900: #4b2e4b;
+  --color-plum-950: #2c162c;
+
+  /* tipografia densa: text-table, text-label, text-caption ... */
+  --text-page-title: 20px;  --text-page-title--line-height: 28px;  --text-page-title--font-weight: 600;
+  --text-section-title: 16px; --text-section-title--line-height: 24px; --text-section-title--font-weight: 600;
+  --text-body: 14px;  --text-body--line-height: 20px;
+  --text-label: 13px; --text-label--line-height: 18px; --text-label--font-weight: 500;
+  --text-table: 13px; --text-table--line-height: 18px;
+  --text-caption: 12px; --text-caption--line-height: 16px;
+  --text-kpi: 24px; --text-kpi--line-height: 32px; --text-kpi--font-weight: 600;
+
+  --shadow-raised: 0 1px 2px rgba(11,21,42,0.08), 0 2px 8px rgba(11,21,42,0.06);
+  --shadow-modal: 0 8px 32px rgba(11,21,42,0.18);
+}
+
+/* ---------- Camada semântica: um valor por modo, sem precisar de dark: ----------
+   Use em código novo: bg-surface, text-fg-primary, border-border-input ...
+   Hex explícito nos dois modos. */
+:root {
+  --ae-bg-app: #f5f6f8; /* graphite-50 */
+  --ae-surface: #ffffff; /* graphite-0 */
+  --ae-surface-raised: #ffffff; /* graphite-0 */
+  --ae-surface-sunken: #f5f6f8; /* graphite-50 */
+  --ae-surface-hover: #f5f6f8; /* graphite-50 */
+  --ae-surface-selected: #f2f5fa; /* navy-50 */
+  --ae-structure: #13213e; /* navy-900 */
+  --ae-structure-hover: #1b2d52; /* navy-800 */
+  --ae-structure-active: #263c68; /* navy-700 */
+  --ae-border: #dde1e7; /* graphite-200 */
+  --ae-border-strong: #c3c9d2; /* graphite-300 */
+  --ae-border-input: #7e8695; /* graphite-400 */
+  --ae-structure-border: #1b2d52; /* navy-800 */
+  --ae-fg-primary: #181c25; /* graphite-900 */
+  --ae-fg-secondary: #535a69; /* graphite-600 */
+  --ae-fg-disabled: #7e8695; /* graphite-400 */
+  --ae-fg-on-structure: #f2f5fa; /* navy-50 */
+  --ae-fg-on-structure-muted: #9bb0d1; /* navy-300 */
+  --ae-fg-link: #334d80; /* navy-600 */
+  --ae-action-primary: #1b2d52; /* navy-800 */
+  --ae-action-primary-hover: #13213e; /* navy-900 */
+  --ae-action-primary-active: #0b152a; /* navy-950 */
+  --ae-on-action-primary: #ffffff; /* graphite-0 */
+  --ae-action-secondary-hover: #f5f6f8; /* graphite-50 */
+  --ae-action-secondary-active: #eceef2; /* graphite-100 */
+  --ae-action-destructive: #a3221a; /* crimson-700 */
+  --ae-action-destructive-hover: #851e18; /* crimson-800 */
+  --ae-action-destructive-active: #6e1d18; /* crimson-900 */
+  --ae-on-action-destructive: #ffffff; /* graphite-0 */
+  --ae-fg-destructive: #a3221a; /* crimson-700 */
+  --ae-action-disabled: #eceef2; /* graphite-100 */
+  --ae-focus-ring: #1d5fc2; /* azure-600 */
+  --ae-focus-ring-on-structure: #86bbf8; /* azure-300 */
+  --ae-accent: #ad8333; /* gold-500 */
+  --ae-accent-text: #705322; /* gold-700 */
+  --ae-accent-soft: #fbf7ee; /* gold-50 */
+  --ae-accent-on-structure: #c79d4b; /* gold-400 */
+  --ae-success-bg: #effaf3; /* jade-50 */
+  --ae-success-border: #ade3c3; /* jade-200 */
+  --ae-success-text: #124a30; /* jade-800 */
+  --ae-success-icon: #187548; /* jade-600 */
+  --ae-error-bg: #fef3f2; /* crimson-50 */
+  --ae-error-border: #fbc7c3; /* crimson-200 */
+  --ae-error-text: #851e18; /* crimson-800 */
+  --ae-error-icon: #c42d23; /* crimson-600 */
+  --ae-warning-bg: #fff6ed; /* flame-50 */
+  --ae-warning-border: #fdd0a8; /* flame-200 */
+  --ae-warning-text: #823614; /* flame-800 */
+  --ae-warning-icon: #c95410; /* flame-600 */
+  --ae-info-bg: #f0f7ff; /* azure-50 */
+  --ae-info-border: #b9d8fc; /* azure-200 */
+  --ae-info-text: #1b417f; /* azure-800 */
+  --ae-info-icon: #1d5fc2; /* azure-600 */
+  --ae-due-d90-bg: #ffffff; /* graphite-0 */
+  --ae-due-d90-text: #535a69; /* graphite-600 */
+  --ae-due-d90-border: #c3c9d2; /* graphite-300 */
+  --ae-due-d60-bg: #f5f6f8; /* graphite-50 */
+  --ae-due-d60-text: #3e4451; /* graphite-700 */
+  --ae-due-d60-border: #c3c9d2; /* graphite-300 */
+  --ae-due-d30-bg: #eceef2; /* graphite-100 */
+  --ae-due-d30-text: #2a2f3a; /* graphite-800 */
+  --ae-due-d30-border: #7e8695; /* graphite-400 */
+  --ae-due-d15-bg: #fff6ed; /* flame-50 */
+  --ae-due-d15-text: #823614; /* flame-800 */
+  --ae-due-d15-border: #fdd0a8; /* flame-200 */
+  --ae-due-d7-bg: #ffead5; /* flame-100 */
+  --ae-due-d7-text: #6a2e14; /* flame-900 */
+  --ae-due-d7-border: #fbae72; /* flame-300 */
+  --ae-due-d1-bg: #fdd0a8; /* flame-200 */
+  --ae-due-d1-text: #3a1507; /* flame-950 */
+  --ae-due-d1-border: #ea6a1a; /* flame-500 */
+  --ae-due-today-bg: #c42d23; /* crimson-600 */
+  --ae-due-today-text: #ffffff; /* graphite-0 */
+  --ae-due-today-border: #a3221a; /* crimson-700 */
+  --ae-due-overdue-bg: #851e18; /* crimson-800 */
+  --ae-due-overdue-text: #ffffff; /* graphite-0 */
+  --ae-due-overdue-border: #6e1d18; /* crimson-900 */
+  --ae-badge-crimson-s2-bg: #851e18; /* crimson-800 */
+  --ae-badge-crimson-s2-text: #ffffff; /* graphite-0 */
+  --ae-badge-crimson-s2-border: #6e1d18; /* crimson-900 */
+  --ae-badge-graphite-ol-bg: #ffffff; /* graphite-0 */
+  --ae-badge-graphite-ol-text: #3e4451; /* graphite-700 */
+  --ae-badge-graphite-ol-border: #c3c9d2; /* graphite-300 */
+  --ae-badge-graphite-t1-bg: #f5f6f8; /* graphite-50 */
+  --ae-badge-graphite-t1-text: #2a2f3a; /* graphite-800 */
+  --ae-badge-graphite-t1-border: #dde1e7; /* graphite-200 */
+  --ae-badge-graphite-t2-bg: #eceef2; /* graphite-100 */
+  --ae-badge-graphite-t2-text: #181c25; /* graphite-900 */
+  --ae-badge-graphite-t2-border: #c3c9d2; /* graphite-300 */
+  --ae-badge-navy-ol-bg: #ffffff; /* graphite-0 */
+  --ae-badge-navy-ol-text: #263c68; /* navy-700 */
+  --ae-badge-navy-ol-border: #9bb0d1; /* navy-300 */
+  --ae-badge-navy-t1-bg: #f2f5fa; /* navy-50 */
+  --ae-badge-navy-t1-text: #1b2d52; /* navy-800 */
+  --ae-badge-navy-t1-border: #c6d2e6; /* navy-200 */
+  --ae-badge-navy-t2-bg: #e3e9f3; /* navy-100 */
+  --ae-badge-navy-t2-text: #13213e; /* navy-900 */
+  --ae-badge-navy-t2-border: #9bb0d1; /* navy-300 */
+  --ae-badge-petrol-s1-bg: #1b766d; /* petrol-600 */
+  --ae-badge-petrol-s1-text: #ffffff; /* graphite-0 */
+  --ae-badge-petrol-s1-border: #1a5f59; /* petrol-700 */
+  --ae-badge-petrol-t1-bg: #effaf8; /* petrol-50 */
+  --ae-badge-petrol-t1-text: #194d49; /* petrol-800 */
+  --ae-badge-petrol-t1-border: #a9e4d9; /* petrol-200 */
+  --ae-badge-petrol-t2-bg: #d4f2ec; /* petrol-100 */
+  --ae-badge-petrol-t2-text: #18403d; /* petrol-900 */
+  --ae-badge-petrol-t2-border: #72cdbf; /* petrol-300 */
+  --ae-badge-plum-ol-bg: #ffffff; /* graphite-0 */
+  --ae-badge-plum-ol-text: #6c3d6c; /* plum-700 */
+  --ae-badge-plum-ol-border: #d4aad4; /* plum-300 */
+  --ae-badge-plum-s1-bg: #844a84; /* plum-600 */
+  --ae-badge-plum-s1-text: #ffffff; /* graphite-0 */
+  --ae-badge-plum-s1-border: #6c3d6c; /* plum-700 */
+  --ae-badge-plum-s2-bg: #5a345a; /* plum-800 */
+  --ae-badge-plum-s2-text: #ffffff; /* graphite-0 */
+  --ae-badge-plum-s2-border: #4b2e4b; /* plum-900 */
+  --ae-badge-plum-t1-bg: #faf5fa; /* plum-50 */
+  --ae-badge-plum-t1-text: #5a345a; /* plum-800 */
+  --ae-badge-plum-t1-border: #e7cfe7; /* plum-200 */
+  --ae-badge-plum-t2-bg: #f3e7f3; /* plum-100 */
+  --ae-badge-plum-t2-text: #4b2e4b; /* plum-900 */
+  --ae-badge-plum-t2-border: #d4aad4; /* plum-300 */
+  --ae-badge-plum-t3-bg: #e7cfe7; /* plum-200 */
+  --ae-badge-plum-t3-text: #2c162c; /* plum-950 */
+  --ae-badge-plum-t3-border: #bb7fbb; /* plum-400 */
+
+  @variant dark {
+    --ae-bg-app: #0c0f14; /* graphite-950 */
+    --ae-surface: #12151c; /* graphite-925 */
+    --ae-surface-raised: #181c25; /* graphite-900 */
+    --ae-surface-sunken: #0c0f14; /* graphite-950 */
+    --ae-surface-hover: #1f242e; /* graphite-850 */
+    --ae-surface-selected: #0b152a; /* navy-950 */
+    --ae-structure: #0b152a; /* navy-950 */
+    --ae-structure-hover: #13213e; /* navy-900 */
+    --ae-structure-active: #1b2d52; /* navy-800 */
+    --ae-border: #2a2f3a; /* graphite-800 */
+    --ae-border-strong: #3e4451; /* graphite-700 */
+    --ae-border-input: #6b7383; /* graphite-500 */
+    --ae-structure-border: #13213e; /* navy-900 */
+    --ae-fg-primary: #f5f6f8; /* graphite-50 */
+    --ae-fg-secondary: #c3c9d2; /* graphite-300 */
+    --ae-fg-disabled: #6b7383; /* graphite-500 */
+    --ae-fg-on-structure: #e3e9f3; /* navy-100 */
+    --ae-fg-on-structure-muted: #9bb0d1; /* navy-300 */
+    --ae-fg-link: #9bb0d1; /* navy-300 */
+    --ae-action-primary: #9bb0d1; /* navy-300 */
+    --ae-action-primary-hover: #c6d2e6; /* navy-200 */
+    --ae-action-primary-active: #e3e9f3; /* navy-100 */
+    --ae-on-action-primary: #0b152a; /* navy-950 */
+    --ae-action-secondary-hover: #1f242e; /* graphite-850 */
+    --ae-action-secondary-active: #2a2f3a; /* graphite-800 */
+    --ae-action-destructive: #ee6a61; /* crimson-400 */
+    --ae-action-destructive-hover: #f69a93; /* crimson-300 */
+    --ae-action-destructive-active: #fbc7c3; /* crimson-200 */
+    --ae-on-action-destructive: #3c0b08; /* crimson-950 */
+    --ae-fg-destructive: #f69a93; /* crimson-300 */
+    --ae-action-disabled: #1f242e; /* graphite-850 */
+    --ae-focus-ring: #86bbf8; /* azure-300 */
+    --ae-focus-ring-on-structure: #86bbf8; /* azure-300 */
+    --ae-accent: #c79d4b; /* gold-400 */
+    --ae-accent-text: #d8b873; /* gold-300 */
+    --ae-accent-soft: #251b0b; /* gold-950 */
+    --ae-accent-on-structure: #c79d4b; /* gold-400 */
+    --ae-success-bg: #082116; /* jade-950 */
+    --ae-success-border: #124a30; /* jade-800 */
+    --ae-success-text: #ade3c3; /* jade-200 */
+    --ae-success-icon: #74cc9b; /* jade-300 */
+    --ae-error-bg: #3c0b08; /* crimson-950 */
+    --ae-error-border: #851e18; /* crimson-800 */
+    --ae-error-text: #fbc7c3; /* crimson-200 */
+    --ae-error-icon: #f69a93; /* crimson-300 */
+    --ae-warning-bg: #3a1507; /* flame-950 */
+    --ae-warning-border: #823614; /* flame-800 */
+    --ae-warning-text: #fdd0a8; /* flame-200 */
+    --ae-warning-icon: #fbae72; /* flame-300 */
+    --ae-info-bg: #132545; /* azure-950 */
+    --ae-info-border: #1b417f; /* azure-800 */
+    --ae-info-text: #b9d8fc; /* azure-200 */
+    --ae-info-icon: #86bbf8; /* azure-300 */
+    --ae-due-d90-bg: #12151c; /* graphite-925 */
+    --ae-due-d90-text: #c3c9d2; /* graphite-300 */
+    --ae-due-d90-border: #3e4451; /* graphite-700 */
+    --ae-due-d60-bg: #181c25; /* graphite-900 */
+    --ae-due-d60-text: #dde1e7; /* graphite-200 */
+    --ae-due-d60-border: #3e4451; /* graphite-700 */
+    --ae-due-d30-bg: #2a2f3a; /* graphite-800 */
+    --ae-due-d30-text: #eceef2; /* graphite-100 */
+    --ae-due-d30-border: #535a69; /* graphite-600 */
+    --ae-due-d15-bg: #3a1507; /* flame-950 */
+    --ae-due-d15-text: #fdd0a8; /* flame-200 */
+    --ae-due-d15-border: #6a2e14; /* flame-900 */
+    --ae-due-d7-bg: #6a2e14; /* flame-900 */
+    --ae-due-d7-text: #ffead5; /* flame-100 */
+    --ae-due-d7-border: #a34110; /* flame-700 */
+    --ae-due-d1-bg: #823614; /* flame-800 */
+    --ae-due-d1-text: #fff6ed; /* flame-50 */
+    --ae-due-d1-border: #ea6a1a; /* flame-500 */
+    --ae-due-today-bg: #a3221a; /* crimson-700 */
+    --ae-due-today-text: #fef3f2; /* crimson-50 */
+    --ae-due-today-border: #e0453b; /* crimson-500 */
+    --ae-due-overdue-bg: #f69a93; /* crimson-300 */
+    --ae-due-overdue-text: #3c0b08; /* crimson-950 */
+    --ae-due-overdue-border: #fbc7c3; /* crimson-200 */
+    --ae-badge-crimson-s2-bg: #f69a93; /* crimson-300 */
+    --ae-badge-crimson-s2-text: #3c0b08; /* crimson-950 */
+    --ae-badge-crimson-s2-border: #fbc7c3; /* crimson-200 */
+    --ae-badge-graphite-ol-bg: #12151c; /* graphite-925 */
+    --ae-badge-graphite-ol-text: #c3c9d2; /* graphite-300 */
+    --ae-badge-graphite-ol-border: #3e4451; /* graphite-700 */
+    --ae-badge-graphite-t1-bg: #0c0f14; /* graphite-950 */
+    --ae-badge-graphite-t1-text: #dde1e7; /* graphite-200 */
+    --ae-badge-graphite-t1-border: #2a2f3a; /* graphite-800 */
+    --ae-badge-graphite-t2-bg: #181c25; /* graphite-900 */
+    --ae-badge-graphite-t2-text: #eceef2; /* graphite-100 */
+    --ae-badge-graphite-t2-border: #3e4451; /* graphite-700 */
+    --ae-badge-navy-ol-bg: #12151c; /* graphite-925 */
+    --ae-badge-navy-ol-text: #9bb0d1; /* navy-300 */
+    --ae-badge-navy-ol-border: #263c68; /* navy-700 */
+    --ae-badge-navy-t1-bg: #0b152a; /* navy-950 */
+    --ae-badge-navy-t1-text: #c6d2e6; /* navy-200 */
+    --ae-badge-navy-t1-border: #1b2d52; /* navy-800 */
+    --ae-badge-navy-t2-bg: #13213e; /* navy-900 */
+    --ae-badge-navy-t2-text: #e3e9f3; /* navy-100 */
+    --ae-badge-navy-t2-border: #263c68; /* navy-700 */
+    --ae-badge-petrol-s1-bg: #3fb0a2; /* petrol-400 */
+    --ae-badge-petrol-s1-text: #082524; /* petrol-950 */
+    --ae-badge-petrol-s1-border: #72cdbf; /* petrol-300 */
+    --ae-badge-petrol-t1-bg: #082524; /* petrol-950 */
+    --ae-badge-petrol-t1-text: #a9e4d9; /* petrol-200 */
+    --ae-badge-petrol-t1-border: #194d49; /* petrol-800 */
+    --ae-badge-petrol-t2-bg: #18403d; /* petrol-900 */
+    --ae-badge-petrol-t2-text: #d4f2ec; /* petrol-100 */
+    --ae-badge-petrol-t2-border: #1a5f59; /* petrol-700 */
+    --ae-badge-plum-ol-bg: #12151c; /* graphite-925 */
+    --ae-badge-plum-ol-text: #d4aad4; /* plum-300 */
+    --ae-badge-plum-ol-border: #6c3d6c; /* plum-700 */
+    --ae-badge-plum-s1-bg: #bb7fbb; /* plum-400 */
+    --ae-badge-plum-s1-text: #2c162c; /* plum-950 */
+    --ae-badge-plum-s1-border: #d4aad4; /* plum-300 */
+    --ae-badge-plum-s2-bg: #d4aad4; /* plum-300 */
+    --ae-badge-plum-s2-text: #2c162c; /* plum-950 */
+    --ae-badge-plum-s2-border: #e7cfe7; /* plum-200 */
+    --ae-badge-plum-t1-bg: #2c162c; /* plum-950 */
+    --ae-badge-plum-t1-text: #e7cfe7; /* plum-200 */
+    --ae-badge-plum-t1-border: #5a345a; /* plum-800 */
+    --ae-badge-plum-t2-bg: #4b2e4b; /* plum-900 */
+    --ae-badge-plum-t2-text: #f3e7f3; /* plum-100 */
+    --ae-badge-plum-t2-border: #6c3d6c; /* plum-700 */
+    --ae-badge-plum-t3-bg: #5a345a; /* plum-800 */
+    --ae-badge-plum-t3-text: #faf5fa; /* plum-50 */
+    --ae-badge-plum-t3-border: #844a84; /* plum-600 */
+    --shadow-raised: 0 0 0 1px #2a2f3a, 0 4px 12px rgba(0,0,0,0.45);
+    --shadow-modal: 0 0 0 1px #2a2f3a, 0 12px 40px rgba(0,0,0,0.6);
+  }
+}
+
+@theme inline {
+  --color-bg-app: var(--ae-bg-app);
+  --color-surface: var(--ae-surface);
+  --color-surface-raised: var(--ae-surface-raised);
+  --color-surface-sunken: var(--ae-surface-sunken);
+  --color-surface-hover: var(--ae-surface-hover);
+  --color-surface-selected: var(--ae-surface-selected);
+  --color-structure: var(--ae-structure);
+  --color-structure-hover: var(--ae-structure-hover);
+  --color-structure-active: var(--ae-structure-active);
+  --color-border: var(--ae-border);
+  --color-border-strong: var(--ae-border-strong);
+  --color-border-input: var(--ae-border-input);
+  --color-structure-border: var(--ae-structure-border);
+  --color-fg-primary: var(--ae-fg-primary);
+  --color-fg-secondary: var(--ae-fg-secondary);
+  --color-fg-disabled: var(--ae-fg-disabled);
+  --color-fg-on-structure: var(--ae-fg-on-structure);
+  --color-fg-on-structure-muted: var(--ae-fg-on-structure-muted);
+  --color-fg-link: var(--ae-fg-link);
+  --color-action-primary: var(--ae-action-primary);
+  --color-action-primary-hover: var(--ae-action-primary-hover);
+  --color-action-primary-active: var(--ae-action-primary-active);
+  --color-on-action-primary: var(--ae-on-action-primary);
+  --color-action-secondary-hover: var(--ae-action-secondary-hover);
+  --color-action-secondary-active: var(--ae-action-secondary-active);
+  --color-action-destructive: var(--ae-action-destructive);
+  --color-action-destructive-hover: var(--ae-action-destructive-hover);
+  --color-action-destructive-active: var(--ae-action-destructive-active);
+  --color-on-action-destructive: var(--ae-on-action-destructive);
+  --color-fg-destructive: var(--ae-fg-destructive);
+  --color-action-disabled: var(--ae-action-disabled);
+  --color-focus-ring: var(--ae-focus-ring);
+  --color-focus-ring-on-structure: var(--ae-focus-ring-on-structure);
+  --color-accent: var(--ae-accent);
+  --color-accent-text: var(--ae-accent-text);
+  --color-accent-soft: var(--ae-accent-soft);
+  --color-accent-on-structure: var(--ae-accent-on-structure);
+  --color-success-bg: var(--ae-success-bg);
+  --color-success-border: var(--ae-success-border);
+  --color-success-text: var(--ae-success-text);
+  --color-success-icon: var(--ae-success-icon);
+  --color-error-bg: var(--ae-error-bg);
+  --color-error-border: var(--ae-error-border);
+  --color-error-text: var(--ae-error-text);
+  --color-error-icon: var(--ae-error-icon);
+  --color-warning-bg: var(--ae-warning-bg);
+  --color-warning-border: var(--ae-warning-border);
+  --color-warning-text: var(--ae-warning-text);
+  --color-warning-icon: var(--ae-warning-icon);
+  --color-info-bg: var(--ae-info-bg);
+  --color-info-border: var(--ae-info-border);
+  --color-info-text: var(--ae-info-text);
+  --color-info-icon: var(--ae-info-icon);
+  --color-due-d90-bg: var(--ae-due-d90-bg);
+  --color-due-d90-text: var(--ae-due-d90-text);
+  --color-due-d90-border: var(--ae-due-d90-border);
+  --color-due-d60-bg: var(--ae-due-d60-bg);
+  --color-due-d60-text: var(--ae-due-d60-text);
+  --color-due-d60-border: var(--ae-due-d60-border);
+  --color-due-d30-bg: var(--ae-due-d30-bg);
+  --color-due-d30-text: var(--ae-due-d30-text);
+  --color-due-d30-border: var(--ae-due-d30-border);
+  --color-due-d15-bg: var(--ae-due-d15-bg);
+  --color-due-d15-text: var(--ae-due-d15-text);
+  --color-due-d15-border: var(--ae-due-d15-border);
+  --color-due-d7-bg: var(--ae-due-d7-bg);
+  --color-due-d7-text: var(--ae-due-d7-text);
+  --color-due-d7-border: var(--ae-due-d7-border);
+  --color-due-d1-bg: var(--ae-due-d1-bg);
+  --color-due-d1-text: var(--ae-due-d1-text);
+  --color-due-d1-border: var(--ae-due-d1-border);
+  --color-due-today-bg: var(--ae-due-today-bg);
+  --color-due-today-text: var(--ae-due-today-text);
+  --color-due-today-border: var(--ae-due-today-border);
+  --color-due-overdue-bg: var(--ae-due-overdue-bg);
+  --color-due-overdue-text: var(--ae-due-overdue-text);
+  --color-due-overdue-border: var(--ae-due-overdue-border);
+  --color-badge-crimson-s2-bg: var(--ae-badge-crimson-s2-bg);
+  --color-badge-crimson-s2-text: var(--ae-badge-crimson-s2-text);
+  --color-badge-crimson-s2-border: var(--ae-badge-crimson-s2-border);
+  --color-badge-graphite-ol-bg: var(--ae-badge-graphite-ol-bg);
+  --color-badge-graphite-ol-text: var(--ae-badge-graphite-ol-text);
+  --color-badge-graphite-ol-border: var(--ae-badge-graphite-ol-border);
+  --color-badge-graphite-t1-bg: var(--ae-badge-graphite-t1-bg);
+  --color-badge-graphite-t1-text: var(--ae-badge-graphite-t1-text);
+  --color-badge-graphite-t1-border: var(--ae-badge-graphite-t1-border);
+  --color-badge-graphite-t2-bg: var(--ae-badge-graphite-t2-bg);
+  --color-badge-graphite-t2-text: var(--ae-badge-graphite-t2-text);
+  --color-badge-graphite-t2-border: var(--ae-badge-graphite-t2-border);
+  --color-badge-navy-ol-bg: var(--ae-badge-navy-ol-bg);
+  --color-badge-navy-ol-text: var(--ae-badge-navy-ol-text);
+  --color-badge-navy-ol-border: var(--ae-badge-navy-ol-border);
+  --color-badge-navy-t1-bg: var(--ae-badge-navy-t1-bg);
+  --color-badge-navy-t1-text: var(--ae-badge-navy-t1-text);
+  --color-badge-navy-t1-border: var(--ae-badge-navy-t1-border);
+  --color-badge-navy-t2-bg: var(--ae-badge-navy-t2-bg);
+  --color-badge-navy-t2-text: var(--ae-badge-navy-t2-text);
+  --color-badge-navy-t2-border: var(--ae-badge-navy-t2-border);
+  --color-badge-petrol-s1-bg: var(--ae-badge-petrol-s1-bg);
+  --color-badge-petrol-s1-text: var(--ae-badge-petrol-s1-text);
+  --color-badge-petrol-s1-border: var(--ae-badge-petrol-s1-border);
+  --color-badge-petrol-t1-bg: var(--ae-badge-petrol-t1-bg);
+  --color-badge-petrol-t1-text: var(--ae-badge-petrol-t1-text);
+  --color-badge-petrol-t1-border: var(--ae-badge-petrol-t1-border);
+  --color-badge-petrol-t2-bg: var(--ae-badge-petrol-t2-bg);
+  --color-badge-petrol-t2-text: var(--ae-badge-petrol-t2-text);
+  --color-badge-petrol-t2-border: var(--ae-badge-petrol-t2-border);
+  --color-badge-plum-ol-bg: var(--ae-badge-plum-ol-bg);
+  --color-badge-plum-ol-text: var(--ae-badge-plum-ol-text);
+  --color-badge-plum-ol-border: var(--ae-badge-plum-ol-border);
+  --color-badge-plum-s1-bg: var(--ae-badge-plum-s1-bg);
+  --color-badge-plum-s1-text: var(--ae-badge-plum-s1-text);
+  --color-badge-plum-s1-border: var(--ae-badge-plum-s1-border);
+  --color-badge-plum-s2-bg: var(--ae-badge-plum-s2-bg);
+  --color-badge-plum-s2-text: var(--ae-badge-plum-s2-text);
+  --color-badge-plum-s2-border: var(--ae-badge-plum-s2-border);
+  --color-badge-plum-t1-bg: var(--ae-badge-plum-t1-bg);
+  --color-badge-plum-t1-text: var(--ae-badge-plum-t1-text);
+  --color-badge-plum-t1-border: var(--ae-badge-plum-t1-border);
+  --color-badge-plum-t2-bg: var(--ae-badge-plum-t2-bg);
+  --color-badge-plum-t2-text: var(--ae-badge-plum-t2-text);
+  --color-badge-plum-t2-border: var(--ae-badge-plum-t2-border);
+  --color-badge-plum-t3-bg: var(--ae-badge-plum-t3-bg);
+  --color-badge-plum-t3-text: var(--ae-badge-plum-t3-text);
+  --color-badge-plum-t3-border: var(--ae-badge-plum-t3-border);
+}
+
+/* números sempre tabulares em tabela */
+@utility num { font-variant-numeric: tabular-nums; text-align: right; }

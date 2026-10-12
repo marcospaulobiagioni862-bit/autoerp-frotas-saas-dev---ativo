@@ -105,11 +105,11 @@ export const FinancialPeriodsView: React.FC = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-slate-900 dark:text-slate-100">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100">
             <CalendarRange className="h-5 w-5 text-blue-600" />
             Períodos Financeiros
           </h2>
-          <p className="mt-1 max-w-3xl text-xs text-slate-500">
+          <p className="mt-1 max-w-3xl text-xs text-graphite-500">
             Feche competências para impedir movimentações retroativas. Reaberturas exigem autorização administrativa e motivo auditável.
           </p>
         </div>
@@ -117,7 +117,7 @@ export const FinancialPeriodsView: React.FC = () => {
           type="button"
           onClick={() => void loadPeriods()}
           disabled={loading || submitting}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-50 disabled:opacity-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200 dark:hover:bg-graphite-800"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Atualizar
@@ -136,31 +136,31 @@ export const FinancialPeriodsView: React.FC = () => {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-graphite-200 bg-white p-4 shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
         <div className="mb-4 flex items-center gap-2">
           <LockKeyhole className="h-4 w-4 text-amber-600" />
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Fechar período</h3>
+          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Fechar período</h3>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Data inicial</span>
+            <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data inicial</span>
             <input
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
               disabled={!canClose || submitting}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
             />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Data final</span>
+            <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data final</span>
             <input
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
               disabled={!canClose || submitting}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
             />
           </label>
           <button
@@ -175,24 +175,24 @@ export const FinancialPeriodsView: React.FC = () => {
         </div>
 
         {!canClose && (
-          <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+          <p className="mt-3 flex items-center gap-2 text-xs text-graphite-500">
             <AlertTriangle className="h-4 w-4" />
             Seu perfil possui acesso somente à consulta de períodos financeiros.
           </p>
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
-        <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Histórico de períodos</h3>
+      <div className="overflow-hidden rounded-xl border border-graphite-200 bg-white shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
+        <div className="border-b border-graphite-100 px-4 py-3 dark:border-graphite-800">
+          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Histórico de períodos</h3>
         </div>
 
         {loading ? (
-          <div className="px-4 py-10 text-center text-sm text-slate-500">Carregando períodos...</div>
+          <div className="px-4 py-10 text-center text-sm text-graphite-500">Carregando períodos...</div>
         ) : periods.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-slate-500">Nenhum período financeiro cadastrado.</div>
+          <div className="px-4 py-10 text-center text-sm text-graphite-500">Nenhum período financeiro cadastrado.</div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
             {periods.map((period) => {
               const closed = period.status === FinancialPeriodStatus.CLOSED;
               const reopening = reopenPeriodId === period.id;
@@ -201,7 +201,7 @@ export const FinancialPeriodsView: React.FC = () => {
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
+                        <span className="font-mono text-sm font-bold text-graphite-900 dark:text-graphite-100">
                           {period.startDate} → {period.endDate}
                         </span>
                         <span
@@ -214,7 +214,7 @@ export const FinancialPeriodsView: React.FC = () => {
                           {closed ? 'Fechado' : 'Aberto'}
                         </span>
                       </div>
-                      <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-[11px] text-slate-500 sm:grid-cols-2">
+                      <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-[11px] text-graphite-500 sm:grid-cols-2">
                         <span>Fechado em: {formatTimestamp(period.closedAt)}</span>
                         <span>Responsável: {period.closedBy || '—'}</span>
                         <span>Reaberto em: {formatTimestamp(period.reopenedAt)}</span>
@@ -243,13 +243,13 @@ export const FinancialPeriodsView: React.FC = () => {
                   {reopening && (
                     <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/40 dark:bg-blue-950/20">
                       <label className="block space-y-1">
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Motivo obrigatório da reabertura</span>
+                        <span className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">Motivo obrigatório da reabertura</span>
                         <textarea
                           value={reopenReason}
                           onChange={(event) => setReopenReason(event.target.value)}
                           maxLength={1000}
                           rows={3}
-                          className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          className="w-full resize-y rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
                           placeholder="Descreva por que este período precisa ser reaberto..."
                         />
                       </label>
@@ -261,7 +261,7 @@ export const FinancialPeriodsView: React.FC = () => {
                             setReopenReason('');
                           }}
                           disabled={submitting}
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-900"
+                          className="rounded-lg border border-graphite-200 px-3 py-2 text-xs font-semibold text-graphite-600 hover:bg-white disabled:opacity-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-900"
                         >
                           Cancelar
                         </button>

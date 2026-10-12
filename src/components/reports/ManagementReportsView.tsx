@@ -238,18 +238,18 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
+      <div className="bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.36 • Relatórios e Indicadores Gerenciais
             </span>
-            <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+            <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
               <Lock className="w-3 h-3 text-emerald-400" /> Financeiro Congelado (Somente Leitura)
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">Central de Inteligência Gerencial & Relatórios</h2>
-          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+          <p className="text-xs text-graphite-300 mt-1 max-w-3xl">
             Indicadores consolidados de frota, contratos, manutenções, compliance, multas e saúde operacional em tempo real.
           </p>
         </div>
@@ -290,7 +290,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-graphite-200 dark:border-graphite-800">
         {[
           { id: 'overview', label: 'Visão Geral & Health Score', icon: BarChart3 },
           { id: 'fleet', label: 'Situação da Frota', icon: Car },
@@ -311,7 +311,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800'
+                  : 'bg-white dark:bg-graphite-900 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 border border-graphite-200 dark:border-graphite-800'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -325,21 +325,21 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       {activeSubTab === 'overview' && (
         <div className="space-y-6">
           {/* Health Score Banner */}
-          <Card className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white border border-indigo-900/50">
+          <Card className="bg-gradient-to-br from-graphite-900 to-indigo-950 text-white border border-indigo-900/50">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="space-y-2 text-center md:text-left">
                 <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
                   Operational Health Score
                 </span>
                 <h3 className="text-2xl font-black">Saúde Operacional Geral: {healthScore.score}%</h3>
-                <p className="text-xs text-slate-300 max-w-xl">
+                <p className="text-xs text-graphite-300 max-w-xl">
                   Indicador sintético ponderado calculando disponibilidade de frota, integridade de contratos, oficina, compliance documental e multas.
                 </p>
               </div>
 
-              <div className="flex items-center gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
-                <div className="text-center px-4 border-r border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
+              <div className="flex items-center gap-4 bg-graphite-900/80 p-4 rounded-2xl border border-graphite-800">
+                <div className="text-center px-4 border-r border-graphite-800">
+                  <span className="text-[10px] uppercase font-bold text-graphite-400 block">Status</span>
                   <span className={`text-sm font-black font-mono ${
                     healthScore.status === 'EXCELLENT' ? 'text-emerald-400' :
                     healthScore.status === 'GOOD' ? 'text-blue-400' :
@@ -349,7 +349,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                   </span>
                 </div>
                 <div className="text-center px-4">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Pendências</span>
+                  <span className="text-[10px] uppercase font-bold text-graphite-400 block">Pendências</span>
                   <span className="text-xl font-black text-white font-mono">{pendings.length}</span>
                 </div>
               </div>
@@ -364,12 +364,12 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                 { label: 'Documentação', value: healthScore.components.documentationHealth },
                 { label: 'Compliance / Multas', value: healthScore.components.complianceHealth },
               ].map((c, idx) => (
-                <div key={idx} className="space-y-1.5 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                <div key={idx} className="space-y-1.5 bg-graphite-900/60 p-3 rounded-xl border border-graphite-800/80">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-300 font-medium">{c.label}</span>
+                    <span className="text-graphite-300 font-medium">{c.label}</span>
                     <span className="font-bold font-mono text-indigo-300">{c.value}%</span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-graphite-800 h-2 rounded-full overflow-hidden">
                     <div
                       className="bg-indigo-500 h-full rounded-full transition-all"
                       style={{ width: `${c.value}%` }}
@@ -383,31 +383,31 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           {/* KPI Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card padding="sm" className="border-l-4 border-l-blue-600">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Frota Total</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Frota Total</span>
               <div className="flex items-baseline justify-between mt-1">
-                <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">{fleet.totalVehicles}</h3>
+                <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 font-mono">{fleet.totalVehicles}</h3>
                 <span className="text-xs text-blue-600 font-semibold">{fleet.availabilityRate}% disponíveis</span>
               </div>
             </Card>
 
             <Card padding="sm" className="border-l-4 border-l-indigo-600">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Contratos Ativos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Contratos Ativos</span>
               <div className="flex items-baseline justify-between mt-1">
-                <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">{contracts.activeContracts}</h3>
+                <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 font-mono">{contracts.activeContracts}</h3>
                 <span className="text-xs text-indigo-600 font-semibold">{contracts.expiringSoon} vencendo</span>
               </div>
             </Card>
 
             <Card padding="sm" className="border-l-4 border-l-amber-500">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Manutenções Abertas</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Manutenções Abertas</span>
               <div className="flex items-baseline justify-between mt-1">
-                <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 font-mono">{maintenance.scheduled + maintenance.inProgress}</h3>
+                <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 font-mono">{maintenance.scheduled + maintenance.inProgress}</h3>
                 <span className="text-xs text-amber-600 font-semibold">{maintenance.overdue} atrasadas</span>
               </div>
             </Card>
 
             <Card padding="sm" className="border-l-4 border-l-rose-600">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Pendências P0/P1</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Pendências P0/P1</span>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
                   {pendings.filter(p => p.priority === 'P0' || p.priority === 'P1').length}
@@ -422,7 +422,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       {/* TAB 2: FLEET SITUATION */}
       {activeSubTab === 'fleet' && (
         <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={() => window.location.reload()}>
-          <Suspense fallback={<div role="status" className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">Carregando situação da frota...</div>}>
+          <Suspense fallback={<div role="status" className="rounded-xl border border-graphite-200 bg-white p-6 text-sm text-graphite-600 dark:border-graphite-800 dark:bg-graphite-900 dark:text-graphite-300">Carregando situação da frota...</div>}>
             <ManagementReportsFleetTab fleet={fleet} />
           </Suspense>
         </LazyModuleErrorBoundary>
@@ -433,20 +433,20 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Contratos Ativos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Contratos Ativos</span>
               <h3 className="text-2xl font-black text-indigo-600 mt-1 font-mono">{contracts.activeContracts}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Próximos do Vencimento</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Próximos do Vencimento</span>
               <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{contracts.expiringSoon}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Vencidos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Vencidos</span>
               <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{contracts.expired}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Encerrados</span>
-              <h3 className="text-2xl font-black text-slate-600 mt-1 font-mono">{contracts.closedContracts}</h3>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Encerrados</span>
+              <h3 className="text-2xl font-black text-graphite-600 mt-1 font-mono">{contracts.closedContracts}</h3>
             </Card>
           </div>
         </div>
@@ -457,19 +457,19 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Agendadas</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Agendadas</span>
               <h3 className="text-2xl font-black text-blue-600 mt-1 font-mono">{maintenance.scheduled}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Em Andamento</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Em Andamento</span>
               <h3 className="text-2xl font-black text-indigo-600 mt-1 font-mono">{maintenance.inProgress}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Atrasadas</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Atrasadas</span>
               <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{maintenance.overdue}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Concluídas</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Concluídas</span>
               <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{maintenance.completed}</h3>
             </Card>
           </div>
@@ -481,29 +481,29 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Documentos Válidos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Documentos Válidos</span>
               <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{documents.valid}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Vencendo (15 dias)</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Vencendo (15 dias)</span>
               <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{documents.expiringSoon}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Documentos Vencidos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Documentos Vencidos</span>
               <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{documents.expired}</h3>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card padding="sm">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Seguros de Frota</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300 mb-2">Seguros de Frota</h4>
               <div className="flex justify-between items-center text-sm">
                 <span>Apólices Ativas: <strong className="font-mono text-emerald-600">{documents.insurancesActive}</strong></span>
                 <span>Vencidas: <strong className="font-mono text-rose-600">{documents.insurancesExpired}</strong></span>
               </div>
             </Card>
             <Card padding="sm">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-2">Rastreadores / Telemetria</h4>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300 mb-2">Rastreadores / Telemetria</h4>
               <div className="flex justify-between items-center text-sm">
                 <span>Rastreadores Ativos: <strong className="font-mono text-teal-600">{documents.trackersActive}</strong> / {documents.trackersTotal}</span>
               </div>
@@ -517,19 +517,19 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Total de Multas</span>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{tickets.totalTickets}</h3>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Total de Multas</span>
+              <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 mt-1 font-mono">{tickets.totalTickets}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Pend. Identificação</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Pend. Identificação</span>
               <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{tickets.pendingIdentification}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Em Recurso</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Em Recurso</span>
               <h3 className="text-2xl font-black text-blue-600 mt-1 font-mono">{tickets.inAppeal}</h3>
             </Card>
             <Card padding="sm">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Resolvidas / Pagas</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase">Resolvidas / Pagas</span>
               <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{tickets.paid + tickets.closed}</h3>
             </Card>
           </div>
@@ -540,7 +540,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       {activeSubTab === 'pendings' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300">
               Central de Pendências Integrada ({pendings.length})
             </h3>
             <Button size="sm" variant="primary" onClick={() => onNavigate('pendencias')}>
@@ -550,17 +550,17 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
 
           <div className="space-y-3">
             {pendings.slice(0, 10).map((p) => (
-              <div key={p.id} className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+              <div key={p.id} className="p-4 bg-white dark:bg-graphite-900 rounded-xl border border-graphite-200 dark:border-graphite-800 flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant={p.priority === 'P0' || p.priority === 'P1' ? 'danger' : 'warning'}>
                       {p.priority}
                     </Badge>
-                    <span className="text-xs font-semibold text-slate-500">{p.category}</span>
+                    <span className="text-xs font-semibold text-graphite-500">{p.category}</span>
                     {p.vehiclePlate && <span className="text-xs font-mono font-bold text-blue-600">Placa: {p.vehiclePlate}</span>}
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{p.title}</h4>
-                  <p className="text-xs text-slate-500">{p.description}</p>
+                  <h4 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">{p.title}</h4>
+                  <p className="text-xs text-graphite-500">{p.description}</p>
                 </div>
               </div>
             ))}
@@ -572,13 +572,13 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       {activeSubTab === 'vehicles' && (
         <div className="space-y-6">
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Buscar por placa, modelo ou motorista..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-graphite-900 dark:text-graphite-100"
             />
           </div>
 
@@ -595,12 +595,12 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <FileCheck className="w-4 h-4 text-indigo-600" />
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Resumo assistido — revisão humana</h3>
+                      <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Resumo assistido — revisão humana</h3>
                       <Badge variant={assistantSuggestion.status === 'CONFIRMED' ? 'success' : assistantSuggestion.status === 'REJECTED' ? 'danger' : 'warning'}>
                         {assistantSuggestion.status}
                       </Badge>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-graphite-500 mt-1">
                       Dados lidos somente do ERP. Não usa IA externa, não grava no cadastro e não executa alteração financeira ou contratual.
                     </p>
                   </div>
@@ -629,13 +629,13 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {assistantSuggestion.suggestion.suggestedFields.map((field) => (
-                    <div key={field.field} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                    <div key={field.field} className="rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{fieldLabel(field.field)}</span>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-graphite-500">{fieldLabel(field.field)}</span>
                         {field.requiresServerRevalidation && <Badge variant="warning">Revalidar</Badge>}
                       </div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
-                      <div className="text-[10px] text-slate-500 mt-2">
+                      <div className="text-sm font-semibold text-graphite-900 dark:text-graphite-100 mt-1 break-words">{fieldValue(field)}</div>
+                      <div className="text-[10px] text-graphite-500 mt-2">
                         Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'dados do sistema' : 'Documento aprovado'}
                         {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
                       </div>
@@ -661,7 +661,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                  <tr className="bg-graphite-50 dark:bg-graphite-900 text-graphite-500 border-b border-graphite-200 dark:border-graphite-800">
                     <th className="p-3 font-semibold">Placa / Veículo</th>
                     <th className="p-3 font-semibold">Status</th>
                     <th className="p-3 font-semibold">Contrato / Motorista</th>
@@ -673,12 +673,12 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                     <th className="p-3 font-semibold">Preenchimento assistido</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">
                   {filteredVehicles.map((v) => (
-                    <tr key={v.vehicleId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <tr key={v.vehicleId} className="hover:bg-graphite-50 dark:hover:bg-graphite-800/40">
                       <td className="p-3">
-                        <span className="font-mono font-bold text-slate-900 dark:text-slate-100 block">{v.plate}</span>
-                        <span className="text-[11px] text-slate-500">{v.brand} {v.model}</span>
+                        <span className="font-mono font-bold text-graphite-900 dark:text-graphite-100 block">{v.plate}</span>
+                        <span className="text-[11px] text-graphite-500">{v.brand} {v.model}</span>
                       </td>
                       <td className="p-3">
                         <Badge variant={v.status === VehicleStatus.AVAILABLE ? 'success' : v.status === VehicleStatus.RENTED ? 'info' : 'warning'}>
@@ -689,10 +689,10 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                         {v.activeContractNumber ? (
                           <div>
                             <span className="font-mono font-semibold text-indigo-600 block">{v.activeContractNumber}</span>
-                            <span className="text-[11px] text-slate-500">{v.driverName || 'Motorista'}</span>
+                            <span className="text-[11px] text-graphite-500">{v.driverName || 'Motorista'}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic">Disponível</span>
+                          <span className="text-graphite-400 italic">Disponível</span>
                         )}
                       </td>
                       <td className="p-3 font-mono">{v.currentKm.toLocaleString()} km</td>
@@ -738,13 +738,13 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       {activeSubTab === 'drivers' && (
         <div className="space-y-6">
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Buscar motorista por nome ou CNH..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-graphite-900 dark:text-graphite-100"
             />
           </div>
 
@@ -761,12 +761,12 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2">
                       <FileCheck className="w-4 h-4 text-indigo-600" />
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Resumo assistido — revisão humana</h3>
+                      <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Resumo assistido — revisão humana</h3>
                       <Badge variant={assistantSuggestion.status === 'CONFIRMED' ? 'success' : assistantSuggestion.status === 'REJECTED' ? 'danger' : 'warning'}>
                         {assistantSuggestion.status}
                       </Badge>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-graphite-500 mt-1">
                       Dados lidos somente do ERP. Não usa IA externa, não grava no cadastro e não executa alteração financeira ou contratual.
                     </p>
                   </div>
@@ -795,13 +795,13 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                   {assistantSuggestion.suggestion.suggestedFields.map((field) => (
-                    <div key={field.field} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                    <div key={field.field} className="rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{fieldLabel(field.field)}</span>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-graphite-500">{fieldLabel(field.field)}</span>
                         {field.requiresServerRevalidation && <Badge variant="warning">Revalidar</Badge>}
                       </div>
-                      <div className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 break-words">{fieldValue(field)}</div>
-                      <div className="text-[10px] text-slate-500 mt-2">
+                      <div className="text-sm font-semibold text-graphite-900 dark:text-graphite-100 mt-1 break-words">{fieldValue(field)}</div>
+                      <div className="text-[10px] text-graphite-500 mt-2">
                         Fonte: {field.provenance[0]?.kind === 'POSTGRES' ? 'dados do sistema' : 'Documento aprovado'}
                         {field.provenance[0]?.observedAt ? ` • ${new Date(field.provenance[0].observedAt).toLocaleString('pt-BR')}` : ''}
                       </div>
@@ -827,7 +827,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-900 text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                  <tr className="bg-graphite-50 dark:bg-graphite-900 text-graphite-500 border-b border-graphite-200 dark:border-graphite-800">
                     <th className="p-3 font-semibold">Motorista</th>
                     <th className="p-3 font-semibold">CNH</th>
                     <th className="p-3 font-semibold">Status CNH</th>
@@ -837,10 +837,10 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                     <th className="p-3 font-semibold">Preenchimento assistido</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">
                   {filteredDrivers.map((d) => (
-                    <tr key={d.driverId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 font-bold text-slate-900 dark:text-slate-100">{d.fullName}</td>
+                    <tr key={d.driverId} className="hover:bg-graphite-50 dark:hover:bg-graphite-800/40">
+                      <td className="p-3 font-bold text-graphite-900 dark:text-graphite-100">{d.fullName}</td>
                       <td className="p-3 font-mono">{d.cnhNumber} (Val: {d.cnhExpiration})</td>
                       <td className="p-3">
                         <Badge variant={d.cnhStatus === DocumentStatus.EXPIRED ? 'danger' : 'success'}>

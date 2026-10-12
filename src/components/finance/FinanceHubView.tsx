@@ -73,7 +73,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
         breadcrumb="Financeiro"
       />
 
-      <div className="min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
+      <div className="min-w-0 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
         {subTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
@@ -84,7 +84,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -94,7 +94,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
                   className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                     isActive
                       ? 'bg-white/20 text-white'
-                      : tab.badgeColor || 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      : tab.badgeColor || 'bg-graphite-200 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300'
                   }`}
                 >
                   {tab.badge}
@@ -106,7 +106,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
       </div>
 
       <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
-        <Suspense fallback={<div className="mt-6 text-sm text-slate-500">Carregando área financeira...</div>}>
+        <Suspense fallback={<div className="mt-6 text-sm text-graphite-500">Carregando área financeira...</div>}>
           <div key={refreshVersion} className="mt-6 min-w-0">
         {activeSubTab === 'overview' && (
           <FinanceOverviewView onSelectSubTab={navigate} />
