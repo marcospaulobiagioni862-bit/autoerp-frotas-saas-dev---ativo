@@ -345,32 +345,32 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
   const getPriorityBadgeClass = (p: TaskPriority) => {
     switch (p) {
-      case 'P0': return 'bg-red-100 text-red-800 border-red-300 font-bold';
+      case 'P0': return 'bg-error-bg text-error-text border-error-border font-bold';
       case 'P1': return 'bg-orange-100 text-orange-800 border-orange-300 font-semibold';
-      case 'P2': return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'P2': return 'bg-warning-bg text-warning-text border-warning-border';
       case 'P3': return 'bg-graphite-100 text-graphite-700 border-graphite-300';
     }
   };
 
   const getStatusBadgeClass = (s: TaskStatus) => {
     switch (s) {
-      case 'OPEN': return 'bg-sky-50 text-sky-700 border-sky-200';
+      case 'OPEN': return 'bg-info-bg text-info-text border-info-border';
       case 'ASSIGNED': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'IN_PROGRESS': return 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse';
-      case 'BLOCKED': return 'bg-red-50 text-red-700 border-red-200';
+      case 'IN_PROGRESS': return 'bg-warning-bg text-warning-text border-warning-border animate-pulse';
+      case 'BLOCKED': return 'bg-error-bg text-error-text border-error-border';
       case 'WAITING_VALIDATION': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'COMPLETED': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'CLOSED': return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'COMPLETED': return 'bg-success-bg text-success-text border-success-border';
+      case 'CLOSED': return 'bg-success-bg text-success-text border-success-border';
       case 'CANCELLED': return 'bg-graphite-100 text-graphite-500 border-graphite-200 line-through';
-      case 'REOPENED': return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'REOPENED': return 'bg-error-bg text-error-text border-error-border';
     }
   };
 
   const getSLABadgeClass = (status: string) => {
     switch (status) {
-      case 'ON_TRACK': return 'bg-emerald-100 text-emerald-800';
-      case 'WARNING': return 'bg-amber-100 text-amber-800 font-semibold';
-      case 'BREACHED': return 'bg-red-100 text-red-800 font-bold animate-bounce';
+      case 'ON_TRACK': return 'bg-success-bg text-success-text';
+      case 'WARNING': return 'bg-warning-bg text-warning-text font-semibold';
+      case 'BREACHED': return 'bg-error-bg text-error-text font-bold animate-bounce';
       case 'RESOLVED': return 'bg-graphite-100 text-graphite-600';
       default: return 'bg-graphite-100 text-graphite-600';
     }
@@ -445,18 +445,18 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
       {/* Notifications */}
       {actionSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg flex items-center justify-between">
+        <div className="p-3 bg-success-bg border border-success-border text-success-text text-xs font-semibold rounded-lg flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-success-icon" />
             <span>{actionSuccess}</span>
           </div>
         </div>
       )}
 
       {actionError && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs font-semibold rounded-lg flex items-center justify-between">
+        <div className="p-3 bg-error-bg border border-error-border text-error-text text-xs font-semibold rounded-lg flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-600" />
+            <AlertTriangle className="w-4 h-4 text-error-icon" />
             <span>{actionError}</span>
           </div>
         </div>
@@ -478,9 +478,9 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
           <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>SLA Compliance</span>
-            <BarChart2 className="w-4 h-4 text-emerald-500" />
+            <BarChart2 className="w-4 h-4 text-success-icon" />
           </div>
-          <div className="text-2xl font-bold text-emerald-600 mt-2">{metrics?.slaComplianceRate || 100}%</div>
+          <div className="text-2xl font-bold text-success-icon mt-2">{metrics?.slaComplianceRate || 100}%</div>
           <div className="text-[11px] text-graphite-500 mt-1">
             {metrics?.slaBreachedCount || 0} Rompidos • {metrics?.slaWarningCount || 0} Em Alerta
           </div>
@@ -489,9 +489,9 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
           <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Tarefas Bloqueadas</span>
-            <Lock className="w-4 h-4 text-red-500" />
+            <Lock className="w-4 h-4 text-error-icon" />
           </div>
-          <div className="text-2xl font-bold text-red-600 mt-2">{metrics?.blockedTasks || 0}</div>
+          <div className="text-2xl font-bold text-error-icon mt-2">{metrics?.blockedTasks || 0}</div>
           <div className="text-[11px] text-graphite-500 mt-1">
             Taxa Bloqueio: {metrics?.blockedRate || 0}%
           </div>
@@ -500,10 +500,10 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
           <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Pendências Ativas</span>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <AlertTriangle className="w-4 h-4 text-warning-icon" />
           </div>
-          <div className="text-2xl font-bold text-amber-600 mt-2">{metrics?.totalPendingActions || 0}</div>
-          <div className="text-[11px] text-graphite-500 mt-1 font-semibold text-red-600">
+          <div className="text-2xl font-bold text-warning-icon mt-2">{metrics?.totalPendingActions || 0}</div>
+          <div className="text-[11px] text-graphite-500 mt-1 font-semibold text-error-icon">
             {metrics?.criticalPendencies || 0} Críticas (P0/P1)
           </div>
         </div>
@@ -785,7 +785,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                               {task.status}
                             </span>
                             {task.blockedReason && (
-                              <div className="text-[10px] text-red-600 font-medium mt-1 truncate max-w-[150px]">
+                              <div className="text-[10px] text-error-icon font-medium mt-1 truncate max-w-[150px]">
                                 Motivo: {task.blockedReason}
                               </div>
                             )}
@@ -828,7 +828,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                               {task.status === 'ASSIGNED' && (
                                 <button
                                   onClick={() => handleStartTask(task.id)}
-                                  className="p-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded text-[11px] font-semibold flex items-center gap-1"
+                                  className="p-1 bg-warning-bg text-warning-text hover:bg-warning-bg rounded text-[11px] font-semibold flex items-center gap-1"
                                 >
                                   <Play className="w-3.5 h-3.5" /> Iniciar
                                 </button>
@@ -838,7 +838,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                                 <>
                                   <button
                                     onClick={() => handleCompleteTask(task.id)}
-                                    className="p-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-[11px] font-semibold flex items-center gap-1"
+                                    className="p-1 bg-success-bg text-success-text hover:bg-success-bg rounded text-[11px] font-semibold flex items-center gap-1"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5" /> Concluir
                                   </button>
@@ -850,7 +850,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                                         handleBlockTask(task.id);
                                       }
                                     }}
-                                    className="p-1 bg-red-50 text-red-700 hover:bg-red-100 rounded text-[11px] font-semibold flex items-center gap-1"
+                                    className="p-1 bg-error-bg text-error-text hover:bg-error-bg rounded text-[11px] font-semibold flex items-center gap-1"
                                   >
                                     <Lock className="w-3.5 h-3.5" /> Bloquear
                                   </button>
@@ -860,7 +860,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                               {task.status === 'BLOCKED' && (
                                 <button
                                   onClick={() => handleUnblockTask(task.id)}
-                                  className="p-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-[11px] font-semibold flex items-center gap-1"
+                                  className="p-1 bg-success-bg text-success-text hover:bg-success-bg rounded text-[11px] font-semibold flex items-center gap-1"
                                 >
                                   <Unlock className="w-3.5 h-3.5" /> Desbloquear
                                 </button>
@@ -869,7 +869,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                               {task.status === 'COMPLETED' && (
                                 <button
                                   onClick={() => handleCloseTask(task.id)}
-                                  className="p-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 rounded text-[11px] font-bold flex items-center gap-1"
+                                  className="p-1 bg-success-bg text-success-text hover:bg-emerald-200 rounded text-[11px] font-bold flex items-center gap-1"
                                 >
                                   <CheckSquare className="w-3.5 h-3.5" /> Validar & Fechar
                                 </button>
@@ -930,7 +930,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                 </div>
 
                 {selectedTask.resolution && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg">
+                  <div className="p-3 bg-success-bg border border-success-border text-success-text text-xs rounded-lg">
                     <span className="font-bold">Resolução:</span> {selectedTask.resolution}
                   </div>
                 )}
@@ -1022,7 +1022,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                         {pend.priority} • {pend.category}
                       </span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        pend.status === 'OPEN' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        pend.status === 'OPEN' ? 'bg-warning-bg text-warning-text' : 'bg-success-bg text-success-text'
                       }`}>
                         {pend.status}
                       </span>
@@ -1152,7 +1152,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                 <div className="flex justify-between items-start">
                   <h4 className="font-bold text-graphite-900 text-sm">{rule.name}</h4>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    rule.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-graphite-100 text-graphite-500'
+                    rule.enabled ? 'bg-success-bg text-success-text' : 'bg-graphite-100 text-graphite-500'
                   }`}>
                     {rule.enabled ? 'Ativo' : 'Inativo'}
                   </span>

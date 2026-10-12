@@ -66,12 +66,12 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
         secondaryActions={<Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button>}
         primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}
       />
-      {error&&<Card className="p-4 text-sm text-rose-700 bg-rose-50">{error}</Card>}
+      {error&&<Card className="p-4 text-sm text-error-text bg-error-bg">{error}</Card>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4"><span className="text-xs text-graphite-500">Multas</span><div className="text-2xl font-bold">{tickets.length}</div><AlertTriangle className="w-5 h-5 text-amber-500"/></Card>
-        <Card className="p-4"><span className="text-xs text-graphite-500">Não identificadas / NIC</span><div className="text-2xl font-bold">{pending}</div><ShieldAlert className="w-5 h-5 text-amber-500"/></Card>
+        <Card className="p-4"><span className="text-xs text-graphite-500">Multas</span><div className="text-2xl font-bold">{tickets.length}</div><AlertTriangle className="w-5 h-5 text-warning-icon"/></Card>
+        <Card className="p-4"><span className="text-xs text-graphite-500">Não identificadas / NIC</span><div className="text-2xl font-bold">{pending}</div><ShieldAlert className="w-5 h-5 text-warning-icon"/></Card>
         <Card className="p-4"><span className="text-xs text-graphite-500">Reembolsos de motorista</span><div className="text-2xl font-bold">{driverCharges}</div><User className="w-5 h-5 text-indigo-500"/></Card>
-        <Card className="p-4"><span className="text-xs text-graphite-500">Valor original acumulado</span><div className="text-xl font-bold">{formatCurrencyBRL(total)}</div><DollarSign className="w-5 h-5 text-emerald-500"/></Card>
+        <Card className="p-4"><span className="text-xs text-graphite-500">Valor original acumulado</span><div className="text-xl font-bold">{formatCurrencyBRL(total)}</div><DollarSign className="w-5 h-5 text-success-icon"/></Card>
       </div>
       <Card className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <Input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Auto, descrição, placa ou motorista..."/>

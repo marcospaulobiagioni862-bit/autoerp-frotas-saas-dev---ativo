@@ -74,9 +74,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   };
 
   const iconMap = {
-    danger: <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />,
-    warning: <AlertCircle className="w-6 h-6 text-amber-600 dark:text-amber-400" />,
-    primary: <Info className="w-6 h-6 text-blue-600 dark:text-blue-400" />,
+    danger: <AlertTriangle className="w-6 h-6 text-error-icon " />,
+    warning: <AlertCircle className="w-6 h-6 text-warning-icon " />,
+    primary: <Info className="w-6 h-6 text-info-icon " />,
   };
 
   const buttonVariantMap = {

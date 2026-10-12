@@ -179,8 +179,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
         <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
           <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-error-bg  border border-error-border  rounded-lg text-xs text-error-text  flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-error-icon shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
@@ -273,7 +273,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               </div>
               <div>
                 <span className="block text-graphite-500">Saldo devedor após pagamento</span>
-                <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+                <strong className="font-mono tabular-nums text-warning-text ">{formatCurrencyBRL(projectedBalance)}</strong>
               </div>
             </div>
           </div>
@@ -298,7 +298,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             {payable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(payable.totalAmount)}</dd></div>}
           </dl>
           {(accounts.length === 0 || methods.length === 0) && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
               Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o pagamento.
             </div>
           )}

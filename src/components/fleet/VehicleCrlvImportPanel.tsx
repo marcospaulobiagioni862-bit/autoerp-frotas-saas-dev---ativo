@@ -198,21 +198,21 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
   };
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 space-y-4">
+    <div className="rounded-xl border border-info-border bg-info-bg p-4 space-y-4">
       <div className="flex items-start gap-2">
-        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-info-icon" />
         <div>
-          <h4 className="font-bold text-blue-900">Importar CRLV</h4>
-          <p className="mt-1 text-[11px] text-blue-800">
+          <h4 className="font-bold text-info-text">Importar CRLV</h4>
+          <p className="mt-1 text-[11px] text-info-text">
             Envie o CRLV como documento do veículo. O arquivo original será preservado e os dados extraídos pela IA podem ser aplicados ao cadastro do veículo.
           </p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-2" aria-label="Progresso do cadastro pós-CRLV">
+      <div className="rounded-lg border border-info-border bg-white p-3 space-y-2" aria-label="Progresso do cadastro pós-CRLV">
         <div className="flex items-center justify-between gap-3 text-xs">
           <span className="font-semibold text-graphite-800">Progresso CRLV → cadastro completo</span>
-          <span className="font-bold text-blue-700">{progressPercent}%</span>
+          <span className="font-bold text-info-text">{progressPercent}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-graphite-200">
           <div className="h-full bg-action-primary transition-all" style={{ width: `${progressPercent}%` }} />
@@ -235,7 +235,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         <AttachmentList entityType="Vehicle" entityId={vehicleId} />
       </div>
 
-      <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-3">
+      <div className="rounded-lg border border-info-border bg-white p-3 space-y-3">
         <div>
           <h5 className="font-bold text-graphite-900">Dados do CRLV extraído</h5>
           <p className="text-[11px] text-graphite-500">Compare o cadastro atual com os valores lidos pela IA do CRLV antes de aplicar ao veículo.</p>
@@ -244,9 +244,9 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         {loadingReview ? (
           <p className="text-xs text-graphite-500">Carregando comparação...</p>
         ) : reviewError ? (
-          <p className="text-xs text-red-600">{reviewError}</p>
+          <p className="text-xs text-error-icon">{reviewError}</p>
         ) : !vehicle || !approvedExtraction ? (
-          <p className="text-xs text-amber-700">Nenhum CRLV extraído para este veículo. Envie o documento do CRLV para realizar a leitura dos dados.</p>
+          <p className="text-xs text-warning-text">Nenhum CRLV extraído para este veículo. Envie o documento do CRLV para realizar a leitura dos dados.</p>
         ) : (
           <>
             <div className="overflow-x-auto rounded-lg border">
@@ -304,13 +304,13 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
               </button>
             </div>
             <p className="text-[11px] text-graphite-500">Os dados lidos do CRLV podem ser copiados para o cadastro do veículo. O servidor relê o CRLV e aplica somente os campos autorizados.</p>
-            {applyNotice && <p className="text-xs font-medium text-emerald-700">{applyNotice}</p>}
+            {applyNotice && <p className="text-xs font-medium text-success-text">{applyNotice}</p>}
           </>
         )}
       </div>
 
       {vehicle && approvedExtraction && (
-        <div className={`rounded-lg border p-3 space-y-2 ${completionReady ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+        <div className={`rounded-lg border p-3 space-y-2 ${completionReady ? 'border-success-border bg-success-bg' : 'border-warning-border bg-warning-bg'}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h5 className="font-bold text-graphite-900">Etapa obrigatória: completar dados que não vêm no CRLV</h5>
@@ -325,14 +325,14 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
               const complete = field.isComplete(vehicle[field.vehicleKey]);
               return (
                 <div key={field.vehicleKey} className="rounded-md border bg-white px-2 py-1.5">
-                  <span className={complete ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>{complete ? '✓' : '○'} {field.label}</span>
+                  <span className={complete ? 'font-semibold text-success-text' : 'font-semibold text-warning-text'}>{complete ? '✓' : '○'} {field.label}</span>
                   <span className="ml-1 text-graphite-500">{complete ? visibleValue(vehicle[field.vehicleKey]) : 'pendente'}</span>
                 </div>
               );
             })}
           </div>
-          {!completionReady && <p className="text-[11px] font-medium text-amber-800">Cadastro pós-CRLV ainda incompleto. Use “Registrar KM” para o odômetro e “Editar Veículo” para os demais campos pendentes.</p>}
-          {completionReady && <p className="text-[11px] font-medium text-emerald-800">Campos essenciais preenchidos. Confirme os valores antes de considerar o cadastro concluído.</p>}
+          {!completionReady && <p className="text-[11px] font-medium text-warning-text">Cadastro pós-CRLV ainda incompleto. Use “Registrar KM” para o odômetro e “Editar Veículo” para os demais campos pendentes.</p>}
+          {completionReady && <p className="text-[11px] font-medium text-success-text">Campos essenciais preenchidos. Confirme os valores antes de considerar o cadastro concluído.</p>}
           <p className="text-[10px] text-graphite-500">FIPE será tratada como consulta externa separada: não substituirá automaticamente o valor de aquisição nem o valor comercial informado pelo operador.</p>
         </div>
       )}

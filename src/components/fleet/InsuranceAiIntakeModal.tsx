@@ -103,7 +103,7 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
 
   return <ModalContainer isOpen={isOpen} onClose={onClose} title="Ler apólice com IA" maxWidth="lg">
     <div className="space-y-4">
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+      <div className="rounded-lg border border-info-border bg-info-bg p-3 text-xs text-info-text   ">
         <strong className="flex items-center gap-2"><Sparkles className="h-4 w-4"/>Preenchimento assistido</strong>
         <p className="mt-1">A IA extrai os dados visíveis da apólice. Você revisa antes de usar no cadastro. Categoria financeira e efeitos em Contas a Pagar nunca são escolhidos pela IA.</p>
       </div>
@@ -116,16 +116,16 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
       </div>
       {vehicleId&&!attachmentId&&<FileUpload entityType="Vehicle" entityId={vehicleId} documentType="INSURANCE_POLICY" onUploadComplete={uploaded}/>}
       {attachmentId&&<div className="rounded-lg border p-3 text-xs"><strong>Apólice original anexada</strong><p className="mt-1 text-graphite-500">{selectedVehicle?.plate} · anexo {attachmentId}</p></div>}
-      {extraction&&['PENDING','PROCESSING'].includes(extraction.status)&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Analisando apólice… o status é atualizado automaticamente.</div>}
-      {extraction?.status==='FAILED'&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">A leitura falhou. Feche e tente novamente com um documento mais legível.</div>}
+      {extraction&&['PENDING','PROCESSING'].includes(extraction.status)&&<div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">Analisando apólice… o status é atualizado automaticamente.</div>}
+      {extraction?.status==='FAILED'&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">A leitura falhou. Feche e tente novamente com um documento mais legível.</div>}
       {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3">
-        <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600"/><strong className="text-sm">Revise os dados encontrados</strong></div>
+        <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-success-icon"/><strong className="text-sm">Revise os dados encontrados</strong></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {fields.map(([key,original])=><Input key={key} label={documentAiFieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
         </div>
         <p className="text-[11px] text-graphite-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
       </div>}
-      {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+      {error&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Seguro</Button>}</div>
     </div>
   </ModalContainer>;

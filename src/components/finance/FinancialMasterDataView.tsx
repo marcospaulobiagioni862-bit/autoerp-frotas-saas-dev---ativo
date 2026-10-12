@@ -40,7 +40,7 @@ export const FinancialMasterDataView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {error && <div className="rounded-lg border border-error-border bg-error-bg p-3 text-sm text-error-text">{error}</div>}
 
       <section className="rounded-xl border border-graphite-200 bg-white p-4 dark:border-graphite-800 dark:bg-graphite-900">
         <h3 className="font-semibold">Contas financeiras</h3>

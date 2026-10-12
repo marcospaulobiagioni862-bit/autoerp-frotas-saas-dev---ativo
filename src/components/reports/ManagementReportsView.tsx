@@ -386,7 +386,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Frota Total</span>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 font-mono">{fleet.totalVehicles}</h3>
-                <span className="text-xs text-blue-600 font-semibold">{fleet.availabilityRate}% disponíveis</span>
+                <span className="text-xs text-info-icon font-semibold">{fleet.availabilityRate}% disponíveis</span>
               </div>
             </Card>
 
@@ -402,17 +402,17 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Manutenções Abertas</span>
               <div className="flex items-baseline justify-between mt-1">
                 <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 font-mono">{maintenance.scheduled + maintenance.inProgress}</h3>
-                <span className="text-xs text-amber-600 font-semibold">{maintenance.overdue} atrasadas</span>
+                <span className="text-xs text-warning-icon font-semibold">{maintenance.overdue} atrasadas</span>
               </div>
             </Card>
 
             <Card padding="sm" className="border-l-4 border-l-rose-600">
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Pendências P0/P1</span>
               <div className="flex items-baseline justify-between mt-1">
-                <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">
+                <h3 className="text-2xl font-black text-error-icon  font-mono">
                   {pendings.filter(p => p.priority === 'P0' || p.priority === 'P1').length}
                 </h3>
-                <span className="text-xs text-rose-600 font-semibold">Críticas</span>
+                <span className="text-xs text-error-icon font-semibold">Críticas</span>
               </div>
             </Card>
           </div>
@@ -438,11 +438,11 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Próximos do Vencimento</span>
-              <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{contracts.expiringSoon}</h3>
+              <h3 className="text-2xl font-black text-warning-icon mt-1 font-mono">{contracts.expiringSoon}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Vencidos</span>
-              <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{contracts.expired}</h3>
+              <h3 className="text-2xl font-black text-error-icon mt-1 font-mono">{contracts.expired}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Encerrados</span>
@@ -458,7 +458,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Agendadas</span>
-              <h3 className="text-2xl font-black text-blue-600 mt-1 font-mono">{maintenance.scheduled}</h3>
+              <h3 className="text-2xl font-black text-info-icon mt-1 font-mono">{maintenance.scheduled}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Em Andamento</span>
@@ -466,11 +466,11 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Atrasadas</span>
-              <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{maintenance.overdue}</h3>
+              <h3 className="text-2xl font-black text-error-icon mt-1 font-mono">{maintenance.overdue}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Concluídas</span>
-              <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{maintenance.completed}</h3>
+              <h3 className="text-2xl font-black text-success-icon mt-1 font-mono">{maintenance.completed}</h3>
             </Card>
           </div>
         </div>
@@ -482,15 +482,15 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Documentos Válidos</span>
-              <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{documents.valid}</h3>
+              <h3 className="text-2xl font-black text-success-icon mt-1 font-mono">{documents.valid}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Vencendo (15 dias)</span>
-              <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{documents.expiringSoon}</h3>
+              <h3 className="text-2xl font-black text-warning-icon mt-1 font-mono">{documents.expiringSoon}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Documentos Vencidos</span>
-              <h3 className="text-2xl font-black text-rose-600 mt-1 font-mono">{documents.expired}</h3>
+              <h3 className="text-2xl font-black text-error-icon mt-1 font-mono">{documents.expired}</h3>
             </Card>
           </div>
 
@@ -498,8 +498,8 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             <Card padding="sm">
               <h4 className="text-xs font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300 mb-2">Seguros de Frota</h4>
               <div className="flex justify-between items-center text-sm">
-                <span>Apólices Ativas: <strong className="font-mono text-emerald-600">{documents.insurancesActive}</strong></span>
-                <span>Vencidas: <strong className="font-mono text-rose-600">{documents.insurancesExpired}</strong></span>
+                <span>Apólices Ativas: <strong className="font-mono text-success-icon">{documents.insurancesActive}</strong></span>
+                <span>Vencidas: <strong className="font-mono text-error-icon">{documents.insurancesExpired}</strong></span>
               </div>
             </Card>
             <Card padding="sm">
@@ -522,15 +522,15 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Pend. Identificação</span>
-              <h3 className="text-2xl font-black text-amber-600 mt-1 font-mono">{tickets.pendingIdentification}</h3>
+              <h3 className="text-2xl font-black text-warning-icon mt-1 font-mono">{tickets.pendingIdentification}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Em Recurso</span>
-              <h3 className="text-2xl font-black text-blue-600 mt-1 font-mono">{tickets.inAppeal}</h3>
+              <h3 className="text-2xl font-black text-info-icon mt-1 font-mono">{tickets.inAppeal}</h3>
             </Card>
             <Card padding="sm">
               <span className="text-xs font-semibold text-graphite-500 uppercase">Resolvidas / Pagas</span>
-              <h3 className="text-2xl font-black text-emerald-600 mt-1 font-mono">{tickets.paid + tickets.closed}</h3>
+              <h3 className="text-2xl font-black text-success-icon mt-1 font-mono">{tickets.paid + tickets.closed}</h3>
             </Card>
           </div>
         </div>
@@ -557,7 +557,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                       {p.priority}
                     </Badge>
                     <span className="text-xs font-semibold text-graphite-500">{p.category}</span>
-                    {p.vehiclePlate && <span className="text-xs font-mono font-bold text-blue-600">Placa: {p.vehiclePlate}</span>}
+                    {p.vehiclePlate && <span className="text-xs font-mono font-bold text-info-icon">Placa: {p.vehiclePlate}</span>}
                   </div>
                   <h4 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">{p.title}</h4>
                   <p className="text-xs text-graphite-500">{p.description}</p>
@@ -583,7 +583,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           </div>
 
           {assistantError && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="rounded-xl border border-warning-border bg-warning-bg p-4 text-xs text-warning-text   ">
               <strong>Falha segura:</strong> {assistantError} O relatório manual permanece disponível e nenhum cadastro foi alterado.
             </div>
           )}
@@ -644,7 +644,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                 </div>
 
                 {(assistantSuggestion.suggestion.missingFields.length > 0 || assistantSuggestion.suggestion.warnings.length > 0) && (
-                  <div className="text-xs text-amber-700 dark:text-amber-300">
+                  <div className="text-xs text-warning-text ">
                     {assistantSuggestion.suggestion.missingFields.length > 0 && (
                       <span>Campos ausentes: {assistantSuggestion.suggestion.missingFields.map(fieldLabel).join(', ')}. </span>
                     )}
@@ -700,16 +700,16 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                       <td className="p-3 font-mono">{v.ticketCount}</td>
                       <td className="p-3 font-mono">
                         {v.pendingCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-600 font-bold">{v.pendingCount}</span>
+                          <span className="px-2 py-0.5 rounded bg-error-bg text-error-icon font-bold">{v.pendingCount}</span>
                         ) : (
-                          <span className="text-emerald-600">0</span>
+                          <span className="text-success-icon">0</span>
                         )}
                       </td>
                       <td className="p-3">
                         <span className={`font-bold font-mono ${
-                          v.healthStatus === 'EXCELLENT' ? 'text-emerald-600' :
-                          v.healthStatus === 'GOOD' ? 'text-blue-600' :
-                          v.healthStatus === 'WARNING' ? 'text-amber-600' : 'text-rose-600'
+                          v.healthStatus === 'EXCELLENT' ? 'text-success-icon' :
+                          v.healthStatus === 'GOOD' ? 'text-info-icon' :
+                          v.healthStatus === 'WARNING' ? 'text-warning-icon' : 'text-error-icon'
                         }`}>
                           {v.healthStatus}
                         </span>
@@ -749,7 +749,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           </div>
 
           {assistantError && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <div className="rounded-xl border border-warning-border bg-warning-bg p-4 text-xs text-warning-text   ">
               <strong>Falha segura:</strong> {assistantError} O relatório manual permanece disponível e nenhum cadastro foi alterado.
             </div>
           )}
@@ -810,7 +810,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                 </div>
 
                 {(assistantSuggestion.suggestion.missingFields.length > 0 || assistantSuggestion.suggestion.warnings.length > 0) && (
-                  <div className="text-xs text-amber-700 dark:text-amber-300">
+                  <div className="text-xs text-warning-text ">
                     {assistantSuggestion.suggestion.missingFields.length > 0 && (
                       <span>Campos ausentes: {assistantSuggestion.suggestion.missingFields.map(fieldLabel).join(', ')}. </span>
                     )}
@@ -848,7 +848,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                         </Badge>
                       </td>
                       <td className="p-3 font-mono text-indigo-600">{d.activeContractNumber || 'Nenhum'}</td>
-                      <td className="p-3 font-mono text-blue-600">{d.vehiclePlate || 'Nenhum'}</td>
+                      <td className="p-3 font-mono text-info-icon">{d.vehiclePlate || 'Nenhum'}</td>
                       <td className="p-3 font-mono">{d.ticketCount}</td>
                       <td className="p-3">
                         <Button

@@ -23,7 +23,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
     <div className="w-full space-y-1.5">
       {label && (
         <label htmlFor={inputId} className="block text-xs font-semibold uppercase tracking-wider text-graphite-700 dark:text-graphite-200">
-          {label} {required && <span className="text-red-500">*</span>}
+          {label} {required && <span className="text-error-icon">*</span>}
         </label>
       )}
       <div className="relative">
@@ -43,7 +43,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
           {...props}
         />
       </div>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-xs text-error-icon ">{error}</p>}
       {!error && helperText && <p className="text-xs text-graphite-500 dark:text-graphite-300">{helperText}</p>}
     </div>
   );

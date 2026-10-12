@@ -115,7 +115,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
         <div className="flex items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
             <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5 text-blue-600" />
+              <ArrowRightLeft className="w-5 h-5 text-info-icon" />
               Transferência Entre Contas (TRANSFER)
             </h3>
             <p className="text-xs text-graphite-500 mt-0.5">
@@ -132,13 +132,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-error-bg  border border-error-border  rounded-lg text-xs text-error-text  flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-error-icon shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="p-3 bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-lg text-xs text-blue-800 dark:text-blue-300">
+          <div className="p-3 bg-info-bg  border border-blue-100  rounded-lg text-xs text-info-text ">
             <strong>Aviso de Integridade:</strong> Transferências operacionais ajustam a variação dos saldos (-origem, +destino) sem duplicar despesas nem inflar DRE.
           </div>
 

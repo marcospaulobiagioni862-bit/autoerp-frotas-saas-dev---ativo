@@ -298,7 +298,7 @@ export const UserPermissionsModal: React.FC<UserPermissionsModalProps> = ({
 
       <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
         {error && (
-          <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+          <div className="flex items-center gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text   ">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>

@@ -255,7 +255,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
           {loadingTransactions ? (
             <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
           ) : transactionsError ? (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            <div role="alert" className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text   ">
               {transactionsError}
             </div>
           ) : transactions.length === 0 ? (
@@ -276,7 +276,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
                         <Badge variant={transaction.type === 'REVERSAL' || transaction.isReversed ? 'warning' : 'neutral'}>
                           {transactionTypeLabel(String(transaction.type))}
                         </Badge>
-                        {transaction.isReversed && <span className="ml-2 text-[10px] text-amber-700 dark:text-amber-400">Estornada</span>}
+                        {transaction.isReversed && <span className="ml-2 text-[10px] text-warning-text ">Estornada</span>}
                       </td>
                       <td className="p-3">
                         <div>{transaction.description}</div>
@@ -292,7 +292,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
         </section>
 
         {waFeedback && (
-          <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <div className="p-2.5 rounded-lg border border-success-border bg-success-bg text-xs text-success-text   ">
             {waFeedback}
           </div>
         )}
@@ -303,7 +303,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
               <Button
                 type="button"
                 variant="outline"
-                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30 flex items-center gap-1.5"
+                className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30 flex items-center gap-1.5"
                 onClick={handleSendWaCharge}
                 isLoading={waLoading}
               >

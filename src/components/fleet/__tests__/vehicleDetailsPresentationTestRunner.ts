@@ -14,6 +14,8 @@ assert.match(modal, /<strong>\{vehicleContractStatus\(summary\.activeContract\.s
 assert.match(modal, /vehicleDisplayName\(vehicle\.brand, vehicle\.model, vehicle\.version\)/);
 assert.match(modal, /bg-graphite-50 rounded-xl border dark:border-graphite-700 dark:bg-graphite-900/);
 assert.match(modal, /bg-graphite-50 space-y-3 dark:border-graphite-700 dark:bg-graphite-900/);
-assert.match(modal, /bg-blue-50 rounded-xl space-y-3 dark:border-blue-800 dark:bg-blue-950\/40/);
+// AUTOERP-91 fase 5: o bloco informativo passou a usar o token semantico
+// (bg-info-bg), que ja troca sozinho no modo escuro - por isso sumiram os dark:.
+assert.match(modal, /bg-info-bg rounded-xl space-y-3/);
 
 console.log('Vehicle details presentation: OK');

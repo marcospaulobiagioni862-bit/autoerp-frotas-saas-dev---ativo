@@ -14,9 +14,9 @@ type UnavailableViewProps = {
 
 const ServerAuthorityUnavailableView: React.FC<UnavailableViewProps> = ({ title, description }) => (
   <div className="p-4 sm:p-6">
-    <div className="mx-auto max-w-3xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm dark:border-amber-900/70 dark:bg-graphite-900">
+    <div className="mx-auto max-w-3xl rounded-2xl border border-warning-border bg-white p-6 shadow-sm  dark:bg-graphite-900">
       <div className="flex items-start gap-4">
-        <div className="rounded-xl bg-amber-50 p-3 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+        <div className="rounded-xl bg-warning-bg p-3 text-warning-text  ">
           <LockKeyhole className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
@@ -27,7 +27,7 @@ const ServerAuthorityUnavailableView: React.FC<UnavailableViewProps> = ({ title,
             </span>
           </div>
           <p className="mt-3 text-sm leading-6 text-graphite-600 dark:text-graphite-300">{description}</p>
-          <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 p-3 text-xs leading-5 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-100 bg-warning-bg p-3 text-xs leading-5 text-warning-text   ">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               Este módulo está temporariamente indisponível. Ele será liberado quando o armazenamento seguro, o controle de acesso e o registro das ações estiverem prontos.

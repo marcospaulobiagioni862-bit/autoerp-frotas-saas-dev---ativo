@@ -1,5 +1,6 @@
 import React from 'react';
 import { ObligationStatus } from '../../types/enums';
+import { OBLIGATION_TONES, VEHICLE_TONES, toneClasses, type BadgeTone } from './statusTones';
 
 export interface BadgeProps {
   status?: ObligationStatus | string;
@@ -44,16 +45,27 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant = 'neutral', child
     }
   }
 
-  const variantStyles: Record<string, string> = {
-    success: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50',
-    warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50',
-    danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50',
-    info: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/50',
-    neutral: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
-    secondary: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
-    indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50',
-    slate: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
+  // AUTOERP-91 fase 6. O tom vem do mapa unico em statusTones.ts; o estado decide
+  // a cor uma vez so, em vez de cada tela escolher a sua. As variantes antigas
+  // (success/warning/danger/info...) continuam aceitas porque ha centenas de
+  // chamadas usando elas - cada uma aponta para o tom equivalente do sistema.
+  const variantTone: Record<string, BadgeTone> = {
+    success: 'badge-petrol-t1',
+    warning: 'badge-plum-t2',
+    danger: 'badge-crimson-s2',
+    info: 'badge-navy-t1',
+    neutral: 'badge-graphite-t1',
+    secondary: 'badge-graphite-t1',
+    indigo: 'badge-navy-t2',
+    slate: 'badge-graphite-t1',
   };
+
+  // Estado explicito tem precedencia sobre a variante: e o caminho correto.
+  const toneFromStatus = status ? (OBLIGATION_TONES[String(status)] || VEHICLE_TONES[String(status)]) : undefined;
+  const variantStyles: Record<string, string> = Object.fromEntries(
+    Object.entries(variantTone).map(([nome, tom]) => [nome, toneClasses(tom)])
+  );
+  if (toneFromStatus) variantStyles[computedVariant as string] = toneClasses(toneFromStatus);
 
   const styleClass = variantStyles[computedVariant as string] || variantStyles.neutral;
 

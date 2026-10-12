@@ -54,7 +54,7 @@ export function VehicleInspectionsView(){
       </div>}
     </Card>
 
-    {error&&<div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
+    {error&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
     {loading?<div className="p-6 text-center text-sm text-graphite-500">Carregando veículos...</div>:selectedVehicle?
       <VehicleInspectionPanel
         vehicleId={selectedVehicle.id}

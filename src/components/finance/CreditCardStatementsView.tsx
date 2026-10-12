@@ -109,13 +109,13 @@ export const CreditCardStatementsView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100"><CreditCard className="h-6 w-6 text-blue-600" /> Cartões / Faturas</h2>
+          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100"><CreditCard className="h-6 w-6 text-info-icon" /> Cartões / Faturas</h2>
           <p className="mt-1 text-xs text-graphite-500">Status, saldo e atraso seguem os lançamentos confirmados. O fechamento e o pagamento exigem sua confirmação.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
       </div>
 
-      {message && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{message}</div>}
+      {message && <div role="alert" className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text   ">{message}</div>}
 
       <Card padding="sm">
         <div className="grid gap-3 md:grid-cols-4">
@@ -172,7 +172,7 @@ export const CreditCardStatementsView: React.FC = () => {
               const profile = profileById.get(statement.creditCardProfileId);
               return <tr key={statement.id}>
                 <td className="p-3"><div className="font-semibold text-graphite-900 dark:text-graphite-100">{statement.cycleRef}</div><div className="mt-1 text-[11px] text-graphite-500">Fecha {statement.closingDate} • vence {statement.dueDate}</div><div className="mt-1 break-all font-mono text-[10px] text-graphite-400">{profile?.financialAccountId || statement.creditCardProfileId}</div></td>
-                <td className="p-3"><Badge variant={creditCardStatementStatusVariant(statement.status, statement.isOverdue)}>{statusLabel(statement.status)}</Badge>{statement.isOverdue && <div className="mt-1 text-[11px] font-semibold text-red-600">Vencida há {statement.overdueDays} dia{statement.overdueDays === 1 ? '' : 's'}</div>}</td>
+                <td className="p-3"><Badge variant={creditCardStatementStatusVariant(statement.status, statement.isOverdue)}>{statusLabel(statement.status)}</Badge>{statement.isOverdue && <div className="mt-1 text-[11px] font-semibold text-error-icon">Vencida há {statement.overdueDays} dia{statement.overdueDays === 1 ? '' : 's'}</div>}</td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.originalAmount)}</td>
                 <td className="p-3 text-right font-mono text-[11px] tabular-nums"><div>Ajuste: {currency(statement.adjustmentAmount)}</div><div>Juros: {currency(statement.interestAmount)}</div><div>Multa: {currency(statement.fineAmount)}</div><div>Desconto: {currency(statement.discountAmount)}</div></td>
                 <td className="p-3 text-right font-mono tabular-nums">{currency(statement.paidAmount)}</td>
@@ -191,7 +191,7 @@ export const CreditCardStatementsView: React.FC = () => {
             <Button size="sm" variant="ghost" onClick={() => { setDetail(null); setDetailMessage(null); }} icon={<X className="h-4 w-4" />}>Fechar</Button>
           </div>
           {detailLoading && <div className="mt-4 space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>}
-          {detailMessage && <div role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">{detailMessage}</div>}
+          {detailMessage && <div role="alert" className="mt-4 rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text   ">{detailMessage}</div>}
           {detail && (
             <div className="mt-4 space-y-5 text-xs">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4"><div><span className="text-graphite-500">Ciclo</span><div className="font-semibold">{detail.statement.cycleRef}</div></div><div><span className="text-graphite-500">Status</span><div className="font-semibold">{statusLabel(detail.statement.status)}</div></div><div><span className="text-graphite-500">Pago</span><div className="font-mono font-semibold">{currency(detail.statement.paidAmount)}</div></div><div><span className="text-graphite-500">Saldo</span><div className="font-mono font-bold">{currency(detail.statement.balanceAmount)}</div></div></div>

@@ -229,7 +229,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       />
 
       {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+        <div className="rounded-xl border border-error-border bg-error-bg px-4 py-3 text-sm text-error-text   ">
           {error}
         </div>
       )}
@@ -292,7 +292,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                         <div className="flex flex-col items-start gap-1">
                           <Badge variant={item.status === ContractStatus.ACTIVE || ([ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(item.status) && (item.hasSignedEvidence ?? Boolean(item.signedContractUrl))) ? 'success' : item.status === ContractStatus.CANCELLED ? 'danger' : item.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(item.status,item.signedContractUrl,item.hasSignedEvidence)}</Badge>
                           {hasOverdue && (
-                            <button type="button" onClick={() => openContractDetails(item.id, 'FINANCIAL')} className="text-[10px] font-semibold text-rose-600 hover:underline">
+                            <button type="button" onClick={() => openContractDetails(item.id, 'FINANCIAL')} className="text-[10px] font-semibold text-error-icon hover:underline">
                               Cobrança vencida
                             </button>
                           )}
@@ -311,14 +311,14 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                               )}
                               <button
                                 disabled={busy}
-                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-success-text hover:bg-success-bg disabled:opacity-50  dark:hover:bg-emerald-950/30"
                                 onClick={() => void handleSendWhatsApp(item.id)}
                               >
                                 <MessageSquare className="w-3.5 h-3.5" /> Enviar WhatsApp (wa.me)
                               </button>
                               <button
                                 disabled={busy}
-                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                                className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-success-text hover:bg-success-bg disabled:opacity-50  dark:hover:bg-emerald-950/30"
                                 onClick={() => void handleRequestKm(item.id)}
                               >
                                 <Gauge className="w-3.5 h-3.5" /> Pedir KM (wa.me)
@@ -328,7 +328,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                                   Documento / Assinatura
                                 </button>
                               )}
-                              {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
+                              {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-warning-text hover:bg-warning-bg disabled:opacity-50  dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
                               {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 disabled:opacity-50 dark:text-graphite-300 dark:hover:bg-graphite-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
                             </div>
                           </details>

@@ -49,7 +49,7 @@ export const VehicleArchiveModal: React.FC<VehicleArchiveModalProps> = ({ isOpen
     >
       <form onSubmit={submit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-xs text-red-700 dark:text-red-300">
+          <div className="p-3 bg-error-bg  border border-error-border  rounded-lg flex items-center gap-2 text-xs text-error-text ">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>

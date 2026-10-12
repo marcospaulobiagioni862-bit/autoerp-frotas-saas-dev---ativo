@@ -173,7 +173,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       <Card padding="sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
+          <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-success-icon" />Contrato e assinatura</h3>
           <p className="mt-1 text-[11px] text-graphite-500">
             O documento é gerado a partir do modelo já vinculado ao contrato. Depois da assinatura externa, basta confirmar o status no ERP.
           </p>
@@ -183,8 +183,8 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
         </Badge>
       </div>
 
-      {error && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
-      {success && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
+      {error && <div className="mt-3 rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
+      {success && <div className="mt-3 rounded-lg border border-success-border bg-success-bg p-3 text-xs text-success-text">{success}</div>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <div className="space-y-3 rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
@@ -211,7 +211,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
                     <Download className="w-4 h-4" />Abrir PDF gerado
                   </Button>
                 )}
-                <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
+                <Button size="sm" variant="outline" className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
                   <MessageSquare className="w-4 h-4 mr-1" />Enviar via WhatsApp
                 </Button>
               </div>
@@ -230,13 +230,13 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
           <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-graphite-500" /><b className="text-xs">Status da assinatura</b></div>
           {signed ? (
             <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>Contrato assinado</b></div>
+              <div className="flex items-center gap-2 text-success-text"><CheckCircle2 className="w-4 h-4" /><b>Contrato assinado</b></div>
               <p>Registro: <b>{signatureMethodLabel(signed.signatureMethod)}</b></p>
               <p>Confirmado por: <b>{signed.signedByName || '—'}</b></p>
               <p>Data/hora: {signed.signedAt ? new Date(signed.signedAt).toLocaleString('pt-BR') : '—'}</p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => void openAttachment(signed.attachmentId)}><Download className="w-4 h-4" />Abrir documento associado</Button>
-                <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
+                <Button size="sm" variant="outline" className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30" onClick={() => void sendWhatsApp()}>
                   <MessageSquare className="w-4 h-4 mr-1" />Enviar link no WhatsApp
                 </Button>
               </div>
@@ -260,7 +260,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       </div>
 
       {canActivate && contract.status !== ContractStatus.ACTIVE && (
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-success-border bg-success-bg p-3  ">
           <div className="text-xs"><b>Contrato apto para ativação</b><p className="mt-0.5 text-graphite-500">O servidor repetirá todos os gates antes de vincular veículo, motorista e cobrança.</p></div>
           <Button size="sm" variant="primary" isLoading={loading} onClick={activate} disabled={!incomeCategoryId}>Ativar contrato</Button>
         </div>

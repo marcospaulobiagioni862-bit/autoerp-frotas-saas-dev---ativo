@@ -84,9 +84,9 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Atingidas</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">{evaluation.goalsSummary.achieved}</p>
+              <p className="text-3xl font-bold text-success-icon mt-1">{evaluation.goalsSummary.achieved}</p>
             </div>
-            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/80 rounded-xl text-emerald-600 dark:text-emerald-400">
+            <div className="p-2.5 bg-success-bg  rounded-xl text-success-icon ">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
@@ -99,9 +99,9 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas em Alerta</p>
-              <p className="text-3xl font-bold text-amber-600 mt-1">{evaluation.goalsSummary.warning}</p>
+              <p className="text-3xl font-bold text-warning-icon mt-1">{evaluation.goalsSummary.warning}</p>
             </div>
-            <div className="p-2.5 bg-amber-50 dark:bg-amber-950/80 rounded-xl text-amber-600 dark:text-amber-400">
+            <div className="p-2.5 bg-warning-bg  rounded-xl text-warning-icon ">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
@@ -114,9 +114,9 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Críticas</p>
-              <p className="text-3xl font-bold text-rose-600 mt-1">{evaluation.goalsSummary.critical}</p>
+              <p className="text-3xl font-bold text-error-icon mt-1">{evaluation.goalsSummary.critical}</p>
             </div>
-            <div className="p-2.5 bg-rose-50 dark:bg-rose-950/80 rounded-xl text-rose-600 dark:text-rose-400">
+            <div className="p-2.5 bg-error-bg  rounded-xl text-error-icon ">
               <AlertCircle className="w-5 h-5" />
             </div>
           </div>
@@ -152,9 +152,9 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
                         <p className="text-xs text-graphite-500 mt-0.5">{g.description}</p>
                       </div>
                       <Badge className={
-                        g.status === 'ACHIEVED' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300' :
-                        g.status === 'WARNING' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300' :
-                        'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300'
+                        g.status === 'ACHIEVED' ? 'bg-success-bg text-success-text  ' :
+                        g.status === 'WARNING' ? 'bg-warning-bg text-warning-text  ' :
+                        'bg-error-bg text-error-text  '
                       }>
                         {g.status === 'ACHIEVED' ? 'Atingida' : g.status === 'WARNING' ? 'Atenção' : 'Crítica'}
                       </Badge>
@@ -186,23 +186,23 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
           <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
             <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
               <h2 className="text-lg font-bold text-graphite-900 dark:text-white flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-rose-500" /> Alertas Gerenciais
+                <AlertTriangle className="w-5 h-5 text-error-icon" /> Alertas Gerenciais
               </h2>
-              <Badge className="bg-rose-50 text-rose-700">{evaluation.alerts.length} Ativos</Badge>
+              <Badge className="bg-error-bg text-error-text">{evaluation.alerts.length} Ativos</Badge>
             </div>
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {evaluation.alerts.length === 0 ? (
                 <p className="text-sm text-graphite-500 text-center py-8">Nenhum alerta gerencial ativo no momento.</p>
               ) : (
                 evaluation.alerts.map((alert) => (
-                  <div key={alert.id} className="p-3 rounded-xl border border-rose-100 bg-rose-50/40 dark:bg-rose-950/20 dark:border-rose-900/40 space-y-1.5">
+                  <div key={alert.id} className="p-3 rounded-xl border border-rose-100 bg-error-bg   space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-rose-900 dark:text-rose-200 text-xs">{alert.title}</span>
+                      <span className="font-bold text-error-text  text-xs">{alert.title}</span>
                       <Badge className={alert.severity === 'P0' ? 'bg-action-destructive text-on-action-destructive' : 'bg-amber-500 text-white'}>
                         {alert.severity}
                       </Badge>
                     </div>
-                    <p className="text-xs text-rose-700 dark:text-rose-300">{alert.message}</p>
+                    <p className="text-xs text-error-text ">{alert.message}</p>
                     <p className="text-[10px] text-graphite-500 italic mt-1">Ação: {alert.recommendedAction}</p>
                   </div>
                 ))

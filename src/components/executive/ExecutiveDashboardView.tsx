@@ -34,10 +34,10 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   }, [companyId, tasks, incidents, pendings]);
 
   const healthScoreColor = 
-    report.healthScore.classification === 'EXCELLENT' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200' :
+    report.healthScore.classification === 'EXCELLENT' ? 'text-success-icon bg-success-bg  border-success-border' :
     report.healthScore.classification === 'GOOD' ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200' :
-    report.healthScore.classification === 'WARNING' ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/40 border-amber-200' :
-    'text-rose-600 bg-rose-50 dark:bg-rose-950/40 border-rose-200';
+    report.healthScore.classification === 'WARNING' ? 'text-warning-icon bg-warning-bg  border-warning-border' :
+    'text-error-icon bg-error-bg  border-error-border';
 
   return (
     <div className="space-y-6">
@@ -115,7 +115,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs pt-3 border-t border-graphite-100 dark:border-graphite-800">
             <div>
               <span className="text-graphite-400 block">Disponíveis</span>
-              <span className="font-bold text-emerald-600">{report.kpis.fleet.available} ({report.kpis.fleet.availabilityRate}%)</span>
+              <span className="font-bold text-success-icon">{report.kpis.fleet.available} ({report.kpis.fleet.availabilityRate}%)</span>
             </div>
             <div>
               <span className="text-graphite-400 block">Alugados</span>
@@ -131,18 +131,18 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <p className="text-xs font-medium text-graphite-500">Produtividade & SLA</p>
               <p className="text-3xl font-bold text-graphite-900 dark:text-white mt-1">{report.kpis.productivity.completionRate}%</p>
             </div>
-            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/80 rounded-xl text-emerald-600">
+            <div className="p-2.5 bg-success-bg  rounded-xl text-success-icon">
               <Award className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs pt-3 border-t border-graphite-100 dark:border-graphite-800">
             <div>
               <span className="text-graphite-400 block">SLA Cumprido</span>
-              <span className="font-bold text-emerald-600">{report.kpis.productivity.slaComplianceRate}%</span>
+              <span className="font-bold text-success-icon">{report.kpis.productivity.slaComplianceRate}%</span>
             </div>
             <div>
               <span className="text-graphite-400 block">Tarefas Atrasadas</span>
-              <span className="font-bold text-rose-600">{report.kpis.operations.overdueTasks}</span>
+              <span className="font-bold text-error-icon">{report.kpis.operations.overdueTasks}</span>
             </div>
           </div>
         </Card>
@@ -154,18 +154,18 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <p className="text-xs font-medium text-graphite-500">Metas Gerenciais</p>
               <p className="text-3xl font-bold text-graphite-900 dark:text-white mt-1">{report.kpis.goals.achieved} / {report.kpis.goals.total}</p>
             </div>
-            <div className="p-2.5 bg-amber-50 dark:bg-amber-950/80 rounded-xl text-amber-600">
+            <div className="p-2.5 bg-warning-bg  rounded-xl text-warning-icon">
               <Target className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs pt-3 border-t border-graphite-100 dark:border-graphite-800">
             <div>
               <span className="text-graphite-400 block">Em Alerta</span>
-              <span className="font-bold text-amber-600">{report.kpis.goals.warning}</span>
+              <span className="font-bold text-warning-icon">{report.kpis.goals.warning}</span>
             </div>
             <div>
               <span className="text-graphite-400 block">Críticas</span>
-              <span className="font-bold text-rose-600">{report.kpis.goals.critical}</span>
+              <span className="font-bold text-error-icon">{report.kpis.goals.critical}</span>
             </div>
           </div>
         </Card>
@@ -175,10 +175,10 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
         <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
           <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-500" />
+            <Zap className="w-5 h-5 text-warning-icon" />
             <h2 className="text-lg font-bold text-graphite-900 dark:text-white">Centro de Decisão & Ações Recomendadas</h2>
           </div>
-          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+          <Badge className="bg-warning-bg text-warning-text  ">
             {report.recommendations.length} Ações Prioritárias
           </Badge>
         </div>
@@ -213,10 +213,10 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
         <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-rose-500" />
+            <AlertTriangle className="w-5 h-5 text-error-icon" />
             <h2 className="text-lg font-bold text-graphite-900 dark:text-white">Matriz Executiva de Riscos</h2>
           </div>
-          <Badge className="bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300">
+          <Badge className="bg-error-bg text-error-text  ">
             {report.risks.length} Riscos Mapeados
           </Badge>
         </div>
@@ -226,7 +226,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
             <p className="text-sm text-graphite-500 text-center py-6">Nenhum risco crítico mapeado na operação atual.</p>
           ) : (
             report.risks.map((risk) => (
-              <div key={risk.id} className="p-4 rounded-xl border border-rose-100 bg-rose-50/40 dark:bg-rose-950/20 dark:border-rose-900/40 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div key={risk.id} className="p-4 rounded-xl border border-rose-100 bg-error-bg   flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-action-destructive text-on-action-destructive">{risk.priority}</Badge>

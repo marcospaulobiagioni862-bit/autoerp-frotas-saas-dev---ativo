@@ -316,8 +316,8 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       </div>
 
       <div className="space-y-4 p-4">
-        {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</div>}
-        {success && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
+        {error && <div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
+        {success && <div className="rounded-lg border border-success-border bg-success-bg p-3 text-xs text-success-text">{success}</div>}
 
         {tab === 'SAVED' ? (
           <>

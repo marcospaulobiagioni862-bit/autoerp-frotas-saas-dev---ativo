@@ -47,11 +47,11 @@ export const SystemHealthCenterView: React.FC<{ companyId?: string }> = ({ compa
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'HEALTHY':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300"><CheckCircle2 className="w-3.5 h-3.5" /> Operacional</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success-bg text-success-text  "><CheckCircle2 className="w-3.5 h-3.5" /> Operacional</span>;
       case 'WARNING':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300"><AlertTriangle className="w-3.5 h-3.5" /> Atenção</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-warning-bg text-warning-text  "><AlertTriangle className="w-3.5 h-3.5" /> Atenção</span>;
       case 'CRITICAL':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300"><XCircle className="w-3.5 h-3.5" /> Crítico</span>;
+        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-error-bg text-error-text  "><XCircle className="w-3.5 h-3.5" /> Crítico</span>;
       default:
         return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-graphite-100 text-graphite-800 dark:bg-graphite-800 dark:text-graphite-300">Desconhecido</span>;
     }

@@ -122,11 +122,11 @@ export const DriverProfilePhoto: React.FC<DriverProfilePhotoProps> = ({ driverId
           </Button>
           {photo && (
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void handleRemove()}>
-              <Trash2 className="mr-1 h-4 w-4 text-rose-600" />Remover
+              <Trash2 className="mr-1 h-4 w-4 text-error-icon" />Remover
             </Button>
           )}
         </div>
-        {error && <span className="max-w-64 text-[11px] text-rose-600 dark:text-rose-400">{error}</span>}
+        {error && <span className="max-w-64 text-[11px] text-error-icon ">{error}</span>}
       </div>
       <input
         ref={inputRef}

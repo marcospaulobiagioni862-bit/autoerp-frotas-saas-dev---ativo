@@ -257,7 +257,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 R$ {totalAccountBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </h3>
             </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-950/60 dark:text-blue-400">
+            <div className="p-2.5 bg-info-bg text-info-icon rounded-xl  ">
               <Wallet className="w-5 h-5" />
             </div>
           </div>
@@ -272,17 +272,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">A Receber Pendente</span>
-              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono tabular-nums">
+              <h3 className="text-xl sm:text-2xl font-black text-success-icon  mt-1 font-mono tabular-nums">
                 R$ {totalReceivableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </h3>
             </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl dark:bg-emerald-950/60 dark:text-emerald-400">
+            <div className="p-2.5 bg-success-bg text-success-icon rounded-xl  ">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] flex justify-between">
             <span className="text-graphite-500">Em Atraso:</span>
-            <span className="text-amber-600 font-bold">{overdueReceivables.length} títulos</span>
+            <span className="text-warning-icon font-bold">{overdueReceivables.length} títulos</span>
           </div>
         </Card>
 
@@ -320,7 +320,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] flex justify-between">
             <span className="text-graphite-500">Taxa de Ocupação:</span>
-            <strong className="text-emerald-600 font-bold">
+            <strong className="text-success-icon font-bold">
               {vehicles.length > 0 ? `${Math.round((rentedVehiclesCount / vehicles.length) * 100)}%` : '0%'}
             </strong>
           </div>
@@ -333,17 +333,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Veículos Disponíveis</span>
-              <h3 className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+              <h3 className="text-xl sm:text-2xl font-black text-success-icon  mt-1">
                 {availableVehiclesCount}
               </h3>
             </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl dark:bg-emerald-950/60 dark:text-emerald-400">
+            <div className="p-2.5 bg-success-bg text-success-icon rounded-xl  ">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] text-graphite-500 flex justify-between">
             <span>Prontos para locação</span>
-            <span className="text-blue-600 font-semibold">Ver Frota →</span>
+            <span className="text-info-icon font-semibold">Ver Frota →</span>
           </div>
         </Card>
 
@@ -369,17 +369,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Em Manutenção</span>
-              <h3 className="text-xl sm:text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
+              <h3 className="text-xl sm:text-2xl font-black text-warning-icon  mt-1">
                 {maintenanceVehiclesCount}
               </h3>
             </div>
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl dark:bg-amber-950/60 dark:text-amber-400">
+            <div className="p-2.5 bg-warning-bg text-warning-icon rounded-xl  ">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] text-graphite-500 flex justify-between">
             <span>Oficina & Reparos</span>
-            <span className="text-blue-600 font-semibold">Ver Manutenção →</span>
+            <span className="text-info-icon font-semibold">Ver Manutenção →</span>
           </div>
         </Card>
 
@@ -387,17 +387,17 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Motoristas Ativos</span>
-              <h3 className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
+              <h3 className="text-xl sm:text-2xl font-black text-info-icon  mt-1">
                 {activeDriversCount} <span className="text-xs text-graphite-400 font-normal">ativos / {drivers.length} cadastrados</span>
               </h3>
             </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-950/60 dark:text-blue-400">
+            <div className="p-2.5 bg-info-bg text-info-icon rounded-xl  ">
               <Car className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] text-graphite-500 flex justify-between">
             <span>Cadastrados no sistema</span>
-            <span className="text-blue-600 font-semibold">Ver Motoristas →</span>
+            <span className="text-info-icon font-semibold">Ver Motoristas →</span>
           </div>
         </Card>
 
@@ -415,7 +415,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
           <div className="mt-3 pt-3 border-t border-graphite-100 dark:border-graphite-800/80 text-[11px] text-graphite-500 flex justify-between">
             <span>Locações vigentes</span>
-            <span className="text-blue-600 font-semibold">Ver Contratos →</span>
+            <span className="text-info-icon font-semibold">Ver Contratos →</span>
           </div>
         </Card>
       </div>
@@ -459,38 +459,38 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
           <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-graphite-800 rounded-xl border border-graphite-200/80 dark:border-graphite-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
             <div>
-              <span className="text-[11px] font-semibold text-rose-600 uppercase">Críticas & Bloqueadores</span>
-              <p className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono mt-0.5">
+              <span className="text-[11px] font-semibold text-error-icon uppercase">Críticas & Bloqueadores</span>
+              <p className="text-xl font-black text-error-icon  font-mono mt-0.5">
                 {pendings.filter(p => p.priority === 'P0' || p.priority === 'P1').length}
               </p>
             </div>
-            <div className="p-2 bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-lg">
+            <div className="p-2 bg-error-bg  text-error-icon  rounded-lg">
               <ShieldAlert className="w-4 h-4" />
             </div>
           </button>
 
           <button type="button" onClick={() => onNavigate('pendencias')} className="w-full text-left p-3 bg-white dark:bg-graphite-800 rounded-xl border border-graphite-200/80 dark:border-graphite-700 shadow-xs flex items-center justify-between hover:border-blue-500 transition-colors">
             <div>
-              <span className="text-[11px] font-semibold text-amber-600 uppercase">Próximos Vencimentos</span>
-              <p className="text-xl font-black text-amber-600 dark:text-amber-400 font-mono mt-0.5">
+              <span className="text-[11px] font-semibold text-warning-icon uppercase">Próximos Vencimentos</span>
+              <p className="text-xl font-black text-warning-icon  font-mono mt-0.5">
                 {pendings.filter(p => p.priority === 'P2').length}
               </p>
             </div>
-            <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-lg">
+            <div className="p-2 bg-warning-bg  text-warning-icon  rounded-lg">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </button>
         </div>
         {pendings.length>0&&<div className="border-t border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900">
           {pendings.slice(0,3).map(item=><div key={item.id} className="p-3 border-b last:border-b-0 border-graphite-100 dark:border-graphite-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="min-w-0"><div className="flex items-center gap-2">{item.priority==='P0'||item.priority==='P1'?<ShieldAlert className="w-4 h-4 text-rose-500 shrink-0"/>:<AlertTriangle className="w-4 h-4 text-amber-500 shrink-0"/>}<strong className="text-xs text-graphite-900 dark:text-graphite-100 truncate">{item.title}</strong></div><p className="text-[11px] text-graphite-500 mt-1 line-clamp-1">{item.description}</p></div>
+            <div className="min-w-0"><div className="flex items-center gap-2">{item.priority==='P0'||item.priority==='P1'?<ShieldAlert className="w-4 h-4 text-error-icon shrink-0"/>:<AlertTriangle className="w-4 h-4 text-warning-icon shrink-0"/>}<strong className="text-xs text-graphite-900 dark:text-graphite-100 truncate">{item.title}</strong></div><p className="text-[11px] text-graphite-500 mt-1 line-clamp-1">{item.description}</p></div>
             <Button size="sm" variant="outline" onClick={()=>onNavigate(item.destinationTab)} icon={<ArrowRight className="w-3.5 h-3.5"/>}>Resolver</Button>
           </div>)}
         </div>}
       </Card>
 
       {/* Relatórios & Indicadores Gerenciais Quick Access */}
-      <Card padding="none" className="border border-blue-200/80 dark:border-blue-900/50 shadow-sm overflow-hidden">
+      <Card padding="none" className="border border-info-border  shadow-sm overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-blue-950 via-graphite-900 to-indigo-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-action-primary/30 rounded-xl text-blue-400 border border-blue-500/30">
@@ -522,11 +522,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         <Card padding="none" className="flex flex-col">
           <div className="p-4 border-b border-graphite-100 dark:border-graphite-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" /> Títulos a Receber Prioritários
+              <AlertTriangle className="w-4 h-4 text-warning-icon" /> Títulos a Receber Prioritários
             </h3>
             <button
               onClick={() => onNavigate('receivables')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 focus:outline-none focus:underline"
+              className="text-xs font-semibold text-info-icon hover:text-info-text  focus:outline-none focus:underline"
             >
               Ver Todos →
             </button>
@@ -554,7 +554,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <span className="font-mono font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      <span className="font-mono font-bold tabular-nums text-success-text ">
                         R$ {rec.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                       <Button
@@ -577,11 +577,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         <Card padding="none" className="flex flex-col">
           <div className="p-4 border-b border-graphite-100 dark:border-graphite-800 flex items-center justify-between">
             <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-blue-500" /> Extrato de Eventos Financeiros Recentes
+              <CheckCircle2 className="w-4 h-4 text-info-icon" /> Extrato de Eventos Financeiros Recentes
             </h3>
             <button
               onClick={() => onNavigate('transactions')}
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 focus:outline-none focus:underline"
+              className="text-xs font-semibold text-info-icon hover:text-info-text  focus:outline-none focus:underline"
             >
               Extrato Completo →
             </button>
@@ -604,10 +604,10 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                       <div
                         className={`p-1.5 rounded-lg ${
                           isIncome
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            ? 'bg-success-bg text-success-text  '
                             : isExpense
                             ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                            : 'bg-info-bg text-info-text  '
                         }`}
                       >
                         {isIncome ? (
@@ -629,10 +629,10 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                     <span
                       className={`font-mono font-bold tabular-nums text-xs ${
                         isIncome
-                          ? 'text-emerald-600 dark:text-emerald-400'
+                          ? 'text-success-icon '
                           : isExpense
                           ? 'text-indigo-600 dark:text-indigo-400'
-                          : 'text-blue-600 dark:text-blue-400'
+                          : 'text-info-icon '
                       }`}
                     >
                       {isIncome ? '+' : isExpense ? '-' : ''} R${' '}

@@ -163,7 +163,7 @@ export const BankReconciliationView: React.FC = () => {
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100"><Landmark className="h-6 w-6 text-blue-600" /> Conciliação Bancária</h2>
+          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100"><Landmark className="h-6 w-6 text-info-icon" /> Conciliação Bancária</h2>
           <p className="mt-1 text-xs text-graphite-500">Vincule entradas de extrato a transações já existentes. Esta área não altera saldo nem cria movimentações financeiras.</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => void refresh()} icon={<RefreshCw className="h-4 w-4" />}>Atualizar</Button>
@@ -180,7 +180,7 @@ export const BankReconciliationView: React.FC = () => {
       </Card>
 
       <Card padding="sm">
-        <div className="mb-3 flex items-center gap-2"><Upload className="h-4 w-4 text-blue-600" /><h3 className="text-sm font-bold">Importação manual estruturada</h3></div>
+        <div className="mb-3 flex items-center gap-2"><Upload className="h-4 w-4 text-info-icon" /><h3 className="text-sm font-bold">Importação manual estruturada</h3></div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           <Input type="date" value={importDate} onChange={(event) => setImportDate(event.target.value)} />
           <Input value={importDescription} onChange={(event) => setImportDescription(event.target.value)} placeholder="Descrição" />

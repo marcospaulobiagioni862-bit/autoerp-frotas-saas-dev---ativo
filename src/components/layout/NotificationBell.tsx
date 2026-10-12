@@ -23,10 +23,10 @@ function severityLabel(severity: NotificationSeverity): string {
 
 function severityClasses(severity: NotificationSeverity): string {
   switch (severity) {
-    case 'DANGER': return 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300';
-    case 'WARNING': return 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
-    case 'SUCCESS': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300';
-    default: return 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300';
+    case 'DANGER': return 'bg-error-bg text-error-text  ';
+    case 'WARNING': return 'bg-warning-bg text-warning-text  ';
+    case 'SUCCESS': return 'bg-success-bg text-success-text  ';
+    default: return 'bg-info-bg text-info-text  ';
   }
 }
 
@@ -188,7 +188,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
               </div>
             )}
             {!loading && error && (
-              <div className="px-4 py-6 text-sm text-red-700 dark:text-red-300 text-center">
+              <div className="px-4 py-6 text-sm text-error-text  text-center">
                 Notificações indisponíveis. Tente novamente.
               </div>
             )}
@@ -204,7 +204,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
                   type="button"
                   key={item.id}
                   onClick={() => { void resolveNotification(item); }}
-                  className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-graphite-100 dark:border-graphite-800 hover:bg-graphite-50 dark:hover:bg-graphite-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
+                  className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-graphite-100 dark:border-graphite-800 hover:bg-graphite-50 dark:hover:bg-graphite-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-info-bg '}`}
                 >
                   <div className="flex gap-2 items-start">
                     <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-graphite-300 dark:bg-graphite-600' : 'bg-action-primary'}`} />
@@ -220,7 +220,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
                         <span>{formatTimestamp(item.createdAt)}</span>
                         {entity && <span className="truncate" title={entity}>{entity}</span>}
                         <span>{item.readAt ? 'Lida' : 'Não lida'}</span>
-                        {onResolve && <span className="font-semibold text-blue-600 dark:text-blue-400">Abrir para resolver →</span>}
+                        {onResolve && <span className="font-semibold text-info-icon ">Abrir para resolver →</span>}
                       </div>
                     </div>
                   </div>

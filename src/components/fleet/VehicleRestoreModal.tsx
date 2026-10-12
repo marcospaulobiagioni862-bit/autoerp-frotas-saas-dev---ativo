@@ -49,7 +49,7 @@ export const VehicleRestoreModal: React.FC<VehicleRestoreModalProps> = ({ isOpen
     >
       <form onSubmit={submit} className="space-y-4">
         {error && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+          <div className="flex items-center gap-2 rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text   ">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>

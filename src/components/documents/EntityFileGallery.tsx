@@ -122,7 +122,7 @@ export function EntityFileGallery({entityType,entityId}:{entityType:RootEntityTy
       <div className="flex justify-end"><Button type="button" size="sm" variant="ghost" onClick={()=>{setSearch('');setKind('ALL');setOrigin('ALL');setFrom('');setTo('');}}>Limpar filtros</Button></div>
     </Card>
 
-    {error&&<div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
+    {error&&<div role="alert" className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text   ">{error}</div>}
     {loading?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-graphite-500">Carregando arquivos...</div>:filtered.length===0?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-graphite-500"><FileArchive className="mx-auto mb-2 h-7 w-7"/>Nenhum arquivo corresponde aos filtros selecionados.</div>:<AttachmentList attachments={filtered} onRefresh={()=>void load()} showPdfActions protectLatestDriverCnh={entityType==='Driver'} showProtectedDriverCnh={entityType==='Driver'}/>}
   </div>;
 }

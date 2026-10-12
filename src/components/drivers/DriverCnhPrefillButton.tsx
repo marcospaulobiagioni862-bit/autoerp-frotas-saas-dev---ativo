@@ -51,10 +51,10 @@ export function DriverCnhPrefillButton({ driverId, onApply }: DriverCnhPrefillBu
   };
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+    <div className="rounded-xl border border-info-border bg-info-bg p-3  ">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-2">
-          <Bot className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <Bot className="mt-0.5 h-4 w-4 shrink-0 text-info-icon " />
           <div>
             <p className="text-sm font-semibold text-graphite-800 dark:text-graphite-100">Preenchimento assistido pela CNH</p>
             <p className="mt-0.5 text-xs text-graphite-600 dark:text-graphite-400">
@@ -69,10 +69,10 @@ export function DriverCnhPrefillButton({ driverId, onApply }: DriverCnhPrefillBu
       {message && (
         <div className={`mt-3 flex items-start gap-2 text-xs ${
           message.kind === 'success'
-            ? 'text-emerald-700 dark:text-emerald-300'
+            ? 'text-success-text '
             : message.kind === 'error'
-              ? 'text-red-700 dark:text-red-300'
-              : 'text-blue-700 dark:text-blue-300'
+              ? 'text-error-text '
+              : 'text-info-text '
         }`}>
           {message.kind === 'success' ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Info className="h-4 w-4 shrink-0" />}
           <span>{message.text}</span>
