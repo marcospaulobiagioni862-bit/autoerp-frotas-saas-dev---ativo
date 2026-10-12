@@ -232,7 +232,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
 
  {/* KPI Metric Cards */}
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
- <Card padding="sm" className=" dark:border-l-indigo-500">
+ <Card padding="sm" className="">
  <div className="flex justify-between items-start">
  <div>
  <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Total de Pendências</span>
