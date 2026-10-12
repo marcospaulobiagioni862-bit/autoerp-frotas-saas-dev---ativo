@@ -215,7 +215,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           <span className="font-bold text-blue-700">{progressPercent}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-graphite-200">
-          <div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
+          <div className="h-full bg-action-primary transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
         <div className="grid grid-cols-2 gap-1 text-[10px] text-graphite-600 sm:grid-cols-4">
           <span>{stepCrlvSent ? '✓' : '○'} CRLV enviado</span>
@@ -290,7 +290,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 type="button"
                 disabled={applying || selectableApprovedFields.length === 0}
                 onClick={applyAllApproved}
-                className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
+                className="rounded-md bg-action-primary px-3 py-2 text-xs font-semibold text-on-action-primary disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
               >
                 {applying ? 'Copiando...' : `Copiar todos os dados extraídos (${selectableApprovedFields.length})`}
               </button>
@@ -298,7 +298,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 type="button"
                 disabled={applying || selectedFields.size === 0}
                 onClick={applySelected}
-                className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
+                className="rounded-md bg-action-primary px-3 py-2 text-xs font-semibold text-on-action-primary disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
               >
                 {applying ? 'Copiando...' : `Copiar selecionados (${selectedFields.size})`}
               </button>

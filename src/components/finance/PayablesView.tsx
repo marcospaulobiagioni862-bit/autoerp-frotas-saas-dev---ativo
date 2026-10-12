@@ -290,7 +290,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                 onClick={() => setStatusFilter(st)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                   statusFilter === st
-                    ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
+                    ? 'bg-action-primary text-on-action-primary font-semibold shadow-2xs'
                     : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
                 }`}
               >
@@ -402,7 +402,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                       <td className="p-3.5 text-right">
                         <div className="flex justify-end gap-2">
                           {isPending && !blockingInstallment && (
-                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white font-semibold">
+                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary font-semibold">
                               Pagar
                             </Button>
                           )}
@@ -545,7 +545,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-indigo-600 hover:!bg-indigo-700 !text-white">
+              <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary">
                 Criar despesa
               </Button>
             </div>

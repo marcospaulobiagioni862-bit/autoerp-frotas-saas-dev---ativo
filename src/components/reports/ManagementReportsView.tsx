@@ -241,7 +241,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
       <div className="bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-action-primary/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.36 • Relatórios e Indicadores Gerenciais
             </span>
             <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
@@ -310,7 +310,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
               onClick={() => setActiveSubTab(tab.id as ReportTab)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-md'
+                  ? 'bg-action-primary text-on-action-primary shadow-md'
                   : 'bg-white dark:bg-graphite-900 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 border border-graphite-200 dark:border-graphite-800'
               }`}
             >
@@ -328,7 +328,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
           <Card className="bg-gradient-to-br from-graphite-900 to-indigo-950 text-white border border-indigo-900/50">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="space-y-2 text-center md:text-left">
-                <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
+                <span className="px-3 py-1 bg-action-primary/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
                   Operational Health Score
                 </span>
                 <h3 className="text-2xl font-black">Saúde Operacional Geral: {healthScore.score}%</h3>
@@ -371,7 +371,7 @@ export const ManagementReportsView: React.FC<ManagementReportsViewProps> = ({
                   </div>
                   <div className="w-full bg-graphite-800 h-2 rounded-full overflow-hidden">
                     <div
-                      className="bg-indigo-500 h-full rounded-full transition-all"
+                      className="bg-action-primary h-full rounded-full transition-all"
                       style={{ width: `${c.value}%` }}
                     />
                   </div>

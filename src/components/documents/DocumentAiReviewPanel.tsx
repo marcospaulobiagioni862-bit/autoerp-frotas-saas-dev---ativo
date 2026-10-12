@@ -403,7 +403,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               type="button"
               onClick={() => setCleanupFilter(value)}
               className={`rounded-md px-2 py-1.5 text-xs font-medium ${cleanupFilter === value
-                ? 'bg-blue-600 text-white'
+                ? 'bg-action-primary text-on-action-primary'
                 : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300'}`}
             >
               {label}

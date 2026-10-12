@@ -184,7 +184,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       isActive
-                        ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/30'
+                        ? 'bg-action-primary text-on-action-primary font-semibold shadow-md shadow-blue-900/30'
                         : 'text-graphite-400 hover:text-graphite-100 hover:bg-graphite-800/50'
                     }`}
                   >

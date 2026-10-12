@@ -17,23 +17,35 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap';
+  // AUTOERP-91 fase 3. Uma cor de acao so: primario e navy, destrutivo e crimson,
+  // secundario e contorno. Nada de indigo/blue/rose soltos. O anel de foco usa
+  // :focus-visible (nao :focus) para nao aparecer em clique de mouse, e os tokens
+  // semanticos ja trocam sozinhos no modo escuro - por isso nao ha par dark: aqui.
+  const baseStyles = 'inline-flex items-center justify-center font-medium rounded transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed whitespace-nowrap';
 
   const variantStyles: Record<string, string> = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:ring-blue-500',
-    secondary: 'bg-graphite-100 text-graphite-800 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-200 dark:hover:bg-graphite-700 focus:ring-graphite-400',
-    outline: 'border border-graphite-300 text-graphite-700 bg-transparent hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800 focus:ring-graphite-400',
-    ghost: 'bg-transparent text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800 focus:ring-graphite-400',
-    danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500 focus:ring-red-500',
-    warning: 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 focus:ring-amber-500',
+    primary: 'bg-action-primary text-on-action-primary hover:bg-action-primary-hover active:bg-action-primary-active disabled:bg-action-disabled disabled:text-fg-disabled',
+    // "secondary" e "outline" convergem para a mesma coisa: contorno. Mantidos os
+    // dois nomes porque 100+ chamadas usam um ou outro - trocar nome agora seria
+    // mudanca de API sem ganho.
+    secondary: 'bg-transparent border border-border-strong text-fg-primary hover:bg-action-secondary-hover active:bg-action-secondary-active disabled:border-border disabled:text-fg-disabled',
+    outline: 'bg-transparent border border-border-strong text-fg-primary hover:bg-action-secondary-hover active:bg-action-secondary-active disabled:border-border disabled:text-fg-disabled',
+    ghost: 'bg-transparent text-fg-secondary hover:bg-action-secondary-hover hover:text-fg-primary active:bg-action-secondary-active disabled:text-fg-disabled',
+    danger: 'bg-action-destructive text-on-action-destructive hover:bg-action-destructive-hover active:bg-action-destructive-active disabled:bg-action-disabled disabled:text-fg-disabled',
+    // "warning" nao e acao: aviso e estado, nao botao. Cai no contorno de proposito,
+    // para o amarelo sumir dos botoes sem quebrar quem ainda passa variant="warning".
+    warning: 'bg-transparent border border-border-strong text-fg-primary hover:bg-action-secondary-hover active:bg-action-secondary-active disabled:border-border disabled:text-fg-disabled',
   };
 
   const styleClass = variantStyles[variant as string] || variantStyles.primary;
 
+  // Alturas do design system: 28px (sm) e 32px (md). No celular todos sobem para
+  // 44px, que e o minimo confortavel para o dedo - o ganho de densidade so faz
+  // sentido com mouse.
   const sizeStyles = {
-    sm: 'text-xs px-2.5 py-1.5 gap-1.5',
-    md: 'text-sm px-4 py-2 gap-2',
-    lg: 'text-base px-5 py-2.5 gap-2.5',
+    sm: 'text-xs min-h-11 sm:min-h-7 px-3 gap-1.5',
+    md: 'text-sm min-h-11 sm:min-h-8 px-3 gap-1.5',
+    lg: 'text-sm min-h-11 sm:min-h-10 px-4 gap-2',
   };
 
   return (

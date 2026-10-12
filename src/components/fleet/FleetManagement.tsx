@@ -184,7 +184,7 @@ export const FleetManagement: React.FC = () => {
             <Button variant="outline" size="sm" onClick={toggleArchivedView}>{showArchived ? 'Voltar à frota ativa' : 'Ver vendidos / arquivados'}</Button>
             {!showArchived && <Filter className="w-3.5 h-3.5 text-graphite-400 shrink-0 mr-1" />}
             {!showArchived && VEHICLE_STATUS_FILTERS.map((st) => (
-              <button key={st.id} onClick={() => setStatusFilter(st.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusFilter === st.id ? 'bg-blue-600 text-white font-semibold shadow-2xs' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'}`}>{st.label}</button>
+              <button key={st.id} onClick={() => setStatusFilter(st.id)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${statusFilter === st.id ? 'bg-action-primary text-on-action-primary font-semibold shadow-2xs' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'}`}>{st.label}</button>
             ))}
             <div className="w-52 shrink-0">
               <Select aria-label="Filtrar por categoria" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} options={[{ value: 'ALL', label: 'Todas as categorias' }, ...VEHICLE_CATEGORIES.map((category) => ({ value: category, label: category }))]}/>
@@ -299,7 +299,7 @@ export const FleetManagement: React.FC = () => {
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-2">
-                      <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"><Eye className="w-3.5 h-3.5"/> Detalhes</button>
+                      <button onClick={() => setSelectedVehicleIdForDetails(vehicle.id)} className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-action-primary px-3 py-2 font-semibold text-on-action-primary hover:bg-action-primary focus:outline-none focus:ring-2 focus:ring-blue-500"><Eye className="w-3.5 h-3.5"/> Detalhes</button>
                       <details className="relative">
                         <summary aria-label={`Mais ações para ${vehicle.plate}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-2 text-base font-bold text-graphite-600 hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800">⋮</summary>
                         <div className="absolute right-0 z-20 mt-1 w-56 space-y-1 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">

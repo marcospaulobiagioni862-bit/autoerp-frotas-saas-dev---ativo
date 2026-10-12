@@ -119,9 +119,9 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
               const Icon = tab.icon;
               const selected = activeTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`min-h-11 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 ${selected ? 'bg-blue-600 text-white font-semibold' : 'border border-graphite-200 text-graphite-600 hover:bg-graphite-100 dark:border-graphite-800'}`}>
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`min-h-11 px-3 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 ${selected ? 'bg-action-primary text-on-action-primary font-semibold' : 'border border-graphite-200 text-graphite-600 hover:bg-graphite-100 dark:border-graphite-800'}`}>
                   <Icon className="w-3.5 h-3.5"/>{tab.label}
-                  {tab.count !== undefined && <span className={`ml-1 px-1.5 rounded-full text-[10px] ${selected ? 'bg-blue-700 text-white' : 'bg-graphite-200 text-graphite-700'}`}>{tab.count}</span>}
+                  {tab.count !== undefined && <span className={`ml-1 px-1.5 rounded-full text-[10px] ${selected ? 'bg-action-primary text-on-action-primary' : 'bg-graphite-200 text-graphite-700'}`}>{tab.count}</span>}
                 </button>
               );
             })}

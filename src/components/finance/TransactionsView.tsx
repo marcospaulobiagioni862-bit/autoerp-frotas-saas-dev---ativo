@@ -238,7 +238,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                   onClick={() => setTypeFilter(type)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     typeFilter === type
-                      ? 'bg-blue-600 text-white font-semibold shadow-2xs'
+                      ? 'bg-action-primary text-on-action-primary font-semibold shadow-2xs'
                       : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
                   }`}
                 >

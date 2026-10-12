@@ -377,7 +377,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             <button
               type="submit"
               disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
-              className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-action-primary hover:bg-action-primary-hover rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
             </button>

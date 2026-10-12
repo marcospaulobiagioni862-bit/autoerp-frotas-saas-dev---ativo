@@ -224,7 +224,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
       <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 text-white p-2.5 rounded-lg shadow-sm">
+            <div className="bg-action-primary text-on-action-primary p-2.5 rounded-lg shadow-sm">
               <TrendingUp className="w-6 h-6" />
             </div>
             <div>
@@ -281,7 +281,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
                 isActive
-                  ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                  ? 'bg-action-primary text-on-action-primary font-semibold shadow-sm'
                   : 'text-graphite-600 hover:bg-graphite-100 hover:text-graphite-900'
               }`}
             >
@@ -372,7 +372,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                       <span className="font-bold">{item.val}%</span>
                     </div>
                     <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${item.val}%` }}></div>
+                      <div className="bg-action-primary h-2 rounded-full transition-all" style={{ width: `${item.val}%` }}></div>
                     </div>
                   </div>
                 ))}
@@ -466,7 +466,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             </div>
             <button
               onClick={() => setShowNewGoalModal(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              className="flex items-center gap-2 px-3.5 py-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary rounded-lg text-sm font-semibold transition-colors"
             >
               <Plus className="w-4 h-4" />
               Nova Meta
@@ -522,7 +522,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             </div>
             <button
               onClick={() => setShowNewKPIModal(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              className="flex items-center gap-2 px-3.5 py-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary rounded-lg text-sm font-semibold transition-colors"
             >
               <Plus className="w-4 h-4" />
               Novo KPI
@@ -647,7 +647,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             </div>
             <button
               onClick={() => setShowNewPDCAModal(true)}
-              className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors"
+              className="flex items-center gap-2 px-3.5 py-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary rounded-lg text-sm font-semibold transition-colors"
             >
               <Plus className="w-4 h-4" />
               Novo PDCA
@@ -758,7 +758,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             <button
               onClick={handleRunTests}
               disabled={runningTests}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
               {runningTests ? 'Executando Testes...' : 'Executar Validação Geral'}
@@ -848,7 +848,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded font-semibold hover:bg-indigo-700"
+                  className="px-3 py-1.5 bg-action-primary text-on-action-primary rounded font-semibold hover:bg-action-primary"
                 >
                   Salvar Meta
                 </button>
@@ -895,7 +895,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded font-semibold hover:bg-indigo-700"
+                  className="px-3 py-1.5 bg-action-primary text-on-action-primary rounded font-semibold hover:bg-action-primary"
                 >
                   Salvar KPI
                 </button>
@@ -942,7 +942,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded font-semibold hover:bg-indigo-700"
+                  className="px-3 py-1.5 bg-action-primary text-on-action-primary rounded font-semibold hover:bg-action-primary"
                 >
                   Iniciar PDCA
                 </button>

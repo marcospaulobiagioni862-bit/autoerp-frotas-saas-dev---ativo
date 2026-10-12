@@ -75,7 +75,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
         <div className="text-[11px] text-amber-800">Informe o horário da infração para desempate automático pelas vistorias de entrega e devolução (check-in/check-out).</div>
       </div>}
       <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 flex flex-col gap-1 text-xs">
-        <div className="flex items-center justify-between"><span className="font-bold flex items-center gap-1.5">Titularidade (CRLV): {matchContext.vehicle.ownerName||matchContext.vehicle.plate} ({matchContext.ownershipFlow.flowType})</span>{matchContext.ownershipFlow.riskOfNic&&<span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-600 text-white flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> RISCO NIC</span>}</div>
+        <div className="flex items-center justify-between"><span className="font-bold flex items-center gap-1.5">Titularidade (CRLV): {matchContext.vehicle.ownerName||matchContext.vehicle.plate} ({matchContext.ownershipFlow.flowType})</span>{matchContext.ownershipFlow.riskOfNic&&<span className="px-2 py-0.5 rounded text-[10px] font-bold bg-action-destructive text-on-action-destructive flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> RISCO NIC</span>}</div>
         <p className="text-[11px] text-purple-900 opacity-90">{matchContext.ownershipFlow.instructions}</p>
       </div>
     </div>}

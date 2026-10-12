@@ -491,7 +491,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">{progress.percent}%</span>
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
-              <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${progress.percent}%` }} />
+              <div className="h-full rounded-full bg-action-primary transition-all duration-500" style={{ width: `${progress.percent}%` }} />
             </div>
             <div className="text-center">
               <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-emerald-600" />

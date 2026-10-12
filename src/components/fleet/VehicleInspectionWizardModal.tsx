@@ -306,7 +306,7 @@ export function VehicleInspectionWizardModal({
         <div className="flex items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-violet-600 px-2 py-0.5 text-[11px] font-bold text-white">
+              <span className="rounded-lg bg-action-primary px-2 py-0.5 text-[11px] font-bold text-on-action-primary">
                 Passo {step} de 6
               </span>
               <h3 className="font-bold text-sm text-graphite-900 dark:text-white">
@@ -334,7 +334,7 @@ export function VehicleInspectionWizardModal({
         {/* Barra de Progresso */}
         <div className="h-1.5 w-full bg-graphite-100 dark:bg-graphite-800">
           <div
-            className="h-full bg-violet-600 transition-all duration-300"
+            className="h-full bg-action-primary transition-all duration-300"
             style={{ width: `${(step / 6) * 100}%` }}
           />
         </div>
@@ -442,7 +442,7 @@ export function VehicleInspectionWizardModal({
                         onClick={() => setFuelLevel(val)}
                         className={`rounded-lg py-2.5 text-xs font-bold transition-all ${
                           fuelLevel === val
-                            ? 'bg-violet-600 text-white shadow-sm'
+                            ? 'bg-action-primary text-on-action-primary shadow-sm'
                             : 'bg-graphite-100 text-graphite-700 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-200'
                         }`}
                       >
@@ -694,7 +694,7 @@ export function VehicleInspectionWizardModal({
                       onClick={() => setWashType(w.key as any)}
                       className={`rounded-lg p-2 text-xs font-semibold text-center transition-all ${
                         washType === w.key
-                          ? 'bg-violet-600 text-white shadow-sm'
+                          ? 'bg-action-primary text-on-action-primary shadow-sm'
                           : 'bg-graphite-100 text-graphite-700 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-200'
                       }`}
                     >
@@ -859,7 +859,7 @@ export function VehicleInspectionWizardModal({
               size="sm"
               onClick={() => void handleComplete()}
               disabled={submitting}
-              className="gap-1 text-xs bg-emerald-600 hover:bg-emerald-700"
+              className="gap-1 text-xs bg-action-primary hover:bg-action-primary-hover"
             >
               <CheckCircle2 className="w-4 h-4" />
               {submitting ? 'Salvando Vistoria...' : 'Concluir e Salvar Vistoria'}

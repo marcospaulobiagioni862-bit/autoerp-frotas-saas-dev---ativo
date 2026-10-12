@@ -255,7 +255,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold text-white bg-action-primary hover:bg-action-primary-hover rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
             >
               {isSubmitting ? 'Transferindo...' : 'Executar Transferência'}
             </button>

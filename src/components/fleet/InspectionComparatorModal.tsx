@@ -210,7 +210,7 @@ export function InspectionComparatorModal({
                     onClick={() => setActiveSlot(slot.key)}
                     className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeSlot === slot.key
-                        ? 'bg-violet-600 text-white shadow-sm'
+                        ? 'bg-action-primary text-on-action-primary shadow-sm'
                         : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300'
                     }`}
                   >

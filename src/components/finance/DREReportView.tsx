@@ -113,13 +113,13 @@ export const DREReportView: React.FC = () => {
         <div className="flex items-center gap-1 bg-graphite-100 dark:bg-graphite-800 p-1 rounded-xl shrink-0">
           <button
             onClick={() => setRegime(AccountingRegime.CASH)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.CASH ? 'bg-blue-600 text-white shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.CASH ? 'bg-action-primary text-on-action-primary shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
           >
             Regime de Caixa
           </button>
           <button
             onClick={() => setRegime(AccountingRegime.ACCRUAL)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.ACCRUAL ? 'bg-blue-600 text-white shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.ACCRUAL ? 'bg-action-primary text-on-action-primary shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
           >
             Regime de Competência
           </button>

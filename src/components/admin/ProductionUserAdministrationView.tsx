@@ -63,7 +63,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
               type="button"
               aria-pressed={activeTab === 'users'}
               onClick={() => setActiveTab('users')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-white dark:text-graphite-300 dark:hover:bg-graphite-800'}`}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'users' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-white dark:text-graphite-300 dark:hover:bg-graphite-800'}`}
             >
               <Users className="h-4 w-4" /> Usuários
             </button>
@@ -71,7 +71,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
               type="button"
               aria-pressed={activeTab === 'tenant'}
               onClick={() => setActiveTab('tenant')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'tenant' ? 'bg-blue-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-white dark:text-graphite-300 dark:hover:bg-graphite-800'}`}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${activeTab === 'tenant' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-white dark:text-graphite-300 dark:hover:bg-graphite-800'}`}
             >
               <Building2 className="h-4 w-4" /> Empresa
             </button>

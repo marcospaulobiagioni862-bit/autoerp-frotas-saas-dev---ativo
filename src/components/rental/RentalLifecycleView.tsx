@@ -153,7 +153,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
       <div className="bg-gradient-to-r from-graphite-950 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-action-primary/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.38 • Ciclo Completo de Vida da Locação
             </span>
             <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
@@ -256,7 +256,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
               onClick={() => setStageFilter(f.id as StageFilter)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 stageFilter === f.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-action-primary text-on-action-primary shadow-sm'
                   : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
@@ -378,7 +378,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
                   <div className="space-y-3 pl-3 border-l-2 border-indigo-500/30">
                     {selectedItem.timeline.map((ev, idx) => (
                       <div key={ev.id || idx} className="relative text-xs">
-                        <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-white dark:ring-graphite-900" />
+                        <div className="absolute -left-[17px] top-1 w-2.5 h-2.5 rounded-full bg-action-primary ring-4 ring-white dark:ring-graphite-900" />
                         <span className="text-[10px] font-mono text-graphite-400">{ev.timestamp.split('T')[0]}</span>
                         <h5 className="font-bold text-graphite-900 dark:text-graphite-100">{ev.title}</h5>
                         <p className="text-graphite-600 dark:text-graphite-400">{ev.description}</p>

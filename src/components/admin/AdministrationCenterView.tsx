@@ -251,7 +251,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
                 isActive
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-action-primary text-on-action-primary shadow-sm'
                   : 'text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800'
               }`}
             >
@@ -347,7 +347,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
               <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Representante Legal</label><Input value={legalRepresentativeNameInput} onChange={(e) => setLegalRepresentativeNameInput(e.target.value)} /></div>
               <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CPF do Representante</label><Input value={legalRepresentativeCpfInput} onChange={(e) => setLegalRepresentativeCpfInput(e.target.value)} /></div>
             </div>
-            <div className="pt-2"><Button onClick={() => void handleSaveCompanyProfile()} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"><Save className="w-4 h-4" />Salvar dados oficiais</Button></div>
+            <div className="pt-2"><Button onClick={() => void handleSaveCompanyProfile()} className="gap-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary"><Save className="w-4 h-4" />Salvar dados oficiais</Button></div>
           </Card>
           <Card className="p-6 space-y-4">
             <h3 className="text-lg font-semibold text-graphite-900 dark:text-graphite-100">Configuração operacional da empresa</h3>

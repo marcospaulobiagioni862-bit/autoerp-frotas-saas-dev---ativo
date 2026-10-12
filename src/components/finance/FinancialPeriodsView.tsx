@@ -269,7 +269,7 @@ export const FinancialPeriodsView: React.FC = () => {
                           type="button"
                           onClick={() => void reopenPeriod(period.id)}
                           disabled={submitting || !reopenReason.trim()}
-                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                          className="inline-flex items-center gap-2 rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-on-action-primary hover:bg-action-primary disabled:opacity-50"
                         >
                           <UnlockKeyhole className="h-4 w-4" />
                           Confirmar reabertura

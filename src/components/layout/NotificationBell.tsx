@@ -157,7 +157,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
       >
         <Bell className="w-4 h-4" />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-action-destructive text-on-action-destructive text-[9px] font-bold flex items-center justify-center">
             {unread > 99 ? '99+' : unread}
           </span>
         )}
@@ -207,7 +207,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
                   className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-graphite-100 dark:border-graphite-800 hover:bg-graphite-50 dark:hover:bg-graphite-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
                 >
                   <div className="flex gap-2 items-start">
-                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-graphite-300 dark:bg-graphite-600' : 'bg-blue-600'}`} />
+                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-graphite-300 dark:bg-graphite-600' : 'bg-action-primary'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="text-xs font-semibold text-graphite-900 dark:text-graphite-100 truncate flex-1">{item.title}</p>

@@ -258,13 +258,13 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 p-6 rounded-xl border border-indigo-900/50 text-white shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+            <Badge className="bg-action-primary/20 text-emerald-300 border-emerald-500/30">
               AutoERP v3.57
             </Badge>
-            <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+            <Badge className="bg-action-primary/20 text-indigo-300 border-indigo-500/30">
               Fase 3.57 — Execução Operacional Integrada
             </Badge>
-            <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30 flex items-center gap-1">
+            <Badge className="bg-action-destructive/20 text-rose-300 border-rose-500/30 flex items-center gap-1">
               <Lock className="w-3 h-3" /> Financeiro Congelado
             </Badge>
           </div>
@@ -279,7 +279,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setShowCreateModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-2"
+            className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary flex items-center gap-2"
           >
             <Plus className="w-4 h-4" /> Nova Atividade
           </Button>
@@ -388,7 +388,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                           Atribuído a: {act.assignedTo} | Início: {act.scheduledStart.substring(0, 10)}
                         </div>
                       </div>
-                      <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30">
+                      <Badge className="bg-action-destructive/20 text-rose-300 border-rose-500/30">
                         P0 - CRÍTICA
                       </Badge>
                     </div>
@@ -416,7 +416,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                         Início: {new Date(evt.startAt).toLocaleString()} | Tipo: {evt.sourceType}
                       </div>
                     </div>
-                    <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30">
+                    <Badge className="bg-action-primary/20 text-indigo-300 border-indigo-500/30">
                       {evt.priority}
                     </Badge>
                   </div>
@@ -441,7 +441,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   size="sm"
                   variant={agendaViewMode === mode ? 'default' : 'outline'}
                   onClick={() => setAgendaViewMode(mode)}
-                  className={agendaViewMode === mode ? 'bg-indigo-600' : 'border-graphite-700 text-graphite-300'}
+                  className={agendaViewMode === mode ? 'bg-action-primary' : 'border-graphite-700 text-graphite-300'}
                 >
                   {mode === 'DAY' ? 'Dia' : mode === 'WEEK' ? 'Semana' : mode === 'MONTH' ? 'Mês' : 'Lista'}
                 </Button>
@@ -461,7 +461,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-graphite-100">{evt.title}</span>
-                      <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/30 text-xs">
+                      <Badge className="bg-action-primary/20 text-indigo-300 border-indigo-500/30 text-xs">
                         {evt.sourceType}
                       </Badge>
                       <Badge className="bg-graphite-700 text-graphite-200 text-xs">{evt.priority}</Badge>
@@ -475,7 +475,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   <Badge
                     className={
                       evt.status === 'COMPLETED'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        ? 'bg-action-primary/20 text-emerald-300 border-emerald-500/30'
                         : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                     }
                   >
@@ -563,10 +563,10 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                         <Badge
                           className={
                             act.priority === 'P0'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              ? 'bg-action-destructive/20 text-rose-300 border-rose-500/30'
                               : act.priority === 'P1'
                               ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                              : 'bg-action-primary/20 text-indigo-300 border-indigo-500/30'
                           }
                         >
                           {act.priority}
@@ -577,9 +577,9 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                         <Badge
                           className={
                             act.status === 'COMPLETED'
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              ? 'bg-action-primary/20 text-emerald-300 border-emerald-500/30'
                               : act.status === 'BLOCKED'
-                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                              ? 'bg-action-destructive/20 text-rose-300 border-rose-500/30'
                               : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
                           }
                         >
@@ -600,7 +600,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                         {act.status === 'IN_PROGRESS' && (
                           <Button
                             size="sm"
-                            className="text-xs bg-emerald-600 hover:bg-emerald-500"
+                            className="text-xs bg-action-primary hover:bg-action-primary-hover"
                             onClick={() => handleUpdateStatus(act.id, 'COMPLETED')}
                           >
                             Concluir
@@ -638,14 +638,14 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-graphite-100">{p.title}</span>
-                      <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30">{p.priority}</Badge>
+                      <Badge className="bg-action-destructive/20 text-rose-300 border-rose-500/30">{p.priority}</Badge>
                       <Badge className="bg-graphite-700 text-graphite-300">{p.category}</Badge>
                     </div>
                     <p className="text-xs text-graphite-400">{p.description}</p>
                   </div>
                   <Button
                     size="sm"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1"
+                    className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary flex items-center gap-1"
                     onClick={() => handleConvertPendingToTask(p.id)}
                   >
                     <CheckSquare className="w-4 h-4" /> Converter em Tarefa
@@ -679,10 +679,10 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                     <Badge
                       className={
                         userWork.classification === 'CRÍTICA'
-                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                          ? 'bg-action-destructive/20 text-rose-300 border-rose-500/30'
                           : userWork.classification === 'SOBRECARGA'
                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : 'bg-action-primary/20 text-emerald-300 border-emerald-500/30'
                       }
                     >
                       {userWork.classification}
@@ -728,7 +728,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   <Card key={periodKey} className="p-3 bg-graphite-800/80 border-graphite-700 flex flex-col justify-between space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-sm text-white">{bucket.title}</span>
-                      <Badge className="bg-indigo-500/20 text-indigo-300 text-xs">
+                      <Badge className="bg-action-primary/20 text-indigo-300 text-xs">
                         {bucket.activities.length} Atividades
                       </Badge>
                     </div>
@@ -851,7 +851,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
             <Button
               onClick={handleRunTests}
               disabled={testingRunning}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-2"
+              className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary flex items-center gap-2"
             >
               <Play className="w-4 h-4" />
               {testingRunning ? 'Executando Suíte...' : 'Executar Suíte Completa 3.57'}
@@ -875,7 +875,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   {testResults.adversarialResults.map((r) => (
                     <div key={r.id} className="p-2 bg-graphite-800/80 rounded border border-graphite-700 flex items-center justify-between">
                       <span className="font-mono text-graphite-300">{r.id}: {r.name}</span>
-                      <Badge className={r.passed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}>
+                      <Badge className={r.passed ? 'bg-action-primary/20 text-emerald-300' : 'bg-action-destructive/20 text-rose-300'}>
                         {r.passed ? 'PASSED' : 'FAILED'}
                       </Badge>
                     </div>
@@ -890,7 +890,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                   {testResults.e2eResults.map((r) => (
                     <div key={r.id} className="p-2 bg-graphite-800/80 rounded border border-graphite-700 flex items-center justify-between">
                       <span className="font-mono text-graphite-300">{r.id}: {r.name}</span>
-                      <Badge className={r.passed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}>
+                      <Badge className={r.passed ? 'bg-action-primary/20 text-emerald-300' : 'bg-action-destructive/20 text-rose-300'}>
                         {r.passed ? 'PASSED' : 'FAILED'}
                       </Badge>
                     </div>
@@ -981,7 +981,7 @@ export const OperationalExecutionCenterView: React.FC<OperationalExecutionCenter
                 >
                   Cancelar
                 </Button>
-                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                <Button type="submit" className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary">
                   Criar Atividade
                 </Button>
               </div>

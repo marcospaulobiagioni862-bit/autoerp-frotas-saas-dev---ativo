@@ -287,7 +287,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
           <div className="flex items-center gap-2 mb-1">
             <Award className="w-6 h-6 text-indigo-400" />
             <h1 className="text-2xl font-bold tracking-tight">Central de Gestão de Decisões Executivas</h1>
-            <span className="bg-indigo-500/20 text-indigo-300 text-xs px-2.5 py-1 rounded-full border border-indigo-500/30 font-mono">
+            <span className="bg-action-primary/20 text-indigo-300 text-xs px-2.5 py-1 rounded-full border border-indigo-500/30 font-mono">
               v3.59
             </span>
           </div>
@@ -306,7 +306,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium shadow transition"
+            className="flex items-center gap-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary px-4 py-2.5 rounded-lg text-sm font-medium shadow transition"
           >
             <Plus className="w-4 h-4" />
             Nova Decisão Executiva
@@ -422,7 +422,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                       <span>{metrics.actionConversionRate}%</span>
                     </div>
                     <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${metrics.actionConversionRate}%` }} />
+                      <div className="bg-action-primary h-full rounded-full" style={{ width: `${metrics.actionConversionRate}%` }} />
                     </div>
                   </div>
                   <div>
@@ -431,7 +431,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                       <span>{metrics.p0P1ResolutionRate}%</span>
                     </div>
                     <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${metrics.p0P1ResolutionRate}%` }} />
+                      <div className="bg-action-primary h-full rounded-full" style={{ width: `${metrics.p0P1ResolutionRate}%` }} />
                     </div>
                   </div>
                 </div>
@@ -497,7 +497,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleApprove(d.id)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition"
+                      className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition"
                     >
                       Aprovar Decisão
                     </button>
@@ -558,14 +558,14 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     {d.status === 'PROPOSED' || d.status === 'UNDER_ANALYSIS' ? (
                       <button
                         onClick={() => handleApprove(d.id)}
-                        className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-emerald-500"
+                        className="bg-action-primary text-on-action-primary px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-action-primary"
                       >
                         Aprovar P0/P1
                       </button>
                     ) : (
                       <button
                         onClick={() => handleStartExecution(d.id)}
-                        className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-indigo-500"
+                        className="bg-action-primary text-on-action-primary px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm hover:bg-action-primary"
                       >
                         Iniciar Execução
                       </button>
@@ -612,7 +612,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                         setDecisionToValidate(d);
                         setShowValidationModal(true);
                       }}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition"
+                      className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm transition"
                     >
                       Submeter & Validar Resultado
                     </button>
@@ -777,7 +777,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               <div key={user} className="p-4 bg-graphite-50 rounded-xl border border-graphite-200 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-graphite-900 text-sm">{user}</span>
-                  <span className="bg-indigo-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">
+                  <span className="bg-action-primary text-on-action-primary text-xs px-2.5 py-0.5 rounded-full font-bold">
                     {count} Decisões
                   </span>
                 </div>
@@ -1059,7 +1059,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-500"
+                  className="px-4 py-2 bg-action-primary text-on-action-primary font-medium rounded-lg hover:bg-action-primary"
                 >
                   Criar Decisão Executiva
                 </button>
@@ -1113,7 +1113,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-500"
+                  className="px-4 py-2 bg-action-primary text-on-action-primary font-medium rounded-lg hover:bg-action-primary"
                 >
                   Validar & Finalizar Decisão
                 </button>
@@ -1159,7 +1159,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-rose-600 text-white font-medium rounded-lg hover:bg-rose-500"
+                  className="px-4 py-2 bg-action-destructive text-on-action-destructive font-medium rounded-lg hover:bg-action-destructive"
                 >
                   Confirmar Reabertura
                 </button>

@@ -85,10 +85,10 @@ export function InspectionCarDamageDiagram({
         </div>
         <div className="flex items-center gap-2 text-[10px]">
           <span className="flex items-center gap-1">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" /> Pré-existente
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-action-primary" /> Pré-existente
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500" /> Nova
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-action-destructive" /> Nova
           </span>
         </div>
       </div>
@@ -320,7 +320,7 @@ export function InspectionCarDamageDiagram({
                 <div className="flex items-center gap-2">
                   <span
                     className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                      dmg.isPreExisting ? 'bg-blue-600' : 'bg-rose-600'
+                      dmg.isPreExisting ? 'bg-action-primary' : 'bg-action-destructive'
                     }`}
                   >
                     {idx + 1}
