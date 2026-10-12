@@ -200,7 +200,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {user.name}
                 </p>
                 <p className="text-[11px] font-medium text-graphite-500 dark:text-graphite-400 mt-0.5 flex items-center gap-1.5">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-action-primary" />
                   <span>{roleLabel(user.role)}</span>
                 </p>
                 <p className="text-[10px] text-graphite-400 dark:text-graphite-500 mt-1 truncate">

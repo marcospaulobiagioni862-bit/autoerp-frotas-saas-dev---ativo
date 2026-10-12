@@ -205,7 +205,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       <div className="bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-action-primary/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.34 • Central Operacional
             </span>
             <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
@@ -322,7 +322,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                 onClick={() => setFilter(f.id as FilterCategory)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                   filter === f.id
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-action-primary text-on-action-primary shadow-xs'
                     : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300 dark:hover:bg-graphite-700'
                 }`}
               >

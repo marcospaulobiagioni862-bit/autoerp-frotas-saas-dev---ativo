@@ -263,7 +263,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-700">
             <div
-              className={`h-full rounded-full bg-blue-600 transition-[width] duration-500 ${analysisInProgress?'animate-pulse':''}`}
+              className={`h-full rounded-full bg-action-primary transition-[width] duration-500 ${analysisInProgress?'animate-pulse':''}`}
               style={{width:`${progress}%`}}
               role="progressbar"
               aria-valuemin={0}

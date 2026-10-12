@@ -169,7 +169,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
       <div className="bg-gradient-to-r from-graphite-950 via-rose-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-rose-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-action-destructive/20 text-rose-300 border border-rose-500/30">
               FASE 3.39 • Central de Controle da Locação
             </span>
             <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
@@ -273,7 +273,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
               onClick={() => setActiveFilter(f.id as FilterTab)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeFilter === f.id
-                  ? 'bg-rose-600 text-white shadow-sm'
+                  ? 'bg-action-destructive text-on-action-destructive shadow-sm'
                   : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >

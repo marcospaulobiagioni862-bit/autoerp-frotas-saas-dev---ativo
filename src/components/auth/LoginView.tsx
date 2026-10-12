@@ -67,8 +67,8 @@ export function LoginView({ onLogin }: LoginViewProps) {
   return (
     <main className="min-h-screen bg-gradient-to-br from-graphite-900 via-graphite-950 to-graphite-900 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
       {/* Luzes ambiente de fundo */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[300px] bg-violet-600/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-72 h-72 bg-indigo-600/10 rounded-full blur-2xl pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[300px] bg-action-primary/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-72 h-72 bg-action-primary/10 rounded-full blur-2xl pointer-events-none" />
 
       <section
         className="w-full max-w-md rounded-2xl border border-graphite-800 bg-graphite-900/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl shadow-black/70 relative z-10 transition-all duration-200"
@@ -76,7 +76,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
       >
         {/* Logo / Header */}
         <div className="mb-7">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-semibold tracking-wider uppercase mb-3.5">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-action-primary/10 border border-violet-500/20 text-violet-400 text-xs font-semibold tracking-wider uppercase mb-3.5">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>AutoERP V2</span>
           </div>
@@ -117,7 +117,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
         {error && (
           <div
             role="alert"
-            className="mb-5 flex items-start gap-2.5 p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm animate-fadeIn"
+            className="mb-5 flex items-start gap-2.5 p-3.5 rounded-xl border border-rose-500/30 bg-action-destructive/10 text-rose-300 text-sm animate-fadeIn"
           >
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
             <span className="leading-snug">{error}</span>
@@ -187,7 +187,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-2 rounded-xl bg-violet-600 hover:bg-violet-500 active:bg-violet-700 text-white font-semibold py-2.5 px-4 shadow-lg shadow-violet-600/25 transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
+              className="w-full mt-2 rounded-xl bg-action-primary hover:bg-action-primary-hover active:bg-action-primary text-on-action-primary font-semibold py-2.5 px-4 shadow-lg shadow-violet-600/25 transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
             >
               {isSubmitting ? (
                 <>
@@ -214,7 +214,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 className="w-full p-3.5 rounded-xl border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-violet-500/80 text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-50"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 rounded-lg bg-violet-500/10 text-violet-400 border border-violet-500/20 group-hover:bg-violet-500/20 transition-colors shrink-0">
+                  <div className="p-2 rounded-lg bg-action-primary/10 text-violet-400 border border-violet-500/20 group-hover:bg-action-primary/20 transition-colors shrink-0">
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">

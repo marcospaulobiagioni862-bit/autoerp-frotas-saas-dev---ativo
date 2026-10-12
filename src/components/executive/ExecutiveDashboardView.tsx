@@ -189,7 +189,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-graphite-900 dark:text-white text-sm">{rec.title}</span>
-                  <Badge className={rec.priority === 'P0' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'}>
+                  <Badge className={rec.priority === 'P0' ? 'bg-action-destructive text-on-action-destructive' : 'bg-amber-500 text-white'}>
                     {rec.priority}
                   </Badge>
                 </div>
@@ -229,7 +229,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <div key={risk.id} className="p-4 rounded-xl border border-rose-100 bg-rose-50/40 dark:bg-rose-950/20 dark:border-rose-900/40 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <Badge className="bg-rose-600 text-white">{risk.priority}</Badge>
+                    <Badge className="bg-action-destructive text-on-action-destructive">{risk.priority}</Badge>
                     <span className="font-bold text-graphite-900 dark:text-white text-sm">{risk.title}</span>
                     <Badge className="bg-graphite-100 dark:bg-graphite-800 text-graphite-700 dark:text-graphite-300 text-[10px]">{risk.category}</Badge>
                   </div>

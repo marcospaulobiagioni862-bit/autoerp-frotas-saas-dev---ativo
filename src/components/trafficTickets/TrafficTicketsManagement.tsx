@@ -54,8 +54,8 @@ export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> =
 
   return <div className="space-y-3">
     <div className="px-4 sm:px-6 pt-4 sm:pt-6 max-w-7xl mx-auto w-full"><div className="inline-flex rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 p-1">
-      <button type="button" onClick={()=>setOperationView('TICKETS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TICKETS'?'bg-blue-600 text-white':'text-graphite-600 dark:text-graphite-300'}`}><AlertTriangle className="w-4 h-4"/>Multas</button>
-      <button type="button" onClick={()=>setOperationView('TOLLS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TOLLS'?'bg-blue-600 text-white':'text-graphite-600 dark:text-graphite-300'}`}><Route className="w-4 h-4"/>Pedágios / Free Flow</button>
+      <button type="button" onClick={()=>setOperationView('TICKETS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TICKETS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><AlertTriangle className="w-4 h-4"/>Multas</button>
+      <button type="button" onClick={()=>setOperationView('TOLLS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TOLLS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><Route className="w-4 h-4"/>Pedágios / Free Flow</button>
     </div></div>
     {operationView==='TOLLS'?<LazyModuleErrorBoundary resetKey="toll-passages" onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-8 text-center text-sm text-graphite-500">Carregando Pedágios / Free Flow...</div>}><TollPassagesManagement/></Suspense></LazyModuleErrorBoundary>:
     <div className="p-4 sm:p-6 pt-1 space-y-6 max-w-7xl mx-auto">

@@ -486,7 +486,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
           disabled={isRunning}
           variant="primary"
           size="sm"
-          className="!bg-emerald-600 hover:!bg-emerald-700 !text-white"
+          className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary"
           icon={
             isRunning ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -573,7 +573,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               onClick={() => setStatusFilter('PASSED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 statusFilter === 'PASSED'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  ? 'bg-action-primary text-on-action-primary shadow-2xs'
                   : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
@@ -583,7 +583,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               onClick={() => setStatusFilter('FAILED')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 statusFilter === 'FAILED'
-                  ? 'bg-red-600 text-white shadow-2xs'
+                  ? 'bg-action-destructive text-on-action-destructive shadow-2xs'
                   : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >

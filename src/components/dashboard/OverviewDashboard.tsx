@@ -424,7 +424,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       <Card padding="none" className="border border-indigo-200/80 dark:border-indigo-900/50 shadow-sm overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-indigo-600/30 rounded-xl text-indigo-400 border border-indigo-500/30">
+            <div className="p-2 bg-action-primary/30 rounded-xl text-indigo-400 border border-indigo-500/30">
               <BellRing className="w-5 h-5" />
             </div>
             <div>
@@ -493,7 +493,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       <Card padding="none" className="border border-blue-200/80 dark:border-blue-900/50 shadow-sm overflow-hidden">
         <div className="p-4 bg-gradient-to-r from-blue-950 via-graphite-900 to-indigo-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-600/30 rounded-xl text-blue-400 border border-blue-500/30">
+            <div className="p-2 bg-action-primary/30 rounded-xl text-blue-400 border border-blue-500/30">
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
@@ -561,7 +561,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                         size="sm"
                         variant="primary"
                         onClick={() => onOpenReceiptModal(rec)}
-                        className="!bg-emerald-600 hover:!bg-emerald-700 !text-white"
+                        className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary"
                       >
                         Receber
                       </Button>

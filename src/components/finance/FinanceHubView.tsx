@@ -83,7 +83,7 @@ export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
               onClick={() => navigate(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                 isActive
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-action-primary text-on-action-primary shadow-xs'
                   : 'text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800'
               }`}
             >

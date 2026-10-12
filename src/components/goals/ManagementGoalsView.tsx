@@ -198,7 +198,7 @@ export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
                   <div key={alert.id} className="p-3 rounded-xl border border-rose-100 bg-rose-50/40 dark:bg-rose-950/20 dark:border-rose-900/40 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-rose-900 dark:text-rose-200 text-xs">{alert.title}</span>
-                      <Badge className={alert.severity === 'P0' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'}>
+                      <Badge className={alert.severity === 'P0' ? 'bg-action-destructive text-on-action-destructive' : 'bg-amber-500 text-white'}>
                         {alert.severity}
                       </Badge>
                     </div>

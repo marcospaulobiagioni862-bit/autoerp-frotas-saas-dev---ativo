@@ -283,7 +283,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
         </div>
         <div className="flex gap-2">
           {selectedIds.length > 0 && <Button onClick={() => onOpenRenegotiationModal(selectedReceivables)} variant="warning" size="sm" icon={<RefreshCw className="w-4 h-4" />}>Renegociar Selecionados ({selectedIds.length})</Button>}
-          <Button onClick={() => setIsCreateOpen(true)} variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} className="!bg-emerald-600 hover:!bg-emerald-700 !text-white font-semibold">Nova cobrança</Button>
+          <Button onClick={() => setIsCreateOpen(true)} variant="primary" size="sm" icon={<Plus className="w-4 h-4" />} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary font-semibold">Nova cobrança</Button>
         </div>
       </div>
 
@@ -302,7 +302,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
               [ObligationStatus.PAID, 'Pagos'],
               [ObligationStatus.CANCELLED, 'Cancelados'],
               [ObligationStatus.RENEGOTIATED, 'Renegociados'],
-            ].map(([status, label]) => <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ${statusFilter === status ? 'bg-emerald-600 text-white' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400'}`}>{label}</button>)}
+            ].map(([status, label]) => <button key={status} onClick={() => setStatusFilter(status)} className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ${statusFilter === status ? 'bg-action-primary text-on-action-primary' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400'}`}>{label}</button>)}
           </div>
         </div>
       </Card>

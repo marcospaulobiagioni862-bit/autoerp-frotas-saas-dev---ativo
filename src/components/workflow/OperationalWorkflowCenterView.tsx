@@ -382,7 +382,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-graphite-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 text-white rounded-lg shadow-md">
+            <div className="p-2.5 bg-action-primary text-on-action-primary rounded-lg shadow-md">
               <ListTodo className="w-6 h-6" />
             </div>
             <div>
@@ -426,7 +426,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
           <button
             onClick={handleRunAutomations}
             disabled={loading}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold shadow-sm transition"
+            className="flex items-center gap-2 bg-action-primary hover:bg-action-primary-hover text-on-action-primary px-3.5 py-2 rounded-lg text-xs font-semibold shadow-sm transition"
           >
             <Play className="w-3.5 h-3.5" />
             Rodar Automações
@@ -525,7 +525,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('tasks')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
+            activeSubTab === 'tasks' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <ListTodo className="w-4 h-4" />
@@ -535,7 +535,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('pendencies')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'pendencies' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
+            activeSubTab === 'pendencies' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
@@ -545,7 +545,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('sla')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'sla' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
+            activeSubTab === 'sla' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <Clock className="w-4 h-4" />
@@ -555,7 +555,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('workflows')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'workflows' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
+            activeSubTab === 'workflows' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -565,7 +565,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('timeline')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'timeline' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
+            activeSubTab === 'timeline' ? 'bg-action-primary text-on-action-primary shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <History className="w-4 h-4" />
@@ -630,7 +630,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
             <button
               onClick={() => setShowCreateTaskModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition"
+              className="bg-action-primary hover:bg-action-primary-hover text-on-action-primary px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition"
             >
               <Plus className="w-4 h-4" />
               Nova Tarefa
@@ -725,7 +725,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700"
+                      className="px-4 py-2 bg-action-primary text-on-action-primary rounded-lg font-semibold hover:bg-action-primary"
                     >
                       Criar Tarefa
                     </button>
@@ -1042,7 +1042,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     {pend.status === 'OPEN' && (
                       <button
                         onClick={() => handleConvertPending(pend.id)}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg text-xs flex items-center gap-1"
+                        className="px-3 py-1.5 bg-action-primary hover:bg-action-primary-hover text-on-action-primary font-semibold rounded-lg text-xs flex items-center gap-1"
                       >
                         <Plus className="w-3.5 h-3.5" /> Gerar Tarefa
                       </button>
@@ -1116,7 +1116,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <div className="w-full bg-graphite-200 rounded-full h-2 overflow-hidden">
                             <div
-                              className={`h-full ${sla.consumedPercent >= 100 ? 'bg-red-600' : sla.consumedPercent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                              className={`h-full ${sla.consumedPercent >= 100 ? 'bg-action-destructive' : sla.consumedPercent >= 80 ? 'bg-amber-500' : 'bg-action-primary'}`}
                               style={{ width: `${Math.min(100, sla.consumedPercent)}%` }}
                             />
                           </div>
@@ -1228,7 +1228,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
               <button
                 onClick={handleRunTestRunner}
                 disabled={testRunning}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-graphite-950 font-bold rounded-lg text-xs font-mono transition flex items-center gap-2"
+                className="px-4 py-2 bg-action-primary hover:bg-action-primary-hover text-graphite-950 font-bold rounded-lg text-xs font-mono transition flex items-center gap-2"
               >
                 <Cpu className="w-4 h-4" />
                 {testRunning ? 'Executando Suíte...' : 'Executar Suíte Completa 3.56'}
