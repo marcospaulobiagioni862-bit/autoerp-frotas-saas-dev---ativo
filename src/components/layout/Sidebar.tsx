@@ -135,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <aside className="w-64 h-full min-h-0 bg-graphite-900 text-graphite-300 flex flex-col border-r border-graphite-800 shrink-0 select-none">
+    <aside className="w-64 h-full min-h-0 bg-structure text-fg-on-structure-muted flex flex-col border-r border-structure-border shrink-0 select-none">
       <div className="p-4 border-b border-graphite-800/80 flex items-center justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
           {branding?.logoUrl && (
@@ -184,12 +184,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       isActive
-                        ? 'bg-action-primary text-on-action-primary font-semibold shadow-md shadow-blue-900/30'
-                        : 'text-graphite-400 hover:text-graphite-100 hover:bg-graphite-800/50'
+                        ? 'relative bg-structure-active text-fg-on-structure font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-full before:bg-accent-on-structure'
+                        : 'text-fg-on-structure-muted hover:text-fg-on-structure hover:bg-structure-hover'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-graphite-400'}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-fg-on-structure' : 'text-fg-on-structure-muted'}`} />
                       <span>{item.label}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
@@ -198,7 +198,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {item.badge}
                         </span>
                       )}
-                      {isActive && <ChevronRight className="w-3 h-3 text-blue-200" />}
+                      {isActive && <ChevronRight className="w-3 h-3 text-fg-on-structure-muted" />}
                     </div>
                   </button>
                 );
@@ -208,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      <div className="shrink-0 p-4 border-t border-graphite-800/80 bg-graphite-950/40 text-[11px] text-graphite-500">
+      <div className="shrink-0 p-4 border-t border-structure-border bg-structure text-[11px] text-fg-on-structure-muted">
         <div className="flex items-center justify-between font-mono">
           <span>Ambiente:</span>
           <span className="text-emerald-400 font-semibold">V2 Operacional</span>
@@ -223,7 +223,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isMobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden flex">
           <div
-            className="fixed inset-0 bg-graphite-950/60 backdrop-blur-xs"
+            className="fixed inset-0 bg-scrim"
             onClick={onCloseMobile}
             aria-hidden="true"
           />

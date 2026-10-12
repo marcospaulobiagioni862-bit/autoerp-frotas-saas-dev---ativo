@@ -65,18 +65,18 @@ export function LoginView({ onLogin }: LoginViewProps) {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-graphite-900 via-graphite-950 to-graphite-900 flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
+    <main className="min-h-screen bg-structure flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
       {/* Luzes ambiente de fundo */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[300px] bg-action-primary/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-72 h-72 bg-action-primary/10 rounded-full blur-2xl pointer-events-none" />
 
       <section
-        className="w-full max-w-md rounded-2xl border border-graphite-800 bg-graphite-900/90 backdrop-blur-xl p-8 sm:p-10 shadow-2xl shadow-black/70 relative z-10 transition-all duration-200"
+        className="w-full max-w-md rounded-md border border-structure-border bg-surface-raised p-8 sm:p-10 shadow-modal relative z-10 transition-all duration-200"
         aria-labelledby="login-title"
       >
         {/* Logo / Header */}
         <div className="mb-7">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-action-primary/10 border border-violet-500/20 text-violet-400 text-xs font-semibold tracking-wider uppercase mb-3.5">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-action-primary/10 border border-border text-accent-text text-xs font-semibold tracking-wider uppercase mb-3.5">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>AutoERP V2</span>
           </div>
@@ -97,7 +97,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   type="button"
                   onClick={handleBackToLogin}
                   disabled={isSubmitting}
-                  className="p-1 -ml-1 text-graphite-400 hover:text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="p-1 -ml-1 text-graphite-400 hover:text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus-visible:outline-focus-ring"
                   aria-label="Voltar para login"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -117,7 +117,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
         {error && (
           <div
             role="alert"
-            className="mb-5 flex items-start gap-2.5 p-3.5 rounded-xl border border-rose-500/30 bg-action-destructive/10 text-rose-300 text-sm animate-fadeIn"
+            className="mb-5 flex items-start gap-2.5 p-3.5 rounded-md border border-rose-500/30 bg-action-destructive/10 text-rose-300 text-sm animate-fadeIn"
           >
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
             <span className="leading-snug">{error}</span>
@@ -147,7 +147,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   placeholder="seu.email@empresa.com.br"
                   required
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
+                  className="w-full rounded-md border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
                 />
               </div>
             </div>
@@ -170,7 +170,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   placeholder="••••••••••••"
                   required
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-10 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
+                  className="w-full rounded-md border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-10 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
                 />
                 <button
                   type="button"
@@ -187,7 +187,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-2 rounded-xl bg-action-primary hover:bg-action-primary-hover active:bg-action-primary text-on-action-primary font-semibold py-2.5 px-4 shadow-lg shadow-violet-600/25 transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
+              className="w-full mt-2 rounded-md bg-action-primary hover:bg-action-primary-hover active:bg-action-primary text-on-action-primary font-semibold py-2.5 px-4 shadow-lg shadow-modal transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
             >
               {isSubmitting ? (
                 <>
@@ -211,10 +211,10 @@ export function LoginView({ onLogin }: LoginViewProps) {
                 type="button"
                 onClick={() => handleSelectCompany(company)}
                 disabled={isSubmitting}
-                className="w-full p-3.5 rounded-xl border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-violet-500/80 text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-50"
+                className="w-full p-3.5 rounded-md border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-border text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus-visible:outline-focus-ring disabled:opacity-50"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 rounded-lg bg-action-primary/10 text-violet-400 border border-violet-500/20 group-hover:bg-action-primary/20 transition-colors shrink-0">
+                  <div className="p-2 rounded-lg bg-action-primary/10 text-accent-text border border-border group-hover:bg-action-primary/20 transition-colors shrink-0">
                     <Building2 className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
@@ -226,7 +226,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-graphite-500 group-hover:text-violet-400 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
+                <ChevronRight className="w-4 h-4 text-graphite-500 group-hover:text-accent-text group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
               </button>
             ))}
 
