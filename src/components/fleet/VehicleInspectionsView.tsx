@@ -6,64 +6,64 @@ import {Button,Card} from '../ui';
 import {VehicleInspectionPanel} from './VehicleInspectionPanel';
 
 export function VehicleInspectionsView(){
-  const[vehicles,setVehicles]=useState<Vehicle[]>([]);
-  const[selectedVehicleId,setSelectedVehicleId]=useState('');
-  const[loading,setLoading]=useState(true);
-  const[error,setError]=useState<string|null>(null);
+ const[vehicles,setVehicles]=useState<Vehicle[]>([]);
+ const[selectedVehicleId,setSelectedVehicleId]=useState('');
+ const[loading,setLoading]=useState(true);
+ const[error,setError]=useState<string|null>(null);
 
-  const load=async()=>{
-    setLoading(true);setError(null);
-    try{
-      const rows=(await VehicleClient.list()).filter(vehicle=>!vehicle.isArchived);
-      setVehicles(rows);
-      setSelectedVehicleId(current=>current&&rows.some(vehicle=>vehicle.id===current)?current:(rows[0]?.id||''));
-    }catch(error){
-      setVehicles([]);
-      setSelectedVehicleId('');
-      setError(error instanceof Error?error.message:'Falha ao carregar veículos para vistoria.');
-    }finally{setLoading(false);}
-  };
+ const load=async()=>{
+ setLoading(true);setError(null);
+ try{
+ const rows=(await VehicleClient.list()).filter(vehicle=>!vehicle.isArchived);
+ setVehicles(rows);
+ setSelectedVehicleId(current=>current&&rows.some(vehicle=>vehicle.id===current)?current:(rows[0]?.id||''));
+ }catch(error){
+ setVehicles([]);
+ setSelectedVehicleId('');
+ setError(error instanceof Error?error.message:'Falha ao carregar veículos para vistoria.');
+ }finally{setLoading(false);}
+ };
 
-  useEffect(()=>{void load();},[]);
-  const selectedVehicle=useMemo(()=>vehicles.find(vehicle=>vehicle.id===selectedVehicleId)||null,[vehicles,selectedVehicleId]);
+ useEffect(()=>{void load();},[]);
+ const selectedVehicle=useMemo(()=>vehicles.find(vehicle=>vehicle.id===selectedVehicleId)||null,[vehicles,selectedVehicleId]);
 
-  return <div className="p-4 sm:p-6 space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Operação • Vistorias</p>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold"><ClipboardCheck className="h-6 w-6"/>Vistorias de Veículos</h1>
-        <p className="mt-1 text-sm text-graphite-500">Check-in/check-out, KM, checklist técnico, pneus, bateria e evidências.</p>
-      </div>
-      <Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="h-4 w-4"/>}>Atualizar</Button>
-    </div>
+ return <div className="p-4 sm:p-6 space-y-4">
+ <div className="flex flex-wrap items-center justify-between gap-3">
+ <div>
+ <p className="text-xs font-semibold uppercase tracking-wider text-fg-secondary">Operação • Vistorias</p>
+ <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold"><ClipboardCheck className="h-6 w-6"/>Vistorias de Veículos</h1>
+ <p className="mt-1 text-sm text-graphite-500">Check-in/check-out, KM, checklist técnico, pneus, bateria e evidências.</p>
+ </div>
+ <Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="h-4 w-4"/>}>Atualizar</Button>
+ </div>
 
-    <Card padding="md">
-      <label className="block text-xs font-semibold text-graphite-500">Veículo para vistoria</label>
-      <select
-        aria-label="Veículo para vistoria"
-        className="mt-2 w-full rounded-lg border border-graphite-300 bg-transparent p-2 text-sm dark:border-graphite-700"
-        value={selectedVehicleId}
-        onChange={event=>setSelectedVehicleId(event.target.value)}
-      >
-        {vehicles.map(vehicle=><option key={vehicle.id} value={vehicle.id}>{vehicle.plate} — {vehicle.brand} {vehicle.model}</option>)}
-      </select>
-      {selectedVehicle&&<div className="mt-3 grid gap-2 text-xs text-graphite-500 sm:grid-cols-3">
-        <span><strong className="text-graphite-700 dark:text-graphite-200">Placa:</strong> {selectedVehicle.plate}</span>
-        <span><strong className="text-graphite-700 dark:text-graphite-200">KM atual:</strong> {selectedVehicle.currentKm.toLocaleString('pt-BR')}</span>
-        <span><strong className="text-graphite-700 dark:text-graphite-200">Status:</strong> {selectedVehicle.status}</span>
-      </div>}
-    </Card>
+ <Card padding="md">
+ <label className="block text-xs font-semibold text-graphite-500">Veículo para vistoria</label>
+ <select
+ aria-label="Veículo para vistoria"
+ className="mt-2 w-full rounded-lg border border-graphite-300 bg-transparent p-2 text-sm dark:border-graphite-700"
+ value={selectedVehicleId}
+ onChange={event=>setSelectedVehicleId(event.target.value)}
+ >
+ {vehicles.map(vehicle=><option key={vehicle.id} value={vehicle.id}>{vehicle.plate} — {vehicle.brand} {vehicle.model}</option>)}
+ </select>
+ {selectedVehicle&&<div className="mt-3 grid gap-2 text-xs text-graphite-500 sm:grid-cols-3">
+ <span><strong className="text-graphite-700 dark:text-graphite-200">Placa:</strong> {selectedVehicle.plate}</span>
+ <span><strong className="text-graphite-700 dark:text-graphite-200">KM atual:</strong> {selectedVehicle.currentKm.toLocaleString('pt-BR')}</span>
+ <span><strong className="text-graphite-700 dark:text-graphite-200">Status:</strong> {selectedVehicle.status}</span>
+ </div>}
+ </Card>
 
-    {error&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
-    {loading?<div className="p-6 text-center text-sm text-graphite-500">Carregando veículos...</div>:selectedVehicle?
-      <VehicleInspectionPanel
-        vehicleId={selectedVehicle.id}
-        currentKm={selectedVehicle.currentKm}
-        vehiclePlate={selectedVehicle.plate}
-        vehicleModel={`${selectedVehicle.brand} ${selectedVehicle.model}`}
-        contractId={selectedVehicle.currentContractId}
-        driverId={selectedVehicle.currentDriverId}
-      />:
-      <div className="rounded-xl border p-6 text-center text-sm text-graphite-500">Nenhum veículo disponível para vistoria.</div>}
-  </div>;
+ {error&&<div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{error}</div>}
+ {loading?<div className="p-6 text-center text-sm text-graphite-500">Carregando veículos...</div>:selectedVehicle?
+ <VehicleInspectionPanel
+ vehicleId={selectedVehicle.id}
+ currentKm={selectedVehicle.currentKm}
+ vehiclePlate={selectedVehicle.plate}
+ vehicleModel={`${selectedVehicle.brand} ${selectedVehicle.model}`}
+ contractId={selectedVehicle.currentContractId}
+ driverId={selectedVehicle.currentDriverId}
+ />:
+ <div className="rounded-xl border p-6 text-center text-sm text-graphite-500">Nenhum veículo disponível para vistoria.</div>}
+ </div>;
 }

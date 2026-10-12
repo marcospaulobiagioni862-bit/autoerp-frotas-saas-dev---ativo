@@ -20,119 +20,119 @@ const FinancialMasterDataView=lazy(()=>import('./FinancialMasterDataView').then(
 type FinanceSubTab = 'overview' | 'receivables' | 'payables' | 'transactions' | 'cashflow' | 'delinquency' | 'reconciliation' | 'cards' | 'periods' | 'dre' | 'settings';
 
 interface FinanceHubViewProps {
-  refreshVersion?: number;
-  initialSubTab?: FinanceSubTab;
-  pendingReceivablesCount?: number;
-  pendingPayablesCount?: number;
-  onOpenReceiptModal: (rec: AccountReceivable) => void;
-  onOpenPaymentModal: (pay: AccountPayable) => void;
-  onOpenTransferModal: () => void;
-  onOpenRenegotiationModal: (recs: AccountReceivable[]) => void;
+ refreshVersion?: number;
+ initialSubTab?: FinanceSubTab;
+ pendingReceivablesCount?: number;
+ pendingPayablesCount?: number;
+ onOpenReceiptModal: (rec: AccountReceivable) => void;
+ onOpenPaymentModal: (pay: AccountPayable) => void;
+ onOpenTransferModal: () => void;
+ onOpenRenegotiationModal: (recs: AccountReceivable[]) => void;
 }
 
 export const FinanceHubView: React.FC<FinanceHubViewProps> = ({
-  initialSubTab = 'overview',
-  refreshVersion = 0,
-  pendingReceivablesCount = 0,
-  pendingPayablesCount = 0,
-  onOpenReceiptModal,
-  onOpenPaymentModal,
-  onOpenTransferModal,
-  onOpenRenegotiationModal,
+ initialSubTab = 'overview',
+ refreshVersion = 0,
+ pendingReceivablesCount = 0,
+ pendingPayablesCount = 0,
+ onOpenReceiptModal,
+ onOpenPaymentModal,
+ onOpenTransferModal,
+ onOpenRenegotiationModal,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<FinanceSubTab>(initialSubTab);
-  const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
+ const [activeSubTab, setActiveSubTab] = useState<FinanceSubTab>(initialSubTab);
+ const navigate = (tab: FinanceSubTab) => { if (tab === activeSubTab || !confirmDiscardUnsavedChanges()) return; clearAllUnsavedChanges(); setActiveSubTab(tab); };
 
-  const subTabs = [
-    { id: 'overview' as const, label: 'Resumo', icon: LayoutDashboard, badge: null, badgeColor: '' },
-    {
-      id: 'receivables' as const,
-      label: 'A Receber',
-      icon: TrendingUp,
-      badge: pendingReceivablesCount > 0 ? pendingReceivablesCount : null,
-      badgeColor: 'bg-success-bg text-success-text  ',
-    },
-    {
-      id: 'payables' as const,
-      label: 'A Pagar',
-      icon: CreditCard,
-      badge: pendingPayablesCount > 0 ? pendingPayablesCount : null,
-      badgeColor: 'bg-warning-bg text-warning-text  ',
-    },
-    { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft, badge: null, badgeColor: '' },
-    { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote, badge: null, badgeColor: '' },
-    { id: 'dre' as const, label: 'DRE', icon: PieChart, badge: null, badgeColor: '' },
-    { id: 'settings' as const, label: 'Configurações', icon: Settings, badge: null, badgeColor: '' },
-  ];
+ const subTabs = [
+ { id: 'overview' as const, label: 'Resumo', icon: LayoutDashboard, badge: null, badgeColor: '' },
+ {
+ id: 'receivables' as const,
+ label: 'A Receber',
+ icon: TrendingUp,
+ badge: pendingReceivablesCount > 0 ? pendingReceivablesCount : null,
+ badgeColor: 'bg-success-bg text-success-text ',
+ },
+ {
+ id: 'payables' as const,
+ label: 'A Pagar',
+ icon: CreditCard,
+ badge: pendingPayablesCount > 0 ? pendingPayablesCount : null,
+ badgeColor: 'bg-warning-bg text-warning-text ',
+ },
+ { id: 'transactions' as const, label: 'Movimentações', icon: ArrowRightLeft, badge: null, badgeColor: '' },
+ { id: 'cashflow' as const, label: 'Fluxo de Caixa', icon: Banknote, badge: null, badgeColor: '' },
+ { id: 'dre' as const, label: 'DRE', icon: PieChart, badge: null, badgeColor: '' },
+ { id: 'settings' as const, label: 'Configurações', icon: Settings, badge: null, badgeColor: '' },
+ ];
 
-  return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-      <PageHeader
-        title="Financeiro"
-        description="Contas a receber e pagar, movimentações, fluxo de caixa e relatórios"
-        breadcrumb="Financeiro"
-      />
+ return (
+ <div className="min-w-0 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+ <PageHeader
+ title="Financeiro"
+ description="Contas a receber e pagar, movimentações, fluxo de caixa e relatórios"
+ breadcrumb="Financeiro"
+ />
 
-      <div className="min-w-0 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
-        {subTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeSubTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => navigate(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isActive
-                  ? 'bg-action-primary text-on-action-primary shadow-xs'
-                  : 'text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-              {tab.badge !== null && tab.badge !== undefined && (
-                <span
-                  className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : tab.badgeColor || 'bg-graphite-200 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+ <div className="min-w-0 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto md:flex-wrap md:overflow-x-visible shadow-xs">
+ {subTabs.map((tab) => {
+ const Icon = tab.icon;
+ const isActive = activeSubTab === tab.id;
+ return (
+ <button
+ key={tab.id}
+ onClick={() => navigate(tab.id)}
+ className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 focus:outline-none focus:ring-2 focus-visible:outline-focus-ring ${
+ isActive
+ ? 'bg-action-primary text-on-action-primary shadow-xs'
+ : 'text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800'
+ }`}
+ >
+ <Icon className="w-4 h-4" />
+ <span>{tab.label}</span>
+ {tab.badge !== null && tab.badge !== undefined && (
+ <span
+ className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+ isActive
+ ? 'bg-white/20 text-white'
+ : tab.badgeColor || 'bg-graphite-200 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300'
+ }`}
+ >
+ {tab.badge}
+ </span>
+ )}
+ </button>
+ );
+ })}
+ </div>
 
-      <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
-        <Suspense fallback={<div className="mt-6 text-sm text-graphite-500">Carregando área financeira...</div>}>
-          <div key={refreshVersion} className="mt-6 min-w-0">
-        {activeSubTab === 'overview' && (
-          <FinanceOverviewView onSelectSubTab={navigate} />
-        )}
-        {activeSubTab === 'receivables' && (
-          <ReceivablesView
-            onOpenReceiptModal={onOpenReceiptModal}
-            onOpenRenegotiationModal={onOpenRenegotiationModal}
-          />
-        )}
-        {activeSubTab === 'payables' && (
-          <PayablesView onOpenPaymentModal={onOpenPaymentModal} />
-        )}
-        {activeSubTab === 'transactions' && (
-          <TransactionsView onOpenTransferModal={onOpenTransferModal} />
-        )}
-        {activeSubTab === 'cashflow' && <CashFlowView />}
-        {activeSubTab === 'delinquency' && <DelinquencyView />}
-        {activeSubTab === 'reconciliation' && <BankReconciliationView />}
-        {activeSubTab === 'cards' && <CreditCardStatementsView />}
-        {activeSubTab === 'periods' && <FinancialPeriodsView />}
-        {activeSubTab === 'dre' && <DREReportView />}
-        {activeSubTab === 'settings' && <FinancialMasterDataView />}
-          </div>
-        </Suspense>
-      </LazyModuleErrorBoundary>
-    </div>
-  );
+ <LazyModuleErrorBoundary resetKey={activeSubTab} onRetry={()=>window.location.reload()}>
+ <Suspense fallback={<div className="mt-6 text-sm text-graphite-500">Carregando área financeira...</div>}>
+ <div key={refreshVersion} className="mt-6 min-w-0">
+ {activeSubTab === 'overview' && (
+ <FinanceOverviewView onSelectSubTab={navigate} />
+ )}
+ {activeSubTab === 'receivables' && (
+ <ReceivablesView
+ onOpenReceiptModal={onOpenReceiptModal}
+ onOpenRenegotiationModal={onOpenRenegotiationModal}
+ />
+ )}
+ {activeSubTab === 'payables' && (
+ <PayablesView onOpenPaymentModal={onOpenPaymentModal} />
+ )}
+ {activeSubTab === 'transactions' && (
+ <TransactionsView onOpenTransferModal={onOpenTransferModal} />
+ )}
+ {activeSubTab === 'cashflow' && <CashFlowView />}
+ {activeSubTab === 'delinquency' && <DelinquencyView />}
+ {activeSubTab === 'reconciliation' && <BankReconciliationView />}
+ {activeSubTab === 'cards' && <CreditCardStatementsView />}
+ {activeSubTab === 'periods' && <FinancialPeriodsView />}
+ {activeSubTab === 'dre' && <DREReportView />}
+ {activeSubTab === 'settings' && <FinancialMasterDataView />}
+ </div>
+ </Suspense>
+ </LazyModuleErrorBoundary>
+ </div>
+ );
 };

@@ -6,283 +6,283 @@ import { FinancialPeriodStatus } from '../../types/enums';
 import { useAuth } from '../../hooks/useAuth';
 
 function initialMonthRange(): { start: string; end: string } {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const monthText = String(month + 1).padStart(2, '0');
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return {
-    start: `${year}-${monthText}-01`,
-    end: `${year}-${monthText}-${String(lastDay).padStart(2, '0')}`,
-  };
+ const now = new Date();
+ const year = now.getFullYear();
+ const month = now.getMonth();
+ const monthText = String(month + 1).padStart(2, '0');
+ const lastDay = new Date(year, month + 1, 0).getDate();
+ return {
+ start: `${year}-${monthText}-01`,
+ end: `${year}-${monthText}-${String(lastDay).padStart(2, '0')}`,
+ };
 }
 
 function formatTimestamp(value?: string): string {
-  if (!value) return '—';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('pt-BR');
+ if (!value) return '—';
+ const parsed = new Date(value);
+ return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('pt-BR');
 }
 
 export const FinancialPeriodsView: React.FC = () => {
-  const { user } = useAuth();
-  const initialRange = useMemo(initialMonthRange, []);
-  const [periods, setPeriods] = useState<FinancialPeriod[]>([]);
-  const [startDate, setStartDate] = useState(initialRange.start);
-  const [endDate, setEndDate] = useState(initialRange.end);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [reopenPeriodId, setReopenPeriodId] = useState<string | null>(null);
-  const [reopenReason, setReopenReason] = useState('');
+ const { user } = useAuth();
+ const initialRange = useMemo(initialMonthRange, []);
+ const [periods, setPeriods] = useState<FinancialPeriod[]>([]);
+ const [startDate, setStartDate] = useState(initialRange.start);
+ const [endDate, setEndDate] = useState(initialRange.end);
+ const [loading, setLoading] = useState(true);
+ const [submitting, setSubmitting] = useState(false);
+ const [error, setError] = useState('');
+ const [message, setMessage] = useState('');
+ const [reopenPeriodId, setReopenPeriodId] = useState<string | null>(null);
+ const [reopenReason, setReopenReason] = useState('');
 
-  const role = String(user?.role || '').toUpperCase();
-  const canClose = role === 'ADMIN' || role === 'MANAGER' || role === 'FINANCIAL_MANAGER';
-  const canReopen = role === 'ADMIN';
+ const role = String(user?.role || '').toUpperCase();
+ const canClose = role === 'ADMIN' || role === 'MANAGER' || role === 'FINANCIAL_MANAGER';
+ const canReopen = role === 'ADMIN';
 
-  const loadPeriods = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setPeriods(await FinancePeriodClient.list());
-    } catch (err) {
-      const text = err instanceof FinancePeriodApiError ? err.message : 'Não foi possível carregar os períodos financeiros.';
-      setError(text);
-      setPeriods([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+ const loadPeriods = useCallback(async () => {
+ setLoading(true);
+ setError('');
+ try {
+ setPeriods(await FinancePeriodClient.list());
+ } catch (err) {
+ const text = err instanceof FinancePeriodApiError ? err.message : 'Não foi possível carregar os períodos financeiros.';
+ setError(text);
+ setPeriods([]);
+ } finally {
+ setLoading(false);
+ }
+ }, []);
 
-  useEffect(() => {
-    void loadPeriods();
-  }, [loadPeriods, user?.companyId]);
+ useEffect(() => {
+ void loadPeriods();
+ }, [loadPeriods, user?.companyId]);
 
-  const closePeriod = async () => {
-    setError('');
-    setMessage('');
-    if (!startDate || !endDate || startDate > endDate) {
-      setError('Informe um intervalo de datas válido para o fechamento.');
-      return;
-    }
+ const closePeriod = async () => {
+ setError('');
+ setMessage('');
+ if (!startDate || !endDate || startDate > endDate) {
+ setError('Informe um intervalo de datas válido para o fechamento.');
+ return;
+ }
 
-    setSubmitting(true);
-    try {
-      const period = await FinancePeriodClient.close(startDate, endDate);
-      setMessage(`Período ${period.startDate} a ${period.endDate} fechado com sucesso.`);
-      await loadPeriods();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao fechar o período financeiro.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+ setSubmitting(true);
+ try {
+ const period = await FinancePeriodClient.close(startDate, endDate);
+ setMessage(`Período ${period.startDate} a ${period.endDate} fechado com sucesso.`);
+ await loadPeriods();
+ } catch (err) {
+ setError(err instanceof Error ? err.message : 'Falha ao fechar o período financeiro.');
+ } finally {
+ setSubmitting(false);
+ }
+ };
 
-  const reopenPeriod = async (periodId: string) => {
-    const reason = reopenReason.trim();
-    setError('');
-    setMessage('');
-    if (!reason) {
-      setError('Informe o motivo da reabertura.');
-      return;
-    }
+ const reopenPeriod = async (periodId: string) => {
+ const reason = reopenReason.trim();
+ setError('');
+ setMessage('');
+ if (!reason) {
+ setError('Informe o motivo da reabertura.');
+ return;
+ }
 
-    setSubmitting(true);
-    try {
-      const period = await FinancePeriodClient.reopen(periodId, reason);
-      setMessage(`Período ${period.startDate} a ${period.endDate} reaberto com sucesso.`);
-      setReopenPeriodId(null);
-      setReopenReason('');
-      await loadPeriods();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao reabrir o período financeiro.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+ setSubmitting(true);
+ try {
+ const period = await FinancePeriodClient.reopen(periodId, reason);
+ setMessage(`Período ${period.startDate} a ${period.endDate} reaberto com sucesso.`);
+ setReopenPeriodId(null);
+ setReopenReason('');
+ await loadPeriods();
+ } catch (err) {
+ setError(err instanceof Error ? err.message : 'Falha ao reabrir o período financeiro.');
+ } finally {
+ setSubmitting(false);
+ }
+ };
 
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100">
-            <CalendarRange className="h-5 w-5 text-info-icon" />
-            Períodos Financeiros
-          </h2>
-          <p className="mt-1 max-w-3xl text-xs text-graphite-500">
-            Feche competências para impedir movimentações retroativas. Reaberturas exigem autorização administrativa e motivo auditável.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadPeriods()}
-          disabled={loading || submitting}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-50 disabled:opacity-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200 dark:hover:bg-graphite-800"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </button>
-      </div>
+ return (
+ <div className="space-y-5">
+ <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+ <div>
+ <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100">
+ <CalendarRange className="h-5 w-5 text-info-icon" />
+ Períodos Financeiros
+ </h2>
+ <p className="mt-1 max-w-3xl text-xs text-graphite-500">
+ Feche competências para impedir movimentações retroativas. Reaberturas exigem autorização administrativa e motivo auditável.
+ </p>
+ </div>
+ <button
+ type="button"
+ onClick={() => void loadPeriods()}
+ disabled={loading || submitting}
+ className="inline-flex items-center justify-center gap-2 rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-50 disabled:opacity-50 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200 dark:hover:bg-graphite-800"
+ >
+ <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+ Atualizar
+ </button>
+ </div>
 
-      {(error || message) && (
-        <div
-          className={`rounded-xl border px-4 py-3 text-xs font-medium ${
-            error
-              ? 'border-error-border bg-error-bg text-error-text   '
-              : 'border-success-border bg-success-bg text-success-text   '
-          }`}
-        >
-          {error || message}
-        </div>
-      )}
+ {(error || message) && (
+ <div
+ className={`rounded-xl border px-4 py-3 text-xs font-medium ${
+ error
+ ? 'border-error-border bg-error-bg text-error-text '
+ : 'border-success-border bg-success-bg text-success-text '
+ }`}
+ >
+ {error || message}
+ </div>
+ )}
 
-      <div className="rounded-xl border border-graphite-200 bg-white p-4 shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
-        <div className="mb-4 flex items-center gap-2">
-          <LockKeyhole className="h-4 w-4 text-warning-icon" />
-          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Fechar período</h3>
-        </div>
+ <div className="rounded-xl border border-graphite-200 bg-white p-4 shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
+ <div className="mb-4 flex items-center gap-2">
+ <LockKeyhole className="h-4 w-4 text-warning-icon" />
+ <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Fechar período</h3>
+ </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-          <label className="space-y-1">
-            <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data inicial</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              disabled={!canClose || submitting}
-              className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data final</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-              disabled={!canClose || submitting}
-              className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void closePeriod()}
-            disabled={!canClose || submitting}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <LockKeyhole className="h-4 w-4" />
-            Fechar período
-          </button>
-        </div>
+ <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+ <label className="space-y-1">
+ <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data inicial</span>
+ <input
+ type="date"
+ value={startDate}
+ onChange={(event) => setStartDate(event.target.value)}
+ disabled={!canClose || submitting}
+ className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus-visible:outline-focus-ring disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
+ />
+ </label>
+ <label className="space-y-1">
+ <span className="text-xs font-semibold text-graphite-600 dark:text-graphite-400">Data final</span>
+ <input
+ type="date"
+ value={endDate}
+ onChange={(event) => setEndDate(event.target.value)}
+ disabled={!canClose || submitting}
+ className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus-visible:outline-focus-ring disabled:opacity-60 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
+ />
+ </label>
+ <button
+ type="button"
+ onClick={() => void closePeriod()}
+ disabled={!canClose || submitting}
+ className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-warning-bg px-4 py-2 text-xs font-bold text-white hover:bg-warning-bg disabled:cursor-not-allowed disabled:opacity-50"
+ >
+ <LockKeyhole className="h-4 w-4" />
+ Fechar período
+ </button>
+ </div>
 
-        {!canClose && (
-          <p className="mt-3 flex items-center gap-2 text-xs text-graphite-500">
-            <AlertTriangle className="h-4 w-4" />
-            Seu perfil possui acesso somente à consulta de períodos financeiros.
-          </p>
-        )}
-      </div>
+ {!canClose && (
+ <p className="mt-3 flex items-center gap-2 text-xs text-graphite-500">
+ <AlertTriangle className="h-4 w-4" />
+ Seu perfil possui acesso somente à consulta de períodos financeiros.
+ </p>
+ )}
+ </div>
 
-      <div className="overflow-hidden rounded-xl border border-graphite-200 bg-white shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
-        <div className="border-b border-graphite-100 px-4 py-3 dark:border-graphite-800">
-          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Histórico de períodos</h3>
-        </div>
+ <div className="overflow-hidden rounded-xl border border-graphite-200 bg-white shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
+ <div className="border-b border-graphite-100 px-4 py-3 dark:border-graphite-800">
+ <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Histórico de períodos</h3>
+ </div>
 
-        {loading ? (
-          <div className="px-4 py-10 text-center text-sm text-graphite-500">Carregando períodos...</div>
-        ) : periods.length === 0 ? (
-          <div className="px-4 py-10 text-center text-sm text-graphite-500">Nenhum período financeiro cadastrado.</div>
-        ) : (
-          <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
-            {periods.map((period) => {
-              const closed = period.status === FinancialPeriodStatus.CLOSED;
-              const reopening = reopenPeriodId === period.id;
-              return (
-                <div key={period.id} className="p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-sm font-bold text-graphite-900 dark:text-graphite-100">
-                          {period.startDate} → {period.endDate}
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-                            closed
-                              ? 'bg-error-bg text-error-text  '
-                              : 'bg-success-bg text-success-text  '
-                          }`}
-                        >
-                          {closed ? 'Fechado' : 'Aberto'}
-                        </span>
-                      </div>
-                      <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-[11px] text-graphite-500 sm:grid-cols-2">
-                        <span>Fechado em: {formatTimestamp(period.closedAt)}</span>
-                        <span>Responsável: {period.closedBy || '—'}</span>
-                        <span>Reaberto em: {formatTimestamp(period.reopenedAt)}</span>
-                        <span>Motivo: {period.reopenReason || '—'}</span>
-                      </div>
-                    </div>
+ {loading ? (
+ <div className="px-4 py-10 text-center text-sm text-graphite-500">Carregando períodos...</div>
+ ) : periods.length === 0 ? (
+ <div className="px-4 py-10 text-center text-sm text-graphite-500">Nenhum período financeiro cadastrado.</div>
+ ) : (
+ <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
+ {periods.map((period) => {
+ const closed = period.status === FinancialPeriodStatus.CLOSED;
+ const reopening = reopenPeriodId === period.id;
+ return (
+ <div key={period.id} className="p-4">
+ <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+ <div className="min-w-0">
+ <div className="flex flex-wrap items-center gap-2">
+ <span className="font-mono text-sm font-bold text-graphite-900 dark:text-graphite-100">
+ {period.startDate} → {period.endDate}
+ </span>
+ <span
+ className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+ closed
+ ? 'bg-error-bg text-error-text '
+ : 'bg-success-bg text-success-text '
+ }`}
+ >
+ {closed ? 'Fechado' : 'Aberto'}
+ </span>
+ </div>
+ <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-[11px] text-graphite-500 sm:grid-cols-2">
+ <span>Fechado em: {formatTimestamp(period.closedAt)}</span>
+ <span>Responsável: {period.closedBy || '—'}</span>
+ <span>Reaberto em: {formatTimestamp(period.reopenedAt)}</span>
+ <span>Motivo: {period.reopenReason || '—'}</span>
+ </div>
+ </div>
 
-                    {closed && canReopen && !reopening && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReopenPeriodId(period.id);
-                          setReopenReason('');
-                          setError('');
-                          setMessage('');
-                        }}
-                        disabled={submitting}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-xs font-bold text-info-text hover:bg-info-bg disabled:opacity-50   "
-                      >
-                        <UnlockKeyhole className="h-4 w-4" />
-                        Reabrir
-                      </button>
-                    )}
-                  </div>
+ {closed && canReopen && !reopening && (
+ <button
+ type="button"
+ onClick={() => {
+ setReopenPeriodId(period.id);
+ setReopenReason('');
+ setError('');
+ setMessage('');
+ }}
+ disabled={submitting}
+ className="inline-flex items-center justify-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-xs font-bold text-info-text hover:bg-info-bg disabled:opacity-50 "
+ >
+ <UnlockKeyhole className="h-4 w-4" />
+ Reabrir
+ </button>
+ )}
+ </div>
 
-                  {reopening && (
-                    <div className="mt-4 rounded-lg border border-blue-100 bg-info-bg p-3  ">
-                      <label className="block space-y-1">
-                        <span className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">Motivo obrigatório da reabertura</span>
-                        <textarea
-                          value={reopenReason}
-                          onChange={(event) => setReopenReason(event.target.value)}
-                          maxLength={1000}
-                          rows={3}
-                          className="w-full resize-y rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus:ring-blue-500 dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
-                          placeholder="Descreva por que este período precisa ser reaberto..."
-                        />
-                      </label>
-                      <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReopenPeriodId(null);
-                            setReopenReason('');
-                          }}
-                          disabled={submitting}
-                          className="rounded-lg border border-graphite-200 px-3 py-2 text-xs font-semibold text-graphite-600 hover:bg-white disabled:opacity-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-900"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void reopenPeriod(period.id)}
-                          disabled={submitting || !reopenReason.trim()}
-                          className="inline-flex items-center gap-2 rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-on-action-primary hover:bg-action-primary disabled:opacity-50"
-                        >
-                          <UnlockKeyhole className="h-4 w-4" />
-                          Confirmar reabertura
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+ {reopening && (
+ <div className="mt-4 rounded-lg border border-info-border bg-info-bg p-3 ">
+ <label className="block space-y-1">
+ <span className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">Motivo obrigatório da reabertura</span>
+ <textarea
+ value={reopenReason}
+ onChange={(event) => setReopenReason(event.target.value)}
+ maxLength={1000}
+ rows={3}
+ className="w-full resize-y rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm text-graphite-900 outline-none focus:ring-2 focus-visible:outline-focus-ring dark:border-graphite-700 dark:bg-graphite-950 dark:text-graphite-100"
+ placeholder="Descreva por que este período precisa ser reaberto..."
+ />
+ </label>
+ <div className="mt-3 flex flex-wrap justify-end gap-2">
+ <button
+ type="button"
+ onClick={() => {
+ setReopenPeriodId(null);
+ setReopenReason('');
+ }}
+ disabled={submitting}
+ className="rounded-lg border border-graphite-200 px-3 py-2 text-xs font-semibold text-graphite-600 hover:bg-white disabled:opacity-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-900"
+ >
+ Cancelar
+ </button>
+ <button
+ type="button"
+ onClick={() => void reopenPeriod(period.id)}
+ disabled={submitting || !reopenReason.trim()}
+ className="inline-flex items-center gap-2 rounded-lg bg-action-primary px-3 py-2 text-xs font-bold text-on-action-primary hover:bg-action-primary disabled:opacity-50"
+ >
+ <UnlockKeyhole className="h-4 w-4" />
+ Confirmar reabertura
+ </button>
+ </div>
+ </div>
+ )}
+ </div>
+ );
+ })}
+ </div>
+ )}
+ </div>
+ </div>
+ );
 };

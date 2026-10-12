@@ -8,115 +8,115 @@ import { ModalContainer } from '../ui/ModalContainer';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface VehicleSaleModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  vehicle: Vehicle | null;
+ isOpen: boolean;
+ onClose: () => void;
+ onSuccess: () => void;
+ vehicle: Vehicle | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onClose, onSuccess, vehicle }) => {
-  if (!vehicle) return null;
+ if (!vehicle) return null;
 
-  const [saleDate, setSaleDate] = useState(today());
-  const [reason, setReason] = useState('Venda');
-  const [disposalType, setDisposalType] = useState('VENDA');
-  const [saleValue, setSaleValue] = useState<number>(vehicle.currentValue);
-  const [finalKm, setFinalKm] = useState<number>(vehicle.currentKm);
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerDocument, setBuyerDocument] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
-  const [buyerEmail, setBuyerEmail] = useState('');
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+ const [saleDate, setSaleDate] = useState(today());
+ const [reason, setReason] = useState('Venda');
+ const [disposalType, setDisposalType] = useState('VENDA');
+ const [saleValue, setSaleValue] = useState<number>(vehicle.currentValue);
+ const [finalKm, setFinalKm] = useState<number>(vehicle.currentKm);
+ const [buyerName, setBuyerName] = useState('');
+ const [buyerDocument, setBuyerDocument] = useState('');
+ const [buyerPhone, setBuyerPhone] = useState('');
+ const [buyerEmail, setBuyerEmail] = useState('');
+ const [notes, setNotes] = useState('');
+ const [loading, setLoading] = useState(false);
+ const [error, setError] = useState<string | null>(null);
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    if (!buyerName.trim()) {
-      setError('Informe o comprador.');
-      return;
-    }
-    if (!buyerDocument.trim()) {
-      setError('Informe o documento do comprador.');
-      return;
-    }
-    if (finalKm < vehicle.currentKm) {
-      setError(`O KM final não pode ser menor que ${vehicle.currentKm.toLocaleString('pt-BR')} KM.`);
-      return;
-    }
-    setLoading(true);
-    try {
-      await VehicleClient.markSold(vehicle.id, {
-        saleDate,
-        reason: reason.trim(),
-        disposalType: disposalType.trim(),
-        saleValue: Number(saleValue),
-        finalKm: Number(finalKm),
-        notes: notes.trim(),
-        buyerName: buyerName.trim(),
-        buyerDocument: buyerDocument.trim(),
-        buyerPhone: buyerPhone.trim() || undefined,
-        buyerEmail: buyerEmail.trim() || undefined,
-      });
-      await onSuccess();
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Não foi possível registrar a venda do veículo.');
-    } finally {
-      setLoading(false);
-    }
-  };
+ const submit = async (event: React.FormEvent) => {
+ event.preventDefault();
+ setError(null);
+ if (!buyerName.trim()) {
+ setError('Informe o comprador.');
+ return;
+ }
+ if (!buyerDocument.trim()) {
+ setError('Informe o documento do comprador.');
+ return;
+ }
+ if (finalKm < vehicle.currentKm) {
+ setError(`O KM final não pode ser menor que ${vehicle.currentKm.toLocaleString('pt-BR')} KM.`);
+ return;
+ }
+ setLoading(true);
+ try {
+ await VehicleClient.markSold(vehicle.id, {
+ saleDate,
+ reason: reason.trim(),
+ disposalType: disposalType.trim(),
+ saleValue: Number(saleValue),
+ finalKm: Number(finalKm),
+ notes: notes.trim(),
+ buyerName: buyerName.trim(),
+ buyerDocument: buyerDocument.trim(),
+ buyerPhone: buyerPhone.trim() || undefined,
+ buyerEmail: buyerEmail.trim() || undefined,
+ });
+ await onSuccess();
+ onClose();
+ } catch (err: any) {
+ setError(err.message || 'Não foi possível registrar a venda do veículo.');
+ } finally {
+ setLoading(false);
+ }
+ };
 
-  return (
-    <ModalContainer
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Marcar veículo como vendido — ${vehicle.plate}`}
-      subtitle="Esta ação preserva o histórico. Contrato ativo ou manutenção bloqueante impedem a venda."
-      maxWidth="lg"
-    >
-      <form onSubmit={submit} className="space-y-4">
-        {error && (
-          <div className="p-3 bg-error-bg  border border-error-border  rounded-lg flex items-center gap-2 text-xs text-error-text ">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+ return (
+ <ModalContainer
+ isOpen={isOpen}
+ onClose={onClose}
+ title={`Marcar veículo como vendido — ${vehicle.plate}`}
+ subtitle="Esta ação preserva o histórico. Contrato ativo ou manutenção bloqueante impedem a venda."
+ maxWidth="lg"
+ >
+ <form onSubmit={submit} className="space-y-4">
+ {error && (
+ <div className="p-3 bg-error-bg border border-error-border rounded-lg flex items-center gap-2 text-xs text-error-text ">
+ <AlertCircle className="w-4 h-4 shrink-0" />
+ <span>{error}</span>
+ </div>
+ )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <Input label="Data da venda *" type="date" required value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
-          <Input label="Valor da venda *" type="number" min={0} step="0.01" required value={saleValue} onChange={(e) => setSaleValue(Number(e.target.value))} />
-          <Input label="KM final *" type="number" min={vehicle.currentKm} required value={finalKm} onChange={(e) => setFinalKm(Number(e.target.value))} />
-          <Input label="Tipo de baixa/alienação *" required value={disposalType} onChange={(e) => setDisposalType(e.target.value)} />
-          <Input label="Motivo *" required value={reason} onChange={(e) => setReason(e.target.value)} />
-          <Input label="Comprador *" required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
-          <Input label="Documento do comprador *" required value={buyerDocument} onChange={(e) => setBuyerDocument(e.target.value)} />
-          <Input label="Telefone do comprador" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="(00) 00000-0000" />
-          <Input label="E-mail do comprador" type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="comprador@exemplo.com" />
-        </div>
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+ <Input label="Data da venda *" type="date" required value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
+ <Input label="Valor da venda *" type="number" min={0} step="0.01" required value={saleValue} onChange={(e) => setSaleValue(Number(e.target.value))} />
+ <Input label="KM final *" type="number" min={vehicle.currentKm} required value={finalKm} onChange={(e) => setFinalKm(Number(e.target.value))} />
+ <Input label="Tipo de baixa/alienação *" required value={disposalType} onChange={(e) => setDisposalType(e.target.value)} />
+ <Input label="Motivo *" required value={reason} onChange={(e) => setReason(e.target.value)} />
+ <Input label="Comprador *" required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
+ <Input label="Documento do comprador *" required value={buyerDocument} onChange={(e) => setBuyerDocument(e.target.value)} />
+ <Input label="Telefone do comprador" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="(00) 00000-0000" />
+ <Input label="E-mail do comprador" type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="comprador@exemplo.com" />
+ </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Observação *</label>
-          <textarea
-            required
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Registre as informações relevantes da venda."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Observação *</label>
+ <textarea
+ required
+ rows={3}
+ value={notes}
+ onChange={(e) => setNotes(e.target.value)}
+ placeholder="Registre as informações relevantes da venda."
+ className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus-visible:outline-focus-ring"
+ />
+ </div>
 
-        <p className="text-xs text-graphite-500">O histórico, documentos, contratos, manutenções e registros financeiros vinculados ao veículo não serão apagados.</p>
+ <p className="text-xs text-graphite-500">O histórico, documentos, contratos, manutenções e registros financeiros vinculados ao veículo não serão apagados.</p>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
-          <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
-          <Button type="submit" variant="primary" isLoading={loading}>Confirmar venda</Button>
-        </div>
-      </form>
-    </ModalContainer>
-  );
+ <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
+ <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
+ <Button type="submit" variant="primary" isLoading={loading}>Confirmar venda</Button>
+ </div>
+ </form>
+ </ModalContainer>
+ );
 };

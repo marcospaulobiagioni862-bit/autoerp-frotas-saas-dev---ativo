@@ -6,408 +6,408 @@ import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCur
 import { AccountPayable } from '../../types/entities';
 import { X, CreditCard, AlertCircle } from 'lucide-react';
 import {
-  FinanceSettlementClient,
-  SettlementAccountOption,
-  SettlementPaymentMethodOption,
-  createSettlementIdempotencyKey,
+ FinanceSettlementClient,
+ SettlementAccountOption,
+ SettlementPaymentMethodOption,
+ createSettlementIdempotencyKey,
 } from '../../api/financeSettlementClient';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  payable: AccountPayable | null;
-  onSuccess: () => void;
+ isOpen: boolean;
+ onClose: () => void;
+ payable: AccountPayable | null;
+ onSuccess: () => void;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, payable, onSuccess }) => {
-  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
-  const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
-  const [selectedMethodId, setSelectedMethodId] = useState<string>('');
-  const [amount, setAmount] = useState<string>('');
-  const [interestAmount, setInterestAmount] = useState<string>('0,00');
-  const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
-  const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
-  const [fineAmount, setFineAmount] = useState('0,00');
-  const [discountAmount, setDiscountAmount] = useState('0,00');
-  const amountEdited = useRef(false);
-  const [notes, setNotes] = useState<string>('');
-  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const submittingRef = useRef(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+ const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
+ const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
+ const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+ const [selectedMethodId, setSelectedMethodId] = useState<string>('');
+ const [amount, setAmount] = useState<string>('');
+ const [interestAmount, setInterestAmount] = useState<string>('0,00');
+ const [additionalAmount, setAdditionalAmount] = useState<string>('0,00');
+ const [paymentDate, setPaymentDate] = useState<string>(() => settlementLocalDate());
+ const [fineAmount, setFineAmount] = useState('0,00');
+ const [discountAmount, setDiscountAmount] = useState('0,00');
+ const amountEdited = useRef(false);
+ const [notes, setNotes] = useState<string>('');
+ const [idempotencyKey, setIdempotencyKey] = useState<string>(() => createSettlementIdempotencyKey());
+ const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+ const submittingRef = useRef(false);
+ const [confirmOpen, setConfirmOpen] = useState(false);
+ const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (payable) {
-      amountEdited.current = false;
-      setInterestAmount('0,00');
-      setAdditionalAmount('0,00');
-      setFineAmount('0,00');
-      setDiscountAmount('0,00');
-      setAmount(payable.balanceAmount.toFixed(2).replace('.', ','));
-      setIdempotencyKey(createSettlementIdempotencyKey());
-      setError(null);
-      loadOptions();
-    }
-  }, [payable]);
+ useEffect(() => {
+ if (payable) {
+ amountEdited.current = false;
+ setInterestAmount('0,00');
+ setAdditionalAmount('0,00');
+ setFineAmount('0,00');
+ setDiscountAmount('0,00');
+ setAmount(payable.balanceAmount.toFixed(2).replace('.', ','));
+ setIdempotencyKey(createSettlementIdempotencyKey());
+ setError(null);
+ loadOptions();
+ }
+ }, [payable]);
 
-  const rotateCommandKey = () => setIdempotencyKey(createSettlementIdempotencyKey());
+ const rotateCommandKey = () => setIdempotencyKey(createSettlementIdempotencyKey());
 
-  const loadOptions = async () => {
-    try {
-      const options = await FinanceSettlementClient.getOptions();
-      setAccounts(options.accounts);
-      setMethods(options.paymentMethods);
-      if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
-      if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
-    } catch (err) {
-      setAccounts([]);
-      setMethods([]);
-      setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
-    }
-  };
+ const loadOptions = async () => {
+ try {
+ const options = await FinanceSettlementClient.getOptions();
+ setAccounts(options.accounts);
+ setMethods(options.paymentMethods);
+ if (options.accounts.length > 0) setSelectedAccountId(options.accounts[0].id);
+ if (options.paymentMethods.length > 0) setSelectedMethodId(options.paymentMethods[0].id);
+ } catch (err) {
+ setAccounts([]);
+ setMethods([]);
+ setError(err instanceof Error ? err.message : 'Erro ao carregar opções financeiras.');
+ }
+ };
 
-  const interestValue = parseCurrencyDraft(interestAmount);
-  const additionalValue = parseCurrencyDraft(additionalAmount);
-  const fineValue = parseCurrencyDraft(fineAmount);
-  const discountValue = parseCurrencyDraft(discountAmount);
-  const settlementTotal = roundCurrency((payable?.balanceAmount ?? 0) + interestValue + additionalValue + fineValue - discountValue);
-  const paymentValue = parseCurrencyDraft(amount);
-  const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
-  const adjustmentTotal = roundCurrency(interestValue + additionalValue + fineValue - discountValue);
-  const projectedBalance = Math.max(0, roundCurrency(settlementTotal - safePaymentValue));
-  useEffect(() => {
-    if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
-  }, [settlementTotal, payable]);
+ const interestValue = parseCurrencyDraft(interestAmount);
+ const additionalValue = parseCurrencyDraft(additionalAmount);
+ const fineValue = parseCurrencyDraft(fineAmount);
+ const discountValue = parseCurrencyDraft(discountAmount);
+ const settlementTotal = roundCurrency((payable?.balanceAmount ?? 0) + interestValue + additionalValue + fineValue - discountValue);
+ const paymentValue = parseCurrencyDraft(amount);
+ const safePaymentValue = Number.isFinite(paymentValue) ? paymentValue : 0;
+ const adjustmentTotal = roundCurrency(interestValue + additionalValue + fineValue - discountValue);
+ const projectedBalance = Math.max(0, roundCurrency(settlementTotal - safePaymentValue));
+ useEffect(() => {
+ if (!amountEdited.current && payable) setAmount(settlementTotal.toFixed(2).replace('.', ','));
+ }, [settlementTotal, payable]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen && !submittingRef.current && !confirmOpen) onClose();
-    };
-    if (isOpen) window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, confirmOpen, onClose]);
+ useEffect(() => {
+ const handleKeyDown = (event: KeyboardEvent) => {
+ if (event.key === 'Escape' && isOpen && !submittingRef.current && !confirmOpen) onClose();
+ };
+ if (isOpen) window.addEventListener('keydown', handleKeyDown);
+ return () => window.removeEventListener('keydown', handleKeyDown);
+ }, [isOpen, confirmOpen, onClose]);
 
-  if (!isOpen || !payable) return null;
+ if (!isOpen || !payable) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const paymentAmount = parseCurrencyDraft(amount);
-    if (submittingRef.current || confirmOpen) return;
-    if (!Number.isFinite(interestValue)) { setError('Juros inválidos'); return; }
-    if (!Number.isFinite(fineValue) || !Number.isFinite(discountValue) || settlementTotal < 0) { setError('Confira multa e desconto: o total não pode ser negativo.'); return; }
-    if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
-    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-      setError('O valor a pagar deve ser maior que zero.');
-      return;
-    }
-    if (paymentAmount > settlementTotal) {
-      setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o total previsto (${formatCurrencyBRL(settlementTotal)}).`);
-      return;
-    }
-    if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
-        !methods.some(method => method.id === selectedMethodId && method.active)) {
-      setError('Selecione uma conta financeira e um meio de pagamento ativos.');
-      return;
-    }
-    setError(null);
-    setConfirmOpen(true);
-  };
+ const handleSubmit = async (e: React.FormEvent) => {
+ e.preventDefault();
+ const paymentAmount = parseCurrencyDraft(amount);
+ if (submittingRef.current || confirmOpen) return;
+ if (!Number.isFinite(interestValue)) { setError('Juros inválidos'); return; }
+ if (!Number.isFinite(fineValue) || !Number.isFinite(discountValue) || settlementTotal < 0) { setError('Confira multa e desconto: o total não pode ser negativo.'); return; }
+ if (!Number.isFinite(additionalValue)) { setError('Acréscimo inválido'); return; }
+ if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+ setError('O valor a pagar deve ser maior que zero.');
+ return;
+ }
+ if (paymentAmount > settlementTotal) {
+ setError(`O valor inserido (${formatCurrencyBRL(paymentAmount)}) é maior que o total previsto (${formatCurrencyBRL(settlementTotal)}).`);
+ return;
+ }
+ if (!accounts.some(account => account.id === selectedAccountId && account.status === 'ACTIVE') ||
+ !methods.some(method => method.id === selectedMethodId && method.active)) {
+ setError('Selecione uma conta financeira e um meio de pagamento ativos.');
+ return;
+ }
+ setError(null);
+ setConfirmOpen(true);
+ };
 
-  const confirmSettlement = async () => {
-    if (submittingRef.current || !confirmOpen) return;
-    submittingRef.current = true;
-    setIsSubmitting(true);
-    const paymentAmount = parseCurrencyDraft(amount);
-    try {
-      setError(null);
+ const confirmSettlement = async () => {
+ if (submittingRef.current || !confirmOpen) return;
+ submittingRef.current = true;
+ setIsSubmitting(true);
+ const paymentAmount = parseCurrencyDraft(amount);
+ try {
+ setError(null);
 
-      await FinanceSettlementClient.registerPayment(payable.id, {
-        financialAccountId: selectedAccountId,
-        paymentAmount,
-        settleRemainingBalance: paymentAmount >= settlementTotal,
-        interestAmount: interestValue,
-        additionalAmount: additionalValue,
-        fineAmount: fineValue,
-        discountAmount: discountValue,
-        paymentDate,
-        paymentMethodId: selectedMethodId,
-        description: notes || `Pagamento • ${payable.description}${payable.installmentNumber ? ` • Parcela ${payable.installmentNumber}/${payable.totalInstallments}` : ''}`,
-        idempotencyKey,
-      });
+ await FinanceSettlementClient.registerPayment(payable.id, {
+ financialAccountId: selectedAccountId,
+ paymentAmount,
+ settleRemainingBalance: paymentAmount >= settlementTotal,
+ interestAmount: interestValue,
+ additionalAmount: additionalValue,
+ fineAmount: fineValue,
+ discountAmount: discountValue,
+ paymentDate,
+ paymentMethodId: selectedMethodId,
+ description: notes || `Pagamento • ${payable.description}${payable.installmentNumber ? ` • Parcela ${payable.installmentNumber}/${payable.totalInstallments}` : ''}`,
+ idempotencyKey,
+ });
 
-    } catch (err: any) {
-      submittingRef.current = false;
-      setConfirmOpen(false);
-      // Keep the key after an ambiguous failure so an unchanged retry cannot
-      // debit the financial account twice.
-      setError(err.message || 'Erro ao registrar o pagamento.');
-      return;
-    } finally {
-      setIsSubmitting(false);
-    }
-    // A read-model refresh failure must never turn a committed settlement into a retry.
-    onSuccess();
-    onClose();
-  };
+ } catch (err: any) {
+ submittingRef.current = false;
+ setConfirmOpen(false);
+ // Keep the key after an ambiguous failure so an unchanged retry cannot
+ // debit the financial account twice.
+ setError(err.message || 'Erro ao registrar o pagamento.');
+ return;
+ } finally {
+ setIsSubmitting(false);
+ }
+ // A read-model refresh failure must never turn a committed settlement into a retry.
+ onSuccess();
+ onClose();
+ };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
-      <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col">
-        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
-          <div>
-            <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-indigo-600" />
-              Registrar pagamento
-            </h3>
-            <p className="text-xs text-graphite-500 mt-0.5">
-              Liquidação de Conta a Pagar • {payable.description}
-            </p>
-          </div>
-          <button
-            aria-label="Fechar modal"
-            disabled={isSubmitting || confirmOpen}
-            onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-            className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+ return (
+ <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+ <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col">
+ <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
+ <div>
+ <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
+ <CreditCard className="w-5 h-5 text-badge-navy-t1-text" />
+ Registrar pagamento
+ </h3>
+ <p className="text-xs text-graphite-500 mt-0.5">
+ Liquidação de Conta a Pagar • {payable.description}
+ </p>
+ </div>
+ <button
+ aria-label="Fechar modal"
+ disabled={isSubmitting || confirmOpen}
+ onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
+ className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
+ >
+ <X className="w-5 h-5" />
+ </button>
+ </div>
 
-        <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
-          <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
-          {error && (
-            <div className="p-3 bg-error-bg  border border-error-border  rounded-lg text-xs text-error-text  flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-error-icon shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
+ <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
+ <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
+ {error && (
+ <div className="p-3 bg-error-bg border border-error-border rounded-lg text-xs text-error-text flex items-start gap-2">
+ <AlertCircle className="w-4 h-4 text-error-icon shrink-0 mt-0.5" />
+ <span>{error}</span>
+ </div>
+ )}
 
-          <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 p-3 rounded-lg flex justify-between items-center text-xs">
-            <div>
-              <span className="text-graphite-500 block">Valor Original / Saldo Devedor:</span>
-              <span className="font-semibold font-mono tabular-nums text-graphite-700 dark:text-graphite-300">
-                R$ {payable.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /{' '}
-                <strong className="text-indigo-700 dark:text-indigo-400 font-mono tabular-nums">
-                  R$ {payable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </strong>
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="text-graphite-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-graphite-700 dark:text-graphite-300">{formatDateBR(payable.dueDate)}</span>
-            </div>
-          </div>
+ <div className="bg-badge-navy-t1-bg border border-badge-navy-t1-border dark:border-badge-navy-t1-border p-3 rounded-lg flex justify-between items-center text-xs">
+ <div>
+ <span className="text-graphite-500 block">Valor Original / Saldo Devedor:</span>
+ <span className="font-semibold font-mono tabular-nums text-graphite-700 dark:text-graphite-300">
+ R$ {payable.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /{' '}
+ <strong className="text-badge-navy-t1-text font-mono tabular-nums">
+ R$ {payable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+ </strong>
+ </span>
+ </div>
+ <div className="text-right">
+ <span className="text-graphite-500 block">Vencimento:</span>
+ <span className="font-medium font-mono tabular-nums text-graphite-700 dark:text-graphite-300">{formatDateBR(payable.dueDate)}</span>
+ </div>
+ </div>
 
-          <dl aria-label="Composição do pagamento">
-            <div>{payable.interestAmount || payable.fineAmount || payable.additionalAmount || payable.discountAmount ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo atual'}: {formatCurrencyBRL(payable.balanceAmount)}</div>
-            <div>Juros desta baixa: {formatCurrencyBRL(interestValue)}</div>
-            <div>Acréscimo: {formatCurrencyBRL(additionalValue)}</div>
-            <div>Valor total a pagar: {formatCurrencyBRL(settlementTotal)}</div>
-            <div>Valor pago agora: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
-          </dl>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
-              Juros (R$)
-              <input
-                aria-label="Juros (R$)"
-                type="text"
-                inputMode="decimal" onFocus={event => event.target.select()}
-                value={interestAmount}
-                onChange={e => {
-                  const draft = normalizeCurrencyCentsDraft(e.target.value);
-                  if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
-                }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
-              />
-            </label>
-            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
-              Acréscimo (R$)
-              <input
-                aria-label="Acréscimo (R$)"
-                type="text"
-                inputMode="decimal" onFocus={event => event.target.select()}
-                value={additionalAmount}
-                onChange={e => {
-                  const draft = normalizeCurrencyCentsDraft(e.target.value);
-                  if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
-                }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
-              />
-            </label>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-              Valor pago agora (R$) *
-            </label>
-            <input
-              type="text"
-              inputMode="decimal" onFocus={event => event.target.select()}
-              aria-label="Valor pago agora (R$)"
-              value={amount}
-              onChange={(e) => {
-                const draft = normalizeCurrencyCentsDraft(e.target.value);
-                if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
-              }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              required
-            />
-            <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-graphite-200 bg-white/70 p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900/40 sm:grid-cols-5">
-              <div>
-                <span className="block text-graphite-500">Saldo atual</span>
-                <strong className="font-mono tabular-nums">{formatCurrencyBRL(payable.balanceAmount)}</strong>
-              </div>
-              <div>
-                <span className="block text-graphite-500">Ajustes desta baixa</span>
-                <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
-              </div>
-              <div>
-                <span className="block text-graphite-500">Valor total a pagar</span>
-                <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
-              </div>
-              <div>
-                <span className="block text-graphite-500">Pago agora</span>
-                <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
-              </div>
-              <div>
-                <span className="block text-graphite-500">Saldo devedor após pagamento</span>
-                <strong className="font-mono tabular-nums text-warning-text ">{formatCurrencyBRL(projectedBalance)}</strong>
-              </div>
-            </div>
-          </div>
+ <dl aria-label="Composição do pagamento">
+ <div>{payable.interestAmount || payable.fineAmount || payable.additionalAmount || payable.discountAmount ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo atual'}: {formatCurrencyBRL(payable.balanceAmount)}</div>
+ <div>Juros desta baixa: {formatCurrencyBRL(interestValue)}</div>
+ <div>Acréscimo: {formatCurrencyBRL(additionalValue)}</div>
+ <div>Valor total a pagar: {formatCurrencyBRL(settlementTotal)}</div>
+ <div>Valor pago agora: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
+ </dl>
+ <div className="grid grid-cols-2 gap-3">
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
+ Juros (R$)
+ <input
+ aria-label="Juros (R$)"
+ type="text"
+ inputMode="decimal" onFocus={event => event.target.select()}
+ value={interestAmount}
+ onChange={e => {
+ const draft = normalizeCurrencyCentsDraft(e.target.value);
+ if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
+ }}
+ className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
+ />
+ </label>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
+ Acréscimo (R$)
+ <input
+ aria-label="Acréscimo (R$)"
+ type="text"
+ inputMode="decimal" onFocus={event => event.target.select()}
+ value={additionalAmount}
+ onChange={e => {
+ const draft = normalizeCurrencyCentsDraft(e.target.value);
+ if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
+ }}
+ className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
+ />
+ </label>
+ </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Valor pago agora (R$) *
+ </label>
+ <input
+ type="text"
+ inputMode="decimal" onFocus={event => event.target.select()}
+ aria-label="Valor pago agora (R$)"
+ value={amount}
+ onChange={(e) => {
+ const draft = normalizeCurrencyCentsDraft(e.target.value);
+ if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
+ }}
+ className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:border-badge-navy-t1-border focus:outline-none"
+ required
+ />
+ <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-graphite-200 bg-white/70 p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900/40 sm:grid-cols-5">
+ <div>
+ <span className="block text-graphite-500">Saldo atual</span>
+ <strong className="font-mono tabular-nums">{formatCurrencyBRL(payable.balanceAmount)}</strong>
+ </div>
+ <div>
+ <span className="block text-graphite-500">Ajustes desta baixa</span>
+ <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
+ </div>
+ <div>
+ <span className="block text-graphite-500">Valor total a pagar</span>
+ <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
+ </div>
+ <div>
+ <span className="block text-graphite-500">Pago agora</span>
+ <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
+ </div>
+ <div>
+ <span className="block text-graphite-500">Saldo devedor após pagamento</span>
+ <strong className="font-mono tabular-nums text-warning-text ">{formatCurrencyBRL(projectedBalance)}</strong>
+ </div>
+ </div>
+ </div>
 
 
-          <div className="grid grid-cols-2 gap-3">
-            {([['Multa (R$)', fineAmount, setFineAmount], ...(payable.originType === 'TRAFFIC_TICKET_COMPANY' ? [] : [['Desconto (R$)', discountAmount, setDiscountAmount] as const])] as const).map(([label, value, setter]) => (
-              <label key={label} className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
-                {label}
-                <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
-                  onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg" />
-              </label>
-            ))}
-          </div>
-          {payable.originType === 'TRAFFIC_TICKET_COMPANY' && <p className="text-xs text-graphite-500">O desconto desta multa segue o valor e o prazo cadastrados na multa e é conferido pelo servidor.</p>}
-          <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
-            <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(payable.originalAmount)}</dd></div>
-            <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(payable.paidAmount)}</dd></div>
-            <div><dt>Valor atualizado antes desta baixa</dt><dd>{formatCurrencyBRL(payable.updatedAmount)}</dd></div>
-            <div><dt>Parcela</dt><dd>{payable.installmentNumber && payable.totalInstallments ? `${payable.installmentNumber}/${payable.totalInstallments}` : 'Única'}</dd></div>
-            {payable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(payable.totalAmount)}</dd></div>}
-          </dl>
-          {(accounts.length === 0 || methods.length === 0) && (
-            <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
-              Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o pagamento.
-            </div>
-          )}
+ <div className="grid grid-cols-2 gap-3">
+ {([['Multa (R$)', fineAmount, setFineAmount], ...(payable.originType === 'TRAFFIC_TICKET_COMPANY' ? [] : [['Desconto (R$)', discountAmount, setDiscountAmount] as const])] as const).map(([label, value, setter]) => (
+ <label key={label} className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
+ {label}
+ <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
+ onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
+ className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg" />
+ </label>
+ ))}
+ </div>
+ {payable.originType === 'TRAFFIC_TICKET_COMPANY' && <p className="text-xs text-graphite-500">O desconto desta multa segue o valor e o prazo cadastrados na multa e é conferido pelo servidor.</p>}
+ <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
+ <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(payable.originalAmount)}</dd></div>
+ <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(payable.paidAmount)}</dd></div>
+ <div><dt>Valor atualizado antes desta baixa</dt><dd>{formatCurrencyBRL(payable.updatedAmount)}</dd></div>
+ <div><dt>Parcela</dt><dd>{payable.installmentNumber && payable.totalInstallments ? `${payable.installmentNumber}/${payable.totalInstallments}` : 'Única'}</dd></div>
+ {payable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(payable.totalAmount)}</dd></div>}
+ </dl>
+ {(accounts.length === 0 || methods.length === 0) && (
+ <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text ">
+ Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o pagamento.
+ </div>
+ )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-                Conta Financeira de Origem *
-              </label>
-              <select
-                value={selectedAccountId}
-                onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                required
-              >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name} ({acc.type})
-                  </option>
-                ))}
-              </select>
-            </div>
+ <div className="grid grid-cols-2 gap-3">
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Conta Financeira de Origem *
+ </label>
+ <select
+ value={selectedAccountId}
+ onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
+ className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:border-badge-navy-t1-border focus:outline-none"
+ required
+ >
+ {accounts.map((acc) => (
+ <option key={acc.id} value={acc.id}>
+ {acc.name} ({acc.type})
+ </option>
+ ))}
+ </select>
+ </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-                Meio de Pagamento *
-              </label>
-              <select
-                value={selectedMethodId}
-                onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                required
-              >
-                {methods.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Meio de Pagamento *
+ </label>
+ <select
+ value={selectedMethodId}
+ onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
+ className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:border-badge-navy-t1-border focus:outline-none"
+ required
+ >
+ {methods.map((m) => (
+ <option key={m.id} value={m.id}>
+ {m.name}
+ </option>
+ ))}
+ </select>
+ </div>
+ </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-              Data Efetiva de Pagamento *
-            </label>
-            <input
-              type="date"
-              value={paymentDate}
-              onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-              required
-            />
-          </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Data Efetiva de Pagamento *
+ </label>
+ <input
+ type="date"
+ value={paymentDate}
+ onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
+ className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:border-badge-navy-t1-border focus:outline-none"
+ required
+ />
+ </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-              Observações / Comprovante
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
-              placeholder="Ex: Pagamento autorizado pelo gerência..."
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-16"
-            />
-          </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Observações / Comprovante
+ </label>
+ <textarea
+ value={notes}
+ onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
+ placeholder="Ex: Pagamento autorizado pelo gerência..."
+ className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:border-badge-navy-t1-border focus:outline-none resize-none h-16"
+ />
+ </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
-            <button
-              type="button"
-              onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-              className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
-              className="px-4 py-2 text-xs font-semibold text-white bg-action-primary hover:bg-action-primary-hover rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
-            >
-              {isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
-            </button>
-          </div>
-          </fieldset>
-        </form>
-        <ConfirmDialog
-          isOpen={confirmOpen}
-          title="Confirmar Pagamento"
-          variant="primary"
-          confirmText={isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
-          isLoading={isSubmitting}
-          onCancel={() => { if (!submittingRef.current) setConfirmOpen(false); }}
-          onConfirm={confirmSettlement}
-        >
-          <dl className="space-y-2">
-            <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
-            <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(payable.balanceAmount)}</dd></div>
-            <div><dt>Valor total a pagar</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
-            <div><dt>Valor pago agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
-            <div><dt>Saldo devedor após pagamento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
-            <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
-            <div><dt>Multa desta baixa</dt><dd>{formatCurrencyBRL(fineValue)}</dd></div>
-            <div><dt>Desconto desta baixa</dt><dd>{formatCurrencyBRL(discountValue)}</dd></div>
-            <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
-            <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
-            <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
-          </dl>
-        </ConfirmDialog>
-      </div>
-    </div>
-  );
+ <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
+ <button
+ type="button"
+ onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
+ className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
+ >
+ Cancelar
+ </button>
+ <button
+ type="submit"
+ disabled={isSubmitting || accounts.length === 0 || methods.length === 0 || !selectedAccountId || !selectedMethodId}
+ className="px-4 py-2 text-xs font-semibold text-white bg-action-primary hover:bg-action-primary-hover rounded-lg transition-colors shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+ >
+ {isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
+ </button>
+ </div>
+ </fieldset>
+ </form>
+ <ConfirmDialog
+ isOpen={confirmOpen}
+ title="Confirmar Pagamento"
+ variant="primary"
+ confirmText={isSubmitting ? 'Processando...' : 'Confirmar Pagamento'}
+ isLoading={isSubmitting}
+ onCancel={() => { if (!submittingRef.current) setConfirmOpen(false); }}
+ onConfirm={confirmSettlement}
+ >
+ <dl className="space-y-2">
+ <div><dt>Título / origem</dt><dd>{payable.description} • {payable.originType}</dd></div>
+ <div><dt>Saldo atual</dt><dd>{formatCurrencyBRL(payable.balanceAmount)}</dd></div>
+ <div><dt>Valor total a pagar</dt><dd>{formatCurrencyBRL(settlementTotal)}</dd></div>
+ <div><dt>Valor pago agora</dt><dd>{formatCurrencyBRL(parseCurrencyDraft(amount))}</dd></div>
+ <div><dt>Saldo devedor após pagamento</dt><dd>{formatCurrencyBRL(projectedBalance)}</dd></div>
+ <div><dt>Juros</dt><dd>{formatCurrencyBRL(interestValue)}</dd></div>
+ <div><dt>Multa desta baixa</dt><dd>{formatCurrencyBRL(fineValue)}</dd></div>
+ <div><dt>Desconto desta baixa</dt><dd>{formatCurrencyBRL(discountValue)}</dd></div>
+ <div><dt>Acréscimo</dt><dd>{formatCurrencyBRL(additionalValue)}</dd></div>
+ <div><dt>Conta financeira de origem</dt><dd>{accounts.find(account => account.id === selectedAccountId)?.name}</dd></div>
+ <div><dt>Meio de pagamento</dt><dd>{methods.find(method => method.id === selectedMethodId)?.name}</dd></div>
+ </dl>
+ </ConfirmDialog>
+ </div>
+ </div>
+ );
 };

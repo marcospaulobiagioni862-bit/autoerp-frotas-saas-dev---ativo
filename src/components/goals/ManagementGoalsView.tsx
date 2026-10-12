@@ -1,224 +1,224 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Target, ShieldCheck, AlertTriangle, CheckCircle2, TrendingUp, Filter, 
-  BarChart3, AlertCircle, Award, Activity, RefreshCw 
+ Target, ShieldCheck, AlertTriangle, CheckCircle2, TrendingUp, Filter, 
+ BarChart3, AlertCircle, Award, Activity, RefreshCw 
 } from 'lucide-react';
 import { Card, Button, Badge, Input, Select } from '../ui';
 import { ManagementGoalsService } from '../../domain/goals/ManagementGoalsService';
 
 interface ManagementGoalsViewProps {
-  companyId?: string;
-  tasks?: any[];
-  incidents?: any[];
-  pendings?: any[];
+ companyId?: string;
+ tasks?: any[];
+ incidents?: any[];
+ pendings?: any[];
 }
 
 export const ManagementGoalsView: React.FC<ManagementGoalsViewProps> = ({
-  companyId = 'company-main-uuid',
-  tasks = [],
-  incidents = [],
-  pendings = [],
+ companyId = 'company-main-uuid',
+ tasks = [],
+ incidents = [],
+ pendings = [],
 }) => {
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+ const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
-  const evaluation = useMemo(() => {
-    return ManagementGoalsService.evaluateGoals({
-      companyId,
-      tasks,
-      incidents,
-      pendings,
-    });
-  }, [companyId, tasks, incidents, pendings]);
+ const evaluation = useMemo(() => {
+ return ManagementGoalsService.evaluateGoals({
+ companyId,
+ tasks,
+ incidents,
+ pendings,
+ });
+ }, [companyId, tasks, incidents, pendings]);
 
-  const filteredGoals = useMemo(() => {
-    if (filterStatus === 'ALL') return evaluation.goals;
-    return evaluation.goals.filter(g => g.status === filterStatus);
-  }, [evaluation.goals, filterStatus]);
+ const filteredGoals = useMemo(() => {
+ if (filterStatus === 'ALL') return evaluation.goals;
+ return evaluation.goals.filter(g => g.status === filterStatus);
+ }, [evaluation.goals, filterStatus]);
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-graphite-900 p-6 rounded-2xl shadow-sm border border-graphite-100 dark:border-graphite-800">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-semibold text-sm mb-1">
-            <Target className="w-5 h-5" />
-            <span>FASE 3.43 — METAS, INDICADORES E ALERTAS GERENCIAIS</span>
-          </div>
-          <h1 className="text-2xl font-bold text-graphite-900 dark:text-white">Central de Metas & Alertas Gerenciais</h1>
-          <p className="text-graphite-600 dark:text-graphite-400 text-sm mt-1">
-            Acompanhamento em tempo real de metas operacionais, desvios, tendências e alertas preventivos P0-P3.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select
-            value={filterStatus}
-            onChange={(e: any) => setFilterStatus(e.target.value)}
-            options={[
-              { value: 'ALL', label: 'Todas as Metas' },
-              { value: 'ACHIEVED', label: 'Atingidas' },
-              { value: 'WARNING', label: 'Em Alerta (Warning)' },
-              { value: 'CRITICAL', label: 'Críticas' },
-            ]}
-          />
-        </div>
-      </div>
+ return (
+ <div className="space-y-6">
+ {/* Header */}
+ <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-graphite-900 p-6 rounded-2xl shadow-sm border border-graphite-100 dark:border-graphite-800">
+ <div>
+ <div className="flex items-center gap-2 text-badge-navy-t1-text font-semibold text-sm mb-1">
+ <Target className="w-5 h-5" />
+ <span>FASE 3.43 — METAS, INDICADORES E ALERTAS GERENCIAIS</span>
+ </div>
+ <h1 className="text-2xl font-bold text-graphite-900 dark:text-white">Central de Metas & Alertas Gerenciais</h1>
+ <p className="text-graphite-600 dark:text-graphite-400 text-sm mt-1">
+ Acompanhamento em tempo real de metas operacionais, desvios, tendências e alertas preventivos P0-P3.
+ </p>
+ </div>
+ <div className="flex items-center gap-3">
+ <Select
+ value={filterStatus}
+ onChange={(e: any) => setFilterStatus(e.target.value)}
+ options={[
+ { value: 'ALL', label: 'Todas as Metas' },
+ { value: 'ACHIEVED', label: 'Atingidas' },
+ { value: 'WARNING', label: 'Em Alerta (Warning)' },
+ { value: 'CRITICAL', label: 'Críticas' },
+ ]}
+ />
+ </div>
+ </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5 border-l-4 border-l-indigo-500 bg-white dark:bg-graphite-900">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Total de Metas</p>
-              <p className="text-3xl font-bold text-graphite-900 dark:text-white mt-1">{evaluation.goalsSummary.total}</p>
-            </div>
-            <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/80 rounded-xl text-indigo-600 dark:text-indigo-400">
-              <Target className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-graphite-500">
-            <span>Monitoramento operacional ativo</span>
-          </div>
-        </Card>
+ {/* KPI Cards */}
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+ <Card className="p-5 bg-white dark:bg-graphite-900">
+ <div className="flex justify-between items-start">
+ <div>
+ <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Total de Metas</p>
+ <p className="text-3xl font-bold text-graphite-900 dark:text-white mt-1">{evaluation.goalsSummary.total}</p>
+ </div>
+ <div className="p-2.5 bg-badge-navy-t1-bg rounded-xl text-badge-navy-t1-text ">
+ <Target className="w-5 h-5" />
+ </div>
+ </div>
+ <div className="mt-3 text-xs text-graphite-500">
+ <span>Monitoramento operacional ativo</span>
+ </div>
+ </Card>
 
-        <Card className="p-5 border-l-4 border-l-emerald-500 bg-white dark:bg-graphite-900">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Atingidas</p>
-              <p className="text-3xl font-bold text-success-icon mt-1">{evaluation.goalsSummary.achieved}</p>
-            </div>
-            <div className="p-2.5 bg-success-bg  rounded-xl text-success-icon ">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-graphite-500">
-            <span>Desempenho dentro do esperado</span>
-          </div>
-        </Card>
+ <Card className="p-5 bg-white dark:bg-graphite-900">
+ <div className="flex justify-between items-start">
+ <div>
+ <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Atingidas</p>
+ <p className="text-3xl font-bold text-success-icon mt-1">{evaluation.goalsSummary.achieved}</p>
+ </div>
+ <div className="p-2.5 bg-success-bg rounded-xl text-success-icon ">
+ <CheckCircle2 className="w-5 h-5" />
+ </div>
+ </div>
+ <div className="mt-3 text-xs text-graphite-500">
+ <span>Desempenho dentro do esperado</span>
+ </div>
+ </Card>
 
-        <Card className="p-5 border-l-4 border-l-amber-500 bg-white dark:bg-graphite-900">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas em Alerta</p>
-              <p className="text-3xl font-bold text-warning-icon mt-1">{evaluation.goalsSummary.warning}</p>
-            </div>
-            <div className="p-2.5 bg-warning-bg  rounded-xl text-warning-icon ">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-graphite-500">
-            <span>Requer atenção preventiva</span>
-          </div>
-        </Card>
+ <Card className="p-5 bg-white dark:bg-graphite-900">
+ <div className="flex justify-between items-start">
+ <div>
+ <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas em Alerta</p>
+ <p className="text-3xl font-bold text-warning-icon mt-1">{evaluation.goalsSummary.warning}</p>
+ </div>
+ <div className="p-2.5 bg-warning-bg rounded-xl text-warning-icon ">
+ <AlertTriangle className="w-5 h-5" />
+ </div>
+ </div>
+ <div className="mt-3 text-xs text-graphite-500">
+ <span>Requer atenção preventiva</span>
+ </div>
+ </Card>
 
-        <Card className="p-5 border-l-4 border-l-rose-500 bg-white dark:bg-graphite-900">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Críticas</p>
-              <p className="text-3xl font-bold text-error-icon mt-1">{evaluation.goalsSummary.critical}</p>
-            </div>
-            <div className="p-2.5 bg-error-bg  rounded-xl text-error-icon ">
-              <AlertCircle className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3 text-xs text-graphite-500">
-            <span>Violando limites críticos (P0)</span>
-          </div>
-        </Card>
-      </div>
+ <Card className="p-5 bg-white dark:bg-graphite-900">
+ <div className="flex justify-between items-start">
+ <div>
+ <p className="text-xs font-medium text-graphite-500 dark:text-graphite-400">Metas Críticas</p>
+ <p className="text-3xl font-bold text-error-icon mt-1">{evaluation.goalsSummary.critical}</p>
+ </div>
+ <div className="p-2.5 bg-error-bg rounded-xl text-error-icon ">
+ <AlertCircle className="w-5 h-5" />
+ </div>
+ </div>
+ <div className="mt-3 text-xs text-graphite-500">
+ <span>Violando limites críticos (P0)</span>
+ </div>
+ </Card>
+ </div>
 
-      {/* Main Content Grid: Goals List & Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Goals List (2 Cols) */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
-              <h2 className="text-lg font-bold text-graphite-900 dark:text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-indigo-500" /> Acompanhamento de Metas
-              </h2>
-              <span className="text-xs text-graphite-500">{filteredGoals.length} metas exibidas</span>
-            </div>
-            <div className="space-y-3">
-              {filteredGoals.length === 0 ? (
-                <p className="text-sm text-graphite-500 text-center py-8">Nenhuma meta encontrada para o filtro selecionado.</p>
-              ) : (
-                filteredGoals.map((g) => (
-                  <div key={g.id} className="p-4 rounded-xl border border-graphite-100 dark:border-graphite-800 hover:border-indigo-200 transition-all space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-graphite-900 dark:text-white text-sm">{g.name}</span>
-                          <Badge className="bg-graphite-100 dark:bg-graphite-800 text-graphite-700 dark:text-graphite-300 text-[10px]">{g.category}</Badge>
-                        </div>
-                        <p className="text-xs text-graphite-500 mt-0.5">{g.description}</p>
-                      </div>
-                      <Badge className={
-                        g.status === 'ACHIEVED' ? 'bg-success-bg text-success-text  ' :
-                        g.status === 'WARNING' ? 'bg-warning-bg text-warning-text  ' :
-                        'bg-error-bg text-error-text  '
-                      }>
-                        {g.status === 'ACHIEVED' ? 'Atingida' : g.status === 'WARNING' ? 'Atenção' : 'Crítica'}
-                      </Badge>
-                    </div>
+ {/* Main Content Grid: Goals List & Alerts */}
+ <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+ {/* Goals List (2 Cols) */}
+ <div className="lg:col-span-2 space-y-4">
+ <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
+ <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
+ <h2 className="text-lg font-bold text-graphite-900 dark:text-white flex items-center gap-2">
+ <BarChart3 className="w-5 h-5 text-fg-secondary" /> Acompanhamento de Metas
+ </h2>
+ <span className="text-xs text-graphite-500">{filteredGoals.length} metas exibidas</span>
+ </div>
+ <div className="space-y-3">
+ {filteredGoals.length === 0 ? (
+ <p className="text-sm text-graphite-500 text-center py-8">Nenhuma meta encontrada para o filtro selecionado.</p>
+ ) : (
+ filteredGoals.map((g) => (
+ <div key={g.id} className="p-4 rounded-xl border border-graphite-100 dark:border-graphite-800 hover:border-badge-navy-t1-border transition-all space-y-2">
+ <div className="flex items-center justify-between">
+ <div>
+ <div className="flex items-center gap-2">
+ <span className="font-semibold text-graphite-900 dark:text-white text-sm">{g.name}</span>
+ <Badge className="bg-graphite-100 dark:bg-graphite-800 text-graphite-700 dark:text-graphite-300 text-[10px]">{g.category}</Badge>
+ </div>
+ <p className="text-xs text-graphite-500 mt-0.5">{g.description}</p>
+ </div>
+ <Badge className={
+ g.status === 'ACHIEVED' ? 'bg-success-bg text-success-text ' :
+ g.status === 'WARNING' ? 'bg-warning-bg text-warning-text ' :
+ 'bg-error-bg text-error-text '
+ }>
+ {g.status === 'ACHIEVED' ? 'Atingida' : g.status === 'WARNING' ? 'Atenção' : 'Crítica'}
+ </Badge>
+ </div>
 
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800/60 text-xs">
-                      <div>
-                        <span className="text-graphite-400 block">Meta Alvo</span>
-                        <span className="font-bold text-graphite-800 dark:text-graphite-200">{g.targetValue}</span>
-                      </div>
-                      <div>
-                        <span className="text-graphite-400 block">Realizado</span>
-                        <span className="font-bold text-graphite-800 dark:text-graphite-200">{g.realizedValue}</span>
-                      </div>
-                      <div>
-                        <span className="text-graphite-400 block">Atingimento</span>
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{g.achievementPercentage}%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
+ <div className="grid grid-cols-3 gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800/60 text-xs">
+ <div>
+ <span className="text-graphite-400 block">Meta Alvo</span>
+ <span className="font-bold text-graphite-800 dark:text-graphite-200">{g.targetValue}</span>
+ </div>
+ <div>
+ <span className="text-graphite-400 block">Realizado</span>
+ <span className="font-bold text-graphite-800 dark:text-graphite-200">{g.realizedValue}</span>
+ </div>
+ <div>
+ <span className="text-graphite-400 block">Atingimento</span>
+ <span className="font-bold text-badge-navy-t1-text ">{g.achievementPercentage}%</span>
+ </div>
+ </div>
+ </div>
+ ))
+ )}
+ </div>
+ </Card>
+ </div>
 
-        {/* Managerial Alerts (1 Col) */}
-        <div className="space-y-4">
-          <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
-            <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
-              <h2 className="text-lg font-bold text-graphite-900 dark:text-white flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-error-icon" /> Alertas Gerenciais
-              </h2>
-              <Badge className="bg-error-bg text-error-text">{evaluation.alerts.length} Ativos</Badge>
-            </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-              {evaluation.alerts.length === 0 ? (
-                <p className="text-sm text-graphite-500 text-center py-8">Nenhum alerta gerencial ativo no momento.</p>
-              ) : (
-                evaluation.alerts.map((alert) => (
-                  <div key={alert.id} className="p-3 rounded-xl border border-rose-100 bg-error-bg   space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-error-text  text-xs">{alert.title}</span>
-                      <Badge className={alert.severity === 'P0' ? 'bg-action-destructive text-on-action-destructive' : 'bg-amber-500 text-white'}>
-                        {alert.severity}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-error-text ">{alert.message}</p>
-                    <p className="text-[10px] text-graphite-500 italic mt-1">Ação: {alert.recommendedAction}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
-      </div>
+ {/* Managerial Alerts (1 Col) */}
+ <div className="space-y-4">
+ <Card className="p-6 bg-white dark:bg-graphite-900 space-y-4">
+ <div className="flex items-center justify-between border-b pb-3 dark:border-graphite-800">
+ <h2 className="text-lg font-bold text-graphite-900 dark:text-white flex items-center gap-2">
+ <AlertTriangle className="w-5 h-5 text-error-icon" /> Alertas Gerenciais
+ </h2>
+ <Badge className="bg-error-bg text-error-text">{evaluation.alerts.length} Ativos</Badge>
+ </div>
+ <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+ {evaluation.alerts.length === 0 ? (
+ <p className="text-sm text-graphite-500 text-center py-8">Nenhum alerta gerencial ativo no momento.</p>
+ ) : (
+ evaluation.alerts.map((alert) => (
+ <div key={alert.id} className="p-3 rounded-xl border border-error-border bg-error-bg space-y-1.5">
+ <div className="flex items-center justify-between">
+ <span className="font-bold text-error-text text-xs">{alert.title}</span>
+ <Badge className={alert.severity === 'P0' ? 'bg-action-destructive text-on-action-destructive' : 'bg-warning-bg text-white'}>
+ {alert.severity}
+ </Badge>
+ </div>
+ <p className="text-xs text-error-text ">{alert.message}</p>
+ <p className="text-[10px] text-graphite-500 italic mt-1">Ação: {alert.recommendedAction}</p>
+ </div>
+ ))
+ )}
+ </div>
+ </Card>
+ </div>
+ </div>
 
-      {/* Financial Boundary Notice */}
-      <div className="p-4 rounded-xl bg-graphite-50 dark:bg-graphite-800/60 border border-graphite-200 dark:border-graphite-700 flex items-center gap-3">
-        <Activity className="w-5 h-5 text-indigo-600 shrink-0" />
-        <p className="text-xs text-graphite-600 dark:text-graphite-400">
-          <strong>Segurança e Isolamento Financeiro:</strong> A Central de Metas e Alertas opera estritamente em modo de leitura sobre os indicadores operacionais, preservando 100% o núcleo financeiro congelado do AutoERP.
-        </p>
-      </div>
-    </div>
-  );
+ {/* Financial Boundary Notice */}
+ <div className="p-4 rounded-xl bg-graphite-50 dark:bg-graphite-800/60 border border-graphite-200 dark:border-graphite-700 flex items-center gap-3">
+ <Activity className="w-5 h-5 text-badge-navy-t1-text shrink-0" />
+ <p className="text-xs text-graphite-600 dark:text-graphite-400">
+ <strong>Segurança e Isolamento Financeiro:</strong> A Central de Metas e Alertas opera estritamente em modo de leitura sobre os indicadores operacionais, preservando 100% o núcleo financeiro congelado do AutoERP.
+ </p>
+ </div>
+ </div>
+ );
 };

@@ -7,227 +7,227 @@ import { formatDateBR } from '../../shared/utils/date';
 import { Card, Skeleton } from '../ui';
 
 function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+ return date.toISOString().slice(0, 10);
 }
 
 function currentMonthRange(): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
-  return { start: isoDate(start), end: isoDate(end) };
+ const now = new Date();
+ const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+ const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+ return { start: isoDate(start), end: isoDate(end) };
 }
 
 function rollingRange(days: number): { start: string; end: string } {
-  const start = new Date();
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + Math.max(0, days - 1));
-  return { start: isoDate(start), end: isoDate(end) };
+ const start = new Date();
+ const end = new Date(start);
+ end.setUTCDate(end.getUTCDate() + Math.max(0, days - 1));
+ return { start: isoDate(start), end: isoDate(end) };
 }
 
 export const CashFlowView: React.FC = () => {
-  const defaults = useMemo(currentMonthRange, []);
-  const [startDate, setStartDate] = useState(defaults.start);
-  const [endDate, setEndDate] = useState(defaults.end);
-  const [report, setReport] = useState<CashFlowReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+ const defaults = useMemo(currentMonthRange, []);
+ const [startDate, setStartDate] = useState(defaults.start);
+ const [endDate, setEndDate] = useState(defaults.end);
+ const [report, setReport] = useState<CashFlowReport | null>(null);
+ const [loading, setLoading] = useState(true);
+ const [error, setError] = useState('');
 
-  const applyPreset = (preset: 'MONTH' | 30 | 60 | 90) => {
-    const next = preset === 'MONTH' ? currentMonthRange() : rollingRange(preset);
-    setStartDate(next.start);
-    setEndDate(next.end);
-  };
+ const applyPreset = (preset: 'MONTH' | 30 | 60 | 90) => {
+ const next = preset === 'MONTH' ? currentMonthRange() : rollingRange(preset);
+ setStartDate(next.start);
+ setEndDate(next.end);
+ };
 
-  const projectedReceivable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedIncomes, 0) ?? 0;
-  const projectedPayable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedExpenses, 0) ?? 0;
-  const projectedClosing = report?.dailyFlows.length
-    ? report.dailyFlows[report.dailyFlows.length - 1].predictedClosingBalance
-    : report?.finalRealizedCashBalance ?? 0;
+ const projectedReceivable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedIncomes, 0) ?? 0;
+ const projectedPayable = report?.dailyFlows.reduce((sum, item) => sum + item.predictedExpenses, 0) ?? 0;
+ const projectedClosing = report?.dailyFlows.length
+ ? report.dailyFlows[report.dailyFlows.length - 1].predictedClosingBalance
+ : report?.finalRealizedCashBalance ?? 0;
 
-  useEffect(() => {
-    let active = true;
+ useEffect(() => {
+ let active = true;
 
-    const load = async () => {
-      if (!startDate || !endDate || startDate > endDate) {
-        setReport(null);
-        setError('Informe um período válido.');
-        setLoading(false);
-        return;
-      }
+ const load = async () => {
+ if (!startDate || !endDate || startDate > endDate) {
+ setReport(null);
+ setError('Informe um período válido.');
+ setLoading(false);
+ return;
+ }
 
-      setLoading(true);
-      setError('');
-      try {
-        const next = await FinanceReportingClient.getCashFlow(startDate, endDate);
-        if (active) setReport(next);
-      } catch (err) {
-        if (active) {
-          console.error('Erro ao carregar Fluxo de Caixa:', err);
-          setReport(null);
-          setError('Não foi possível carregar o Fluxo de Caixa autoritativo.');
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
+ setLoading(true);
+ setError('');
+ try {
+ const next = await FinanceReportingClient.getCashFlow(startDate, endDate);
+ if (active) setReport(next);
+ } catch (err) {
+ if (active) {
+ console.error('Erro ao carregar Fluxo de Caixa:', err);
+ setReport(null);
+ setError('Não foi possível carregar o Fluxo de Caixa autoritativo.');
+ }
+ } finally {
+ if (active) setLoading(false);
+ }
+ };
 
-    load();
-    return () => { active = false; };
-  }, [startDate, endDate]);
+ load();
+ return () => { active = false; };
+ }, [startDate, endDate]);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <Banknote className="w-6 h-6 text-info-icon" />
-            Fluxo de Caixa
-          </h2>
-          <p className="text-xs text-graphite-500 mt-1">
-            Caixa realizado e projeções de Contas a Receber e a Pagar com base nos lançamentos confirmados.
-          </p>
-        </div>
+ return (
+ <div className="space-y-6">
+ <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+ <div>
+ <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
+ <Banknote className="w-6 h-6 text-info-icon" />
+ Fluxo de Caixa
+ </h2>
+ <p className="text-xs text-graphite-500 mt-1">
+ Caixa realizado e projeções de Contas a Receber e a Pagar com base nos lançamentos confirmados.
+ </p>
+ </div>
 
-        <Card padding="sm">
-          <div className="mb-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Mês atual</button>
-            <button type="button" onClick={() => applyPreset(30)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">30 dias</button>
-            <button type="button" onClick={() => applyPreset(60)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">60 dias</button>
-            <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">90 dias</button>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="font-semibold text-graphite-500">Personalizado</span>
-            <CalendarRange className="w-4 h-4 text-graphite-400" />
-            <label className="text-graphite-500">De</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <label className="text-graphite-500">até</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </Card>
-      </div>
+ <Card padding="sm">
+ <div className="mb-3 flex flex-wrap gap-2">
+ <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Mês atual</button>
+ <button type="button" onClick={() => applyPreset(30)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">30 dias</button>
+ <button type="button" onClick={() => applyPreset(60)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">60 dias</button>
+ <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">90 dias</button>
+ </div>
+ <div className="flex flex-wrap items-center gap-3 text-xs">
+ <span className="font-semibold text-graphite-500">Personalizado</span>
+ <CalendarRange className="w-4 h-4 text-graphite-400" />
+ <label className="text-graphite-500">De</label>
+ <input
+ type="date"
+ value={startDate}
+ onChange={(event) => setStartDate(event.target.value)}
+ className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus-visible:outline-focus-ring"
+ />
+ <label className="text-graphite-500">até</label>
+ <input
+ type="date"
+ value={endDate}
+ onChange={(event) => setEndDate(event.target.value)}
+ className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus-visible:outline-focus-ring"
+ />
+ </div>
+ </Card>
+ </div>
 
-      {loading ? (
-        <div className="space-y-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-72 w-full" />
-        </div>
-      ) : error ? (
-        <Card padding="md" className="border border-error-border ">
-          <p className="text-sm text-error-icon ">{error}</p>
-        </Card>
-      ) : report ? (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <Card padding="md">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Saldo inicial</span>
-              <strong className="block mt-1 text-xl font-mono text-graphite-900 dark:text-graphite-100">
-                {formatCurrencyBRL(report.initialCashBalance)}
-              </strong>
-            </Card>
-            <Card padding="md">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider font-semibold text-success-icon">Entradas realizadas</span>
-                <TrendingUp className="w-4 h-4 text-success-icon" />
-              </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>
-                {formatCurrencyBRL(report.totalRealizedIncomes)}
-              </strong>
-            </Card>
-            <Card padding="md">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider font-semibold text-error-icon">Saídas realizadas</span>
-                <TrendingDown className="w-4 h-4 text-error-icon" />
-              </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>
-                {formatCurrencyBRL(report.totalRealizedExpenses)}
-              </strong>
-            </Card>
-            <Card padding="md">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo realizado final</span>
-              <strong className="block mt-1 text-xl font-mono text-info-text ">
-                {formatCurrencyBRL(report.finalRealizedCashBalance)}
-              </strong>
-            </Card>
-          </div>
+ {loading ? (
+ <div className="space-y-4">
+ <Skeleton className="h-24 w-full" />
+ <Skeleton className="h-72 w-full" />
+ </div>
+ ) : error ? (
+ <Card padding="md" className="border border-error-border ">
+ <p className="text-sm text-error-icon ">{error}</p>
+ </Card>
+ ) : report ? (
+ <>
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+ <Card padding="md">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Saldo inicial</span>
+ <strong className="block mt-1 text-xl font-mono text-graphite-900 dark:text-graphite-100">
+ {formatCurrencyBRL(report.initialCashBalance)}
+ </strong>
+ </Card>
+ <Card padding="md">
+ <div className="flex items-center justify-between">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-success-icon">Entradas realizadas</span>
+ <TrendingUp className="w-4 h-4 text-success-icon" />
+ </div>
+ <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>
+ {formatCurrencyBRL(report.totalRealizedIncomes)}
+ </strong>
+ </Card>
+ <Card padding="md">
+ <div className="flex items-center justify-between">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-error-icon">Saídas realizadas</span>
+ <TrendingDown className="w-4 h-4 text-error-icon" />
+ </div>
+ <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>
+ {formatCurrencyBRL(report.totalRealizedExpenses)}
+ </strong>
+ </Card>
+ <Card padding="md">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo realizado final</span>
+ <strong className="block mt-1 text-xl font-mono text-info-text ">
+ {formatCurrencyBRL(report.finalRealizedCashBalance)}
+ </strong>
+ </Card>
+ </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A receber no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
-            </Card>
-            <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A pagar no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>{formatCurrencyBRL(projectedPayable)}</strong>
-            </Card>
-            <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo projetado</span>
-              <strong className="mt-1 block font-mono text-lg text-info-text ">{formatCurrencyBRL(projectedClosing)}</strong>
-            </Card>
-            <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Resultado projetado</span>
-              <strong className="mt-1 block font-mono text-lg text-graphite-900 dark:text-graphite-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
-            </Card>
-          </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+ <Card padding="sm">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A receber no período</span>
+ <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
+ </Card>
+ <Card padding="sm">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A pagar no período</span>
+ <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>{formatCurrencyBRL(projectedPayable)}</strong>
+ </Card>
+ <Card padding="sm">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo projetado</span>
+ <strong className="mt-1 block font-mono text-lg text-info-text ">{formatCurrencyBRL(projectedClosing)}</strong>
+ </Card>
+ <Card padding="sm">
+ <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Resultado projetado</span>
+ <strong className="mt-1 block font-mono text-lg text-graphite-900 dark:text-graphite-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
+ </Card>
+ </div>
 
-          <Card padding="md" className="overflow-hidden">
-            <div className="flex items-center justify-between mb-4 gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Movimento diário e projeção</h3>
-                <p className="text-xs text-graphite-500">Transferências internas não inflam entradas/saídas consolidadas.</p>
-              </div>
-              <span className="text-xs font-mono text-graphite-500 shrink-0">{formatDateBR(report.periodStart)} a {formatDateBR(report.periodEnd)}</span>
-            </div>
+ <Card padding="md" className="overflow-hidden">
+ <div className="flex items-center justify-between mb-4 gap-3">
+ <div>
+ <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Movimento diário e projeção</h3>
+ <p className="text-xs text-graphite-500">Transferências internas não inflam entradas/saídas consolidadas.</p>
+ </div>
+ <span className="text-xs font-mono text-graphite-500 shrink-0">{formatDateBR(report.periodStart)} a {formatDateBR(report.periodEnd)}</span>
+ </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] text-xs">
-                <thead>
-                  <tr className="border-b border-graphite-200 dark:border-graphite-800 text-graphite-500">
-                    <th className="text-left py-2 pr-3">Data</th>
-                    <th className="text-right py-2 px-3">Abertura</th>
-                    <th className="text-right py-2 px-3">Entradas</th>
-                    <th className="text-right py-2 px-3">Saídas</th>
-                    <th className="text-right py-2 px-3">Fechamento</th>
-                    <th className="text-right py-2 px-3">A receber</th>
-                    <th className="text-right py-2 px-3">A pagar</th>
-                    <th className="text-right py-2 pl-3">Projetado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.dailyFlows.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-graphite-500">Sem movimentos ou títulos previstos no período.</td>
-                    </tr>
-                  ) : report.dailyFlows.map((daily) => {
-                    const overdueProjection = daily.date < new Date().toISOString().slice(0, 10) && (daily.predictedIncomes > 0 || daily.predictedExpenses > 0);
-                    return (
-                    <tr key={daily.date} className="border-b border-graphite-100 dark:border-graphite-800/70 last:border-0">
-                      <td className="py-2.5 pr-3 font-mono text-graphite-700 dark:text-graphite-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-error-icon">Vencidos</span>}</td>
-                      <td className="py-2.5 px-3 text-right font-mono">{formatCurrencyBRL(daily.openingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatCurrencyBRL(daily.closingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
-                      <td className="py-2.5 pl-3 text-right font-mono font-bold text-info-text ">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </>
-      ) : null}
-    </div>
-  );
+ <div className="overflow-x-auto">
+ <table className="w-full min-w-[960px] text-xs">
+ <thead>
+ <tr className="border-b border-graphite-200 dark:border-graphite-800 text-graphite-500">
+ <th className="text-left py-2 pr-3">Data</th>
+ <th className="text-right py-2 px-3">Abertura</th>
+ <th className="text-right py-2 px-3">Entradas</th>
+ <th className="text-right py-2 px-3">Saídas</th>
+ <th className="text-right py-2 px-3">Fechamento</th>
+ <th className="text-right py-2 px-3">A receber</th>
+ <th className="text-right py-2 px-3">A pagar</th>
+ <th className="text-right py-2 pl-3">Projetado</th>
+ </tr>
+ </thead>
+ <tbody>
+ {report.dailyFlows.length === 0 ? (
+ <tr>
+ <td colSpan={8} className="py-8 text-center text-graphite-500">Sem movimentos ou títulos previstos no período.</td>
+ </tr>
+ ) : report.dailyFlows.map((daily) => {
+ const overdueProjection = daily.date < new Date().toISOString().slice(0, 10) && (daily.predictedIncomes > 0 || daily.predictedExpenses > 0);
+ return (
+ <tr key={daily.date} className="border-b border-graphite-100 dark:border-graphite-800/70 last:border-0">
+ <td className="py-2.5 pr-3 font-mono text-graphite-700 dark:text-graphite-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-error-icon">Vencidos</span>}</td>
+ <td className="py-2.5 px-3 text-right font-mono">{formatCurrencyBRL(daily.openingBalance)}</td>
+ <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
+ <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
+ <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatCurrencyBRL(daily.closingBalance)}</td>
+ <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
+ <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
+ <td className="py-2.5 pl-3 text-right font-mono font-bold text-info-text ">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ </Card>
+ </>
+ ) : null}
+ </div>
+ );
 };

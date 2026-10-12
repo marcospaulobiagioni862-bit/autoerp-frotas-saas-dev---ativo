@@ -3,54 +3,54 @@ import type { ManagementReportData } from '../../domain/reports/ManagementReport
 import { Card } from '../ui';
 
 interface ManagementReportsFleetTabProps {
-  fleet: ManagementReportData['fleet'];
+ fleet: ManagementReportData['fleet'];
 }
 
 export const ManagementReportsFleetTab: React.FC<ManagementReportsFleetTabProps> = ({ fleet }) => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <Card padding="sm">
-        <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Disponibilidade</span>
-        <h3 className="text-3xl font-black text-success-icon mt-1 font-mono">{fleet.availabilityRate}%</h3>
-        <p className="text-xs text-graphite-500 mt-1">{fleet.available} veículos prontos para locação</p>
-      </Card>
-      <Card padding="sm">
-        <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Utilização</span>
-        <h3 className="text-3xl font-black text-info-icon mt-1 font-mono">{fleet.utilizationRate}%</h3>
-        <p className="text-xs text-graphite-500 mt-1">{fleet.rented} veículos atualmente alugados</p>
-      </Card>
-      <Card padding="sm">
-        <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Indisponibilidade / Parados</span>
-        <h3 className="text-3xl font-black text-warning-icon mt-1 font-mono">{fleet.stoppedRate}%</h3>
-        <p className="text-xs text-graphite-500 mt-1">{fleet.maintenance + fleet.inactive + fleet.blocked} na oficina ou inativos</p>
-      </Card>
-    </div>
+ <div className="space-y-6">
+ <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+ <Card padding="sm">
+ <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Disponibilidade</span>
+ <h3 className="text-3xl font-black text-success-icon mt-1 font-mono">{fleet.availabilityRate}%</h3>
+ <p className="text-xs text-graphite-500 mt-1">{fleet.available} veículos prontos para locação</p>
+ </Card>
+ <Card padding="sm">
+ <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Utilização</span>
+ <h3 className="text-3xl font-black text-info-icon mt-1 font-mono">{fleet.utilizationRate}%</h3>
+ <p className="text-xs text-graphite-500 mt-1">{fleet.rented} veículos atualmente alugados</p>
+ </Card>
+ <Card padding="sm">
+ <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Indisponibilidade / Parados</span>
+ <h3 className="text-3xl font-black text-warning-icon mt-1 font-mono">{fleet.stoppedRate}%</h3>
+ <p className="text-xs text-graphite-500 mt-1">{fleet.maintenance + fleet.inactive + fleet.blocked} na oficina ou inativos</p>
+ </Card>
+ </div>
 
-    <Card padding="none" className="overflow-hidden">
-      <div className="p-4 bg-graphite-50 dark:bg-graphite-900 border-b border-graphite-200 dark:border-graphite-800 font-bold text-xs uppercase tracking-wider">
-        Detalhamento da Frota por Status
-      </div>
-      <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
-        {[
-          { label: 'Disponíveis', count: fleet.available, color: 'text-success-icon bg-success-bg ' },
-          { label: 'Alugados', count: fleet.rented, color: 'text-info-icon bg-info-bg ' },
-          { label: 'Em Manutenção', count: fleet.maintenance, color: 'text-warning-icon bg-warning-bg ' },
-          { label: 'Inativos', count: fleet.inactive, color: 'text-graphite-600 bg-graphite-100 dark:bg-graphite-800' },
-          { label: 'Bloqueados', count: fleet.blocked, color: 'text-error-icon bg-error-bg ' },
-        ].map((item) => (
-          <div key={item.label} className="p-4 flex items-center justify-between">
-            <span className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">{item.label}</span>
-            <div className="flex items-center gap-3">
-              <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${item.color}`}>
-                {item.count} veículo(s)
-              </span>
-              <span className="text-xs text-graphite-400 font-mono w-12 text-right">
-                {fleet.totalVehicles > 0 ? Math.round((item.count / fleet.totalVehicles) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Card>
-  </div>
+ <Card padding="none" className="overflow-hidden">
+ <div className="p-4 bg-graphite-50 dark:bg-graphite-900 border-b border-graphite-200 dark:border-graphite-800 font-bold text-xs uppercase tracking-wider">
+ Detalhamento da Frota por Status
+ </div>
+ <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
+ {[
+ { label: 'Disponíveis', count: fleet.available, color: 'text-success-icon bg-success-bg ' },
+ { label: 'Alugados', count: fleet.rented, color: 'text-info-icon bg-info-bg ' },
+ { label: 'Em Manutenção', count: fleet.maintenance, color: 'text-warning-icon bg-warning-bg ' },
+ { label: 'Inativos', count: fleet.inactive, color: 'text-graphite-600 bg-graphite-100 dark:bg-graphite-800' },
+ { label: 'Bloqueados', count: fleet.blocked, color: 'text-error-icon bg-error-bg ' },
+ ].map((item) => (
+ <div key={item.label} className="p-4 flex items-center justify-between">
+ <span className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">{item.label}</span>
+ <div className="flex items-center gap-3">
+ <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono ${item.color}`}>
+ {item.count} veículo(s)
+ </span>
+ <span className="text-xs text-graphite-400 font-mono w-12 text-right">
+ {fleet.totalVehicles > 0 ? Math.round((item.count / fleet.totalVehicles) * 100) : 0}%
+ </span>
+ </div>
+ </div>
+ ))}
+ </div>
+ </Card>
+ </div>
 );

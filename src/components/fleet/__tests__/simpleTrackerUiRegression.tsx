@@ -40,20 +40,20 @@ for(const method of ['listTelemetry','getTelemetryHealth','getTelemetryObservabi
 const text=(node:any):string=>typeof node==='string'?node:Array.isArray(node)?node.map(text).join(' '):node?.children?text(node.children):'';
 const user:any={id:'admin',companyId:'tenant-a',name:'Admin',role:'ADMIN',permissions:['*']};
 for(const trackerOnly of [false,true]){
-  let tree:any;
-  await act(async()=>{tree=TestRenderer.create(<AuthContext.Provider value={{user,authMode:'server-session',logout:async()=>{}}}><FleetComplianceManagement initialTab="trackers" trackerOnly={trackerOnly}/></AuthContext.Provider>);});
-  const visible=text(tree.toJSON());assert(visible.includes('Operational provider'));assert(visible.includes('support@example.test'));
-  assert(!/Telemetria|Consultar eventos|Saúde:|Confirmar divergência|Descartar falso positivo/i.test(visible));
-  const link=tree.root.findAllByType('a').find((node:any)=>text(node.props.children)==='Abrir Portal de Rastreamento');assert(link);assert.equal(link.props.href,tracker.portalUrl);assert.equal(link.props.target,'_blank');assert.equal(link.props.rel,'noopener noreferrer');
-  await act(async()=>{tree.root.findAllByType('button').find((node:any)=>text(node.props.children).includes('Novo Rastreador')).props.onClick();});
-  const change=async(label:string,value:string)=>{await act(async()=>{const field=tree.root.findAllByType('label').find((node:any)=>text(node.props.children).startsWith(label));assert(field,'missing field '+label);field.findAll((node:any)=>node.type==='input'||node.type==='select')[0].props.onChange({target:{value}});});};
-  await change('Veículo *','vehicle-a');await change('Modelo *','Simple');await change('IMEI *','123456789012345');await change('Instalação *','2026-09-01');
-  await change('Empresa de rastreamento','New provider');await change('Contato','contact@example.test');await change('URL do portal','javascript:alert(1)');
-  sent=undefined;await act(async()=>{await tree.root.findByType('form').props.onSubmit({preventDefault(){}});});assert.equal(sent,undefined,'unsafe portal submitted');
-  await change('URL do portal','https://new.example.test/portal');await change('Mensalidade','65');await change('Fornecedor','financial-supplier');await change('Categoria','category-a');
-  await act(async()=>{await tree.root.findByType('form').props.onSubmit({preventDefault(){}});});
-  assert.equal(sent.providerName,'New provider');assert.equal(sent.providerContact,'contact@example.test');assert.equal(sent.portalUrl,'https://new.example.test/portal');assert.equal(sent.supplierId,'financial-supplier');assert.equal(sent.monthlyCost,65);assert.equal(sent.categoryId,'category-a');
-  await act(async()=>{tree.unmount();});
+ let tree:any;
+ await act(async()=>{tree=TestRenderer.create(<AuthContext.Provider value={{user,authMode:'server-session',logout:async()=>{}}}><FleetComplianceManagement initialTab="trackers" trackerOnly={trackerOnly}/></AuthContext.Provider>);});
+ const visible=text(tree.toJSON());assert(visible.includes('Operational provider'));assert(visible.includes('support@example.test'));
+ assert(!/Telemetria|Consultar eventos|Saúde:|Confirmar divergência|Descartar falso positivo/i.test(visible));
+ const link=tree.root.findAllByType('a').find((node:any)=>text(node.props.children)==='Abrir Portal de Rastreamento');assert(link);assert.equal(link.props.href,tracker.portalUrl);assert.equal(link.props.target,'_blank');assert.equal(link.props.rel,'noopener noreferrer');
+ await act(async()=>{tree.root.findAllByType('button').find((node:any)=>text(node.props.children).includes('Novo Rastreador')).props.onClick();});
+ const change=async(label:string,value:string)=>{await act(async()=>{const field=tree.root.findAllByType('label').find((node:any)=>text(node.props.children).startsWith(label));assert(field,'missing field '+label);field.findAll((node:any)=>node.type==='input'||node.type==='select')[0].props.onChange({target:{value}});});};
+ await change('Veículo *','vehicle-a');await change('Modelo *','Simple');await change('IMEI *','123456789012345');await change('Instalação *','2026-09-01');
+ await change('Empresa de rastreamento','New provider');await change('Contato','contact@example.test');await change('URL do portal','javascript:alert(1)');
+ sent=undefined;await act(async()=>{await tree.root.findByType('form').props.onSubmit({preventDefault(){}});});assert.equal(sent,undefined,'unsafe portal submitted');
+ await change('URL do portal','https://new.example.test/portal');await change('Mensalidade','65');await change('Fornecedor','financial-supplier');await change('Categoria','category-a');
+ await act(async()=>{await tree.root.findByType('form').props.onSubmit({preventDefault(){}});});
+ assert.equal(sent.providerName,'New provider');assert.equal(sent.providerContact,'contact@example.test');assert.equal(sent.portalUrl,'https://new.example.test/portal');assert.equal(sent.supplierId,'financial-supplier');assert.equal(sent.monthlyCost,65);assert.equal(sent.categoryId,'category-a');
+ await act(async()=>{tree.unmount();});
 }
 const app=readFileSync('src/App.tsx','utf8');assert(!app.includes('TelemetryKmDivergenceOverview'));assert(!app.includes('TelemetrySanitizedLocationOverview'));
 const routes=readFileSync('src/server/trackerRoutes.ts','utf8');assert(!routes.includes('telemetryRoutes'));assert(!routes.includes('telemetryAuthority'));
