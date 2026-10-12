@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 import { UnitOfWork } from '../db/uow';
 import { users } from '../db/schema';
-import { userCompanyMemberships } from '../db/authSchema';
+import { userCompanyMemberships, userCredentials } from '../db/authSchema';
 import { AuditAction } from '../types/enums';
 import { getDefaultPermissionsForRole } from './rolePresets';
+import { hashPassword } from './password';
 
 export interface AdminUserActor {
   companyId: string;
@@ -83,6 +84,15 @@ async function auditStatusChange(
 async function hasMembershipsTable(tx: any): Promise<boolean> {
   try {
     const res: any = await tx.execute(sql`SELECT to_regclass('user_company_memberships') AS reg`);
+    return Boolean(res.rows?.[0]?.reg || res[0]?.reg);
+  } catch {
+    return false;
+  }
+}
+
+async function hasCredentialsTable(tx: any): Promise<boolean> {
+  try {
+    const res: any = await tx.execute(sql`SELECT to_regclass('user_credentials') AS reg`);
     return Boolean(res.rows?.[0]?.reg || res[0]?.reg);
   } catch {
     return false;
@@ -408,13 +418,22 @@ export class AdminUserAuthority {
 
   static async provisionUser(
     actor: AdminUserActor,
-    input: { id?: string; name: string; email: string; role: string; permissions?: string[]; companyId?: string }
+    input: { id?: string; name: string; email: string; role: string; permissions?: string[]; companyId?: string; password?: string }
   ): Promise<AdminUserRecord> {
     assertCanManageUsers(actor);
     // Guarda de seguranca multi-tenant estrita (AUTOERP-82):
     // Um ADMIN da empresa A NAO pode criar ou alterar vinculo de ninguem na empresa B.
     if (input.companyId && input.companyId.trim() !== '' && input.companyId.trim() !== actor.companyId) {
       throw new AdminUserForbiddenError('Acesso negado: não é permitido gerenciar usuários de outra empresa');
+    }
+
+    let passwordHash: string | null = null;
+    if (typeof input.password === 'string' && input.password.trim() !== '') {
+      const cleanPassword = input.password.trim();
+      if (cleanPassword.length < 12) {
+        throw new AdminUserConflictError('A senha provisória deve conter no mínimo 12 caracteres');
+      }
+      passwordHash = await hashPassword(cleanPassword);
     }
 
     const roleClean = input.role.trim().toUpperCase();
@@ -504,6 +523,26 @@ export class AdminUserAuthority {
               updatedAt: now,
             },
           });
+      }
+
+      // 3. Insere credencial inicial se senha foi informada e o usuario ainda nao tem credencial
+      if (passwordHash) {
+        const hasCreds = await hasCredentialsTable(tx);
+        if (hasCreds) {
+          const credRows = await tx
+            .select({ userId: userCredentials.userId })
+            .from(userCredentials)
+            .where(eq(userCredentials.userId, userRecord.id))
+            .limit(1);
+          if (credRows.length === 0) {
+            await tx.insert(userCredentials).values({
+              userId: userRecord.id,
+              companyId: actor.companyId,
+              passwordHash,
+              passwordUpdatedAt: now,
+            });
+          }
+        }
       }
 
       await txContext.getAuditLogRepo().create({

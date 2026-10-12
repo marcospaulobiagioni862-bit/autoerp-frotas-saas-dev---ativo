@@ -120,7 +120,7 @@ export function registerAdminUserRoutes(app: Express): void {
     const p = requirePrincipal(req, res);
     if (!p) return;
     try {
-      const { name, email, role, permissions, companyId } = req.body || {};
+      const { name, email, role, permissions, companyId, password } = req.body || {};
       if (!name || !email || !role) {
         res.status(400).json({ error: 'Nome, email e papel são obrigatórios' });
         return;
@@ -132,6 +132,7 @@ export function registerAdminUserRoutes(app: Express): void {
           role,
           permissions,
           companyId: typeof companyId === 'string' ? companyId : undefined,
+          password: typeof password === 'string' ? password : undefined,
         }),
       });
     } catch (error) {
