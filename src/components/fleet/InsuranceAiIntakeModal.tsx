@@ -109,13 +109,13 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
       </div>
       <div>
         <label className="mb-1 block text-xs font-semibold">Veículo *</label>
-        <select className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" value={vehicleId} onChange={e=>{setVehicleId(e.target.value);setAttachmentId('');setExtraction(null);setDraft({});}} disabled={busy||Boolean(attachmentId)}>
+        <select className="w-full rounded-lg border border-graphite-300 bg-white p-2.5 text-sm dark:border-graphite-700 dark:bg-graphite-900" value={vehicleId} onChange={e=>{setVehicleId(e.target.value);setAttachmentId('');setExtraction(null);setDraft({});}} disabled={busy||Boolean(attachmentId)}>
           <option value="">Selecione o veículo</option>
           {vehicles.map(vehicle=><option key={vehicle.id} value={vehicle.id}>{vehicle.plate} — {vehicle.brand} {vehicle.model}</option>)}
         </select>
       </div>
       {vehicleId&&!attachmentId&&<FileUpload entityType="Vehicle" entityId={vehicleId} documentType="INSURANCE_POLICY" onUploadComplete={uploaded}/>}
-      {attachmentId&&<div className="rounded-lg border p-3 text-xs"><strong>Apólice original anexada</strong><p className="mt-1 text-slate-500">{selectedVehicle?.plate} · anexo {attachmentId}</p></div>}
+      {attachmentId&&<div className="rounded-lg border p-3 text-xs"><strong>Apólice original anexada</strong><p className="mt-1 text-graphite-500">{selectedVehicle?.plate} · anexo {attachmentId}</p></div>}
       {extraction&&['PENDING','PROCESSING'].includes(extraction.status)&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Analisando apólice… o status é atualizado automaticamente.</div>}
       {extraction?.status==='FAILED'&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">A leitura falhou. Feche e tente novamente com um documento mais legível.</div>}
       {extraction?.status==='REVIEW_REQUIRED'&&<div className="space-y-3">
@@ -123,7 +123,7 @@ export const InsuranceAiIntakeModal:React.FC<Props>=({isOpen,vehicles,onClose,on
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {fields.map(([key,original])=><Input key={key} label={documentAiFieldLabel(key)} value={draft[key]??value(original)} onChange={e=>setDraft(current=>({...current,[key]:e.target.value}))}/>)}
         </div>
-        <p className="text-[11px] text-slate-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
+        <p className="text-[11px] text-graphite-500">Campos ausentes no documento continuarão vazios e poderão ser preenchidos no formulário normal.</p>
       </div>}
       {error&&<div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={busy}>Cancelar</Button>{extraction?.status==='REVIEW_REQUIRED'&&<Button onClick={()=>void approve()} isLoading={busy}>Usar dados no Seguro</Button>}</div>

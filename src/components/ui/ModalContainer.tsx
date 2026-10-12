@@ -110,7 +110,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       data-unsaved-guard={guardId}
       onInputCapture={(event) => markDirty(event.target)}
       onChangeCapture={(event) => markDirty(event.target)}
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 overflow-hidden bg-slate-900/60 backdrop-blur-xs transition-opacity"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 overflow-hidden bg-graphite-900/60 backdrop-blur-xs transition-opacity"
     >
       <div
         className="fixed inset-0"
@@ -119,15 +119,15 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
       />
 
       <div
-        className={`relative w-full min-w-0 ${widthClass} bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative w-full min-w-0 ${widthClass} bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[96vh] z-10 transition-all transform animate-in fade-in zoom-in-95 duration-150`}
       >
-        <div className="flex min-w-0 items-start justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex min-w-0 items-start justify-between px-4 py-3 border-b border-graphite-200 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/30">
           <div className="min-w-0">
-            <h2 id="modal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100">
+            <h2 id="modal-title" className="text-lg font-bold text-graphite-900 dark:text-graphite-100">
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-0.5 text-xs text-graphite-500 dark:text-graphite-400">
                 {subtitle}
               </p>
             )}
@@ -135,7 +135,7 @@ export const ModalContainer: React.FC<ModalContainerProps> = ({
           <button
             onClick={requestClose}
             aria-label="Fechar modal"
-            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="p-1.5 text-graphite-400 hover:text-graphite-600 dark:hover:text-graphite-200 rounded-lg hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <X className="w-5 h-5" />
           </button>

@@ -73,11 +73,11 @@ export function InspectionCarDamageDiagram({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h5 className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+          <h5 className="text-xs font-bold text-graphite-800 dark:text-graphite-100 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
             Mapeamento de Avarias na Carroceria
           </h5>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-graphite-500">
             {readOnly
               ? 'Pins azuis = avarias anteriores (pré-existentes). Pins vermelhos = avarias novas nesta devolução.'
               : 'Toque na silhueta do veículo para marcar o local exato do dano.'}
@@ -94,7 +94,7 @@ export function InspectionCarDamageDiagram({
       </div>
 
       {/* Silhueta SVG da Carroceria (Vista Superior Top-Down) */}
-      <div className="relative mx-auto max-w-[280px] bg-slate-50 dark:bg-slate-900/60 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 flex justify-center">
+      <div className="relative mx-auto max-w-[280px] bg-graphite-50 dark:bg-graphite-900/60 rounded-2xl p-4 border border-graphite-200 dark:border-graphite-800 flex justify-center">
         <svg
           viewBox="0 0 200 400"
           className={`w-full max-w-[220px] select-none ${!readOnly ? 'cursor-crosshair' : ''}`}
@@ -105,7 +105,7 @@ export function InspectionCarDamageDiagram({
           <path
             d="M 50 60 C 50 20, 150 20, 150 60 L 160 110 C 165 140, 165 260, 160 320 C 155 370, 45 370, 40 320 C 35 260, 35 140, 40 110 Z"
             fill="currentColor"
-            className="text-slate-200 dark:text-slate-800"
+            className="text-graphite-200 dark:text-graphite-800"
             stroke="currentColor"
             strokeWidth="3"
             strokeLinejoin="round"
@@ -128,7 +128,7 @@ export function InspectionCarDamageDiagram({
             height="110"
             rx="8"
             fill="currentColor"
-            className="text-slate-100 dark:text-slate-850"
+            className="text-graphite-100 dark:text-graphite-850"
             stroke="currentColor"
             strokeWidth="2"
           />
@@ -146,7 +146,7 @@ export function InspectionCarDamageDiagram({
           <path
             d="M 55 300 C 60 350, 140 350, 145 300 Z"
             fill="currentColor"
-            className="text-slate-200 dark:text-slate-800"
+            className="text-graphite-200 dark:text-graphite-800"
             stroke="currentColor"
             strokeWidth="2"
           />
@@ -157,12 +157,12 @@ export function InspectionCarDamageDiagram({
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
-            className="text-slate-300 dark:text-slate-700"
+            className="text-graphite-300 dark:text-graphite-700"
           />
 
           {/* Retrovisores */}
-          <rect x="25" y="115" width="14" height="20" rx="4" fill="currentColor" className="text-slate-400" />
-          <rect x="161" y="115" width="14" height="20" rx="4" fill="currentColor" className="text-slate-400" />
+          <rect x="25" y="115" width="14" height="20" rx="4" fill="currentColor" className="text-graphite-400" />
+          <rect x="161" y="115" width="14" height="20" rx="4" fill="currentColor" className="text-graphite-400" />
 
           {/* Pneus laterais */}
           <rect x="25" y="75" width="10" height="30" rx="3" fill="#1e293b" />
@@ -207,7 +207,7 @@ export function InspectionCarDamageDiagram({
                 cx={(selectedPoint.x / 100) * 200}
                 cy={(selectedPoint.y / 100) * 400}
                 r="10"
-                className="fill-amber-400 stroke-slate-900 animate-ping opacity-75"
+                className="fill-amber-400 stroke-graphite-900 animate-ping opacity-75"
               />
               <circle
                 cx={(selectedPoint.x / 100) * 200}
@@ -231,18 +231,18 @@ export function InspectionCarDamageDiagram({
             <button
               type="button"
               onClick={() => setSelectedPoint(null)}
-              className="text-xs text-slate-500 hover:text-slate-800"
+              className="text-xs text-graphite-500 hover:text-graphite-800"
             >
               Cancelar
             </button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div>
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">Peça / Local</label>
+              <label className="text-[11px] font-semibold text-graphite-700 dark:text-graphite-300">Peça / Local</label>
               <select
                 value={part}
                 onChange={(e) => setPart(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
               >
                 {CAR_PARTS.map((p) => (
                   <option key={p} value={p}>
@@ -252,11 +252,11 @@ export function InspectionCarDamageDiagram({
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">Gravidade</label>
+              <label className="text-[11px] font-semibold text-graphite-700 dark:text-graphite-300">Gravidade</label>
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value as any)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
               >
                 <option value="LOW">Leve (Risco superficial)</option>
                 <option value="MEDIUM">Média (Amassado / Risco fundo)</option>
@@ -266,7 +266,7 @@ export function InspectionCarDamageDiagram({
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
             <div>
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              <label className="text-[11px] font-semibold text-graphite-700 dark:text-graphite-300">
                 Descrição do dano *
               </label>
               <input
@@ -274,11 +274,11 @@ export function InspectionCarDamageDiagram({
                 placeholder="Ex: Risco 15cm com perda de tinta..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
               />
             </div>
             <div>
-              <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+              <label className="text-[11px] font-semibold text-graphite-700 dark:text-graphite-300">
                 Estimativa (R$)
               </label>
               <input
@@ -286,7 +286,7 @@ export function InspectionCarDamageDiagram({
                 placeholder="Ex: 250"
                 value={estimatedCost}
                 onChange={(e) => setEstimatedCost(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
               />
             </div>
           </div>
@@ -304,7 +304,7 @@ export function InspectionCarDamageDiagram({
       {/* Lista de Avarias Registradas */}
       {damages.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+          <p className="text-[11px] font-bold text-graphite-700 dark:text-graphite-300">
             Avarias mapeadas ({damages.length})
           </p>
           <div className="grid gap-1.5 max-h-48 overflow-y-auto">
@@ -326,29 +326,29 @@ export function InspectionCarDamageDiagram({
                     {idx + 1}
                   </span>
                   <div>
-                    <span className="font-semibold text-slate-900 dark:text-white">
+                    <span className="font-semibold text-graphite-900 dark:text-white">
                       {dmg.part}
                     </span>
-                    <span className="text-[10px] text-slate-500 ml-1.5">
+                    <span className="text-[10px] text-graphite-500 ml-1.5">
                       ({dmg.severity === 'LOW' ? 'Leve' : dmg.severity === 'MEDIUM' ? 'Média' : 'Grave'})
                     </span>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300">{dmg.description}</p>
+                    <p className="text-[11px] text-graphite-600 dark:text-graphite-300">{dmg.description}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                   {dmg.estimatedCost ? (
-                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
+                    <span className="font-mono font-semibold text-graphite-700 dark:text-graphite-200">
                       R$ {dmg.estimatedCost.toFixed(2)}
                     </span>
                   ) : (
-                    <span className="text-[10px] text-slate-400">Sob orçamento</span>
+                    <span className="text-[10px] text-graphite-400">Sob orçamento</span>
                   )}
                   {!readOnly && onRemoveDamage && (
                     <button
                       type="button"
                       onClick={() => onRemoveDamage(dmg.id)}
-                      className="text-slate-400 hover:text-rose-600"
+                      className="text-graphite-400 hover:text-rose-600"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

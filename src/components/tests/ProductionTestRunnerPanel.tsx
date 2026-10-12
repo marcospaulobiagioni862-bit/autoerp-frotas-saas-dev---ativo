@@ -24,13 +24,13 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = () => (
           <ShieldCheck className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Testes de produção protegidos</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <h3 className="font-semibold text-graphite-900 dark:text-graphite-100">Testes de produção protegidos</h3>
+          <p className="text-sm text-graphite-600 dark:text-graphite-400 mt-1">
             Esta tela não altera os dados da empresa. As verificações do sistema são realizadas em ambiente separado.
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center gap-2 text-xs text-graphite-500 dark:text-graphite-400">
         <GitBranch className="w-4 h-4" />
         Consulte a área de validação para ver os resultados mais recentes.
       </div>

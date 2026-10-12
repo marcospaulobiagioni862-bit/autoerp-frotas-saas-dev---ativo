@@ -348,7 +348,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       case 'P0': return 'bg-red-100 text-red-800 border-red-300 font-bold';
       case 'P1': return 'bg-orange-100 text-orange-800 border-orange-300 font-semibold';
       case 'P2': return 'bg-amber-100 text-amber-800 border-amber-300';
-      case 'P3': return 'bg-slate-100 text-slate-700 border-slate-300';
+      case 'P3': return 'bg-graphite-100 text-graphite-700 border-graphite-300';
     }
   };
 
@@ -361,7 +361,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       case 'WAITING_VALIDATION': return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'COMPLETED': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'CLOSED': return 'bg-emerald-100 text-emerald-800 border-emerald-300';
-      case 'CANCELLED': return 'bg-slate-100 text-slate-500 border-slate-200 line-through';
+      case 'CANCELLED': return 'bg-graphite-100 text-graphite-500 border-graphite-200 line-through';
       case 'REOPENED': return 'bg-rose-50 text-rose-700 border-rose-200';
     }
   };
@@ -371,25 +371,25 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       case 'ON_TRACK': return 'bg-emerald-100 text-emerald-800';
       case 'WARNING': return 'bg-amber-100 text-amber-800 font-semibold';
       case 'BREACHED': return 'bg-red-100 text-red-800 font-bold animate-bounce';
-      case 'RESOLVED': return 'bg-slate-100 text-slate-600';
-      default: return 'bg-slate-100 text-slate-600';
+      case 'RESOLVED': return 'bg-graphite-100 text-graphite-600';
+      default: return 'bg-graphite-100 text-graphite-600';
     }
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen text-slate-800">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-graphite-50 min-h-screen text-graphite-800">
       {/* Header Banner */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl shadow-sm border border-graphite-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-indigo-600 text-white rounded-lg shadow-md">
               <ListTodo className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              <h1 className="text-2xl font-bold text-graphite-900 tracking-tight">
                 Central de Workflow & Execução Operacional
               </h1>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="text-xs text-graphite-500 font-medium mt-0.5">
                 AutoERP v3.56 • Gestão de Tarefas, SLAs, Pendências e Automações sem Alteração Financeira (Read-Only)
               </p>
             </div>
@@ -397,12 +397,12 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-            <Building2 className="w-4 h-4 text-slate-500" />
+          <div className="flex items-center gap-2 bg-graphite-100 px-3 py-1.5 rounded-lg border border-graphite-200 text-xs">
+            <Building2 className="w-4 h-4 text-graphite-500" />
             <select
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
-              className="bg-transparent font-semibold text-slate-700 focus:outline-none"
+              className="bg-transparent font-semibold text-graphite-700 focus:outline-none"
             >
               <option value="company-1">Empresa Alpha (ID: company-1)</option>
               <option value="company-test-tenant-a">Empresa de teste A</option>
@@ -410,12 +410,12 @@ export const OperationalWorkflowCenterView: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs">
-            <UserCheck className="w-4 h-4 text-slate-500" />
+          <div className="flex items-center gap-2 bg-graphite-100 px-3 py-1.5 rounded-lg border border-graphite-200 text-xs">
+            <UserCheck className="w-4 h-4 text-graphite-500" />
             <select
               value={userRole}
               onChange={(e) => setUserRole(e.target.value as any)}
-              className="bg-transparent font-semibold text-slate-700 focus:outline-none"
+              className="bg-transparent font-semibold text-graphite-700 focus:outline-none"
             >
               <option value="ADMIN">Perfil: ADMIN</option>
               <option value="OPERATIONAL_MANAGER">Perfil: GESTOR OPERACIONAL</option>
@@ -435,7 +435,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
           <button
             onClick={loadData}
             disabled={loading}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition"
+            className="p-2 text-graphite-600 hover:bg-graphite-100 rounded-lg border border-graphite-200 transition"
             title="Atualizar Dados"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -464,68 +464,68 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
       {/* Executive KPIs Grid */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
+        <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+          <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Total Tarefas</span>
             <ListTodo className="w-4 h-4 text-indigo-500" />
           </div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">{metrics?.totalTasks || 0}</div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-2xl font-bold text-graphite-900 mt-2">{metrics?.totalTasks || 0}</div>
+          <div className="text-[11px] text-graphite-500 mt-1">
             {metrics?.openTasks || 0} Abertas • {metrics?.inProgressTasks || 0} Em Andamento
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
+        <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+          <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>SLA Compliance</span>
             <BarChart2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-2xl font-bold text-emerald-600 mt-2">{metrics?.slaComplianceRate || 100}%</div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-[11px] text-graphite-500 mt-1">
             {metrics?.slaBreachedCount || 0} Rompidos • {metrics?.slaWarningCount || 0} Em Alerta
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
+        <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+          <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Tarefas Bloqueadas</span>
             <Lock className="w-4 h-4 text-red-500" />
           </div>
           <div className="text-2xl font-bold text-red-600 mt-2">{metrics?.blockedTasks || 0}</div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-[11px] text-graphite-500 mt-1">
             Taxa Bloqueio: {metrics?.blockedRate || 0}%
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
+        <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+          <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Pendências Ativas</span>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
           </div>
           <div className="text-2xl font-bold text-amber-600 mt-2">{metrics?.totalPendingActions || 0}</div>
-          <div className="text-[11px] text-slate-500 mt-1 font-semibold text-red-600">
+          <div className="text-[11px] text-graphite-500 mt-1 font-semibold text-red-600">
             {metrics?.criticalPendencies || 0} Críticas (P0/P1)
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center text-slate-500 text-xs font-medium">
+        <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+          <div className="flex justify-between items-center text-graphite-500 text-xs font-medium">
             <span>Sem Responsável</span>
-            <User className="w-4 h-4 text-slate-400" />
+            <User className="w-4 h-4 text-graphite-400" />
           </div>
-          <div className="text-2xl font-bold text-slate-800 mt-2">{metrics?.unassignedTasks || 0}</div>
-          <div className="text-[11px] text-slate-500 mt-1">
+          <div className="text-2xl font-bold text-graphite-800 mt-2">{metrics?.unassignedTasks || 0}</div>
+          <div className="text-[11px] text-graphite-500 mt-1">
             Taxa Conclusão: {metrics?.completionRate || 0}%
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs */}
-      <div className="border-b border-slate-200 flex items-center gap-2 overflow-x-auto bg-white p-1 rounded-xl shadow-sm">
+      <div className="border-b border-graphite-200 flex items-center gap-2 overflow-x-auto bg-white p-1 rounded-xl shadow-sm">
         <button
           onClick={() => setActiveSubTab('tasks')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'tasks' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <ListTodo className="w-4 h-4" />
@@ -535,7 +535,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('pendencies')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'pendencies' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'pendencies' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <AlertTriangle className="w-4 h-4" />
@@ -545,7 +545,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('sla')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'sla' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'sla' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <Clock className="w-4 h-4" />
@@ -555,7 +555,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('workflows')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'workflows' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'workflows' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <Layers className="w-4 h-4" />
@@ -565,7 +565,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('timeline')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'timeline' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'timeline' ? 'bg-indigo-600 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <History className="w-4 h-4" />
@@ -575,7 +575,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
         <button
           onClick={() => setActiveSubTab('matriz')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 transition ${
-            activeSubTab === 'matriz' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+            activeSubTab === 'matriz' ? 'bg-graphite-900 text-white shadow-sm' : 'text-graphite-600 hover:bg-graphite-100'
           }`}
         >
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -586,23 +586,23 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 1: Tasks */}
       {activeSubTab === 'tasks' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   placeholder="Buscar tarefa..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="pl-9 pr-3 py-1.5 border border-graphite-200 rounded-lg text-xs w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
+                className="px-3 py-1.5 border border-graphite-200 rounded-lg text-xs bg-white text-graphite-700"
               >
                 <option value="ALL">Todos os Status</option>
                 <option value="OPEN">OPEN (Abertas)</option>
@@ -618,7 +618,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
+                className="px-3 py-1.5 border border-graphite-200 rounded-lg text-xs bg-white text-graphite-700"
               >
                 <option value="ALL">Todas as Prioridades</option>
                 <option value="P0">P0 (Crítica)</option>
@@ -639,43 +639,43 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
           {/* Create Task Modal */}
           {showCreateTaskModal && (
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-graphite-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <h3 className="font-bold text-slate-900 text-sm">Criar Nova Tarefa Operacional</h3>
-                  <button onClick={() => setShowCreateTaskModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                <div className="flex justify-between items-center border-b border-graphite-100 pb-3">
+                  <h3 className="font-bold text-graphite-900 text-sm">Criar Nova Tarefa Operacional</h3>
+                  <button onClick={() => setShowCreateTaskModal(false)} className="text-graphite-400 hover:text-graphite-600">✕</button>
                 </div>
 
                 <form onSubmit={handleCreateTaskSubmit} className="space-y-3 text-xs">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Título</label>
+                    <label className="block font-semibold text-graphite-700 mb-1">Título</label>
                     <input
                       type="text"
                       value={newTitle}
                       onChange={(e) => setNewTitle(e.target.value)}
                       placeholder="Ex: Atualizar licenciamento do veículo AAA-1234"
-                      className="w-full p-2 border border-slate-200 rounded-lg"
+                      className="w-full p-2 border border-graphite-200 rounded-lg"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Descrição</label>
+                    <label className="block font-semibold text-graphite-700 mb-1">Descrição</label>
                     <textarea
                       value={newDescription}
                       onChange={(e) => setNewDescription(e.target.value)}
                       placeholder="Detalhes operacionais da tarefa..."
-                      className="w-full p-2 border border-slate-200 rounded-lg h-20"
+                      className="w-full p-2 border border-graphite-200 rounded-lg h-20"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Categoria</label>
+                      <label className="block font-semibold text-graphite-700 mb-1">Categoria</label>
                       <select
                         value={newCategory}
                         onChange={(e) => setNewCategory(e.target.value as any)}
-                        className="w-full p-2 border border-slate-200 rounded-lg"
+                        className="w-full p-2 border border-graphite-200 rounded-lg"
                       >
                         <option value="DOCUMENT">Documentação</option>
                         <option value="MAINTENANCE">Manutenção</option>
@@ -690,11 +690,11 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Prioridade</label>
+                      <label className="block font-semibold text-graphite-700 mb-1">Prioridade</label>
                       <select
                         value={newPriority}
                         onChange={(e) => setNewPriority(e.target.value as any)}
-                        className="w-full p-2 border border-slate-200 rounded-lg"
+                        className="w-full p-2 border border-graphite-200 rounded-lg"
                       >
                         <option value="P0">P0 (Crítica - 2h SLA)</option>
                         <option value="P1">P1 (Alta - 8h SLA)</option>
@@ -705,13 +705,13 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Atribuir a Usuário (Opcional)</label>
+                    <label className="block font-semibold text-graphite-700 mb-1">Atribuir a Usuário (Opcional)</label>
                     <input
                       type="text"
                       value={newAssignee}
                       onChange={(e) => setNewAssignee(e.target.value)}
                       placeholder="Ex: usr-atendente-01"
-                      className="w-full p-2 border border-slate-200 rounded-lg"
+                      className="w-full p-2 border border-graphite-200 rounded-lg"
                     />
                   </div>
 
@@ -719,7 +719,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowCreateTaskModal(false)}
-                      className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-semibold"
+                      className="px-4 py-2 border border-graphite-200 rounded-lg text-graphite-600 font-semibold"
                     >
                       Cancelar
                     </button>
@@ -736,10 +736,10 @@ export const OperationalWorkflowCenterView: React.FC = () => {
           )}
 
           {/* Tasks Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-xl border border-graphite-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[11px]">
+              <table className="w-full text-left text-xs text-graphite-600">
+                <thead className="bg-graphite-50 border-b border-graphite-200 text-graphite-700 font-bold uppercase tracking-wider text-[11px]">
                   <tr>
                     <th className="py-3 px-4">Prioridade / ID</th>
                     <th className="py-3 px-4">Título & Origem</th>
@@ -750,10 +750,10 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     <th className="py-3 px-4 text-right">Ações de Controle</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-graphite-100">
                   {filteredTasks.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={7} className="py-8 text-center text-graphite-400">
                         Nenhuma tarefa encontrada.
                       </td>
                     </tr>
@@ -761,22 +761,22 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     filteredTasks.map((task) => {
                       const taskSLA = slaRecords.find(s => s.taskId === task.id || s.id === task.slaId);
                       return (
-                        <tr key={task.id} className="hover:bg-slate-50 transition">
+                        <tr key={task.id} className="hover:bg-graphite-50 transition">
                           <td className="py-3 px-4 whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded border text-[10px] ${getPriorityBadgeClass(task.priority)}`}>
                               {task.priority}
                             </span>
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">{task.id}</div>
+                            <div className="text-[10px] text-graphite-400 font-mono mt-0.5">{task.id}</div>
                           </td>
 
                           <td className="py-3 px-4 max-w-xs">
-                            <div className="font-bold text-slate-900 truncate">{task.title}</div>
-                            <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                            <div className="font-bold text-graphite-900 truncate">{task.title}</div>
+                            <div className="text-[10px] text-graphite-500 truncate mt-0.5">
                               {task.description || 'Sem descrição'} • Origem: <span className="font-mono">{task.sourceType} ({task.sourceId})</span>
                             </div>
                           </td>
 
-                          <td className="py-3 px-4 whitespace-nowrap font-medium text-slate-700">
+                          <td className="py-3 px-4 whitespace-nowrap font-medium text-graphite-700">
                             {task.category}
                           </td>
 
@@ -793,17 +793,17 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
                           <td className="py-3 px-4 whitespace-nowrap">
                             {task.assignedUserId ? (
-                              <span className="font-medium text-slate-800 flex items-center gap-1">
+                              <span className="font-medium text-graphite-800 flex items-center gap-1">
                                 <User className="w-3 h-3 text-indigo-500" />
                                 {task.assignedUserId}
                               </span>
                             ) : (
-                              <span className="text-slate-400 italic">Não Atribuído</span>
+                              <span className="text-graphite-400 italic">Não Atribuído</span>
                             )}
                           </td>
 
                           <td className="py-3 px-4 whitespace-nowrap">
-                            <div className="text-slate-700 font-medium">
+                            <div className="text-graphite-700 font-medium">
                               {new Date(task.dueAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                             </div>
                             {taskSLA && (
@@ -878,7 +878,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                               {(task.status === 'CLOSED' || task.status === 'CANCELLED') && (
                                 <button
                                   onClick={() => handleReopenTask(task.id)}
-                                  className="p-1 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded text-[11px] font-semibold flex items-center gap-1"
+                                  className="p-1 bg-graphite-100 text-graphite-700 hover:bg-graphite-200 rounded text-[11px] font-semibold flex items-center gap-1"
                                 >
                                   <RotateCcw className="w-3.5 h-3.5" /> Reabrir
                                 </button>
@@ -886,7 +886,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
                               <button
                                 onClick={() => setSelectedTask(task)}
-                                className="p-1 text-slate-500 hover:bg-slate-100 rounded"
+                                className="p-1 text-graphite-500 hover:bg-graphite-100 rounded"
                                 title="Ver Detalhes e Evidências"
                               >
                                 <FileText className="w-4 h-4" />
@@ -904,29 +904,29 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
           {/* Selected Task Detail Drawer / Modal */}
           {selectedTask && (
-            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-graphite-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col">
-                <div className="flex justify-between items-start border-b border-slate-100 p-6 pb-3 shrink-0">
+                <div className="flex justify-between items-start border-b border-graphite-100 p-6 pb-3 shrink-0">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getPriorityBadgeClass(selectedTask.priority)}`}>
                         {selectedTask.priority}
                       </span>
-                      <h3 className="font-bold text-slate-900 text-base">{selectedTask.title}</h3>
+                      <h3 className="font-bold text-graphite-900 text-base">{selectedTask.title}</h3>
                     </div>
-                    <div className="text-xs text-slate-400 font-mono mt-1">ID: {selectedTask.id} • Correlation: {selectedTask.correlationId}</div>
+                    <div className="text-xs text-graphite-400 font-mono mt-1">ID: {selectedTask.id} • Correlation: {selectedTask.correlationId}</div>
                   </div>
-                  <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+                  <button onClick={() => setSelectedTask(null)} className="text-graphite-400 hover:text-graphite-600">✕</button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 pt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-3 rounded-lg">
-                  <div><span className="font-semibold text-slate-500">Categoria:</span> {selectedTask.category}</div>
-                  <div><span className="font-semibold text-slate-500">Status:</span> {selectedTask.status}</div>
-                  <div><span className="font-semibold text-slate-500">Origem:</span> {selectedTask.sourceType} ({selectedTask.sourceId})</div>
-                  <div><span className="font-semibold text-slate-500">Entidade:</span> {selectedTask.entityType} ({selectedTask.entityId})</div>
-                  <div><span className="font-semibold text-slate-500">Atribuído a:</span> {selectedTask.assignedUserId || 'Nenhum'}</div>
-                  <div><span className="font-semibold text-slate-500">Prazo:</span> {new Date(selectedTask.dueAt).toLocaleString()}</div>
+                <div className="grid grid-cols-2 gap-4 text-xs bg-graphite-50 p-3 rounded-lg">
+                  <div><span className="font-semibold text-graphite-500">Categoria:</span> {selectedTask.category}</div>
+                  <div><span className="font-semibold text-graphite-500">Status:</span> {selectedTask.status}</div>
+                  <div><span className="font-semibold text-graphite-500">Origem:</span> {selectedTask.sourceType} ({selectedTask.sourceId})</div>
+                  <div><span className="font-semibold text-graphite-500">Entidade:</span> {selectedTask.entityType} ({selectedTask.entityId})</div>
+                  <div><span className="font-semibold text-graphite-500">Atribuído a:</span> {selectedTask.assignedUserId || 'Nenhum'}</div>
+                  <div><span className="font-semibold text-graphite-500">Prazo:</span> {new Date(selectedTask.dueAt).toLocaleString()}</div>
                 </div>
 
                 {selectedTask.resolution && (
@@ -937,21 +937,21 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
                 {/* Evidences Timeline */}
                 <div className="space-y-2">
-                  <h4 className="font-bold text-slate-800 text-xs flex items-center gap-2">
+                  <h4 className="font-bold text-graphite-800 text-xs flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-500" /> Evidências e Comentários ({selectedTask.evidences.length})
                   </h4>
 
                   <div className="space-y-2">
                     {selectedTask.evidences.length === 0 ? (
-                      <div className="text-xs text-slate-400 italic">Nenhuma evidência registrada.</div>
+                      <div className="text-xs text-graphite-400 italic">Nenhuma evidência registrada.</div>
                     ) : (
                       selectedTask.evidences.map(ev => (
-                        <div key={ev.id} className="p-2 bg-slate-50 rounded border border-slate-200 text-xs">
-                          <div className="flex justify-between text-[10px] text-slate-500 font-medium">
+                        <div key={ev.id} className="p-2 bg-graphite-50 rounded border border-graphite-200 text-xs">
+                          <div className="flex justify-between text-[10px] text-graphite-500 font-medium">
                             <span>{ev.addedBy}</span>
                             <span>{new Date(ev.addedAt).toLocaleString()}</span>
                           </div>
-                          <div className="text-slate-800 mt-1">{ev.content}</div>
+                          <div className="text-graphite-800 mt-1">{ev.content}</div>
                         </div>
                       ))
                     )}
@@ -963,21 +963,21 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                       value={evidenceContentInput}
                       onChange={(e) => setEvidenceContentInput(e.target.value)}
                       placeholder="Adicionar comentário ou evidência..."
-                      className="flex-1 p-2 border border-slate-200 rounded-lg text-xs"
+                      className="flex-1 p-2 border border-graphite-200 rounded-lg text-xs"
                     />
                     <button
                       onClick={() => handleAddEvidence(selectedTask.id)}
-                      className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold"
+                      className="px-3 py-2 bg-graphite-800 hover:bg-graphite-900 text-white rounded-lg text-xs font-semibold"
                     >
                       Adicionar
                     </button>
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-2 border-t border-slate-100">
+                <div className="flex justify-end pt-2 border-t border-graphite-100">
                   <button
                     onClick={() => setSelectedTask(null)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold"
+                    className="px-4 py-2 bg-graphite-100 text-graphite-700 rounded-lg text-xs font-semibold"
                   >
                     Fechar
                   </button>
@@ -992,10 +992,10 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 2: Pendencies Central */}
       {activeSubTab === 'pendencies' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm flex justify-between items-center">
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">Central de Pendências Consolidadas</h3>
-              <p className="text-xs text-slate-500">Pendências identificadas automaticamente em todos os subsistemas operacionais</p>
+              <h3 className="font-bold text-graphite-900 text-sm">Central de Pendências Consolidadas</h3>
+              <p className="text-xs text-graphite-500">Pendências identificadas automaticamente em todos os subsistemas operacionais</p>
             </div>
             <button
               onClick={async () => {
@@ -1010,12 +1010,12 @@ export const OperationalWorkflowCenterView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {pendencies.length === 0 ? (
-              <div className="col-span-2 bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-400">
+              <div className="col-span-2 bg-white p-8 rounded-xl border border-graphite-200 text-center text-graphite-400">
                 Nenhuma pendência ativa no momento.
               </div>
             ) : (
               pendencies.map((pend) => (
-                <div key={pend.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+                <div key={pend.id} className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm flex flex-col justify-between space-y-3">
                   <div>
                     <div className="flex justify-between items-start">
                       <span className={`px-2 py-0.5 rounded text-[10px] ${getPriorityBadgeClass(pend.priority)}`}>
@@ -1028,15 +1028,15 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                       </span>
                     </div>
 
-                    <h4 className="font-bold text-slate-900 text-sm mt-2">{pend.title}</h4>
-                    <p className="text-xs text-slate-600 mt-1">{pend.description}</p>
-                    <div className="text-[10px] text-slate-400 font-mono mt-2">
+                    <h4 className="font-bold text-graphite-900 text-sm mt-2">{pend.title}</h4>
+                    <p className="text-xs text-graphite-600 mt-1">{pend.description}</p>
+                    <div className="text-[10px] text-graphite-400 font-mono mt-2">
                       Origem: {pend.sourceType} ({pend.sourceId})
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                    <span className="text-slate-400 text-[11px]">
+                  <div className="pt-2 border-t border-graphite-100 flex justify-between items-center text-xs">
+                    <span className="text-graphite-400 text-[11px]">
                       {pend.dueAt ? `Prazo: ${new Date(pend.dueAt).toLocaleDateString()}` : 'Sem prazo definido'}
                     </span>
                     {pend.status === 'OPEN' && (
@@ -1058,14 +1058,14 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 3: SLA Dashboard */}
       {activeSubTab === 'sla' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 text-sm">Painel de Cumprimento de SLA</h3>
-            <p className="text-xs text-slate-500">Monitoramento contínuo de tempo de atendimento e estouro de limites parametrizados</p>
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+            <h3 className="font-bold text-graphite-900 text-sm">Painel de Cumprimento de SLA</h3>
+            <p className="text-xs text-graphite-500">Monitoramento contínuo de tempo de atendimento e estouro de limites parametrizados</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase text-[11px]">
+          <div className="bg-white rounded-xl border border-graphite-200 shadow-sm overflow-hidden">
+            <table className="w-full text-left text-xs text-graphite-600">
+              <thead className="bg-graphite-50 border-b border-graphite-200 text-graphite-700 font-bold uppercase text-[11px]">
                 <tr>
                   <th className="py-3 px-4">SLA ID / Task</th>
                   <th className="py-3 px-4">Prioridade</th>
@@ -1076,19 +1076,19 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                   <th className="py-3 px-4">Prazo Limite</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-graphite-100">
                 {slaRecords.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                    <td colSpan={7} className="py-8 text-center text-graphite-400">
                       Nenhum registro de SLA encontrado.
                     </td>
                   </tr>
                 ) : (
                   slaRecords.map((sla) => (
-                    <tr key={sla.id} className="hover:bg-slate-50 transition">
+                    <tr key={sla.id} className="hover:bg-graphite-50 transition">
                       <td className="py-3 px-4 font-mono text-[11px]">
-                        <div className="font-bold text-slate-800">{sla.id}</div>
-                        <div className="text-slate-400">{sla.taskId}</div>
+                        <div className="font-bold text-graphite-800">{sla.id}</div>
+                        <div className="text-graphite-400">{sla.taskId}</div>
                       </td>
 
                       <td className="py-3 px-4">
@@ -1103,28 +1103,28 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                         </span>
                       </td>
 
-                      <td className="py-3 px-4 font-semibold text-slate-800">
+                      <td className="py-3 px-4 font-semibold text-graphite-800">
                         {sla.targetHours}h
                       </td>
 
-                      <td className="py-3 px-4 text-slate-700">
+                      <td className="py-3 px-4 text-graphite-700">
                         <div>{sla.elapsedMinutes} min decorridos</div>
-                        <div className="text-[10px] text-slate-400">{sla.remainingMinutes} min restantes</div>
+                        <div className="text-[10px] text-graphite-400">{sla.remainingMinutes} min restantes</div>
                       </td>
 
                       <td className="py-3 px-4 w-40">
                         <div className="flex items-center gap-2">
-                          <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div className="w-full bg-graphite-200 rounded-full h-2 overflow-hidden">
                             <div
                               className={`h-full ${sla.consumedPercent >= 100 ? 'bg-red-600' : sla.consumedPercent >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                               style={{ width: `${Math.min(100, sla.consumedPercent)}%` }}
                             />
                           </div>
-                          <span className="text-[10px] font-bold text-slate-600">{sla.consumedPercent}%</span>
+                          <span className="text-[10px] font-bold text-graphite-600">{sla.consumedPercent}%</span>
                         </div>
                       </td>
 
-                      <td className="py-3 px-4 text-slate-700">
+                      <td className="py-3 px-4 text-graphite-700">
                         {new Date(sla.dueAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </td>
                     </tr>
@@ -1139,39 +1139,39 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 4: Workflow Rules */}
       {activeSubTab === 'workflows' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm flex justify-between items-center">
             <div>
-              <h3 className="font-bold text-slate-900 text-sm">Regras de Automação de Workflow</h3>
-              <p className="text-xs text-slate-500">Mapeamento de eventos e geração automática de tarefas</p>
+              <h3 className="font-bold text-graphite-900 text-sm">Regras de Automação de Workflow</h3>
+              <p className="text-xs text-graphite-500">Mapeamento de eventos e geração automática de tarefas</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {rules.map((rule) => (
-              <div key={rule.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+              <div key={rule.id} className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm space-y-3">
                 <div className="flex justify-between items-start">
-                  <h4 className="font-bold text-slate-900 text-sm">{rule.name}</h4>
+                  <h4 className="font-bold text-graphite-900 text-sm">{rule.name}</h4>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    rule.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                    rule.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-graphite-100 text-graphite-500'
                   }`}>
                     {rule.enabled ? 'Ativo' : 'Inativo'}
                   </span>
                 </div>
 
-                <div className="text-xs text-slate-600 space-y-1">
-                  <div>Gatilho: <span className="font-mono bg-slate-100 px-1 py-0.5 rounded">{rule.eventTrigger}</span></div>
-                  <div>Prioridade Padrão: <span className="font-bold text-slate-800">{rule.defaultPriority}</span></div>
+                <div className="text-xs text-graphite-600 space-y-1">
+                  <div>Gatilho: <span className="font-mono bg-graphite-100 px-1 py-0.5 rounded">{rule.eventTrigger}</span></div>
+                  <div>Prioridade Padrão: <span className="font-bold text-graphite-800">{rule.defaultPriority}</span></div>
                   <div>Criação Automática: <span className="font-semibold text-indigo-600">{rule.autoCreateTask ? 'SIM' : 'NÃO'}</span></div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <div className="pt-2 border-t border-graphite-100 flex justify-end">
                   <button
                     onClick={async () => {
                       const updated = { ...rule, enabled: !rule.enabled };
                       await WorkflowService.updateWorkflowRule(companyId, updated, userContext);
                       await loadData();
                     }}
-                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-semibold text-slate-700"
+                    className="px-3 py-1 bg-graphite-100 hover:bg-graphite-200 rounded text-xs font-semibold text-graphite-700"
                   >
                     {rule.enabled ? 'Desativar' : 'Ativar'}
                   </button>
@@ -1185,26 +1185,26 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 5: Audit & History Timeline */}
       {activeSubTab === 'timeline' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-900 text-sm">Histórico & Trilha de Auditoria Append-Only</h3>
-            <p className="text-xs text-slate-500">Registro imutável de todas as transições de tarefas, SLAs e execuções de workflow</p>
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm">
+            <h3 className="font-bold text-graphite-900 text-sm">Histórico & Trilha de Auditoria Append-Only</h3>
+            <p className="text-xs text-graphite-500">Registro imutável de todas as transições de tarefas, SLAs e execuções de workflow</p>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3 max-h-[500px] overflow-y-auto">
+          <div className="bg-white p-4 rounded-xl border border-graphite-200 shadow-sm space-y-3 max-h-[500px] overflow-y-auto">
             {auditLogs.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">Nenhum registro de auditoria.</div>
+              <div className="text-center py-8 text-graphite-400 text-xs">Nenhum registro de auditoria.</div>
             ) : (
               auditLogs.slice().reverse().map((log) => (
-                <div key={log.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1">
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                <div key={log.id} className="p-3 bg-graphite-50 rounded-lg border border-graphite-200 text-xs space-y-1">
+                  <div className="flex justify-between items-center text-[10px] text-graphite-500 font-mono">
                     <span className="font-bold text-indigo-600">{log.entityName} ({log.entityId})</span>
                     <span>{new Date(log.timestamp).toLocaleString()}</span>
                   </div>
-                  <div className="font-semibold text-slate-800">
-                    Ação: <span className="text-slate-900">{log.action}</span> • Usuário: {log.userName} ({log.userId})
+                  <div className="font-semibold text-graphite-800">
+                    Ação: <span className="text-graphite-900">{log.action}</span> • Usuário: {log.userName} ({log.userId})
                   </div>
                   {log.newState && (
-                    <div className="text-[10px] text-slate-600 bg-white p-2 rounded border border-slate-200 font-mono overflow-x-auto truncate">
+                    <div className="text-[10px] text-graphite-600 bg-white p-2 rounded border border-graphite-200 font-mono overflow-x-auto truncate">
                       State: {log.newState}
                     </div>
                   )}
@@ -1218,17 +1218,17 @@ export const OperationalWorkflowCenterView: React.FC = () => {
       {/* Sub-Tab 6: Matriz Oficial v3.56 */}
       {activeSubTab === 'matriz' && (
         <div className="space-y-4">
-          <div className="bg-slate-900 text-slate-100 p-6 rounded-xl shadow-lg border border-slate-800 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+          <div className="bg-graphite-900 text-graphite-100 p-6 rounded-xl shadow-lg border border-graphite-800 space-y-4">
+            <div className="flex justify-between items-center border-b border-graphite-800 pb-4">
               <div>
                 <h3 className="text-lg font-bold text-emerald-400 font-mono">Matriz de Homologação — Fase 3.56</h3>
-                <p className="text-xs text-slate-400 font-mono">Execução de Testes Adversariais ADV-3.56-01..20 e E2E-3.56-01..25</p>
+                <p className="text-xs text-graphite-400 font-mono">Execução de Testes Adversariais ADV-3.56-01..20 e E2E-3.56-01..25</p>
               </div>
 
               <button
                 onClick={handleRunTestRunner}
                 disabled={testRunning}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-lg text-xs font-mono transition flex items-center gap-2"
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-graphite-950 font-bold rounded-lg text-xs font-mono transition flex items-center gap-2"
               >
                 <Cpu className="w-4 h-4" />
                 {testRunning ? 'Executando Suíte...' : 'Executar Suíte Completa 3.56'}
@@ -1236,7 +1236,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
             </div>
 
             {/* Terminal Matriz Display */}
-            <div className="bg-black/80 p-4 rounded-lg font-mono text-xs text-emerald-400 border border-slate-800 space-y-2 overflow-x-auto leading-relaxed">
+            <div className="bg-black/80 p-4 rounded-lg font-mono text-xs text-emerald-400 border border-graphite-800 space-y-2 overflow-x-auto leading-relaxed">
               <div>╔══════════════════════════════════════════════════════════════╗</div>
               <div>║ AUTOERP — WORKFLOW & CONTINUIDADE OPERACIONAL — FASE 3.56  ║</div>
               <div>╠══════════════════════════════════════════════════════════════╣</div>
@@ -1292,10 +1292,10 @@ export const OperationalWorkflowCenterView: React.FC = () => {
             {/* Test Results Output */}
             {testsExecuted && (
               <div className="space-y-3 pt-2">
-                <h4 className="font-bold text-xs text-slate-200">Resultados da Suíte de Testes (45 Testes Executados)</h4>
+                <h4 className="font-bold text-xs text-graphite-200">Resultados da Suíte de Testes (45 Testes Executados)</h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto text-xs font-mono">
-                  <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-1">
+                  <div className="bg-graphite-950 p-3 rounded border border-graphite-800 space-y-1">
                     <div className="font-bold text-amber-400">Testes Adversariais (20 Testes)</div>
                     {advResults.map(r => (
                       <div key={r.id} className={`flex justify-between ${r.passed ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -1305,7 +1305,7 @@ export const OperationalWorkflowCenterView: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-1">
+                  <div className="bg-graphite-950 p-3 rounded border border-graphite-800 space-y-1">
                     <div className="font-bold text-indigo-400">Testes E2E (25 Testes)</div>
                     {e2eResults.map(r => (
                       <div key={r.id} className={`flex justify-between ${r.passed ? 'text-emerald-400' : 'text-red-400'}`}>

@@ -106,11 +106,11 @@ export const DriverProfilePhoto: React.FC<DriverProfilePhotoProps> = ({ driverId
 
   return (
     <div className="flex items-center gap-3">
-      <div className="relative h-14 w-14 overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+      <div className="relative h-14 w-14 overflow-hidden rounded-full border border-graphite-200 bg-graphite-100 dark:border-graphite-700 dark:bg-graphite-800">
         {previewUrl ? (
           <img src={previewUrl} alt={`Foto de ${driverName}`} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-400" aria-label="Motorista sem foto">
+          <div className="flex h-full w-full items-center justify-center text-graphite-400" aria-label="Motorista sem foto">
             <User className="h-6 w-6" />
           </div>
         )}

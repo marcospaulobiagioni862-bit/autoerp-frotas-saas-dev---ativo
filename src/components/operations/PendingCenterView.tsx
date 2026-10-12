@@ -180,7 +180,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       case 'TRACKER': return <Radio className="w-4 h-4 text-teal-500" />;
       case 'RECEIVABLE':
       case 'PAYABLE': return <DollarSign className="w-4 h-4 text-emerald-500" />;
-      default: return <AlertTriangle className="w-4 h-4 text-slate-500" />;
+      default: return <AlertTriangle className="w-4 h-4 text-graphite-500" />;
     }
   };
 
@@ -202,18 +202,18 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
+      <div className="bg-gradient-to-r from-graphite-900 via-indigo-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-indigo-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               FASE 3.34 • Central Operacional
             </span>
-            <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+            <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
               <Lock className="w-3 h-3 text-emerald-400" /> Núcleo Financeiro Congelado (Read-Only)
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">Central de Pendências e Alertas Operacionais</h2>
-          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+          <p className="text-xs text-graphite-300 mt-1 max-w-3xl">
             Visão consolidada em tempo real de impedimentos, vencimentos de contratos, manutenções, CNHs, documentos de frota, multas e seguros para ação gerencial imediata.
           </p>
         </div>
@@ -232,23 +232,23 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
 
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card padding="sm" className="border-l-4 border-l-slate-900 dark:border-l-indigo-500">
+        <Card padding="sm" className="border-l-4 border-l-graphite-900 dark:border-l-indigo-500">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Total de Pendências</span>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1 font-mono">{totalCount}</h3>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Total de Pendências</span>
+              <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 mt-1 font-mono">{totalCount}</h3>
             </div>
-            <div className="p-2.5 bg-slate-100 text-slate-700 rounded-xl dark:bg-slate-800 dark:text-slate-300">
+            <div className="p-2.5 bg-graphite-100 text-graphite-700 rounded-xl dark:bg-graphite-800 dark:text-graphite-300">
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">Derivado de todas as fontes operacionais</div>
+          <div className="mt-2 text-[11px] text-graphite-500">Derivado de todas as fontes operacionais</div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-rose-600">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Críticas & Bloqueadores</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Críticas & Bloqueadores</span>
               <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 font-mono">{criticalCount}</h3>
             </div>
             <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl dark:bg-rose-950/60 dark:text-rose-400">
@@ -261,7 +261,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         <Card padding="sm" className="border-l-4 border-l-amber-500">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Importantes / Avisos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Importantes / Avisos</span>
               <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 font-mono">{importantCount}</h3>
             </div>
             <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl dark:bg-amber-950/60 dark:text-amber-400">
@@ -274,14 +274,14 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         <Card padding="sm" className="border-l-4 border-l-blue-600">
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Itens Vencidos</span>
+              <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Itens Vencidos</span>
               <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">{overdueCount}</h3>
             </div>
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-950/60 dark:text-blue-400">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-2 text-[11px] text-slate-500">Com prazo expirado</div>
+          <div className="mt-2 text-[11px] text-graphite-500">Com prazo expirado</div>
         </Card>
       </div>
 
@@ -290,13 +290,13 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           {/* Search Input */}
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Buscar por placa, motorista, contrato..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-slate-100 placeholder-slate-400"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-graphite-50 dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-graphite-900 dark:text-graphite-100 placeholder-graphite-400"
             />
           </div>
 
@@ -323,7 +323,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                   filter === f.id
                     ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                    : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300 dark:hover:bg-graphite-700'
                 }`}
               >
                 {f.label}
@@ -334,27 +334,27 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
       </Card>
 
       {/* Pendings List / Table */}
-      <Card padding="none" className="overflow-hidden border border-slate-200/80 dark:border-slate-800">
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+      <Card padding="none" className="overflow-hidden border border-graphite-200/80 dark:border-graphite-800">
+        <div className="p-4 bg-graphite-50 dark:bg-graphite-900/60 border-b border-graphite-200 dark:border-graphite-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+            <Filter className="w-4 h-4 text-graphite-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300">
               Lista Consolidada de Pendências ({filteredPendings.length})
             </h3>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">
+          <span className="text-[11px] text-graphite-400 font-mono">
             Pendências da empresa
           </span>
         </div>
 
-        <div className="divide-y divide-slate-100 dark:divide-slate-800 overflow-y-auto max-h-[600px]">
+        <div className="divide-y divide-graphite-100 dark:divide-graphite-800 overflow-y-auto max-h-[600px]">
           {filteredPendings.length === 0 ? (
             <div className="p-12 text-center space-y-3">
               <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto dark:bg-emerald-950 dark:text-emerald-400">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{filter === 'DRIVER' ? 'Nenhum motorista com pendência' : 'Nenhuma pendência encontrada'}</h4>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
+              <h4 className="text-sm font-bold text-graphite-800 dark:text-graphite-200">{filter === 'DRIVER' ? 'Nenhum motorista com pendência' : 'Nenhuma pendência encontrada'}</h4>
+              <p className="text-xs text-graphite-500 max-w-md mx-auto">
                 Parabéns! Sua operação está em perfeita conformidade com os critérios da Central de Alertas.
               </p>
             </div>
@@ -362,17 +362,17 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
             filteredPendings.map((item) => (
               <div
                 key={item.id}
-                className="p-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                className="p-4 hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
               >
                 <div className="flex items-start gap-3.5">
-                  <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl mt-0.5 shrink-0">
+                  <div className="p-2 bg-graphite-100 dark:bg-graphite-800 rounded-xl mt-0.5 shrink-0">
                     {getTypeIcon(item.type)}
                   </div>
 
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {getPriorityBadge(item.priority)}
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                      <span className="text-[11px] font-semibold text-graphite-500 bg-graphite-100 dark:bg-graphite-800 px-2 py-0.5 rounded">
                         {item.category}
                       </span>
                       {item.vehiclePlate && (
@@ -387,22 +387,22 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                       )}
                     </div>
 
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <h4 className="text-xs sm:text-sm font-bold text-graphite-900 dark:text-graphite-100">
                       {item.title}
                     </h4>
 
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                    <p className="text-xs text-graphite-600 dark:text-graphite-400">
                       {item.description}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 pt-1">
+                    <div className="flex flex-wrap items-center gap-4 text-[11px] text-graphite-500 pt-1">
                       {item.dueDate && (
-                        <span>Vencimento: <strong className="text-slate-700 dark:text-slate-300 font-mono">{item.dueDate}</strong></span>
+                        <span>Vencimento: <strong className="text-graphite-700 dark:text-graphite-300 font-mono">{item.dueDate}</strong></span>
                       )}
                       {item.overdueDays > 0 && (
                         <span className="text-rose-600 font-bold">Em atraso por {item.overdueDays} dia(s)</span>
                       )}
-                      <span>Ação Recomendada: <strong className="text-slate-700 dark:text-slate-300">{item.actionRecommended}</strong></span>
+                      <span>Ação Recomendada: <strong className="text-graphite-700 dark:text-graphite-300">{item.actionRecommended}</strong></span>
                     </div>
                   </div>
                 </div>

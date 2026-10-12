@@ -418,16 +418,16 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
   return (
     <ModalContainer isOpen={isOpen} onClose={close} title={isRenewal ? 'Nova CNH / Renovar CNH' : 'Cadastrar motorista pela CNH'} maxWidth="2xl">
       <div className="space-y-5">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-4 text-sm dark:border-graphite-800 dark:bg-graphite-900">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">
+              <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {isRenewal
                   ? 'A nova CNH será salva no motorista selecionado após análise e revisão.'
                   : 'A CNH salva o documento e cria o cadastro inicial após sua aprovação.'}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-graphite-500">
                 {isRenewal
                   ? 'A validade e os dados aprovados serão atualizados; o documento anterior permanecerá no histórico.'
                   : 'Você revisa os dados da habilitação. Telefone, endereço, e-mail e plataformas podem ser completados depois.'}
@@ -445,10 +445,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
 
         {step === 'UPLOAD' && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
-              <FileUp className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Adicionar arquivo da CNH</p>
-              <p className="mt-1 text-xs text-slate-500">PDF, JPG, PNG ou WebP · até 20 MB</p>
+            <div className="rounded-xl border border-dashed border-graphite-300 p-6 text-center dark:border-graphite-700">
+              <FileUp className="mx-auto mb-2 h-8 w-8 text-graphite-400" />
+              <p className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">Adicionar arquivo da CNH</p>
+              <p className="mt-1 text-xs text-graphite-500">PDF, JPG, PNG ou WebP · até 20 MB</p>
               <input
                 ref={fileInputRef}
                 className="hidden"
@@ -473,7 +473,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
                 <strong>CNH selecionada:</strong> {file.name}
               </div>
             ) : (
-              <p className="text-center text-xs text-slate-500">Nenhum arquivo selecionado. Selecione a CNH para liberar a análise.</p>
+              <p className="text-center text-xs text-graphite-500">Nenhum arquivo selecionado. Selecione a CNH para liberar a análise.</p>
             )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={close} disabled={busy}>Cancelar</Button>
@@ -487,17 +487,17 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
         {showProgress && (
           <div className="space-y-4 py-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-semibold text-slate-900 dark:text-slate-100">{progress.label}</span>
+              <span className="font-semibold text-graphite-900 dark:text-graphite-100">{progress.label}</span>
               <span className="font-semibold text-emerald-600 dark:text-emerald-400">{progress.percent}%</span>
             </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
+            <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
               <div className="h-full rounded-full bg-emerald-600 transition-all duration-500" style={{ width: `${progress.percent}%` }} />
             </div>
             <div className="text-center">
               <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-emerald-600" />
-              <p className="text-xs text-slate-500">{progress.detail}</p>
+              <p className="text-xs text-graphite-500">{progress.detail}</p>
               {(step === 'PENDING' || step === 'PROCESSING') && (
-                <p className="mt-1 text-[11px] text-slate-400">O status é atualizado automaticamente a cada 4 segundos.</p>
+                <p className="mt-1 text-[11px] text-graphite-400">O status é atualizado automaticamente a cada 4 segundos.</p>
               )}
             </div>
             {(step === 'PENDING' || step === 'PROCESSING') && (
@@ -511,8 +511,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
         {step === 'REVIEW_REQUIRED' && extraction && (
           <div className="space-y-4">
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Revise os dados reconhecidos</p>
-              <p className="text-xs text-slate-500">Documento detectado: {extraction.detectedDocumentType || 'não identificado'}</p>
+              <p className="text-sm font-semibold text-graphite-900 dark:text-graphite-100">Revise os dados reconhecidos</p>
+              <p className="text-xs text-graphite-500">Documento detectado: {extraction.detectedDocumentType || 'não identificado'}</p>
             </div>
             {!isRenewal && existingDriverResolution && (
               <div className={`rounded-xl border p-4 text-left ${
@@ -526,12 +526,12 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
                   }`} />
                   <div className="space-y-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <p className="text-sm font-semibold text-graphite-900 dark:text-graphite-100">
                         {existingDriverResolution.kind === 'MATCH'
                           ? 'Motorista já cadastrado — esta CNH não deve criar outro cadastro'
                           : 'Conflito de identificação encontrado'}
                       </p>
-                      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                      <p className="mt-1 text-xs text-graphite-600 dark:text-graphite-300">
                         {existingDriverResolution.kind === 'MATCH'
                           ? `${existingDriverResolution.driver.fullName} já possui este CPF e esta CNH no ERP.${existingDriverResolution.renewalCandidate ? ' A validade informada é posterior; faça a atualização pelo fluxo de renovação do motorista existente.' : ' O reenvio desta mesma CNH foi bloqueado para evitar duplicidade.'}`
                           : existingDriverResolution.detail}
@@ -555,10 +555,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               </div>
             )}
             {isRenewal && renewalDriver && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-left dark:border-slate-800 dark:bg-slate-900">
-                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Comparação com a CNH vigente</p>
+              <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3 text-left dark:border-graphite-800 dark:bg-graphite-900">
+                <p className="text-xs font-semibold text-graphite-800 dark:text-graphite-200">Comparação com a CNH vigente</p>
                 {renewalDifferences.length === 0 ? (
-                  <p className="mt-1 text-xs text-slate-500">Nenhuma diferença identificada nos campos preenchidos.</p>
+                  <p className="mt-1 text-xs text-graphite-500">Nenhuma diferença identificada nos campos preenchidos.</p>
                 ) : (
                   <div className="mt-2 space-y-2">
                     {renewalDifferences.map((item) => (
@@ -609,12 +609,12 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observação da revisão</label>
+              <label className="mb-1 block text-xs font-semibold text-graphite-700 dark:text-graphite-300">Observação da revisão</label>
               <textarea
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
                 rows={2}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
+                className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm dark:border-graphite-800 dark:bg-graphite-900"
               />
             </div>
             <div className="flex flex-wrap justify-end gap-2">
@@ -644,10 +644,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
           <div className="space-y-4 text-center py-4">
             <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">
+              <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {savedDriverId ? 'CNH revisada, aprovada e salva' : 'CNH aprovada, aguardando gravação'}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-graphite-500">
                 {savedDriverId
                   ? (isRenewal
                     ? 'A nova CNH foi vinculada ao motorista correto, e o documento anterior foi preservado no histórico.'
@@ -665,10 +665,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
           <div className="space-y-4 text-center py-4">
             <XCircle className="mx-auto h-9 w-9 text-rose-600" />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">
+              <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {providerRateLimited ? 'Serviço de leitura temporariamente indisponível' : 'Esta tentativa não pode preencher o cadastro'}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-graphite-500">
                 {providerRateLimited
                   ? 'A CNH enviada foi preservada. O limite temporário do serviço de leitura foi atingido; não envie o documento novamente agora.'
                   : `${extraction?.failureCode ? `Falha: ${extraction.failureCode}. ` : ''}Inicie uma nova tentativa com um documento legível.`}

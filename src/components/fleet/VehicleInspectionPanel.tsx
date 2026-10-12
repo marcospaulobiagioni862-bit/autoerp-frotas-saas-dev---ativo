@@ -202,9 +202,9 @@ export function VehicleInspectionPanel({
     )}
 
     <div className="rounded-xl border p-4 space-y-4">
-      {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+      {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><h4 className="font-bold flex items-center gap-2"><ClipboardCheck className="w-4 h-4"/>Nova vistoria</h4><p className="text-xs text-slate-500">Entrada e saída usam exatamente o mesmo checklist.</p></div>
+        <div><h4 className="font-bold flex items-center gap-2"><ClipboardCheck className="w-4 h-4"/>Nova vistoria</h4><p className="text-xs text-graphite-500">Entrada e saída usam exatamente o mesmo checklist.</p></div>
         <div className="flex gap-2">
           <Button size="sm" variant={type==='ENTRY'?'primary':'outline'} onClick={()=>setType('ENTRY')}>Entrada</Button>
           <Button size="sm" variant={type==='EXIT'?'primary':'outline'} onClick={()=>setType('EXIT')}>Saída</Button>
@@ -215,7 +215,7 @@ export function VehicleInspectionPanel({
         <Input label="Combustível (%)" type="number" min="0" max="100" value={fuelLevel} onChange={e=>setFuelLevel(e.target.value)}/>
       </div>
       <div className="rounded-xl border p-3 space-y-3">
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Pneus e bateria — estado na vistoria</p>
+        <p className="text-xs font-semibold text-graphite-700 dark:text-graphite-200">Pneus e bateria — estado na vistoria</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Input label="Marca dos pneus *" value={tireBrand} onChange={e=>setTireBrand(e.target.value)}/>
           <Input label="Modelo dos pneus *" value={tireModel} onChange={e=>setTireModel(e.target.value)}/>
@@ -225,7 +225,7 @@ export function VehicleInspectionPanel({
         </div>
       </div>
       <div>
-        <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Checklist ({checked}/{ITEMS.length})</p>
+        <p className="text-xs font-semibold text-graphite-700 dark:text-graphite-200 mb-2">Checklist ({checked}/{ITEMS.length})</p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {ITEMS.map(([key,label])=><label key={key} className="flex items-center gap-2 rounded-lg border p-2 text-xs">
             <input type="checkbox" checked={checklist[key]} onChange={e=>setChecklist(v=>({...v,[key]:e.target.checked}))}/>
@@ -235,7 +235,7 @@ export function VehicleInspectionPanel({
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Vistoria técnica ({technicalCompleted}/{TECHNICAL_ITEMS.length})</p>
+          <p className="text-xs font-semibold text-graphite-700 dark:text-graphite-200">Vistoria técnica ({technicalCompleted}/{TECHNICAL_ITEMS.length})</p>
           <strong className="text-xs">{resultPreview?resultLabel(resultPreview):'Resultado pendente'}</strong>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -245,7 +245,7 @@ export function VehicleInspectionPanel({
               aria-label={label}
               value={technicalChecklist[key]||''}
               onChange={e=>setTechnicalChecklist(current=>({...current,[key]:e.target.value as VehicleInspectionItemStatus}))}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+              className="rounded-md border border-graphite-300 bg-white px-2 py-1 text-xs dark:border-graphite-700 dark:bg-graphite-900"
             >
               <option value="">Avaliar...</option>
               {TECHNICAL_OPTIONS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
@@ -254,25 +254,25 @@ export function VehicleInspectionPanel({
         </div>
         {resultPreview==='BLOCKED_FOR_RENTAL'&&<p className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-xs font-semibold text-rose-700">Falha crítica: ao salvar, o veículo será bloqueado para locação. O desbloqueio nunca é automático.</p>}
       </div>
-      <div><label className="text-xs font-semibold text-slate-700 dark:text-slate-200">Observações</label><textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900"/></div>
+      <div><label className="text-xs font-semibold text-graphite-700 dark:text-graphite-200">Observações</label><textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-3 text-sm dark:border-graphite-700 dark:bg-graphite-900"/></div>
       {error&&<p className="rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}
       <Button onClick={()=>void create()} disabled={loading} className="gap-2"><Plus className="w-4 h-4"/>{loading?'Salvando...':'Salvar vistoria'}</Button>
     </div>
 
     <div className="space-y-2">
       <h4 className="font-bold text-sm">Histórico de vistorias</h4>
-      {items.length===0?<p className="rounded-xl border p-5 text-center text-xs text-slate-500">Nenhuma vistoria registrada.</p>:items.map(item=><div key={item.id} className="rounded-xl border p-3 space-y-3">
+      {items.length===0?<p className="rounded-xl border p-5 text-center text-xs text-graphite-500">Nenhuma vistoria registrada.</p>:items.map(item=><div key={item.id} className="rounded-xl border p-3 space-y-3">
         <button type="button" onClick={()=>setExpanded(expanded===item.id?null:item.id)} className="w-full text-left">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div><strong>{item.inspectionType==='ENTRY'?'Vistoria de entrada':'Vistoria de saída'}</strong><p className="text-slate-500">{new Date(item.inspectionDate).toLocaleString('pt-BR')} • {resultLabel(item.result)}</p></div>
-            <div className="text-right"><strong>{item.odometer.toLocaleString('pt-BR')} KM</strong><p className="text-slate-500">Combustível: {item.fuelLevel}%</p></div>
+            <div><strong>{item.inspectionType==='ENTRY'?'Vistoria de entrada':'Vistoria de saída'}</strong><p className="text-graphite-500">{new Date(item.inspectionDate).toLocaleString('pt-BR')} • {resultLabel(item.result)}</p></div>
+            <div className="text-right"><strong>{item.odometer.toLocaleString('pt-BR')} KM</strong><p className="text-graphite-500">Combustível: {item.fuelLevel}%</p></div>
           </div>
         </button>
         {expanded===item.id&&<div className="space-y-3 border-t pt-3">
-          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{item.checklist[key]?'OK':'Não'}</strong></div>)}</div>
+          <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-graphite-50 px-2 py-1 dark:bg-graphite-800"><span>{label}</span><strong>{item.checklist[key]?'OK':'Não'}</strong></div>)}</div>
           {item.equipmentSnapshot&&<div className="rounded-lg border p-3 text-xs"><p className="mb-2 font-semibold">Pneus e bateria registrados</p><div className="grid gap-1 sm:grid-cols-2"><p><strong>Pneus:</strong> {item.equipmentSnapshot.tireBrand} {item.equipmentSnapshot.tireModel} — {item.equipmentSnapshot.tireMeasure}</p><p><strong>Bateria:</strong> {item.equipmentSnapshot.batteryBrand} {item.equipmentSnapshot.batteryModel}</p></div></div>}
-          {item.technicalChecklist&&<div className="space-y-2"><p className="text-xs font-semibold">Resultado técnico: {resultLabel(item.result)}</p><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{TECHNICAL_ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-slate-50 px-2 py-1 dark:bg-slate-800"><span>{label}</span><strong>{TECHNICAL_OPTIONS.find(option=>option.value===item.technicalChecklist?.[key])?.label||'—'}</strong></div>)}</div></div>}
-          {item.notes&&<p className="text-xs text-slate-600 dark:text-slate-300">{item.notes}</p>}
+          {item.technicalChecklist&&<div className="space-y-2"><p className="text-xs font-semibold">Resultado técnico: {resultLabel(item.result)}</p><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{TECHNICAL_ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-graphite-50 px-2 py-1 dark:bg-graphite-800"><span>{label}</span><strong>{TECHNICAL_OPTIONS.find(option=>option.value===item.technicalChecklist?.[key])?.label||'—'}</strong></div>)}</div></div>}
+          {item.notes&&<p className="text-xs text-graphite-600 dark:text-graphite-300">{item.notes}</p>}
           <div className="rounded-lg border p-3 space-y-3">
             <p className="text-xs font-semibold">Fotos e vídeos desta vistoria</p>
             <FileUpload entityType="VehicleInspection" entityId={item.id} documentType="INSPECTION_MEDIA" multiple allowedTypes={['image/jpeg','image/jpg','image/png','image/webp','video/mp4']} maxSizeMB={20} onUploadComplete={()=>void load()}/>

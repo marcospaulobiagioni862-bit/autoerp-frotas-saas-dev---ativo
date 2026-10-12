@@ -20,18 +20,18 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   breadcrumb,
 }) => {
   return (
-    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-graphite-200 dark:border-graphite-800 pb-5">
       <div>
         {breadcrumb && (
           <span className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1 block">
             {breadcrumb}
           </span>
         )}
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-bold tracking-tight text-graphite-900 dark:text-white">
           {title}
         </h1>
         {description && (
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-graphite-500 dark:text-graphite-400 mt-1">
             {description}
           </p>
         )}

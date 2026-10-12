@@ -219,22 +219,22 @@ export const PerformanceManagementCenterView: React.FC = () => {
   const analysis = data.analysis;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen text-slate-800">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 bg-graphite-50 min-h-screen text-graphite-800">
       {/* Header */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
             <div className="bg-indigo-600 text-white p-2.5 rounded-lg shadow-sm">
               <TrendingUp className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-graphite-900 flex items-center gap-2">
                 Gestão de Resultados & Performance
                 <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-semibold">
                   Fase 3.60
                 </span>
               </h1>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-graphite-500">
                 Acompanhamento contínuo de Metas, OKRs, KPIs, Planos de Ação e Ciclos PDCA com Núcleo Financeiro Congelado 🔒
               </p>
             </div>
@@ -244,7 +244,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleSaveSnapshot}
-            className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium text-sm transition-colors border border-slate-300"
+            className="flex items-center gap-2 px-3.5 py-2 bg-graphite-100 hover:bg-graphite-200 text-graphite-700 rounded-lg font-medium text-sm transition-colors border border-graphite-300"
           >
             <Layers className="w-4 h-4" />
             Gerar Snapshot
@@ -260,7 +260,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm text-sm font-medium">
+      <div className="flex items-center gap-1 overflow-x-auto bg-white p-1.5 rounded-xl border border-graphite-200 shadow-sm text-sm font-medium">
         {[
           { id: 'EXECUTIVE', label: '1. Visão Executiva', icon: Activity },
           { id: 'OKRS', label: '2. Objetivos & OKRs', icon: Target },
@@ -282,7 +282,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
               className={`flex items-center gap-2 px-3.5 py-2 rounded-lg transition-all whitespace-nowrap ${
                 isActive
                   ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  : 'text-graphite-600 hover:bg-graphite-100 hover:text-graphite-900'
               }`}
             >
               <Icon className="w-4 h-4" />
@@ -299,62 +299,62 @@ export const PerformanceManagementCenterView: React.FC = () => {
         <div className="space-y-6">
           {/* Top Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enterprise Performance Score</span>
+                <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Enterprise Performance Score</span>
                 <span className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Activity className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">{analysis?.overallScore || 0}</span>
-                <span className="text-sm font-semibold text-slate-500">/ 100</span>
+                <span className="text-3xl font-extrabold text-graphite-900">{analysis?.overallScore || 0}</span>
+                <span className="text-sm font-semibold text-graphite-500">/ 100</span>
               </div>
               <p className="mt-2 text-xs font-medium text-emerald-600 flex items-center gap-1">
                 <CheckCircle className="w-3.5 h-3.5" /> Classificação: {analysis?.classification || 'NORMAL'}
               </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cumprimento de Metas</span>
+                <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Cumprimento de Metas</span>
                 <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Award className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">{analysis?.goalAchievementScore || 0}%</span>
+                <span className="text-3xl font-extrabold text-graphite-900">{analysis?.goalAchievementScore || 0}%</span>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-graphite-500">
                 {data.goals.length} metas cadastradas ({analysis?.atRiskGoalsCount || 0} em risco)
               </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Saúde dos KPIs</span>
+                <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Saúde dos KPIs</span>
                 <span className="p-2 bg-blue-50 text-blue-600 rounded-lg"><BarChart3 className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-900">{analysis?.kpiHealthScore || 0}%</span>
+                <span className="text-3xl font-extrabold text-graphite-900">{analysis?.kpiHealthScore || 0}%</span>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-graphite-500">
                 {data.kpis.length} indicadores ativos na empresa
               </p>
             </div>
 
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Previsão de Atingimento</span>
+                <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Previsão de Atingimento</span>
                 <span className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Zap className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-lg font-bold text-slate-900">{analysis?.forecast || 'EXPECTED_ON_TIME'}</span>
+                <span className="text-lg font-bold text-graphite-900">{analysis?.forecast || 'EXPECTED_ON_TIME'}</span>
               </div>
-              <p className="mt-2 text-xs text-slate-500">Análise determinística sem IA</p>
+              <p className="mt-2 text-xs text-graphite-500">Análise determinística sem IA</p>
             </div>
           </div>
 
           {/* Breakdown & Critical Highlights */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm">
+              <h3 className="text-base font-bold text-graphite-900 mb-4 flex items-center gap-2">
                 <Activity className="w-5 h-5 text-indigo-600" />
                 Desempenho por Dimensão Operacional
               </h3>
@@ -367,11 +367,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
                   { label: 'Índice de Melhoria Contínua (PDCA)', val: analysis?.continuousImprovementScore || 0 },
                 ].map((item, idx) => (
                   <div key={idx} className="space-y-1">
-                    <div className="flex justify-between text-xs font-medium text-slate-700">
+                    <div className="flex justify-between text-xs font-medium text-graphite-700">
                       <span>{item.label}</span>
                       <span className="font-bold">{item.val}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
                       <div className="bg-indigo-600 h-2 rounded-full transition-all" style={{ width: `${item.val}%` }}></div>
                     </div>
                   </div>
@@ -379,12 +379,12 @@ export const PerformanceManagementCenterView: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-              <h3 className="text-base font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm">
+              <h3 className="text-base font-bold text-graphite-900 mb-4 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-600" />
                 Invariantes & Núcleo Financeiro Congelado 🔒
               </h3>
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2 text-xs font-mono text-slate-700">
+              <div className="bg-graphite-50 p-4 rounded-lg border border-graphite-200 space-y-2 text-xs font-mono text-graphite-700">
                 <div className="flex justify-between"><span>FINANCIAL_FILES_MODIFIED:</span> <span className="font-bold text-emerald-600">0</span></div>
                 <div className="flex justify-between"><span>FINANCIAL_STATE_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
                 <div className="flex justify-between"><span>FINANCIAL_BALANCES_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
@@ -392,7 +392,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <div className="flex justify-between"><span>FINANCIAL_LOGIC_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
                 <div className="flex justify-between"><span>FINANCIAL_WRITES_FROM_PHASE_3_60:</span> <span className="font-bold text-emerald-600">0</span></div>
               </div>
-              <p className="mt-4 text-xs text-slate-500">
+              <p className="mt-4 text-xs text-graphite-500">
                 A camada 3.60 opera estritamente acima das baselines 3.49-3.59. Indicadores financeiros são lidos em modo exclusivo READ_ONLY.
               </p>
             </div>
@@ -402,11 +402,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 2. OBJETIVOS & OKRs */}
       {activeTab === 'OKRS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Objetivos Estratégicos & Key Results (OKRs)</h2>
-              <p className="text-xs text-slate-500">Ciclo trimestral de alinhamento estratégico empresarial</p>
+              <h2 className="text-lg font-bold text-graphite-900">Objetivos Estratégicos & Key Results (OKRs)</h2>
+              <p className="text-xs text-graphite-500">Ciclo trimestral de alinhamento estratégico empresarial</p>
             </div>
           </div>
 
@@ -414,35 +414,35 @@ export const PerformanceManagementCenterView: React.FC = () => {
             {data.objectives.map((obj) => {
               const krs = data.keyResults.filter((k) => k.objectiveId === obj.id);
               return (
-                <div key={obj.id} className="p-5 rounded-lg border border-slate-200 bg-slate-50 space-y-4">
+                <div key={obj.id} className="p-5 rounded-lg border border-graphite-200 bg-graphite-50 space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
                         {obj.period}
                       </span>
-                      <h3 className="text-base font-bold text-slate-900 mt-1">{obj.title}</h3>
-                      <p className="text-xs text-slate-600">{obj.description}</p>
+                      <h3 className="text-base font-bold text-graphite-900 mt-1">{obj.title}</h3>
+                      <p className="text-xs text-graphite-600">{obj.description}</p>
                     </div>
                     <div className="text-right">
                       <span className="text-2xl font-extrabold text-indigo-600">{obj.progressPercentage}%</span>
-                      <div className="text-xs text-slate-500 font-medium">{obj.status}</div>
+                      <div className="text-xs text-graphite-500 font-medium">{obj.status}</div>
                     </div>
                   </div>
 
                   {/* Key Results List */}
-                  <div className="bg-white p-4 rounded-lg border border-slate-200 space-y-3">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Key Results Vinculados ({krs.length})</h4>
+                  <div className="bg-white p-4 rounded-lg border border-graphite-200 space-y-3">
+                    <h4 className="text-xs font-bold text-graphite-500 uppercase tracking-wider">Key Results Vinculados ({krs.length})</h4>
                     {krs.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">Nenhum Key Result vinculado a este objetivo</p>
+                      <p className="text-xs text-graphite-400 italic">Nenhum Key Result vinculado a este objetivo</p>
                     ) : (
                       krs.map((kr) => (
-                        <div key={kr.id} className="flex justify-between items-center text-xs p-2.5 bg-slate-50 rounded border border-slate-100">
+                        <div key={kr.id} className="flex justify-between items-center text-xs p-2.5 bg-graphite-50 rounded border border-graphite-100">
                           <div>
-                            <span className="font-semibold text-slate-800">{kr.title}</span>
-                            <div className="text-slate-500">Linha de Base: {kr.baseline} | Alvo: {kr.target} {kr.metric}</div>
+                            <span className="font-semibold text-graphite-800">{kr.title}</span>
+                            <div className="text-graphite-500">Linha de Base: {kr.baseline} | Alvo: {kr.target} {kr.metric}</div>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="font-bold text-slate-900">{kr.currentValue} / {kr.target}</span>
+                            <span className="font-bold text-graphite-900">{kr.currentValue} / {kr.target}</span>
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold">{kr.progressPercentage}%</span>
                           </div>
                         </div>
@@ -458,11 +458,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 3. METAS */}
       {activeTab === 'GOALS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Metas Operacionais & Táticas</h2>
-              <p className="text-xs text-slate-500">Acompanhamento e apuração de metas por categoria e responsável</p>
+              <h2 className="text-lg font-bold text-graphite-900">Metas Operacionais & Táticas</h2>
+              <p className="text-xs text-graphite-500">Acompanhamento e apuração de metas por categoria e responsável</p>
             </div>
             <button
               onClick={() => setShowNewGoalModal(true)}
@@ -474,9 +474,9 @@ export const PerformanceManagementCenterView: React.FC = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 border-collapse">
+            <table className="w-full text-left text-xs text-graphite-700 border-collapse">
               <thead>
-                <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-600 uppercase">
+                <tr className="bg-graphite-100 border-b border-graphite-200 font-bold text-graphite-600 uppercase">
                   <th className="p-3">Título / Descrição</th>
                   <th className="p-3">Categoria</th>
                   <th className="p-3">Prazo</th>
@@ -485,12 +485,12 @@ export const PerformanceManagementCenterView: React.FC = () => {
                   <th className="p-3">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-graphite-200">
                 {data.goals.map((g) => (
-                  <tr key={g.id} className="hover:bg-slate-50">
+                  <tr key={g.id} className="hover:bg-graphite-50">
                     <td className="p-3">
-                      <div className="font-semibold text-slate-900">{g.title}</div>
-                      <div className="text-slate-500">{g.description}</div>
+                      <div className="font-semibold text-graphite-900">{g.title}</div>
+                      <div className="text-graphite-500">{g.description}</div>
                     </td>
                     <td className="p-3 font-semibold">{g.category}</td>
                     <td className="p-3">{g.dueDate}</td>
@@ -514,11 +514,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 4. KPIS */}
       {activeTab === 'KPIS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Indicadores Chave de Performance (KPIs)</h2>
-              <p className="text-xs text-slate-500">Métricas com limites de alerta, tendência e proteção READ_ONLY para o financeiro</p>
+              <h2 className="text-lg font-bold text-graphite-900">Indicadores Chave de Performance (KPIs)</h2>
+              <p className="text-xs text-graphite-500">Métricas com limites de alerta, tendência e proteção READ_ONLY para o financeiro</p>
             </div>
             <button
               onClick={() => setShowNewKPIModal(true)}
@@ -531,18 +531,18 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {data.kpis.map((k) => (
-              <div key={k.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-3">
+              <div key={k.id} className="p-4 rounded-lg border border-graphite-200 bg-graphite-50 space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-sm text-slate-900">{k.name}</h3>
+                      <h3 className="font-bold text-sm text-graphite-900">{k.name}</h3>
                       {k.isReadOnlyFinancial && (
                         <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
                           <Lock className="w-3 h-3" /> READ_ONLY
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">{k.description}</p>
+                    <p className="text-xs text-graphite-500">{k.description}</p>
                   </div>
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                     k.status === 'NORMAL' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
@@ -551,14 +551,14 @@ export const PerformanceManagementCenterView: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex justify-between items-end pt-2 border-t border-slate-200 text-xs">
+                <div className="flex justify-between items-end pt-2 border-t border-graphite-200 text-xs">
                   <div>
-                    <div className="text-slate-500">Valor Atual</div>
-                    <div className="text-xl font-extrabold text-slate-900">{k.currentValue} {k.unit}</div>
+                    <div className="text-graphite-500">Valor Atual</div>
+                    <div className="text-xl font-extrabold text-graphite-900">{k.currentValue} {k.unit}</div>
                   </div>
                   <div>
-                    <div className="text-slate-500 text-right">Alvo / Tolerância</div>
-                    <div className="font-mono text-slate-700 text-right">{k.target} {k.unit} (Crítico: {k.criticalThreshold})</div>
+                    <div className="text-graphite-500 text-right">Alvo / Tolerância</div>
+                    <div className="font-mono text-graphite-700 text-right">{k.target} {k.unit} (Crítico: {k.criticalThreshold})</div>
                   </div>
                 </div>
               </div>
@@ -569,26 +569,26 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 5. PLANOS DE AÇÃO */}
       {activeTab === 'ACTION_PLANS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Planos de Ação Operacionais</h2>
-              <p className="text-xs text-slate-500">Execução de iniciativas vinculadas a metas e geração de tarefas no Workflow</p>
+              <h2 className="text-lg font-bold text-graphite-900">Planos de Ação Operacionais</h2>
+              <p className="text-xs text-graphite-500">Execução de iniciativas vinculadas a metas e geração de tarefas no Workflow</p>
             </div>
           </div>
 
           <div className="space-y-4">
             {data.actionPlans.map((p) => (
-              <div key={p.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-3">
+              <div key={p.id} className="p-4 rounded-lg border border-graphite-200 bg-graphite-50 space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">{p.title}</h3>
-                    <p className="text-xs text-slate-600">{p.description}</p>
+                    <h3 className="font-bold text-graphite-900 text-sm">{p.title}</h3>
+                    <p className="text-xs text-graphite-600">{p.description}</p>
                   </div>
                   <span className="px-2.5 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold">{p.status}</span>
                 </div>
 
-                <div className="flex justify-between items-center text-xs text-slate-600 bg-white p-2.5 rounded border border-slate-200">
+                <div className="flex justify-between items-center text-xs text-graphite-600 bg-white p-2.5 rounded border border-graphite-200">
                   <div>Vencimento: <span className="font-semibold">{p.dueDate}</span></div>
                   <div>Tarefas Criadas: <span className="font-mono font-bold text-indigo-600">{p.linkedTaskIds.length}</span></div>
                   <div>Progresso: <span className="font-bold text-emerald-600">{p.progressPercentage}%</span></div>
@@ -601,17 +601,17 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 6. RESULTADOS */}
       {activeTab === 'RESULTS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
 
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Histórico de Medições de Resultado (APPEND_ONLY)</h2>
-            <p className="text-xs text-slate-500">Registros imutáveis de apuração de metas e indicadores com variação e cálculo de variância</p>
+            <h2 className="text-lg font-bold text-graphite-900">Histórico de Medições de Resultado (APPEND_ONLY)</h2>
+            <p className="text-xs text-graphite-500">Registros imutáveis de apuração de metas e indicadores com variação e cálculo de variância</p>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700 border-collapse">
+            <table className="w-full text-left text-xs text-graphite-700 border-collapse">
               <thead>
-                <tr className="bg-slate-100 border-b border-slate-200 font-bold text-slate-600 uppercase">
+                <tr className="bg-graphite-100 border-b border-graphite-200 font-bold text-graphite-600 uppercase">
                   <th className="p-3">Data / Origem</th>
                   <th className="p-3">Medido</th>
                   <th className="p-3">Esperado</th>
@@ -620,9 +620,9 @@ export const PerformanceManagementCenterView: React.FC = () => {
                   <th className="p-3">Medido Por</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-graphite-200">
                 {data.recentMeasurements.map((m) => (
-                  <tr key={m.id} className="hover:bg-slate-50">
+                  <tr key={m.id} className="hover:bg-graphite-50">
                     <td className="p-3 font-mono">{m.measuredAt.substring(0, 16)} ({m.source})</td>
                     <td className="p-3 font-bold">{m.measuredValue}</td>
                     <td className="p-3">{m.expectedValue}</td>
@@ -639,11 +639,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 7. MELHORIA CONTÍNUA (PDCA) */}
       {activeTab === 'PDCA' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Ciclo PDCA & Melhoria Contínua</h2>
-              <p className="text-xs text-slate-500">Tratamento de causas raiz e padronização de melhorias operacionais</p>
+              <h2 className="text-lg font-bold text-graphite-900">Ciclo PDCA & Melhoria Contínua</h2>
+              <p className="text-xs text-graphite-500">Tratamento de causas raiz e padronização de melhorias operacionais</p>
             </div>
             <button
               onClick={() => setShowNewPDCAModal(true)}
@@ -654,17 +654,17 @@ export const PerformanceManagementCenterView: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-graphite-50 p-4 rounded-xl border border-graphite-200">
             {['PLAN', 'DO', 'CHECK', 'ACT'].map((phase) => (
-              <div key={phase} className="bg-white p-3 rounded-lg border border-slate-200 space-y-2">
+              <div key={phase} className="bg-white p-3 rounded-lg border border-graphite-200 space-y-2">
                 <h3 className="font-extrabold text-xs text-indigo-600 uppercase tracking-wider">{phase}</h3>
                 <div className="space-y-2">
                   {data.pdcaRecords
                     .filter((p) => p.currentPhase === phase)
                     .map((p) => (
-                      <div key={p.id} className="p-2.5 bg-slate-50 rounded border border-slate-200 text-xs space-y-1">
-                        <div className="font-bold text-slate-900">{p.title}</div>
-                        <div className="text-slate-500">Causa: {p.rootCause || 'N/I'}</div>
+                      <div key={p.id} className="p-2.5 bg-graphite-50 rounded border border-graphite-200 text-xs space-y-1">
+                        <div className="font-bold text-graphite-900">{p.title}</div>
+                        <div className="text-graphite-500">Causa: {p.rootCause || 'N/I'}</div>
                       </div>
                     ))}
                 </div>
@@ -676,10 +676,10 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 8. ALERTAS & ESCALONAMENTOS */}
       {activeTab === 'ALERTS' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Alertas Operacionais & Gestão de Gargalos</h2>
-            <p className="text-xs text-slate-500">Notificações por severidade (P0, P1, P2, P3) com escalonamento automático</p>
+            <h2 className="text-lg font-bold text-graphite-900">Alertas Operacionais & Gestão de Gargalos</h2>
+            <p className="text-xs text-graphite-500">Notificações por severidade (P0, P1, P2, P3) com escalonamento automático</p>
           </div>
 
           <div className="space-y-3">
@@ -715,7 +715,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
             {data.goals.filter((g) => g.status === 'AT_RISK').length === 0 &&
               data.kpis.filter((k) => k.status === 'CRITICAL').length === 0 && (
-                <p className="text-xs text-slate-500 italic">Nenhum alerta P0/P1 ativo no momento.</p>
+                <p className="text-xs text-graphite-500 italic">Nenhum alerta P0/P1 ativo no momento.</p>
               )}
           </div>
         </div>
@@ -723,23 +723,23 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 9. AUDITORIA & SNAPSHOTS */}
       {activeTab === 'AUDIT' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">AuditLog & Snapshots de Performance</h2>
-            <p className="text-xs text-slate-500">Fotografias imutáveis de estado e rastreamento de Correlation IDs</p>
+            <h2 className="text-lg font-bold text-graphite-900">AuditLog & Snapshots de Performance</h2>
+            <p className="text-xs text-graphite-500">Fotografias imutáveis de estado e rastreamento de Correlation IDs</p>
           </div>
 
           <div className="space-y-4">
             {data.snapshots.map((s) => (
-              <div key={s.id} className="p-4 rounded-lg border border-slate-200 bg-slate-50 space-y-2 text-xs">
+              <div key={s.id} className="p-4 rounded-lg border border-graphite-200 bg-graphite-50 space-y-2 text-xs">
                 <div className="flex justify-between items-center font-bold">
                   <span className="text-indigo-600">{s.id}</span>
-                  <span className="text-slate-500">{s.timestamp}</span>
+                  <span className="text-graphite-500">{s.timestamp}</span>
                 </div>
-                <div className="flex justify-between text-slate-700">
+                <div className="flex justify-between text-graphite-700">
                   <span>Score Geral: <strong>{s.analysis.overallScore}</strong></span>
                   <span>Classificação: <strong>{s.analysis.classification}</strong></span>
-                  <span className="font-mono text-slate-500">CorrID: {s.correlationId}</span>
+                  <span className="font-mono text-graphite-500">CorrID: {s.correlationId}</span>
                 </div>
               </div>
             ))}
@@ -749,11 +749,11 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* 10. MATRIZ OFICIAL V3.60 */}
       {activeTab === 'OFFICIAL_MATRIX' && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-6">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Matriz Oficial de Homologação Fase 3.60</h2>
-              <p className="text-xs text-slate-500">Execução e validação de suítes de testes unitários, adversariais e de proteção financeira</p>
+              <h2 className="text-lg font-bold text-graphite-900">Matriz Oficial de Homologação Fase 3.60</h2>
+              <p className="text-xs text-graphite-500">Execução e validação de suítes de testes unitários, adversariais e de proteção financeira</p>
             </div>
             <button
               onClick={handleRunTests}
@@ -782,15 +782,15 @@ export const PerformanceManagementCenterView: React.FC = () => {
                   testSummary.financialProtectionTest,
                   testSummary.dataQualityTests,
                 ].map((s, idx) => (
-                  <div key={idx} className="p-3 bg-slate-50 rounded border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900">{s.suiteName}</div>
-                    <div className="text-slate-600">Total: {s.total} | Aprovados: <span className="text-emerald-600 font-bold">{s.passed}</span> | Falhas: <span className="text-red-600 font-bold">{s.failed}</span></div>
+                  <div key={idx} className="p-3 bg-graphite-50 rounded border border-graphite-200 space-y-1">
+                    <div className="font-bold text-graphite-900">{s.suiteName}</div>
+                    <div className="text-graphite-600">Total: {s.total} | Aprovados: <span className="text-emerald-600 font-bold">{s.passed}</span> | Falhas: <span className="text-red-600 font-bold">{s.failed}</span></div>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300 text-xs">
+            <div className="p-8 text-center text-graphite-500 bg-graphite-50 rounded-lg border border-dashed border-graphite-300 text-xs">
               Clique em &quot;Executar Validação Geral&quot; para rodar a suíte completa de homologação oficial.
             </div>
           )}
@@ -801,39 +801,39 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* New Goal Modal */}
       {showNewGoalModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Cadastrar Nova Meta</h3>
+        <div className="fixed inset-0 bg-graphite-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-xl max-w-md w-full space-y-4">
+            <h3 className="text-base font-bold text-graphite-900">Cadastrar Nova Meta</h3>
             <form onSubmit={handleCreateGoal} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Título da Meta</label>
+                <label className="block text-graphite-700 font-semibold mb-1">Título da Meta</label>
                 <input
                   type="text"
                   value={newGoalTitle}
                   onChange={(e) => setNewGoalTitle(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="Ex: Aumentar pontualidade de entregas"
                   required
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Valor Alvo</label>
+                  <label className="block text-graphite-700 font-semibold mb-1">Valor Alvo</label>
                   <input
                     type="number"
                     value={newGoalTarget}
                     onChange={(e) => setNewGoalTarget(Number(e.target.value))}
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-1">Unidade</label>
+                  <label className="block text-graphite-700 font-semibold mb-1">Unidade</label>
                   <input
                     type="text"
                     value={newGoalUnit}
                     onChange={(e) => setNewGoalUnit(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                     required
                   />
                 </div>
@@ -842,7 +842,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewGoalModal(false)}
-                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded font-medium hover:bg-slate-200"
+                  className="px-3 py-1.5 bg-graphite-100 text-graphite-700 rounded font-medium hover:bg-graphite-200"
                 >
                   Cancelar
                 </button>
@@ -860,28 +860,28 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* New KPI Modal */}
       {showNewKPIModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Cadastrar Novo KPI</h3>
+        <div className="fixed inset-0 bg-graphite-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-xl max-w-md w-full space-y-4">
+            <h3 className="text-base font-bold text-graphite-900">Cadastrar Novo KPI</h3>
             <form onSubmit={handleCreateKPI} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Nome do Indicador</label>
+                <label className="block text-graphite-700 font-semibold mb-1">Nome do Indicador</label>
                 <input
                   type="text"
                   value={newKPIName}
                   onChange={(e) => setNewKPIName(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="Ex: SLA de Atendimento"
                   required
                 />
               </div>
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Valor Alvo</label>
+                <label className="block text-graphite-700 font-semibold mb-1">Valor Alvo</label>
                 <input
                   type="number"
                   value={newKPITarget}
                   onChange={(e) => setNewKPITarget(Number(e.target.value))}
-                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                   required
                 />
               </div>
@@ -889,7 +889,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewKPIModal(false)}
-                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded font-medium hover:bg-slate-200"
+                  className="px-3 py-1.5 bg-graphite-100 text-graphite-700 rounded font-medium hover:bg-graphite-200"
                 >
                   Cancelar
                 </button>
@@ -907,27 +907,27 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
       {/* New PDCA Modal */}
       {showNewPDCAModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xl max-w-md w-full space-y-4">
-            <h3 className="text-base font-bold text-slate-900">Abrir Ciclo PDCA</h3>
+        <div className="fixed inset-0 bg-graphite-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-xl max-w-md w-full space-y-4">
+            <h3 className="text-base font-bold text-graphite-900">Abrir Ciclo PDCA</h3>
             <form onSubmit={handleCreatePDCA} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Título do Problema / Oportunidade</label>
+                <label className="block text-graphite-700 font-semibold mb-1">Título do Problema / Oportunidade</label>
                 <input
                   type="text"
                   value={newPDCATitle}
                   onChange={(e) => setNewPDCATitle(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="Ex: Análise de paradas não programadas"
                   required
                 />
               </div>
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Causa Raiz Identificada</label>
+                <label className="block text-graphite-700 font-semibold mb-1">Causa Raiz Identificada</label>
                 <textarea
                   value={newPDCARootCause}
                   onChange={(e) => setNewPDCARootCause(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                  className="w-full p-2 border border-graphite-300 rounded focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="Descreva a causa investigada..."
                   rows={3}
                 ></textarea>
@@ -936,7 +936,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewPDCAModal(false)}
-                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded font-medium hover:bg-slate-200"
+                  className="px-3 py-1.5 bg-graphite-100 text-graphite-700 rounded font-medium hover:bg-graphite-200"
                 >
                   Cancelar
                 </button>

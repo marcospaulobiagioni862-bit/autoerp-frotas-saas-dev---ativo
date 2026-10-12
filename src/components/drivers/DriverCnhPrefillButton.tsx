@@ -56,8 +56,8 @@ export function DriverCnhPrefillButton({ driverId, onApply }: DriverCnhPrefillBu
         <div className="flex items-start gap-2">
           <Bot className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
           <div>
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Preenchimento assistido pela CNH</p>
-            <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+            <p className="text-sm font-semibold text-graphite-800 dark:text-graphite-100">Preenchimento assistido pela CNH</p>
+            <p className="mt-0.5 text-xs text-graphite-600 dark:text-graphite-400">
               Usa somente uma extração já aprovada na revisão humana e não salva nenhuma alteração automaticamente.
             </p>
           </div>

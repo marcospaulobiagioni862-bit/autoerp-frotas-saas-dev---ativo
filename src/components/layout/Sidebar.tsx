@@ -135,8 +135,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <aside className="w-64 h-full min-h-0 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shrink-0 select-none">
-      <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
+    <aside className="w-64 h-full min-h-0 bg-graphite-900 text-graphite-300 flex flex-col border-r border-graphite-800 shrink-0 select-none">
+      <div className="p-4 border-b border-graphite-800/80 flex items-center justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
           {branding?.logoUrl && (
             <img
@@ -148,13 +148,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
           <div className="min-w-0">
             <span className="text-sm font-black tracking-wide text-white block truncate">{displayName}</span>
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 block">AutoERP V2</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-graphite-400 block">AutoERP V2</span>
           </div>
         </div>
         {onCloseMobile && (
           <button
             onClick={onCloseMobile}
-            className="md:hidden p-1 text-slate-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="md:hidden p-1 text-graphite-400 hover:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             aria-label="Fechar menu"
           >
             <X className="w-5 h-5" />
@@ -166,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {categories.map((category) => (
           <div key={category.title || 'principal'} className="space-y-1">
             {Boolean(category.title) && (
-              <div className="text-[10px] font-bold tracking-wider text-slate-500 uppercase px-3.5 py-1">
+              <div className="text-[10px] font-bold tracking-wider text-graphite-500 uppercase px-3.5 py-1">
                 {category.title}
               </div>
             )}
@@ -185,16 +185,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-all group focus:outline-none focus:ring-1 focus:ring-blue-500 ${
                       isActive
                         ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/30'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
+                        : 'text-graphite-400 hover:text-graphite-100 hover:bg-graphite-800/50'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-graphite-400'}`} />
                       <span>{item.label}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {item.badge !== null && (
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${'badgeColor' in item && item.badgeColor ? item.badgeColor : 'bg-slate-800 text-slate-300'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${'badgeColor' in item && item.badgeColor ? item.badgeColor : 'bg-graphite-800 text-graphite-300'}`}>
                           {item.badge}
                         </span>
                       )}
@@ -208,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      <div className="shrink-0 p-4 border-t border-slate-800/80 bg-slate-950/40 text-[11px] text-slate-500">
+      <div className="shrink-0 p-4 border-t border-graphite-800/80 bg-graphite-950/40 text-[11px] text-graphite-500">
         <div className="flex items-center justify-between font-mono">
           <span>Ambiente:</span>
           <span className="text-emerald-400 font-semibold">V2 Operacional</span>
@@ -223,7 +223,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {isMobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden flex">
           <div
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
+            className="fixed inset-0 bg-graphite-950/60 backdrop-blur-xs"
             onClick={onCloseMobile}
             aria-hidden="true"
           />

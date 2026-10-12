@@ -93,27 +93,27 @@ export function EntityFileGallery({entityType,entityId}:{entityType:RootEntityTy
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-bold">Arquivos</h3>
-          <p className="text-[11px] text-slate-500">Uma única visão dos anexos diretos e relacionados. Os arquivos não são copiados.</p>
+          <p className="text-[11px] text-graphite-500">Uma única visão dos anexos diretos e relacionados. Os arquivos não são copiados.</p>
         </div>
         <div className="flex items-center gap-2"><Badge variant="neutral">{filtered.length} de {items.length}</Badge><Button type="button" size="sm" variant="outline" onClick={()=>void load()} disabled={loading}><RefreshCw className="h-3.5 w-3.5"/>Atualizar</Button><Button type="button" size="sm" onClick={()=>setUploadOpen(value=>!value)}><Upload className="h-3.5 w-3.5"/>{uploadOpen?'Fechar envio':'Enviar arquivo'}</Button></div>
       </div>
 
-      {uploadOpen&&<div className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-        <label className="mb-3 block text-xs font-semibold text-slate-600 dark:text-slate-300">Tipo do novo arquivo
-          <select className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" value={uploadKind} onChange={event=>setUploadKind(event.target.value as UploadKind)}>
+      {uploadOpen&&<div className="rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
+        <label className="mb-3 block text-xs font-semibold text-graphite-600 dark:text-graphite-300">Tipo do novo arquivo
+          <select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2.5 text-sm dark:border-graphite-700 dark:bg-graphite-900" value={uploadKind} onChange={event=>setUploadKind(event.target.value as UploadKind)}>
             <option value="DOCUMENT">Documento</option><option value="PHOTO">Foto</option><option value="VIDEO">Vídeo MP4</option><option value="OTHER">Outro</option>
           </select>
         </label>
         <React.Fragment key={uploadKind}><FileUpload entityType={entityType} entityId={entityId} documentType={uploadConfig.documentType} allowedTypes={uploadConfig.allowedTypes} maxSizeMB={uploadConfig.maxSizeMB} multiple onUploadComplete={()=>void load()}/></React.Fragment>
-        <p className="mt-2 text-[11px] text-slate-500">Limite atual do storage: 10 MB por arquivo. Vídeos aceitos somente em MP4.</p>
+        <p className="mt-2 text-[11px] text-graphite-500">Limite atual do storage: 10 MB por arquivo. Vídeos aceitos somente em MP4.</p>
       </div>}
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input value={search} onChange={event=>setSearch(event.target.value)} placeholder="Buscar nome, tipo, origem..."/>
-        <select aria-label="Filtrar tipo de arquivo" className="rounded-lg border border-slate-300 bg-transparent p-2 text-xs dark:border-slate-700" value={kind} onChange={event=>setKind(event.target.value as FileKind)}>
+        <select aria-label="Filtrar tipo de arquivo" className="rounded-lg border border-graphite-300 bg-transparent p-2 text-xs dark:border-graphite-700" value={kind} onChange={event=>setKind(event.target.value as FileKind)}>
           {(['ALL','PHOTO','VIDEO','PDF','OTHER'] as FileKind[]).map(value=><option key={value} value={value}>{kindLabel(value)}</option>)}
         </select>
-        <select aria-label="Filtrar origem do arquivo" className="rounded-lg border border-slate-300 bg-transparent p-2 text-xs dark:border-slate-700" value={origin} onChange={event=>setOrigin(event.target.value as FileOrigin)}>
+        <select aria-label="Filtrar origem do arquivo" className="rounded-lg border border-graphite-300 bg-transparent p-2 text-xs dark:border-graphite-700" value={origin} onChange={event=>setOrigin(event.target.value as FileOrigin)}>
           {availableOrigins.map(value=><option key={value} value={value}>{ORIGIN_LABELS[value]}</option>)}
         </select>
         <Input type="date" value={from} onChange={event=>setFrom(event.target.value)} aria-label="Arquivos a partir da data"/>
@@ -123,6 +123,6 @@ export function EntityFileGallery({entityType,entityId}:{entityType:RootEntityTy
     </Card>
 
     {error&&<div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">{error}</div>}
-    {loading?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-slate-500">Carregando arquivos...</div>:filtered.length===0?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-slate-500"><FileArchive className="mx-auto mb-2 h-7 w-7"/>Nenhum arquivo corresponde aos filtros selecionados.</div>:<AttachmentList attachments={filtered} onRefresh={()=>void load()} showPdfActions protectLatestDriverCnh={entityType==='Driver'} showProtectedDriverCnh={entityType==='Driver'}/>}
+    {loading?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-graphite-500">Carregando arquivos...</div>:filtered.length===0?<div className="rounded-lg border border-dashed p-8 text-center text-sm text-graphite-500"><FileArchive className="mx-auto mb-2 h-7 w-7"/>Nenhum arquivo corresponde aos filtros selecionados.</div>:<AttachmentList attachments={filtered} onRefresh={()=>void load()} showPdfActions protectLatestDriverCnh={entityType==='Driver'} showProtectedDriverCnh={entityType==='Driver'}/>}
   </div>;
 }

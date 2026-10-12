@@ -43,7 +43,7 @@ function correctedValue(text: string, original: unknown): unknown {
 
 function confidenceLabel(value: unknown): { text: string; className: string } {
   const confidence = typeof value === 'number' && Number.isFinite(value) ? value : null;
-  if (confidence === null) return { text: 'Confiança não informada', className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' };
+  if (confidence === null) return { text: 'Confiança não informada', className: 'bg-graphite-100 text-graphite-600 dark:bg-graphite-800 dark:text-graphite-300' };
   const percentage = Math.max(0, Math.min(100, Math.round(confidence * 100)));
   if (percentage >= 85) return { text: `${percentage}%`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
   if (percentage >= 60) return { text: `${percentage}%`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
@@ -65,7 +65,7 @@ function DocumentAiObservabilitySummary({
 }) {
   if (!snapshot) {
     return (
-      <div className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+      <div className="mx-4 mt-4 rounded-lg border border-graphite-200 bg-graphite-50 p-3 text-sm text-graphite-600 dark:border-graphite-800 dark:bg-graphite-900 dark:text-graphite-300">
         <p className="font-medium">Indicadores operacionais indisponíveis</p>
         <p className="mt-1 text-xs">A fila de revisão permanece acessível; nenhuma execução foi iniciada.</p>
       </div>
@@ -73,13 +73,13 @@ function DocumentAiObservabilitySummary({
   }
   const counts = snapshot.counts;
   return (
-    <section className="mx-4 mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900" aria-label="Observabilidade documental">
+    <section className="mx-4 mt-4 rounded-lg border border-graphite-200 bg-graphite-50 p-3 dark:border-graphite-800 dark:bg-graphite-900" aria-label="Observabilidade documental">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">{runtimeDescription(snapshot.runtime.mode)}</p>
-          <p className="text-xs text-slate-500">Somente leitura · execução automática bloqueada</p>
+          <p className="text-sm font-semibold text-graphite-900 dark:text-white">{runtimeDescription(snapshot.runtime.mode)}</p>
+          <p className="text-xs text-graphite-500">Somente leitura · execução automática bloqueada</p>
         </div>
-        <span className="text-xs text-slate-500">{counts.total} extrações registradas</span>
+        <span className="text-xs text-graphite-500">{counts.total} extrações registradas</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
@@ -88,9 +88,9 @@ function DocumentAiObservabilitySummary({
           ['Em revisão', counts.REVIEW_REQUIRED],
           ['Falhas', counts.FAILED],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-md border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
-            <p className="text-lg font-semibold text-slate-900 dark:text-white">{value}</p>
+          <div key={String(label)} className="rounded-md border border-graphite-200 bg-white px-3 py-2 dark:border-graphite-700 dark:bg-graphite-950">
+            <p className="text-[11px] uppercase tracking-wide text-graphite-500">{label}</p>
+            <p className="text-lg font-semibold text-graphite-900 dark:text-white">{value}</p>
           </div>
         ))}
       </div>
@@ -343,7 +343,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-slate-500">Carregando propostas para revisão...</div>;
+    return <div className="p-6 text-sm text-graphite-500">Carregando propostas para revisão...</div>;
   }
 
   if (items.length === 0) {
@@ -352,8 +352,8 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
         <div className="p-6 text-center">
         <ShieldCheck className="h-9 w-9 mx-auto text-emerald-500 mb-2" />
-        <p className="font-medium text-slate-900 dark:text-white">Nenhuma proposta ou falha pendente</p>
-        <p className="text-sm text-slate-500 mt-1">Extrações futuras aparecerão aqui antes de qualquer aplicação no ERP.</p>
+        <p className="font-medium text-graphite-900 dark:text-white">Nenhuma proposta ou falha pendente</p>
+        <p className="text-sm text-graphite-500 mt-1">Extrações futuras aparecerão aqui antes de qualquer aplicação no ERP.</p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>
           Atualizar
         </Button>
@@ -369,7 +369,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
       <div>
         <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
         <div className="p-6 text-center">
-          <p className="font-medium text-slate-900 dark:text-white">Nenhum item neste filtro</p>
+          <p className="font-medium text-graphite-900 dark:text-white">Nenhum item neste filtro</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => setCleanupFilter('ALL')}>Mostrar todos</Button>
         </div>
       </div>
@@ -382,12 +382,12 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
     <div>
       <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
       <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] min-h-[420px]">
-      <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 p-3 space-y-2">
+      <aside className="border-b lg:border-b-0 lg:border-r border-graphite-200 dark:border-graphite-800 p-3 space-y-2">
         <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-xs font-semibold uppercase tracking-wide text-graphite-500">
             Revisão e falhas ({items.length})
           </span>
-          <button type="button" onClick={() => void load()} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Atualizar">
+          <button type="button" onClick={() => void load()} className="p-1.5 rounded hover:bg-graphite-100 dark:hover:bg-graphite-800" title="Atualizar">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>
@@ -404,7 +404,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               onClick={() => setCleanupFilter(value)}
               className={`rounded-md px-2 py-1.5 text-xs font-medium ${cleanupFilter === value
                 ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'}`}
+                : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300'}`}
             >
               {label}
             </button>
@@ -432,7 +432,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             {item.status === 'FAILED' && canReview && (
               <input
                 type="checkbox"
-                className="mt-4 h-4 w-4 rounded border-slate-300"
+                className="mt-4 h-4 w-4 rounded border-graphite-300"
                 checked={selectedFailedIds.has(item.id)}
                 onChange={() => toggleFailedSelection(item.id)}
                 aria-label={`Selecionar falha do anexo ${item.attachmentId}`}
@@ -444,7 +444,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             className={`min-w-0 flex-1 text-left rounded-lg border p-3 transition-colors ${
               item.id === selected.id
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
-                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900'
+                : 'border-graphite-200 hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-900'
             }`}
           >
             <div className="flex items-center justify-between gap-2">
@@ -457,11 +457,11 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
                 {item.status === 'FAILED' ? 'Falhou' : 'Revisar'}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 truncate">Anexo {item.attachmentId}</p>
+            <p className="text-xs text-graphite-500 mt-1 truncate">Anexo {item.attachmentId}</p>
             <p className={`mt-1 text-[11px] ${cleanupClassification(item).category === 'UNUSED' ? 'text-emerald-600' : 'text-amber-600'}`}>
               {cleanupClassification(item).reason}
             </p>
-            <p className="text-xs text-slate-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
+            <p className="text-xs text-graphite-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
             </button>
             {item.status === 'FAILED' && canDeletePermanently && cleanupClassification(item).category === 'UNUSED' && (
               <button
@@ -487,7 +487,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
                 {selected.status === 'FAILED' ? 'Falha controlada na extração' : 'Proposta de extração'}
               </h3>
             </div>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-graphite-500 mt-1">
               {selected.detectedDocumentType || 'Tipo ainda não identificado'}
               {selected.provider ? ` · ${selected.provider}${selected.model ? ` / ${selected.model}` : ''}` : ''}
             </p>
@@ -518,10 +518,10 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
           </div>
         )}
 
-        <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="rounded-lg border border-graphite-200 dark:border-graphite-800 overflow-hidden">
+          <div className="px-4 py-3 bg-graphite-50 dark:bg-graphite-900 border-b border-graphite-200 dark:border-graphite-800">
             <p className="text-sm font-medium flex items-center gap-2"><FileSearch className="h-4 w-4" /> Campos encontrados</p>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-graphite-500 mt-1">
               Origem: anexo {selected.attachmentId} · SHA-256 {selected.attachmentChecksum.slice(0, 12)}…
             </p>
           </div>
@@ -532,7 +532,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
           ) : fields.length === 0 ? (
             <div className="p-5 text-sm text-amber-700 dark:text-amber-300">Nenhum campo estruturado foi proposto. Rejeite ou aguarde novo processamento.</div>
           ) : (
-            <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            <div className="divide-y divide-graphite-200 dark:divide-graphite-800">
               {fields.map(([key, proposed]) => {
                 const confidence = confidenceLabel(selected.fieldConfidence[key]);
                 const changed = draft[key] !== editableValue(proposed);
@@ -543,15 +543,15 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
                       <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-xs font-medium ${confidence.className}`}>
                         {confidence.text}
                       </span>
-                      <p className="text-[11px] text-slate-400 mt-2">Origem: documento acima</p>
+                      <p className="text-[11px] text-graphite-400 mt-2">Origem: documento acima</p>
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Valor proposto / correção humana</label>
+                      <label className="text-xs text-graphite-500">Valor proposto / correção humana</label>
                       <input
                         value={draft[key] ?? ''}
                         onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))}
-                        className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm bg-white dark:bg-slate-950 ${
-                          changed ? 'border-amber-500 ring-1 ring-amber-200' : 'border-slate-300 dark:border-slate-700'
+                        className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm bg-white dark:bg-graphite-950 ${
+                          changed ? 'border-amber-500 ring-1 ring-amber-200' : 'border-graphite-300 dark:border-graphite-700'
                         }`}
                       />
                       {changed && <p className="text-xs text-amber-600 mt-1">Correção humana será auditada.</p>}
@@ -572,7 +572,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               maxLength={2000}
               rows={3}
               placeholder="Motivo da correção, aprovação ou rejeição..."
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-graphite-300 dark:border-graphite-700 bg-white dark:bg-graphite-950 px-3 py-2 text-sm"
             />
           </div>
         )}

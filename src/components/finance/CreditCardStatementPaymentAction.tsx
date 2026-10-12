@@ -79,29 +79,29 @@ export const CreditCardStatementPaymentAction: React.FC<CreditCardStatementPayme
         Pagar fatura
       </Button>
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-96 max-w-[90vw] rounded-xl border border-slate-200 bg-white p-4 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+        <div className="absolute right-0 z-20 mt-2 w-96 max-w-[90vw] rounded-xl border border-graphite-200 bg-white p-4 text-left shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">Pagamento autoritativo</div>
-              <div className="mt-1 text-[11px] text-slate-500">Somente transferências já existentes, não estornadas, com destino à conta do cartão e valor exatamente igual ao saldo.</div>
+              <div className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Pagamento autoritativo</div>
+              <div className="mt-1 text-[11px] text-graphite-500">Somente transferências já existentes, não estornadas, com destino à conta do cartão e valor exatamente igual ao saldo.</div>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setOpen(false)} icon={<X className="h-4 w-4" />}>Fechar</Button>
           </div>
 
-          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
+          <div className="mt-3 rounded-lg bg-graphite-50 p-3 text-xs dark:bg-graphite-800/60">
             <div className="flex justify-between gap-3"><span>Ciclo</span><strong>{statement.cycleRef}</strong></div>
             <div className="mt-1 flex justify-between gap-3"><span>Saldo autoritativo</span><strong className="font-mono">{currency(statement.balanceAmount)}</strong></div>
           </div>
 
           {loading ? (
-            <div className="mt-3 text-xs text-slate-500">Carregando transferências elegíveis...</div>
+            <div className="mt-3 text-xs text-graphite-500">Carregando transferências elegíveis...</div>
           ) : transfers.length > 0 ? (
-            <label className="mt-3 block text-xs font-semibold text-slate-600 dark:text-slate-300">
+            <label className="mt-3 block text-xs font-semibold text-graphite-600 dark:text-graphite-300">
               Transferência elegível
               <select
                 value={selectedTransactionId}
                 onChange={(event) => setSelectedTransactionId(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950"
+                className="mt-1 w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs dark:border-graphite-700 dark:bg-graphite-950"
               >
                 <option value="">Selecione...</option>
                 {transfers.map((transfer) => (
@@ -121,7 +121,7 @@ export const CreditCardStatementPaymentAction: React.FC<CreditCardStatementPayme
               {paying ? 'Registrando...' : 'Confirmar pagamento'}
             </Button>
           </div>
-          <p className="mt-2 text-[10px] text-slate-500">O sistema confirma os valores, saldos e vínculos antes de registrar o pagamento. Se houver uma falha, a tentativa pode ser refeita sem duplicar o lançamento.</p>
+          <p className="mt-2 text-[10px] text-graphite-500">O sistema confirma os valores, saldos e vínculos antes de registrar o pagamento. Se houver uma falha, a tentativa pode ser refeita sem duplicar o lançamento.</p>
         </div>
       )}
     </div>

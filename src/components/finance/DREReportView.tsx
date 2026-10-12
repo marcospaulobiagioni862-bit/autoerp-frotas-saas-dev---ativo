@@ -99,27 +99,27 @@ export const DREReportView: React.FC = () => {
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <PieChart className="w-6 h-6 text-indigo-600" />
             {regime === AccountingRegime.CASH ? 'Resultado Gerencial — Caixa' : 'DRE Gerencial'}
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-graphite-500 mt-0.5">
             {regime === AccountingRegime.CASH
               ? 'Entradas e saídas efetivadas no período. A rentabilidade por veículo aparece em uma seção separada.'
               : 'Receitas e despesas por competência no período. A rentabilidade por veículo aparece em uma seção separada.'}
           </p>
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+        <div className="flex items-center gap-1 bg-graphite-100 dark:bg-graphite-800 p-1 rounded-xl shrink-0">
           <button
             onClick={() => setRegime(AccountingRegime.CASH)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.CASH ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.CASH ? 'bg-blue-600 text-white shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
           >
             Regime de Caixa
           </button>
           <button
             onClick={() => setRegime(AccountingRegime.ACCRUAL)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.ACCRUAL ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${regime === AccountingRegime.ACCRUAL ? 'bg-blue-600 text-white shadow-2xs' : 'text-graphite-600 dark:text-graphite-400 hover:text-graphite-900 dark:hover:text-graphite-200'}`}
           >
             Regime de Competência
           </button>
@@ -128,23 +128,23 @@ export const DREReportView: React.FC = () => {
 
       <Card padding="sm">
         <div className="mb-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Mês atual</button>
-          <button type="button" onClick={() => applyPreset('30_DAYS')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Últimos 30 dias</button>
-          <button type="button" onClick={() => applyPreset('YEAR')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Ano atual</button>
+          <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Mês atual</button>
+          <button type="button" onClick={() => applyPreset('30_DAYS')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Últimos 30 dias</button>
+          <button type="button" onClick={() => applyPreset('YEAR')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Ano atual</button>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-xs">
-          <span className="font-semibold text-slate-500">Personalizado</span>
+          <span className="font-semibold text-graphite-500">Personalizado</span>
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-slate-400" />
-            <span className="font-semibold text-slate-700 dark:text-slate-300">Período de Análise:</span>
+            <Calendar className="w-4 h-4 text-graphite-400" />
+            <span className="font-semibold text-graphite-700 dark:text-graphite-300">Período de Análise:</span>
           </div>
-          <label className="flex items-center gap-2 text-slate-500">
+          <label className="flex items-center gap-2 text-graphite-500">
             De:
-            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono" />
+            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="px-2.5 py-1 bg-graphite-50 dark:bg-graphite-800 border border-graphite-200 dark:border-graphite-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono" />
           </label>
-          <label className="flex items-center gap-2 text-slate-500">
+          <label className="flex items-center gap-2 text-graphite-500">
             Até:
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="px-2.5 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono" />
+            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="px-2.5 py-1 bg-graphite-50 dark:bg-graphite-800 border border-graphite-200 dark:border-graphite-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-mono" />
           </label>
         </div>
       </Card>
@@ -159,14 +159,14 @@ export const DREReportView: React.FC = () => {
           <DREStatement report={dreReport} />
 
           <Card padding="md" className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <div className="flex items-center justify-between border-b border-graphite-100 dark:border-graphite-800 pb-3">
+              <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
                 <Car className="w-4 h-4 text-blue-600" /> Rentabilidade por Veículo
               </h3>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Selecionar veículo:</label>
+              <label className="block text-xs font-semibold text-graphite-600 dark:text-graphite-400 mb-1">Selecionar veículo:</label>
               <Select
                 value={selectedVehicleId}
                 onChange={(event) => setSelectedVehicleId(event.target.value)}
@@ -177,7 +177,7 @@ export const DREReportView: React.FC = () => {
             {vehicleProfit ? (
               <VehicleProfitabilityBreakdown report={vehicleProfit} />
             ) : (
-              <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800/50">Nenhum veículo disponível para o período selecionado.</p>
+              <p className="rounded-lg bg-graphite-50 p-3 text-xs text-graphite-500 dark:bg-graphite-800/50">Nenhum veículo disponível para o período selecionado.</p>
             )}
           </Card>
         </div>

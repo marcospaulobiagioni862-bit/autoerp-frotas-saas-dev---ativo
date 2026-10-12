@@ -211,13 +211,13 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
 
       <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-2" aria-label="Progresso do cadastro pós-CRLV">
         <div className="flex items-center justify-between gap-3 text-xs">
-          <span className="font-semibold text-slate-800">Progresso CRLV → cadastro completo</span>
+          <span className="font-semibold text-graphite-800">Progresso CRLV → cadastro completo</span>
           <span className="font-bold text-blue-700">{progressPercent}%</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+        <div className="h-2 overflow-hidden rounded-full bg-graphite-200">
           <div className="h-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
-        <div className="grid grid-cols-2 gap-1 text-[10px] text-slate-600 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1 text-[10px] text-graphite-600 sm:grid-cols-4">
           <span>{stepCrlvSent ? '✓' : '○'} CRLV enviado</span>
           <span>{stepReviewed ? '✓' : '○'} Leitura IA concluída</span>
           <span>{stepApplied ? '✓' : '○'} Dados aplicados</span>
@@ -237,12 +237,12 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
 
       <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-3">
         <div>
-          <h5 className="font-bold text-slate-900">Dados do CRLV extraído</h5>
-          <p className="text-[11px] text-slate-500">Compare o cadastro atual com os valores lidos pela IA do CRLV antes de aplicar ao veículo.</p>
+          <h5 className="font-bold text-graphite-900">Dados do CRLV extraído</h5>
+          <p className="text-[11px] text-graphite-500">Compare o cadastro atual com os valores lidos pela IA do CRLV antes de aplicar ao veículo.</p>
         </div>
 
         {loadingReview ? (
-          <p className="text-xs text-slate-500">Carregando comparação...</p>
+          <p className="text-xs text-graphite-500">Carregando comparação...</p>
         ) : reviewError ? (
           <p className="text-xs text-red-600">{reviewError}</p>
         ) : !vehicle || !approvedExtraction ? (
@@ -251,7 +251,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
           <>
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50">
+                <thead className="bg-graphite-50">
                   <tr>
                     <th className="p-2">Aplicar</th>
                     <th className="p-2">Campo</th>
@@ -290,7 +290,7 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 type="button"
                 disabled={applying || selectableApprovedFields.length === 0}
                 onClick={applyAllApproved}
-                className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
               >
                 {applying ? 'Copiando...' : `Copiar todos os dados extraídos (${selectableApprovedFields.length})`}
               </button>
@@ -298,12 +298,12 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
                 type="button"
                 disabled={applying || selectedFields.size === 0}
                 onClick={applySelected}
-                className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                className="rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-graphite-200 disabled:text-graphite-500"
               >
                 {applying ? 'Copiando...' : `Copiar selecionados (${selectedFields.size})`}
               </button>
             </div>
-            <p className="text-[11px] text-slate-500">Os dados lidos do CRLV podem ser copiados para o cadastro do veículo. O servidor relê o CRLV e aplica somente os campos autorizados.</p>
+            <p className="text-[11px] text-graphite-500">Os dados lidos do CRLV podem ser copiados para o cadastro do veículo. O servidor relê o CRLV e aplica somente os campos autorizados.</p>
             {applyNotice && <p className="text-xs font-medium text-emerald-700">{applyNotice}</p>}
           </>
         )}
@@ -313,10 +313,10 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
         <div className={`rounded-lg border p-3 space-y-2 ${completionReady ? 'border-emerald-200 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h5 className="font-bold text-slate-900">Etapa obrigatória: completar dados que não vêm no CRLV</h5>
-              <p className="text-[11px] text-slate-600">A IA não deve inventar valores operacionais ou patrimoniais. Confira e edite esses dados manualmente no cadastro do veículo.</p>
+              <h5 className="font-bold text-graphite-900">Etapa obrigatória: completar dados que não vêm no CRLV</h5>
+              <p className="text-[11px] text-graphite-600">A IA não deve inventar valores operacionais ou patrimoniais. Confira e edite esses dados manualmente no cadastro do veículo.</p>
             </div>
-            <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-slate-700">
+            <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-graphite-700">
               {POST_CRLV_COMPLETION_FIELDS.length - missingCompletionFields.length}/{POST_CRLV_COMPLETION_FIELDS.length} preenchidos
             </span>
           </div>
@@ -326,14 +326,14 @@ export const VehicleCrlvImportPanel: React.FC<VehicleCrlvImportPanelProps> = ({ 
               return (
                 <div key={field.vehicleKey} className="rounded-md border bg-white px-2 py-1.5">
                   <span className={complete ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-800'}>{complete ? '✓' : '○'} {field.label}</span>
-                  <span className="ml-1 text-slate-500">{complete ? visibleValue(vehicle[field.vehicleKey]) : 'pendente'}</span>
+                  <span className="ml-1 text-graphite-500">{complete ? visibleValue(vehicle[field.vehicleKey]) : 'pendente'}</span>
                 </div>
               );
             })}
           </div>
           {!completionReady && <p className="text-[11px] font-medium text-amber-800">Cadastro pós-CRLV ainda incompleto. Use “Registrar KM” para o odômetro e “Editar Veículo” para os demais campos pendentes.</p>}
           {completionReady && <p className="text-[11px] font-medium text-emerald-800">Campos essenciais preenchidos. Confirme os valores antes de considerar o cadastro concluído.</p>}
-          <p className="text-[10px] text-slate-500">FIPE será tratada como consulta externa separada: não substituirá automaticamente o valor de aquisição nem o valor comercial informado pelo operador.</p>
+          <p className="text-[10px] text-graphite-500">FIPE será tratada como consulta externa separada: não substituirá automaticamente o valor de aquisição nem o valor comercial informado pelo operador.</p>
         </div>
       )}
     </div>

@@ -99,20 +99,20 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observação *</label>
+          <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Observação *</label>
           <textarea
             required
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Registre as informações relevantes da venda."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <p className="text-xs text-slate-500">O histórico, documentos, contratos, manutenções e registros financeiros vinculados ao veículo não serão apagados.</p>
+        <p className="text-xs text-graphite-500">O histórico, documentos, contratos, manutenções e registros financeiros vinculados ao veículo não serão apagados.</p>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
           <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>Confirmar venda</Button>
         </div>

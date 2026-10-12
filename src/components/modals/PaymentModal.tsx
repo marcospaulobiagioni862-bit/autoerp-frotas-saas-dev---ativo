@@ -154,15 +154,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
-        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
+      <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col">
+        <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-indigo-600" />
               Registrar pagamento
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-graphite-500 mt-0.5">
               Liquidação de Conta a Pagar • {payable.description}
             </p>
           </div>
@@ -170,7 +170,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             aria-label="Fechar modal"
             disabled={isSubmitting || confirmOpen}
             onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -187,8 +187,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
           <div className="bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 p-3 rounded-lg flex justify-between items-center text-xs">
             <div>
-              <span className="text-slate-500 block">Valor Original / Saldo Devedor:</span>
-              <span className="font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-300">
+              <span className="text-graphite-500 block">Valor Original / Saldo Devedor:</span>
+              <span className="font-semibold font-mono tabular-nums text-graphite-700 dark:text-graphite-300">
                 R$ {payable.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /{' '}
                 <strong className="text-indigo-700 dark:text-indigo-400 font-mono tabular-nums">
                   R$ {payable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -196,8 +196,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
               </span>
             </div>
             <div className="text-right">
-              <span className="text-slate-500 block">Vencimento:</span>
-              <span className="font-medium font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatDateBR(payable.dueDate)}</span>
+              <span className="text-graphite-500 block">Vencimento:</span>
+              <span className="font-medium font-mono tabular-nums text-graphite-700 dark:text-graphite-300">{formatDateBR(payable.dueDate)}</span>
             </div>
           </div>
 
@@ -209,7 +209,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             <div>Valor pago agora: {formatCurrencyBRL(parseCurrencyDraft(amount) || 0)}</div>
           </dl>
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
               Juros (R$)
               <input
                 aria-label="Juros (R$)"
@@ -220,10 +220,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                   const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) { setInterestAmount(draft); rotateCommandKey(); }
                 }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
               />
             </label>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
               Acréscimo (R$)
               <input
                 aria-label="Acréscimo (R$)"
@@ -234,12 +234,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                   const draft = normalizeCurrencyCentsDraft(e.target.value);
                   if (draft !== null) { setAdditionalAmount(draft); rotateCommandKey(); }
                 }}
-                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg"
               />
             </label>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Valor pago agora (R$) *
             </label>
             <input
@@ -251,28 +251,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
                 const draft = normalizeCurrencyCentsDraft(e.target.value);
                 if (draft !== amount) { amountEdited.current = true; setAmount(draft); rotateCommandKey(); }
               }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
-            <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/70 p-2 text-[11px] dark:border-slate-700 dark:bg-slate-900/40 sm:grid-cols-5">
+            <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-graphite-200 bg-white/70 p-2 text-[11px] dark:border-graphite-700 dark:bg-graphite-900/40 sm:grid-cols-5">
               <div>
-                <span className="block text-slate-500">Saldo atual</span>
+                <span className="block text-graphite-500">Saldo atual</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(payable.balanceAmount)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Ajustes desta baixa</span>
+                <span className="block text-graphite-500">Ajustes desta baixa</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(adjustmentTotal)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Valor total a pagar</span>
+                <span className="block text-graphite-500">Valor total a pagar</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(settlementTotal)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Pago agora</span>
+                <span className="block text-graphite-500">Pago agora</span>
                 <strong className="font-mono tabular-nums">{formatCurrencyBRL(safePaymentValue)}</strong>
               </div>
               <div>
-                <span className="block text-slate-500">Saldo devedor após pagamento</span>
+                <span className="block text-graphite-500">Saldo devedor após pagamento</span>
                 <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
               </div>
             </div>
@@ -281,15 +281,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
           <div className="grid grid-cols-2 gap-3">
             {([['Multa (R$)', fineAmount, setFineAmount], ...(payable.originType === 'TRAFFIC_TICKET_COMPANY' ? [] : [['Desconto (R$)', discountAmount, setDiscountAmount] as const])] as const).map(([label, value, setter]) => (
-              <label key={label} className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <label key={label} className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                 {label}
                 <input aria-label={label} type="text" inputMode="decimal" onFocus={event => event.target.select()} value={value}
                   onChange={event => { setter(normalizeCurrencyCentsDraft(event.target.value)); rotateCommandKey(); }}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg" />
+                  className="mt-1 w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg" />
               </label>
             ))}
           </div>
-          {payable.originType === 'TRAFFIC_TICKET_COMPANY' && <p className="text-xs text-slate-500">O desconto desta multa segue o valor e o prazo cadastrados na multa e é conferido pelo servidor.</p>}
+          {payable.originType === 'TRAFFIC_TICKET_COMPANY' && <p className="text-xs text-graphite-500">O desconto desta multa segue o valor e o prazo cadastrados na multa e é conferido pelo servidor.</p>}
           <dl className="grid grid-cols-2 gap-2 text-xs" aria-label="Título e parcelas">
             <div><dt>Valor original do título</dt><dd>{formatCurrencyBRL(payable.originalAmount)}</dd></div>
             <div><dt>Valor já liquidado</dt><dd>{formatCurrencyBRL(payable.paidAmount)}</dd></div>
@@ -305,13 +305,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Conta Financeira de Origem *
               </label>
               <select
                 value={selectedAccountId}
                 onChange={(e) => { setSelectedAccountId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 required
               >
                 {accounts.map((acc) => (
@@ -323,13 +323,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Meio de Pagamento *
               </label>
               <select
                 value={selectedMethodId}
                 onChange={(e) => { setSelectedMethodId(e.target.value); rotateCommandKey(); }}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 required
               >
                 {methods.map((m) => (
@@ -342,35 +342,35 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Data Efetiva de Pagamento *
             </label>
             <input
               type="date"
               value={paymentDate}
               onChange={(e) => { setPaymentDate(e.target.value); rotateCommandKey(); }}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Observações / Comprovante
             </label>
             <textarea
               value={notes}
               onChange={(e) => { setNotes(e.target.value); rotateCommandKey(); }}
               placeholder="Ex: Pagamento autorizado pelo gerência..."
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-16"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-16"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
             <button
               type="button"
               onClick={(event)=>{ if (!submittingRef.current) requestGuardedClose(event,onClose); }}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>

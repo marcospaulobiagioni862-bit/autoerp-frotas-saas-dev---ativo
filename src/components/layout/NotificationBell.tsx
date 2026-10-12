@@ -152,7 +152,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
         onClick={() => setOpen((value) => !value)}
         aria-label="Abrir notificações"
         aria-expanded={open}
-        className="relative p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="relative p-2 text-graphite-500 hover:text-graphite-700 dark:text-graphite-400 dark:hover:text-graphite-200 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
         title={error ? 'Notificações temporariamente indisponíveis' : 'Notificações'}
       >
         <Bell className="w-4 h-4" />
@@ -164,17 +164,17 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-700 rounded-xl shadow-xl overflow-hidden z-50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-graphite-200 dark:border-graphite-800">
             <div>
-              <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Notificações</p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">{unread} não lida(s)</p>
+              <p className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Notificações</p>
+              <p className="text-[11px] text-graphite-500 dark:text-graphite-400">{unread} não lida(s)</p>
             </div>
             <button
               type="button"
               onClick={() => { void markAllRead(); }}
               disabled={unread === 0}
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="p-1.5 rounded-lg text-graphite-500 hover:bg-graphite-100 dark:hover:bg-graphite-800 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
               title="Marcar todas como lidas"
             >
               <CheckCheck className="w-4 h-4" />
@@ -183,7 +183,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
 
           <div className="max-h-80 overflow-y-auto">
             {loading && (
-              <div className="py-8 flex items-center justify-center text-slate-500">
+              <div className="py-8 flex items-center justify-center text-graphite-500">
                 <Loader2 className="w-5 h-5 animate-spin" />
               </div>
             )}
@@ -193,7 +193,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
               </div>
             )}
             {!loading && !error && items.length === 0 && (
-              <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">
+              <div className="px-4 py-6 text-sm text-graphite-500 dark:text-graphite-400 text-center">
                 Nenhuma notificação.
               </div>
             )}
@@ -204,19 +204,19 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onResolve })
                   type="button"
                   key={item.id}
                   onClick={() => { void resolveNotification(item); }}
-                  className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
+                  className={`w-full text-left px-4 py-3 border-b last:border-b-0 border-graphite-100 dark:border-graphite-800 hover:bg-graphite-50 dark:hover:bg-graphite-800/70 transition-colors ${item.readAt ? 'opacity-70' : 'bg-blue-50/40 dark:bg-blue-950/10'}`}
                 >
                   <div className="flex gap-2 items-start">
-                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600'}`} />
+                    <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${item.readAt ? 'bg-graphite-300 dark:bg-graphite-600' : 'bg-blue-600'}`} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">{item.title}</p>
+                        <p className="text-xs font-semibold text-graphite-900 dark:text-graphite-100 truncate flex-1">{item.title}</p>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${severityClasses(item.severity)}`}>
                           {severityLabel(item.severity)}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-[11px] leading-4 text-slate-600 dark:text-slate-300">{item.message}</p>
-                      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400 min-w-0">
+                      <p className="mt-0.5 text-[11px] leading-4 text-graphite-600 dark:text-graphite-300">{item.message}</p>
+                      <div className="mt-1 flex items-center gap-2 text-[10px] text-graphite-400 min-w-0">
                         <span>{formatTimestamp(item.createdAt)}</span>
                         {entity && <span className="truncate" title={entity}>{entity}</span>}
                         <span>{item.readAt ? 'Lida' : 'Não lida'}</span>

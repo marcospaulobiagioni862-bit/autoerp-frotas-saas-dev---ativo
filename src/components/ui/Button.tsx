@@ -21,9 +21,9 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantStyles: Record<string, string> = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 focus:ring-blue-500',
-    secondary: 'bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 focus:ring-slate-400',
-    outline: 'border border-slate-300 text-slate-700 bg-transparent hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 focus:ring-slate-400',
-    ghost: 'bg-transparent text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 focus:ring-slate-400',
+    secondary: 'bg-graphite-100 text-graphite-800 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-200 dark:hover:bg-graphite-700 focus:ring-graphite-400',
+    outline: 'border border-graphite-300 text-graphite-700 bg-transparent hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800 focus:ring-graphite-400',
+    ghost: 'bg-transparent text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800 focus:ring-graphite-400',
     danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500 focus:ring-red-500',
     warning: 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 focus:ring-amber-500',
   };

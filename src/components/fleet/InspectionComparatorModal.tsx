@@ -64,20 +64,20 @@ export function InspectionComparatorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-3 backdrop-blur-sm sm:p-6 overflow-y-auto">
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/80 p-3 backdrop-blur-sm sm:p-6 overflow-y-auto">
+      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 overflow-hidden">
         {/* Cabeçalho */}
-        <div className="flex flex-wrap items-center justify-between border-b border-slate-100 p-4 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
           <div>
             <div className="flex items-center gap-2">
               <span className="rounded-lg bg-violet-100 p-1.5 text-violet-700 dark:bg-violet-950/60 dark:text-violet-400">
                 <ArrowRightLeft className="w-5 h-5" />
               </span>
-              <h3 className="font-bold text-base text-slate-900 dark:text-white">
+              <h3 className="font-bold text-base text-graphite-900 dark:text-white">
                 Comparador Lado a Lado: Entrega vs Devolução
               </h3>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-graphite-500">
               {vehicle.plate} • {vehicle.brand} {vehicle.model} | Condutor: {driver.name}
             </p>
           </div>
@@ -92,7 +92,7 @@ export function InspectionComparatorModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded-lg p-1.5 text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -100,11 +100,11 @@ export function InspectionComparatorModal({
         </div>
 
         {/* Barra de Deltas Operacionais Rápidos */}
-        <div className="grid grid-cols-2 gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-4 dark:border-slate-800 dark:bg-slate-950/40 text-xs">
-          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between text-slate-500">
+        <div className="grid grid-cols-2 gap-2 border-b border-graphite-100 bg-graphite-50/70 p-3 sm:grid-cols-4 dark:border-graphite-800 dark:bg-graphite-950/40 text-xs">
+          <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
+            <div className="flex items-center justify-between text-graphite-500">
               <span className="flex items-center gap-1"><Gauge className="w-3.5 h-3.5 text-blue-500" /> Odômetro</span>
-              <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-300">+{deltaKm} km</span>
+              <span className="font-mono text-[11px] font-bold text-graphite-700 dark:text-graphite-300">+{deltaKm} km</span>
             </div>
             <div className="mt-1 flex justify-between font-mono text-[11px]">
               <span>Saída: {exitInspection?.odometer || 0}</span>
@@ -117,8 +117,8 @@ export function InspectionComparatorModal({
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between text-slate-500">
+          <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
+            <div className="flex items-center justify-between text-graphite-500">
               <span className="flex items-center gap-1"><Fuel className="w-3.5 h-3.5 text-amber-500" /> Tanque</span>
               <span className={`font-mono text-[11px] font-bold ${deltaFuel > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                 {deltaFuel > 0 ? `-${deltaFuel}%` : 'OK'}
@@ -135,40 +135,40 @@ export function InspectionComparatorModal({
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between text-slate-500">
+          <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
+            <div className="flex items-center justify-between text-graphite-500">
               <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Avarias</span>
               <span className="font-mono text-[11px] font-bold text-rose-600">
                 +{newDamages.length} novas
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-[11px] text-graphite-500">
               Pré-existentes: {preExistingDamages.length}
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200/80 bg-white p-2.5 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between text-slate-500">
+          <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
+            <div className="flex items-center justify-between text-graphite-500">
               <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Caução</span>
               <span className="font-mono text-[11px] font-bold text-emerald-600">
                 R$ {(settlement?.securityDepositAvailable || 0).toFixed(2)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] font-semibold text-slate-800 dark:text-slate-200">
+            <p className="mt-1 text-[11px] font-semibold text-graphite-800 dark:text-graphite-200">
               Total Desvios: R$ {totalDeviations.toFixed(2)}
             </p>
           </div>
         </div>
 
         {/* Abas de Navegação */}
-        <div className="flex border-b border-slate-100 bg-slate-50 px-4 dark:border-slate-800 dark:bg-slate-950 text-xs">
+        <div className="flex border-b border-graphite-100 bg-graphite-50 px-4 dark:border-graphite-800 dark:bg-graphite-950 text-xs">
           <button
             type="button"
             onClick={() => setViewTab('photos')}
             className={`px-4 py-2.5 font-bold border-b-2 transition-colors ${
               viewTab === 'photos'
                 ? 'border-violet-600 text-violet-700 dark:text-violet-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                : 'border-transparent text-graphite-500 hover:text-graphite-800'
             }`}
           >
             Fotos Pareadas por Ângulo
@@ -179,7 +179,7 @@ export function InspectionComparatorModal({
             className={`px-4 py-2.5 font-bold border-b-2 transition-colors ${
               viewTab === 'damages'
                 ? 'border-violet-600 text-violet-700 dark:text-violet-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                : 'border-transparent text-graphite-500 hover:text-graphite-800'
             }`}
           >
             Carroceria & Avarias ({newDamages.length} novas)
@@ -190,7 +190,7 @@ export function InspectionComparatorModal({
             className={`px-4 py-2.5 font-bold border-b-2 transition-colors ${
               viewTab === 'settlement'
                 ? 'border-violet-600 text-violet-700 dark:text-violet-400'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
+                : 'border-transparent text-graphite-500 hover:text-graphite-800'
             }`}
           >
             Extrato de Acerto & Cobrança
@@ -211,7 +211,7 @@ export function InspectionComparatorModal({
                     className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
                       activeSlot === slot.key
                         ? 'bg-violet-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                        : 'bg-graphite-100 text-graphite-600 hover:bg-graphite-200 dark:bg-graphite-800 dark:text-graphite-300'
                     }`}
                   >
                     {slot.label}
@@ -222,16 +222,16 @@ export function InspectionComparatorModal({
               {/* Visão Lado a Lado das Fotos */}
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Foto da Entrega (Saída) */}
-                <div className="rounded-xl border border-slate-200 p-3 space-y-2 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                <div className="rounded-xl border border-graphite-200 p-3 space-y-2 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-900/40">
                   <div className="flex items-center justify-between">
                     <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
                       ENTREGA (Saída do pátio)
                     </span>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[11px] text-graphite-500">
                       {exitInspection ? new Date(exitInspection.inspectionDate).toLocaleDateString('pt-BR') : '—'}
                     </span>
                   </div>
-                  <div className="aspect-[4/3] rounded-lg bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center">
+                  <div className="aspect-[4/3] rounded-lg bg-graphite-200 dark:bg-graphite-800 overflow-hidden flex items-center justify-center">
                     {currentPair?.exitPhotoUrl ? (
                       <img
                         src={currentPair.exitPhotoUrl}
@@ -239,22 +239,22 @@ export function InspectionComparatorModal({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs text-slate-400">Foto não registrada na entrega</span>
+                      <span className="text-xs text-graphite-400">Foto não registrada na entrega</span>
                     )}
                   </div>
                 </div>
 
                 {/* Foto da Devolução (Entrada) */}
-                <div className="rounded-xl border border-slate-200 p-3 space-y-2 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                <div className="rounded-xl border border-graphite-200 p-3 space-y-2 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-900/40">
                   <div className="flex items-center justify-between">
                     <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                       DEVOLUÇÃO (Entrada no pátio)
                     </span>
-                    <span className="text-[11px] text-slate-500">
+                    <span className="text-[11px] text-graphite-500">
                       {entryInspection ? new Date(entryInspection.inspectionDate).toLocaleDateString('pt-BR') : '—'}
                     </span>
                   </div>
-                  <div className="aspect-[4/3] rounded-lg bg-slate-200 dark:bg-slate-800 overflow-hidden flex items-center justify-center">
+                  <div className="aspect-[4/3] rounded-lg bg-graphite-200 dark:bg-graphite-800 overflow-hidden flex items-center justify-center">
                     {currentPair?.entryPhotoUrl ? (
                       <img
                         src={currentPair.entryPhotoUrl}
@@ -262,7 +262,7 @@ export function InspectionComparatorModal({
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs text-slate-400">Foto não registrada na devolução</span>
+                      <span className="text-xs text-graphite-400">Foto não registrada na devolução</span>
                     )}
                   </div>
                 </div>
@@ -281,12 +281,12 @@ export function InspectionComparatorModal({
 
           {viewTab === 'settlement' && (
             <div className="space-y-4">
-              <div className="rounded-xl border border-slate-200 p-4 space-y-3 dark:border-slate-800">
-                <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+              <div className="rounded-xl border border-graphite-200 p-4 space-y-3 dark:border-graphite-800">
+                <h4 className="font-bold text-sm text-graphite-900 dark:text-white">
                   Demonstrativo de Acerto de Contas da Devolução
                 </h4>
 
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                <div className="divide-y divide-graphite-100 dark:divide-graphite-800 text-xs">
                   <div className="flex justify-between py-2">
                     <span>KM Excedente ({excessKm} km × R$ {excessKmRate.toFixed(2)})</span>
                     <span className="font-mono font-semibold">R$ {excessKmCost.toFixed(2)}</span>
@@ -305,7 +305,7 @@ export function InspectionComparatorModal({
                       <span className="font-mono font-semibold">R$ {(settlement?.washCost || 0).toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between py-2.5 font-bold text-sm text-slate-900 dark:text-white border-t-2 border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between py-2.5 font-bold text-sm text-graphite-900 dark:text-white border-t-2 border-graphite-200 dark:border-graphite-700">
                     <span>Total de Desvios Apurados</span>
                     <span className="font-mono text-rose-600">R$ {totalDeviations.toFixed(2)}</span>
                   </div>
@@ -313,7 +313,7 @@ export function InspectionComparatorModal({
                     <span>( - ) Depósito Caução Retido</span>
                     <span className="font-mono">(R$ {(settlement?.securityDepositAvailable || 0).toFixed(2)})</span>
                   </div>
-                  <div className="flex justify-between py-2.5 font-bold text-sm border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-between py-2.5 font-bold text-sm border-t border-graphite-200 dark:border-graphite-700">
                     <span>
                       {totalDeviations <= (settlement?.securityDepositAvailable || 0)
                         ? 'Saldo a Estornar ao Motorista (após janela de 30 dias de multas)'

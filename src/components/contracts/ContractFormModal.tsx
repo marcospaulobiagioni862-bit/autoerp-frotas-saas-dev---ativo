@@ -258,7 +258,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
       size="5xl"
       title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
     >
-      {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+      {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
       <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
         {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -295,16 +295,16 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
             type="file"
             accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
             onChange={(event) => selectContractFile(event.target.files?.[0] || null)}
-            className="control border-slate-300 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-100"
+            className="control border-graphite-300 bg-white text-graphite-800 dark:border-graphite-700 dark:bg-graphite-950/50 dark:text-graphite-100"
           />
-          <span className="block text-[11px] font-normal text-slate-600 dark:text-slate-300">
+          <span className="block text-[11px] font-normal text-graphite-600 dark:text-graphite-300">
             {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. Os modelos padrão MoveFlex VISUAL_FIXO geram PDF sobre as páginas imutáveis aprovadas; modelos personalizados seguem o fluxo configurado.'}
           </span>
         </Field>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300">
+        <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3 text-xs text-graphite-600 dark:border-graphite-800 dark:bg-graphite-900/40 dark:text-graphite-300">
           <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel e a caução são gerados automaticamente como <strong>Contas a Receber do motorista</strong>, vinculadas ao veículo e ao contrato. O contrato nasce ativo e não depende de ativação financeira ou de modelo. Documento e assinatura são evidências opcionais.
         </div>
-        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions || noVehiclesForNewContract || noDriversForNewContract}><Save className="w-4 h-4" />Salvar</Button></div>
+        <div className="flex justify-end gap-2 border-t border-graphite-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions || noVehiclesForNewContract || noDriversForNewContract}><Save className="w-4 h-4" />Salvar</Button></div>
       </form>
       <style>{`.control{width:100%;border:1px solid rgb(203 213 225);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem;color:inherit}.dark .control{border-color:rgb(51 65 85);background:rgb(2 6 23 / .35);color:rgb(226 232 240)}`}</style>
     </ModalContainer>
@@ -314,7 +314,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
 const Field: React.FC<{ label: string; children: React.ReactNode; error?:string }> = ({ label, children, error }) => {
   const required = label.endsWith(' *');
   const displayLabel = required ? label.slice(0, -2) : label;
-  return <label className="block space-y-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+  return <label className="block space-y-1.5 text-xs font-semibold text-graphite-700 dark:text-graphite-200">
     <span>{displayLabel}{required && <span className="ml-1 text-red-500" aria-hidden="true">*</span>}</span>
     {children}
     {error&&<span className="block text-[11px] font-normal text-red-600 dark:text-red-400">{error}</span>}

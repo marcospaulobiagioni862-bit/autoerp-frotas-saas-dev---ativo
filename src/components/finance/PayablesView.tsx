@@ -231,11 +231,11 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <CreditCard className="w-6 h-6 text-indigo-600" />
             Contas a Pagar
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-graphite-500 mt-0.5">
             Obrigações da empresa, despesas operacionais e pagamentos.
           </p>
         </div>
@@ -254,7 +254,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       {actionMessage && (
         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
           <span>{actionMessage}</span>
-          <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-slate-500 hover:text-slate-700">
+          <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -269,17 +269,17 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               placeholder="Buscar fornecedor, veículo, descrição..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-slate-400" />}
+              icon={<Search className="w-4 h-4 text-graphite-400" />}
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <Filter className="w-3.5 h-3.5 text-graphite-400 shrink-0" />
             <select
               aria-label="Filtrar contas a pagar por origem"
               value={originFilter}
               onChange={(event) => setOriginFilter(event.target.value)}
-              className="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="shrink-0 rounded-lg border border-graphite-200 bg-white px-2.5 py-1.5 text-xs text-graphite-700 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200"
             >
               <option value="ALL">Todas as origens</option>
               {originOptions.map((origin) => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
@@ -291,7 +291,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
                   statusFilter === st
                     ? 'bg-indigo-600 text-white font-semibold shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
                 }`}
               >
                 {st === 'ALL' ? 'Todos' : st === 'OVERDUE_VIEW' ? 'Vencidos' : statusLabel(String(st))}
@@ -312,7 +312,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         ) : (
           <div className="overflow-x-auto md:overflow-x-visible">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+              <thead className="bg-graphite-50 dark:bg-graphite-800/60 text-graphite-500 font-semibold uppercase tracking-wider border-b border-graphite-100 dark:border-graphite-800">
                 <tr>
                   <th className="p-3.5">Descrição / Origem</th>
                   <th className="p-3.5">Vencimento</th>
@@ -324,9 +324,9 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                   <th className="p-3.5 text-right">Ação Operacional</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+              <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800 text-graphite-700 dark:text-graphite-300">
                 {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-slate-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
+                  <tr><td colSpan={8} className="p-8 text-center text-graphite-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
                 )}
                 {filtered.map((item) => {
                   const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
@@ -354,16 +354,16 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                     : 'Única';
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr key={item.id} className="hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 transition-colors">
                       <td className="p-3.5">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        <div className="font-semibold text-graphite-900 dark:text-graphite-100">
                           {item.description}
                         </div>
-                        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-graphite-500">
                           <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
                           <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || 'Não informada'}</span>
                         </div>
-                        {context.length > 0 && <div className="mt-0.5 text-[11px] text-slate-500">{context.join(' • ')}</div>}
+                        {context.length > 0 && <div className="mt-0.5 text-[11px] text-graphite-500">{context.join(' • ')}</div>}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums">
                         {formatDateBR(item.dueDate)}
@@ -382,7 +382,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
                         <span className="block">R$ {operationalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-slate-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                        {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-graphite-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                       </td>
                       <td className="p-3.5 text-center">
                         <Badge
@@ -412,8 +412,8 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                           <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
                           {isPending && (
                             <details className="relative">
-                              <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>
-                              <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                              <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
+                              <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
                                 <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
                               </div>
                             </details>
@@ -447,7 +447,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
           title="Lançamento manual excepcional"
           maxWidth="max-w-2xl"
         >
-          {formDraft.notice && <p role="status" className="text-xs text-slate-500">{formDraft.notice}</p>}
+          {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
           <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
               Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
@@ -490,11 +490,11 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               />
 
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 block">Categoria *</label>
+                <label className="text-xs font-semibold text-graphite-500 block">Categoria *</label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
+                  className="w-full text-xs p-2.5 rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 text-graphite-800 dark:text-graphite-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
                   required
                 >
                   <option value="">Selecione uma categoria de despesa</option>
@@ -507,7 +507,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 block">Fornecedor / beneficiário</label>
+                <label className="text-xs font-semibold text-graphite-500 block">Fornecedor / beneficiário</label>
                 <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="control w-full">
                   <option value="">Sem fornecedor cadastrado</option>
                   {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
@@ -519,14 +519,14 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 block">Veículo vinculado</label>
+                <label className="text-xs font-semibold text-graphite-500 block">Veículo vinculado</label>
                 <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="control w-full">
                   <option value="">Sem veículo</option>
                   {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} • {vehicle.brand} {vehicle.model}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-500 block">Responsável / motorista</label>
+                <label className="text-xs font-semibold text-graphite-500 block">Responsável / motorista</label>
                 <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="control w-full">
                   <option value="">Move Flex / empresa</option>
                   {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName}</option>)}
@@ -534,14 +534,14 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-500 block">Contrato vinculado</label>
+              <label className="text-xs font-semibold text-graphite-500 block">Contrato vinculado</label>
               <select value={contractId} onChange={(e) => setContractId(e.target.value)} className="control w-full">
                 <option value="">Sem contrato</option>
                 {contracts.filter((contract) => !driverId || contract.driverId === driverId).map((contract) => <option key={contract.id} value={contract.id}>{contract.contractNumber}</option>)}
               </select>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex justify-end gap-2 pt-2 border-t border-graphite-200 dark:border-graphite-800">
               <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
                 Cancelar
               </Button>

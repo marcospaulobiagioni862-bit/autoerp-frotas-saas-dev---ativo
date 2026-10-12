@@ -133,7 +133,7 @@ assert.match(
 );
 assert.match(
   contractForm,
-  /dark:text-slate-200/,
+  /dark:text-graphite-200/,
   'contract form labels must remain readable in dark mode',
 );
 assert.match(
@@ -143,7 +143,7 @@ assert.match(
 );
 assert.match(
   contractForm,
-  /dark:text-slate-300/,
+  /dark:text-graphite-300/,
   'contract attachment helper text must remain readable in dark mode',
 );
 assert.match(templateModal, /Contratos salvos/, 'template manager must expose a dedicated saved-contracts tab');
@@ -212,7 +212,7 @@ assert.match(contractForm, /isContractBlocking\(item\.status\)/, 'new contract m
 assert.doesNotMatch(contractForm, /new Set<ContractStatus>/, 'new contract must not maintain a local blocking-status matrix');
 assert.match(
   templateModal,
-  /dark:bg-slate-950\/50 dark:text-slate-200/,
+  /dark:bg-graphite-950\/50 dark:text-graphite-200/,
   'template file input must have an explicit readable dark-mode surface',
 );
 

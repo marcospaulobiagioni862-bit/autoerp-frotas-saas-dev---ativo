@@ -58,23 +58,23 @@ export const VehicleRestoreModal: React.FC<VehicleRestoreModalProps> = ({ isOpen
         <Input label="Data da reentrada *" type="date" required value={restoreDate} onChange={(event) => setRestoreDate(event.target.value)} />
 
         <div>
-          <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Motivo da reentrada / recompra *</label>
+          <label className="mb-1 block text-xs font-semibold text-graphite-700 dark:text-graphite-300">Motivo da reentrada / recompra *</label>
           <textarea
             required
             rows={3}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             placeholder="Ex.: veículo recomprado e retornando à operação."
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="w-full rounded-lg border border-graphite-300 bg-white px-3 py-2 text-xs text-graphite-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-100"
           />
         </div>
 
-        <div className="rounded-lg border border-slate-200 p-3 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+        <div className="rounded-lg border border-graphite-200 p-3 text-xs text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">
           <div className="mb-1 flex items-center gap-2 font-semibold"><RotateCcw className="h-4 w-4" />Reentrada auditável</div>
           O mesmo ID, documentos, multas, manutenções, contratos históricos e lançamentos financeiros permanecem preservados. Esta ação não cria nem altera contrato ou título financeiro automaticamente.
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 border-t border-graphite-200 pt-4 dark:border-graphite-800">
           <Button type="button" variant="outline" onClick={(event) => requestGuardedClose(event, onClose)} disabled={loading}>Cancelar</Button>
           <Button type="submit" variant="primary" isLoading={loading}>Confirmar retorno ao estoque</Button>
         </div>

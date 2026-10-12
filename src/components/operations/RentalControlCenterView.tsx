@@ -146,7 +146,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
       case 'P0': return <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-300">P0 • BLOQUEADOR</span>;
       case 'P1': return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300">P1 • CRÍTICO</span>;
       case 'P2': return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300">P2 • IMPORTANTE</span>;
-      case 'P3': return <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">P3 • NORMAL</span>;
+      case 'P3': return <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300">P3 • NORMAL</span>;
     }
   };
 
@@ -166,18 +166,18 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-950 via-rose-950 to-slate-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-rose-900/40">
+      <div className="bg-gradient-to-r from-graphite-950 via-rose-950 to-graphite-900 text-white rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-rose-900/40">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
               FASE 3.39 • Central de Controle da Locação
             </span>
-            <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+            <span className="text-xs text-graphite-400 flex items-center gap-1 font-mono">
               <Lock className="w-3 h-3 text-emerald-400" /> Núcleo Financeiro Congelado
             </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white">Centro de Comando Operacional & Exceções</h2>
-          <p className="text-xs text-slate-300 mt-1 max-w-3xl">
+          <p className="text-xs text-graphite-300 mt-1 max-w-3xl">
             Responda instantaneamente: "Existe alguma locação que exige intervenção?" com severidades P0 a P3, bloqueios e ações recomendadas.
           </p>
         </div>
@@ -213,7 +213,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Prioridade P1</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Prioridade P1</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-amber-600 font-mono">{counts.p1}</h3>
             <AlertTriangle className="w-4 h-4 text-amber-500" />
@@ -221,7 +221,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-red-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Bloqueadas</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Bloqueadas</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-red-600 font-mono">{counts.blocked}</h3>
             <XCircle className="w-4 h-4 text-red-500" />
@@ -229,7 +229,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-indigo-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Atrasadas</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Atrasadas</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-indigo-600 font-mono">{counts.returnLate}</h3>
             <Clock className="w-4 h-4 text-indigo-500" />
@@ -237,7 +237,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-teal-500">
-          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">Prontas p/ Entrega</span>
+          <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Prontas p/ Entrega</span>
           <div className="flex items-baseline justify-between mt-1">
             <h3 className="text-2xl font-black text-teal-600 font-mono">{counts.ready}</h3>
             <CheckSquare className="w-4 h-4 text-teal-500" />
@@ -254,9 +254,9 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-white dark:bg-graphite-900 p-4 rounded-xl border border-graphite-200 dark:border-graphite-800 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase text-slate-500 mr-2 flex items-center gap-1">
+          <span className="text-xs font-bold uppercase text-graphite-500 mr-2 flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" /> Filtro:
           </span>
           {[
@@ -274,7 +274,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeFilter === f.id
                   ? 'bg-rose-600 text-white shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
               {f.label}
@@ -283,13 +283,13 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </div>
 
         <div className="relative w-full md:w-72">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Buscar por placa, motorista ou contrato..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-900 dark:text-slate-100"
+            className="w-full pl-9 pr-4 py-2 text-xs bg-graphite-50 dark:bg-graphite-800 border border-graphite-200 dark:border-graphite-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 text-graphite-900 dark:text-graphite-100"
           />
         </div>
       </div>
@@ -298,25 +298,25 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Item List */}
         <div className="lg:col-span-2 space-y-3">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-600" /> Locações sob Controle e Exceções ({filteredItems.length})
           </h3>
 
           {filteredItems.length === 0 ? (
             <Card className="text-center py-12">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
-              <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">Nenhuma exceção ou locação encontrada</h4>
-              <p className="text-xs text-slate-500 mt-1">Todos os veículos e contratos operam dentro da normalidade para os filtros selecionados.</p>
+              <h4 className="text-base font-bold text-graphite-900 dark:text-graphite-100">Nenhuma exceção ou locação encontrada</h4>
+              <p className="text-xs text-graphite-500 mt-1">Todos os veículos e contratos operam dentro da normalidade para os filtros selecionados.</p>
             </Card>
           ) : (
             filteredItems.map(item => (
               <div
                 key={item.id}
                 onClick={() => setSelectedItem(item)}
-                className={`p-4 rounded-xl border bg-white dark:bg-slate-900 cursor-pointer transition-all hover:shadow-md ${
+                className={`p-4 rounded-xl border bg-white dark:bg-graphite-900 cursor-pointer transition-all hover:shadow-md ${
                   selectedItem?.id === item.id
                     ? 'border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10'
-                    : 'border-slate-200 dark:border-slate-800'
+                    : 'border-graphite-200 dark:border-graphite-800'
                 }`}
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -330,19 +330,19 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
                         {item.contractNumber}
                       </span>
                       {item.vehiclePlate && (
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        <span className="px-2 py-0.5 rounded bg-graphite-100 dark:bg-graphite-800 font-mono text-xs font-semibold text-graphite-700 dark:text-graphite-300">
                           {item.vehiclePlate}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 text-slate-400" /> Motorista: <strong className="text-slate-900 dark:text-slate-100">{item.driverName || 'Não atribuído'}</strong>
+                    <div className="text-xs text-graphite-600 dark:text-graphite-400 flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5 text-graphite-400" /> Motorista: <strong className="text-graphite-900 dark:text-graphite-100">{item.driverName || 'Não atribuído'}</strong>
                     </div>
                   </div>
 
-                  <div className="text-right flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Estágio Ciclo</span>
-                    <span className="text-xs font-mono font-medium text-slate-700 dark:text-slate-300">{item.lifecycleStage}</span>
+                  <div className="text-right flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-graphite-100 dark:border-graphite-800">
+                    <span className="text-[10px] text-graphite-400 uppercase font-bold">Estágio Ciclo</span>
+                    <span className="text-xs font-mono font-medium text-graphite-700 dark:text-graphite-300">{item.lifecycleStage}</span>
                   </div>
                 </div>
 
@@ -362,9 +362,9 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         {/* Right Col: Detail Inspection */}
         <div>
           <Card className="sticky top-6 space-y-4">
-            <div className="border-b pb-3 border-slate-100 dark:border-slate-800">
+            <div className="border-b pb-3 border-graphite-100 dark:border-graphite-800">
               <span className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400 tracking-wider">Inspeção da Exceção</span>
-              <h3 className="text-base font-black text-slate-900 dark:text-slate-100 mt-0.5">
+              <h3 className="text-base font-black text-graphite-900 dark:text-graphite-100 mt-0.5">
                 {selectedItem ? selectedItem.contractNumber : 'Selecione uma Locação'}
               </h3>
             </div>
@@ -372,26 +372,26 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
             {selectedItem ? (
               <div className="space-y-4">
                 <div className="space-y-2 text-xs">
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Prioridade:</span>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Prioridade:</span>
                     <div>{getPriorityBadge(selectedItem.priority)}</div>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Status Operacional:</span>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Status Operacional:</span>
                     <Badge variant={getOperationalStatusVariant(selectedItem.operationalStatus)}>{selectedItem.operationalStatus}</Badge>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Veículo / Placa:</span>
-                    <strong className="text-slate-800 dark:text-slate-200 font-mono">{selectedItem.vehiclePlate || 'N/A'}</strong>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Veículo / Placa:</span>
+                    <strong className="text-graphite-800 dark:text-graphite-200 font-mono">{selectedItem.vehiclePlate || 'N/A'}</strong>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500">Motorista:</span>
-                    <strong className="text-slate-800 dark:text-slate-200">{selectedItem.driverName || 'N/A'}</strong>
+                  <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
+                    <span className="text-graphite-500">Motorista:</span>
+                    <strong className="text-graphite-800 dark:text-graphite-200">{selectedItem.driverName || 'N/A'}</strong>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase text-slate-500">Ação Recomendada</h4>
+                  <h4 className="text-xs font-bold uppercase text-graphite-500">Ação Recomendada</h4>
                   <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 text-xs text-indigo-900 dark:text-indigo-200 font-medium">
                     {selectedItem.recommendedAction}
                   </div>
@@ -430,7 +430,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-slate-500 text-center py-8">Selecione um item à esquerda para inspecionar os bloqueios, prioridade e ações recomendadas.</p>
+              <p className="text-xs text-graphite-500 text-center py-8">Selecione um item à esquerda para inspecionar os bloqueios, prioridade e ações recomendadas.</p>
             )}
           </Card>
         </div>

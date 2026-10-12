@@ -134,11 +134,11 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <ArrowRightLeft className="w-6 h-6 text-blue-600" />
             Movimentações
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-graphite-500 mt-0.5">
             Entradas, saídas, transferências e estornos efetivamente realizados.
           </p>
         </div>
@@ -170,20 +170,20 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
             <Card key={acc.id} padding="sm">
               <div className="flex justify-between items-center">
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  <span className="text-[11px] font-semibold text-graphite-500 uppercase tracking-wider block">
                     {acc.name} • {accountTypeLabel(acc.type)}
                   </span>
                   <h3
                     className={`text-xl font-black mt-1 font-mono tabular-nums ${
                       isCard && acc.currentBalance < 0
                         ? 'text-indigo-600 dark:text-indigo-400'
-                        : 'text-slate-900 dark:text-slate-100'
+                        : 'text-graphite-900 dark:text-graphite-100'
                     }`}
                   >
                     R$ {acc.currentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </h3>
                 </div>
-                <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-600 dark:text-slate-300">
+                <div className="p-2.5 bg-graphite-100 dark:bg-graphite-800 rounded-xl text-graphite-600 dark:text-graphite-300">
                   {isCard ? <CreditCard className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
                 </div>
               </div>
@@ -201,14 +201,14 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                 placeholder="Buscar descrição ou origem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search className="w-4 h-4 text-slate-400" />}
+                icon={<Search className="w-4 h-4 text-graphite-400" />}
               />
             </div>
             <select
               aria-label="Filtrar por conta"
               value={accountFilter}
               onChange={(e) => setAccountFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+              className="rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
             >
               <option value="ALL">Todas as contas</option>
               {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
@@ -217,7 +217,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
               aria-label="Filtrar por vínculo"
               value={linkFilter}
               onChange={(e) => setLinkFilter(e.target.value as TransactionLinkFilter)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+              className="rounded-lg border border-graphite-200 bg-white px-3 py-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"
             >
               <option value="ALL">Todos os vínculos financeiros</option>
               <option value="RECEIVABLE">Contas a receber</option>
@@ -239,7 +239,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     typeFilter === type
                       ? 'bg-blue-600 text-white font-semibold shadow-2xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
                   }`}
                 >
                   {type === 'ALL' ? 'Todos' : transactionTypeLabel(type as TransactionType)}
@@ -247,7 +247,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
               ))}
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-slate-500">{filteredTxs.length} de {transactions.length} movimentações</span>
+              <span className="text-graphite-500">{filteredTxs.length} de {transactions.length} movimentações</span>
               <Button size="sm" variant="outline" onClick={clearFilters} disabled={!filtersActive}>Limpar filtros</Button>
             </div>
           </div>
@@ -270,7 +270,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+              <thead className="bg-graphite-50 dark:bg-graphite-800/60 text-graphite-500 font-semibold uppercase tracking-wider border-b border-graphite-100 dark:border-graphite-800">
                 <tr>
                   <th className="p-3.5">Data</th>
                   <th className="p-3.5">Descrição / Origem</th>
@@ -280,7 +280,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                   <th className="p-3.5 text-right">Ação</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+              <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800 text-graphite-700 dark:text-graphite-300">
                 {filteredTxs.map((tx) => {
                   const isIncome = tx.type === TransactionType.INCOME;
                   const isExpense = tx.type === TransactionType.EXPENSE;
@@ -290,7 +290,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                   return (
                     <tr
                       key={tx.id}
-                      className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${
+                      className={`hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 transition-colors ${
                         tx.isReversed ? 'opacity-50 line-through' : ''
                       }`}
                     >
@@ -298,12 +298,12 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                         <div className="font-mono tabular-nums font-semibold">{formatDateBR(tx.transactionDate)}</div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-semibold text-slate-900 dark:text-slate-100">{tx.description}</div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="font-semibold text-graphite-900 dark:text-graphite-100">{tx.description}</div>
+                        <div className="text-[10px] text-graphite-400">
                           Competência: {formatDateBR(tx.competenceDate)} • Conta: {accounts.find((account) => account.id === tx.financialAccountId)?.name || 'Conta não identificada'}
                           {isTransfer && tx.destinationAccountId ? ` → ${accounts.find((account) => account.id === tx.destinationAccountId)?.name || 'Conta destino'}` : ''}
                         </div>
-                        <div className="text-[10px] text-slate-400">
+                        <div className="text-[10px] text-graphite-400">
                           {tx.receivableId ? 'Origem: Conta a receber' : tx.payableId ? 'Origem: Conta a pagar' : isTransfer ? 'Origem: Transferência interna' : isReversal ? 'Origem: Estorno' : 'Origem: Movimento avulso'}
                         </div>
                       </td>
@@ -343,7 +343,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                             size="sm"
                             variant="ghost"
                             onClick={() => openReversal(tx)}
-                            className="text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                            className="text-graphite-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
                           >
                             Estornar
                           </Button>
@@ -368,16 +368,16 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
         onCancel={closeReversal}
       >
         {reversalTargetTx && (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-700 dark:bg-slate-900/60">
+          <div className="rounded-lg border border-graphite-200 bg-graphite-50 p-3 text-xs dark:border-graphite-700 dark:bg-graphite-900/60">
             <div className="grid gap-2 sm:grid-cols-2">
-              <div><span className="text-slate-500">Tipo</span><strong className="block text-slate-800 dark:text-slate-100">{transactionTypeLabel(reversalTargetTx.type)}</strong></div>
-              <div><span className="text-slate-500">Valor</span><strong className="block font-mono text-slate-800 dark:text-slate-100">R$ {Number(reversalTargetTx.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></div>
-              <div><span className="text-slate-500">Data</span><strong className="block text-slate-800 dark:text-slate-100">{formatDateBR(reversalTargetTx.transactionDate)}</strong></div>
-              <div><span className="text-slate-500">Conta</span><strong className="block text-slate-800 dark:text-slate-100">{accounts.find(account=>account.id===reversalTargetTx.financialAccountId)?.name||'Conta não identificada'}</strong></div>
-              <div><span className="text-slate-500">Meio de pagamento</span><strong className="block text-slate-800 dark:text-slate-100">{paymentMethods.find(method=>method.id===reversalTargetTx.paymentMethodId)?.name||'Não identificado'}</strong></div>
-              <div><span className="text-slate-500">Vínculo</span><strong className="block text-slate-800 dark:text-slate-100">{reversalTargetTx.receivableId?'Conta a receber':reversalTargetTx.payableId?'Conta a pagar':reversalTargetTx.type===TransactionType.TRANSFER?'Transferência':'Movimento avulso'}</strong></div>
+              <div><span className="text-graphite-500">Tipo</span><strong className="block text-graphite-800 dark:text-graphite-100">{transactionTypeLabel(reversalTargetTx.type)}</strong></div>
+              <div><span className="text-graphite-500">Valor</span><strong className="block font-mono text-graphite-800 dark:text-graphite-100">R$ {Number(reversalTargetTx.amount).toLocaleString('pt-BR',{minimumFractionDigits:2})}</strong></div>
+              <div><span className="text-graphite-500">Data</span><strong className="block text-graphite-800 dark:text-graphite-100">{formatDateBR(reversalTargetTx.transactionDate)}</strong></div>
+              <div><span className="text-graphite-500">Conta</span><strong className="block text-graphite-800 dark:text-graphite-100">{accounts.find(account=>account.id===reversalTargetTx.financialAccountId)?.name||'Conta não identificada'}</strong></div>
+              <div><span className="text-graphite-500">Meio de pagamento</span><strong className="block text-graphite-800 dark:text-graphite-100">{paymentMethods.find(method=>method.id===reversalTargetTx.paymentMethodId)?.name||'Não identificado'}</strong></div>
+              <div><span className="text-graphite-500">Vínculo</span><strong className="block text-graphite-800 dark:text-graphite-100">{reversalTargetTx.receivableId?'Conta a receber':reversalTargetTx.payableId?'Conta a pagar':reversalTargetTx.type===TransactionType.TRANSFER?'Transferência':'Movimento avulso'}</strong></div>
             </div>
-            <div className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-700"><span className="text-slate-500">Descrição / origem</span><strong className="block text-slate-800 dark:text-slate-100">{reversalTargetTx.description}</strong></div>
+            <div className="mt-2 border-t border-graphite-200 pt-2 dark:border-graphite-700"><span className="text-graphite-500">Descrição / origem</span><strong className="block text-graphite-800 dark:text-graphite-100">{reversalTargetTx.description}</strong></div>
           </div>
         )}
       </ConfirmDialog>

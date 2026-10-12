@@ -246,7 +246,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
           <div className="md:w-96">
             <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar contrato, placa ou motorista..." icon={<Search className="w-4 h-4" />} />
           </div>
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900">
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm dark:border-graphite-700 dark:bg-graphite-900">
             <option value="ALL">Todos os status</option>
             {Object.values(ContractStatus).filter((value) => value !== ContractStatus.ARCHIVED).map((value) => <option key={value} value={value}>{contractStatusLabel(value)}</option>)}
           </select>
@@ -255,13 +255,13 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
 
       <Card padding="none">
         {loading ? (
-          <div className="p-10 text-center text-sm text-slate-500">Carregando contratos...</div>
+          <div className="p-10 text-center text-sm text-graphite-500">Carregando contratos...</div>
         ) : filteredContracts.length === 0 ? (
-          <div className="p-10 text-center text-sm text-slate-500">Nenhum contrato encontrado.</div>
+          <div className="p-10 text-center text-sm text-graphite-500">Nenhum contrato encontrado.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/70 text-slate-500 text-xs uppercase">
+              <thead className="bg-graphite-50 dark:bg-graphite-900/70 text-graphite-500 text-xs uppercase">
                 <tr>
                   <th className="px-4 py-3 text-left">Contrato</th>
                   <th className="px-4 py-3 text-left">Veículo</th>
@@ -272,7 +272,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                   <th className="px-4 py-3 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">
                 {filteredContracts.map((item) => {
                   const vehicle = vehicles[item.vehicleId];
                   const driver = drivers[item.driverId];
@@ -282,11 +282,11 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                     receivable.balanceAmount > 0 && receivable.dueDate < today && receivable.status !== 'CANCELLED'
                   );
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/40">
+                    <tr key={item.id} className="hover:bg-graphite-50/70 dark:hover:bg-graphite-900/40">
                       <td className="px-4 py-3 font-mono font-semibold whitespace-nowrap">{item.contractNumber}</td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Car className="w-4 h-4 text-slate-400" /><span>{vehicle ? `${vehicle.plate} • ${vehicle.model}` : '—'}</span></div></td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-slate-400" /><span>{driver?.fullName || '—'}</span></div></td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-400" /><span>{item.endDate ? `${formatDateBR(item.startDate)} → ${formatDateBR(item.endDate)}` : `Início: ${formatDateBR(item.startDate)}`}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Car className="w-4 h-4 text-graphite-400" /><span>{vehicle ? `${vehicle.plate} • ${vehicle.model}` : '—'}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><User className="w-4 h-4 text-graphite-400" /><span>{driver?.fullName || '—'}</span></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-graphite-400" /><span>{item.endDate ? `${formatDateBR(item.startDate)} → ${formatDateBR(item.endDate)}` : `Início: ${formatDateBR(item.startDate)}`}</span></div></td>
                       <td className="px-4 py-3 text-right font-mono">{item.rentalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-start gap-1">
@@ -302,10 +302,10 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="primary" onClick={() => openContractDetails(item.id, 'OVERVIEW')}><Eye className="w-4 h-4 mr-1" />Detalhes</Button>
                           <details className="relative">
-                            <summary aria-label={`Mais ações do contrato ${item.contractNumber}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
-                            <div className="absolute right-0 z-20 mt-1 w-52 space-y-1 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                            <summary aria-label={`Mais ações do contrato ${item.contractNumber}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800">⋮</summary>
+                            <div className="absolute right-0 z-20 mt-1 w-52 space-y-1 rounded-xl border border-graphite-200 bg-white p-2 text-left shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
                               {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && (
-                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800" onClick={() => { setContractToEdit(item); setFormOpen(true); }}>
                                   Editar contrato
                                 </button>
                               )}
@@ -324,12 +324,12 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
                                 <Gauge className="w-3.5 h-3.5" /> Pedir KM (wa.me)
                               </button>
                               {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(item.status) && (
-                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800" onClick={() => openContractDetails(item.id, 'PDF_SIGNATURE')}>
                                   Documento / Assinatura
                                 </button>
                               )}
                               {item.status === ContractStatus.ACTIVE && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:text-amber-300 dark:hover:bg-amber-950/30" onClick={() => void (lifecycleAction === 'CANCEL' ? handleCancel(item.id) : handleClose(item.id))}>{lifecycleAction === 'CANCEL' ? 'Cancelar contrato' : 'Encerrar contrato'}</button>}
-                              {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
+                              {item.status !== ContractStatus.ACTIVE && item.status !== ContractStatus.SUSPENDED && <button disabled={busy} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 disabled:opacity-50 dark:text-graphite-300 dark:hover:bg-graphite-800" onClick={() => void handleArchive(item.id)}>Arquivar</button>}
                             </div>
                           </details>
                         </div>
@@ -344,7 +344,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
       </Card>
 
       <LazyModuleErrorBoundary resetKey={contractModalResetKey} onRetry={()=>window.location.reload()}>
-        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do contrato...</div></div>}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-graphite-600 shadow-xl dark:bg-graphite-900 dark:text-graphite-300">Carregando dados do contrato...</div></div>}>
           {formOpen&&<ContractFormModal
             isOpen
             onClose={() => setFormOpen(false)}
@@ -370,10 +370,10 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
 const Kpi: React.FC<{ icon: React.ReactNode; label: string; value: string; helper: string }> = ({ icon, label, value, helper }) => (
   <div className="flex items-center justify-between gap-3">
     <div>
-      <span className="text-[11px] font-semibold uppercase text-slate-500">{label}</span>
-      <div className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">{value}</div>
-      <span className="text-[10px] text-slate-400">{helper}</span>
+      <span className="text-[11px] font-semibold uppercase text-graphite-500">{label}</span>
+      <div className="mt-1 text-xl font-black text-graphite-900 dark:text-graphite-100">{value}</div>
+      <span className="text-[10px] text-graphite-400">{helper}</span>
     </div>
-    <div className="rounded-xl bg-slate-100 p-2.5 text-slate-500 dark:bg-slate-800">{icon}</div>
+    <div className="rounded-xl bg-graphite-100 p-2.5 text-graphite-500 dark:bg-graphite-800">{icon}</div>
   </div>
 );

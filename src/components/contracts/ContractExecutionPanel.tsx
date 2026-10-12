@@ -174,7 +174,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="flex items-center gap-2 font-bold"><FileSignature className="w-4 h-4 text-emerald-600" />Contrato e assinatura</h3>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-[11px] text-graphite-500">
             O documento é gerado a partir do modelo já vinculado ao contrato. Depois da assinatura externa, basta confirmar o status no ERP.
           </p>
         </div>
@@ -187,18 +187,18 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
       {success && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{success}</div>}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-          <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-slate-500" /><b className="text-xs">Documento oficial</b></div>
-          <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-900/50">
+        <div className="space-y-3 rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
+          <div className="flex items-center gap-2"><FileText className="w-4 h-4 text-graphite-500" /><b className="text-xs">Documento oficial</b></div>
+          <div className="rounded-lg bg-graphite-50 p-3 text-xs dark:bg-graphite-900/50">
             <b>Modelo vinculado ao contrato</b>
-            <div className="mt-1 text-slate-500">
+            <div className="mt-1 text-graphite-500">
               {contract.templateId ? 'Definido no cadastro do contrato e protegido pelo servidor.' : 'Nenhum modelo vinculado.'}
             </div>
           </div>
           {generated ? (
             <div className="space-y-2 text-xs">
-              <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-900/50">
-                <b>Snapshot SHA-256</b><div className="mt-1 break-all font-mono text-[10px] text-slate-500">{generated.snapshotHash}</div>
+              <div className="rounded-lg bg-graphite-50 p-2 dark:bg-graphite-900/50">
+                <b>Snapshot SHA-256</b><div className="mt-1 break-all font-mono text-[10px] text-graphite-500">{generated.snapshotHash}</div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {generatedDocx && (
@@ -217,7 +217,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               </div>
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Nenhum documento oficial foi gerado para este contrato.</p>
+            <p className="text-xs text-graphite-500">Nenhum documento oficial foi gerado para este contrato.</p>
           )}
           {canGenerate && (
             <Button size="sm" variant="primary" isLoading={loading} onClick={generateOfficial} disabled={!contract.templateId || !template}>
@@ -226,8 +226,8 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
           )}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-slate-500" /><b className="text-xs">Status da assinatura</b></div>
+        <div className="space-y-3 rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
+          <div className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-graphite-500" /><b className="text-xs">Status da assinatura</b></div>
           {signed ? (
             <div className="space-y-2 text-xs">
               <div className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="w-4 h-4" /><b>Contrato assinado</b></div>
@@ -246,7 +246,7 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
             </div>
           ) : generated ? (
             <div className="space-y-3 text-xs">
-              <p className="text-slate-500">Após a assinatura fora do ERP, confirme o status. Nenhum upload ou método de assinatura é obrigatório nesta etapa.</p>
+              <p className="text-graphite-500">Após a assinatura fora do ERP, confirme o status. Nenhum upload ou método de assinatura é obrigatório nesta etapa.</p>
               {canChangeSignStatus && (
                 <Button size="sm" variant="primary" isLoading={loading} onClick={() => setSigned(true)}>
                   <ShieldCheck className="w-4 h-4" />Marcar como assinado
@@ -254,20 +254,20 @@ export const ContractExecutionPanel: React.FC<ContractExecutionPanelProps> = ({ 
               )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500">Gere o documento oficial antes de confirmar a assinatura.</p>
+            <p className="text-xs text-graphite-500">Gere o documento oficial antes de confirmar a assinatura.</p>
           )}
         </div>
       </div>
 
       {canActivate && contract.status !== ContractStatus.ACTIVE && (
         <div className="mt-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <div className="text-xs"><b>Contrato apto para ativação</b><p className="mt-0.5 text-slate-500">O servidor repetirá todos os gates antes de vincular veículo, motorista e cobrança.</p></div>
+          <div className="text-xs"><b>Contrato apto para ativação</b><p className="mt-0.5 text-graphite-500">O servidor repetirá todos os gates antes de vincular veículo, motorista e cobrança.</p></div>
           <Button size="sm" variant="primary" isLoading={loading} onClick={activate} disabled={!incomeCategoryId}>Ativar contrato</Button>
         </div>
       )}
 
       {!signed && generated && canGenerate && (
-        <div className="mt-3 text-[11px] text-slate-500 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" />Os termos ficam bloqueados após a geração do documento oficial para evitar divergência entre banco e documento.</div>
+        <div className="mt-3 text-[11px] text-graphite-500 flex items-center gap-2"><RefreshCw className="w-3.5 h-3.5" />Os termos ficam bloqueados após a geração do documento oficial para evitar divergência entre banco e documento.</div>
       )}
       </Card>
     </div>

@@ -20,17 +20,17 @@ export const ResilienceCenterView: React.FC = () => (
           <AlertTriangle className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Backup local do navegador desabilitado</h3>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <h3 className="font-semibold text-graphite-900 dark:text-graphite-100">Backup local do navegador desabilitado</h3>
+          <p className="text-sm text-graphite-600 dark:text-graphite-400 mt-1">
             A criação, restauração e validação de cópias de segurança estão temporariamente indisponíveis. A função será liberada quando o armazenamento e a recuperação segura dos dados estiverem prontos.
           </p>
         </div>
       </div>
       <div className="grid sm:grid-cols-2 gap-3 text-xs">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+        <div className="flex items-center gap-2 rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
           <ShieldCheck className="w-4 h-4 text-emerald-600" /> Fail-closed no browser
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+        <div className="flex items-center gap-2 rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
           <Database className="w-4 h-4 text-blue-600" /> Próxima etapa: validar a segurança dos dados
         </div>
       </div>

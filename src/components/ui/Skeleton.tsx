@@ -7,7 +7,7 @@ export interface SkeletonProps {
 export const Skeleton: React.FC<SkeletonProps> = ({ className = '' }) => {
   return (
     <div
-      className={`animate-pulse bg-slate-200 dark:bg-slate-700/60 rounded-lg ${className}`}
+      className={`animate-pulse bg-graphite-200 dark:bg-graphite-700/60 rounded-lg ${className}`}
     />
   );
 };

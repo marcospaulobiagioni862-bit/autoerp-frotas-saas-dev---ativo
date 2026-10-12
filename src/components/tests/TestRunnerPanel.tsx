@@ -472,11 +472,11 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-emerald-600" />
             Suíte de Auditoria AutoERP (Fase 3.31 — Homologação Operacional Final)
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-graphite-500 mt-0.5">
             Homologação operacional final: veículos, motoristas, contratos, entrega/devolução, manutenção, multas, financeiro (🔒 congelado), idempotência, multi-tenancy, RBAC e regressão 3.7 → 3.31.
           </p>
         </div>
@@ -504,8 +504,8 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
           <Card padding="sm">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">Total de Testes</span>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-0.5 font-mono tabular-nums">
+                <span className="text-[11px] font-semibold text-graphite-500 uppercase block">Total de Testes</span>
+                <h3 className="text-2xl font-black text-graphite-900 dark:text-graphite-100 mt-0.5 font-mono tabular-nums">
                   {testSummary.total}
                 </h3>
               </div>
@@ -518,7 +518,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
           <Card padding="sm">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">Testes Aprovados</span>
+                <span className="text-[11px] font-semibold text-graphite-500 uppercase block">Testes Aprovados</span>
                 <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono tabular-nums">
                   {testSummary.passed}
                 </h3>
@@ -532,12 +532,12 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
           <Card padding="sm">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase block">Testes Reprovados</span>
-                <h3 className={`text-2xl font-black mt-0.5 font-mono tabular-nums ${testSummary.failed > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                <span className="text-[11px] font-semibold text-graphite-500 uppercase block">Testes Reprovados</span>
+                <h3 className={`text-2xl font-black mt-0.5 font-mono tabular-nums ${testSummary.failed > 0 ? 'text-red-600' : 'text-graphite-400'}`}>
                   {testSummary.failed}
                 </h3>
               </div>
-              <div className={`p-2.5 rounded-xl ${testSummary.failed > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/60' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+              <div className={`p-2.5 rounded-xl ${testSummary.failed > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/60' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-400'}`}>
                 <XCircle className="w-5 h-5" />
               </div>
             </div>
@@ -554,7 +554,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               placeholder="Filtrar testes por nome, ID ou detalhes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-slate-400" />}
+              icon={<Search className="w-4 h-4 text-graphite-400" />}
             />
           </div>
 
@@ -563,8 +563,8 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               onClick={() => setStatusFilter('ALL')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 statusFilter === 'ALL'
-                  ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  ? 'bg-graphite-900 text-white dark:bg-graphite-100 dark:text-graphite-900 shadow-2xs'
+                  : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
               Todos
@@ -574,7 +574,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 statusFilter === 'PASSED'
                   ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
               Aprovados
@@ -584,7 +584,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                 statusFilter === 'FAILED'
                   ? 'bg-red-600 text-white shadow-2xs'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
               }`}
             >
               Reprovados
@@ -596,18 +596,18 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
       {/* Test Log List */}
       <Card padding="none">
         {isRunning ? (
-          <div className="p-12 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+          <div className="p-12 text-center text-graphite-500 flex flex-col items-center justify-center gap-2">
             <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
             <span>Executando bateria de testes do motor financeiro...</span>
           </div>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+          <div className="divide-y divide-graphite-100 dark:divide-graphite-800 text-xs">
             {filteredResults.map((log, idx) => (
-              <div key={`${log.id}-${idx}`} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors space-y-1.5">
+              <div key={`${log.id}-${idx}`} className="p-4 hover:bg-graphite-50 dark:hover:bg-graphite-800/50 transition-colors space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono tabular-nums text-[11px] font-bold text-slate-400">#{log.id}</span>
-                    <span className="font-bold text-slate-900 dark:text-slate-100">{log.name}</span>
+                    <span className="font-mono tabular-nums text-[11px] font-bold text-graphite-400">#{log.id}</span>
+                    <span className="font-bold text-graphite-900 dark:text-graphite-100">{log.name}</span>
                   </div>
 
                   <Badge variant={log.passed ? 'success' : 'danger'}>
@@ -615,7 +615,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
                   </Badge>
                 </div>
 
-                <div className="text-slate-600 dark:text-slate-400 pl-6 border-l-2 border-slate-200 dark:border-slate-700 py-0.5 font-mono text-[11px]">
+                <div className="text-graphite-600 dark:text-graphite-400 pl-6 border-l-2 border-graphite-200 dark:border-graphite-700 py-0.5 font-mono text-[11px]">
                   {log.message}
                 </div>
               </div>

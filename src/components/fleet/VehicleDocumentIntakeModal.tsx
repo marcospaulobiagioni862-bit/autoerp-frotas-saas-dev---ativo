@@ -252,16 +252,16 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
 
       {attachmentId&&<div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div><strong className="text-sm">Análise documental</strong><p className="text-xs text-slate-500">Status: {extraction?.status||'PROCESSANDO'}</p></div>
+          <div><strong className="text-sm">Análise documental</strong><p className="text-xs text-graphite-500">Status: {extraction?.status||'PROCESSANDO'}</p></div>
           <Button variant="outline" size="sm" onClick={()=>void refresh()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${analysisInProgress?'animate-spin':''}`}/>Atualizar análise</Button>
         </div>
 
         <div className="space-y-1.5" aria-label="Progresso estimado da análise documental">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className={`font-medium ${failed?'text-red-700 dark:text-red-300':'text-slate-700 dark:text-slate-200'}`}>{analysisInProgress?'Analisando documento':failed?'Análise falhou':'Etapa concluída'}</span>
-            <span className="font-semibold tabular-nums">{progress}% <span className="font-normal text-slate-500">estimado</span></span>
+            <span className={`font-medium ${failed?'text-red-700 dark:text-red-300':'text-graphite-700 dark:text-graphite-200'}`}>{analysisInProgress?'Analisando documento':failed?'Análise falhou':'Etapa concluída'}</span>
+            <span className="font-semibold tabular-nums">{progress}% <span className="font-normal text-graphite-500">estimado</span></span>
           </div>
-          <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-700">
             <div
               className={`h-full rounded-full bg-blue-600 transition-[width] duration-500 ${analysisInProgress?'animate-pulse':''}`}
               style={{width:`${progress}%`}}
@@ -272,7 +272,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
               aria-valuetext={`${progress}% estimado`}
             />
           </div>
-          <p className="text-[11px] text-slate-500">Percentual estimado por etapa. Enquanto a análise estiver em processamento, o ERP consulta o estado automaticamente.</p>
+          <p className="text-[11px] text-graphite-500">Percentual estimado por etapa. Enquanto a análise estiver em processamento, o ERP consulta o estado automaticamente.</p>
         </div>
 
         {failed&&<div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
@@ -299,12 +299,12 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             <div className="min-w-0 flex-1">
               <strong className="block text-sm">Veículo já cadastrado no ERP</strong>
               <p className="mt-1 text-xs">Não crie um novo registro. Os dados lidos correspondem a um cadastro existente.</p>
-              <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 p-3 text-xs dark:border-amber-800 dark:bg-slate-900/60">
+              <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 p-3 text-xs dark:border-amber-800 dark:bg-graphite-900/60">
                 <div><b>Placa:</b> {identityCheck.item.plate}</div>
                 <div><b>Veículo:</b> {identityCheck.item.brand} {identityCheck.item.model}</div>
                 <div><b>Status:</b> {vehicleStatusLabel(identityCheck.item.status)}</div>
                 <div><b>Local:</b> {identityCheck.historical?'Vendidos / Arquivados — histórico':'Frota cadastrada'}</div>
-                <div className="mt-1 font-mono text-[10px] text-slate-500">Cadastro: {identityCheck.item.id}</div>
+                <div className="mt-1 font-mono text-[10px] text-graphite-500">Cadastro: {identityCheck.item.id}</div>
               </div>
               {onExistingFound&&<div className="mt-3"><Button variant="outline" onClick={()=>onExistingFound(identityCheck.item!)}>Abrir cadastro existente</Button></div>}
             </div>
@@ -312,8 +312,8 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
         </div>}
 
         {isReady&&<div className="space-y-4">
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-            <div><strong className="text-sm">Dados extraídos do documento</strong><p className="text-xs text-slate-500">Confira e ajuste se necessário antes de concluir o cadastro.</p></div>
+          <div className="space-y-3 rounded-xl border border-graphite-200 bg-graphite-50 p-4 dark:border-graphite-800 dark:bg-graphite-900">
+            <div><strong className="text-sm">Dados extraídos do documento</strong><p className="text-xs text-graphite-500">Confira e ajuste se necessário antes de concluir o cadastro.</p></div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {FIELD_KEYS.map(key=><Input key={key} label={FIELD_LABELS[key]} value={corrections[key]||''} onChange={e=>setCorrections(v=>({...v,[key]:e.target.value}))}/>)}
             </div>
@@ -322,8 +322,8 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
             </div>}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-            <div><strong className="text-sm">Completar cadastro do veículo</strong><p className="text-xs text-slate-500">Os campos abaixo não são definidos pelo CRLV e devem ser informados antes da criação.</p></div>
+          <div className="space-y-3 rounded-xl border border-graphite-200 bg-white p-4 dark:border-graphite-700 dark:bg-graphite-900">
+            <div><strong className="text-sm">Completar cadastro do veículo</strong><p className="text-xs text-graphite-500">Os campos abaixo não são definidos pelo CRLV e devem ser informados antes da criação.</p></div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Input label="Cor *" required value={completion.color} error={completionErrors.color} onChange={e=>{setCompletion(v=>({...v,color:e.target.value}));clearCompletionError('color');}}/>
               <Select label="Categoria *" required value={completion.category} error={completionErrors.category} onChange={e=>{setCompletion(v=>({...v,category:e.target.value}));clearCompletionError('category');}} options={[{value:'',label:'Selecione...'},...VEHICLE_CATEGORIES.map(category=>({value:category,label:category}))]}/>
@@ -331,22 +331,22 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
               <Input label="Versão" value={completion.version} onChange={e=>setCompletion(v=>({...v,version:e.target.value}))} placeholder="Ex.: LT Turbo Flex"/>
               <Input label="Próx. Manutenção (KM)" type="number" min="0" value={completion.nextMaintenanceKm} error={completionErrors.nextMaintenanceKm} onChange={e=>{setCompletion(v=>({...v,nextMaintenanceKm:e.target.value}));clearCompletionError('nextMaintenanceKm');}}/>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Valores obrigatórios</h4>
+            <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3 dark:border-graphite-700 dark:bg-graphite-800/50">
+              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-graphite-700 dark:text-graphite-300">Valores obrigatórios</h4>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Input label="Valor de Compra (R$) *" type="text" inputMode="decimal" required value={completion.acquisitionValue} error={completionErrors.acquisitionValue} onBlur={()=>formatMoneyField('acquisitionValue')} onChange={e=>{setCompletion(v=>({...v,acquisitionValue:e.target.value}));clearCompletionError('acquisitionValue');}} placeholder="R$ 0,00"/>
                 <Input label="Valor Comercial Atual (R$) *" type="text" inputMode="decimal" required value={completion.currentValue} error={completionErrors.currentValue} onBlur={()=>formatMoneyField('currentValue')} onChange={e=>{setCompletion(v=>({...v,currentValue:e.target.value}));clearCompletionError('currentValue');}} placeholder="R$ 0,00"/>
                 <Input label="Aluguel Semanal (R$) *" type="text" inputMode="decimal" required value={completion.rentalValueBase} error={completionErrors.rentalValueBase} onBlur={()=>formatMoneyField('rentalValueBase')} onChange={e=>{setCompletion(v=>({...v,rentalValueBase:e.target.value}));clearCompletionError('rentalValueBase');}} placeholder="R$ 0,00"/>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">Valores exibidos em Real brasileiro (R$). Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
+              <p className="mt-2 text-[11px] text-graphite-500">Valores exibidos em Real brasileiro (R$). Nenhum valor financeiro é preenchido automaticamente pela IA.</p>
             </div>
-            <div><label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900"/></div>
+            <div><label className="mb-1 block text-xs font-semibold text-graphite-700 dark:text-graphite-300">Observações</label><textarea rows={2} value={completion.notes} onChange={e=>setCompletion(v=>({...v,notes:e.target.value}))} className="w-full rounded-lg border border-graphite-300 bg-white px-3 py-2 text-xs dark:border-graphite-700 dark:bg-graphite-900"/></div>
           </div>
           <Button onClick={()=>void createVehicle()} disabled={busy||materializingRef.current||checkingIdentity||Boolean(identityCheck?.exists)}>{identityCheck?.exists?'Cadastro existente — não criar':busy?'Criando veículo...':'Concluir cadastro e criar veículo'}</Button>
         </div>}
       </div>}
 
-      {message&&<p className="rounded-lg bg-slate-100 p-3 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">{message}</p>}
+      {message&&<p className="rounded-lg bg-graphite-100 p-3 text-xs text-graphite-700 dark:bg-graphite-800 dark:text-graphite-200">{message}</p>}
       {error&&<div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
     </div>
   </ModalContainer>;

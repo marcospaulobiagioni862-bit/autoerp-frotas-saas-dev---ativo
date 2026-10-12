@@ -294,44 +294,44 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <Card className="p-3 border-l-4 border-l-emerald-500">
-          <span className="text-[11px] font-medium text-slate-500 block">Total</span>
-          <strong className="text-lg font-bold text-slate-900 dark:text-slate-100 font-mono">{kpis.total}</strong>
+          <span className="text-[11px] font-medium text-graphite-500 block">Total</span>
+          <strong className="text-lg font-bold text-graphite-900 dark:text-graphite-100 font-mono">{kpis.total}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-emerald-600">
-          <span className="text-[11px] font-medium text-slate-500 block">Ativos</span>
+          <span className="text-[11px] font-medium text-graphite-500 block">Ativos</span>
           <strong className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">{kpis.active}</strong>
         </Card>
-        <Card className="p-3 border-l-4 border-l-slate-400">
-          <span className="text-[11px] font-medium text-slate-500 block">Inativos</span>
-          <strong className="text-lg font-bold text-slate-600 dark:text-slate-400 font-mono">{kpis.inactive}</strong>
+        <Card className="p-3 border-l-4 border-l-graphite-400">
+          <span className="text-[11px] font-medium text-graphite-500 block">Inativos</span>
+          <strong className="text-lg font-bold text-graphite-600 dark:text-graphite-400 font-mono">{kpis.inactive}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-rose-500">
-          <span className="text-[11px] font-medium text-slate-500 block">Bloqueados</span>
+          <span className="text-[11px] font-medium text-graphite-500 block">Bloqueados</span>
           <strong className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">{kpis.blocked}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-500">
-          <span className="text-[11px] font-medium text-slate-500 block">Documentos pendentes</span>
+          <span className="text-[11px] font-medium text-graphite-500 block">Documentos pendentes</span>
           <strong className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">{kpis.pendingDocs}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-600">
-          <span className="text-[11px] font-medium text-slate-500 block">CNH Vencendo</span>
+          <span className="text-[11px] font-medium text-graphite-500 block">CNH Vencendo</span>
           <strong className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">{kpis.cnhExpiring}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-rose-600">
-          <span className="text-[11px] font-medium text-slate-500 block">CNH Vencida</span>
+          <span className="text-[11px] font-medium text-graphite-500 block">CNH Vencida</span>
           <strong className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">{kpis.cnhExpired}</strong>
         </Card>
       </div>
 
       <Card className="p-4 space-y-3 sm:space-y-0 sm:flex sm:items-center sm:gap-4">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-graphite-400" />
           <input
             type="text"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Buscar por nome, CPF, CNH ou telefone..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
         <div className="w-full sm:w-64">
@@ -366,21 +366,21 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         <Card className="p-8 text-center space-y-3 border-rose-200 dark:border-rose-900">
           <Users className="w-10 h-10 mx-auto text-rose-400" />
           <p className="font-semibold text-sm text-rose-700 dark:text-rose-300">Não foi possível carregar os motoristas.</p>
-          <p className="text-xs text-slate-500">{loadError}</p>
+          <p className="text-xs text-graphite-500">{loadError}</p>
           <Button size="sm" variant="outline" onClick={()=>void loadData()}><RefreshCw className="w-4 h-4 mr-1.5"/>Tentar novamente</Button>
         </Card>
       ) : filteredDrivers.length === 0 ? (
-        <Card className="p-12 text-center text-slate-400 space-y-2">
-          <Users className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+        <Card className="p-12 text-center text-graphite-400 space-y-2">
+          <Users className="w-10 h-10 mx-auto text-graphite-300 dark:text-graphite-600" />
           <p className="font-semibold text-sm">Nenhum motorista encontrado.</p>
           <p className="text-xs">Tente ajustar a busca ou os filtros aplicados.</p>
         </Card>
       ) : (
         <>
-          <div className="hidden md:block overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="hidden md:block overflow-x-auto rounded-2xl border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr className="bg-graphite-50 dark:bg-graphite-800/50 text-[11px] font-bold uppercase tracking-wider text-graphite-500 dark:text-graphite-400 border-b border-graphite-200 dark:border-graphite-800">
                   <th className="p-3.5">Motorista / CPF</th>
                   <th className="p-3.5">CNH / Categoria</th>
                   <th className="p-3.5">Validade CNH</th>
@@ -389,7 +389,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                   <th className="p-3.5 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+              <tbody className="divide-y divide-graphite-200 dark:divide-graphite-800 text-xs">
                 {filteredDrivers.map((driver) => {
                   const cnhEval = evaluateCnhStatus(driver.cnhExpiration);
                   const vehicleName = driver.currentVehicleId ? vehiclesMap[driver.currentVehicleId] : null;
@@ -397,20 +397,20 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                     <tr
                       key={driver.id}
                       onClick={() => handleOpenDetails(driver.id)}
-                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 cursor-pointer transition-colors"
+                      className="hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 cursor-pointer transition-colors"
                     >
                       <td className="p-3.5">
-                        <div className="font-bold text-slate-900 dark:text-slate-100">{driver.fullName}</div>
-                        <div className="text-[11px] text-slate-500 font-mono">CPF: {maskCpf(driver.cpf)} • Tel: {maskPhone(driver.phone)}</div>
+                        <div className="font-bold text-graphite-900 dark:text-graphite-100">{driver.fullName}</div>
+                        <div className="text-[11px] text-graphite-500 font-mono">CPF: {maskCpf(driver.cpf)} • Tel: {maskPhone(driver.phone)}</div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">{maskCnh(driver.cnhNumber)}</div>
-                        <div className="text-[11px] text-slate-400">
-                          Cat. <span className="font-bold text-slate-700 dark:text-slate-300">{driver.cnhCategory}</span> • {earLabel(driver.cnhEar)}
+                        <div className="font-mono font-semibold text-graphite-800 dark:text-graphite-200">{maskCnh(driver.cnhNumber)}</div>
+                        <div className="text-[11px] text-graphite-400">
+                          Cat. <span className="font-bold text-graphite-700 dark:text-graphite-300">{driver.cnhCategory}</span> • {earLabel(driver.cnhEar)}
                         </div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-mono text-slate-800 dark:text-slate-200">{formatDateBR(driver.cnhExpiration)}</div>
+                        <div className="font-mono text-graphite-800 dark:text-graphite-200">{formatDateBR(driver.cnhExpiration)}</div>
                         {cnhEval.status === DocumentStatus.EXPIRED && (
                           cnhEval.inGracePeriod ? (
                             <span className="text-[10px] font-semibold text-amber-600 block">
@@ -430,7 +430,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                         )}
                       </td>
                       <td className="p-3.5">{getStatusBadge(driver.status)}</td>
-                      <td className="p-3.5 text-slate-600 dark:text-slate-400">
+                      <td className="p-3.5 text-graphite-600 dark:text-graphite-400">
                         {vehicleName ? (
                           onSelectVehicle && driver.currentVehicleId ? (
                             <button
@@ -446,7 +446,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                             </span>
                           )
                         ) : (
-                          <span className="text-slate-400 italic">Sem veículo</span>
+                          <span className="text-graphite-400 italic">Sem veículo</span>
                         )}
                       </td>
                       <td className="p-3.5 text-right">
@@ -455,9 +455,9 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                             <Eye className="w-4 h-4 mr-1" />Detalhes
                           </Button>
                           <details className="relative">
-                            <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">⋮</summary>
-                            <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                              <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                            <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 hover:bg-graphite-50 dark:border-graphite-700 dark:text-graphite-300 dark:hover:bg-graphite-800">⋮</summary>
+                            <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-graphite-200 bg-white p-2 text-left shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
+                              <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">
                                 <Edit2 className="w-4 h-4" />Editar
                               </button>
                               <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
@@ -489,18 +489,18 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{driver.fullName}</h3>
-                      <p className="text-xs text-slate-500 font-mono">CPF: {maskCpf(driver.cpf)}</p>
+                      <h3 className="font-bold text-sm text-graphite-900 dark:text-graphite-100">{driver.fullName}</h3>
+                      <p className="text-xs text-graphite-500 font-mono">CPF: {maskCpf(driver.cpf)}</p>
                     </div>
                     {getStatusBadge(driver.status)}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-graphite-100 dark:border-graphite-800">
                     <div>
-                      <span className="text-slate-400 block text-[10px]">CNH</span>
-                      <strong className="font-mono">{maskCnh(driver.cnhNumber)} ({driver.cnhCategory})</strong><span className="block text-[10px] text-slate-400 mt-0.5">{earLabel(driver.cnhEar)}</span>
+                      <span className="text-graphite-400 block text-[10px]">CNH</span>
+                      <strong className="font-mono">{maskCnh(driver.cnhNumber)} ({driver.cnhCategory})</strong><span className="block text-[10px] text-graphite-400 mt-0.5">{earLabel(driver.cnhEar)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Validade CNH</span>
+                      <span className="text-graphite-400 block text-[10px]">Validade CNH</span>
                       <strong className="font-mono">{formatDateBR(driver.cnhExpiration)}</strong>
                       {cnhEval.status === DocumentStatus.EXPIRED && (
                         <span className={`block text-[10px] font-semibold ${cnhEval.inGracePeriod ? 'text-amber-600' : 'text-rose-600'}`}>
@@ -521,16 +521,16 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                     </div>
                   )}
                   <div
-                    className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800"
+                    className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <Button size="sm" variant="primary" onClick={() => handleOpenDetails(driver.id)}>
                       <Eye className="w-4 h-4 mr-1" />Detalhes
                     </Button>
                     <details className="relative">
-                      <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-base font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">⋮</summary>
-                      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
-                        <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Edit2 className="w-4 h-4"/>Editar</button>
+                      <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
+                      <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-graphite-200 bg-white p-2 text-left shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
+                        <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Edit2 className="w-4 h-4"/>Editar</button>
                         <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><MessageSquare className="w-4 h-4"/>Avisar CNH (wa.me)</button>
                         <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-4 h-4"/>Arquivar</button>
                       </div>
@@ -544,7 +544,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
       )}
 
       <LazyModuleErrorBoundary resetKey={driverModalResetKey} onRetry={() => window.location.reload()}>
-        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-slate-600 shadow-xl dark:bg-slate-900 dark:text-slate-300">Carregando dados do motorista...</div></div>}>
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-graphite-600 shadow-xl dark:bg-graphite-900 dark:text-graphite-300">Carregando dados do motorista...</div></div>}>
           {isCnhIntakeOpen && <DriverCnhIntakeModal
             isOpen
             onClose={() => {

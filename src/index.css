@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* AUTOERP-91 fase 1: tema novo (navy/graphite/dourado). As escalas antigas
+   (slate, emerald, amber...) continuam valendo ate a migracao terminar. */
+@import "./styles/autoerp-theme.css";
 
 @layer base {
   :root {

@@ -58,21 +58,21 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-graphite-200 dark:border-graphite-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
               <RefreshCw className="w-5 h-5 text-amber-600" />
               Renegociação de Títulos ({receivables.length} Selecionado{receivables.length > 1 ? 's' : ''})
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-graphite-500 mt-0.5">
               Refinanciamento de obrigações • Cancela os títulos originais e gera novo grupo parcelado
             </p>
           </div>
           <button
             onClick={(event)=>requestGuardedClose(event,onClose)}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -88,14 +88,14 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
 
           <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 p-3 rounded-lg text-xs flex justify-between items-center">
             <div>
-              <span className="text-slate-500 block">Saldo Devedor Total:</span>
+              <span className="text-graphite-500 block">Saldo Devedor Total:</span>
               <strong className="text-amber-800 dark:text-amber-300 font-mono tabular-nums text-sm">
                 R$ {totalOriginalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </strong>
             </div>
             <div className="text-right">
-              <span className="text-slate-500 block">Motorista / Contrato:</span>
-              <span className="font-medium text-slate-700 dark:text-slate-300">
+              <span className="text-graphite-500 block">Motorista / Contrato:</span>
+              <span className="font-medium text-graphite-700 dark:text-graphite-300">
                 {receivables[0]?.driverId || 'Geral'}
               </span>
             </div>
@@ -103,7 +103,7 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Número de Parcelas *
               </label>
               <input
@@ -112,19 +112,19 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
                 max="24"
                 value={installments}
                 onChange={(e) => setInstallments(parseInt(e.target.value) || 1)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Periodicidade das Parcelas *
               </label>
               <select
                 value={installmentFrequency}
                 onChange={(e) => setInstallmentFrequency(e.target.value as RenegotiationInstallmentFrequency)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
               >
                 <option value="WEEKLY">Semanal (7 dias)</option>
                 <option value="BIWEEKLY">Quinzenal (14 dias)</option>
@@ -135,7 +135,7 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Desconto Concedido (R$)
               </label>
               <input
@@ -143,12 +143,12 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
                 step="0.01"
                 value={discountAmount}
                 onChange={(e) => setDiscountAmount(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Juros / Acréscimo (R$)
               </label>
               <input
@@ -156,40 +156,40 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
                 step="0.01"
                 value={interestAmount}
                 onChange={(e) => setInterestAmount(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Data da Primeira Parcela *
             </label>
             <input
               type="date"
               value={newDueDate}
               onChange={(e) => setNewDueDate(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Observações do Acordo
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none h-16"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none h-16"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
             <button
               type="button"
               onClick={(event)=>requestGuardedClose(event,onClose)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>

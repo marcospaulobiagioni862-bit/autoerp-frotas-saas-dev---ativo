@@ -49,10 +49,10 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant = 'neutral', child
     warning: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50',
     danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50',
     info: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/50',
-    neutral: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
-    secondary: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+    neutral: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
+    secondary: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
     indigo: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50',
-    slate: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+    slate: 'bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300 border border-graphite-200 dark:border-graphite-700',
   };
 
   const styleClass = variantStyles[computedVariant as string] || variantStyles.neutral;

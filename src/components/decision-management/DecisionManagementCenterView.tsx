@@ -280,9 +280,9 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
   };
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-900 p-4 md:p-6 space-y-6">
+    <div className="w-full min-h-screen bg-graphite-50 text-graphite-900 p-4 md:p-6 space-y-6">
       {/* Header Banner */}
-      <div className="bg-slate-900 text-white rounded-xl p-6 shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-graphite-900 text-white rounded-xl p-6 shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Award className="w-6 h-6 text-indigo-400" />
@@ -291,7 +291,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               v3.59
             </span>
           </div>
-          <p className="text-slate-400 text-sm">
+          <p className="text-graphite-400 text-sm">
             Governança de decisões, acompanhamento de resultados, escalonamento e efetividade operacional.
           </p>
         </div>
@@ -299,7 +299,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={handleTakeSnapshot}
-            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-700 transition"
+            className="flex items-center gap-2 bg-graphite-800 hover:bg-graphite-700 text-graphite-200 px-4 py-2.5 rounded-lg text-sm font-medium border border-graphite-700 transition"
           >
             <History className="w-4 h-4 text-indigo-400" />
             Gravar Snapshot
@@ -331,7 +331,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
       )}
 
       {/* Navigation Tabs */}
-      <div className="border-b border-slate-200 overflow-x-auto">
+      <div className="border-b border-graphite-200 overflow-x-auto">
         <nav className="flex space-x-2 min-w-max">
           {[
             { id: 1, label: 'Visão Executiva', icon: BarChart3 },
@@ -354,7 +354,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm transition whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                    : 'border-transparent text-graphite-500 hover:text-graphite-800 hover:border-graphite-300'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -369,12 +369,12 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
       {activeTab === 1 && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold uppercase text-slate-500">Total Decisões</span>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{metrics.totalDecisions}</p>
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
+              <span className="text-xs font-semibold uppercase text-graphite-500">Total Decisões</span>
+              <p className="text-2xl font-bold text-graphite-900 mt-1">{metrics.totalDecisions}</p>
             </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold uppercase text-slate-500">Decisões Abertas</span>
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
+              <span className="text-xs font-semibold uppercase text-graphite-500">Decisões Abertas</span>
               <p className="text-2xl font-bold text-indigo-600 mt-1">{metrics.openDecisions}</p>
             </div>
             <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm bg-rose-50/30">
@@ -389,39 +389,39 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               <span className="text-xs font-semibold uppercase text-emerald-700">Taxa de Sucesso</span>
               <p className="text-2xl font-bold text-emerald-600 mt-1">{metrics.successRate}%</p>
             </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-semibold uppercase text-slate-500">Score Efetividade</span>
+            <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
+              <span className="text-xs font-semibold uppercase text-graphite-500">Score Efetividade</span>
               <p className="text-2xl font-bold text-indigo-700 mt-1">{metrics.effectivenessScore} / 100</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm md:col-span-2 space-y-4">
-              <h3 className="text-base font-semibold text-slate-900">Lead Time & Tempos Médios Executivos</h3>
+            <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm md:col-span-2 space-y-4">
+              <h3 className="text-base font-semibold text-graphite-900">Lead Time & Tempos Médios Executivos</h3>
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">Lead Time (Proposta → Decisão)</span>
-                  <p className="text-xl font-bold text-slate-800 mt-1">{metrics.avgLeadTimeHours}h</p>
+                <div className="p-4 bg-graphite-50 rounded-lg">
+                  <span className="text-xs text-graphite-500">Lead Time (Proposta → Decisão)</span>
+                  <p className="text-xl font-bold text-graphite-800 mt-1">{metrics.avgLeadTimeHours}h</p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">Tempo de Execução</span>
+                <div className="p-4 bg-graphite-50 rounded-lg">
+                  <span className="text-xs text-graphite-500">Tempo de Execução</span>
                   <p className="text-xl font-bold text-indigo-600 mt-1">{metrics.avgExecutionTimeHours}h</p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <span className="text-xs text-slate-500">Tempo de Encerramento</span>
+                <div className="p-4 bg-graphite-50 rounded-lg">
+                  <span className="text-xs text-graphite-500">Tempo de Encerramento</span>
                   <p className="text-xl font-bold text-emerald-600 mt-1">{metrics.avgClosureTimeHours}h</p>
                 </div>
               </div>
 
               <div className="pt-2">
-                <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Conversão e Resolução</h4>
+                <h4 className="text-xs font-semibold text-graphite-500 uppercase mb-2">Conversão e Resolução</h4>
                 <div className="space-y-3">
                   <div>
                     <div className="flex justify-between text-xs font-medium mb-1">
                       <span>Taxa de Conversão em Ações Operacionais</span>
                       <span>{metrics.actionConversionRate}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
                       <div className="bg-indigo-600 h-full rounded-full" style={{ width: `${metrics.actionConversionRate}%` }} />
                     </div>
                   </div>
@@ -430,7 +430,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                       <span>Resolução de P0 / P1 Críticas</span>
                       <span>{metrics.p0P1ResolutionRate}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="w-full bg-graphite-100 h-2 rounded-full overflow-hidden">
                       <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${metrics.p0P1ResolutionRate}%` }} />
                     </div>
                   </div>
@@ -438,17 +438,17 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-              <h3 className="text-base font-semibold text-slate-900">Decisões por Categoria</h3>
+            <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-4">
+              <h3 className="text-base font-semibold text-graphite-900">Decisões por Categoria</h3>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {Object.entries(metrics.decisionsByCategory).map(([cat, count]) => (
-                  <div key={cat} className="flex justify-between items-center p-2.5 bg-slate-50 rounded-lg text-xs font-medium">
-                    <span className="text-slate-700">{cat}</span>
+                  <div key={cat} className="flex justify-between items-center p-2.5 bg-graphite-50 rounded-lg text-xs font-medium">
+                    <span className="text-graphite-700">{cat}</span>
                     <span className="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold">{count}</span>
                   </div>
                 ))}
                 {Object.keys(metrics.decisionsByCategory).length === 0 && (
-                  <p className="text-xs text-slate-400 italic">Nenhuma categoria registrada ainda.</p>
+                  <p className="text-xs text-graphite-400 italic">Nenhuma categoria registrada ainda.</p>
                 )}
               </div>
             </div>
@@ -458,39 +458,39 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 2: Decisões Pendentes */}
       {activeTab === 2 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-base font-semibold text-slate-900">Decisões Propostas & Em Análise</h3>
-            <span className="text-xs text-slate-500">
+            <h3 className="text-base font-semibold text-graphite-900">Decisões Propostas & Em Análise</h3>
+            <span className="text-xs text-graphite-500">
               Decisões aguardando aprovação formal antes de conversão em tarefas.
             </span>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-graphite-100">
             {decisions
               .filter((d) => d.status === 'PROPOSED' || d.status === 'UNDER_ANALYSIS')
               .map((d) => (
                 <div key={d.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">{d.decisionNumber}</span>
+                      <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           d.priority === 'P0'
                             ? 'bg-rose-100 text-rose-700'
                             : d.priority === 'P1'
                             ? 'bg-amber-100 text-amber-800'
-                            : 'bg-slate-100 text-slate-700'
+                            : 'bg-graphite-100 text-graphite-700'
                         }`}
                       >
                         {d.priority}
                       </span>
-                      <h4 className="font-semibold text-slate-900 text-sm">{d.title}</h4>
+                      <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
                     </div>
-                    <p className="text-xs text-slate-600 line-clamp-2">{d.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <span>Resultado Esperado: <strong className="text-slate-700">{d.expectedResult}</strong></span>
-                      <span>Responsável: <strong className="text-slate-700">{d.responsibleUserId || 'Não atribuído'}</strong></span>
+                    <p className="text-xs text-graphite-600 line-clamp-2">{d.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-graphite-400">
+                      <span>Resultado Esperado: <strong className="text-graphite-700">{d.expectedResult}</strong></span>
+                      <span>Responsável: <strong className="text-graphite-700">{d.responsibleUserId || 'Não atribuído'}</strong></span>
                     </div>
                   </div>
 
@@ -512,7 +512,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               ))}
 
             {decisions.filter((d) => d.status === 'PROPOSED' || d.status === 'UNDER_ANALYSIS').length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center italic">Nenhuma decisão pendente de aprovação.</p>
+              <p className="text-sm text-graphite-400 py-8 text-center italic">Nenhuma decisão pendente de aprovação.</p>
             )}
           </div>
         </div>
@@ -531,26 +531,26 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
             </span>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-graphite-100">
             {decisions
               .filter((d) => d.priority === 'P0' || d.priority === 'P1')
               .map((d) => (
                 <div key={d.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">{d.decisionNumber}</span>
+                      <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
                       <span className="bg-rose-100 text-rose-800 text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.priority}
                       </span>
-                      <span className="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                      <span className="bg-graphite-100 text-graphite-700 text-xs px-2 py-0.5 rounded-full font-medium">
                         {d.status}
                       </span>
-                      <h4 className="font-semibold text-slate-900 text-sm">{d.title}</h4>
+                      <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
                     </div>
-                    <p className="text-xs text-slate-600">{d.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                    <p className="text-xs text-graphite-600">{d.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-graphite-400">
                       <span>Prazo Limite: <strong className="text-rose-700">{d.dueAt ? d.dueAt.substring(0, 10) : 'Sem prazo'}</strong></span>
-                      <span>Responsável: <strong className="text-slate-700">{d.responsibleUserId || 'PENDENTE DE ATRIBUIÇÃO'}</strong></span>
+                      <span>Responsável: <strong className="text-graphite-700">{d.responsibleUserId || 'PENDENTE DE ATRIBUIÇÃO'}</strong></span>
                     </div>
                   </div>
 
@@ -575,7 +575,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               ))}
 
             {decisions.filter((d) => d.priority === 'P0' || d.priority === 'P1').length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center italic">Nenhuma decisão P0/P1 registrada.</p>
+              <p className="text-sm text-graphite-400 py-8 text-center italic">Nenhuma decisão P0/P1 registrada.</p>
             )}
           </div>
         </div>
@@ -583,24 +583,24 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 4: Em Execução */}
       {activeTab === 4 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Decisões em Execução Ativa</h3>
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
+          <h3 className="text-base font-semibold text-graphite-900">Decisões em Execução Ativa</h3>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-graphite-100">
             {decisions
               .filter((d) => d.status === 'IN_EXECUTION' || d.status === 'WAITING_RESULT')
               .map((d) => (
                 <div key={d.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">{d.decisionNumber}</span>
+                      <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
                       <span className="bg-indigo-100 text-indigo-800 text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.status}
                       </span>
-                      <h4 className="font-semibold text-slate-900 text-sm">{d.title}</h4>
+                      <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
                     </div>
-                    <p className="text-xs text-slate-600">{d.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
+                    <p className="text-xs text-graphite-600">{d.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-graphite-400">
                       <span>Tarefas Operacionais: <strong className="text-indigo-600">{d.linkedTaskIds.join(', ') || 'Nenhuma'}</strong></span>
                       <span>Pendências Vinculadas: <strong className="text-amber-600">{d.linkedPendingActionIds.join(', ') || 'Nenhuma'}</strong></span>
                     </div>
@@ -621,7 +621,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               ))}
 
             {decisions.filter((d) => d.status === 'IN_EXECUTION' || d.status === 'WAITING_RESULT').length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center italic">Nenhuma decisão em execução no momento.</p>
+              <p className="text-sm text-graphite-400 py-8 text-center italic">Nenhuma decisão em execução no momento.</p>
             )}
           </div>
         </div>
@@ -632,25 +632,25 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
         <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-6 space-y-4">
           <h3 className="text-base font-semibold text-amber-900">Decisões Escalonadas por SLA ou Sobrecarga</h3>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-graphite-100">
             {decisions
               .filter((d) => d.status === 'ESCALATED' || d.escalationLevel !== 'LEVEL_0')
               .map((d) => (
                 <div key={d.id} className="py-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">{d.decisionNumber}</span>
+                      <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
                       <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.escalationLevel}
                       </span>
-                      <h4 className="font-semibold text-slate-900 text-sm">{d.title}</h4>
+                      <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
                     </div>
-                    <span className="text-xs text-slate-400">
-                      Responsável Atual: <strong className="text-slate-800">{d.responsibleUserId}</strong>
+                    <span className="text-xs text-graphite-400">
+                      Responsável Atual: <strong className="text-graphite-800">{d.responsibleUserId}</strong>
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600">{d.description}</p>
+                  <p className="text-xs text-graphite-600">{d.description}</p>
 
                   {d.escalationHistory && d.escalationHistory.length > 0 && (
                     <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 space-y-1">
@@ -669,7 +669,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               ))}
 
             {decisions.filter((d) => d.status === 'ESCALATED' || d.escalationLevel !== 'LEVEL_0').length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center italic">Nenhuma decisão em estado de escalonamento.</p>
+              <p className="text-sm text-graphite-400 py-8 text-center italic">Nenhuma decisão em estado de escalonamento.</p>
             )}
           </div>
         </div>
@@ -677,21 +677,21 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 6: Resultados & Sucesso */}
       {activeTab === 6 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Central de Resultados e Critérios de Sucesso</h3>
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
+          <h3 className="text-base font-semibold text-graphite-900">Central de Resultados e Critérios de Sucesso</h3>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-graphite-100">
             {decisions
               .filter((d) => d.status === 'COMPLETED' || d.status === 'CLOSED' || d.status === 'VALIDATING')
               .map((d) => (
                 <div key={d.id} className="py-4 space-y-2">
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">{d.decisionNumber}</span>
+                      <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
                       <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.status}
                       </span>
-                      <h4 className="font-semibold text-slate-900 text-sm">{d.title}</h4>
+                      <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
@@ -700,7 +700,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                       {d.status === 'COMPLETED' && (
                         <button
                           onClick={() => handleCloseDecision(d.id)}
-                          className="bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded text-xs font-medium"
+                          className="bg-graphite-800 hover:bg-graphite-700 text-white px-2.5 py-1 rounded text-xs font-medium"
                         >
                           Encerrar Decisão
                         </button>
@@ -719,13 +719,13 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-3 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-graphite-50 p-3 rounded-lg">
                     <div>
-                      <span className="font-semibold text-slate-500 uppercase">Resultado Esperado:</span>
-                      <p className="text-slate-800 font-medium mt-0.5">{d.expectedResult}</p>
+                      <span className="font-semibold text-graphite-500 uppercase">Resultado Esperado:</span>
+                      <p className="text-graphite-800 font-medium mt-0.5">{d.expectedResult}</p>
                     </div>
                     <div>
-                      <span className="font-semibold text-slate-500 uppercase">Resultado Alcançado:</span>
+                      <span className="font-semibold text-graphite-500 uppercase">Resultado Alcançado:</span>
                       <p className="text-emerald-800 font-medium mt-0.5">{d.actualResult || 'Ainda não registrado'}</p>
                     </div>
                   </div>
@@ -733,7 +733,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               ))}
 
             {decisions.filter((d) => d.status === 'COMPLETED' || d.status === 'CLOSED' || d.status === 'VALIDATING').length === 0 && (
-              <p className="text-sm text-slate-400 py-8 text-center italic">Nenhuma decisão finalizada com resultados ainda.</p>
+              <p className="text-sm text-graphite-400 py-8 text-center italic">Nenhuma decisão finalizada com resultados ainda.</p>
             )}
           </div>
         </div>
@@ -742,15 +742,15 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
       {/* Tab 7: Efetividade Operacional */}
       {activeTab === 7 && (
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="text-base font-semibold text-slate-900">Score Global de Efetividade Executiva</h3>
+          <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm space-y-4">
+            <h3 className="text-base font-semibold text-graphite-900">Score Global de Efetividade Executiva</h3>
             <div className="flex items-center gap-6">
               <div className="relative w-32 h-32 flex items-center justify-center bg-indigo-50 rounded-full border-4 border-indigo-500 text-3xl font-black text-indigo-700">
                 {metrics.effectivenessScore}
               </div>
               <div className="space-y-1">
-                <span className="text-sm font-bold text-slate-700 uppercase">Efetividade Média da Gestão</span>
-                <p className="text-xs text-slate-500 max-w-md">
+                <span className="text-sm font-bold text-graphite-700 uppercase">Efetividade Média da Gestão</span>
+                <p className="text-xs text-graphite-500 max-w-md">
                   Medida ponderada atingida a partir dos critérios de resultado real, cumprimento de prazos SLA e fornecimento de evidências operacionais.
                 </p>
                 <div className="pt-2 flex gap-2">
@@ -769,19 +769,19 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 8: Carga por Responsável */}
       {activeTab === 8 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Distribuição de Carga de Decisões por Gestor/Usuário</h3>
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
+          <h3 className="text-base font-semibold text-graphite-900">Distribuição de Carga de Decisões por Gestor/Usuário</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(metrics.decisionsByResponsible).map(([user, count]) => (
-              <div key={user} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <div key={user} className="p-4 bg-graphite-50 rounded-xl border border-graphite-200 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-900 text-sm">{user}</span>
+                  <span className="font-bold text-graphite-900 text-sm">{user}</span>
                   <span className="bg-indigo-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">
                     {count} Decisões
                   </span>
                 </div>
-                <div className="text-xs text-slate-500">
+                <div className="text-xs text-graphite-500">
                   Total atribuído sob gestão ou execução operacional.
                 </div>
               </div>
@@ -792,26 +792,26 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 9: Histórico Completo */}
       {activeTab === 9 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <h3 className="text-base font-semibold text-slate-900">Histórico de Decisões Executivas</h3>
+            <h3 className="text-base font-semibold text-graphite-900">Histórico de Decisões Executivas</h3>
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="relative flex-1 md:w-64">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Search className="w-4 h-4 text-graphite-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
                   placeholder="Buscar por título ou número..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-1.5 w-full text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="pl-9 pr-4 py-1.5 w-full text-xs border border-graphite-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="py-1.5 px-3 text-xs border border-slate-200 rounded-lg focus:outline-none"
+                className="py-1.5 px-3 text-xs border border-graphite-200 rounded-lg focus:outline-none"
               >
                 <option value="ALL">Todos os Status</option>
                 <option value="PROPOSED">PROPOSED</option>
@@ -825,7 +825,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="py-1.5 px-3 text-xs border border-slate-200 rounded-lg focus:outline-none"
+                className="py-1.5 px-3 text-xs border border-graphite-200 rounded-lg focus:outline-none"
               >
                 <option value="ALL">Todas as Prioridades</option>
                 <option value="P0">P0</option>
@@ -839,7 +839,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-100 text-slate-700 font-semibold uppercase border-b border-slate-200">
+                <tr className="bg-graphite-100 text-graphite-700 font-semibold uppercase border-b border-graphite-200">
                   <th className="p-3">Número</th>
                   <th className="p-3">Título</th>
                   <th className="p-3">Prioridade</th>
@@ -850,18 +850,18 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <th className="p-3">Ação</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-graphite-100">
                 {filteredDecisions.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50 transition">
+                  <tr key={d.id} className="hover:bg-graphite-50 transition">
                     <td className="p-3 font-mono font-bold text-indigo-600">{d.decisionNumber}</td>
-                    <td className="p-3 font-medium text-slate-900">{d.title}</td>
+                    <td className="p-3 font-medium text-graphite-900">{d.title}</td>
                     <td className="p-3 font-bold">{d.priority}</td>
                     <td className="p-3">
-                      <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-medium">{d.status}</span>
+                      <span className="bg-graphite-100 text-graphite-800 px-2 py-0.5 rounded font-medium">{d.status}</span>
                     </td>
-                    <td className="p-3 text-slate-600">{d.responsibleUserId || '-'}</td>
-                    <td className="p-3 text-slate-500">{d.createdAt.substring(0, 10)}</td>
-                    <td className="p-3 text-slate-500">{d.dueAt ? d.dueAt.substring(0, 10) : '-'}</td>
+                    <td className="p-3 text-graphite-600">{d.responsibleUserId || '-'}</td>
+                    <td className="p-3 text-graphite-500">{d.createdAt.substring(0, 10)}</td>
+                    <td className="p-3 text-graphite-500">{d.dueAt ? d.dueAt.substring(0, 10) : '-'}</td>
                     <td className="p-3">
                       <button
                         onClick={() => setSelectedDecision(d)}
@@ -874,7 +874,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 ))}
                 {filteredDecisions.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="p-6 text-center text-slate-400 italic">
+                    <td colSpan={8} className="p-6 text-center text-graphite-400 italic">
                       Nenhuma decisão encontrada com os filtros selecionados.
                     </td>
                   </tr>
@@ -887,69 +887,69 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 10: Auditoria & Logs */}
       {activeTab === 10 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-semibold text-slate-900">Registro de Auditoria Imutável (Append-Only)</h3>
-          <p className="text-xs text-slate-500">
+        <div className="bg-white rounded-xl border border-graphite-200 shadow-sm p-6 space-y-4">
+          <h3 className="text-base font-semibold text-graphite-900">Registro de Auditoria Imutável (Append-Only)</h3>
+          <p className="text-xs text-graphite-500">
             Todas as criações, aprovações, transições de estado, validações e reaberturas são gravadas com Correlation ID.
           </p>
 
-          <div className="bg-slate-900 text-slate-200 p-4 rounded-xl font-mono text-xs space-y-2 max-h-96 overflow-y-auto">
+          <div className="bg-graphite-900 text-graphite-200 p-4 rounded-xl font-mono text-xs space-y-2 max-h-96 overflow-y-auto">
             {decisions.map((d) => (
-              <div key={d.id} className="border-b border-slate-800 pb-2">
+              <div key={d.id} className="border-b border-graphite-800 pb-2">
                 <span className="text-indigo-400">[{d.createdAt}]</span>{' '}
                 <span className="text-emerald-400">CORR:{d.correlationId}</span> - DEC:{d.decisionNumber} - STATUS:{d.status} - PRIO:{d.priority} - RESP:{d.responsibleUserId}
               </div>
             ))}
-            {decisions.length === 0 && <span className="text-slate-500">Nenhum log de auditoria gerado ainda.</span>}
+            {decisions.length === 0 && <span className="text-graphite-500">Nenhum log de auditoria gerado ainda.</span>}
           </div>
         </div>
       )}
 
       {/* Tab 11: Matriz Oficial v3.59 */}
       {activeTab === 11 && (
-        <div className="bg-slate-900 text-slate-100 rounded-xl p-6 shadow-xl space-y-4 font-mono text-xs">
-          <h3 className="text-lg font-bold text-indigo-400 border-b border-slate-800 pb-2">
+        <div className="bg-graphite-900 text-graphite-100 rounded-xl p-6 shadow-xl space-y-4 font-mono text-xs">
+          <h3 className="text-lg font-bold text-indigo-400 border-b border-graphite-800 pb-2">
             AUTOERP — GESTÃO DE DECISÕES — MATRIZ OFICIAL FASE 3.59
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1">
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>BASELINE 3.58</span>
               <span className="text-emerald-400">[VALIDADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>DECISION MANAGEMENT</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>DECISION WORKFLOW</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>ACTION MANAGEMENT</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>RESPONSABILIDADES</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>ESCALONAMENTO</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>EFETIVIDADE</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>AUDITLOG & CORRELATION</span>
               <span className="text-emerald-400">[APROVADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>FINANCEIRO</span>
               <span className="text-amber-400">[🔒 CONGELADO]</span>
             </div>
-            <div className="flex justify-between border-b border-slate-800 py-1">
+            <div className="flex justify-between border-b border-graphite-800 py-1">
               <span>FASE 3.59 STATUS</span>
               <span className="text-emerald-400 font-bold">[HOMOLOGADA]</span>
             </div>
@@ -959,47 +959,47 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Modal: Create Decision */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
+        <div className="fixed inset-0 bg-graphite-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Nova Decisão Executiva</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-700">
+            <div className="flex justify-between items-center border-b border-graphite-100 pb-3">
+              <h3 className="font-bold text-graphite-900 text-base">Nova Decisão Executiva</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-graphite-400 hover:text-graphite-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateDecision} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Título da Decisão *</label>
+                <label className="block font-semibold text-graphite-700 mb-1">Título da Decisão *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Realocação da Frota para Região Sul"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full p-2 border border-graphite-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Descrição / Justificativa *</label>
+                <label className="block font-semibold text-graphite-700 mb-1">Descrição / Justificativa *</label>
                 <textarea
                   required
                   rows={3}
                   placeholder="Descreva o motivo e a necessidade estratégica..."
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full p-2 border border-graphite-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Prioridade</label>
+                  <label className="block font-semibold text-graphite-700 mb-1">Prioridade</label>
                   <select
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value as DecisionPriority)}
-                    className="w-full p-2 border border-slate-200 rounded-lg"
+                    className="w-full p-2 border border-graphite-200 rounded-lg"
                   >
                     <option value="P0">P0 (Emergencial)</option>
                     <option value="P1">P1 (Alta)</option>
@@ -1009,11 +1009,11 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Categoria</label>
+                  <label className="block font-semibold text-graphite-700 mb-1">Categoria</label>
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value as DecisionCategory)}
-                    className="w-full p-2 border border-slate-200 rounded-lg"
+                    className="w-full p-2 border border-graphite-200 rounded-lg"
                   >
                     <option value="OPERATIONAL">Operacional</option>
                     <option value="FLEET">Frota</option>
@@ -1027,25 +1027,25 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Resultado Esperado *</label>
+                <label className="block font-semibold text-graphite-700 mb-1">Resultado Esperado *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Aumentar taxa de utilização em 15%"
                   value={newExpectedResult}
                   onChange={(e) => setNewExpectedResult(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg focus:outline-none"
+                  className="w-full p-2 border border-graphite-200 rounded-lg focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Critério de Sucesso</label>
+                <label className="block font-semibold text-graphite-700 mb-1">Critério de Sucesso</label>
                 <input
                   type="text"
                   placeholder="Ex: Sem veículos ociosos por mais de 48h"
                   value={newSuccessCriteria}
                   onChange={(e) => setNewSuccessCriteria(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg"
+                  className="w-full p-2 border border-graphite-200 rounded-lg"
                 />
               </div>
 
@@ -1053,7 +1053,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50"
+                  className="px-4 py-2 border border-graphite-200 rounded-lg text-graphite-600 hover:bg-graphite-50"
                 >
                   Cancelar
                 </button>
@@ -1071,35 +1071,35 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Modal: Validation */}
       {showValidationModal && decisionToValidate && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
+        <div className="fixed inset-0 bg-graphite-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base">Validar Resultado & Concluir</h3>
-              <button onClick={() => setShowValidationModal(false)} className="text-slate-400 hover:text-slate-700">
+            <div className="flex justify-between items-center border-b border-graphite-100 pb-3">
+              <h3 className="font-bold text-graphite-900 text-base">Validar Resultado & Concluir</h3>
+              <button onClick={() => setShowValidationModal(false)} className="text-graphite-400 hover:text-graphite-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleValidateAndComplete} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Resultado Alcançado Na Prática *</label>
+                <label className="block font-semibold text-graphite-700 mb-1">Resultado Alcançado Na Prática *</label>
                 <textarea
                   required
                   rows={3}
                   placeholder="Descreva o que realmente foi alcançado após a execução..."
                   value={actualResultInput}
                   onChange={(e) => setActualResultInput(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg"
+                  className="w-full p-2 border border-graphite-200 rounded-lg"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">IDs de Evidências (separados por vírgula)</label>
+                <label className="block font-semibold text-graphite-700 mb-1">IDs de Evidências (separados por vírgula)</label>
                 <input
                   type="text"
                   value={evidenceInput}
                   onChange={(e) => setEvidenceInput(e.target.value)}
-                  className="w-full p-2 border border-slate-200 rounded-lg font-mono text-xs"
+                  className="w-full p-2 border border-graphite-200 rounded-lg font-mono text-xs"
                 />
               </div>
 
@@ -1107,7 +1107,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setShowValidationModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600"
+                  className="px-4 py-2 border border-graphite-200 rounded-lg text-graphite-600"
                 >
                   Cancelar
                 </button>
@@ -1125,18 +1125,18 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Modal: Reopen */}
       {showReopenModal && decisionToReopen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
+        <div className="fixed inset-0 bg-graphite-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-900 text-base text-rose-700">Reabrir Decisão Executiva</h3>
-              <button onClick={() => setShowReopenModal(false)} className="text-slate-400 hover:text-slate-700">
+            <div className="flex justify-between items-center border-b border-graphite-100 pb-3">
+              <h3 className="font-bold text-graphite-900 text-base text-rose-700">Reabrir Decisão Executiva</h3>
+              <button onClick={() => setShowReopenModal(false)} className="text-graphite-400 hover:text-graphite-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleReopenDecision} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
+                <label className="block font-semibold text-graphite-700 mb-1">
                   Motivo Obrigatório da Reabertura (Mínimo 5 caracteres) *
                 </label>
                 <textarea
@@ -1153,7 +1153,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => setShowReopenModal(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-slate-600"
+                  className="px-4 py-2 border border-graphite-200 rounded-lg text-graphite-600"
                 >
                   Cancelar
                 </button>

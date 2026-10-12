@@ -110,21 +110,21 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-graphite-200 dark:border-graphite-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
               <ArrowRightLeft className="w-5 h-5 text-blue-600" />
               Transferência Entre Contas (TRANSFER)
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-graphite-500 mt-0.5">
               Movimentação interna de saldo • Não gera receita ou despesa no DRE
             </p>
           </div>
           <button
             onClick={(event)=>requestGuardedClose(event,onClose)}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-graphite-400 hover:text-graphite-600 hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -144,13 +144,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Conta de Origem (-) *
               </label>
               <select
                 value={sourceAccountId}
                 onChange={(e) => setSourceAccountId(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
                 <option value="" disabled>Selecione</option>
@@ -163,13 +163,13 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Conta de Destino (+) *
               </label>
               <select
                 value={destinationAccountId}
                 onChange={(e) => setDestinationAccountId(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
                 <option value="" disabled>Selecione</option>
@@ -184,7 +184,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Valor da Transferência (R$) *
               </label>
               <input
@@ -193,19 +193,19 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
                 Meio / Tipo *
               </label>
               <select
                 value={methodId}
                 onChange={(e) => setMethodId(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 required
               >
                 <option value="" disabled>Selecione</option>
@@ -219,20 +219,20 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Data da Transferência *
             </label>
             <input
               type="date"
               value={transferDate}
               onChange={(e) => setTransferDate(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
               Descrição / Motivo
             </label>
             <input
@@ -240,15 +240,15 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose, o
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ex: Pagamento de Fatura de Cartão de Crédito"
-              className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-2 text-sm bg-white dark:bg-graphite-800 border border-graphite-300 dark:border-graphite-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
             <button
               type="button"
               onClick={(event)=>requestGuardedClose(event,onClose)}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="px-4 py-2 text-xs font-semibold text-graphite-600 dark:text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800 rounded-lg transition-colors"
             >
               Cancelar
             </button>

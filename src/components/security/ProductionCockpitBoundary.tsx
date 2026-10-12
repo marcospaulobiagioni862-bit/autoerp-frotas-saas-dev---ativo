@@ -14,19 +14,19 @@ type UnavailableViewProps = {
 
 const ServerAuthorityUnavailableView: React.FC<UnavailableViewProps> = ({ title, description }) => (
   <div className="p-4 sm:p-6">
-    <div className="mx-auto max-w-3xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm dark:border-amber-900/70 dark:bg-slate-900">
+    <div className="mx-auto max-w-3xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm dark:border-amber-900/70 dark:bg-graphite-900">
       <div className="flex items-start gap-4">
         <div className="rounded-xl bg-amber-50 p-3 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
           <LockKeyhole className="h-6 w-6" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <h1 className="text-xl font-bold text-graphite-900 dark:text-graphite-100">{title}</h1>
+            <span className="inline-flex items-center gap-1 rounded-full border border-graphite-200 bg-graphite-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-graphite-600 dark:border-graphite-700 dark:bg-graphite-800 dark:text-graphite-300">
               <LockKeyhole className="h-3 w-3" /> Este recurso está temporariamente indisponível
             </span>
           </div>
-          <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{description}</p>
+          <p className="mt-3 text-sm leading-6 text-graphite-600 dark:text-graphite-300">{description}</p>
           <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50/70 p-3 text-xs leading-5 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <span>

@@ -135,7 +135,7 @@ export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumen
   ) : null;
 
   if (loading) {
-    return <div className="rounded-lg border p-3 text-xs text-slate-500">Carregando CNH vigente…</div>;
+    return <div className="rounded-lg border p-3 text-xs text-graphite-500">Carregando CNH vigente…</div>;
   }
 
   if (!attachment) {
@@ -161,7 +161,7 @@ export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumen
               <span className="text-sm font-semibold">CNH vigente</span>
               {statusBadge}
             </div>
-            <div className="truncate text-[11px] text-slate-500">
+            <div className="truncate text-[11px] text-graphite-500">
               Validade: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}
             </div>
           </div>

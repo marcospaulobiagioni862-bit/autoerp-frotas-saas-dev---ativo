@@ -304,7 +304,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
       title="Modelos de contrato"
       subtitle="Os modelos oficiais da MoveFlex permanecem separados dos modelos personalizados."
     >
-      <div className="border-b border-slate-100 pb-3 dark:border-slate-800">
+      <div className="border-b border-graphite-100 pb-3 dark:border-graphite-800">
         <div className="flex gap-2">
           <Button size="sm" variant={tab === 'SAVED' ? 'primary' : 'ghost'} onClick={() => setTab('SAVED')}>
             <FileText className="h-4 w-4" />Contratos salvos
@@ -323,7 +323,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
           <>
             <div>
               <h3 className="text-sm font-bold">Modelos oficiais MoveFlex</h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+              <p className="mt-1 text-xs text-graphite-500 dark:text-graphite-300">
                 Somente o DOCX mestre aprovado pode ativar estes modelos para geração oficial.
               </p>
             </div>
@@ -332,11 +332,11 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
               {approvedTemplates.map((item) => {
                 const master = getMoveFlexApprovedContractMaster(item.templateKey)!;
                 return (
-                  <div key={item.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                  <div key={item.id} className="rounded-xl border border-graphite-200 p-4 dark:border-graphite-800">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-bold">{master.title}</div>
-                        <div className="mt-1 text-[11px] text-slate-500">Arquivo mestre: {master.fileName}</div>
+                        <div className="mt-1 text-[11px] text-graphite-500">Arquivo mestre: {master.fileName}</div>
                       </div>
                       <div className="flex gap-1">
                         <Badge variant={contractTemplateGenerationMode(item) ? 'success' : 'warning'}>{contractTemplateGenerationMode(item) ? 'Disponível • PDF' : 'Arquivo pendente'}</Badge>
@@ -367,7 +367,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div>
                 <h3 className="text-sm font-bold">Modelos personalizados</h3>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+                <p className="mt-1 text-xs text-graphite-500 dark:text-graphite-300">
                   Apenas a versão atual aparece aqui. Versões anteriores continuam guardadas para auditoria.
                 </p>
               </div>
@@ -375,10 +375,10 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             </div>
 
             {savedTemplates.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
-                <FileText className="mx-auto h-8 w-8 text-slate-400" />
+              <div className="rounded-xl border border-dashed border-graphite-300 p-8 text-center dark:border-graphite-700">
+                <FileText className="mx-auto h-8 w-8 text-graphite-400" />
                 <p className="mt-3 text-sm font-semibold">Nenhum modelo personalizado salvo ainda.</p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-graphite-500">
                   Crie ou importe um modelo personalizado. O servidor atribuirá automaticamente o número Contrato {String(nextNumber).padStart(2, '0')}.
                 </p>
                 <div className="mt-4"><Button size="sm" onClick={startNew}>Criar primeiro contrato</Button></div>
@@ -388,11 +388,11 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                 {savedTemplates.map((item) => {
                   const fileBacked = !item.contentMarkdown.trim();
                   return (
-                    <div key={item.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                    <div key={item.id} className="rounded-xl border border-graphite-200 p-4 dark:border-graphite-800">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-bold">{savedContractLabel(item)} — {item.title}</div>
-                          <div className="mt-1 text-[11px] text-slate-500">
+                          <div className="mt-1 text-[11px] text-graphite-500">
                             {fileBacked ? 'Modelo por arquivo DOCX/PDF' : 'Conteúdo editável dentro do ERP'}
                           </div>
                         </div>
@@ -426,7 +426,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
               </div>
             )}
 
-            <div className="rounded-lg bg-slate-50 p-3 text-[11px] text-slate-500 dark:bg-slate-900/50 dark:text-slate-300">
+            <div className="rounded-lg bg-graphite-50 p-3 text-[11px] text-graphite-500 dark:bg-graphite-900/50 dark:text-graphite-300">
               Registros antigos continuam preservados para histórico. Modelos oficiais só ficam disponíveis após validação do arquivo mestre pelo servidor.
             </div>
           </>
@@ -442,7 +442,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                       : `Editar ${savedContractLabel(editing)}`
                   : `Novo modelo — próximo número: Contrato ${String(nextNumber).padStart(2, '0')}`}
               </h3>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">
+              <p className="mt-1 text-xs text-graphite-500 dark:text-graphite-300">
                 {editing
                   ? getMoveFlexApprovedContractMaster(editing.templateKey)
                     ? 'O servidor validará nome lógico, tipo, checksum e tamanho do DOCX mestre antes de disponibilizar o modelo.'
@@ -452,12 +452,12 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
             </div>
 
             {editing && getMoveFlexApprovedContractMaster(editing.templateKey) ? (
-              <div className="rounded-lg border border-slate-200 p-3 text-xs dark:border-slate-700">
+              <div className="rounded-lg border border-graphite-200 p-3 text-xs dark:border-graphite-700">
                 <b>{title}</b>
-                <div className="mt-1 text-slate-500">Este modelo oficial não possui edição textual no ERP.</div>
+                <div className="mt-1 text-graphite-500">Este modelo oficial não possui edição textual no ERP.</div>
               </div>
             ) : (
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-200">
                 Título do contrato
                 <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ex.: Locação padrão semanal" />
               </label>
@@ -465,7 +465,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
 
             {!editing || !getMoveFlexApprovedContractMaster(editing.templateKey) ? (
               <div>
-                <div className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-200">Como deseja manter este modelo?</div>
+                <div className="mb-2 text-xs font-semibold text-graphite-700 dark:text-graphite-200">Como deseja manter este modelo?</div>
                 <div className="flex flex-wrap gap-2">
                   {(!editing || Boolean(editing.contentMarkdown.trim())) && (
                     <Button
@@ -489,29 +489,29 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
 
             {sourceMode === 'MARKDOWN' ? (
               <>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">
+                <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-200">
                   Conteúdo do contrato
                   <textarea
-                    className="mt-1 min-h-56 w-full rounded-lg border border-slate-200 bg-transparent p-3 font-mono text-xs dark:border-slate-700"
+                    className="mt-1 min-h-56 w-full rounded-lg border border-graphite-200 bg-transparent p-3 font-mono text-xs dark:border-graphite-700"
                     value={content}
                     onChange={(event) => setContent(event.target.value)}
                     placeholder="# Contrato {{contract.number}}\n\nEntre {{company.name}} e {{driver.name}}..."
                   />
                 </label>
-                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900/50">
+                <div className="rounded-lg bg-graphite-50 p-3 dark:bg-graphite-900/50">
                   <b className="text-[11px]">Campos automáticos permitidos</b>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {PLACEHOLDERS.map((item) => (
-                      <code key={item} className="rounded bg-white px-1.5 py-1 text-[9px] dark:bg-slate-800">{item}</code>
+                      <code key={item} className="rounded bg-white px-1.5 py-1 text-[9px] dark:bg-graphite-800">{item}</code>
                     ))}
                   </div>
                 </div>
               </>
             ) : (
-              <div className="space-y-3 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+              <div className="space-y-3 rounded-lg border border-graphite-200 p-4 dark:border-graphite-700">
                 <div>
                   <b className="text-xs">Arquivo {editing && getMoveFlexApprovedContractMaster(editing.templateKey) ? 'DOCX oficial' : 'DOCX ou PDF'}</b>
-                  <p className="mt-1 text-[11px] text-slate-500">
+                  <p className="mt-1 text-[11px] text-graphite-500">
                     {editing && getMoveFlexApprovedContractMaster(editing.templateKey)
                       ? `Selecione exatamente o arquivo mestre ${getMoveFlexApprovedContractMaster(editing.templateKey)!.fileName}. O servidor rejeitará qualquer arquivo incompatível.`
                       : 'Para alterar cláusulas de um modelo por arquivo, baixe o DOCX atual, edite e envie o arquivo atualizado. O ERP salvará uma nova versão.'}
@@ -519,7 +519,7 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                 </div>
                 <input
                   ref={fileInputRef}
-                  className="block w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/50 dark:text-slate-200"
+                  className="block w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs text-graphite-700 dark:border-graphite-700 dark:bg-graphite-950/50 dark:text-graphite-200"
                   type="file"
                   accept={editing && getMoveFlexApprovedContractMaster(editing.templateKey)
                     ? '.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -531,10 +531,10 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
                     <Upload className="h-4 w-4" />Selecionar {editing && getMoveFlexApprovedContractMaster(editing.templateKey) ? 'DOCX oficial' : 'DOCX/PDF'}
                   </Button>
                   {sourceFile
-                    ? <div className="text-xs text-slate-600 dark:text-slate-300">Selecionado: <b>{sourceFile.name}</b></div>
-                    : <div className="text-xs text-slate-500 dark:text-slate-400">Nenhum arquivo selecionado.</div>}
+                    ? <div className="text-xs text-graphite-600 dark:text-graphite-300">Selecionado: <b>{sourceFile.name}</b></div>
+                    : <div className="text-xs text-graphite-500 dark:text-graphite-400">Nenhum arquivo selecionado.</div>}
                 </div>
-                <div className="text-[10px] text-slate-500">
+                <div className="text-[10px] text-graphite-500">
                   {editing && getMoveFlexApprovedContractMaster(editing.templateKey)
                     ? 'O arquivo será validado pelo checksum e tamanho oficiais antes de o modelo ser ativado.'
                     : 'DOCX pode ficar disponível para preenchimento automático. PDF é mantido como arquivo de referência e não é ativado automaticamente.'}
@@ -542,8 +542,8 @@ export const ContractTemplateManagementModal: React.FC<ContractTemplateManagemen
               </div>
             )}
 
-            <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-1 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="sticky bottom-0 z-20 -mx-1 flex flex-wrap items-center justify-between gap-2 border-t border-graphite-200 bg-white/95 px-1 py-3 backdrop-blur dark:border-graphite-700 dark:bg-graphite-900/95">
+              <div className="text-[11px] text-graphite-500 dark:text-graphite-400">
                 {sourceMode === 'FILE'
                   ? sourceFile ? `Arquivo pronto para salvar: ${sourceFile.name}` : 'Selecione um arquivo para habilitar o salvamento.'
                   : 'Preencha o título e o conteúdo do contrato.'}

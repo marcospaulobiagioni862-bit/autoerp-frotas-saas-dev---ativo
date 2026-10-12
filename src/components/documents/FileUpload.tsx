@@ -118,21 +118,21 @@ export function FileUpload({
   return (
     <div className="w-full space-y-3">
       {isVehicleDocument && (
-        <div className="rounded-lg border bg-slate-50 p-3 dark:bg-slate-900/40">
-          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+        <div className="rounded-lg border bg-graphite-50 p-3 dark:bg-graphite-900/40">
+          <label className="mb-1.5 block text-xs font-semibold text-graphite-700 dark:text-graphite-200">
             Tipo de documento do veículo
           </label>
           <select
             value={selectedVehicleDocumentType}
             onChange={(event) => setSelectedVehicleDocumentType(event.target.value)}
             disabled={isUploading}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"
+            className="w-full rounded-lg border border-graphite-300 bg-white px-3 py-2.5 text-sm dark:border-graphite-700 dark:bg-graphite-900"
           >
             {VEHICLE_DOCUMENT_TYPES.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
-          <p className="mt-1.5 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-[11px] text-graphite-500">
             Escolha CRLV, ATPV-e, IPVA, DPVAT/SPVAT, seguro ou outro tipo antes de anexar.
           </p>
         </div>
@@ -155,7 +155,7 @@ export function FileUpload({
           ou arraste o arquivo para esta área
         </p>
         {!isUploading && (
-          <span className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+          <span className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-graphite-300 bg-white px-4 py-2 text-sm font-semibold text-graphite-700 dark:border-graphite-600 dark:bg-graphite-900 dark:text-graphite-200">
             <FileText className="h-4 w-4" /> Selecionar arquivo
           </span>
         )}

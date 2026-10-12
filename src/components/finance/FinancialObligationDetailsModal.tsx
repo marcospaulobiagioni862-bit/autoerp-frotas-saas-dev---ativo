@@ -211,27 +211,27 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <h3 className="text-sm font-semibold text-graphite-900 dark:text-graphite-100">
                 {obligation.description}
               </h3>
-              <p className="text-[11px] text-slate-500">{type === 'RECEIVABLE' ? 'Cobrança' : 'Obrigação'} financeira</p>
+              <p className="text-[11px] text-graphite-500">{type === 'RECEIVABLE' ? 'Cobrança' : 'Obrigação'} financeira</p>
             </div>
             <Badge variant={obligation.status === 'PAID' ? 'success' : obligation.status === 'CANCELLED' ? 'neutral' : 'warning'}>
               {statusLabel(String(obligation.status))}{obligation.status === 'PARTIALLY_PAID' && obligation.balanceAmount > 0 && isDateOverdue(obligation.dueDate) ? ' • Vencido' : ''}
             </Badge>
           </div>
-          <dl className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/50 sm:grid-cols-4">
-            <div><dt className="text-slate-500">Vencimento</dt><dd className="font-semibold">{dateLabel(obligation.dueDate)}</dd></div>
-            <div><dt className="text-slate-500">Competência</dt><dd className="font-semibold">{dateLabel(obligation.competenceDate)}</dd></div>
-            <div><dt className="text-slate-500">Origem</dt><dd className="font-semibold">{originLabel(String(obligation.originType))}</dd></div>
-            <div><dt className="text-slate-500">Parcela</dt><dd className="font-semibold">{obligation.installmentNumber && obligation.totalInstallments ? `${obligation.installmentNumber}/${obligation.totalInstallments}` : 'Única'}</dd></div>
+          <dl className="grid grid-cols-2 gap-3 rounded-xl bg-graphite-50 p-3 text-xs dark:bg-graphite-800/50 sm:grid-cols-4">
+            <div><dt className="text-graphite-500">Vencimento</dt><dd className="font-semibold">{dateLabel(obligation.dueDate)}</dd></div>
+            <div><dt className="text-graphite-500">Competência</dt><dd className="font-semibold">{dateLabel(obligation.competenceDate)}</dd></div>
+            <div><dt className="text-graphite-500">Origem</dt><dd className="font-semibold">{originLabel(String(obligation.originType))}</dd></div>
+            <div><dt className="text-graphite-500">Parcela</dt><dd className="font-semibold">{obligation.installmentNumber && obligation.totalInstallments ? `${obligation.installmentNumber}/${obligation.totalInstallments}` : 'Única'}</dd></div>
           </dl>
           {linkedEntities.length > 0 && (
             <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
               {linkedEntities.map(([label, value]) => (
                 <div key={label} className="flex gap-2">
-                  <dt className="text-slate-500">{label}:</dt>
-                  <dd className="font-semibold text-slate-700 dark:text-slate-300">{value}</dd>
+                  <dt className="text-graphite-500">{label}:</dt>
+                  <dd className="font-semibold text-graphite-700 dark:text-graphite-300">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -239,11 +239,11 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
         </section>
 
         <section>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Composição financeira</h3>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-graphite-500">Composição financeira</h3>
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {amountRows.map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                <dt className="text-[11px] text-slate-500">{label}</dt>
+              <div key={label} className="rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
+                <dt className="text-[11px] text-graphite-500">{label}</dt>
                 <dd className="mt-1 font-mono text-sm font-semibold tabular-nums">{currency(value)}</dd>
               </div>
             ))}
@@ -251,7 +251,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
         </section>
 
         <section>
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Histórico de liquidações e estornos</h3>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-graphite-500">Histórico de liquidações e estornos</h3>
           {loadingTransactions ? (
             <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
           ) : transactionsError ? (
@@ -259,16 +259,16 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
               {transactionsError}
             </div>
           ) : transactions.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800/50">
+            <p className="rounded-lg bg-graphite-50 p-3 text-xs text-graphite-500 dark:bg-graphite-800/50">
               Nenhuma transação autorizada vinculada a este título.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="overflow-x-auto rounded-xl border border-graphite-200 dark:border-graphite-800">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 dark:bg-slate-800/60">
+                <thead className="bg-graphite-50 text-graphite-500 dark:bg-graphite-800/60">
                   <tr><th className="p-3">Data</th><th className="p-3">Tipo</th><th className="p-3">Descrição</th><th className="p-3 text-right">Valor</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800">
                   {transactions.map((transaction) => (
                     <tr key={transaction.id}>
                       <td className="p-3 font-mono">{dateLabel(transaction.transactionDate)}</td>
@@ -280,7 +280,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
                       </td>
                       <td className="p-3">
                         <div>{transaction.description}</div>
-                        {transaction.reversalTransactionId && <div className="text-[10px] text-slate-400">Estorno relacionado</div>}
+                        {transaction.reversalTransactionId && <div className="text-[10px] text-graphite-400">Estorno relacionado</div>}
                       </td>
                       <td className="p-3 text-right font-mono font-semibold tabular-nums">{currency(transaction.amount)}</td>
                     </tr>
@@ -297,7 +297,7 @@ export const FinancialObligationDetailsModal: React.FC<FinancialObligationDetail
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-800">
+        <div className="flex items-center justify-between border-t border-graphite-200 pt-3 dark:border-graphite-800">
           <div>
             {type === 'RECEIVABLE' && obligation && ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'].includes(obligation.status) && obligation.driverId && (
               <Button

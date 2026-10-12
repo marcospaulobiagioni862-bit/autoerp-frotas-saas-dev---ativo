@@ -12,17 +12,22 @@ const input = readFileSync(new URL('../Input.tsx', import.meta.url), 'utf8');
 const select = readFileSync(new URL('../Select.tsx', import.meta.url), 'utf8');
 const unsavedAuthority = readFileSync(new URL('../../../app/unsavedChangesAuthority.ts', import.meta.url), 'utf8');
 
-assert.match(modal, /overflow-hidden bg-slate-900\/60/, 'modal overlay must not create a second vertical scrollbar');
+assert.match(modal, /overflow-hidden bg-graphite-900\/60/, 'modal overlay must not create a second vertical scrollbar');
 assert.match(modal, /document\.querySelector\('main'\)/, 'modal must lock the app scroll root behind it');
 assert.match(modal, /'max-w-5xl': 'max-w-5xl'/, 'legacy max-width values must resolve instead of falling back to lg');
 assert.match(modal, /max-h-\[96vh\]/, 'modal should use nearly all available viewport height before scrolling');
 assert.match(modal, /relative w-full min-w-0/, 'modal shell must allow responsive shrinking');
-assert.match(modal, /min-w-0 p-4 overflow-y-auto overflow-x-hidden/, 'modal body must not create a page-level horizontal scrollbar');
-assert.match(input, /dark:text-slate-200/, 'shared input labels must remain legible in dark mode');
-assert.match(input, /dark:placeholder-slate-400/, 'shared input placeholders must remain legible in dark mode');
-assert.match(input, /helperText[\s\S]*dark:text-slate-300/, 'shared input helper text must remain legible in dark mode');
-assert.match(select, /dark:text-slate-200/, 'shared select labels must remain legible in dark mode');
-assert.match(select, /helperText[\s\S]*dark:text-slate-300/, 'shared select helper text must remain legible in dark mode');
+assert.match(modal, /min-w-0 flex-1 min-h-0 p-4 overflow-y-auto overflow-x-hidden/, 'modal body must not create a page-level horizontal scrollbar');
+// AUTOERP-84: flex-1 e min-h-0 sao o que faz o corpo ENCOLHER e rolar por dentro.
+// Sem eles o corpo cresce com o conteudo, estoura o painel limitado a 96vh, e o
+// rodape com o botao de acao fica fora da tela - era impossivel cadastrar veiculo
+// num notebook. A asercao abaixo existe para esse par nunca mais ser removido.
+assert.match(modal, /flex-1 min-h-0/, 'modal body must keep flex-1 and min-h-0 or the footer leaves the screen');
+assert.match(input, /dark:text-graphite-200/, 'shared input labels must remain legible in dark mode');
+assert.match(input, /dark:placeholder-graphite-400/, 'shared input placeholders must remain legible in dark mode');
+assert.match(input, /helperText[\s\S]*dark:text-graphite-300/, 'shared input helper text must remain legible in dark mode');
+assert.match(select, /dark:text-graphite-200/, 'shared select labels must remain legible in dark mode');
+assert.match(select, /helperText[\s\S]*dark:text-graphite-300/, 'shared select helper text must remain legible in dark mode');
 
 assert.match(modal, /data-unsaved-guard=\{guardId\}/, 'every standard modal must participate in the unsaved-changes authority');
 assert.match(modal, /onInputCapture=\{\(event\) => markDirty\(event\.target\)\}/, 'modal must detect user edits without per-form wiring');
@@ -63,7 +68,7 @@ assert.deepEqual(
 assert.match(contractForm, /size="5xl"/, 'contract form should use a wide desktop workspace');
 assert.match(contractForm, /title=\{contractToEdit \? 'Editar Contrato' : 'Novo Contrato'\}/, 'contract form must use ModalContainer title');
 assert.doesNotMatch(contractForm, /<h2 className="flex items-center gap-2 font-bold">/, 'contract form must not render a second modal header');
-assert.doesNotMatch(contractForm, /<button onClick=\{onClose\} className="text-slate-400">/, 'contract form must not render a second close button');
+assert.doesNotMatch(contractForm, /<button onClick=\{onClose\} className="text-graphite-400">/, 'contract form must not render a second close button');
 assert.doesNotMatch(contractForm, /max-h-\[80vh\][^"]*overflow-y-auto/, 'contract form must not create nested vertical scroll');
 
 assert.match(contractDetails, /size="6xl"/, 'contract details should use a near-full desktop workspace');

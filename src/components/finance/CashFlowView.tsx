@@ -79,38 +79,38 @@ export const CashFlowView: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
             <Banknote className="w-6 h-6 text-blue-600" />
             Fluxo de Caixa
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-xs text-graphite-500 mt-1">
             Caixa realizado e projeções de Contas a Receber e a Pagar com base nos lançamentos confirmados.
           </p>
         </div>
 
         <Card padding="sm">
           <div className="mb-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">Mês atual</button>
-            <button type="button" onClick={() => applyPreset(30)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">30 dias</button>
-            <button type="button" onClick={() => applyPreset(60)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">60 dias</button>
-            <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">90 dias</button>
+            <button type="button" onClick={() => applyPreset('MONTH')} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">Mês atual</button>
+            <button type="button" onClick={() => applyPreset(30)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">30 dias</button>
+            <button type="button" onClick={() => applyPreset(60)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">60 dias</button>
+            <button type="button" onClick={() => applyPreset(90)} className="rounded-lg border border-graphite-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-graphite-50 dark:border-graphite-700 dark:hover:bg-graphite-800">90 dias</button>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="font-semibold text-slate-500">Personalizado</span>
-            <CalendarRange className="w-4 h-4 text-slate-400" />
-            <label className="text-slate-500">De</label>
+            <span className="font-semibold text-graphite-500">Personalizado</span>
+            <CalendarRange className="w-4 h-4 text-graphite-400" />
+            <label className="text-graphite-500">De</label>
             <input
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <label className="text-slate-500">até</label>
+            <label className="text-graphite-500">até</label>
             <input
               type="date"
               value={endDate}
               onChange={(event) => setEndDate(event.target.value)}
-              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-2.5 py-1.5 rounded-lg border border-graphite-200 dark:border-graphite-700 bg-white dark:bg-graphite-900 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </Card>
@@ -129,8 +129,8 @@ export const CashFlowView: React.FC = () => {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <Card padding="md">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Saldo inicial</span>
-              <strong className="block mt-1 text-xl font-mono text-slate-900 dark:text-slate-100">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Saldo inicial</span>
+              <strong className="block mt-1 text-xl font-mono text-graphite-900 dark:text-graphite-100">
                 {formatCurrencyBRL(report.initialCashBalance)}
               </strong>
             </Card>
@@ -139,7 +139,7 @@ export const CashFlowView: React.FC = () => {
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600">Entradas realizadas</span>
                 <TrendingUp className="w-4 h-4 text-emerald-600" />
               </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-emerald-700 dark:text-emerald-400'}`}>
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {formatCurrencyBRL(report.totalRealizedIncomes)}
               </strong>
             </Card>
@@ -148,7 +148,7 @@ export const CashFlowView: React.FC = () => {
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-red-600">Saídas realizadas</span>
                 <TrendingDown className="w-4 h-4 text-red-600" />
               </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-700 dark:text-red-400'}`}>
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-red-700 dark:text-red-400'}`}>
                 {formatCurrencyBRL(report.totalRealizedExpenses)}
               </strong>
             </Card>
@@ -162,36 +162,36 @@ export const CashFlowView: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">A receber no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-emerald-700 dark:text-emerald-400'}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A receber no período</span>
+              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-emerald-700 dark:text-emerald-400'}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
             </Card>
             <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">A pagar no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-slate-700 dark:text-slate-300' : 'text-red-700 dark:text-red-400'}`}>{formatCurrencyBRL(projectedPayable)}</strong>
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A pagar no período</span>
+              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-red-700 dark:text-red-400'}`}>{formatCurrencyBRL(projectedPayable)}</strong>
             </Card>
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-600">Saldo projetado</span>
               <strong className="mt-1 block font-mono text-lg text-blue-700 dark:text-blue-300">{formatCurrencyBRL(projectedClosing)}</strong>
             </Card>
             <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Resultado projetado</span>
-              <strong className="mt-1 block font-mono text-lg text-slate-900 dark:text-slate-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Resultado projetado</span>
+              <strong className="mt-1 block font-mono text-lg text-graphite-900 dark:text-graphite-100">{formatCurrencyBRL(projectedReceivable - projectedPayable)}</strong>
             </Card>
           </div>
 
           <Card padding="md" className="overflow-hidden">
             <div className="flex items-center justify-between mb-4 gap-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Movimento diário e projeção</h3>
-                <p className="text-xs text-slate-500">Transferências internas não inflam entradas/saídas consolidadas.</p>
+                <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Movimento diário e projeção</h3>
+                <p className="text-xs text-graphite-500">Transferências internas não inflam entradas/saídas consolidadas.</p>
               </div>
-              <span className="text-xs font-mono text-slate-500 shrink-0">{formatDateBR(report.periodStart)} a {formatDateBR(report.periodEnd)}</span>
+              <span className="text-xs font-mono text-graphite-500 shrink-0">{formatDateBR(report.periodStart)} a {formatDateBR(report.periodEnd)}</span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full min-w-[960px] text-xs">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                  <tr className="border-b border-graphite-200 dark:border-graphite-800 text-graphite-500">
                     <th className="text-left py-2 pr-3">Data</th>
                     <th className="text-right py-2 px-3">Abertura</th>
                     <th className="text-right py-2 px-3">Entradas</th>
@@ -205,19 +205,19 @@ export const CashFlowView: React.FC = () => {
                 <tbody>
                   {report.dailyFlows.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500">Sem movimentos ou títulos previstos no período.</td>
+                      <td colSpan={8} className="py-8 text-center text-graphite-500">Sem movimentos ou títulos previstos no período.</td>
                     </tr>
                   ) : report.dailyFlows.map((daily) => {
                     const overdueProjection = daily.date < new Date().toISOString().slice(0, 10) && (daily.predictedIncomes > 0 || daily.predictedExpenses > 0);
                     return (
-                    <tr key={daily.date} className="border-b border-slate-100 dark:border-slate-800/70 last:border-0">
-                      <td className="py-2.5 pr-3 font-mono text-slate-700 dark:text-slate-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-rose-600">Vencidos</span>}</td>
+                    <tr key={daily.date} className="border-b border-graphite-100 dark:border-graphite-800/70 last:border-0">
+                      <td className="py-2.5 pr-3 font-mono text-graphite-700 dark:text-graphite-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-rose-600">Vencidos</span>}</td>
                       <td className="py-2.5 px-3 text-right font-mono">{formatCurrencyBRL(daily.openingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-slate-500' : 'text-emerald-600'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-slate-500' : 'text-red-600'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-graphite-500' : 'text-emerald-600'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-graphite-500' : 'text-red-600'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatCurrencyBRL(daily.closingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-slate-500' : 'text-emerald-600/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-slate-500' : 'text-red-600/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-graphite-500' : 'text-emerald-600/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-graphite-500' : 'text-red-600/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
                       <td className="py-2.5 pl-3 text-right font-mono font-bold text-blue-700 dark:text-blue-300">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
                     </tr>
                     );

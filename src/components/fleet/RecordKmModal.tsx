@@ -79,7 +79,7 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
           value={newKm}
           onChange={(e) => setNewKm(Number(e.target.value))}
           helperText={`Igual a ${vehicle.currentKm.toLocaleString('pt-BR')} KM registra conferência; menor é bloqueado.`}
-          icon={<Gauge className="w-4 h-4 text-slate-400" />}
+          icon={<Gauge className="w-4 h-4 text-graphite-400" />}
         />
 
         <Select
@@ -95,7 +95,7 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
         />
 
         <div>
-          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+          <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
             Observações / Ponto de Atenção
           </label>
           <textarea
@@ -103,11 +103,11 @@ export const RecordKmModal: React.FC<RecordKmModalProps> = ({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Ex: Leitura realizada no pátio central..."
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-xs rounded-lg bg-white dark:bg-graphite-900 border border-graphite-300 dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
           <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>
             Cancelar
           </Button>
