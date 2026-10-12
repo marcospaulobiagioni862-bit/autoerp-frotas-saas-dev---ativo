@@ -71,7 +71,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  <div className="absolute bottom-10 right-10 w-72 h-72 bg-action-primary/10 rounded-full blur-2xl pointer-events-none" />
 
  <section
- className="w-full max-w-md rounded-md border border-structure-border bg-surface-raised p-8 sm:p-10 shadow-modal relative z-10 transition-all duration-200"
+ className="w-full max-w-md rounded-2xl border border-structure-border bg-surface-raised p-8 sm:p-10 shadow-modal relative z-10 transition-all duration-200"
  aria-labelledby="login-title"
  >
  {/* Logo / Header */}
@@ -117,7 +117,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  {error && (
  <div
  role="alert"
- className="mb-5 flex items-start gap-2.5 p-3.5 rounded-md border border-error-border bg-action-destructive/10 text-error-text text-sm animate-fadeIn"
+ className="mb-5 flex items-start gap-2.5 p-3.5 rounded-xl border border-error-border bg-action-destructive/10 text-error-text text-sm animate-fadeIn"
  >
  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-error-text" />
  <span className="leading-snug">{error}</span>
@@ -147,7 +147,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  placeholder="seu.email@empresa.com.br"
  required
  disabled={isSubmitting}
- className="w-full rounded-md border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
+ className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-3.5 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
  />
  </div>
  </div>
@@ -170,7 +170,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  placeholder="••••••••••••"
  required
  disabled={isSubmitting}
- className="w-full rounded-md border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-10 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
+ className="w-full rounded-xl border border-graphite-700/80 bg-graphite-950/70 pl-10 pr-10 py-2.5 text-white placeholder-graphite-500 outline-none transition-all focus:border-border focus:ring-2 focus-visible:outline-focus-ring disabled:bg-graphite-950/30 disabled:opacity-50 text-sm"
  />
  <button
  type="button"
@@ -187,7 +187,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  <button
  type="submit"
  disabled={isSubmitting}
- className="w-full mt-2 rounded-md bg-action-primary hover:bg-action-primary-hover active:bg-action-primary text-on-action-primary font-semibold py-2.5 px-4 shadow-lg shadow-modal transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
+ className="w-full mt-2 rounded-xl bg-action-primary hover:bg-action-primary-hover active:bg-action-primary text-on-action-primary font-semibold py-2.5 px-4 shadow-lg shadow-modal transition-all duration-150 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60 text-sm group"
  >
  {isSubmitting ? (
  <>
@@ -211,7 +211,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
  type="button"
  onClick={() => handleSelectCompany(company)}
  disabled={isSubmitting}
- className="w-full p-3.5 rounded-md border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-border text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus-visible:outline-focus-ring disabled:opacity-50"
+ className="w-full p-3.5 rounded-xl border border-graphite-800 bg-graphite-950/50 hover:bg-graphite-800/80 hover:border-border text-left transition-all duration-150 flex items-center justify-between group focus:outline-none focus:ring-2 focus-visible:outline-focus-ring disabled:opacity-50"
  >
  <div className="flex items-center gap-3 min-w-0">
  <div className="p-2 rounded-lg bg-action-primary/10 text-accent-text border border-border group-hover:bg-action-primary/20 transition-colors shrink-0">
