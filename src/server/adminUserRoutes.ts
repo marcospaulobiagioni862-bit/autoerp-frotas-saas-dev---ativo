@@ -139,4 +139,23 @@ export function registerAdminUserRoutes(app: Express): void {
       sendError(res, error);
     }
   });
+
+  app.patch('/api/admin/users/:id', async (req, res) => {
+    const p = requirePrincipal(req, res);
+    if (!p) return;
+    try {
+      const { name, email, phone, role, password } = req.body || {};
+      res.json({
+        item: await AdminUserAuthority.updateUser(actorFrom(p), req.params.id, {
+          name: typeof name === 'string' ? name : undefined,
+          email: typeof email === 'string' ? email : undefined,
+          phone: typeof phone === 'string' ? phone : undefined,
+          role: typeof role === 'string' ? role : undefined,
+          password: typeof password === 'string' ? password : undefined,
+        }),
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 }

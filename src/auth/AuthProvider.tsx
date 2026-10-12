@@ -116,12 +116,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return <LoginView onLogin={login} />;
   }
 
+  const updateUserProfile = (patch: { name?: string; phone?: string | null; avatarUrl?: string | null }) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         authMode: embeddedDevelopmentUser ? 'development-mock' : 'server-session',
         logout,
+        updateUserProfile,
       }}
     >
       {children}

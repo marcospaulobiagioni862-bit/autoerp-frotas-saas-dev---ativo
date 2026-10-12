@@ -6,6 +6,7 @@ import { FinancialAuthorizationService } from '../domain/finance/FinancialAuthor
 import { registerAdminUserRoutes } from './adminUserRoutes';
 import { registerTenantProfileRoutes } from './tenantProfileRoutes';
 import { registerTollPassageRoutes } from './tollPassageRoutes';
+import { registerUserProfileRoutes } from './userProfileRoutes';
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -41,6 +42,7 @@ export function registerFinanceCashFlowRoutes(app: Express): void {
   registerAdminUserRoutes(app);
   registerTenantProfileRoutes(app);
   registerTollPassageRoutes(app);
+  registerUserProfileRoutes(app);
 
   app.get('/api/finance/reports/cash-flow', async (req: Request, res: Response) => {
     const actor = principal(req);

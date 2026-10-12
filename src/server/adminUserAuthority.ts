@@ -26,9 +26,24 @@ export interface AdminUserRecord {
   updatedAt: string;
 }
 
-export class AdminUserForbiddenError extends Error {}
-export class AdminUserNotFoundError extends Error {}
-export class AdminUserConflictError extends Error {}
+export class AdminUserForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AdminUserForbiddenError';
+  }
+}
+export class AdminUserNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AdminUserNotFoundError';
+  }
+}
+export class AdminUserConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AdminUserConflictError';
+  }
+}
 
 function assertCanManageUsers(actor: AdminUserActor): void {
   const role = String(actor.role || '').toUpperCase();
@@ -94,6 +109,17 @@ async function hasCredentialsTable(tx: any): Promise<boolean> {
   try {
     const res: any = await tx.execute(sql`SELECT to_regclass('user_credentials') AS reg`);
     return Boolean(res.rows?.[0]?.reg || res[0]?.reg);
+  } catch {
+    return false;
+  }
+}
+
+async function hasColumn(tx: any, table: string, col: string): Promise<boolean> {
+  try {
+    const res: any = await tx.execute(
+      sql`SELECT 1 FROM information_schema.columns WHERE table_name = ${table} AND column_name = ${col}`
+    );
+    return Boolean(res.rows?.length || res?.length);
   } catch {
     return false;
   }
@@ -562,6 +588,177 @@ export class AdminUserAuthority {
         ...userRecord,
         role: roleClean,
         permissions: assignedPermissions,
+      });
+    });
+  }
+
+  static async updateUser(
+    actor: AdminUserActor,
+    targetUserId: string,
+    input: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      role?: string;
+      password?: string;
+    }
+  ): Promise<AdminUserRecord> {
+    assertCanManageUsers(actor);
+
+    return await UnitOfWork.run(actor.companyId, async (txContext: any) => {
+      const tx = txContext.getRawTransaction();
+      const now = new Date().toISOString();
+
+      // 1. Buscar usuario
+      const [existing] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, targetUserId))
+        .limit(1);
+
+      if (!existing) {
+        throw new AdminUserNotFoundError('Usuário não encontrado');
+      }
+
+      // 2. Guarda multi-tenant: o usuario precisa pertencer a mesma empresa do ator
+      const hasMemberships = await hasMembershipsTable(tx);
+      let membershipRole: string | null = null;
+      if (hasMemberships) {
+        const mems = await tx
+          .select()
+          .from(userCompanyMemberships)
+          .where(
+            and(
+              eq(userCompanyMemberships.userId, targetUserId),
+              eq(userCompanyMemberships.companyId, actor.companyId)
+            )
+          )
+          .limit(1);
+        if (mems.length > 0) {
+          membershipRole = mems[0].role;
+        }
+      }
+
+      if (existing.companyId !== actor.companyId && !membershipRole) {
+        throw new AdminUserForbiddenError('Acesso negado: não é permitido gerenciar usuários de outra empresa');
+      }
+
+      // 3. Guarda de privilegio caso haja alteracao de papel
+      let newRole: string | undefined;
+      let newPermissions: string[] | undefined;
+      if (typeof input.role === 'string' && input.role.trim() !== '') {
+        newRole = input.role.trim().toUpperCase();
+        const currentRole = (membershipRole || existing.role || '').toUpperCase();
+        if (newRole !== currentRole) {
+          if (newRole === 'ADMIN' || currentRole === 'ADMIN') {
+            assertCanGrantPrivilege(actor);
+          }
+          newPermissions = getDefaultPermissionsForRole(newRole);
+          if (newRole === 'ADMIN' && !newPermissions.includes('*')) {
+            newPermissions.push('*');
+          }
+        }
+      }
+
+      // 4. Se senha informada, validacao e hash
+      let passwordHash: string | null = null;
+      if (typeof input.password === 'string' && input.password.trim() !== '') {
+        const cleanPassword = input.password.trim();
+        if (cleanPassword.length < 12) {
+          throw new AdminUserConflictError('A senha deve conter no mínimo 12 caracteres');
+        }
+        passwordHash = await hashPassword(cleanPassword);
+      }
+
+      // 5. Update na tabela users
+      const userUpdates: Record<string, any> = {
+        updatedAt: now,
+      };
+      if (typeof input.name === 'string' && input.name.trim() !== '') {
+        userUpdates.name = input.name.trim();
+      }
+      if (typeof input.email === 'string' && input.email.trim() !== '') {
+        userUpdates.email = input.email.trim().toLowerCase();
+      }
+      if (newRole) {
+        userUpdates.role = newRole;
+      }
+      if (newPermissions) {
+        userUpdates.permissions = newPermissions;
+      }
+      if (typeof input.phone === 'string') {
+        const hasPhoneCol = await hasColumn(tx, 'users', 'phone');
+        if (hasPhoneCol) {
+          userUpdates.phone = input.phone.trim();
+        }
+      }
+
+      await tx.update(users).set(userUpdates).where(eq(users.id, targetUserId));
+
+      // 6. Update em userCompanyMemberships se existir
+      if (hasMemberships && newRole) {
+        await tx
+          .insert(userCompanyMemberships)
+          .values({
+            userId: targetUserId,
+            companyId: actor.companyId,
+            role: newRole,
+            permissions: newPermissions,
+            active: existing.active,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [userCompanyMemberships.userId, userCompanyMemberships.companyId],
+            set: {
+              role: newRole,
+              permissions: newPermissions,
+              updatedAt: now,
+            },
+          });
+      }
+
+      // 7. Atualizar credencial se senha informada
+      if (passwordHash) {
+        const hasCreds = await hasCredentialsTable(tx);
+        if (hasCreds) {
+          await tx
+            .insert(userCredentials)
+            .values({
+              userId: targetUserId,
+              companyId: actor.companyId,
+              passwordHash,
+              passwordUpdatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: userCredentials.userId,
+              set: {
+                passwordHash,
+                passwordUpdatedAt: now,
+              },
+            });
+        }
+      }
+
+      // 8. Log de auditoria
+      await txContext.getAuditLogRepo().create({
+        id: randomUUID(),
+        companyId: actor.companyId,
+        entityName: 'User',
+        entityId: targetUserId,
+        action: AuditAction.UPDATE,
+        previousState: JSON.stringify({ name: existing.name, email: existing.email, role: existing.role }),
+        newState: JSON.stringify({ name: userUpdates.name || existing.name, email: userUpdates.email || existing.email, role: newRole || existing.role }),
+        userId: actor.userId,
+        userName: actor.name,
+        timestamp: now,
+      });
+
+      return sanitizeUser({
+        ...existing,
+        ...userUpdates,
+        role: newRole || membershipRole || existing.role,
+        permissions: newPermissions || existing.permissions,
       });
     });
   }
