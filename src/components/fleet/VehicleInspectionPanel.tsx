@@ -252,10 +252,10 @@ export function VehicleInspectionPanel({
             </select>
           </label>)}
         </div>
-        {resultPreview==='BLOCKED_FOR_RENTAL'&&<p className="rounded-lg border border-rose-300 bg-rose-50 p-2 text-xs font-semibold text-rose-700">Falha crítica: ao salvar, o veículo será bloqueado para locação. O desbloqueio nunca é automático.</p>}
+        {resultPreview==='BLOCKED_FOR_RENTAL'&&<p className="rounded-lg border border-error-border bg-error-bg p-2 text-xs font-semibold text-error-text">Falha crítica: ao salvar, o veículo será bloqueado para locação. O desbloqueio nunca é automático.</p>}
       </div>
       <div><label className="text-xs font-semibold text-graphite-700 dark:text-graphite-200">Observações</label><textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-3 text-sm dark:border-graphite-700 dark:bg-graphite-900"/></div>
-      {error&&<p className="rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}
+      {error&&<p className="rounded-lg bg-error-bg p-2 text-xs text-error-text">{error}</p>}
       <Button onClick={()=>void create()} disabled={loading} className="gap-2"><Plus className="w-4 h-4"/>{loading?'Salvando...':'Salvar vistoria'}</Button>
     </div>
 

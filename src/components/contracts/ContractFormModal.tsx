@@ -260,7 +260,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
     >
       {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
       <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
-        {error && <div className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"><AlertCircle className="w-4 h-4" />{error}</div>}
+        {error && <div className="flex gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text"><AlertCircle className="w-4 h-4" />{error}</div>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
           <Field label="Modelo de contrato (opcional)"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Sem modelo</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
@@ -270,14 +270,14 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
               <option value="">{loadingOptions ? 'Carregando veículos...' : noVehiclesForNewContract ? 'Nenhum veículo disponível para novo contrato' : 'Selecione'}</option>
               {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}
             </select>
-            {noVehiclesForNewContract && <span role="status" className="block text-[11px] font-normal text-amber-700 dark:text-amber-300">Nenhum veículo disponível para novo contrato.</span>}
+            {noVehiclesForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Nenhum veículo disponível para novo contrato.</span>}
           </Field>
           <Field label="Motorista *" error={fieldErrors.driverId}>
             <select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions || noDriversForNewContract} className={`control ${fieldErrors.driverId?'border-red-500':''}`}>
               <option value="">{loadingOptions ? 'Carregando motoristas...' : noDriversForNewContract ? 'Nenhum motorista disponível para novo contrato' : 'Selecione'}</option>
               {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}
             </select>
-            {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-amber-700 dark:text-amber-300">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
+            {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
           </Field>
           <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
           <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
@@ -315,8 +315,8 @@ const Field: React.FC<{ label: string; children: React.ReactNode; error?:string 
   const required = label.endsWith(' *');
   const displayLabel = required ? label.slice(0, -2) : label;
   return <label className="block space-y-1.5 text-xs font-semibold text-graphite-700 dark:text-graphite-200">
-    <span>{displayLabel}{required && <span className="ml-1 text-red-500" aria-hidden="true">*</span>}</span>
+    <span>{displayLabel}{required && <span className="ml-1 text-error-icon" aria-hidden="true">*</span>}</span>
     {children}
-    {error&&<span className="block text-[11px] font-normal text-red-600 dark:text-red-400">{error}</span>}
+    {error&&<span className="block text-[11px] font-normal text-error-icon ">{error}</span>}
   </label>;
 };

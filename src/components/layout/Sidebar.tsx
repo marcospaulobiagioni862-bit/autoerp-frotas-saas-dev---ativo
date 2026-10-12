@@ -98,8 +98,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const displayName = companyName || branding?.companyName || 'AutoERP';
   const totalFinancePending = (pendingReceivablesCount || 0) + (pendingPayablesCount || 0);
   const financeBadgeColor = pendingPayablesCount > 0
-    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
-    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300';
+    ? 'bg-warning-bg text-warning-text  '
+    : 'bg-success-bg text-success-text  ';
 
   const categories = [
     {

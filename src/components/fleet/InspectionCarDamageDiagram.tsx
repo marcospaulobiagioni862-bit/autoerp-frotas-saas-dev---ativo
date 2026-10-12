@@ -74,7 +74,7 @@ export function InspectionCarDamageDiagram({
       <div className="flex items-center justify-between">
         <div>
           <h5 className="text-xs font-bold text-graphite-800 dark:text-graphite-100 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-warning-icon" />
             Mapeamento de Avarias na Carroceria
           </h5>
           <p className="text-[11px] text-graphite-500">
@@ -115,7 +115,7 @@ export function InspectionCarDamageDiagram({
           <path
             d="M 55 105 L 145 105 L 138 145 L 62 145 Z"
             fill="currentColor"
-            className="text-blue-200/50 dark:text-blue-900/40"
+            className="text-blue-200/50 dark:text-info-text/40"
             stroke="currentColor"
             strokeWidth="2"
           />
@@ -137,7 +137,7 @@ export function InspectionCarDamageDiagram({
           <path
             d="M 62 265 L 138 265 L 145 295 L 55 295 Z"
             fill="currentColor"
-            className="text-blue-200/50 dark:text-blue-900/40"
+            className="text-blue-200/50 dark:text-info-text/40"
             stroke="currentColor"
             strokeWidth="2"
           />
@@ -223,9 +223,9 @@ export function InspectionCarDamageDiagram({
 
       {/* Modal/Box de inclusão de dano ao tocar no carro */}
       {selectedPoint && !readOnly && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-3.5 space-y-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+        <div className="rounded-xl border border-warning-border bg-warning-bg p-3.5 space-y-3  ">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+            <span className="text-xs font-bold text-warning-text ">
               Registrar avaria no ponto marcado
             </span>
             <button
@@ -313,8 +313,8 @@ export function InspectionCarDamageDiagram({
                 key={dmg.id}
                 className={`flex items-center justify-between rounded-lg border p-2 text-xs ${
                   dmg.isPreExisting
-                    ? 'border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20'
-                    : 'border-rose-200 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20'
+                    ? 'border-info-border bg-info-bg  '
+                    : 'border-error-border bg-error-bg  '
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -348,7 +348,7 @@ export function InspectionCarDamageDiagram({
                     <button
                       type="button"
                       onClick={() => onRemoveDamage(dmg.id)}
-                      className="text-graphite-400 hover:text-rose-600"
+                      className="text-graphite-400 hover:text-error-icon"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

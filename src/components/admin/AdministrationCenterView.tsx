@@ -226,7 +226,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
               v{summary.systemVersion}
             </span>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-success-bg text-success-text  ">
               {summary.baseline}
             </span>
           </div>
@@ -269,7 +269,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             <Card className="p-5 border-l-4 border-l-indigo-600">
               <p className="text-xs font-medium uppercase text-graphite-500">System Health Score</p>
               <h3 className="text-3xl font-black text-graphite-900 dark:text-graphite-100 mt-1">{summary.health.overallScore}/100</h3>
-              <p className="text-xs text-emerald-600 font-semibold mt-2">{summary.health.statusClassification}</p>
+              <p className="text-xs text-success-icon font-semibold mt-2">{summary.health.statusClassification}</p>
             </Card>
 
             <Card className="p-5 border-l-4 border-l-emerald-600">
@@ -298,9 +298,9 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             ) : (
               <div className="space-y-3">
                 {summary.alerts.map((alt: any) => (
-                  <div key={alt.id} className="p-4 rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900/40 flex items-center justify-between">
+                  <div key={alt.id} className="p-4 rounded-lg border border-warning-border bg-warning-bg   flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-200 text-amber-900">{alt.severity}</span>
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-200 text-warning-text">{alt.severity}</span>
                       <span className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">[{alt.category}]</span>
                       <p className="text-sm text-graphite-800 dark:text-graphite-200">{alt.message}</p>
                     </div>
@@ -383,7 +383,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
                     <td className="p-3 text-xs">{u.email}</td>
                     <td className="p-3 font-mono text-xs">{u.role}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${u.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${u.status === 'ACTIVE' ? 'bg-success-bg text-success-text' : 'bg-error-bg text-error-text'}`}>
                         {u.status}
                       </span>
                     </td>
@@ -426,7 +426,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
                     <td className="p-3 font-mono font-bold text-graphite-900 dark:text-graphite-100">{rule.role}</td>
                     <td className="p-3 font-semibold">{rule.action}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${rule.allowed ? 'bg-emerald-100 text-emerald-800' : 'bg-graphite-100 text-graphite-600'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${rule.allowed ? 'bg-success-bg text-success-text' : 'bg-graphite-100 text-graphite-600'}`}>
                         {rule.allowed ? 'PERMITIDO' : 'BLOQUEADO'}
                       </span>
                     </td>
@@ -462,7 +462,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
                     <td className="p-3 font-mono text-xs">{s.ipAddress}</td>
                     <td className="p-3 text-xs">{new Date(s.lastActiveTime).toLocaleTimeString()}</td>
                     <td className="p-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">ATIVO</span>
+                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-success-bg text-success-text">ATIVO</span>
                     </td>
                   </tr>
                 ))}
@@ -491,7 +491,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
             </div>
             <div className="flex justify-between py-2 border-b">
               <span className="font-medium text-graphite-600">Autenticação MFA Obrigatória:</span>
-              <span className="font-bold text-emerald-600">{tenantConfig.securityPolicy.enforceMfa ? 'SIM' : 'NÃO'}</span>
+              <span className="font-bold text-success-icon">{tenantConfig.securityPolicy.enforceMfa ? 'SIM' : 'NÃO'}</span>
             </div>
           </div>
         </Card>
@@ -542,8 +542,8 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
       {activeTab === 'integrity' && (
         <Card className="p-6 space-y-4">
           <h3 className="text-lg font-semibold text-graphite-900 dark:text-graphite-100">Monitoramento de Integridade Relacional</h3>
-          <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 text-emerald-800 dark:text-emerald-300 text-sm flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          <div className="p-4 rounded-lg bg-success-bg  border border-success-border text-success-text  text-sm flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-success-icon" />
             <span>Nenhum registro órfão ou duplicado encontrado no banco de dados local.</span>
           </div>
         </Card>

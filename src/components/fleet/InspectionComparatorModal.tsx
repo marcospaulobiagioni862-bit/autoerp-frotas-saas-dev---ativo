@@ -85,7 +85,7 @@ export function InspectionComparatorModal({
             <button
               type="button"
               onClick={shareViaWhatsApp}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+              className="flex items-center gap-1.5 rounded-lg border border-success-border bg-success-bg px-2.5 py-1.5 text-xs font-semibold text-success-text hover:bg-success-bg   "
             >
               <Share2 className="w-3.5 h-3.5" /> Compartilhar no WhatsApp
             </button>
@@ -103,7 +103,7 @@ export function InspectionComparatorModal({
         <div className="grid grid-cols-2 gap-2 border-b border-graphite-100 bg-graphite-50/70 p-3 sm:grid-cols-4 dark:border-graphite-800 dark:bg-graphite-950/40 text-xs">
           <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
             <div className="flex items-center justify-between text-graphite-500">
-              <span className="flex items-center gap-1"><Gauge className="w-3.5 h-3.5 text-blue-500" /> Odômetro</span>
+              <span className="flex items-center gap-1"><Gauge className="w-3.5 h-3.5 text-info-icon" /> Odômetro</span>
               <span className="font-mono text-[11px] font-bold text-graphite-700 dark:text-graphite-300">+{deltaKm} km</span>
             </div>
             <div className="mt-1 flex justify-between font-mono text-[11px]">
@@ -111,7 +111,7 @@ export function InspectionComparatorModal({
               <span>Entrada: {entryInspection?.odometer || 0}</span>
             </div>
             {excessKm > 0 && (
-              <p className="mt-1 font-semibold text-rose-600 dark:text-rose-400 text-[10px]">
+              <p className="mt-1 font-semibold text-error-icon  text-[10px]">
                 Excedente: {excessKm} km (R$ {excessKmCost.toFixed(2)})
               </p>
             )}
@@ -119,8 +119,8 @@ export function InspectionComparatorModal({
 
           <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
             <div className="flex items-center justify-between text-graphite-500">
-              <span className="flex items-center gap-1"><Fuel className="w-3.5 h-3.5 text-amber-500" /> Tanque</span>
-              <span className={`font-mono text-[11px] font-bold ${deltaFuel > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+              <span className="flex items-center gap-1"><Fuel className="w-3.5 h-3.5 text-warning-icon" /> Tanque</span>
+              <span className={`font-mono text-[11px] font-bold ${deltaFuel > 0 ? 'text-error-icon' : 'text-success-icon'}`}>
                 {deltaFuel > 0 ? `-${deltaFuel}%` : 'OK'}
               </span>
             </div>
@@ -129,7 +129,7 @@ export function InspectionComparatorModal({
               <span>Entrada: {entryInspection?.fuelLevel || 0}%</span>
             </div>
             {fuelCost > 0 && (
-              <p className="mt-1 font-semibold text-rose-600 dark:text-rose-400 text-[10px]">
+              <p className="mt-1 font-semibold text-error-icon  text-[10px]">
                 A cobrar: R$ {fuelCost.toFixed(2)}
               </p>
             )}
@@ -137,8 +137,8 @@ export function InspectionComparatorModal({
 
           <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
             <div className="flex items-center justify-between text-graphite-500">
-              <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> Avarias</span>
-              <span className="font-mono text-[11px] font-bold text-rose-600">
+              <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-error-icon" /> Avarias</span>
+              <span className="font-mono text-[11px] font-bold text-error-icon">
                 +{newDamages.length} novas
               </span>
             </div>
@@ -149,8 +149,8 @@ export function InspectionComparatorModal({
 
           <div className="rounded-xl border border-graphite-200/80 bg-white p-2.5 dark:border-graphite-800 dark:bg-graphite-900">
             <div className="flex items-center justify-between text-graphite-500">
-              <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Caução</span>
-              <span className="font-mono text-[11px] font-bold text-emerald-600">
+              <span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5 text-success-icon" /> Caução</span>
+              <span className="font-mono text-[11px] font-bold text-success-icon">
                 R$ {(settlement?.securityDepositAvailable || 0).toFixed(2)}
               </span>
             </div>
@@ -224,7 +224,7 @@ export function InspectionComparatorModal({
                 {/* Foto da Entrega (Saída) */}
                 <div className="rounded-xl border border-graphite-200 p-3 space-y-2 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-900/40">
                   <div className="flex items-center justify-between">
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                    <span className="rounded bg-info-bg px-2 py-0.5 text-[10px] font-bold text-info-text  ">
                       ENTREGA (Saída do pátio)
                     </span>
                     <span className="text-[11px] text-graphite-500">
@@ -247,7 +247,7 @@ export function InspectionComparatorModal({
                 {/* Foto da Devolução (Entrada) */}
                 <div className="rounded-xl border border-graphite-200 p-3 space-y-2 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-900/40">
                   <div className="flex items-center justify-between">
-                    <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    <span className="rounded bg-success-bg px-2 py-0.5 text-[10px] font-bold text-success-text  ">
                       DEVOLUÇÃO (Entrada no pátio)
                     </span>
                     <span className="text-[11px] text-graphite-500">
@@ -307,9 +307,9 @@ export function InspectionComparatorModal({
                   )}
                   <div className="flex justify-between py-2.5 font-bold text-sm text-graphite-900 dark:text-white border-t-2 border-graphite-200 dark:border-graphite-700">
                     <span>Total de Desvios Apurados</span>
-                    <span className="font-mono text-rose-600">R$ {totalDeviations.toFixed(2)}</span>
+                    <span className="font-mono text-error-icon">R$ {totalDeviations.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between py-2 text-emerald-700 dark:text-emerald-400 font-semibold">
+                  <div className="flex justify-between py-2 text-success-text  font-semibold">
                     <span>( - ) Depósito Caução Retido</span>
                     <span className="font-mono">(R$ {(settlement?.securityDepositAvailable || 0).toFixed(2)})</span>
                   </div>

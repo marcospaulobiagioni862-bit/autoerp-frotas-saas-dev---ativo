@@ -16,7 +16,7 @@ export const ResilienceCenterView: React.FC = () => (
     />
     <Card padding="md" className="space-y-4">
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+        <div className="p-2 rounded-lg bg-warning-bg text-warning-text  ">
           <AlertTriangle className="w-5 h-5" />
         </div>
         <div>
@@ -28,10 +28,10 @@ export const ResilienceCenterView: React.FC = () => (
       </div>
       <div className="grid sm:grid-cols-2 gap-3 text-xs">
         <div className="flex items-center gap-2 rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" /> Fail-closed no browser
+          <ShieldCheck className="w-4 h-4 text-success-icon" /> Fail-closed no browser
         </div>
         <div className="flex items-center gap-2 rounded-lg border border-graphite-200 dark:border-graphite-800 p-3">
-          <Database className="w-4 h-4 text-blue-600" /> Próxima etapa: validar a segurança dos dados
+          <Database className="w-4 h-4 text-info-icon" /> Próxima etapa: validar a segurança dos dados
         </div>
       </div>
     </Card>

@@ -100,35 +100,35 @@ export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumen
 
   const cardBorderClass = isExpired
     ? (cnhEval?.inGracePeriod
-      ? 'border-amber-300 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
-      : 'border-rose-300 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20')
+      ? 'border-warning-border bg-warning-bg  '
+      : 'border-error-border bg-error-bg  ')
     : isExpiring
-    ? 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20'
-    : 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/20';
+    ? 'border-warning-border bg-warning-bg  '
+    : 'border-success-border bg-success-bg  ';
 
   const iconColorClass = isExpired
-    ? (cnhEval?.inGracePeriod ? 'text-amber-600' : 'text-rose-600')
+    ? (cnhEval?.inGracePeriod ? 'text-warning-icon' : 'text-error-icon')
     : isExpiring
-    ? 'text-amber-600'
-    : 'text-emerald-600';
+    ? 'text-warning-icon'
+    : 'text-success-icon';
 
   const statusBadge = cnhEval ? (
     isExpired ? (
       cnhEval.inGracePeriod ? (
-        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+        <span className="inline-flex items-center gap-1 rounded bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-text  ">
           <Clock className="h-3 w-3" /> Vencida ({cnhEval.graceDaysRemaining}d de tolerância CTB)
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-800 dark:bg-rose-900/50 dark:text-rose-200">
+        <span className="inline-flex items-center gap-1 rounded bg-error-bg px-1.5 py-0.5 text-[10px] font-medium text-error-text  ">
           <AlertTriangle className="h-3 w-3" /> Vencida há {Math.abs(cnhEval.daysToExpiration)}d
         </span>
       )
     ) : isExpiring ? (
-      <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+      <span className="inline-flex items-center gap-1 rounded bg-warning-bg px-1.5 py-0.5 text-[10px] font-medium text-warning-text  ">
         <Clock className="h-3 w-3" /> Vence em {cnhEval.daysToExpiration}d
       </span>
     ) : (
-      <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+      <span className="inline-flex items-center gap-1 rounded bg-success-bg px-1.5 py-0.5 text-[10px] font-medium text-success-text  ">
         <CheckCircle2 className="h-3 w-3" /> Válida ({cnhEval.daysToExpiration}d restantes)
       </span>
     )
@@ -140,13 +140,13 @@ export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumen
 
   if (!attachment) {
     return (
-      <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+      <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
         <div className="flex items-center gap-2">
           <strong>CNH — arquivo vigente pendente</strong>
           {statusBadge}
         </div>
         <div className="mt-1">Validade cadastrada: {dateLabel(driver?.cnhExpiration)} • EAR: {earLabel}</div>
-        {error && <div className="mt-1 text-rose-600">{error}</div>}
+        {error && <div className="mt-1 text-error-icon">{error}</div>}
       </div>
     );
   }
@@ -174,7 +174,7 @@ export function DriverCnhDocumentCard({ driverId, refreshKey }: DriverCnhDocumen
             <Download className="mr-1 h-4 w-4" />Baixar
           </Button>
         </div>
-        {error && <div className="text-xs text-rose-600 sm:basis-full">{error}</div>}
+        {error && <div className="text-xs text-error-icon sm:basis-full">{error}</div>}
       </div>
       {previewUrl && attachment && (
         <DocumentPreviewModal

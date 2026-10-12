@@ -161,10 +161,10 @@ export const FleetManagement: React.FC = () => {
       {!showArchived && (
         <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
           <div className="p-3 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl"><span className="text-xs text-graphite-400 block">Total Frota</span><strong className="text-lg font-mono font-bold text-graphite-900 dark:text-graphite-100">{totalCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-graphite-900 border border-emerald-200 dark:border-emerald-900/50 rounded-xl"><span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-emerald-700 dark:text-emerald-300">{rentedCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-graphite-900 border border-blue-200 dark:border-blue-900/50 rounded-xl"><span className="text-xs text-blue-600 dark:text-blue-400 block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-blue-700 dark:text-blue-300">{availableCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-success-border  rounded-xl"><span className="text-xs text-success-icon  block font-semibold">Locados</span><strong className="text-lg font-mono font-bold text-success-text ">{rentedCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-info-border  rounded-xl"><span className="text-xs text-info-icon  block font-semibold">Disponíveis</span><strong className="text-lg font-mono font-bold text-info-text ">{availableCount}</strong></div>
           <div className="p-3 bg-white dark:bg-graphite-900 border border-violet-200 dark:border-violet-900/50 rounded-xl"><span className="text-xs text-violet-600 dark:text-violet-400 block font-semibold">Reservados</span><strong className="text-lg font-mono font-bold text-violet-700 dark:text-violet-300">{reservedCount}</strong></div>
-          <div className="p-3 bg-white dark:bg-graphite-900 border border-amber-200 dark:border-amber-900/50 rounded-xl"><span className="text-xs text-amber-600 dark:text-amber-400 block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-amber-700 dark:text-amber-300">{maintenanceCount}</strong></div>
+          <div className="p-3 bg-white dark:bg-graphite-900 border border-warning-border  rounded-xl"><span className="text-xs text-warning-icon  block font-semibold">Em Manutenção</span><strong className="text-lg font-mono font-bold text-warning-text ">{maintenanceCount}</strong></div>
           <div className="p-3 bg-white dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 rounded-xl"><span className="text-xs text-graphite-400 block">Inativos</span><strong className="text-lg font-mono font-bold text-graphite-600 dark:text-graphite-400">{inactiveCount}</strong></div>
         </div>
       )}
@@ -245,8 +245,8 @@ export const FleetManagement: React.FC = () => {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border ${
                       vehicle.ownerType === 'PROPRIO' ? 'bg-graphite-100 text-graphite-700 border-graphite-200 dark:bg-graphite-800 dark:text-graphite-300 dark:border-graphite-700' :
                       vehicle.ownerType === 'SOCIO' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800' :
-                      vehicle.ownerType === 'LEASING' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800' :
-                      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                      vehicle.ownerType === 'LEASING' ? 'bg-warning-bg text-warning-text border-warning-border   ' :
+                      'bg-info-bg text-info-text border-info-border   '
                     }`}>
                       {vehicle.ownerType === 'PROPRIO' ? 'Próprio (CNPJ)' :
                        vehicle.ownerType === 'SOCIO' ? 'Sócio (CPF)' :
@@ -255,17 +255,17 @@ export const FleetManagement: React.FC = () => {
                     </span>
 
                     {vehicle.sneCoverageStatus === 'COBERTO_CNPJ' && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" title="Desconto de até 40% em multas via SNE ativo no CNPJ">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-success-bg text-success-text border border-success-border   " title="Desconto de até 40% em multas via SNE ativo no CNPJ">
                         SNE 40%
                       </span>
                     )}
                     {vehicle.sneCoverageStatus === 'PENDENTE_CPF_TITULAR' && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800" title="SNE requer adesão pelo CPF do titular">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-warning-bg text-warning-text border border-warning-border   " title="SNE requer adesão pelo CPF do titular">
                         SNE Pendente (CPF)
                       </span>
                     )}
                     {(vehicle.sneCoverageStatus === 'DESCOBERTO_BANCO_LEASING' || vehicle.sneCoverageStatus === 'DESCOBERTO_TERCEIRO') && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800" title="Fora da cobertura direta de desconto SNE da empresa">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-error-bg text-error-text border border-error-border   " title="Fora da cobertura direta de desconto SNE da empresa">
                         SNE Descoberto
                       </span>
                     )}
@@ -278,7 +278,7 @@ export const FleetManagement: React.FC = () => {
 
                   <div className="mt-4 pt-3 border-t border-graphite-100 dark:border-graphite-800 space-y-1.5 text-xs text-graphite-600 dark:text-graphite-400">
                     <div className="flex justify-between"><span className="text-graphite-400">Quilometragem:</span><strong className="font-mono tabular-nums text-graphite-900 dark:text-graphite-100">{vehicle.currentKm.toLocaleString('pt-BR')} KM</strong></div>
-                    <div className="flex justify-between"><span className="text-graphite-400">Aluguel Semanal:</span><strong className="font-mono text-emerald-600 dark:text-emerald-400">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>
+                    <div className="flex justify-between"><span className="text-graphite-400">Aluguel Semanal:</span><strong className="font-mono text-success-icon ">{vehicle.rentalValueBase > 0 ? `${formatCurrencyBRL(vehicle.rentalValueBase)} / sem` : 'Não definido'}</strong></div>
                   </div>
                 </div>
 
@@ -287,14 +287,14 @@ export const FleetManagement: React.FC = () => {
 
                   {isReadOnlyTerminal ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-blue-600 dark:text-blue-400 font-semibold border rounded-lg hover:bg-graphite-50 dark:hover:bg-graphite-800">
+                      <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-info-icon  font-semibold border rounded-lg hover:bg-graphite-50 dark:hover:bg-graphite-800">
                         <Eye className="w-3.5 h-3.5"/> Abrir histórico somente leitura
                       </button>
                       {vehicle.status === VehicleStatus.SOLD && !vehicle.isArchived && (
-                        <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo vendido ao estoque" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 rounded-lg border border-emerald-200 dark:border-emerald-900"><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque</button>
+                        <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo vendido ao estoque" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-success-text bg-success-bg hover:bg-success-bg   rounded-lg border border-success-border "><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque</button>
                       )}
                       {!showArchived && vehicle.status === VehicleStatus.SOLD && canArchive && (
-                        <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300 rounded-lg border border-rose-200 dark:border-rose-900"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>
+                        <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-error-text bg-error-bg hover:bg-error-bg   rounded-lg border border-error-border "><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>
                       )}
                     </div>
                   ) : (
@@ -324,10 +324,10 @@ export const FleetManagement: React.FC = () => {
                           )}
                           <button onClick={() => setVehicleForKmRecord(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Gauge className="w-4 h-4"/>Registrar KM</button>
                           <button onClick={() => { setVehicleToEdit(vehicle); setIsFormOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Edit className="w-4 h-4"/>Editar</button>
-                          {isAvailable && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40">Enviar para manutenção</button>}
+                          {isAvailable && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.MAINTENANCE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-warning-text hover:bg-warning-bg  dark:hover:bg-amber-950/40">Enviar para manutenção</button>}
                           {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Colocar fora de uso</button>}
                           {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Marcar como vendido</button>}
-                          {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>}
+                          {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>}
                         </div>
                       </details>
                     </div>

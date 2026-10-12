@@ -143,9 +143,9 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
 
   const getPriorityBadge = (priority: 'P0' | 'P1' | 'P2' | 'P3') => {
     switch (priority) {
-      case 'P0': return <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300 border border-red-300">P0 • BLOQUEADOR</span>;
-      case 'P1': return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300">P1 • CRÍTICO</span>;
-      case 'P2': return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300">P2 • IMPORTANTE</span>;
+      case 'P0': return <span className="px-2 py-0.5 rounded text-[10px] font-black bg-error-bg text-error-text   border border-error-border">P0 • BLOQUEADOR</span>;
+      case 'P1': return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-warning-bg text-warning-text   border border-warning-border">P1 • CRÍTICO</span>;
+      case 'P2': return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-info-bg text-info-text  ">P2 • IMPORTANTE</span>;
       case 'P3': return <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-graphite-100 text-graphite-700 dark:bg-graphite-800 dark:text-graphite-300">P3 • NORMAL</span>;
     }
   };
@@ -204,27 +204,27 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Card padding="sm" className="border-l-4 border-l-red-600 bg-red-50/20">
-          <span className="text-[11px] font-bold text-red-700 dark:text-red-400 uppercase tracking-wider block">Prioridade P0</span>
+        <Card padding="sm" className="border-l-4 border-l-red-600 bg-error-bg">
+          <span className="text-[11px] font-bold text-error-text  uppercase tracking-wider block">Prioridade P0</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-red-600 font-mono">{counts.p0}</h3>
-            <ShieldAlert className="w-4 h-4 text-red-500" />
+            <h3 className="text-2xl font-black text-error-icon font-mono">{counts.p0}</h3>
+            <ShieldAlert className="w-4 h-4 text-error-icon" />
           </div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Prioridade P1</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-amber-600 font-mono">{counts.p1}</h3>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <h3 className="text-2xl font-black text-warning-icon font-mono">{counts.p1}</h3>
+            <AlertTriangle className="w-4 h-4 text-warning-icon" />
           </div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-red-500">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Bloqueadas</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-red-600 font-mono">{counts.blocked}</h3>
-            <XCircle className="w-4 h-4 text-red-500" />
+            <h3 className="text-2xl font-black text-error-icon font-mono">{counts.blocked}</h3>
+            <XCircle className="w-4 h-4 text-error-icon" />
           </div>
         </Card>
 
@@ -245,10 +245,10 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-emerald-600">
-          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Ativas / Total</span>
+          <span className="text-[11px] font-bold text-success-text  uppercase tracking-wider block">Ativas / Total</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-emerald-600 font-mono">{counts.active} / {counts.total}</h3>
-            <Car className="w-4 h-4 text-emerald-500" />
+            <h3 className="text-2xl font-black text-success-icon font-mono">{counts.active} / {counts.total}</h3>
+            <Car className="w-4 h-4 text-success-icon" />
           </div>
         </Card>
       </div>
@@ -299,12 +299,12 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         {/* Left 2 Cols: Item List */}
         <div className="lg:col-span-2 space-y-3">
           <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-600" /> Locações sob Controle e Exceções ({filteredItems.length})
+            <ShieldAlert className="w-4 h-4 text-error-icon" /> Locações sob Controle e Exceções ({filteredItems.length})
           </h3>
 
           {filteredItems.length === 0 ? (
             <Card className="text-center py-12">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+              <CheckCircle2 className="w-12 h-12 text-success-icon mx-auto mb-3" />
               <h4 className="text-base font-bold text-graphite-900 dark:text-graphite-100">Nenhuma exceção ou locação encontrada</h4>
               <p className="text-xs text-graphite-500 mt-1">Todos os veículos e contratos operam dentro da normalidade para os filtros selecionados.</p>
             </Card>
@@ -315,7 +315,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
                 onClick={() => setSelectedItem(item)}
                 className={`p-4 rounded-xl border bg-white dark:bg-graphite-900 cursor-pointer transition-all hover:shadow-md ${
                   selectedItem?.id === item.id
-                    ? 'border-rose-600 ring-2 ring-rose-500/20 bg-rose-50/10'
+                    ? 'border-rose-600 ring-2 ring-rose-500/20 bg-error-bg'
                     : 'border-graphite-200 dark:border-graphite-800'
                 }`}
               >
@@ -326,7 +326,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
                       <Badge variant={getOperationalStatusVariant(item.operationalStatus)}>
                         {item.operationalStatus}
                       </Badge>
-                      <span className="font-mono text-xs font-bold text-rose-600 dark:text-rose-400">
+                      <span className="font-mono text-xs font-bold text-error-icon ">
                         {item.contractNumber}
                       </span>
                       {item.vehiclePlate && (
@@ -347,8 +347,8 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
                 </div>
 
                 {item.blockers.length > 0 && (
-                  <div className="mt-3 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-xs text-red-800 dark:text-red-300 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <div className="mt-3 p-2.5 rounded-lg bg-error-bg  border border-error-border  text-xs text-error-text  flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-error-icon flex-shrink-0" />
                     <div>
                       <strong>Bloqueio Operacional:</strong> {item.blockers[0]}
                     </div>
@@ -363,7 +363,7 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
         <div>
           <Card className="sticky top-6 space-y-4">
             <div className="border-b pb-3 border-graphite-100 dark:border-graphite-800">
-              <span className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400 tracking-wider">Inspeção da Exceção</span>
+              <span className="text-[10px] font-bold uppercase text-error-icon  tracking-wider">Inspeção da Exceção</span>
               <h3 className="text-base font-black text-graphite-900 dark:text-graphite-100 mt-0.5">
                 {selectedItem ? selectedItem.contractNumber : 'Selecione uma Locação'}
               </h3>
@@ -399,8 +399,8 @@ export const RentalControlCenterView: React.FC<RentalControlCenterViewProps> = (
 
                 {selectedItem.blockers.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="text-xs font-bold uppercase text-red-600">Impedimentos Ativos ({selectedItem.blockers.length})</h4>
-                    <ul className="space-y-1 text-xs text-red-700 dark:text-red-300 list-disc list-inside">
+                    <h4 className="text-xs font-bold uppercase text-error-icon">Impedimentos Ativos ({selectedItem.blockers.length})</h4>
+                    <ul className="space-y-1 text-xs text-error-text  list-disc list-inside">
                       {selectedItem.blockers.map((b, idx) => (
                         <li key={idx}>{b}</li>
                       ))}

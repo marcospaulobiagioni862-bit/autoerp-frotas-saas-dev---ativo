@@ -16,7 +16,7 @@ export function SettlementLateInterest({ quote, balanceAmount, hasPreviousAdjust
   quote: ReturnType<typeof settlementQuote>; balanceAmount: number; hasPreviousAdjustments: boolean; dueDate: string; kind: 'receber' | 'pagar';
 }) {
   if (!quote || quote.daysOverdue === 0) return null;
-  return <dl aria-label="Composição de juros por atraso" className="rounded-lg border border-amber-200 p-3 text-xs space-y-1">
+  return <dl aria-label="Composição de juros por atraso" className="rounded-lg border border-warning-border p-3 text-xs space-y-1">
     <div>{hasPreviousAdjustments ? 'Saldo atual (inclui ajustes anteriores)' : 'Saldo principal'}: {formatCurrencyBRL(balanceAmount)}</div>
     <div>Vencimento: {formatDateBR(dueDate)}</div>
     <div>Período desta diária: {formatDateBR(quote.periodStartDate)} → {formatDateBR(quote.effectiveDate)}</div>

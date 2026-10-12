@@ -252,7 +252,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
       </div>
 
       {actionMessage && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+        <div className="p-3 bg-success-bg  border border-success-border  rounded-lg text-xs text-success-text  flex items-center justify-between">
           <span>{actionMessage}</span>
           <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700">
             <X className="w-4 h-4" />
@@ -368,7 +368,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                       <td className="p-3.5 font-mono tabular-nums">
                         {formatDateBR(item.dueDate)}
                         {isOverdue && (
-                          <span className="block text-[10px] text-red-600 dark:text-red-400 font-bold">EM ATRASO</span>
+                          <span className="block text-[10px] text-error-icon  font-bold">EM ATRASO</span>
                         )}
                       </td>
                       <td className="p-3.5 font-mono tabular-nums font-semibold">
@@ -407,14 +407,14 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
                             </Button>
                           )}
                           {isPending && blockingInstallment && (
-                            <span className="text-xs font-semibold text-amber-700" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
+                            <span className="text-xs font-semibold text-warning-text" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
                           )}
                           <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
                           {isPending && (
                             <details className="relative">
                               <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
                               <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
-                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
+                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
                               </div>
                             </details>
                           )}
@@ -449,7 +449,7 @@ export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }
         >
           {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
           <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
-            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+            <p className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
               Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
             </p>
             <Input

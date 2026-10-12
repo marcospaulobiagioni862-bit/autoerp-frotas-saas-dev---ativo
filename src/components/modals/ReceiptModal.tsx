@@ -198,7 +198,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
           <div>
             <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <CheckCircle className="w-5 h-5 text-success-icon" />
               Registrar recebimento
             </h3>
             <p className="text-xs text-graphite-500 mt-0.5">
@@ -218,18 +218,18 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
         <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto p-6 space-y-4">
           <fieldset disabled={isSubmitting || confirmOpen} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-error-bg  border border-error-border  rounded-lg text-xs text-error-text  flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-error-icon shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 p-3 rounded-lg flex justify-between items-center text-xs">
+          <div className="bg-success-bg  border border-emerald-100  p-3 rounded-lg flex justify-between items-center text-xs">
             <div>
               <span className="text-graphite-500 block">Valor Original / Restante:</span>
               <span className="font-semibold font-mono tabular-nums text-graphite-700 dark:text-graphite-300">
                 R$ {receivable.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} /{' '}
-                <strong className="text-emerald-700 dark:text-emerald-400 font-mono tabular-nums">
+                <strong className="text-success-text  font-mono tabular-nums">
                   R$ {receivable.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </strong>
               </span>
@@ -294,7 +294,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
               </label>
             </div>
             {dailyQuoteLoading && dailyInterestValue > 0 ? (
-              <div className="rounded-lg border border-amber-200 p-3 text-xs text-graphite-500">Calculando diária de atraso...</div>
+              <div className="rounded-lg border border-warning-border p-3 text-xs text-graphite-500">Calculando diária de atraso...</div>
             ) : (
               <SettlementLateInterest quote={quote} balanceAmount={receivable.balanceAmount} hasPreviousAdjustments={Boolean(receivable.interestAmount || receivable.fineAmount || receivable.additionalAmount || receivable.discountAmount)} dueDate={receivable.dueDate} kind="receber" />
             )}
@@ -333,7 +333,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
                 </div>
                 <div>
                   <span className="block text-graphite-500">Saldo devedor após recebimento</span>
-                  <strong className="font-mono tabular-nums text-amber-700 dark:text-amber-300">{formatCurrencyBRL(projectedBalance)}</strong>
+                  <strong className="font-mono tabular-nums text-warning-text ">{formatCurrencyBRL(projectedBalance)}</strong>
                 </div>
               </div>
               <span className="text-[11px] text-graphite-500 mt-1 block">
@@ -361,7 +361,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, rec
             {receivable.totalAmount !== undefined && <div><dt>Total original do parcelamento</dt><dd>{formatCurrencyBRL(receivable.totalAmount)}</dd></div>}
           </dl>
           {(accounts.length === 0 || methods.length === 0) && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+            <div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
               Cadastre uma conta financeira e um meio de pagamento ativos em Financeiro → Configurações antes de registrar o recebimento.
             </div>
           )}

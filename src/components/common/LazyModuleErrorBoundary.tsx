@@ -51,7 +51,7 @@ export class LazyModuleErrorBoundary extends LazyModuleBoundaryComponent {
     if (!this.state.hasError) return this.props.children;
 
     return (
-      <div role="alert" className="m-6 rounded-lg border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+      <div role="alert" className="m-6 rounded-lg border border-warning-border bg-warning-bg p-5 text-amber-950 dark:border-amber-700  dark:text-amber-100">
         <h2 className="text-base font-semibold">Não foi possível carregar este módulo.</h2>
         <p className="mt-1 text-sm">
           Você pode abrir outro módulo pelo menu ou recarregar a aplicação para tentar novamente.

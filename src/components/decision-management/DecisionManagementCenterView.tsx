@@ -319,8 +319,8 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
         <div
           className={`p-4 rounded-lg text-sm flex justify-between items-center ${
             message.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
+              ? 'bg-success-bg text-success-text border border-success-border'
+              : 'bg-error-bg text-error-text border border-error-border'
           }`}
         >
           <span>{message.text}</span>
@@ -377,17 +377,17 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
               <span className="text-xs font-semibold uppercase text-graphite-500">Decisões Abertas</span>
               <p className="text-2xl font-bold text-indigo-600 mt-1">{metrics.openDecisions}</p>
             </div>
-            <div className="bg-white p-5 rounded-xl border border-rose-200 shadow-sm bg-rose-50/30">
-              <span className="text-xs font-semibold uppercase text-rose-600">P0 / P1 Críticas</span>
-              <p className="text-2xl font-bold text-rose-600 mt-1">{metrics.criticalP0P1Count}</p>
+            <div className="bg-white p-5 rounded-xl border border-error-border shadow-sm bg-error-bg">
+              <span className="text-xs font-semibold uppercase text-error-icon">P0 / P1 Críticas</span>
+              <p className="text-2xl font-bold text-error-icon mt-1">{metrics.criticalP0P1Count}</p>
             </div>
-            <div className="bg-white p-5 rounded-xl border border-amber-200 shadow-sm bg-amber-50/30">
-              <span className="text-xs font-semibold uppercase text-amber-700">Atrasadas</span>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{metrics.overdueCount}</p>
+            <div className="bg-white p-5 rounded-xl border border-warning-border shadow-sm bg-warning-bg">
+              <span className="text-xs font-semibold uppercase text-warning-text">Atrasadas</span>
+              <p className="text-2xl font-bold text-warning-icon mt-1">{metrics.overdueCount}</p>
             </div>
-            <div className="bg-white p-5 rounded-xl border border-emerald-200 shadow-sm bg-emerald-50/30">
-              <span className="text-xs font-semibold uppercase text-emerald-700">Taxa de Sucesso</span>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{metrics.successRate}%</p>
+            <div className="bg-white p-5 rounded-xl border border-success-border shadow-sm bg-success-bg">
+              <span className="text-xs font-semibold uppercase text-success-text">Taxa de Sucesso</span>
+              <p className="text-2xl font-bold text-success-icon mt-1">{metrics.successRate}%</p>
             </div>
             <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <span className="text-xs font-semibold uppercase text-graphite-500">Score Efetividade</span>
@@ -409,7 +409,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                 </div>
                 <div className="p-4 bg-graphite-50 rounded-lg">
                   <span className="text-xs text-graphite-500">Tempo de Encerramento</span>
-                  <p className="text-xl font-bold text-emerald-600 mt-1">{metrics.avgClosureTimeHours}h</p>
+                  <p className="text-xl font-bold text-success-icon mt-1">{metrics.avgClosureTimeHours}h</p>
                 </div>
               </div>
 
@@ -477,9 +477,9 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                           d.priority === 'P0'
-                            ? 'bg-rose-100 text-rose-700'
+                            ? 'bg-error-bg text-error-text'
                             : d.priority === 'P1'
-                            ? 'bg-amber-100 text-amber-800'
+                            ? 'bg-warning-bg text-warning-text'
                             : 'bg-graphite-100 text-graphite-700'
                         }`}
                       >
@@ -503,7 +503,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     </button>
                     <button
                       onClick={() => handleEscalate(d)}
-                      className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+                      className="bg-warning-bg hover:bg-amber-200 text-warning-text px-3 py-1.5 rounded-lg text-xs font-medium transition"
                     >
                       Escalonar
                     </button>
@@ -520,13 +520,13 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 3: P0/P1 Críticas */}
       {activeTab === 3 && (
-        <div className="bg-white rounded-xl border border-rose-200 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-xl border border-error-border shadow-sm p-6 space-y-4">
           <div className="flex justify-between items-center border-b border-rose-100 pb-3">
-            <h3 className="text-base font-semibold text-rose-900 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
+            <h3 className="text-base font-semibold text-error-text flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-error-icon" />
               Decisões Críticas P0 / P1
             </h3>
-            <span className="text-xs bg-rose-100 text-rose-800 px-2.5 py-1 rounded-full font-bold">
+            <span className="text-xs bg-error-bg text-error-text px-2.5 py-1 rounded-full font-bold">
               {metrics.criticalP0P1Count} Decisões Críticas
             </span>
           </div>
@@ -539,7 +539,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
-                      <span className="bg-rose-100 text-rose-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                      <span className="bg-error-bg text-error-text text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.priority}
                       </span>
                       <span className="bg-graphite-100 text-graphite-700 text-xs px-2 py-0.5 rounded-full font-medium">
@@ -549,7 +549,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     </div>
                     <p className="text-xs text-graphite-600">{d.description}</p>
                     <div className="flex items-center gap-4 text-xs text-graphite-400">
-                      <span>Prazo Limite: <strong className="text-rose-700">{d.dueAt ? d.dueAt.substring(0, 10) : 'Sem prazo'}</strong></span>
+                      <span>Prazo Limite: <strong className="text-error-text">{d.dueAt ? d.dueAt.substring(0, 10) : 'Sem prazo'}</strong></span>
                       <span>Responsável: <strong className="text-graphite-700">{d.responsibleUserId || 'PENDENTE DE ATRIBUIÇÃO'}</strong></span>
                     </div>
                   </div>
@@ -602,7 +602,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     <p className="text-xs text-graphite-600">{d.description}</p>
                     <div className="flex items-center gap-4 text-xs text-graphite-400">
                       <span>Tarefas Operacionais: <strong className="text-indigo-600">{d.linkedTaskIds.join(', ') || 'Nenhuma'}</strong></span>
-                      <span>Pendências Vinculadas: <strong className="text-amber-600">{d.linkedPendingActionIds.join(', ') || 'Nenhuma'}</strong></span>
+                      <span>Pendências Vinculadas: <strong className="text-warning-icon">{d.linkedPendingActionIds.join(', ') || 'Nenhuma'}</strong></span>
                     </div>
                   </div>
 
@@ -629,8 +629,8 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
 
       {/* Tab 5: Escalonadas */}
       {activeTab === 5 && (
-        <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-6 space-y-4">
-          <h3 className="text-base font-semibold text-amber-900">Decisões Escalonadas por SLA ou Sobrecarga</h3>
+        <div className="bg-white rounded-xl border border-warning-border shadow-sm p-6 space-y-4">
+          <h3 className="text-base font-semibold text-warning-text">Decisões Escalonadas por SLA ou Sobrecarga</h3>
 
           <div className="divide-y divide-graphite-100">
             {decisions
@@ -640,7 +640,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
-                      <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                      <span className="bg-warning-bg text-warning-text text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.escalationLevel}
                       </span>
                       <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
@@ -653,14 +653,14 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <p className="text-xs text-graphite-600">{d.description}</p>
 
                   {d.escalationHistory && d.escalationHistory.length > 0 && (
-                    <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 space-y-1">
-                      <span className="text-xs font-bold text-amber-900">Histórico de Escalonamento:</span>
+                    <div className="bg-warning-bg p-3 rounded-lg border border-amber-100 space-y-1">
+                      <span className="text-xs font-bold text-warning-text">Histórico de Escalonamento:</span>
                       {d.escalationHistory.map((h, idx) => (
-                        <div key={idx} className="text-xs text-amber-800 flex justify-between">
+                        <div key={idx} className="text-xs text-warning-text flex justify-between">
                           <span>
                             Nível {h.level}: {h.reason}
                           </span>
-                          <span className="text-amber-600">{h.escalatedAt.substring(0, 16)}</span>
+                          <span className="text-warning-icon">{h.escalatedAt.substring(0, 16)}</span>
                         </div>
                       ))}
                     </div>
@@ -688,7 +688,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs font-bold text-graphite-500">{d.decisionNumber}</span>
-                      <span className="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full font-bold">
+                      <span className="bg-success-bg text-success-text text-xs px-2 py-0.5 rounded-full font-bold">
                         {d.status}
                       </span>
                       <h4 className="font-semibold text-graphite-900 text-sm">{d.title}</h4>
@@ -711,7 +711,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                             setDecisionToReopen(d);
                             setShowReopenModal(true);
                           }}
-                          className="bg-rose-100 text-rose-800 hover:bg-rose-200 px-2.5 py-1 rounded text-xs font-medium"
+                          className="bg-error-bg text-error-text hover:bg-rose-200 px-2.5 py-1 rounded text-xs font-medium"
                         >
                           Reabrir Decisão
                         </button>
@@ -726,7 +726,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                     </div>
                     <div>
                       <span className="font-semibold text-graphite-500 uppercase">Resultado Alcançado:</span>
-                      <p className="text-emerald-800 font-medium mt-0.5">{d.actualResult || 'Ainda não registrado'}</p>
+                      <p className="text-success-text font-medium mt-0.5">{d.actualResult || 'Ainda não registrado'}</p>
                     </div>
                   </div>
                 </div>
@@ -754,7 +754,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   Medida ponderada atingida a partir dos critérios de resultado real, cumprimento de prazos SLA e fornecimento de evidências operacionais.
                 </p>
                 <div className="pt-2 flex gap-2">
-                  <span className="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-bold">
+                  <span className="text-xs bg-success-bg text-success-text px-2.5 py-1 rounded-full font-bold">
                     Excelente (90+)
                   </span>
                   <span className="text-xs bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-full font-bold">
@@ -1128,7 +1128,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
         <div className="fixed inset-0 bg-graphite-900/60 backdrop-blur-sm flex justify-center items-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-graphite-100 pb-3">
-              <h3 className="font-bold text-graphite-900 text-base text-rose-700">Reabrir Decisão Executiva</h3>
+              <h3 className="font-bold text-graphite-900 text-base text-error-text">Reabrir Decisão Executiva</h3>
               <button onClick={() => setShowReopenModal(false)} className="text-graphite-400 hover:text-graphite-700">
                 <X className="w-5 h-5" />
               </button>
@@ -1145,7 +1145,7 @@ export const DecisionManagementCenterView: React.FC<Props> = ({
                   placeholder="Explique por que o resultado foi insatisfatório ou reincidente..."
                   value={reopenReason}
                   onChange={(e) => setReopenReason(e.target.value)}
-                  className="w-full p-2 border border-rose-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="w-full p-2 border border-error-border rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
 

@@ -113,7 +113,7 @@ export const CreditCardStatementPaymentAction: React.FC<CreditCardStatementPayme
             </label>
           ) : null}
 
-          {message && <div role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">{message}</div>}
+          {message && <div role="alert" className="mt-3 rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">{message}</div>}
 
           <div className="mt-4 flex justify-end gap-2">
             <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>

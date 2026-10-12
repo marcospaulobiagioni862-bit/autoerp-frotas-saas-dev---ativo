@@ -80,7 +80,7 @@ export const CashFlowView: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <Banknote className="w-6 h-6 text-blue-600" />
+            <Banknote className="w-6 h-6 text-info-icon" />
             Fluxo de Caixa
           </h2>
           <p className="text-xs text-graphite-500 mt-1">
@@ -122,8 +122,8 @@ export const CashFlowView: React.FC = () => {
           <Skeleton className="h-72 w-full" />
         </div>
       ) : error ? (
-        <Card padding="md" className="border border-red-200 dark:border-red-900/60">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        <Card padding="md" className="border border-error-border ">
+          <p className="text-sm text-error-icon ">{error}</p>
         </Card>
       ) : report ? (
         <>
@@ -136,25 +136,25 @@ export const CashFlowView: React.FC = () => {
             </Card>
             <Card padding="md">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600">Entradas realizadas</span>
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-success-icon">Entradas realizadas</span>
+                <TrendingUp className="w-4 h-4 text-success-icon" />
               </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-emerald-700 dark:text-emerald-400'}`}>
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedIncomes === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>
                 {formatCurrencyBRL(report.totalRealizedIncomes)}
               </strong>
             </Card>
             <Card padding="md">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider font-semibold text-red-600">Saídas realizadas</span>
-                <TrendingDown className="w-4 h-4 text-red-600" />
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-error-icon">Saídas realizadas</span>
+                <TrendingDown className="w-4 h-4 text-error-icon" />
               </div>
-              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-red-700 dark:text-red-400'}`}>
+              <strong className={`block mt-1 text-xl font-mono ${report.totalRealizedExpenses === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>
                 {formatCurrencyBRL(report.totalRealizedExpenses)}
               </strong>
             </Card>
             <Card padding="md">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-600">Saldo realizado final</span>
-              <strong className="block mt-1 text-xl font-mono text-blue-700 dark:text-blue-300">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo realizado final</span>
+              <strong className="block mt-1 text-xl font-mono text-info-text ">
                 {formatCurrencyBRL(report.finalRealizedCashBalance)}
               </strong>
             </Card>
@@ -163,15 +163,15 @@ export const CashFlowView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A receber no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-emerald-700 dark:text-emerald-400'}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
+              <strong className={`mt-1 block font-mono text-lg ${projectedReceivable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-success-text '}`}>{formatCurrencyBRL(projectedReceivable)}</strong>
             </Card>
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">A pagar no período</span>
-              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-red-700 dark:text-red-400'}`}>{formatCurrencyBRL(projectedPayable)}</strong>
+              <strong className={`mt-1 block font-mono text-lg ${projectedPayable === 0 ? 'text-graphite-700 dark:text-graphite-300' : 'text-error-text '}`}>{formatCurrencyBRL(projectedPayable)}</strong>
             </Card>
             <Card padding="sm">
-              <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-600">Saldo projetado</span>
-              <strong className="mt-1 block font-mono text-lg text-blue-700 dark:text-blue-300">{formatCurrencyBRL(projectedClosing)}</strong>
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-info-icon">Saldo projetado</span>
+              <strong className="mt-1 block font-mono text-lg text-info-text ">{formatCurrencyBRL(projectedClosing)}</strong>
             </Card>
             <Card padding="sm">
               <span className="text-[11px] uppercase tracking-wider font-semibold text-graphite-500">Resultado projetado</span>
@@ -211,14 +211,14 @@ export const CashFlowView: React.FC = () => {
                     const overdueProjection = daily.date < new Date().toISOString().slice(0, 10) && (daily.predictedIncomes > 0 || daily.predictedExpenses > 0);
                     return (
                     <tr key={daily.date} className="border-b border-graphite-100 dark:border-graphite-800/70 last:border-0">
-                      <td className="py-2.5 pr-3 font-mono text-graphite-700 dark:text-graphite-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-rose-600">Vencidos</span>}</td>
+                      <td className="py-2.5 pr-3 font-mono text-graphite-700 dark:text-graphite-300">{formatDateBR(daily.date)}{overdueProjection && <span className="ml-2 text-[10px] font-semibold text-error-icon">Vencidos</span>}</td>
                       <td className="py-2.5 px-3 text-right font-mono">{formatCurrencyBRL(daily.openingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-graphite-500' : 'text-emerald-600'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-graphite-500' : 'text-red-600'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon'}`}>{formatCurrencyBRL(daily.realizedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.realizedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon'}`}>{formatCurrencyBRL(daily.realizedExpenses)}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-semibold">{formatCurrencyBRL(daily.closingBalance)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-graphite-500' : 'text-emerald-600/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
-                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-graphite-500' : 'text-red-600/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
-                      <td className="py-2.5 pl-3 text-right font-mono font-bold text-blue-700 dark:text-blue-300">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedIncomes === 0 ? 'text-graphite-500' : 'text-success-icon/80'}`}>{formatCurrencyBRL(daily.predictedIncomes)}</td>
+                      <td className={`py-2.5 px-3 text-right font-mono ${daily.predictedExpenses === 0 ? 'text-graphite-500' : 'text-error-icon/80'}`}>{formatCurrencyBRL(daily.predictedExpenses)}</td>
+                      <td className="py-2.5 pl-3 text-right font-mono font-bold text-info-text ">{formatCurrencyBRL(daily.predictedClosingBalance)}</td>
                     </tr>
                     );
                   })}

@@ -79,7 +79,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+      <div className="flex items-start gap-3 rounded-xl border border-warning-border bg-warning-bg p-4 text-sm text-warning-text   ">
         <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
           <strong>Disponível:</strong> administração de usuários e dados da empresa. As demais funções administrativas permanecem bloqueadas até estarem prontas e seguras para uso.
@@ -98,7 +98,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100">Usuários</h2>
-                  <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <Badge className="border-success-border bg-success-bg text-success-text   ">
                     Dados protegidos
                   </Badge>
                 </div>
@@ -120,12 +120,12 @@ export const ProductionUserAdministrationView: React.FC = () => {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
+            <div className="flex items-center gap-2 rounded-lg border border-error-border bg-error-bg p-3 text-sm text-error-text   ">
               <AlertTriangle className="h-4 w-4" /> {error}
             </div>
           )}
           {message && (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <div className="flex items-center gap-2 rounded-lg border border-success-border bg-success-bg p-3 text-sm text-success-text   ">
               <ShieldCheck className="h-4 w-4" /> {message}
             </div>
           )}
@@ -151,7 +151,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
                         <span className="font-semibold text-graphite-900 dark:text-graphite-100">{user.name}</span>
                         <Badge variant="outline">{user.role}</Badge>
                         <Badge className={user.active
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          ? 'border-success-border bg-success-bg text-success-text   '
                           : 'border-graphite-200 bg-graphite-50 text-graphite-600 dark:border-graphite-700 dark:bg-graphite-800 dark:text-graphite-300'}>
                           {user.active ? 'ATIVO' : 'INATIVO'}
                         </Badge>

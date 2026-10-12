@@ -20,6 +20,6 @@ export function DocumentAlertSettingsForm() {
     <p className="text-sm font-semibold">Alertas de validade dos documentos</p>
     <div className="flex flex-wrap items-end gap-3"><Input label="Vermelho: até quantos dias" type="number" required min="0" max="365" value={red} disabled={!editable} onChange={event => setRed(event.target.value)} /><Input label="Amarelo: até quantos dias" type="number" required min="0" max="365" value={yellow} disabled={!editable} onChange={event => setYellow(event.target.value)} />{editable && <Button type="submit" isLoading={busy}>Salvar prazos</Button>}</div>
     <p className="text-xs text-graphite-500">Vencidos ficam vermelhos. Acima do prazo amarelo, documentos válidos ficam verdes. A configuração vale para a empresa.</p>
-    {(error || loadError) && <p role="alert" className="text-xs text-red-600">{error || loadError}</p>}
+    {(error || loadError) && <p role="alert" className="text-xs text-error-icon">{error || loadError}</p>}
   </form>;
 }

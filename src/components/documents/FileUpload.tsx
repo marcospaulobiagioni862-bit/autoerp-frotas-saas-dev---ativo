@@ -173,10 +173,10 @@ export function FileUpload({
       </div>
 
       {error && (
-        <div className="mt-3 text-sm text-red-600 bg-red-50 p-3 rounded-md flex items-start gap-2">
+        <div className="mt-3 text-sm text-error-icon bg-error-bg p-3 rounded-md flex items-start gap-2">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <span className="flex-1">{error}</span>
-          <button type="button" onClick={() => setError(null)} className="text-red-500 hover:text-red-700" aria-label="Fechar erro">
+          <button type="button" onClick={() => setError(null)} className="text-error-icon hover:text-error-text" aria-label="Fechar erro">
             <X className="h-4 w-4" />
           </button>
         </div>

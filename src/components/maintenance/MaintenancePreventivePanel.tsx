@@ -162,10 +162,10 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
   return <div className="space-y-4">
     <div className="flex items-center justify-between"><div><h3 className="font-semibold flex items-center gap-2"><Wrench className="w-4 h-4"/>Preventivas, óleo e pneus</h3><p className="text-xs text-graphite-500">Operação diária separada das configurações da frota.</p></div><Button size="sm" variant="ghost" onClick={()=>void load()} icon={<RefreshCw className="w-4 h-4"/>}>Atualizar</Button></div>
     <div className="flex flex-wrap gap-2 rounded-xl border border-graphite-200 p-2 dark:border-graphite-800"><Button size="sm" variant={section==='overview'?'primary':'ghost'} onClick={()=>setSection('overview')}>Visão rápida</Button><Button size="sm" variant={section==='vehicles'?'primary':'ghost'} onClick={()=>setSection('vehicles')}>Por veículo</Button><Button size="sm" variant={section==='settings'?'primary':'ghost'} onClick={()=>setSection('settings')}>Configuração</Button></div>
-    {error&&<div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs">{error}</div>}{loading&&<div className="p-6 text-center text-xs text-graphite-500">Carregando...</div>}
+    {error&&<div className="p-3 rounded-xl border border-error-border bg-error-bg text-error-text text-xs">{error}</div>}{loading&&<div className="p-6 text-center text-xs text-graphite-500">Carregando...</div>}
     {!loading&&<>
       {section==='overview'&&<>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Card padding="sm"><span className="text-[11px] text-graphite-500">PLANOS ATIVOS</span><strong className="block text-2xl">{plans.filter(p=>p.status==='ACTIVE').length}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">VENCIDAS / DEVIDAS</span><strong className="block text-2xl text-amber-600">{due}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">TROCAS DE ÓLEO</span><strong className="block text-2xl">{oils.length}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">PNEUS ATIVOS</span><strong className="block text-2xl">{activeTires}</strong></Card></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3"><Card padding="sm"><span className="text-[11px] text-graphite-500">PLANOS ATIVOS</span><strong className="block text-2xl">{plans.filter(p=>p.status==='ACTIVE').length}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">VENCIDAS / DEVIDAS</span><strong className="block text-2xl text-warning-icon">{due}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">TROCAS DE ÓLEO</span><strong className="block text-2xl">{oils.length}</strong></Card><Card padding="sm"><span className="text-[11px] text-graphite-500">PNEUS ATIVOS</span><strong className="block text-2xl">{activeTires}</strong></Card></div>
       <MaintenanceSlaSummary vehicles={vehicles} workOrders={workOrders}/>
       </>}
       {section==='settings'&&<>
@@ -209,10 +209,10 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
         <div className="text-graphite-600 dark:text-graphite-400">Plano: <strong>{linkTargetPlan.name}</strong> ({linkTargetPlan.maintenanceType.replaceAll('_',' ')})</div>
         {linkTargetPlan.nextDueKm!==undefined&&<div className="text-graphite-500 font-mono">Vencimento previsto: {linkTargetPlan.nextDueKm.toLocaleString('pt-BR')} km</div>}
       </div>
-      {linkModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{linkModalError}</div>}
-      {eligibleWorkOrdersForPlan.length===0?<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300 space-y-2">
+      {linkModalError&&<div className="p-2.5 rounded-lg border border-error-border bg-error-bg text-error-text text-xs">{linkModalError}</div>}
+      {eligibleWorkOrdersForPlan.length===0?<div className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text    space-y-2">
         <p>Não há ordem de serviço aberta para este veículo no momento.</p>
-        <p className="text-[11px] text-amber-700 dark:text-amber-400">Para vincular, acesse a aba de Ordens de Serviço, clique em Nova OS para este veículo e depois retorne para vincular.</p>
+        <p className="text-[11px] text-warning-text ">Para vincular, acesse a aba de Ordens de Serviço, clique em Nova OS para este veículo e depois retorne para vincular.</p>
       </div>:<div className="space-y-1">
         <label className="mb-1 block text-xs font-semibold">Ordem de Serviço elegível *</label>
         <select className="w-full rounded-lg border border-graphite-300 bg-transparent p-2 text-xs dark:border-graphite-700 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={linkWorkOrderId} onChange={e=>setLinkWorkOrderId(e.target.value)} required>
@@ -231,7 +231,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
         <div className="text-graphite-600 dark:text-graphite-400">Pneu: <strong>{rotateTargetTire.brand} {rotateTargetTire.model}</strong> • Posição atual: <strong>{TIRE_POSITION_LABELS[rotateTargetTire.position]||rotateTargetTire.position}</strong></div>
         <div className="text-[11px] text-graphite-500 font-mono">Instalado aos {rotateTargetTire.installationKm.toLocaleString('pt-BR')} km • Último rodízio: {rotateTargetTire.lastRotationKm!==undefined?`${rotateTargetTire.lastRotationKm.toLocaleString('pt-BR')} km`:'Nenhum'}</div>
       </div>
-      {rotateModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{rotateModalError}</div>}
+      {rotateModalError&&<div className="p-2.5 rounded-lg border border-error-border bg-error-bg text-error-text text-xs">{rotateModalError}</div>}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold">Nova posição *</label>
@@ -244,7 +244,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
           <Input type="number" min={rotateTargetTire.installationKm} value={rotateKm} onChange={e=>setRotateKm(e.target.value)} placeholder="KM atual" required/>
         </div>
       </div>
-      {occupyingTire&&<div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+      {occupyingTire&&<div className="rounded-lg border border-warning-border bg-warning-bg p-2.5 text-xs text-warning-text   ">
         ⚠️ A posição <strong>{TIRE_POSITION_LABELS[rotatePosition]||rotatePosition}</strong> já possui o pneu <strong>{occupyingTire.brand} {occupyingTire.model}</strong>. Lembre-se de rodiciar a outra unidade para manter o controle coerente.
       </div>}
       <div className="grid grid-cols-2 gap-3">
@@ -269,7 +269,7 @@ export const MaintenancePreventivePanel:React.FC<Props>=({vehicles,workOrders})=
         <div className="text-graphite-600 dark:text-graphite-400">Pneu: <strong>{removeTargetTire.brand} {removeTargetTire.model}</strong> • Posição: <strong>{TIRE_POSITION_LABELS[removeTargetTire.position]||removeTargetTire.position}</strong></div>
         <div className="text-[11px] text-graphite-500 font-mono">Instalação: {removeTargetTire.installationKm.toLocaleString('pt-BR')} km ({formatDateBR(removeTargetTire.installationDate)})</div>
       </div>
-      {removeModalError&&<div className="p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs">{removeModalError}</div>}
+      {removeModalError&&<div className="p-2.5 rounded-lg border border-error-border bg-error-bg text-error-text text-xs">{removeModalError}</div>}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1 block text-xs font-semibold">Destino / Situação *</label>

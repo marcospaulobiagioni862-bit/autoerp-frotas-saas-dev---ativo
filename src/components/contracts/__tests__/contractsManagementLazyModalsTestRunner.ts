@@ -138,7 +138,7 @@ assert.match(
 );
 assert.match(
   contractForm,
-  /required && <span className="ml-1 text-red-500" aria-hidden="true">\*<\/span>/,
+  /required && <span className="ml-1 text-error-icon" aria-hidden="true">\*<\/span>/,
   'required contract fields must render a visible red marker',
 );
 assert.match(

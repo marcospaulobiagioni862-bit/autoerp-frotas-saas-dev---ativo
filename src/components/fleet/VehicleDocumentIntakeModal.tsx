@@ -231,7 +231,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
 
   return <ModalContainer isOpen={isOpen} onClose={onClose} size="5xl" title="Cadastrar veículo por documento com IA">
     <div className="space-y-4">
-      <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+      <div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info-text   ">
         <strong>Assistente de cadastro por IA:</strong> a IA apenas propõe os dados do documento. Confira e complete os dados operacionais e financeiros para criar o veículo.
       </div>
 
@@ -258,7 +258,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
 
         <div className="space-y-1.5" aria-label="Progresso estimado da análise documental">
           <div className="flex items-center justify-between gap-3 text-xs">
-            <span className={`font-medium ${failed?'text-red-700 dark:text-red-300':'text-graphite-700 dark:text-graphite-200'}`}>{analysisInProgress?'Analisando documento':failed?'Análise falhou':'Etapa concluída'}</span>
+            <span className={`font-medium ${failed?'text-error-text ':'text-graphite-700 dark:text-graphite-200'}`}>{analysisInProgress?'Analisando documento':failed?'Análise falhou':'Etapa concluída'}</span>
             <span className="font-semibold tabular-nums">{progress}% <span className="font-normal text-graphite-500">estimado</span></span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-700">
@@ -275,31 +275,31 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
           <p className="text-[11px] text-graphite-500">Percentual estimado por etapa. Enquanto a análise estiver em processamento, o ERP consulta o estado automaticamente.</p>
         </div>
 
-        {failed&&<div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
-          <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
+        {failed&&<div className="space-y-3 rounded-xl border border-error-border bg-error-bg p-4  ">
+          <div className="flex items-start gap-2 text-error-text ">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/>
             <div>
               <strong className="block text-sm">Não foi possível ler o documento com IA</strong>
               <p className="mt-1 text-xs">{failureMessage(extraction?.failureCode||null)}</p>
-              {extraction?.failureCode&&<p className="mt-1 font-mono text-[10px] text-red-600/80 dark:text-red-300/80">Código: {extraction.failureCode}</p>}
+              {extraction?.failureCode&&<p className="mt-1 font-mono text-[10px] text-error-icon/80 /80">Código: {extraction.failureCode}</p>}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={()=>void retryAnalysis()} disabled={busy} className="gap-2"><RefreshCw className={`h-4 w-4 ${busy?'animate-spin':''}`}/>{busy?'Tentando novamente...':'Tentar análise novamente'}</Button>
             {onManualRequested&&<Button variant="outline" onClick={onManualRequested} disabled={busy}>Cadastrar veículo manualmente</Button>}
           </div>
-          <p className="text-[11px] text-red-700/80 dark:text-red-300/80">Nenhum veículo foi criado automaticamente. O documento enviado permanece preservado neste fluxo.</p>
+          <p className="text-[11px] text-error-text/80 /80">Nenhum veículo foi criado automaticamente. O documento enviado permanece preservado neste fluxo.</p>
         </div>}
 
-        {checkingIdentity&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300">Conferindo placa, RENAVAM e chassi em toda a base do ERP…</div>}
+        {checkingIdentity&&<div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info-text   ">Conferindo placa, RENAVAM e chassi em toda a base do ERP…</div>}
 
-        {identityCheck?.exists&&identityCheck.item&&<div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
-          <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
+        {identityCheck?.exists&&identityCheck.item&&<div className="rounded-xl border-2 border-amber-400 bg-warning-bg p-4 dark:border-amber-700 ">
+          <div className="flex items-start gap-2 text-warning-text ">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0"/>
             <div className="min-w-0 flex-1">
               <strong className="block text-sm">Veículo já cadastrado no ERP</strong>
               <p className="mt-1 text-xs">Não crie um novo registro. Os dados lidos correspondem a um cadastro existente.</p>
-              <div className="mt-3 rounded-lg border border-amber-200 bg-white/70 p-3 text-xs dark:border-amber-800 dark:bg-graphite-900/60">
+              <div className="mt-3 rounded-lg border border-warning-border bg-white/70 p-3 text-xs  dark:bg-graphite-900/60">
                 <div><b>Placa:</b> {identityCheck.item.plate}</div>
                 <div><b>Veículo:</b> {identityCheck.item.brand} {identityCheck.item.model}</div>
                 <div><b>Status:</b> {vehicleStatusLabel(identityCheck.item.status)}</div>
@@ -347,7 +347,7 @@ export function VehicleDocumentIntakeModal({isOpen,onClose,onCreated,onManualReq
       </div>}
 
       {message&&<p className="rounded-lg bg-graphite-100 p-3 text-xs text-graphite-700 dark:bg-graphite-800 dark:text-graphite-200">{message}</p>}
-      {error&&<div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
+      {error&&<div className="flex items-start gap-2 rounded-lg bg-error-bg p-3 text-xs text-error-text  "><AlertCircle className="mt-0.5 h-4 w-4 shrink-0"/><span>{error}</span></div>}
     </div>
   </ModalContainer>;
 }

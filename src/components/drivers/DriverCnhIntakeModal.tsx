@@ -420,7 +420,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
       <div className="space-y-5">
         <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-4 text-sm dark:border-graphite-800 dark:bg-graphite-900">
           <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-600" />
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-success-icon" />
             <div>
               <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {isRenewal
@@ -437,7 +437,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+          <div className="flex items-start gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-sm text-error-text   ">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -469,7 +469,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
               </div>
             </div>
             {file ? (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+              <div className="rounded-lg border border-success-border bg-success-bg p-3 text-sm text-success-text   ">
                 <strong>CNH selecionada:</strong> {file.name}
               </div>
             ) : (
@@ -488,13 +488,13 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
           <div className="space-y-4 py-4">
             <div className="flex items-center justify-between text-sm">
               <span className="font-semibold text-graphite-900 dark:text-graphite-100">{progress.label}</span>
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">{progress.percent}%</span>
+              <span className="font-semibold text-success-icon ">{progress.percent}%</span>
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-graphite-200 dark:bg-graphite-800" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
               <div className="h-full rounded-full bg-action-primary transition-all duration-500" style={{ width: `${progress.percent}%` }} />
             </div>
             <div className="text-center">
-              <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-emerald-600" />
+              <RefreshCw className="mx-auto mb-2 h-7 w-7 animate-spin text-success-icon" />
               <p className="text-xs text-graphite-500">{progress.detail}</p>
               {(step === 'PENDING' || step === 'PROCESSING') && (
                 <p className="mt-1 text-[11px] text-graphite-400">O status é atualizado automaticamente a cada 4 segundos.</p>
@@ -517,12 +517,12 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
             {!isRenewal && existingDriverResolution && (
               <div className={`rounded-xl border p-4 text-left ${
                 existingDriverResolution.kind === 'MATCH'
-                  ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
-                  : 'border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/30'
+                  ? 'border-warning-border bg-warning-bg  '
+                  : 'border-error-border bg-error-bg  '
               }`}>
                 <div className="flex items-start gap-3">
                   <AlertCircle className={`mt-0.5 h-5 w-5 shrink-0 ${
-                    existingDriverResolution.kind === 'MATCH' ? 'text-amber-600' : 'text-rose-600'
+                    existingDriverResolution.kind === 'MATCH' ? 'text-warning-icon' : 'text-error-icon'
                   }`} />
                   <div className="space-y-2">
                     <div>
@@ -562,15 +562,15 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
                 ) : (
                   <div className="mt-2 space-y-2">
                     {renewalDifferences.map((item) => (
-                      <div key={item.key} className={`rounded-lg border px-3 py-2 text-xs ${item.key === 'expirationDate' ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30' : 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'}`}>
+                      <div key={item.key} className={`rounded-lg border px-3 py-2 text-xs ${item.key === 'expirationDate' ? 'border-success-border bg-success-bg  ' : 'border-warning-border bg-warning-bg  '}`}>
                         <strong>{item.label}:</strong> {item.current || 'não informado'} → {item.next}
-                        {item.key !== 'expirationDate' && <span className="ml-1 font-semibold text-amber-700 dark:text-amber-300">alteração adicional</span>}
+                        {item.key !== 'expirationDate' && <span className="ml-1 font-semibold text-warning-text ">alteração adicional</span>}
                       </div>
                     ))}
                   </div>
                 )}
                 {additionalRenewalDifferences.length > 0 && (
-                  <label className="mt-3 flex items-start gap-2 text-xs font-medium text-amber-800 dark:text-amber-200">
+                  <label className="mt-3 flex items-start gap-2 text-xs font-medium text-warning-text ">
                     <input
                       type="checkbox"
                       className="mt-0.5"
@@ -602,7 +602,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
                   <option value="NO">Não</option>
                 </Select>
                 {!earReview && (
-                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  <p className="mt-1 text-xs text-warning-text ">
                     EAR não identificado com segurança. A CNH pode ser salva agora; confirme Sim ou Não ao concluir o cadastro.
                   </p>
                 )}
@@ -642,7 +642,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
 
         {step === 'APPROVED' && (
           <div className="space-y-4 text-center py-4">
-            <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-600" />
+            <CheckCircle2 className="mx-auto h-9 w-9 text-success-icon" />
             <div>
               <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {savedDriverId ? 'CNH revisada, aprovada e salva' : 'CNH aprovada, aguardando gravação'}
@@ -663,7 +663,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
 
         {(step === 'FAILED' || step === 'REJECTED') && (
           <div className="space-y-4 text-center py-4">
-            <XCircle className="mx-auto h-9 w-9 text-rose-600" />
+            <XCircle className="mx-auto h-9 w-9 text-error-icon" />
             <div>
               <p className="font-semibold text-graphite-900 dark:text-graphite-100">
                 {providerRateLimited ? 'Serviço de leitura temporariamente indisponível' : 'Esta tentativa não pode preencher o cadastro'}

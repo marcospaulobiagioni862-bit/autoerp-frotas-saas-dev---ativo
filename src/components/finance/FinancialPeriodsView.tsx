@@ -106,7 +106,7 @@ export const FinancialPeriodsView: React.FC = () => {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-xl font-bold text-graphite-900 dark:text-graphite-100">
-            <CalendarRange className="h-5 w-5 text-blue-600" />
+            <CalendarRange className="h-5 w-5 text-info-icon" />
             Períodos Financeiros
           </h2>
           <p className="mt-1 max-w-3xl text-xs text-graphite-500">
@@ -128,8 +128,8 @@ export const FinancialPeriodsView: React.FC = () => {
         <div
           className={`rounded-xl border px-4 py-3 text-xs font-medium ${
             error
-              ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300'
-              : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+              ? 'border-error-border bg-error-bg text-error-text   '
+              : 'border-success-border bg-success-bg text-success-text   '
           }`}
         >
           {error || message}
@@ -138,7 +138,7 @@ export const FinancialPeriodsView: React.FC = () => {
 
       <div className="rounded-xl border border-graphite-200 bg-white p-4 shadow-xs dark:border-graphite-800 dark:bg-graphite-900">
         <div className="mb-4 flex items-center gap-2">
-          <LockKeyhole className="h-4 w-4 text-amber-600" />
+          <LockKeyhole className="h-4 w-4 text-warning-icon" />
           <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100">Fechar período</h3>
         </div>
 
@@ -207,8 +207,8 @@ export const FinancialPeriodsView: React.FC = () => {
                         <span
                           className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
                             closed
-                              ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-                              : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              ? 'bg-error-bg text-error-text  '
+                              : 'bg-success-bg text-success-text  '
                           }`}
                         >
                           {closed ? 'Fechado' : 'Aberto'}
@@ -232,7 +232,7 @@ export const FinancialPeriodsView: React.FC = () => {
                           setMessage('');
                         }}
                         disabled={submitting}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-xs font-bold text-info-text hover:bg-info-bg disabled:opacity-50   "
                       >
                         <UnlockKeyhole className="h-4 w-4" />
                         Reabrir
@@ -241,7 +241,7 @@ export const FinancialPeriodsView: React.FC = () => {
                   </div>
 
                   {reopening && (
-                    <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/40 dark:bg-blue-950/20">
+                    <div className="mt-4 rounded-lg border border-blue-100 bg-info-bg p-3  ">
                       <label className="block space-y-1">
                         <span className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">Motivo obrigatório da reabertura</span>
                         <textarea

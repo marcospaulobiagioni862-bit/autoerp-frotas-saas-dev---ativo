@@ -57,7 +57,7 @@ export const WorkOrderFinanceFields:React.FC<Props>=({partsAmount,servicesAmount
       </div>
     </div>;
   };
-  if(partsAmount<=0&&servicesAmount<=0&&laborAmount<=0)return <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Informe um valor de peças, serviços ou mão de obra para configurar o pagamento.</div>;
+  if(partsAmount<=0&&servicesAmount<=0&&laborAmount<=0)return <div className="rounded-lg border border-warning-border bg-warning-bg p-2 text-[11px] text-warning-text   ">Informe um valor de peças, serviços ou mão de obra para configurar o pagamento.</div>;
   return <div className="space-y-3">
     <div><strong className="text-xs">Valores e pagamento</strong><p className="text-[10px] text-graphite-500">Peças, serviços e mão de obra são controlados separadamente e podem ter formas de pagamento diferentes.</p></div>
     {section('parts','Pagamento de peças',partsAmount)}

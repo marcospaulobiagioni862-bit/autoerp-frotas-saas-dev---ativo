@@ -276,7 +276,7 @@ export function DocumentCenter({ focusFileName, onFocusConsumed }: DocumentCente
           {loading ? (
             <div className="py-10 text-center text-gray-500">Carregando documentos...</div>
           ) : error ? (
-            <div className="py-10 text-center text-red-500">{error}</div>
+            <div className="py-10 text-center text-error-icon">{error}</div>
           ) : filteredAttachments.length === 0 ? (
             <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center dark:border-gray-700 dark:bg-gray-800/60">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Nenhum arquivo encontrado.</p>

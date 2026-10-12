@@ -198,27 +198,27 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
 
       {/* KPI Summary Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Card padding="sm" className="border-l-4 border-l-rose-600 bg-rose-50/30 dark:bg-rose-950/20">
-          <span className="text-[11px] font-bold text-rose-600 uppercase tracking-wider block">Críticos (P0)</span>
+        <Card padding="sm" className="border-l-4 border-l-rose-600 bg-error-bg ">
+          <span className="text-[11px] font-bold text-error-icon uppercase tracking-wider block">Críticos (P0)</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono">{counts.p0}</h3>
-            <Flame className="w-4 h-4 text-rose-500" />
+            <h3 className="text-2xl font-black text-error-icon  font-mono">{counts.p0}</h3>
+            <Flame className="w-4 h-4 text-error-icon" />
           </div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Alta Prioridade (P1)</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-amber-600 font-mono">{counts.p1}</h3>
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
+            <h3 className="text-2xl font-black text-warning-icon font-mono">{counts.p1}</h3>
+            <AlertTriangle className="w-4 h-4 text-warning-icon" />
           </div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-blue-600">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Entregas Hoje</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-blue-600 font-mono">{counts.deliveriesToday}</h3>
-            <Car className="w-4 h-4 text-blue-500" />
+            <h3 className="text-2xl font-black text-info-icon font-mono">{counts.deliveriesToday}</h3>
+            <Car className="w-4 h-4 text-info-icon" />
           </div>
         </Card>
 
@@ -317,7 +317,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
       <div className="space-y-3">
         {filteredActions.length === 0 ? (
           <Card className="text-center py-12">
-            <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+            <CheckCircle2 className="w-12 h-12 text-success-icon mx-auto mb-3" />
             <h3 className="text-base font-bold text-graphite-900 dark:text-graphite-100">Nenhuma pendência operacional para os filtros selecionados</h3>
             <p className="text-xs text-graphite-500 mt-1">Sua operação diária está em dia!</p>
           </Card>
@@ -327,9 +327,9 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
               key={item.id}
               className={`p-4 rounded-xl border bg-white dark:bg-graphite-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all hover:shadow-md ${
                 item.priority === 'P0'
-                  ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/20'
+                  ? 'border-error-border  bg-error-bg'
                   : item.priority === 'P1'
-                  ? 'border-amber-300 dark:border-amber-900/60'
+                  ? 'border-warning-border '
                   : 'border-graphite-200 dark:border-graphite-800'
               }`}
             >
@@ -343,7 +343,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
                   </Badge>
 
                   {item.vehiclePlate && (
-                    <span className="px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-mono text-xs font-bold">
+                    <span className="px-2 py-0.5 rounded bg-info-bg  text-info-icon  font-mono text-xs font-bold">
                       Placa: {item.vehiclePlate}
                     </span>
                   )}
@@ -355,7 +355,7 @@ export const DailyOperationsView: React.FC<DailyOperationsViewProps> = ({
                   )}
 
                   {item.overdueDays > 0 && (
-                    <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-mono text-xs font-bold">
+                    <span className="px-2 py-0.5 rounded bg-error-bg text-error-text   font-mono text-xs font-bold">
                       Atrasado há {item.overdueDays} dia(s)
                     </span>
                   )}

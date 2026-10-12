@@ -20,7 +20,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = () => (
     />
     <Card padding="md" className="space-y-4">
       <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+        <div className="p-2 rounded-lg bg-success-bg text-success-text  ">
           <ShieldCheck className="w-5 h-5" />
         </div>
         <div>

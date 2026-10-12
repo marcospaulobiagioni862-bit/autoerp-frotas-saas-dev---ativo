@@ -57,9 +57,9 @@ export function MaintenanceCrlvHandoffPanel({ workOrderId }: { workOrderId: stri
   };
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+    <div className="rounded-xl border border-info-border bg-info-bg p-4  ">
       <div className="flex items-start gap-3">
-        <FileCheck2 className="mt-0.5 h-5 w-5 text-blue-600" />
+        <FileCheck2 className="mt-0.5 h-5 w-5 text-info-icon" />
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-graphite-800 dark:text-graphite-100">CRLV anexado na manutenção</h4>
           <p className="mt-1 text-xs text-graphite-600 dark:text-graphite-300">
@@ -71,7 +71,7 @@ export function MaintenanceCrlvHandoffPanel({ workOrderId }: { workOrderId: stri
           ) : (
             <div className="mt-3 space-y-2">
               {eligible.map((attachment) => (
-                <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-white p-2 dark:border-blue-900 dark:bg-graphite-950">
+                <div key={attachment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-100 bg-white p-2  dark:bg-graphite-950">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-graphite-800 dark:text-graphite-100">{attachment.fileName}</p>
                     <p className="text-[11px] text-graphite-500">{attachment.mimeType} · {(attachment.fileSize / 1024).toFixed(1)} KB</p>
@@ -92,7 +92,7 @@ export function MaintenanceCrlvHandoffPanel({ workOrderId }: { workOrderId: stri
           )}
 
           {message && (
-            <div className={`mt-3 rounded-lg border p-2 text-xs ${message.kind === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200'}`}>
+            <div className={`mt-3 rounded-lg border p-2 text-xs ${message.kind === 'success' ? 'border-success-border bg-success-bg text-success-text   ' : 'border-error-border bg-error-bg text-error-text   '}`}>
               {message.text}
             </div>
           )}

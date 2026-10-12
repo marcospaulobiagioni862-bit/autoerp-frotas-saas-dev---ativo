@@ -135,7 +135,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <ArrowRightLeft className="w-6 h-6 text-blue-600" />
+            <ArrowRightLeft className="w-6 h-6 text-info-icon" />
             Movimentações
           </h2>
           <p className="text-xs text-graphite-500 mt-0.5">
@@ -154,7 +154,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
       </div>
 
       {message && (
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+        <div className="p-3 bg-success-bg  border border-success-border  rounded-lg text-xs text-success-text  flex items-center justify-between">
           <span>{message}</span>
           <button onClick={() => setMessage(null)} className="p-1 font-bold">
             <X className="w-4 h-4" />
@@ -253,7 +253,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
           </div>
 
           {invalidPeriod && (
-            <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">
+            <p role="alert" className="text-xs font-semibold text-error-icon ">
               A data inicial não pode ser posterior à data final.
             </p>
           )}
@@ -325,10 +325,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                       <td
                         className={`p-3.5 text-right font-mono tabular-nums font-bold ${
                           isIncome
-                            ? 'text-emerald-600 dark:text-emerald-400'
+                            ? 'text-success-icon '
                             : isExpense
                             ? 'text-indigo-600 dark:text-indigo-400'
-                            : 'text-blue-600 dark:text-blue-400'
+                            : 'text-info-icon '
                         }`}
                       >
                         {isIncome ? '+' : isExpense ? '-' : ''} R${' '}
@@ -343,7 +343,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenTransf
                             size="sm"
                             variant="ghost"
                             onClick={() => openReversal(tx)}
-                            className="text-graphite-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                            className="text-graphite-500 hover:text-error-icon hover:bg-error-bg dark:hover:bg-red-950/40"
                           >
                             Estornar
                           </Button>

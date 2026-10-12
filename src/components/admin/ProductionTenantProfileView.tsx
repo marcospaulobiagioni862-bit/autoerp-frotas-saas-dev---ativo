@@ -109,13 +109,13 @@ export const ProductionTenantProfileView: React.FC = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-4 rounded-2xl border border-graphite-200 bg-white p-6 shadow-sm dark:border-graphite-800 dark:bg-graphite-900 md:flex-row md:items-center md:justify-between">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-blue-50 p-3 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+          <div className="rounded-xl bg-info-bg p-3 text-info-text  ">
             <Building2 className="h-6 w-6" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100">Empresa</h2>
-              <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <Badge className="border-success-border bg-success-bg text-success-text   ">
                 Dados protegidos
               </Badge>
             </div>
@@ -130,12 +130,12 @@ export const ProductionTenantProfileView: React.FC = () => {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200">
+        <div className="flex items-center gap-2 rounded-lg border border-error-border bg-error-bg p-3 text-sm text-error-text   ">
           <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
         </div>
       )}
       {message && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+        <div className="flex items-center gap-2 rounded-lg border border-success-border bg-success-bg p-3 text-sm text-success-text   ">
           <ShieldCheck className="h-4 w-4 shrink-0" /> {message}
         </div>
       )}

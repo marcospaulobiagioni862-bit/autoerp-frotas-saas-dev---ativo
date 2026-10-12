@@ -170,16 +170,16 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'VEHICLE': return <Car className="w-4 h-4 text-blue-500" />;
+      case 'VEHICLE': return <Car className="w-4 h-4 text-info-icon" />;
       case 'CONTRACT': return <FileText className="w-4 h-4 text-indigo-500" />;
-      case 'MAINTENANCE': return <Wrench className="w-4 h-4 text-amber-500" />;
-      case 'DOCUMENT': return <FileCheck className="w-4 h-4 text-rose-500" />;
+      case 'MAINTENANCE': return <Wrench className="w-4 h-4 text-warning-icon" />;
+      case 'DOCUMENT': return <FileCheck className="w-4 h-4 text-error-icon" />;
       case 'FINE': return <ShieldAlert className="w-4 h-4 text-orange-500" />;
       case 'DRIVER': return <Users className="w-4 h-4 text-purple-500" />;
-      case 'INSURANCE': return <ShieldCheck className="w-4 h-4 text-emerald-500" />;
+      case 'INSURANCE': return <ShieldCheck className="w-4 h-4 text-success-icon" />;
       case 'TRACKER': return <Radio className="w-4 h-4 text-teal-500" />;
       case 'RECEIVABLE':
-      case 'PAYABLE': return <DollarSign className="w-4 h-4 text-emerald-500" />;
+      case 'PAYABLE': return <DollarSign className="w-4 h-4 text-success-icon" />;
       default: return <AlertTriangle className="w-4 h-4 text-graphite-500" />;
     }
   };
@@ -249,35 +249,35 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Críticas & Bloqueadores</span>
-              <h3 className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 font-mono">{criticalCount}</h3>
+              <h3 className="text-2xl font-black text-error-icon  mt-1 font-mono">{criticalCount}</h3>
             </div>
-            <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl dark:bg-rose-950/60 dark:text-rose-400">
+            <div className="p-2.5 bg-error-bg text-error-icon rounded-xl  ">
               <ShieldAlert className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-2 text-[11px] text-rose-600 font-medium">Exigem ação imediata (P0 / P1)</div>
+          <div className="mt-2 text-[11px] text-error-icon font-medium">Exigem ação imediata (P0 / P1)</div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Importantes / Avisos</span>
-              <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 font-mono">{importantCount}</h3>
+              <h3 className="text-2xl font-black text-warning-icon  mt-1 font-mono">{importantCount}</h3>
             </div>
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl dark:bg-amber-950/60 dark:text-amber-400">
+            <div className="p-2.5 bg-warning-bg text-warning-icon rounded-xl  ">
               <Clock className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-2 text-[11px] text-amber-600 font-medium">Próximos vencimentos (P2)</div>
+          <div className="mt-2 text-[11px] text-warning-icon font-medium">Próximos vencimentos (P2)</div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-blue-600">
           <div className="flex justify-between items-start">
             <div>
               <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider block">Itens Vencidos</span>
-              <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">{overdueCount}</h3>
+              <h3 className="text-2xl font-black text-info-icon  mt-1 font-mono">{overdueCount}</h3>
             </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-950/60 dark:text-blue-400">
+            <div className="p-2.5 bg-info-bg text-info-icon rounded-xl  ">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
@@ -350,7 +350,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
         <div className="divide-y divide-graphite-100 dark:divide-graphite-800 overflow-y-auto max-h-[600px]">
           {filteredPendings.length === 0 ? (
             <div className="p-12 text-center space-y-3">
-              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto dark:bg-emerald-950 dark:text-emerald-400">
+              <div className="w-12 h-12 bg-success-bg text-success-icon rounded-full flex items-center justify-center mx-auto  ">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <h4 className="text-sm font-bold text-graphite-800 dark:text-graphite-200">{filter === 'DRIVER' ? 'Nenhum motorista com pendência' : 'Nenhuma pendência encontrada'}</h4>
@@ -376,7 +376,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                         {item.category}
                       </span>
                       {item.vehiclePlate && (
-                        <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded">
+                        <span className="text-[11px] font-mono font-bold text-info-icon  bg-info-bg  px-2 py-0.5 rounded">
                           Placa: {item.vehiclePlate}
                         </span>
                       )}
@@ -400,7 +400,7 @@ export const PendingCenterView: React.FC<PendingCenterViewProps> = ({
                         <span>Vencimento: <strong className="text-graphite-700 dark:text-graphite-300 font-mono">{item.dueDate}</strong></span>
                       )}
                       {item.overdueDays > 0 && (
-                        <span className="text-rose-600 font-bold">Em atraso por {item.overdueDays} dia(s)</span>
+                        <span className="text-error-icon font-bold">Em atraso por {item.overdueDays} dia(s)</span>
                       )}
                       <span>Ação Recomendada: <strong className="text-graphite-700 dark:text-graphite-300">{item.actionRecommended}</strong></span>
                     </div>

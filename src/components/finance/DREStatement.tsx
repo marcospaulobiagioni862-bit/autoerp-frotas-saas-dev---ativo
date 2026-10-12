@@ -16,9 +16,9 @@ export function DREStatement({ report: dreReport }: { report: DREReport }) {
       </div>
 
       <div className="space-y-2 text-xs">
-        <div className="flex justify-between items-center p-3 bg-emerald-50/70 dark:bg-emerald-950/20 rounded-lg font-bold text-graphite-900 dark:text-graphite-100">
+        <div className="flex justify-between items-center p-3 bg-success-bg  rounded-lg font-bold text-graphite-900 dark:text-graphite-100">
           <span>(+) Receita operacional bruta</span>
-          <span className="text-emerald-700 dark:text-emerald-400 font-mono tabular-nums text-sm">R$ {dreReport.grossRevenue.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+          <span className="text-success-text  font-mono tabular-nums text-sm">R$ {dreReport.grossRevenue.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
         </div>
 
         <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/20 rounded-lg space-y-1.5">

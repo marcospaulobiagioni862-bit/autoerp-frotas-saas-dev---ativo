@@ -308,7 +308,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 <span className="text-3xl font-extrabold text-graphite-900">{analysis?.overallScore || 0}</span>
                 <span className="text-sm font-semibold text-graphite-500">/ 100</span>
               </div>
-              <p className="mt-2 text-xs font-medium text-emerald-600 flex items-center gap-1">
+              <p className="mt-2 text-xs font-medium text-success-icon flex items-center gap-1">
                 <CheckCircle className="w-3.5 h-3.5" /> Classificação: {analysis?.classification || 'NORMAL'}
               </p>
             </div>
@@ -316,7 +316,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
                 <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Cumprimento de Metas</span>
-                <span className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Award className="w-5 h-5" /></span>
+                <span className="p-2 bg-success-bg text-success-icon rounded-lg"><Award className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-graphite-900">{analysis?.goalAchievementScore || 0}%</span>
@@ -329,7 +329,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
             <div className="bg-white p-5 rounded-xl border border-graphite-200 shadow-sm">
               <div className="flex justify-between items-start">
                 <span className="text-xs font-semibold text-graphite-500 uppercase tracking-wider">Saúde dos KPIs</span>
-                <span className="p-2 bg-blue-50 text-blue-600 rounded-lg"><BarChart3 className="w-5 h-5" /></span>
+                <span className="p-2 bg-info-bg text-info-icon rounded-lg"><BarChart3 className="w-5 h-5" /></span>
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-3xl font-extrabold text-graphite-900">{analysis?.kpiHealthScore || 0}%</span>
@@ -381,16 +381,16 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
             <div className="bg-white p-6 rounded-xl border border-graphite-200 shadow-sm">
               <h3 className="text-base font-bold text-graphite-900 mb-4 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <ShieldCheck className="w-5 h-5 text-success-icon" />
                 Invariantes & Núcleo Financeiro Congelado 🔒
               </h3>
               <div className="bg-graphite-50 p-4 rounded-lg border border-graphite-200 space-y-2 text-xs font-mono text-graphite-700">
-                <div className="flex justify-between"><span>FINANCIAL_FILES_MODIFIED:</span> <span className="font-bold text-emerald-600">0</span></div>
-                <div className="flex justify-between"><span>FINANCIAL_STATE_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
-                <div className="flex justify-between"><span>FINANCIAL_BALANCES_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
-                <div className="flex justify-between"><span>FINANCIAL_SCHEMA_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
-                <div className="flex justify-between"><span>FINANCIAL_LOGIC_CHANGED:</span> <span className="font-bold text-emerald-600">FALSE</span></div>
-                <div className="flex justify-between"><span>FINANCIAL_WRITES_FROM_PHASE_3_60:</span> <span className="font-bold text-emerald-600">0</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_FILES_MODIFIED:</span> <span className="font-bold text-success-icon">0</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_STATE_CHANGED:</span> <span className="font-bold text-success-icon">FALSE</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_BALANCES_CHANGED:</span> <span className="font-bold text-success-icon">FALSE</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_SCHEMA_CHANGED:</span> <span className="font-bold text-success-icon">FALSE</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_LOGIC_CHANGED:</span> <span className="font-bold text-success-icon">FALSE</span></div>
+                <div className="flex justify-between"><span>FINANCIAL_WRITES_FROM_PHASE_3_60:</span> <span className="font-bold text-success-icon">0</span></div>
               </div>
               <p className="mt-4 text-xs text-graphite-500">
                 A camada 3.60 opera estritamente acima das baselines 3.49-3.59. Indicadores financeiros são lidos em modo exclusivo READ_ONLY.
@@ -443,7 +443,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="font-bold text-graphite-900">{kr.currentValue} / {kr.target}</span>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-semibold">{kr.progressPercentage}%</span>
+                            <span className="px-2 py-0.5 bg-success-bg text-success-text rounded font-semibold">{kr.progressPercentage}%</span>
                           </div>
                         </div>
                       ))
@@ -498,8 +498,8 @@ export const PerformanceManagementCenterView: React.FC = () => {
                     <td className="p-3 font-bold text-indigo-600">{g.progressPercentage}%</td>
                     <td className="p-3">
                       <span className={`px-2 py-0.5 rounded font-bold text-xs ${
-                        g.status === 'ACHIEVED' ? 'bg-emerald-100 text-emerald-800' :
-                        g.status === 'AT_RISK' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                        g.status === 'ACHIEVED' ? 'bg-success-bg text-success-text' :
+                        g.status === 'AT_RISK' ? 'bg-warning-bg text-warning-text' : 'bg-info-bg text-info-text'
                       }`}>
                         {g.status}
                       </span>
@@ -537,7 +537,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-sm text-graphite-900">{k.name}</h3>
                       {k.isReadOnlyFinancial && (
-                        <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                        <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded bg-warning-bg text-warning-text font-bold">
                           <Lock className="w-3 h-3" /> READ_ONLY
                         </span>
                       )}
@@ -545,7 +545,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                     <p className="text-xs text-graphite-500">{k.description}</p>
                   </div>
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                    k.status === 'NORMAL' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                    k.status === 'NORMAL' ? 'bg-success-bg text-success-text' : 'bg-error-bg text-error-text'
                   }`}>
                     {k.status}
                   </span>
@@ -585,13 +585,13 @@ export const PerformanceManagementCenterView: React.FC = () => {
                     <h3 className="font-bold text-graphite-900 text-sm">{p.title}</h3>
                     <p className="text-xs text-graphite-600">{p.description}</p>
                   </div>
-                  <span className="px-2.5 py-1 rounded bg-blue-100 text-blue-800 text-xs font-bold">{p.status}</span>
+                  <span className="px-2.5 py-1 rounded bg-info-bg text-info-text text-xs font-bold">{p.status}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs text-graphite-600 bg-white p-2.5 rounded border border-graphite-200">
                   <div>Vencimento: <span className="font-semibold">{p.dueDate}</span></div>
                   <div>Tarefas Criadas: <span className="font-mono font-bold text-indigo-600">{p.linkedTaskIds.length}</span></div>
-                  <div>Progresso: <span className="font-bold text-emerald-600">{p.progressPercentage}%</span></div>
+                  <div>Progresso: <span className="font-bold text-success-icon">{p.progressPercentage}%</span></div>
                 </div>
               </div>
             ))}
@@ -626,7 +626,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                     <td className="p-3 font-mono">{m.measuredAt.substring(0, 16)} ({m.source})</td>
                     <td className="p-3 font-bold">{m.measuredValue}</td>
                     <td className="p-3">{m.expectedValue}</td>
-                    <td className={`p-3 font-bold ${m.variance < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{m.variance}</td>
+                    <td className={`p-3 font-bold ${m.variance < 0 ? 'text-error-icon' : 'text-success-icon'}`}>{m.variance}</td>
                     <td className="p-3 font-bold text-indigo-600">{m.percentageAchieved}%</td>
                     <td className="p-3">{m.measuredBy}</td>
                   </tr>
@@ -686,30 +686,30 @@ export const PerformanceManagementCenterView: React.FC = () => {
             {data.goals
               .filter((g) => g.status === 'AT_RISK' || g.status === 'FAILED')
               .map((g) => (
-                <div key={g.id} className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs flex justify-between items-center">
+                <div key={g.id} className="p-4 rounded-lg bg-warning-bg border border-warning-border text-xs flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                    <AlertTriangle className="w-5 h-5 text-warning-icon" />
                     <div>
-                      <div className="font-bold text-amber-900">[ALERTA P1] Meta em Risco: {g.title}</div>
-                      <div className="text-amber-700">Progresso atual em {g.progressPercentage}% com vencimento em {g.dueDate}</div>
+                      <div className="font-bold text-warning-text">[ALERTA P1] Meta em Risco: {g.title}</div>
+                      <div className="text-warning-text">Progresso atual em {g.progressPercentage}% com vencimento em {g.dueDate}</div>
                     </div>
                   </div>
-                  <span className="px-3 py-1 bg-amber-200 text-amber-900 rounded font-bold">ESCALADO P1</span>
+                  <span className="px-3 py-1 bg-amber-200 text-warning-text rounded font-bold">ESCALADO P1</span>
                 </div>
               ))}
 
             {data.kpis
               .filter((k) => k.status === 'CRITICAL')
               .map((k) => (
-                <div key={k.id} className="p-4 rounded-lg bg-red-50 border border-red-200 text-xs flex justify-between items-center">
+                <div key={k.id} className="p-4 rounded-lg bg-error-bg border border-error-border text-xs flex justify-between items-center">
                   <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <AlertTriangle className="w-5 h-5 text-error-icon" />
                     <div>
-                      <div className="font-bold text-red-900">[ALERTA P0] KPI Crítico: {k.name}</div>
-                      <div className="text-red-700">Valor atual {k.currentValue} abaixo do limite crítico ({k.criticalThreshold})</div>
+                      <div className="font-bold text-error-text">[ALERTA P0] KPI Crítico: {k.name}</div>
+                      <div className="text-error-text">Valor atual {k.currentValue} abaixo do limite crítico ({k.criticalThreshold})</div>
                     </div>
                   </div>
-                  <span className="px-3 py-1 bg-red-200 text-red-900 rounded font-bold">ESCALADO P0</span>
+                  <span className="px-3 py-1 bg-red-200 text-error-text rounded font-bold">ESCALADO P0</span>
                 </div>
               ))}
 
@@ -767,7 +767,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
 
           {testSummary ? (
             <div className="space-y-4">
-              <div className={`p-4 rounded-lg border ${testSummary.overallPassed ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'}`}>
+              <div className={`p-4 rounded-lg border ${testSummary.overallPassed ? 'bg-success-bg border-success-border text-success-text' : 'bg-error-bg border-error-border text-error-text'}`}>
                 <h3 className="font-extrabold text-sm flex items-center gap-2">
                   <CheckCircle className="w-5 h-5" />
                   STATUS GERAL: {testSummary.overallPassed ? 'HOMOLOGADA (100% GREEN)' : 'FALHAS DETECTADAS'}
@@ -784,7 +784,7 @@ export const PerformanceManagementCenterView: React.FC = () => {
                 ].map((s, idx) => (
                   <div key={idx} className="p-3 bg-graphite-50 rounded border border-graphite-200 space-y-1">
                     <div className="font-bold text-graphite-900">{s.suiteName}</div>
-                    <div className="text-graphite-600">Total: {s.total} | Aprovados: <span className="text-emerald-600 font-bold">{s.passed}</span> | Falhas: <span className="text-red-600 font-bold">{s.failed}</span></div>
+                    <div className="text-graphite-600">Total: {s.total} | Aprovados: <span className="text-success-icon font-bold">{s.passed}</span> | Falhas: <span className="text-error-icon font-bold">{s.failed}</span></div>
                   </div>
                 ))}
               </div>

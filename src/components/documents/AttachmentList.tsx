@@ -38,19 +38,19 @@ function expirationLabel(expirationDate?: string, settings: DocumentAlertSetting
   if (!state) return null;
   const days = state.days;
   const dateLabel = new Date(`${expirationDate}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-  if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  if (state.color === 'RED') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
-  if (state.color === 'YELLOW') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
-  return { text: `Válido · ${dateLabel}`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+  if (days < 0) return { text: `Vencido · ${dateLabel}`, className: 'bg-error-bg text-error-text  ' };
+  if (state.color === 'RED') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-error-bg text-error-text  ' };
+  if (state.color === 'YELLOW') return { text: `Vence em ${days}d · ${dateLabel}`, className: 'bg-warning-bg text-warning-text  ' };
+  return { text: `Válido · ${dateLabel}`, className: 'bg-success-bg text-success-text  ' };
 }
 
 function extractionStatusLabel(status: DocumentAiAttachmentStatus['status']): { text: string; className: string } {
-  if (status === 'PENDING') return { text: 'Na fila', className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
-  if (status === 'PROCESSING') return { text: 'Processando', className: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300' };
+  if (status === 'PENDING') return { text: 'Na fila', className: 'bg-warning-bg text-warning-text  ' };
+  if (status === 'PROCESSING') return { text: 'Processando', className: 'bg-info-bg text-info-text  ' };
   if (status === 'REVIEW_REQUIRED') return { text: 'Revisar extração', className: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300' };
-  if (status === 'APPROVED') return { text: 'Extração aprovada', className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
+  if (status === 'APPROVED') return { text: 'Extração aprovada', className: 'bg-success-bg text-success-text  ' };
   if (status === 'REJECTED') return { text: 'Extração rejeitada', className: 'bg-graphite-100 text-graphite-600 dark:bg-graphite-800 dark:text-graphite-300' };
-  return { text: 'Extração falhou', className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  return { text: 'Extração falhou', className: 'bg-error-bg text-error-text  ' };
 }
 
 export function AttachmentList({
@@ -304,25 +304,25 @@ export function AttachmentList({
   };
 
   if (loading) return <div className="text-sm text-gray-500">Carregando documentos...</div>;
-  if (error && attachments.length === 0) return <div role="alert" className="text-sm text-red-500">{error}</div>;
+  if (error && attachments.length === 0) return <div role="alert" className="text-sm text-error-icon">{error}</div>;
 
   return (
     <div className="space-y-4">
       {error && (
-        <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+        <div role="alert" className="rounded-md border border-error-border bg-error-bg p-3 text-sm text-error-text   ">
           {error} Os anexos já carregados continuam disponíveis abaixo.
         </div>
       )}
       {showDocumentAiControls && attachmentStatusesUnavailable && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="rounded-md border border-warning-border bg-warning-bg p-3 text-sm text-warning-text   ">
           Estados de extração temporariamente indisponíveis. Os documentos continuam acessíveis.
         </div>
       )}
       {showDocumentAiControls && documentAiMessage && (
         <div className={`rounded-md border p-3 text-sm ${
           documentAiMessage.kind === 'success'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
-            : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200'
+            ? 'border-success-border bg-success-bg text-success-text   '
+            : 'border-error-border bg-error-bg text-error-text   '
         }`}>
           {documentAiMessage.text}
         </div>
@@ -354,7 +354,7 @@ export function AttachmentList({
                       <span className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</span>
                       <span className="text-xs text-gray-400">·</span>
                       <span className="text-xs text-gray-500">Cadastrado em {new Date(att.createdAt).toLocaleDateString('pt-BR')}</span>
-                      {!contentAvailable && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">Arquivo indisponível no armazenamento</span>}
+                      {!contentAvailable && <span className="rounded-full bg-error-bg px-2 py-0.5 text-[11px] font-medium text-error-text  ">Arquivo indisponível no armazenamento</span>}
                       {expirationBadge && (
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${expirationBadge.className}`}>
                           {expirationBadge.text}
@@ -394,7 +394,7 @@ export function AttachmentList({
                     size="sm"
                     onClick={() => setDeleteId(att.id)}
                     disabled={att.id === latestDriverCnhId}
-                    className="text-amber-500 hover:text-amber-700 disabled:text-graphite-400"
+                    className="text-warning-icon hover:text-warning-text disabled:text-graphite-400"
                     title={att.id === latestDriverCnhId ? 'CNH vigente: substitua pelo fluxo Nova CNH / Renovar CNH' : 'Arquivar'}
                   ><Archive className="h-4 w-4" /></Button>
                   {canDeletePermanently && (
@@ -403,7 +403,7 @@ export function AttachmentList({
                       size="sm"
                       onClick={() => setPermanentDeleteId(att.id)}
                       disabled={att.id === latestDriverCnhId}
-                      className="text-red-500 hover:text-red-700 disabled:text-graphite-400"
+                      className="text-error-icon hover:text-error-text disabled:text-graphite-400"
                       title={att.id === latestDriverCnhId ? 'CNH vigente: exclusão permanente bloqueada' : 'Excluir definitivamente'}
                     ><Trash2 className="h-4 w-4" /></Button>
                   )}
@@ -417,7 +417,7 @@ export function AttachmentList({
       {historyAttachmentId && (
         <div className="rounded-md border border-graphite-200 bg-graphite-50 p-3 text-sm dark:border-graphite-700 dark:bg-graphite-900/40">
           <div className="mb-2 flex items-center gap-2 font-medium text-graphite-800 dark:text-graphite-100"><History className="h-4 w-4" /> Histórico sanitizado da extração</div>
-          {historyLoading ? <p className="text-graphite-500">Carregando histórico...</p> : historyError ? <p className="text-red-600 dark:text-red-300">{historyError}</p> : historyItems.length === 0 ? <p className="text-graphite-500">Nenhum evento sanitizado disponível para este anexo.</p> : (
+          {historyLoading ? <p className="text-graphite-500">Carregando histórico...</p> : historyError ? <p className="text-error-icon ">{historyError}</p> : historyItems.length === 0 ? <p className="text-graphite-500">Nenhum evento sanitizado disponível para este anexo.</p> : (
             <ol className="space-y-1 text-graphite-600 dark:text-graphite-300">{historyItems.map((item, index) => <li key={`${item.updatedAt}-${index}`}>{item.status} · tentativa {item.attemptCount} · {new Date(item.updatedAt).toLocaleString('pt-BR')}{item.failureCode ? ` · ${item.failureCode}` : ''}</li>)}</ol>
           )}
         </div>

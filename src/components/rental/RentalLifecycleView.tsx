@@ -191,16 +191,16 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
         <Card padding="sm" className="border-l-4 border-l-blue-500">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Reservas / Pré</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-blue-600 font-mono">{counts.reserved}</h3>
-            <Calendar className="w-4 h-4 text-blue-500" />
+            <h3 className="text-2xl font-black text-info-icon font-mono">{counts.reserved}</h3>
+            <Calendar className="w-4 h-4 text-info-icon" />
           </div>
         </Card>
 
         <Card padding="sm" className="border-l-4 border-l-amber-500">
           <span className="text-[11px] font-bold text-graphite-600 dark:text-graphite-400 uppercase tracking-wider block">Em Preparação</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-amber-600 font-mono">{counts.preparing}</h3>
-            <Clock className="w-4 h-4 text-amber-500" />
+            <h3 className="text-2xl font-black text-warning-icon font-mono">{counts.preparing}</h3>
+            <Clock className="w-4 h-4 text-warning-icon" />
           </div>
         </Card>
 
@@ -212,11 +212,11 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
           </div>
         </Card>
 
-        <Card padding="sm" className="border-l-4 border-l-emerald-600 bg-emerald-50/20">
-          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block">Locações Ativas</span>
+        <Card padding="sm" className="border-l-4 border-l-emerald-600 bg-success-bg">
+          <span className="text-[11px] font-bold text-success-text  uppercase tracking-wider block">Locações Ativas</span>
           <div className="flex items-baseline justify-between mt-1">
-            <h3 className="text-2xl font-black text-emerald-600 font-mono">{counts.active}</h3>
-            <Car className="w-4 h-4 text-emerald-500" />
+            <h3 className="text-2xl font-black text-success-icon font-mono">{counts.active}</h3>
+            <Car className="w-4 h-4 text-success-icon" />
           </div>
         </Card>
 
@@ -287,7 +287,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
 
           {filteredItems.length === 0 ? (
             <Card className="text-center py-12">
-              <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-3" />
+              <CheckCircle2 className="w-12 h-12 text-success-icon mx-auto mb-3" />
               <h4 className="text-base font-bold text-graphite-900 dark:text-graphite-100">Nenhum contrato encontrado</h4>
               <p className="text-xs text-graphite-500 mt-1">Ajuste os filtros ou crie um novo contrato no módulo de Contratos.</p>
             </Card>
@@ -329,8 +329,8 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
                 </div>
 
                 {item.readinessBlockers.length > 0 && item.currentStage === 'RESERVED' && (
-                  <div className="mt-3 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div className="mt-3 p-2 rounded-lg bg-warning-bg  border border-warning-border  text-xs text-warning-text  flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning-icon flex-shrink-0" />
                     <span>Bloqueio de prontidão: {item.readinessBlockers[0]}</span>
                   </div>
                 )}
@@ -366,7 +366,7 @@ export const RentalLifecycleView: React.FC<RentalLifecycleViewProps> = ({
                   </div>
                   <div className="flex justify-between py-1 border-b border-graphite-100 dark:border-graphite-800">
                     <span className="text-graphite-500">Prontidão entrega:</span>
-                    <span className={selectedItem.isReadyForDelivery ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>
+                    <span className={selectedItem.isReadyForDelivery ? 'text-success-icon font-bold' : 'text-warning-icon font-bold'}>
                       {selectedItem.isReadyForDelivery ? 'Pronto (OK)' : 'Com Pendências'}
                     </span>
                   </div>

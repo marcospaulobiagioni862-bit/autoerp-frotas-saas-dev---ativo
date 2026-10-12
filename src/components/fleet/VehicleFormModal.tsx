@@ -248,7 +248,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-3">
         {errorMessage && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-xs text-red-700 dark:text-red-300">
+          <div className="p-3 bg-error-bg  border border-error-border  rounded-lg flex items-center gap-2 text-xs text-error-text ">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -323,7 +323,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                   handleChange('ownerName', 'TRIFLEX ASSISTENCIA TECNICA DE MAQUINAS');
                   handleChange('ownerDocument', '22.791.551/0001-53');
                 }}
-                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                className="text-[11px] text-info-icon  hover:underline font-medium"
               >
                 Preencher dados da empresa
               </button>

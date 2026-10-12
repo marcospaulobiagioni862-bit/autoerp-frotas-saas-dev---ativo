@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div>
             <h1 className="text-sm sm:text-base font-bold text-graphite-900 dark:text-graphite-100 leading-tight flex items-center gap-1.5">
               <span>AutoERP</span>
-              <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+              <span className="text-[10px] sm:text-xs font-medium px-2 py-0.5 rounded-full bg-info-bg text-info-text   border border-info-border ">
                 V2 Preview
               </span>
             </h1>
@@ -141,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{authMode === 'server-session' ? 'Ambiente isolado para revisão' : 'Ambiente de desenvolvimento'}</span>
               {authMode === 'server-session' && (
                 <span
-                  className={buildIdentity?.commitSha ? 'font-mono text-emerald-600 dark:text-emerald-400' : 'font-medium text-amber-600 dark:text-amber-400'}
+                  className={buildIdentity?.commitSha ? 'font-mono text-success-icon ' : 'font-medium text-warning-icon '}
                   title={buildIdentity?.commitSha || 'O ambiente implantado ainda não expôs o SHA do commit.'}
                 >
                   · preview isolado · {buildIdentity?.commitSha ? buildIdentity.commitSha.slice(0, 7) : 'SHA ?'}
@@ -218,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({
                     setIsUserMenuOpen(false);
                     onNavigateTab?.('administration');
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-graphite-700 dark:text-graphite-300 hover:bg-graphite-50 dark:hover:bg-graphite-800/60 hover:text-blue-600 dark:text-graphite-300 dark:hover:text-blue-400 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-graphite-700 dark:text-graphite-300 hover:bg-graphite-50 dark:hover:bg-graphite-800/60 hover:text-info-icon dark:text-graphite-300 dark:hover:text-blue-400 transition-colors text-left"
                 >
                   <Settings className="w-4 h-4 text-graphite-400 dark:text-graphite-500" />
                   <div>
@@ -237,7 +237,7 @@ export const Header: React.FC<HeaderProps> = ({
                   role="menuitem"
                   disabled={isLoggingOut}
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors text-left disabled:opacity-50"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-error-icon  hover:bg-error-bg dark:hover:bg-rose-950/40 rounded-lg transition-colors text-left disabled:opacity-50"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>{isLoggingOut ? 'Saindo...' : 'Sair da conta'}</span>

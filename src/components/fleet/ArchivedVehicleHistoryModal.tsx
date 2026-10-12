@@ -100,7 +100,7 @@ export const ArchivedVehicleHistoryModal: React.FC<ArchivedVehicleHistoryModalPr
       {loading ? (
         <div className="space-y-4"><Skeleton className="h-12 w-full"/><Skeleton className="h-64 w-full"/></div>
       ) : error || !summary || !vehicle ? (
-        <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700">{error || 'Histórico indisponível.'}</div>
+        <div className="p-4 rounded-xl border border-error-border bg-error-bg text-sm text-error-text">{error || 'Histórico indisponível.'}</div>
       ) : (
         <div className="space-y-5">
           <div className="rounded-xl border bg-graphite-50 dark:bg-graphite-800/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

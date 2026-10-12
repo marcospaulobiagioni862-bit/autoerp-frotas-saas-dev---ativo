@@ -506,7 +506,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           <Skeleton className="h-60 w-full rounded-xl" />
         </div>
       ) : error || !summary || !driver ? (
-        <div className="p-8 text-center text-rose-600 dark:text-rose-400">
+        <div className="p-8 text-center text-error-icon ">
           <AlertTriangle className="w-10 h-10 mx-auto mb-2" />
           <p className="font-semibold">{error || 'Motorista não encontrado.'}</p>
         </div>
@@ -536,7 +536,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           </div>
 
           {summary.cnhAlert.status !== DocumentStatus.VALID && (
-            <div className="p-3.5 rounded-xl border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-xs">
+            <div className="p-3.5 rounded-xl border bg-warning-bg  border-warning-border  text-xs">
               <ShieldAlert className="w-4 h-4 inline mr-2" />
               <strong>Alerta de CNH:</strong> {summary.cnhAlert.message}
             </div>
@@ -549,7 +549,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-xs font-semibold ${activeTab === tab.id ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30' : 'border-graphite-200 text-graphite-500 hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-800/50'}`}
+                  className={`flex min-h-11 items-center justify-center gap-2 rounded-lg border px-4 py-3 text-xs font-semibold ${activeTab === tab.id ? 'border-emerald-600 bg-success-bg text-success-text ' : 'border-graphite-200 text-graphite-500 hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-800/50'}`}
                 >
                   <Icon className="w-4 h-4" />{tab.label}
                 </button>
@@ -598,7 +598,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
               <div className="flex flex-col gap-3 rounded-lg border border-graphite-200 p-3 dark:border-graphite-800 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
-                  <File className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <File className="h-5 w-5 shrink-0 text-success-icon" />
                   <div>
                     <div className="text-sm font-semibold">Identificação cadastral</div>
                     <div className="text-[11px] text-graphite-500">CPF {driver.cpf ? 'cadastrado' : 'pendente'} • RG {driver.rg ? 'cadastrado' : 'pendente'}</div>
@@ -609,7 +609,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
 
               <div className="flex flex-col gap-3 rounded-lg border border-graphite-200 p-3 dark:border-graphite-800 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
-                  <FileText className="h-5 w-5 shrink-0 text-emerald-600" />
+                  <FileText className="h-5 w-5 shrink-0 text-success-icon" />
                   <div>
                     <div className="text-sm font-semibold">Comprovante de residência</div>
                     <div className="text-[11px] text-graphite-500">
@@ -628,7 +628,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                   </Button>
                   {currentResidenceDocument && (
                     <Button size="sm" variant="ghost" onClick={() => handleRemoveDocument(currentResidenceDocument.id)} title="Arquivar comprovante atual">
-                      <Trash2 className="w-4 h-4 text-rose-600" />
+                      <Trash2 className="w-4 h-4 text-error-icon" />
                     </Button>
                   )}
                 </div>
@@ -687,7 +687,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
               {summary.contractHistory.length === 0 ? <p className="text-xs text-graphite-400">Nenhum contrato registrado.</p> : summary.contractHistory.map((contract) => (
                 <Card key={contract.id} className="p-3 flex justify-between text-xs">
                   <div><strong className="font-mono block">Contrato #{contract.contractNumber || contract.id}</strong><span>{contract.startDate || '—'} → {contract.endDate || 'Em andamento'}</span></div>
-                  <div className="text-right"><strong className="text-emerald-600 block">{formatCurrencyBRL(Number(contract.rentalAmount || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : contract.status === 'AWAITING_SIGNATURE' ? 'warning' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge></div>
+                  <div className="text-right"><strong className="text-success-icon block">{formatCurrencyBRL(Number(contract.rentalAmount || 0))}</strong><Badge variant={contract.status === 'ACTIVE' ? 'success' : contract.status === 'AWAITING_SIGNATURE' ? 'warning' : 'neutral'}>{contractStatusLabel(contract.status)}</Badge></div>
                 </Card>
               ))}
             </div>
@@ -696,9 +696,9 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           {activeTab === 'finance' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Card className="p-3"><span className="text-xs text-graphite-400 block">Pendente</span><strong className="text-amber-600">{formatCurrencyBRL(summary.financialSummary.totalPendingAmount)}</strong></Card>
-                <Card className="p-3"><span className="text-xs text-graphite-400 block">Vencido</span><strong className="text-rose-600">{formatCurrencyBRL(summary.financialSummary.totalOverdueAmount)}</strong></Card>
-                <Card className="p-3"><span className="text-xs text-graphite-400 block">Recebido</span><strong className="text-emerald-600">{formatCurrencyBRL(summary.financialSummary.totalPaidAmount)}</strong></Card>
+                <Card className="p-3"><span className="text-xs text-graphite-400 block">Pendente</span><strong className="text-warning-icon">{formatCurrencyBRL(summary.financialSummary.totalPendingAmount)}</strong></Card>
+                <Card className="p-3"><span className="text-xs text-graphite-400 block">Vencido</span><strong className="text-error-icon">{formatCurrencyBRL(summary.financialSummary.totalOverdueAmount)}</strong></Card>
+                <Card className="p-3"><span className="text-xs text-graphite-400 block">Recebido</span><strong className="text-success-icon">{formatCurrencyBRL(summary.financialSummary.totalPaidAmount)}</strong></Card>
               </div>
               <h4 className="text-xs font-bold uppercase text-graphite-400">Cauções</h4>
               {summary.securityDeposits.length === 0 ? <p className="text-xs text-graphite-400">Nenhuma caução registrada.</p> : summary.securityDeposits.map((deposit) => (
@@ -711,20 +711,20 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">Multas de Trânsito Atribuídas</h3>
               {summary.trafficTickets.length === 0 ? <p className="text-xs text-graphite-400">Nenhuma multa registrada.</p> : summary.trafficTickets.map((ticket) => (
-                <Card key={ticket.id} className="p-3 flex justify-between text-xs"><div><strong className="block">{ticket.infractionCode || 'Auto s/n'} — {ticket.description}</strong><span>{ticket.infractionDate} • vence {ticket.dueDate}</span></div><strong className="text-rose-600">{formatCurrencyBRL(Number(ticket.amount || 0))}</strong></Card>
+                <Card key={ticket.id} className="p-3 flex justify-between text-xs"><div><strong className="block">{ticket.infractionCode || 'Auto s/n'} — {ticket.description}</strong><span>{ticket.infractionDate} • vence {ticket.dueDate}</span></div><strong className="text-error-icon">{formatCurrencyBRL(Number(ticket.amount || 0))}</strong></Card>
               ))}
             </div>
           )}
 
           {activeTab === 'communications' && (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-xl border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-xs">
+              <div className="p-3.5 rounded-xl border bg-warning-bg  border-warning-border  text-xs">
                 <ShieldAlert className="w-4 h-4 inline mr-2" />
                 <strong>Modo econômico e seguro:</strong> o provedor está desativado. Preparar um lembrete apenas grava uma solicitação retida; não abre WhatsApp e não envia mensagem.
               </div>
 
               {whatsappError && (
-                <div className="p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-xs dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300">
+                <div className="p-3 rounded-xl border border-error-border bg-error-bg text-error-text text-xs   ">
                   {whatsappError}
                 </div>
               )}
@@ -772,7 +772,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 <p className="text-xs text-graphite-500">Modelo fixo, com nome e validade derivados do cadastro pelo servidor. O ERP não exige registro de consentimento para preparar a comunicação.</p>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" disabled={whatsappLoading} onClick={handlePrepareCnhReminder}>Preparar lembrete — sem enviar</Button>
-                  <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30" disabled={whatsappLoading} onClick={handleSendWaMeCnhReminder}>
+                  <Button size="sm" variant="outline" className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30" disabled={whatsappLoading} onClick={handleSendWaMeCnhReminder}>
                     <MessageSquare className="w-4 h-4 mr-1" /> Avisar CNH (WhatsApp)
                   </Button>
                 </div>
@@ -833,7 +833,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                       </Badge>
                     </div>
                     {proposal.status === 'APPROVED' && proposal.taskId && (
-                      <p className="text-emerald-700 dark:text-emerald-300">Tarefa operacional: {proposal.taskId}</p>
+                      <p className="text-success-text ">Tarefa operacional: {proposal.taskId}</p>
                     )}
                     {proposal.status === 'PENDING' && (
                       <div className="flex flex-wrap gap-2">
@@ -864,7 +864,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
           {activeTab === 'health' && (
             !isHealthUnlocked ? (
               <div className="p-8 text-center border border-dashed rounded-2xl space-y-3">
-                <ShieldAlert className="w-10 h-10 text-amber-500 mx-auto" />
+                <ShieldAlert className="w-10 h-10 text-warning-icon mx-auto" />
                 <h3 className="text-sm font-bold">Saúde & Emergência — acesso restrito</h3>
                 <p className="text-xs text-graphite-500">O acesso é autorizado e auditado no servidor.</p>
                 <Button size="sm" onClick={handleUnlockHealth} disabled={actionLoading}><Unlock className="w-4 h-4 mr-1" />Desbloquear Visualização</Button>
@@ -893,7 +893,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
                 return (
                   <Card key={log.id} className="p-3 text-xs space-y-1.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong className="text-emerald-600">{AUDIT_ACTION_LABELS[String(log.action)]||'Evento'}</strong>
+                      <strong className="text-success-icon">{AUDIT_ACTION_LABELS[String(log.action)]||'Evento'}</strong>
                       <span className="text-graphite-400">{new Date(log.timestamp || log.createdAt).toLocaleString('pt-BR')}</span>
                     </div>
                     <p className="text-graphite-600 dark:text-graphite-300">Responsável: <strong>{log.userName || 'Usuário não identificado'}</strong></p>
@@ -917,7 +917,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
             <Input label="Número do Documento" value={docNumber} onChange={(event) => setDocNumber(event.target.value)} />
             <Input label="Data de Validade" type="date" value={docExpDate} onChange={(event) => setDocExpDate(event.target.value)} />
             <FileUpload entityType="Driver" entityId={driver?.id || ''} documentType={docType} onUploadComplete={(attachment) => setDocAttachmentId(attachment.id)} />
-            {docAttachmentId && <p className="text-xs text-emerald-600">Arquivo enviado e vinculado ao servidor.</p>}
+            {docAttachmentId && <p className="text-xs text-success-icon">Arquivo enviado e vinculado ao servidor.</p>}
             <Input label="Observações" value={docNotes} onChange={(event) => setDocNotes(event.target.value)} />
             <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsAddDocOpen(false)}>Cancelar</Button><Button type="submit" isLoading={actionLoading}>Salvar Documento</Button></div>
           </form>

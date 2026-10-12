@@ -299,7 +299,7 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         </Card>
         <Card className="p-3 border-l-4 border-l-emerald-600">
           <span className="text-[11px] font-medium text-graphite-500 block">Ativos</span>
-          <strong className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">{kpis.active}</strong>
+          <strong className="text-lg font-bold text-success-icon  font-mono">{kpis.active}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-graphite-400">
           <span className="text-[11px] font-medium text-graphite-500 block">Inativos</span>
@@ -307,19 +307,19 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
         </Card>
         <Card className="p-3 border-l-4 border-l-rose-500">
           <span className="text-[11px] font-medium text-graphite-500 block">Bloqueados</span>
-          <strong className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">{kpis.blocked}</strong>
+          <strong className="text-lg font-bold text-error-icon  font-mono">{kpis.blocked}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-500">
           <span className="text-[11px] font-medium text-graphite-500 block">Documentos pendentes</span>
-          <strong className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">{kpis.pendingDocs}</strong>
+          <strong className="text-lg font-bold text-warning-icon  font-mono">{kpis.pendingDocs}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-amber-600">
           <span className="text-[11px] font-medium text-graphite-500 block">CNH Vencendo</span>
-          <strong className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">{kpis.cnhExpiring}</strong>
+          <strong className="text-lg font-bold text-warning-icon  font-mono">{kpis.cnhExpiring}</strong>
         </Card>
         <Card className="p-3 border-l-4 border-l-rose-600">
           <span className="text-[11px] font-medium text-graphite-500 block">CNH Vencida</span>
-          <strong className="text-lg font-bold text-rose-600 dark:text-rose-400 font-mono">{kpis.cnhExpired}</strong>
+          <strong className="text-lg font-bold text-error-icon  font-mono">{kpis.cnhExpired}</strong>
         </Card>
       </div>
 
@@ -363,9 +363,9 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>
       ) : loadError ? (
-        <Card className="p-8 text-center space-y-3 border-rose-200 dark:border-rose-900">
+        <Card className="p-8 text-center space-y-3 border-error-border ">
           <Users className="w-10 h-10 mx-auto text-rose-400" />
-          <p className="font-semibold text-sm text-rose-700 dark:text-rose-300">Não foi possível carregar os motoristas.</p>
+          <p className="font-semibold text-sm text-error-text ">Não foi possível carregar os motoristas.</p>
           <p className="text-xs text-graphite-500">{loadError}</p>
           <Button size="sm" variant="outline" onClick={()=>void loadData()}><RefreshCw className="w-4 h-4 mr-1.5"/>Tentar novamente</Button>
         </Card>
@@ -413,20 +413,20 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                         <div className="font-mono text-graphite-800 dark:text-graphite-200">{formatDateBR(driver.cnhExpiration)}</div>
                         {cnhEval.status === DocumentStatus.EXPIRED && (
                           cnhEval.inGracePeriod ? (
-                            <span className="text-[10px] font-semibold text-amber-600 block">
+                            <span className="text-[10px] font-semibold text-warning-icon block">
                               Vencida ({cnhEval.graceDaysRemaining}d tolerância CTB)
                             </span>
                           ) : (
-                            <span className="text-[10px] font-semibold text-rose-600 block">
+                            <span className="text-[10px] font-semibold text-error-icon block">
                               Vencida há {Math.abs(cnhEval.daysToExpiration)}d
                             </span>
                           )
                         )}
                         {cnhEval.status === DocumentStatus.EXPIRING_SOON && (
-                          <span className="text-[10px] font-semibold text-amber-600 block">Vence em {cnhEval.daysToExpiration}d</span>
+                          <span className="text-[10px] font-semibold text-warning-icon block">Vence em {cnhEval.daysToExpiration}d</span>
                         )}
                         {cnhEval.status === DocumentStatus.VALID && (
-                          <span className="text-[10px] font-medium text-emerald-600 block">Válida ({cnhEval.daysToExpiration}d)</span>
+                          <span className="text-[10px] font-medium text-success-icon block">Válida ({cnhEval.daysToExpiration}d)</span>
                         )}
                       </td>
                       <td className="p-3.5">{getStatusBadge(driver.status)}</td>
@@ -436,12 +436,12 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                             <button
                               type="button"
                               onClick={(event) => { event.stopPropagation(); onSelectVehicle(driver.currentVehicleId!); }}
-                              className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:underline"
+                              className="font-semibold text-success-icon  flex items-center gap-1 hover:underline"
                             >
                               <Car className="w-3.5 h-3.5" />{vehicleName}
                             </button>
                           ) : (
-                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <span className="font-semibold text-success-icon  flex items-center gap-1">
                               <Car className="w-3.5 h-3.5" />{vehicleName}
                             </span>
                           )
@@ -460,10 +460,10 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                               <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">
                                 <Edit2 className="w-4 h-4" />Editar
                               </button>
-                              <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+                              <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-success-text hover:bg-success-bg  dark:hover:bg-emerald-950/30">
                                 <MessageSquare className="w-4 h-4" />Avisar CNH (wa.me)
                               </button>
-                              <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30">
+                              <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30">
                                 <Archive className="w-4 h-4" />Arquivar
                               </button>
                             </div>
@@ -503,20 +503,20 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                       <span className="text-graphite-400 block text-[10px]">Validade CNH</span>
                       <strong className="font-mono">{formatDateBR(driver.cnhExpiration)}</strong>
                       {cnhEval.status === DocumentStatus.EXPIRED && (
-                        <span className={`block text-[10px] font-semibold ${cnhEval.inGracePeriod ? 'text-amber-600' : 'text-rose-600'}`}>
+                        <span className={`block text-[10px] font-semibold ${cnhEval.inGracePeriod ? 'text-warning-icon' : 'text-error-icon'}`}>
                           {cnhEval.inGracePeriod ? `Tolerância CTB: ${cnhEval.graceDaysRemaining}d` : `Vencida há ${Math.abs(cnhEval.daysToExpiration)}d`}
                         </span>
                       )}
                       {cnhEval.status === DocumentStatus.EXPIRING_SOON && (
-                        <span className="block text-[10px] font-semibold text-amber-600">Vence em {cnhEval.daysToExpiration}d</span>
+                        <span className="block text-[10px] font-semibold text-warning-icon">Vence em {cnhEval.daysToExpiration}d</span>
                       )}
                       {cnhEval.status === DocumentStatus.VALID && (
-                        <span className="block text-[10px] font-medium text-emerald-600">Válida ({cnhEval.daysToExpiration}d)</span>
+                        <span className="block text-[10px] font-medium text-success-icon">Válida ({cnhEval.daysToExpiration}d)</span>
                       )}
                     </div>
                   </div>
                   {vehicleName && (
-                    <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 pt-1">
+                    <div className="text-xs font-semibold text-success-icon  flex items-center gap-1.5 pt-1">
                       <Car className="w-4 h-4" />{vehicleName}
                     </div>
                   )}
@@ -531,8 +531,8 @@ export const DriversManagement: React.FC<DriversManagementProps> = ({ onSelectVe
                       <summary aria-label={`Mais ações para ${driver.fullName}`} className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
                       <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-graphite-200 bg-white p-2 text-left shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
                         <button onClick={(event) => handleOpenEdit(driver, event)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800"><Edit2 className="w-4 h-4"/>Editar</button>
-                        <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"><MessageSquare className="w-4 h-4"/>Avisar CNH (wa.me)</button>
-                        <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30"><Archive className="w-4 h-4"/>Arquivar</button>
+                        <button onClick={(event) => { event.stopPropagation(); void handleWaMeCnh(driver.id); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-success-text hover:bg-success-bg  dark:hover:bg-emerald-950/30"><MessageSquare className="w-4 h-4"/>Avisar CNH (wa.me)</button>
+                        <button onClick={() => setDeletingDriver(driver)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30"><Archive className="w-4 h-4"/>Arquivar</button>
                       </div>
                     </details>
                   </div>

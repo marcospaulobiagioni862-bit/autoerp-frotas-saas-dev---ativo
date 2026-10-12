@@ -161,7 +161,7 @@ export const DREReportView: React.FC = () => {
           <Card padding="md" className="space-y-4">
             <div className="flex items-center justify-between border-b border-graphite-100 dark:border-graphite-800 pb-3">
               <h3 className="text-sm font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-                <Car className="w-4 h-4 text-blue-600" /> Rentabilidade por Veículo
+                <Car className="w-4 h-4 text-info-icon" /> Rentabilidade por Veículo
               </h3>
             </div>
 

@@ -11,17 +11,17 @@ export const ManagementReportsFleetTab: React.FC<ManagementReportsFleetTabProps>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <Card padding="sm">
         <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Disponibilidade</span>
-        <h3 className="text-3xl font-black text-emerald-600 mt-1 font-mono">{fleet.availabilityRate}%</h3>
+        <h3 className="text-3xl font-black text-success-icon mt-1 font-mono">{fleet.availabilityRate}%</h3>
         <p className="text-xs text-graphite-500 mt-1">{fleet.available} veículos prontos para locação</p>
       </Card>
       <Card padding="sm">
         <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Utilização</span>
-        <h3 className="text-3xl font-black text-blue-600 mt-1 font-mono">{fleet.utilizationRate}%</h3>
+        <h3 className="text-3xl font-black text-info-icon mt-1 font-mono">{fleet.utilizationRate}%</h3>
         <p className="text-xs text-graphite-500 mt-1">{fleet.rented} veículos atualmente alugados</p>
       </Card>
       <Card padding="sm">
         <span className="text-xs font-semibold text-graphite-500 uppercase">Taxa de Indisponibilidade / Parados</span>
-        <h3 className="text-3xl font-black text-amber-600 mt-1 font-mono">{fleet.stoppedRate}%</h3>
+        <h3 className="text-3xl font-black text-warning-icon mt-1 font-mono">{fleet.stoppedRate}%</h3>
         <p className="text-xs text-graphite-500 mt-1">{fleet.maintenance + fleet.inactive + fleet.blocked} na oficina ou inativos</p>
       </Card>
     </div>
@@ -32,11 +32,11 @@ export const ManagementReportsFleetTab: React.FC<ManagementReportsFleetTabProps>
       </div>
       <div className="divide-y divide-graphite-100 dark:divide-graphite-800">
         {[
-          { label: 'Disponíveis', count: fleet.available, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40' },
-          { label: 'Alugados', count: fleet.rented, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40' },
-          { label: 'Em Manutenção', count: fleet.maintenance, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/40' },
+          { label: 'Disponíveis', count: fleet.available, color: 'text-success-icon bg-success-bg ' },
+          { label: 'Alugados', count: fleet.rented, color: 'text-info-icon bg-info-bg ' },
+          { label: 'Em Manutenção', count: fleet.maintenance, color: 'text-warning-icon bg-warning-bg ' },
           { label: 'Inativos', count: fleet.inactive, color: 'text-graphite-600 bg-graphite-100 dark:bg-graphite-800' },
-          { label: 'Bloqueados', count: fleet.blocked, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/40' },
+          { label: 'Bloqueados', count: fleet.blocked, color: 'text-error-icon bg-error-bg ' },
         ].map((item) => (
           <div key={item.label} className="p-4 flex items-center justify-between">
             <span className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">{item.label}</span>

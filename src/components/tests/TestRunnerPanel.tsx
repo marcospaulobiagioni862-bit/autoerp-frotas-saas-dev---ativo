@@ -473,7 +473,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-emerald-600" />
+            <ShieldCheck className="w-6 h-6 text-success-icon" />
             Suíte de Auditoria AutoERP (Fase 3.31 — Homologação Operacional Final)
           </h2>
           <p className="text-xs text-graphite-500 mt-0.5">
@@ -509,7 +509,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
                   {testSummary.total}
                 </h3>
               </div>
-              <div className="p-2.5 bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 rounded-xl">
+              <div className="p-2.5 bg-info-bg text-info-icon   rounded-xl">
                 <ShieldCheck className="w-5 h-5" />
               </div>
             </div>
@@ -519,11 +519,11 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-graphite-500 uppercase block">Testes Aprovados</span>
-                <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono tabular-nums">
+                <h3 className="text-2xl font-black text-success-icon  mt-0.5 font-mono tabular-nums">
                   {testSummary.passed}
                 </h3>
               </div>
-              <div className="p-2.5 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 rounded-xl">
+              <div className="p-2.5 bg-success-bg text-success-icon   rounded-xl">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
             </div>
@@ -533,11 +533,11 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-semibold text-graphite-500 uppercase block">Testes Reprovados</span>
-                <h3 className={`text-2xl font-black mt-0.5 font-mono tabular-nums ${testSummary.failed > 0 ? 'text-red-600' : 'text-graphite-400'}`}>
+                <h3 className={`text-2xl font-black mt-0.5 font-mono tabular-nums ${testSummary.failed > 0 ? 'text-error-icon' : 'text-graphite-400'}`}>
                   {testSummary.failed}
                 </h3>
               </div>
-              <div className={`p-2.5 rounded-xl ${testSummary.failed > 0 ? 'bg-red-50 text-red-600 dark:bg-red-950/60' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-400'}`}>
+              <div className={`p-2.5 rounded-xl ${testSummary.failed > 0 ? 'bg-error-bg text-error-icon ' : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-400'}`}>
                 <XCircle className="w-5 h-5" />
               </div>
             </div>
@@ -597,7 +597,7 @@ export const TestRunnerPanel: React.FC<TestRunnerPanelProps> = ({ onTestsComplet
       <Card padding="none">
         {isRunning ? (
           <div className="p-12 text-center text-graphite-500 flex flex-col items-center justify-center gap-2">
-            <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
+            <RefreshCw className="w-6 h-6 animate-spin text-success-icon" />
             <span>Executando bateria de testes do motor financeiro...</span>
           </div>
         ) : (

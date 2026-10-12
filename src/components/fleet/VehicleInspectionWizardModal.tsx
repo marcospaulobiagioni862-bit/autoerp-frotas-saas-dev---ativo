@@ -342,7 +342,7 @@ export function VehicleInspectionWizardModal({
         {/* Corpo do Passo a Passo */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {error && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-400">
+            <div className="rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text   ">
               {error}
             </div>
           )}
@@ -460,7 +460,7 @@ export function VehicleInspectionWizardModal({
                     <Camera className="w-4 h-4 text-violet-600" /> Foto do Painel (Ignição Ligada) *
                   </span>
                   {photos.DASHBOARD.dataUrl && (
-                    <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                    <span className="text-[11px] font-semibold text-success-icon flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Registrada
                     </span>
                   )}
@@ -532,11 +532,11 @@ export function VehicleInspectionWizardModal({
                           {slot.label}
                         </span>
                         {hasPhoto ? (
-                          <span className="text-emerald-600 font-semibold flex items-center gap-1 text-[11px]">
+                          <span className="text-success-icon font-semibold flex items-center gap-1 text-[11px]">
                             <CheckCircle2 className="w-3.5 h-3.5" /> OK
                           </span>
                         ) : (
-                          <span className="text-amber-500 font-semibold text-[11px]">Pendente</span>
+                          <span className="text-warning-icon font-semibold text-[11px]">Pendente</span>
                         )}
                       </div>
 
@@ -705,19 +705,19 @@ export function VehicleInspectionWizardModal({
               </div>
 
               {/* Bifurcação de Sinistro / Seguro */}
-              <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3.5 space-y-2 dark:border-rose-900/60 dark:bg-rose-950/20">
-                <label className="flex items-center gap-2 text-xs font-bold text-rose-900 dark:text-rose-200 cursor-pointer">
+              <div className="rounded-xl border border-error-border bg-error-bg p-3.5 space-y-2  ">
+                <label className="flex items-center gap-2 text-xs font-bold text-error-text  cursor-pointer">
                   <input
                     type="checkbox"
                     checked={isInsuranceClaim}
                     onChange={(e) => setIsInsuranceClaim(e.target.checked)}
-                    className="rounded border-rose-400 text-rose-600"
+                    className="rounded border-rose-400 text-error-icon"
                   />
-                  <Shield className="w-4 h-4 text-rose-600" />
+                  <Shield className="w-4 h-4 text-error-icon" />
                   <span>Avaria Estrutural Grave / Acionar Sinistro e Coparticipação de Seguro</span>
                 </label>
                 {isInsuranceClaim && (
-                  <p className="text-[11px] text-rose-700 dark:text-rose-300">
+                  <p className="text-[11px] text-error-text ">
                     O laudo exigirá a anexação do Boletim de Ocorrência (B.O.) e cobrará a franquia de coparticipação estipulada em contrato.
                   </p>
                 )}
@@ -748,12 +748,12 @@ export function VehicleInspectionWizardModal({
                     <span className="text-xs font-bold text-graphite-800 dark:text-graphite-200">
                       Assinatura Digital do Condutor
                     </span>
-                    <label className="flex items-center gap-1.5 text-xs text-rose-600 cursor-pointer">
+                    <label className="flex items-center gap-1.5 text-xs text-error-icon cursor-pointer">
                       <input
                         type="checkbox"
                         checked={signatureRefused}
                         onChange={(e) => setSignatureRefused(e.target.checked)}
-                        className="rounded border-rose-300 text-rose-600"
+                        className="rounded border-error-border text-error-icon"
                       />
                       <span>Condutor recusou assinar</span>
                     </label>
@@ -761,7 +761,7 @@ export function VehicleInspectionWizardModal({
 
                   {signatureRefused ? (
                     <div>
-                      <label className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+                      <label className="text-[11px] font-semibold text-error-text ">
                         Motivo da recusa / contestação apontada pelo motorista *
                       </label>
                       <input
@@ -769,7 +769,7 @@ export function VehicleInspectionWizardModal({
                         value={signatureRefusalReason}
                         onChange={(e) => setSignatureRefusalReason(e.target.value)}
                         placeholder="Ex: Motorista não concordou com a cobrança do risco no parachoque..."
-                        className="mt-1 w-full rounded-lg border border-rose-300 p-2 text-xs dark:border-rose-800 dark:bg-graphite-900"
+                        className="mt-1 w-full rounded-lg border border-error-border p-2 text-xs  dark:bg-graphite-900"
                       />
                     </div>
                   ) : (
@@ -803,7 +803,7 @@ export function VehicleInspectionWizardModal({
                   )}
                 </div>
               ) : (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3 text-xs text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/20 dark:text-blue-300">
+                <div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info-text   ">
                   Devolução remota / via guincho selecionada: a assinatura presencial foi dispensada. O laudo com as fotos será enviado automaticamente por WhatsApp.
                 </div>
               )}

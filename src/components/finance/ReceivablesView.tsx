@@ -278,7 +278,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2"><TrendingUp className="w-6 h-6 text-emerald-600" />Contas a Receber</h2>
+          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2"><TrendingUp className="w-6 h-6 text-success-icon" />Contas a Receber</h2>
           <p className="text-xs text-graphite-500 mt-0.5">Gestão de mensalidades, cobranças de motoristas e cauções a receber.</p>
         </div>
         <div className="flex gap-2">
@@ -287,7 +287,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
         </div>
       </div>
 
-      {actionMessage && <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center justify-between"><span>{actionMessage}</span><button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700"><X className="w-4 h-4" /></button></div>}
+      {actionMessage && <div className="p-3 bg-success-bg  border border-success-border  rounded-lg text-xs text-success-text  flex items-center justify-between"><span>{actionMessage}</span><button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700"><X className="w-4 h-4" /></button></div>}
 
       <Card padding="sm">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -325,15 +325,15 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
                 return <tr key={item.id} className="hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40">
                   <td className="p-3.5 text-center"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelect(item.id)} disabled={!isPending} /></td>
                   <td className="p-3.5"><div className="font-semibold text-graphite-900 dark:text-graphite-100">{originLabel(item.originType)}{contractNumber ? ` • ${contractNumber}` : ''}</div><div className="text-[11px] text-graphite-500">{context || item.description}</div></td>
-                  <td className="p-3.5 font-mono">{formatDateBR(item.dueDate)}{isOverdue && <span className="block text-[10px] text-red-600 font-bold">Em atraso</span>}</td>
+                  <td className="p-3.5 font-mono">{formatDateBR(item.dueDate)}{isOverdue && <span className="block text-[10px] text-error-icon font-bold">Em atraso</span>}</td>
                   <td className="p-3.5 font-mono font-semibold">R$ {formatMoney(item.originalAmount)}</td>
-                  <td className="p-3.5 font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  <td className="p-3.5 font-mono font-bold text-success-text ">
                     <span className="block">R$ {formatMoney(operationalBalance)}</span>
                     {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-graphite-500">Histórico R$ {formatMoney(item.balanceAmount)}</span>}
                     {item.paidAmount > 0 && <span className="block text-[10px] font-normal text-graphite-500">Recebido R$ {formatMoney(item.paidAmount)}</span>}
                   </td>
                   <td className="p-3.5 text-center"><Badge variant={isPaid ? 'success' : isOverdue ? 'danger' : isPending ? 'warning' : 'neutral'}>{statusLabel(item.status, isOverdue)}</Badge></td>
-                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(withInstallmentTotal(item))}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">{item.driverId && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30 flex items-center gap-1.5 mb-1" onClick={() => handleSendWhatsApp(item.id)}><MessageSquare className="w-3.5 h-3.5" /> Cobrar WhatsApp</button>}<button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
+                  <td className="p-3.5 text-right"><div className="flex justify-end gap-2">{isPending && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(withInstallmentTotal(item))}>Receber</Button>}<Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>{isPending && <details className="relative"><summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary><div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">{item.driverId && <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-success-text hover:bg-success-bg  dark:hover:bg-emerald-950/30 flex items-center gap-1.5 mb-1" onClick={() => handleSendWhatsApp(item.id)}><MessageSquare className="w-3.5 h-3.5" /> Cobrar WhatsApp</button>}<button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button></div></details>}</div></td>
                 </tr>;
               })}
             </tbody>
@@ -346,7 +346,7 @@ export const ReceivablesView: React.FC<ReceivablesViewProps> = ({ onOpenReceiptM
       {isCreateOpen && <ModalContainer isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="Nova cobrança" maxWidth="max-w-2xl">
         {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
         <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreateReceivable} className="space-y-4">
-          {manualOptionsError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{manualOptionsError}</div>}
+          {manualOptionsError && <div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">{manualOptionsError}</div>}
           <Input label="Descrição da cobrança *" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex: Mensalidade avulsa, cobrança de sinistro..." required />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Valor Total (R$) *" type="number" min="0.01" step="0.01" value={totalAmount} onChange={(event) => setTotalAmount(event.target.value)} required /><Input label="Primeiro vencimento *" type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} required /></div>
           <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />

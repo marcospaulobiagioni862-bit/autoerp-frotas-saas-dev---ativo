@@ -20,7 +20,7 @@ export function NewVersionNotice() {
     return () => { active = false; window.clearInterval(timer); };
   }, []);
   if (!available || available === dismissed) return null;
-  return <aside role="status" className="flex flex-wrap items-center gap-3 border-b border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+  return <aside role="status" className="flex flex-wrap items-center gap-3 border-b border-info-border bg-info-bg p-3 text-sm text-info-text">
     <span>Uma nova versão está disponível. Seu trabalho continuará aberto.</span>
     <button type="button" className="rounded border px-3 py-1" onClick={() => setDismissed(available)}>Continuar trabalhando</button>
     <button type="button" className="rounded bg-action-primary px-3 py-1 text-on-action-primary" onClick={() => { if (confirmDiscardUnsavedChanges()) window.location.reload(); }}>Atualizar agora</button>

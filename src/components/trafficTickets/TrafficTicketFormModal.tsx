@@ -56,23 +56,23 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
     onSuccess();onClose();
   }catch(err){setError(err instanceof Error?err.message:'Erro ao salvar multa.');}finally{setSubmitting(false);}};
   return <ModalContainer isOpen={isOpen} onClose={onClose} title="Cadastrar Multa" size="5xl"><form onSubmit={submit} className="space-y-3 text-xs">
-    {error&&<div className="p-3 rounded-xl bg-rose-50 text-rose-700 flex gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>}
+    {error&&<div className="p-3 rounded-xl bg-error-bg text-error-text flex gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>}
     {matchContext&&<div className="space-y-2">
-      {matchContext.matchStatus==='MATCHED_CONTRACT'&&matchContext.matchedContract&&<div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex flex-col gap-1 text-xs">
-        <div className="flex items-center gap-2 font-bold"><CheckCircle className="w-4 h-4 text-emerald-600 shrink-0"/><span>Contrato #{matchContext.matchedContract.contractNumber} ativo para {matchContext.matchedContract.driverName}</span></div>
-        <div className="text-[11px] text-emerald-800">{matchContext.matchedContract.driverCpf&&<span>CPF: {matchContext.matchedContract.driverCpf} • </span>}{matchContext.matchedContract.driverCnh&&<span>CNH: {matchContext.matchedContract.driverCnh} • </span>}<span>Vigência: {matchContext.matchedContract.startDate} até {matchContext.matchedContract.endDate||'vigente'}</span>{matchContext.matchedContract.checkOutDate&&<div className="mt-0.5 text-emerald-700 font-medium">Posse real comprovada por vistoria de saída: {matchContext.matchedContract.checkOutDate.slice(0,16).replace('T',' ')}</div>}</div>
+      {matchContext.matchStatus==='MATCHED_CONTRACT'&&matchContext.matchedContract&&<div className="p-3 rounded-xl bg-success-bg border border-success-border text-success-text flex flex-col gap-1 text-xs">
+        <div className="flex items-center gap-2 font-bold"><CheckCircle className="w-4 h-4 text-success-icon shrink-0"/><span>Contrato #{matchContext.matchedContract.contractNumber} ativo para {matchContext.matchedContract.driverName}</span></div>
+        <div className="text-[11px] text-success-text">{matchContext.matchedContract.driverCpf&&<span>CPF: {matchContext.matchedContract.driverCpf} • </span>}{matchContext.matchedContract.driverCnh&&<span>CNH: {matchContext.matchedContract.driverCnh} • </span>}<span>Vigência: {matchContext.matchedContract.startDate} até {matchContext.matchedContract.endDate||'vigente'}</span>{matchContext.matchedContract.checkOutDate&&<div className="mt-0.5 text-success-text font-medium">Posse real comprovada por vistoria de saída: {matchContext.matchedContract.checkOutDate.slice(0,16).replace('T',' ')}</div>}</div>
       </div>}
-      {matchContext.matchStatus==='VEHICLE_IN_MAINTENANCE'&&<div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col gap-1 text-xs">
-        <div className="flex items-center gap-2 font-bold"><Wrench className="w-4 h-4 text-amber-600 shrink-0"/><span>Veículo em Manutenção/Oficina na data da infração (OS #{matchContext.maintenanceOrder?.type})</span></div>
-        <div className="text-[11px] text-amber-800">{matchContext.maintenanceOrder?.description&&<span>Serviço: {matchContext.maintenanceOrder.description} • </span>}<span>Status da OS: {matchContext.maintenanceOrder?.status}. Sem contrato de locação ativo. A responsabilidade deve ser atribuída à MoveFlex (Empresa).</span></div>
+      {matchContext.matchStatus==='VEHICLE_IN_MAINTENANCE'&&<div className="p-3 rounded-xl bg-warning-bg border border-warning-border text-warning-text flex flex-col gap-1 text-xs">
+        <div className="flex items-center gap-2 font-bold"><Wrench className="w-4 h-4 text-warning-icon shrink-0"/><span>Veículo em Manutenção/Oficina na data da infração (OS #{matchContext.maintenanceOrder?.type})</span></div>
+        <div className="text-[11px] text-warning-text">{matchContext.maintenanceOrder?.description&&<span>Serviço: {matchContext.maintenanceOrder.description} • </span>}<span>Status da OS: {matchContext.maintenanceOrder?.status}. Sem contrato de locação ativo. A responsabilidade deve ser atribuída à MoveFlex (Empresa).</span></div>
       </div>}
       {matchContext.matchStatus==='NO_ACTIVE_CONTRACT'&&<div className="p-3 rounded-xl bg-graphite-50 border border-graphite-200 text-graphite-800 flex flex-col gap-1 text-xs">
         <div className="flex items-center gap-2 font-bold"><Info className="w-4 h-4 text-graphite-600 shrink-0"/><span>Veículo sem locação ativa na data da infração (em pátio)</span></div>
         <div className="text-[11px] text-graphite-600">Nenhum contrato ativo cobrindo {infractionDate}. Recomenda-se registrar a responsabilidade para a MoveFlex (Empresa) para evitar imputação indevida de débitos.</div>
       </div>}
-      {matchContext.matchStatus==='AMBIGUOUS'&&<div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col gap-1 text-xs">
-        <div className="flex items-center gap-2 font-bold"><AlertTriangle className="w-4 h-4 text-amber-600 shrink-0"/><span>Mais de um contrato ativo no mesmo dia</span></div>
-        <div className="text-[11px] text-amber-800">Informe o horário da infração para desempate automático pelas vistorias de entrega e devolução (check-in/check-out).</div>
+      {matchContext.matchStatus==='AMBIGUOUS'&&<div className="p-3 rounded-xl bg-warning-bg border border-warning-border text-warning-text flex flex-col gap-1 text-xs">
+        <div className="flex items-center gap-2 font-bold"><AlertTriangle className="w-4 h-4 text-warning-icon shrink-0"/><span>Mais de um contrato ativo no mesmo dia</span></div>
+        <div className="text-[11px] text-warning-text">Informe o horário da infração para desempate automático pelas vistorias de entrega e devolução (check-in/check-out).</div>
       </div>}
       <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 flex flex-col gap-1 text-xs">
         <div className="flex items-center justify-between"><span className="font-bold flex items-center gap-1.5">Titularidade (CRLV): {matchContext.vehicle.ownerName||matchContext.vehicle.plate} ({matchContext.ownershipFlow.flowType})</span>{matchContext.ownershipFlow.riskOfNic&&<span className="px-2 py-0.5 rounded text-[10px] font-bold bg-action-destructive text-on-action-destructive flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> RISCO NIC</span>}</div>
@@ -100,7 +100,7 @@ export const TrafficTicketFormModal:React.FC<TrafficTicketFormModalProps>=({isOp
       {responsibility===TicketResponsibility.UNIDENTIFIED&&<label>Categoria Contas a Pagar — NIC *<Select value={nicCategory} error={fieldErrors.nicCategory} onChange={e=>{setNicCategory(e.target.value);clearFieldError('nicCategory');}}><option value="">Selecione</option>{expenses.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</Select></label>}
       <label className="md:col-span-2">Observações<textarea className="w-full mt-1 p-2 border rounded-xl bg-transparent" rows={2} value={notes} onChange={e=>setNotes(e.target.value)}/></label>
     </div>}
-    {!loading&&<div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200"><strong className="block mb-1">Integração financeira</strong>{financialSummary}<div className="mt-1 text-[11px] opacity-80">Veículo e contrato permanecem vinculados como origem operacional; o responsável financeiro depende da responsabilidade selecionada.</div></div>}
+    {!loading&&<div className="rounded-xl border border-info-border bg-info-bg p-3 text-xs text-info-text   "><strong className="block mb-1">Integração financeira</strong>{financialSummary}<div className="mt-1 text-[11px] opacity-80">Veículo e contrato permanecem vinculados como origem operacional; o responsável financeiro depende da responsabilidade selecionada.</div></div>}
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>Cancelar</Button><Button type="submit" disabled={loading||submitting||matchLoading}>{submitting?'Salvando...':'Salvar multa'}</Button></div>
   </form></ModalContainer>;
 };

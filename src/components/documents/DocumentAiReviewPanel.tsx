@@ -45,9 +45,9 @@ function confidenceLabel(value: unknown): { text: string; className: string } {
   const confidence = typeof value === 'number' && Number.isFinite(value) ? value : null;
   if (confidence === null) return { text: 'Confiança não informada', className: 'bg-graphite-100 text-graphite-600 dark:bg-graphite-800 dark:text-graphite-300' };
   const percentage = Math.max(0, Math.min(100, Math.round(confidence * 100)));
-  if (percentage >= 85) return { text: `${percentage}%`, className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
-  if (percentage >= 60) return { text: `${percentage}%`, className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
-  return { text: `${percentage}%`, className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  if (percentage >= 85) return { text: `${percentage}%`, className: 'bg-success-bg text-success-text  ' };
+  if (percentage >= 60) return { text: `${percentage}%`, className: 'bg-warning-bg text-warning-text  ' };
+  return { text: `${percentage}%`, className: 'bg-error-bg text-error-text  ' };
 }
 
 function runtimeDescription(mode: DocumentAiObservability['runtime']['mode']): string {
@@ -94,7 +94,7 @@ function DocumentAiObservabilitySummary({
           </div>
         ))}
       </div>
-      {unavailable && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Indicadores anteriores preservados durante uma falha temporária de atualização.</p>}
+      {unavailable && <p className="mt-2 text-xs text-warning-text ">Indicadores anteriores preservados durante uma falha temporária de atualização.</p>}
     </section>
   );
 }
@@ -351,14 +351,14 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
       <div>
         <DocumentAiObservabilitySummary snapshot={observability} unavailable={observabilityUnavailable} />
         <div className="p-6 text-center">
-        <ShieldCheck className="h-9 w-9 mx-auto text-emerald-500 mb-2" />
+        <ShieldCheck className="h-9 w-9 mx-auto text-success-icon mb-2" />
         <p className="font-medium text-graphite-900 dark:text-white">Nenhuma proposta ou falha pendente</p>
         <p className="text-sm text-graphite-500 mt-1">Extrações futuras aparecerão aqui antes de qualquer aplicação no ERP.</p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => void load()} icon={<RefreshCw className="h-4 w-4" />}>
           Atualizar
         </Button>
-        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-        {notice && <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-3">{notice}</p>}
+        {error && <p className="text-sm text-error-icon mt-3">{error}</p>}
+        {notice && <p className="text-sm text-success-text  mt-3">{notice}</p>}
         </div>
       </div>
     );
@@ -443,7 +443,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             onClick={() => selectItem(item.id)}
             className={`min-w-0 flex-1 text-left rounded-lg border p-3 transition-colors ${
               item.id === selected.id
-                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30'
+                ? 'border-blue-500 bg-info-bg '
                 : 'border-graphite-200 hover:bg-graphite-50 dark:border-graphite-800 dark:hover:bg-graphite-900'
             }`}
           >
@@ -451,14 +451,14 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               <p className="text-sm font-medium truncate">{item.detectedDocumentType || 'Documento não classificado'}</p>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                 item.status === 'FAILED'
-                  ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                  : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                  ? 'bg-error-bg text-error-text  '
+                  : 'bg-info-bg text-info-text  '
               }`}>
                 {item.status === 'FAILED' ? 'Falhou' : 'Revisar'}
               </span>
             </div>
             <p className="text-xs text-graphite-500 mt-1 truncate">Anexo {item.attachmentId}</p>
-            <p className={`mt-1 text-[11px] ${cleanupClassification(item).category === 'UNUSED' ? 'text-emerald-600' : 'text-amber-600'}`}>
+            <p className={`mt-1 text-[11px] ${cleanupClassification(item).category === 'UNUSED' ? 'text-success-icon' : 'text-warning-icon'}`}>
               {cleanupClassification(item).reason}
             </p>
             <p className="text-xs text-graphite-400 mt-1">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
@@ -467,7 +467,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
               <button
                 type="button"
                 onClick={() => void deleteUnusedFailed([item.id])}
-                className="mt-3 rounded-md p-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                className="mt-3 rounded-md p-1.5 text-error-icon hover:bg-error-bg  dark:hover:bg-red-950/40"
                 title="Excluir definitivamente documento não utilizado"
                 aria-label={`Excluir definitivamente falha não utilizada do anexo ${item.attachmentId}`}
               >
@@ -482,7 +482,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-blue-600" />
+              <Bot className="h-5 w-5 text-info-icon" />
               <h3 className="font-semibold text-lg">
                 {selected.status === 'FAILED' ? 'Falha controlada na extração' : 'Proposta de extração'}
               </h3>
@@ -504,7 +504,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         </div>
 
         {selected.status === 'FAILED' ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          <div className="rounded-lg border border-error-border bg-error-bg p-3 text-sm text-error-text   ">
             <p className="font-medium flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" /> A extração falhou sem gravar proposta parcial.
             </p>
@@ -513,7 +513,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             </p>
           </div>
         ) : (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          <div className="rounded-lg border border-info-border bg-info-bg p-3 text-sm text-info-text   ">
             A IA apenas propõe. Aprovar registra a revisão, mas não altera motorista, veículo, contrato, documento operacional ou financeiro.
           </div>
         )}
@@ -526,11 +526,11 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
             </p>
           </div>
           {selected.status === 'FAILED' ? (
-            <div className="p-5 text-sm text-red-700 dark:text-red-300">
+            <div className="p-5 text-sm text-error-text ">
               Nenhuma proposta válida foi persistida. Uma nova tentativa exige ação explícita e continuará sob o limite do servidor.
             </div>
           ) : fields.length === 0 ? (
-            <div className="p-5 text-sm text-amber-700 dark:text-amber-300">Nenhum campo estruturado foi proposto. Rejeite ou aguarde novo processamento.</div>
+            <div className="p-5 text-sm text-warning-text ">Nenhum campo estruturado foi proposto. Rejeite ou aguarde novo processamento.</div>
           ) : (
             <div className="divide-y divide-graphite-200 dark:divide-graphite-800">
               {fields.map(([key, proposed]) => {
@@ -554,7 +554,7 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
                           changed ? 'border-amber-500 ring-1 ring-amber-200' : 'border-graphite-300 dark:border-graphite-700'
                         }`}
                       />
-                      {changed && <p className="text-xs text-amber-600 mt-1">Correção humana será auditada.</p>}
+                      {changed && <p className="text-xs text-warning-icon mt-1">Correção humana será auditada.</p>}
                     </div>
                   </div>
                 );
@@ -578,12 +578,12 @@ export function DocumentAiReviewPanel({ refreshKey = 0 }: { refreshKey?: number 
         )}
 
         {!canReview && (
-          <p className="text-sm text-amber-700 dark:text-amber-300">
+          <p className="text-sm text-warning-text ">
             Seu perfil pode consultar a proposta, mas não pode aprovar ou rejeitar.
           </p>
         )}
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {notice && <p className="text-sm text-emerald-700 dark:text-emerald-300">{notice}</p>}
+        {error && <p className="text-sm text-error-icon">{error}</p>}
+        {notice && <p className="text-sm text-success-text ">{notice}</p>}
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
           {selected.status === 'FAILED' ? (
