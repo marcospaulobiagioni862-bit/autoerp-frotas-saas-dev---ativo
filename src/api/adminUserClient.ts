@@ -9,6 +9,14 @@ export interface AdminUserDto {
   updatedAt: string;
 }
 
+export interface CreateAdminUserInput {
+  name: string;
+  email: string;
+  role: string;
+  permissions?: string[];
+  password?: string;
+}
+
 type JsonRecord = Record<string, unknown>;
 
 function record(value: unknown): JsonRecord {
@@ -85,6 +93,17 @@ export class AdminUserClient {
     const payload = record(
       await request(`/api/admin/users/${encodeURIComponent(id)}/permissions`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    );
+    return parseUser(payload.item);
+  }
+
+  static async createUser(data: CreateAdminUserInput): Promise<AdminUserDto> {
+    const payload = record(
+      await request('/api/admin/users', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, LockKeyhole, RefreshCw, Shield, ShieldCheck, Users } from 'lucide-react';
+import { AlertTriangle, Building2, LockKeyhole, RefreshCw, Shield, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { AdminUserClient, type AdminUserDto } from '../../api/adminUserClient';
 import { Badge, Button, Card } from '../ui';
 import { ProductionTenantProfileView } from './ProductionTenantProfileView';
 import { UserPermissionsModal } from './UserPermissionsModal';
+import { CreateUserModal } from './CreateUserModal';
 
 type AdministrationTab = 'users' | 'tenant';
 
@@ -13,6 +14,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
  const [loading, setLoading] = useState(true);
  const [mutatingId, setMutatingId] = useState<string | null>(null);
  const [permissionModalUser, setPermissionModalUser] = useState<AdminUserDto | null>(null);
+ const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
  const [error, setError] = useState<string | null>(null);
  const [message, setMessage] = useState<string | null>(null);
 
@@ -107,9 +109,14 @@ export const ProductionUserAdministrationView: React.FC = () => {
  </p>
  </div>
  </div>
- <Button variant="outline" onClick={() => void load()} disabled={loading} className="gap-2">
- <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
- </Button>
+ <div className="flex flex-wrap items-center gap-2">
+  <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+   <UserPlus className="h-4 w-4" /> Novo Usuário
+  </Button>
+  <Button variant="outline" onClick={() => void load()} disabled={loading} className="gap-2">
+   <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+  </Button>
+ </div>
  </div>
 
  <div className="flex items-start gap-3 rounded-xl border border-graphite-200 bg-graphite-50 p-4 text-sm text-graphite-700 dark:border-graphite-800 dark:bg-graphite-900 dark:text-graphite-300">
@@ -190,14 +197,25 @@ export const ProductionUserAdministrationView: React.FC = () => {
 
  {permissionModalUser && (
  <UserPermissionsModal
- isOpen
- onClose={() => setPermissionModalUser(null)}
- user={permissionModalUser}
- onSuccess={(updated) => {
- setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
- setMessage(`Permissões atualizadas com sucesso para ${updated.name} (${updated.role}).`);
- }}
- />
+  isOpen
+  onClose={() => setPermissionModalUser(null)}
+  user={permissionModalUser}
+  onSuccess={(updated) => {
+  setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  setMessage(`Permissões atualizadas com sucesso para ${updated.name} (${updated.role}).`);
+  }}
+  />
+ )}
+
+ {isCreateModalOpen && (
+  <CreateUserModal
+  isOpen
+  onClose={() => setIsCreateModalOpen(false)}
+  onSuccess={(newUser) => {
+  setUsers((current) => [newUser, ...current.filter((u) => u.id !== newUser.id)]);
+  setMessage(`Usuário ${newUser.name} cadastrado com sucesso.`);
+  }}
+  />
  )}
  </div>
  )}
