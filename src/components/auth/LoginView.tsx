@@ -66,9 +66,52 @@ export function LoginView({ onLogin }: LoginViewProps) {
 
  return (
  <main className="min-h-screen bg-structure flex items-center justify-center p-4 sm:p-6 lg:p-8 relative overflow-hidden select-none">
- {/* Luzes ambiente de fundo */}
- <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[300px] bg-action-primary/15 rounded-full blur-3xl pointer-events-none" />
- <div className="absolute bottom-10 right-10 w-72 h-72 bg-action-primary/10 rounded-full blur-2xl pointer-events-none" />
+ {/* Motivo vetorial automotivo sutil de fundo (estrada convergindo ao horizonte) */}
+ <svg
+ aria-hidden="true"
+ className="pointer-events-none absolute inset-0 h-full w-full stroke-white/[0.06] select-none"
+ viewBox="0 0 1440 900"
+ fill="none"
+ preserveAspectRatio="xMidYMid slice"
+ >
+ <defs>
+ <linearGradient id="roadFade" x1="0%" y1="0%" x2="0%" y2="100%">
+ <stop offset="0%" stopColor="white" stopOpacity="0.1" />
+ <stop offset="100%" stopColor="white" stopOpacity="0.9" />
+ </linearGradient>
+ <mask id="roadMask">
+ <rect width="1440" height="900" fill="url(#roadFade)" />
+ </mask>
+ </defs>
+
+ <g mask="url(#roadMask)">
+ {/* Linha do horizonte */}
+ <line x1="0" y1="500" x2="1440" y2="500" strokeWidth="1" strokeDasharray="4 8" opacity="0.3" />
+
+ {/* Bordas externas da rodovia convergindo ao centro */}
+ <path d="M -160 920 L 610 500" strokeWidth="1.5" opacity="0.5" />
+ <path d="M 1600 920 L 830 500" strokeWidth="1.5" opacity="0.5" />
+
+ {/* Faixas de acostamento e guias */}
+ <path d="M 120 920 L 650 500" strokeWidth="1" opacity="0.35" />
+ <path d="M 1320 920 L 790 500" strokeWidth="1" opacity="0.35" />
+
+ {/* Faixas intermediárias da pista */}
+ <path d="M 400 920 L 685 500" strokeWidth="1" strokeDasharray="16 16" opacity="0.3" />
+ <path d="M 1040 920 L 755 500" strokeWidth="1" strokeDasharray="16 16" opacity="0.3" />
+
+ {/* Faixa central pontilhada com perspectiva */}
+ <line x1="720" y1="510" x2="720" y2="530" strokeWidth="1.5" opacity="0.25" />
+ <line x1="720" y1="545" x2="720" y2="575" strokeWidth="2" opacity="0.35" />
+ <line x1="720" y1="600" x2="720" y2="650" strokeWidth="2.5" opacity="0.45" />
+ <line x1="720" y1="685" x2="720" y2="765" strokeWidth="3" opacity="0.6" />
+ <line x1="720" y1="810" x2="720" y2="920" strokeWidth="3.5" opacity="0.75" />
+
+ {/* Arcos aerodinâmicos laterais sutis */}
+ <path d="M -80 780 C 350 760, 520 620, 670 500" strokeWidth="1" opacity="0.2" />
+ <path d="M 1520 780 C 1090 760, 920 620, 770 500" strokeWidth="1" opacity="0.2" />
+ </g>
+ </svg>
 
  <section
  className="w-full max-w-md rounded-2xl border border-structure-border bg-surface-raised p-8 sm:p-10 shadow-modal relative z-10 transition-all duration-200"
