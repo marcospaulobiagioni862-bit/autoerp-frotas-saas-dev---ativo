@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Building2, Sun, Moon, Menu, ShieldCheck, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Building2, Sun, Moon, Menu, ShieldCheck, LogOut, ChevronDown, Settings, User as UserIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
 import type { NotificationItem } from '../../api/notificationClient';
 import { OpsHealthClient, type OpsBuildIdentity } from '../../api/opsHealthClient';
+import { UserProfileModal } from '../profile/UserProfileModal';
 
 interface HeaderProps {
  testStatus: { passed: number; total: number; failed: number } | null;
@@ -49,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
  return document.documentElement.classList.contains('dark');
  });
  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+ const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
  const [isLoggingOut, setIsLoggingOut] = useState(false);
  const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -175,8 +177,16 @@ export const Header: React.FC<HeaderProps> = ({
  aria-label={`Menu do usuário: ${user.name}`}
  className="flex items-center gap-2 p-1 sm:px-2 sm:py-1.5 rounded-xl hover:bg-graphite-100 dark:hover:bg-graphite-800 transition-colors focus:outline-none focus:ring-2 focus-visible:outline-focus-ring text-left group"
  >
- <div className="w-8 h-8 rounded-full bg-surface-raised dark: dark: flex items-center justify-center text-graphite-800 dark:text-graphite-100 font-bold text-xs border border-graphite-300/80 dark:border-graphite-600 shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
- {initials(user.name)}
+ <div className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center text-graphite-800 dark:text-graphite-100 font-bold text-xs border border-graphite-300/80 dark:border-graphite-600 shrink-0 shadow-2xs group-hover:scale-105 transition-transform overflow-hidden">
+ {user.avatarUrl ? (
+ <img
+ src={user.avatarUrl}
+ alt={user.name}
+ className="w-full h-full object-cover"
+ />
+ ) : (
+ initials(user.name)
+ )}
  </div>
  <div className="hidden xl:block text-left max-w-44">
  <p className="text-xs font-semibold text-graphite-800 dark:text-graphite-200 leading-none truncate" title={user.name}>
@@ -208,6 +218,24 @@ export const Header: React.FC<HeaderProps> = ({
  </p>
  </div>
 
+  <div className="py-1">
+ <button
+ type="button"
+ role="menuitem"
+ aria-label="Meu Perfil"
+ onClick={() => {
+ setIsUserMenuOpen(false);
+ setIsProfileModalOpen(true);
+ }}
+ className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-graphite-700 dark:text-graphite-300 hover:bg-graphite-50 dark:hover:bg-graphite-800/60 hover:text-action-primary dark:hover:text-action-primary transition-colors text-left"
+ >
+ <UserIcon className="w-4 h-4 text-graphite-400 dark:text-graphite-500" />
+ <div>
+ <span className="font-semibold block">Meu Perfil</span>
+ <span className="text-[10px] text-graphite-400 dark:text-graphite-500 block leading-tight">Foto, dados pessoais e senha</span>
+ </div>
+ </button>
+ </div>
  {isAdmin && (
  <div className="py-1">
  <button
@@ -247,6 +275,12 @@ export const Header: React.FC<HeaderProps> = ({
  )}
  </div>
  </div>
+  {isProfileModalOpen && (
+ <UserProfileModal
+ isOpen={isProfileModalOpen}
+ onClose={() => setIsProfileModalOpen(false)}
+ />
+ )}
  </header>
  );
 };

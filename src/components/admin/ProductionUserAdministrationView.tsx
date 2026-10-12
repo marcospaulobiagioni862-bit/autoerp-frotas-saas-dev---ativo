@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Building2, LockKeyhole, RefreshCw, Shield, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { AlertTriangle, Building2, LockKeyhole, Pencil, RefreshCw, Shield, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { AdminUserClient, type AdminUserDto } from '../../api/adminUserClient';
 import { Badge, Button, Card } from '../ui';
 import { ProductionTenantProfileView } from './ProductionTenantProfileView';
 import { UserPermissionsModal } from './UserPermissionsModal';
 import { CreateUserModal } from './CreateUserModal';
+import { EditUserModal } from './EditUserModal';
 
 type AdministrationTab = 'users' | 'tenant';
 
@@ -15,6 +16,7 @@ export const ProductionUserAdministrationView: React.FC = () => {
  const [mutatingId, setMutatingId] = useState<string | null>(null);
  const [permissionModalUser, setPermissionModalUser] = useState<AdminUserDto | null>(null);
  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+ const [editingUser, setEditingUser] = useState<AdminUserDto | null>(null);
  const [error, setError] = useState<string | null>(null);
  const [message, setMessage] = useState<string | null>(null);
 
@@ -168,10 +170,21 @@ export const ProductionUserAdministrationView: React.FC = () => {
  : `${user.permissions?.length || 0} permissões concedidas`}
  </span>
  </div>
- <div className="mt-1 text-sm text-graphite-600 dark:text-graphite-300">{user.email}</div>
+ <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-graphite-600 dark:text-graphite-300">
+  <span>{user.email}</span>
+  {user.phone && <span className="text-xs text-graphite-500">· 📞 {user.phone}</span>}
+ </div>
  <div className="mt-1 text-xs text-graphite-400">ID: {user.id}</div>
  </div>
  <div className="flex items-center gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={() => setEditingUser(user)}
+ className="gap-1.5"
+ >
+ <Pencil className="h-3.5 w-3.5 text-graphite-500" /> Editar
+ </Button>
  <Button
  variant="outline"
  size="sm"
@@ -214,6 +227,18 @@ export const ProductionUserAdministrationView: React.FC = () => {
   onSuccess={(newUser) => {
   setUsers((current) => [newUser, ...current.filter((u) => u.id !== newUser.id)]);
   setMessage(`Usuário ${newUser.name} cadastrado com sucesso.`);
+  }}
+  />
+ )}
+
+ {editingUser && (
+  <EditUserModal
+  isOpen
+  onClose={() => setEditingUser(null)}
+  user={editingUser}
+  onSuccess={(updated) => {
+  setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+  setMessage(`Colaborador ${updated.name} atualizado com sucesso.`);
   }}
   />
  )}

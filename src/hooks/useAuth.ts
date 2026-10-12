@@ -8,6 +8,9 @@ export interface AuthUser {
   active: boolean;
   companyId: string;
   permissions: string[];
+  email?: string | null;
+  phone?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface LoginCredentials {
@@ -33,6 +36,7 @@ export interface AuthContextValue {
   user: AuthUser;
   authMode: 'development-mock' | 'server-session';
   logout: () => Promise<void>;
+  updateUserProfile?: (patch: { name?: string; phone?: string | null; avatarUrl?: string | null }) => void;
 }
 
 export interface AuthSessionClient {
@@ -50,6 +54,7 @@ interface ServerPrincipalPayload {
   userId: string;
   companyId: string;
   name: string;
+  email?: string;
   role: string;
   permissions: string[];
 }
@@ -58,6 +63,7 @@ const DEVELOPMENT_AUTH_USER: AuthUser = {
   id: 'user-admin-1',
   userId: 'user-admin-1',
   name: 'Admin User',
+  email: 'admin@autoerp.local',
   role: 'ADMIN',
   active: true,
   companyId: 'company-main-uuid',
@@ -106,6 +112,7 @@ export function mapTrustedServerPrincipal(value: unknown): AuthUser | null {
     id: candidate.userId,
     userId: candidate.userId,
     name: candidate.name,
+    email: candidate.email || null,
     role: candidate.role,
     active: true,
     companyId: candidate.companyId,

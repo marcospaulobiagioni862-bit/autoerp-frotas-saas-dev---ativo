@@ -3,6 +3,8 @@ export interface AdminUserDto {
   name: string;
   email: string;
   role: string;
+  phone?: string;
+  avatarUrl?: string;
   active: boolean;
   permissions: string[];
   createdAt: string;
@@ -14,6 +16,14 @@ export interface CreateAdminUserInput {
   email: string;
   role: string;
   permissions?: string[];
+  password?: string;
+}
+
+export interface UpdateAdminUserInput {
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
   password?: string;
 }
 
@@ -48,6 +58,8 @@ function parseUser(value: unknown): AdminUserDto {
     role: row.role,
     active: row.active,
     permissions: [...row.permissions] as string[],
+    phone: typeof row.phone === 'string' ? row.phone : undefined,
+    avatarUrl: typeof row.avatarUrl === 'string' ? row.avatarUrl : undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -104,6 +116,17 @@ export class AdminUserClient {
     const payload = record(
       await request('/api/admin/users', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    );
+    return parseUser(payload.item);
+  }
+
+  static async updateUser(id: string, data: UpdateAdminUserInput): Promise<AdminUserDto> {
+    const payload = record(
+      await request(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
