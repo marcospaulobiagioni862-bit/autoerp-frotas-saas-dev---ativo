@@ -84,6 +84,14 @@ jobs:
           npx tsx src/server/__tests__/v2InspectionAndDocumentRoutesRegression.ts
           npx tsx src/server/__tests__/v2MaintenanceFinanceRegression.ts
 
+      - name: V2 user profile, avatar, vehicle details and storage regressions
+        run: |
+          npx tsx src/server/__tests__/userProfileAndEditRegression.ts
+          npx tsx src/components/layout/__tests__/userAvatarMenuRegression.tsx
+          npx tsx src/server/__tests__/attachmentMultiProviderRegression.ts
+          npx tsx src/server/__tests__/vehicleInspectionMobileAndComparisonRegression.ts
+          npx tsx src/server/__tests__/vehicleDetailsAuthorityTestRunner.ts
+
       - name: AUDIT-WAVE-A source-of-truth transversal invariants
         run: npm run test:audit-wave-a
 
