@@ -14,309 +14,309 @@ import { isContractBlocking } from '../../domain/operations/fleetOperationalStat
 import { contractTemplateGenerationMode } from '../../domain/contracts/contractTemplatePolicy';
 
 interface ContractFormModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  contractToEdit?: Contract | null;
-  companyId: string;
-  onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
+ isOpen: boolean;
+ onClose: () => void;
+ contractToEdit?: Contract | null;
+ companyId: string;
+ onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
 }
 
 const SAVED_CONTRACT_KEY = /^modelo-contrato-(\d+)$/;
 
 function savedContractNumber(templateKey: string): number | undefined {
-  const match = SAVED_CONTRACT_KEY.exec(templateKey);
-  if (!match) return undefined;
-  const value = Number(match[1]);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
+ const match = SAVED_CONTRACT_KEY.exec(templateKey);
+ if (!match) return undefined;
+ const value = Number(match[1]);
+ return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
 function contractTemplateOptionLabel(item: ContractTemplate): string {
-  const number = savedContractNumber(item.templateKey);
-  return number
-    ? `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`
-    : `${item.title} • v${item.versionNumber}`;
+ const number = savedContractNumber(item.templateKey);
+ return number
+ ? `Contrato ${String(number).padStart(2, '0')} — ${item.title} • v${item.versionNumber}`
+ : `${item.title} • v${item.versionNumber}`;
 }
 
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
 
 export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingOptions, setLoadingOptions] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({});
-  const [contractFile, setContractFile] = useState<File | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [form, setForm] = useState({
-    contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '',
-    billingPeriodicity: '' as '' | RecurringFrequency, billingDueDayOfWeek: '', billingDueDayOfMonth: '',
-    securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
-  });
+ const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+ const [drivers, setDrivers] = useState<Driver[]>([]);
+ const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+ const [loading, setLoading] = useState(false);
+ const [loadingOptions, setLoadingOptions] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+ const [fieldErrors, setFieldErrors] = useState<Record<string,string>>({});
+ const [contractFile, setContractFile] = useState<File | null>(null);
+ const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+ const [form, setForm] = useState({
+ contractNumber: '', vehicleId: '', driverId: '', startDate: '', endDate: '', rentalAmount: '',
+ billingPeriodicity: '' as '' | RecurringFrequency, billingDueDayOfWeek: '', billingDueDayOfMonth: '',
+ securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
+ });
 
-  const set = (key: keyof typeof form, value: string) => { setHasUnsavedChanges(true); setForm((current) => ({ ...current, [key]: value })); setFieldErrors((current)=>{if(!current[key])return current;const next={...current};delete next[key];return next;}); };
+ const set = (key: keyof typeof form, value: string) => { setHasUnsavedChanges(true); setForm((current) => ({ ...current, [key]: value })); setFieldErrors((current)=>{if(!current[key])return current;const next={...current};delete next[key];return next;}); };
 
-  const setBillingPeriodicity = (value: string) => {
-    setHasUnsavedChanges(true);
-    setForm((current) => ({
-      ...current,
-      billingPeriodicity: value as '' | RecurringFrequency,
-      billingDueDayOfWeek: value === RecurringFrequency.WEEKLY ? current.billingDueDayOfWeek : '',
-      billingDueDayOfMonth: value && value !== RecurringFrequency.WEEKLY ? current.billingDueDayOfMonth : '',
-    }));
-    setFieldErrors((current) => {
-      const next = { ...current };
-      delete next.billingPeriodicity;
-      delete next.billingDueDayOfWeek;
-      delete next.billingDueDayOfMonth;
-      return next;
-    });
-  };
+ const setBillingPeriodicity = (value: string) => {
+ setHasUnsavedChanges(true);
+ setForm((current) => ({
+ ...current,
+ billingPeriodicity: value as '' | RecurringFrequency,
+ billingDueDayOfWeek: value === RecurringFrequency.WEEKLY ? current.billingDueDayOfWeek : '',
+ billingDueDayOfMonth: value && value !== RecurringFrequency.WEEKLY ? current.billingDueDayOfMonth : '',
+ }));
+ setFieldErrors((current) => {
+ const next = { ...current };
+ delete next.billingPeriodicity;
+ delete next.billingDueDayOfWeek;
+ delete next.billingDueDayOfMonth;
+ return next;
+ });
+ };
 
-  useEffect(() => {
-    if (!isOpen) return;
-    let active = true;
-    setError(null);
-    setFieldErrors({});
-    setContractFile(null);
-    setHasUnsavedChanges(false);
-    setLoadingOptions(true);
-    Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
-      .then(([vehicleList, driverList, contractList, templateList]) => {
-        if (!active) return;
-        const blockingContracts = contractList.filter((item) =>
-          !item.isArchived &&
-          item.id !== contractToEdit?.id &&
-          isContractBlocking(item.status)
-        );
-        const blockedVehicleIds = new Set(blockingContracts.map((item) => item.vehicleId));
-        const blockedDriverIds = new Set(blockingContracts.map((item) => item.driverId));
-        const validVehicles = vehicleList.filter((item) =>
-          !item.isArchived &&
-          !blockedVehicleIds.has(item.id) &&
-          (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId)
-        );
-        const validDrivers = driverList.filter((item) =>
-          !item.isArchived &&
-          !blockedDriverIds.has(item.id) &&
-          (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
-        );
-        const savedTemplates = templateList
-          .filter((item) => contractTemplateGenerationMode(item) !== null)
-          .sort((a, b) => (savedContractNumber(a.templateKey) || 0) - (savedContractNumber(b.templateKey) || 0));
-        const currentHistoricalTemplate = contractToEdit?.templateId
-          ? templateList.find((item) => item.id === contractToEdit.templateId)
-          : undefined;
-        const selectableTemplates = currentHistoricalTemplate && !savedTemplates.some((item) => item.id === currentHistoricalTemplate.id)
-          ? [...savedTemplates, currentHistoricalTemplate]
-          : savedTemplates;
-        setVehicles(validVehicles);
-        setDrivers(validDrivers);
-        setTemplates(selectableTemplates);
-      })
-      .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
-      .finally(() => { if (active) setLoadingOptions(false); });
-    // Initialize once when opening/switching the contract, not when requests
-    // finish: date and amount inputs remain editable while options are loading.
-    if (contractToEdit) {
-      setForm({
-        contractNumber: contractToEdit.contractNumber,
-        vehicleId: contractToEdit.vehicleId,
-        driverId: contractToEdit.driverId,
-        startDate: contractToEdit.startDate,
-        endDate: contractToEdit.endDate || '',
-        rentalAmount: String(contractToEdit.rentalAmount),
-        billingPeriodicity: contractToEdit.billingPeriodicity,
-        billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
-        billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
-        securityDepositAmount: String(contractToEdit.securityDepositAmount),
-        franchiseKm: String(contractToEdit.franchiseKm),
-        excessKmRate: String(contractToEdit.excessKmRate),
-        paymentMethodId: contractToEdit.paymentMethodId || '',
-        templateId: contractToEdit.templateId || '',
-        notes: contractToEdit.notes || '',
-      });
-    } else {
-      setForm({
-        contractNumber: '', vehicleId: '', driverId: '',
-        startDate: '', endDate: '', rentalAmount: '',
-        billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
-        securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
-      });
-    }
-    return () => { active = false; };
-  }, [isOpen, contractToEdit, companyId]);
+ useEffect(() => {
+ if (!isOpen) return;
+ let active = true;
+ setError(null);
+ setFieldErrors({});
+ setContractFile(null);
+ setHasUnsavedChanges(false);
+ setLoadingOptions(true);
+ Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
+ .then(([vehicleList, driverList, contractList, templateList]) => {
+ if (!active) return;
+ const blockingContracts = contractList.filter((item) =>
+ !item.isArchived &&
+ item.id !== contractToEdit?.id &&
+ isContractBlocking(item.status)
+ );
+ const blockedVehicleIds = new Set(blockingContracts.map((item) => item.vehicleId));
+ const blockedDriverIds = new Set(blockingContracts.map((item) => item.driverId));
+ const validVehicles = vehicleList.filter((item) =>
+ !item.isArchived &&
+ !blockedVehicleIds.has(item.id) &&
+ (item.status === VehicleStatus.AVAILABLE || item.id === contractToEdit?.vehicleId)
+ );
+ const validDrivers = driverList.filter((item) =>
+ !item.isArchived &&
+ !blockedDriverIds.has(item.id) &&
+ (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
+ );
+ const savedTemplates = templateList
+ .filter((item) => contractTemplateGenerationMode(item) !== null)
+ .sort((a, b) => (savedContractNumber(a.templateKey) || 0) - (savedContractNumber(b.templateKey) || 0));
+ const currentHistoricalTemplate = contractToEdit?.templateId
+ ? templateList.find((item) => item.id === contractToEdit.templateId)
+ : undefined;
+ const selectableTemplates = currentHistoricalTemplate && !savedTemplates.some((item) => item.id === currentHistoricalTemplate.id)
+ ? [...savedTemplates, currentHistoricalTemplate]
+ : savedTemplates;
+ setVehicles(validVehicles);
+ setDrivers(validDrivers);
+ setTemplates(selectableTemplates);
+ })
+ .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
+ .finally(() => { if (active) setLoadingOptions(false); });
+ // Initialize once when opening/switching the contract, not when requests
+ // finish: date and amount inputs remain editable while options are loading.
+ if (contractToEdit) {
+ setForm({
+ contractNumber: contractToEdit.contractNumber,
+ vehicleId: contractToEdit.vehicleId,
+ driverId: contractToEdit.driverId,
+ startDate: contractToEdit.startDate,
+ endDate: contractToEdit.endDate || '',
+ rentalAmount: String(contractToEdit.rentalAmount),
+ billingPeriodicity: contractToEdit.billingPeriodicity,
+ billingDueDayOfWeek: String(contractToEdit.billingDueDayOfWeek || 1),
+ billingDueDayOfMonth: String(contractToEdit.billingDueDayOfMonth || 1),
+ securityDepositAmount: String(contractToEdit.securityDepositAmount),
+ franchiseKm: String(contractToEdit.franchiseKm),
+ excessKmRate: String(contractToEdit.excessKmRate),
+ paymentMethodId: contractToEdit.paymentMethodId || '',
+ templateId: contractToEdit.templateId || '',
+ notes: contractToEdit.notes || '',
+ });
+ } else {
+ setForm({
+ contractNumber: '', vehicleId: '', driverId: '',
+ startDate: '', endDate: '', rentalAmount: '',
+ billingPeriodicity: '', billingDueDayOfWeek: '', billingDueDayOfMonth: '',
+ securityDepositAmount: '', franchiseKm: '', excessKmRate: '', paymentMethodId: '', templateId: '', notes: '',
+ });
+ }
+ return () => { active = false; };
+ }, [isOpen, contractToEdit, companyId]);
 
-  const formDraft = useLocalFormDraft(`contract:${contractToEdit?.id || 'new'}:${contractToEdit?.updatedAt || ''}`, form, draft => { setForm(draft); setHasUnsavedChanges(true); }, isOpen, hasUnsavedChanges);
-  const noVehiclesForNewContract = !contractToEdit && !loadingOptions && vehicles.length === 0;
-  const noDriversForNewContract = !contractToEdit && !loadingOptions && drivers.length === 0;
+ const formDraft = useLocalFormDraft(`contract:${contractToEdit?.id || 'new'}:${contractToEdit?.updatedAt || ''}`, form, draft => { setForm(draft); setHasUnsavedChanges(true); }, isOpen, hasUnsavedChanges);
+ const noVehiclesForNewContract = !contractToEdit && !loadingOptions && vehicles.length === 0;
+ const noDriversForNewContract = !contractToEdit && !loadingOptions && drivers.length === 0;
 
-  const selectContractFile = (file: File | null) => {
-    setError(null);
-    setHasUnsavedChanges(true);
-    if (!file) {
-      setContractFile(null);
-      return;
-    }
-    if (!CONTRACT_FILE_TYPES.includes(file.type)) {
-      setContractFile(null);
-      setError('Arquivo do contrato deve ser PDF, JPG, PNG ou WebP.');
-      return;
-    }
-    if (file.size <= 0 || file.size > MAX_CONTRACT_FILE_BYTES) {
-      setContractFile(null);
-      setError('Arquivo do contrato deve ter até 10 MB e não pode estar vazio.');
-      return;
-    }
-    setContractFile(file);
-  };
+ const selectContractFile = (file: File | null) => {
+ setError(null);
+ setHasUnsavedChanges(true);
+ if (!file) {
+ setContractFile(null);
+ return;
+ }
+ if (!CONTRACT_FILE_TYPES.includes(file.type)) {
+ setContractFile(null);
+ setError('Arquivo do contrato deve ser PDF, JPG, PNG ou WebP.');
+ return;
+ }
+ if (file.size <= 0 || file.size > MAX_CONTRACT_FILE_BYTES) {
+ setContractFile(null);
+ setError('Arquivo do contrato deve ter até 10 MB e não pode estar vazio.');
+ return;
+ }
+ setContractFile(file);
+ };
 
-  const requestClose = () => {
-    if (loading) return;
-    if (hasUnsavedChanges && !window.confirm('Existem informações não salvas. Deseja sair sem salvar?')) return;
-    onClose();
-  };
+ const requestClose = () => {
+ if (loading) return;
+ if (hasUnsavedChanges && !window.confirm('Existem informações não salvas. Deseja sair sem salvar?')) return;
+ onClose();
+ };
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    const nextErrors:Record<string,string>={};
-    if(!form.vehicleId)nextErrors.vehicleId='Selecione o veículo.';
-    if(!form.driverId)nextErrors.driverId='Selecione o motorista.';
-    if(!form.startDate)nextErrors.startDate='Informe a data inicial.';
-    if(!form.billingPeriodicity)nextErrors.billingPeriodicity='Selecione a periodicidade.';
-    if(!Number.isFinite(Number(form.rentalAmount))||Number(form.rentalAmount)<=0)nextErrors.rentalAmount='Informe um aluguel maior que zero.';
-    if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
-    if(form.billingPeriodicity&&form.billingPeriodicity!==RecurringFrequency.WEEKLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia do vencimento entre 1 e 31.';
-    if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
-    setFieldErrors(nextErrors);
-    if(Object.keys(nextErrors).length){setError('Corrija os campos destacados em vermelho antes de salvar o contrato.');return;}
-    setLoading(true);
-    try {
-      const input = {
-        contractNumber: contractToEdit ? (form.contractNumber.trim() || undefined) : undefined,
-        status: contractToEdit ? undefined : ('DRAFT' as any),
-        vehicleId: form.vehicleId,
-        driverId: form.driverId,
-        startDate: form.startDate,
-        endDate: form.endDate || undefined,
-        rentalAmount: Number(form.rentalAmount),
-        billingPeriodicity: form.billingPeriodicity as RecurringFrequency,
-        billingDueDayOfWeek: form.billingPeriodicity === RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfWeek) : undefined,
-        billingDueDayOfMonth: form.billingPeriodicity !== RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfMonth) : undefined,
-        securityDepositAmount: Number(form.securityDepositAmount || 0),
-        franchiseKm: Number(form.franchiseKm || 0),
-        excessKmRate: Number(form.excessKmRate || 0),
-        paymentMethodId: form.paymentMethodId || undefined,
-        templateId: form.templateId || undefined,
-        notes: form.notes || undefined,
-      };
-      const savedContract = contractToEdit
-        ? await ContractClient.update(contractToEdit.id, input)
-        : await ContractClient.create(input);
+ const submit = async (event: React.FormEvent) => {
+ event.preventDefault();
+ setError(null);
+ const nextErrors:Record<string,string>={};
+ if(!form.vehicleId)nextErrors.vehicleId='Selecione o veículo.';
+ if(!form.driverId)nextErrors.driverId='Selecione o motorista.';
+ if(!form.startDate)nextErrors.startDate='Informe a data inicial.';
+ if(!form.billingPeriodicity)nextErrors.billingPeriodicity='Selecione a periodicidade.';
+ if(!Number.isFinite(Number(form.rentalAmount))||Number(form.rentalAmount)<=0)nextErrors.rentalAmount='Informe um aluguel maior que zero.';
+ if(form.billingPeriodicity===RecurringFrequency.WEEKLY&&(!form.billingDueDayOfWeek||Number(form.billingDueDayOfWeek)<1||Number(form.billingDueDayOfWeek)>7))nextErrors.billingDueDayOfWeek='Informe o dia semanal entre 1 e 7.';
+ if(form.billingPeriodicity&&form.billingPeriodicity!==RecurringFrequency.WEEKLY&&(!form.billingDueDayOfMonth||Number(form.billingDueDayOfMonth)<1||Number(form.billingDueDayOfMonth)>31))nextErrors.billingDueDayOfMonth='Informe o dia do vencimento entre 1 e 31.';
+ if(form.endDate&&form.startDate&&form.startDate>form.endDate)nextErrors.endDate='A data final não pode ser anterior à data inicial.';
+ setFieldErrors(nextErrors);
+ if(Object.keys(nextErrors).length){setError('Corrija os campos destacados em vermelho antes de salvar o contrato.');return;}
+ setLoading(true);
+ try {
+ const input = {
+ contractNumber: contractToEdit ? (form.contractNumber.trim() || undefined) : undefined,
+ status: contractToEdit ? undefined : ('DRAFT' as any),
+ vehicleId: form.vehicleId,
+ driverId: form.driverId,
+ startDate: form.startDate,
+ endDate: form.endDate || undefined,
+ rentalAmount: Number(form.rentalAmount),
+ billingPeriodicity: form.billingPeriodicity as RecurringFrequency,
+ billingDueDayOfWeek: form.billingPeriodicity === RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfWeek) : undefined,
+ billingDueDayOfMonth: form.billingPeriodicity !== RecurringFrequency.WEEKLY ? Number(form.billingDueDayOfMonth) : undefined,
+ securityDepositAmount: Number(form.securityDepositAmount || 0),
+ franchiseKm: Number(form.franchiseKm || 0),
+ excessKmRate: Number(form.excessKmRate || 0),
+ paymentMethodId: form.paymentMethodId || undefined,
+ templateId: form.templateId || undefined,
+ notes: form.notes || undefined,
+ };
+ const savedContract = contractToEdit
+ ? await ContractClient.update(contractToEdit.id, input)
+ : await ContractClient.create(input);
 
-      const warnings: string[] = [];
-      if (contractFile) {
-        try {
-          await AttachmentClient.upload({
-            entityType: 'Contract',
-            entityId: savedContract.id,
-            documentType: 'CONTRACT_DOCUMENT',
-            fileName: contractFile.name,
-            mimeType: contractFile.type,
-            content: contractFile,
-            description: 'Documento externo anexado ao contrato',
-          });
-        } catch (uploadError) {
-          warnings.push(`O contrato foi salvo, mas o anexo externo não foi enviado: ${uploadError instanceof Error ? uploadError.message : 'falha no upload'}.`);
-        }
-      }
+ const warnings: string[] = [];
+ if (contractFile) {
+ try {
+ await AttachmentClient.upload({
+ entityType: 'Contract',
+ entityId: savedContract.id,
+ documentType: 'CONTRACT_DOCUMENT',
+ fileName: contractFile.name,
+ mimeType: contractFile.type,
+ content: contractFile,
+ description: 'Documento externo anexado ao contrato',
+ });
+ } catch (uploadError) {
+ warnings.push(`O contrato foi salvo, mas o anexo externo não foi enviado: ${uploadError instanceof Error ? uploadError.message : 'falha no upload'}.`);
+ }
+ }
 
-      const completedContract = savedContract;
+ const completedContract = savedContract;
 
-      formDraft.clear();
-      setHasUnsavedChanges(false);
-      onClose();
-      onSuccess({
-        contract: completedContract,
-        openPdfSignature: false,
-        warning: warnings.length ? warnings.join(' ') : undefined,
-      });
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Erro ao salvar contrato.');
-    } finally {
-      setLoading(false);
-    }
-  };
+ formDraft.clear();
+ setHasUnsavedChanges(false);
+ onClose();
+ onSuccess({
+ contract: completedContract,
+ openPdfSignature: false,
+ warning: warnings.length ? warnings.join(' ') : undefined,
+ });
+ } catch (caught) {
+ setError(caught instanceof Error ? caught.message : 'Erro ao salvar contrato.');
+ } finally {
+ setLoading(false);
+ }
+ };
 
-  return (
-    <ModalContainer
-      isOpen={isOpen}
-      onClose={requestClose}
-      size="5xl"
-      title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
-    >
-      {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
-      <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
-        {error && <div className="flex gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text"><AlertCircle className="w-4 h-4" />{error}</div>}
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
-          <Field label="Modelo de contrato (opcional)"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Sem modelo</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
-          <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
-          <Field label="Veículo *" error={fieldErrors.vehicleId}>
-            <select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions || noVehiclesForNewContract} className={`control ${fieldErrors.vehicleId?'border-red-500':''}`}>
-              <option value="">{loadingOptions ? 'Carregando veículos...' : noVehiclesForNewContract ? 'Nenhum veículo disponível para novo contrato' : 'Selecione'}</option>
-              {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}
-            </select>
-            {noVehiclesForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Nenhum veículo disponível para novo contrato.</span>}
-          </Field>
-          <Field label="Motorista *" error={fieldErrors.driverId}>
-            <select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions || noDriversForNewContract} className={`control ${fieldErrors.driverId?'border-red-500':''}`}>
-              <option value="">{loadingOptions ? 'Carregando motoristas...' : noDriversForNewContract ? 'Nenhum motorista disponível para novo contrato' : 'Selecione'}</option>
-              {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}
-            </select>
-            {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
-          </Field>
-          <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
-          <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
-          <Field label="Periodicidade *" error={fieldErrors.billingPeriodicity}><select value={form.billingPeriodicity} onChange={(e) => setBillingPeriodicity(e.target.value)} className={`control ${fieldErrors.billingPeriodicity?'border-red-500':''}`}><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
-          {form.billingPeriodicity === RecurringFrequency.WEEKLY && <Field label="Dia semanal *" error={fieldErrors.billingDueDayOfWeek}><select value={form.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} className={`control ${fieldErrors.billingDueDayOfWeek?'border-red-500':''}`}><option value="">Selecione</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option><option value="6">Sábado</option><option value="7">Domingo</option></select></Field>}
-          {form.billingPeriodicity && form.billingPeriodicity !== RecurringFrequency.WEEKLY && <Field label="Dia do vencimento no mês *"><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} error={fieldErrors.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} /></Field>}
-          <Field label="Caução"><Input type="number" min="0" step="0.01" value={form.securityDepositAmount} onChange={(e) => set('securityDepositAmount', e.target.value)} /></Field>
-          <Field label="Franquia KM"><Input type="number" min="0" value={form.franchiseKm} onChange={(e) => set('franchiseKm', e.target.value)} /></Field>
-          <Field label="KM excedente"><Input type="number" min="0" step="0.01" value={form.excessKmRate} onChange={(e) => set('excessKmRate', e.target.value)} /></Field>
-          <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
-        </div>
-        <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
-        <Field label="Anexo externo do contrato (opcional)">
-          <input
-            type="file"
-            accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
-            onChange={(event) => selectContractFile(event.target.files?.[0] || null)}
-            className="control border-graphite-300 bg-white text-graphite-800 dark:border-graphite-700 dark:bg-graphite-950/50 dark:text-graphite-100"
-          />
-          <span className="block text-[11px] font-normal text-graphite-600 dark:text-graphite-300">
-            {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. Os modelos padrão MoveFlex VISUAL_FIXO geram PDF sobre as páginas imutáveis aprovadas; modelos personalizados seguem o fluxo configurado.'}
-          </span>
-        </Field>
-        <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3 text-xs text-graphite-600 dark:border-graphite-800 dark:bg-graphite-900/40 dark:text-graphite-300">
-          <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel e a caução são gerados automaticamente como <strong>Contas a Receber do motorista</strong>, vinculadas ao veículo e ao contrato. O contrato nasce ativo e não depende de ativação financeira ou de modelo. Documento e assinatura são evidências opcionais.
-        </div>
-        <div className="flex justify-end gap-2 border-t border-graphite-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions || noVehiclesForNewContract || noDriversForNewContract}><Save className="w-4 h-4" />Salvar</Button></div>
-      </form>
-      <style>{`.control{width:100%;border:1px solid rgb(203 213 225);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem;color:inherit}.dark .control{border-color:rgb(51 65 85);background:rgb(2 6 23 / .35);color:rgb(226 232 240)}`}</style>
-    </ModalContainer>
-  );
+ return (
+ <ModalContainer
+ isOpen={isOpen}
+ onClose={requestClose}
+ size="5xl"
+ title={contractToEdit ? 'Editar Contrato' : 'Novo Contrato'}
+ >
+ {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
+ <form data-draft-dirty={formDraft.dirty} onSubmit={submit} className="p-3 space-y-3">
+ {error && <div className="flex gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text"><AlertCircle className="w-4 h-4" />{error}</div>}
+ <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+ <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
+ <Field label="Modelo de contrato (opcional)"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Sem modelo</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
+ <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
+ <Field label="Veículo *" error={fieldErrors.vehicleId}>
+ <select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions || noVehiclesForNewContract} className={`control ${fieldErrors.vehicleId?'border-error-border':''}`}>
+ <option value="">{loadingOptions ? 'Carregando veículos...' : noVehiclesForNewContract ? 'Nenhum veículo disponível para novo contrato' : 'Selecione'}</option>
+ {vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate} • {v.brand} {v.model}</option>)}
+ </select>
+ {noVehiclesForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Nenhum veículo disponível para novo contrato.</span>}
+ </Field>
+ <Field label="Motorista *" error={fieldErrors.driverId}>
+ <select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions || noDriversForNewContract} className={`control ${fieldErrors.driverId?'border-error-border':''}`}>
+ <option value="">{loadingOptions ? 'Carregando motoristas...' : noDriversForNewContract ? 'Nenhum motorista disponível para novo contrato' : 'Selecione'}</option>
+ {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}
+ </select>
+ {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
+ </Field>
+ <Field label="Data final"><Input type="date" value={form.endDate} error={fieldErrors.endDate} onChange={(e) => set('endDate', e.target.value)} /></Field>
+ <Field label="Aluguel *"><Input type="number" min="0.01" step="0.01" value={form.rentalAmount} error={fieldErrors.rentalAmount} onChange={(e) => set('rentalAmount', e.target.value)} /></Field>
+ <Field label="Periodicidade *" error={fieldErrors.billingPeriodicity}><select value={form.billingPeriodicity} onChange={(e) => setBillingPeriodicity(e.target.value)} className={`control ${fieldErrors.billingPeriodicity?'border-error-border':''}`}><option value="">Selecione</option>{Object.values(RecurringFrequency).map((v) => <option key={v} value={v}>{v === RecurringFrequency.WEEKLY ? 'Semanal' : v === RecurringFrequency.MONTHLY ? 'Mensal' : v === RecurringFrequency.QUARTERLY ? 'Trimestral' : v === RecurringFrequency.SEMI_ANNUAL ? 'Semestral' : 'Anual'}</option>)}</select></Field>
+ {form.billingPeriodicity === RecurringFrequency.WEEKLY && <Field label="Dia semanal *" error={fieldErrors.billingDueDayOfWeek}><select value={form.billingDueDayOfWeek} onChange={(e) => set('billingDueDayOfWeek', e.target.value)} className={`control ${fieldErrors.billingDueDayOfWeek?'border-error-border':''}`}><option value="">Selecione</option><option value="1">Segunda-feira</option><option value="2">Terça-feira</option><option value="3">Quarta-feira</option><option value="4">Quinta-feira</option><option value="5">Sexta-feira</option><option value="6">Sábado</option><option value="7">Domingo</option></select></Field>}
+ {form.billingPeriodicity && form.billingPeriodicity !== RecurringFrequency.WEEKLY && <Field label="Dia do vencimento no mês *"><Input type="number" min="1" max="31" value={form.billingDueDayOfMonth} error={fieldErrors.billingDueDayOfMonth} onChange={(e) => set('billingDueDayOfMonth', e.target.value)} /></Field>}
+ <Field label="Caução"><Input type="number" min="0" step="0.01" value={form.securityDepositAmount} onChange={(e) => set('securityDepositAmount', e.target.value)} /></Field>
+ <Field label="Franquia KM"><Input type="number" min="0" value={form.franchiseKm} onChange={(e) => set('franchiseKm', e.target.value)} /></Field>
+ <Field label="KM excedente"><Input type="number" min="0" step="0.01" value={form.excessKmRate} onChange={(e) => set('excessKmRate', e.target.value)} /></Field>
+ <Field label="Forma de pagamento"><Input value={form.paymentMethodId} onChange={(e) => set('paymentMethodId', e.target.value)} placeholder="Opcional" /></Field>
+ </div>
+ <Field label="Observações"><textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} className="control" /></Field>
+ <Field label="Anexo externo do contrato (opcional)">
+ <input
+ type="file"
+ accept="application/pdf,image/jpeg,image/jpg,image/png,image/webp"
+ onChange={(event) => selectContractFile(event.target.files?.[0] || null)}
+ className="control border-graphite-300 bg-white text-graphite-800 dark:border-graphite-700 dark:bg-graphite-950/50 dark:text-graphite-100"
+ />
+ <span className="block text-[11px] font-normal text-graphite-600 dark:text-graphite-300">
+ {contractFile ? `Selecionado: ${contractFile.name}` : 'Use somente para anexar um documento externo. Os modelos padrão MoveFlex VISUAL_FIXO geram PDF sobre as páginas imutáveis aprovadas; modelos personalizados seguem o fluxo configurado.'}
+ </span>
+ </Field>
+ <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3 text-xs text-graphite-600 dark:border-graphite-800 dark:bg-graphite-900/40 dark:text-graphite-300">
+ <strong className="block mb-1">Integração financeira do contrato</strong>O aluguel e a caução são gerados automaticamente como <strong>Contas a Receber do motorista</strong>, vinculadas ao veículo e ao contrato. O contrato nasce ativo e não depende de ativação financeira ou de modelo. Documento e assinatura são evidências opcionais.
+ </div>
+ <div className="flex justify-end gap-2 border-t border-graphite-100 pt-4"><Button type="button" variant="ghost" onClick={requestClose}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading} disabled={loadingOptions || noVehiclesForNewContract || noDriversForNewContract}><Save className="w-4 h-4" />Salvar</Button></div>
+ </form>
+ <style>{`.control{width:100%;border:1px solid rgb(203 213 225);border-radius:.5rem;background:transparent;padding:.625rem .75rem;font-size:.875rem;color:inherit}.dark .control{border-color:rgb(51 65 85);background:rgb(2 6 23 / .35);color:rgb(226 232 240)}`}</style>
+ </ModalContainer>
+ );
 };
 
 const Field: React.FC<{ label: string; children: React.ReactNode; error?:string }> = ({ label, children, error }) => {
-  const required = label.endsWith(' *');
-  const displayLabel = required ? label.slice(0, -2) : label;
-  return <label className="block space-y-1.5 text-xs font-semibold text-graphite-700 dark:text-graphite-200">
-    <span>{displayLabel}{required && <span className="ml-1 text-error-icon" aria-hidden="true">*</span>}</span>
-    {children}
-    {error&&<span className="block text-[11px] font-normal text-error-icon ">{error}</span>}
-  </label>;
+ const required = label.endsWith(' *');
+ const displayLabel = required ? label.slice(0, -2) : label;
+ return <label className="block space-y-1.5 text-xs font-semibold text-graphite-700 dark:text-graphite-200">
+ <span>{displayLabel}{required && <span className="ml-1 text-error-icon" aria-hidden="true">*</span>}</span>
+ {children}
+ {error&&<span className="block text-[11px] font-normal text-error-icon ">{error}</span>}
+ </label>;
 };

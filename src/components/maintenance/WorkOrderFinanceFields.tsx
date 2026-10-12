@@ -4,64 +4,64 @@ import { Input } from '../ui';
 import { formatCurrencyBRL } from '../../shared/utils/currency';
 
 export interface WorkOrderFinanceSectionDraft {
-  supplierId:string; categoryId:string; paymentMethodId:string; paymentCondition:'CASH'|'INSTALLMENTS'; installmentsCount:string;
-  firstDueDate:string; discount:string; hasInvoice:''|'YES'|'NO'; invoiceNumber:string;
+ supplierId:string; categoryId:string; paymentMethodId:string; paymentCondition:'CASH'|'INSTALLMENTS'; installmentsCount:string;
+ firstDueDate:string; discount:string; hasInvoice:''|'YES'|'NO'; invoiceNumber:string;
 }
 export interface WorkOrderFinanceDraft {
-  parts:WorkOrderFinanceSectionDraft;
-  services:WorkOrderFinanceSectionDraft;
-  labor:WorkOrderFinanceSectionDraft;
+ parts:WorkOrderFinanceSectionDraft;
+ services:WorkOrderFinanceSectionDraft;
+ labor:WorkOrderFinanceSectionDraft;
 }
 export function createEmptyWorkOrderFinanceDraft():WorkOrderFinanceDraft {
-  const section=():WorkOrderFinanceSectionDraft=>({supplierId:'',categoryId:'',paymentMethodId:'',paymentCondition:'CASH',installmentsCount:'1',firstDueDate:'',discount:'0',hasInvoice:'',invoiceNumber:''});
-  return {parts:section(),services:section(),labor:section()};
+ const section=():WorkOrderFinanceSectionDraft=>({supplierId:'',categoryId:'',paymentMethodId:'',paymentCondition:'CASH',installmentsCount:'1',firstDueDate:'',discount:'0',hasInvoice:'',invoiceNumber:''});
+ return {parts:section(),services:section(),labor:section()};
 }
 
 interface Props {
-  partsAmount:number;
-  servicesAmount:number;
-  laborAmount:number;
-  suppliers:Supplier[];
-  categories:Array<{id:string;name:string}>;
-  paymentMethods:Array<{id:string;name:string;type:string}>;
-  value:WorkOrderFinanceDraft;
-  onChange:(value:WorkOrderFinanceDraft)=>void;
+ partsAmount:number;
+ servicesAmount:number;
+ laborAmount:number;
+ suppliers:Supplier[];
+ categories:Array<{id:string;name:string}>;
+ paymentMethods:Array<{id:string;name:string;type:string}>;
+ value:WorkOrderFinanceDraft;
+ onChange:(value:WorkOrderFinanceDraft)=>void;
 }
 
 export const WorkOrderFinanceFields:React.FC<Props>=({partsAmount,servicesAmount,laborAmount,suppliers,categories,paymentMethods,value,onChange})=>{
-  const update=(key:'parts'|'services'|'labor',patch:Partial<WorkOrderFinanceSectionDraft>)=>onChange({...value,[key]:{...value[key],...patch}});
-  const section=(key:'parts'|'services'|'labor',title:string,gross:number)=>{
-    if(gross<=0)return null;
-    const draft=value[key],discount=Number(draft.discount||0),net=Math.max(0,gross-(Number.isFinite(discount)?discount:0));
-    return <div className="rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
-      <div className="mb-3 flex items-center justify-between">
-        <div><strong className="text-xs">{title}</strong><p className="text-[10px] text-graphite-500">Gera uma Conta a Pagar separada, com a forma de pagamento na descrição.</p></div>
-        <strong className="font-mono text-xs">{formatCurrencyBRL(net)}</strong>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="text-[11px] font-semibold">Fornecedor *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.supplierId} onChange={e=>update(key,{supplierId:e.target.value})} required><option value="">Selecione...</option>{suppliers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <p className="text-[11px] text-graphite-500 sm:col-span-2">Categoria ausente? Cadastre em Financeiro → Configurações → Categorias, com tipo Despesa ou Receita e despesa. Use a categoria correspondente ao serviço.</p>
-        <label className="text-[11px] font-semibold">Categoria financeira *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.categoryId} onChange={e=>update(key,{categoryId:e.target.value})} required><option value="">Selecione...</option>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="text-[11px] font-semibold">Forma de pagamento *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.paymentMethodId} onChange={e=>update(key,{paymentMethodId:e.target.value})} required><option value="">Selecione...</option>{paymentMethods.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label className="text-[11px] font-semibold">Condição *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.paymentCondition} onChange={e=>update(key,{paymentCondition:e.target.value as WorkOrderFinanceSectionDraft['paymentCondition'],installmentsCount:e.target.value==='CASH'?'1':draft.installmentsCount==='1'?'2':draft.installmentsCount})}><option value="CASH">À vista</option><option value="INSTALLMENTS">Parcelado</option></select></label>
-        {draft.paymentCondition==='INSTALLMENTS'&&<Input label="Quantidade de parcelas" type="number" min="2" max="60" value={draft.installmentsCount} onChange={e=>update(key,{installmentsCount:e.target.value})} placeholder="Quantidade de parcelas *" required/>}
-        <Input label="Primeiro vencimento" type="date" value={draft.firstDueDate} onChange={e=>update(key,{firstDueDate:e.target.value})} aria-label={`Primeiro vencimento - ${title}`} required/>
-        <Input label="Desconto (R$)" onFocus={e=>e.target.select()} type="number" min="0" max={gross} step="0.01" value={draft.discount} onChange={e=>update(key,{discount:e.target.value})} placeholder="Desconto"/>
-        <label className="text-[11px] font-semibold">Possui nota fiscal? *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.hasInvoice} onChange={e=>update(key,{hasInvoice:e.target.value as WorkOrderFinanceSectionDraft['hasInvoice'],invoiceNumber:e.target.value==='YES'?draft.invoiceNumber:''})} required><option value="">Selecione...</option><option value="YES">Sim</option><option value="NO">Não</option></select></label>
-        {draft.hasInvoice==='YES'&&<Input value={draft.invoiceNumber} onChange={e=>update(key,{invoiceNumber:e.target.value})} placeholder="Número da nota fiscal (opcional)"/>}
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-graphite-500">
-        <span>Valor bruto</span><strong className="text-right">{formatCurrencyBRL(gross)}</strong>
-        <span>Desconto</span><strong className="text-right">{formatCurrencyBRL(Number.isFinite(discount)?discount:0)}</strong>
-        <span className="font-semibold">Valor líquido</span><strong className="text-right">{formatCurrencyBRL(net)}</strong>
-      </div>
-    </div>;
-  };
-  if(partsAmount<=0&&servicesAmount<=0&&laborAmount<=0)return <div className="rounded-lg border border-warning-border bg-warning-bg p-2 text-[11px] text-warning-text   ">Informe um valor de peças, serviços ou mão de obra para configurar o pagamento.</div>;
-  return <div className="space-y-3">
-    <div><strong className="text-xs">Valores e pagamento</strong><p className="text-[10px] text-graphite-500">Peças, serviços e mão de obra são controlados separadamente e podem ter formas de pagamento diferentes.</p></div>
-    {section('parts','Pagamento de peças',partsAmount)}
-    {section('services','Pagamento de serviços',servicesAmount)}
-    {section('labor','Pagamento de mão de obra',laborAmount)}
-  </div>;
+ const update=(key:'parts'|'services'|'labor',patch:Partial<WorkOrderFinanceSectionDraft>)=>onChange({...value,[key]:{...value[key],...patch}});
+ const section=(key:'parts'|'services'|'labor',title:string,gross:number)=>{
+ if(gross<=0)return null;
+ const draft=value[key],discount=Number(draft.discount||0),net=Math.max(0,gross-(Number.isFinite(discount)?discount:0));
+ return <div className="rounded-xl border border-graphite-200 p-3 dark:border-graphite-800">
+ <div className="mb-3 flex items-center justify-between">
+ <div><strong className="text-xs">{title}</strong><p className="text-[10px] text-graphite-500">Gera uma Conta a Pagar separada, com a forma de pagamento na descrição.</p></div>
+ <strong className="font-mono text-xs">{formatCurrencyBRL(net)}</strong>
+ </div>
+ <div className="grid gap-2 sm:grid-cols-2">
+ <label className="text-[11px] font-semibold">Fornecedor *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.supplierId} onChange={e=>update(key,{supplierId:e.target.value})} required><option value="">Selecione...</option>{suppliers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+ <p className="text-[11px] text-graphite-500 sm:col-span-2">Categoria ausente? Cadastre em Financeiro → Configurações → Categorias, com tipo Despesa ou Receita e despesa. Use a categoria correspondente ao serviço.</p>
+ <label className="text-[11px] font-semibold">Categoria financeira *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.categoryId} onChange={e=>update(key,{categoryId:e.target.value})} required><option value="">Selecione...</option>{categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+ <label className="text-[11px] font-semibold">Forma de pagamento *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.paymentMethodId} onChange={e=>update(key,{paymentMethodId:e.target.value})} required><option value="">Selecione...</option>{paymentMethods.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+ <label className="text-[11px] font-semibold">Condição *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.paymentCondition} onChange={e=>update(key,{paymentCondition:e.target.value as WorkOrderFinanceSectionDraft['paymentCondition'],installmentsCount:e.target.value==='CASH'?'1':draft.installmentsCount==='1'?'2':draft.installmentsCount})}><option value="CASH">À vista</option><option value="INSTALLMENTS">Parcelado</option></select></label>
+ {draft.paymentCondition==='INSTALLMENTS'&&<Input label="Quantidade de parcelas" type="number" min="2" max="60" value={draft.installmentsCount} onChange={e=>update(key,{installmentsCount:e.target.value})} placeholder="Quantidade de parcelas *" required/>}
+ <Input label="Primeiro vencimento" type="date" value={draft.firstDueDate} onChange={e=>update(key,{firstDueDate:e.target.value})} aria-label={`Primeiro vencimento - ${title}`} required/>
+ <Input label="Desconto (R$)" onFocus={e=>e.target.select()} type="number" min="0" max={gross} step="0.01" value={draft.discount} onChange={e=>update(key,{discount:e.target.value})} placeholder="Desconto"/>
+ <label className="text-[11px] font-semibold">Possui nota fiscal? *<select className="mt-1 w-full rounded-lg border border-graphite-300 bg-white p-2 text-xs dark:border-graphite-700 dark:bg-graphite-900 text-graphite-900 dark:text-graphite-100 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-graphite-900 dark:[&>option]:bg-graphite-900 dark:[&>option]:text-graphite-100" value={draft.hasInvoice} onChange={e=>update(key,{hasInvoice:e.target.value as WorkOrderFinanceSectionDraft['hasInvoice'],invoiceNumber:e.target.value==='YES'?draft.invoiceNumber:''})} required><option value="">Selecione...</option><option value="YES">Sim</option><option value="NO">Não</option></select></label>
+ {draft.hasInvoice==='YES'&&<Input value={draft.invoiceNumber} onChange={e=>update(key,{invoiceNumber:e.target.value})} placeholder="Número da nota fiscal (opcional)"/>}
+ </div>
+ <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-graphite-500">
+ <span>Valor bruto</span><strong className="text-right">{formatCurrencyBRL(gross)}</strong>
+ <span>Desconto</span><strong className="text-right">{formatCurrencyBRL(Number.isFinite(discount)?discount:0)}</strong>
+ <span className="font-semibold">Valor líquido</span><strong className="text-right">{formatCurrencyBRL(net)}</strong>
+ </div>
+ </div>;
+ };
+ if(partsAmount<=0&&servicesAmount<=0&&laborAmount<=0)return <div className="rounded-lg border border-warning-border bg-warning-bg p-2 text-[11px] text-warning-text ">Informe um valor de peças, serviços ou mão de obra para configurar o pagamento.</div>;
+ return <div className="space-y-3">
+ <div><strong className="text-xs">Valores e pagamento</strong><p className="text-[10px] text-graphite-500">Peças, serviços e mão de obra são controlados separadamente e podem ter formas de pagamento diferentes.</p></div>
+ {section('parts','Pagamento de peças',partsAmount)}
+ {section('services','Pagamento de serviços',servicesAmount)}
+ {section('labor','Pagamento de mão de obra',laborAmount)}
+ </div>;
 };

@@ -20,556 +20,556 @@ import { Card, Button, Badge, Input, Skeleton, ModalContainer, ConfirmDialog } f
 import { firstUnpaidPreviousInstallment, payableInstallmentOrderMessage } from '../../domain/finance/payableInstallmentOrder';
 
 interface PayablesViewProps {
-  onOpenPaymentModal: (payable: AccountPayable) => void;
+ onOpenPaymentModal: (payable: AccountPayable) => void;
 }
 
 const originLabel = (origin: string): string => {
-  const labels: Record<string, string> = {
-    MAINTENANCE: 'Manutenção',
-    INSURANCE: 'Seguro',
-    TRACKER: 'Rastreador',
-    DOCUMENTATION: 'Documentação',
-    FINANCING: 'Financiamento',
-    ADMINISTRATIVE: 'Administrativo',
-    TRAFFIC_TICKET_COMPANY: 'Multa — Empresa',
-    TRAFFIC_TICKET_NIC: 'Multa — NIC',
-    MANUAL: 'Lançamento manual',
-    RENEGOTIATION: 'Renegociação',
-  };
-  return labels[origin] || origin.replaceAll('_', ' ');
+ const labels: Record<string, string> = {
+ MAINTENANCE: 'Manutenção',
+ INSURANCE: 'Seguro',
+ TRACKER: 'Rastreador',
+ DOCUMENTATION: 'Documentação',
+ FINANCING: 'Financiamento',
+ ADMINISTRATIVE: 'Administrativo',
+ TRAFFIC_TICKET_COMPANY: 'Multa — Empresa',
+ TRAFFIC_TICKET_NIC: 'Multa — NIC',
+ MANUAL: 'Lançamento manual',
+ RENEGOTIATION: 'Renegociação',
+ };
+ return labels[origin] || origin.replaceAll('_', ' ');
 };
 
 const statusLabel = (status: string): string => {
-  const labels: Record<string, string> = {
-    PENDING: 'Em aberto',
-    PARTIALLY_PAID: 'Pago parcialmente',
-    PAID: 'Pago',
-    OVERDUE: 'Vencido',
-    CANCELLED: 'Cancelado',
-    RENEGOTIATED: 'Renegociado',
-    WRITTEN_OFF: 'Baixado',
-  };
-  return labels[status] || status;
+ const labels: Record<string, string> = {
+ PENDING: 'Em aberto',
+ PARTIALLY_PAID: 'Pago parcialmente',
+ PAID: 'Pago',
+ OVERDUE: 'Vencido',
+ CANCELLED: 'Cancelado',
+ RENEGOTIATED: 'Renegociado',
+ WRITTEN_OFF: 'Baixado',
+ };
+ return labels[status] || status;
 };
 
 export const PayablesView: React.FC<PayablesViewProps> = ({ onOpenPaymentModal }) => {
-  const [payables, setPayables] = useState<AccountPayable[]>([]);
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [originFilter, setOriginFilter] = useState<string>('ALL');
-  const [loading, setLoading] = useState<boolean>(true);
-  const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
-  const [detailsTarget, setDetailsTarget] = useState<AccountPayable | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
+ const [payables, setPayables] = useState<AccountPayable[]>([]);
+ const [searchTerm, setSearchTerm] = useState<string>('');
+ const [statusFilter, setStatusFilter] = useState<string>('ALL');
+ const [originFilter, setOriginFilter] = useState<string>('ALL');
+ const [loading, setLoading] = useState<boolean>(true);
+ const [attachmentEntity, setAttachmentEntity] = useState<any>(null);
+ const [detailsTarget, setDetailsTarget] = useState<AccountPayable | null>(null);
+ const [actionMessage, setActionMessage] = useState<string | null>(null);
+ const [categories, setCategories] = useState<TrafficTicketFinancialCategory[]>([]);
+ const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+ const [drivers, setDrivers] = useState<Driver[]>([]);
+ const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+ const [contracts, setContracts] = useState<Contract[]>([]);
 
-  // Manual Creation State
-  const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
-  const [description, setDescription] = useState<string>('');
-  const [totalAmount, setTotalAmount] = useState<string>('');
-  const [dueDate, setDueDate] = useState<string>('');
-  const [competenceDate, setCompetenceDate] = useState<string>('');
-  const [competenceMode, setCompetenceMode] = useState<InstallmentCompetenceMode>('SINGLE_EVENT');
-  const [installmentCompetenceDates, setInstallmentCompetenceDates] = useState<string[]>([]);
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [installmentsCount, setInstallmentsCount] = useState<string>('1');
-  const [supplierId, setSupplierId] = useState<string>('');
-  const [driverId, setDriverId] = useState<string>('');
-  const [vehicleId, setVehicleId] = useState<string>('');
-  const [contractId, setContractId] = useState<string>('');
-  const [createLoading, setCreateLoading] = useState<boolean>(false);
+ // Manual Creation State
+ const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
+ const [description, setDescription] = useState<string>('');
+ const [totalAmount, setTotalAmount] = useState<string>('');
+ const [dueDate, setDueDate] = useState<string>('');
+ const [competenceDate, setCompetenceDate] = useState<string>('');
+ const [competenceMode, setCompetenceMode] = useState<InstallmentCompetenceMode>('SINGLE_EVENT');
+ const [installmentCompetenceDates, setInstallmentCompetenceDates] = useState<string[]>([]);
+ const [categoryId, setCategoryId] = useState<string>('');
+ const [installmentsCount, setInstallmentsCount] = useState<string>('1');
+ const [supplierId, setSupplierId] = useState<string>('');
+ const [driverId, setDriverId] = useState<string>('');
+ const [vehicleId, setVehicleId] = useState<string>('');
+ const [contractId, setContractId] = useState<string>('');
+ const [createLoading, setCreateLoading] = useState<boolean>(false);
 
-  const formDraft = useLocalFormDraft('finance-payables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, supplierId }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setSupplierId(draft.supplierId); }, isCreateOpen);
+ const formDraft = useLocalFormDraft('finance-payables-new', { description, totalAmount, dueDate, competenceDate, competenceMode, installmentCompetenceDates, categoryId, installmentsCount, driverId, vehicleId, contractId, supplierId }, draft => { setDescription(draft.description); setTotalAmount(draft.totalAmount); setDueDate(draft.dueDate); setCompetenceDate(draft.competenceDate); setCompetenceMode(draft.competenceMode); setInstallmentCompetenceDates(draft.installmentCompetenceDates); setCategoryId(draft.categoryId); setInstallmentsCount(draft.installmentsCount); setDriverId(draft.driverId); setVehicleId(draft.vehicleId); setContractId(draft.contractId); setSupplierId(draft.supplierId); }, isCreateOpen);
 
-  // Cancellation state if any
-  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+ // Cancellation state if any
+ const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadPayables();
-  }, []);
+ useEffect(() => {
+ loadPayables();
+ }, []);
 
-  const loadPayables = async () => {
-    setLoading(true);
-    try {
-      const [list, categoryList, supplierList, driverList, vehicleList, contractList] = await Promise.all([
-        FinanceObligationClient.listPayables(),
-        TrafficTicketClient.categories(),
-        MaintenanceClient.listSuppliers(),
-        DriverClient.list(),
-        VehicleClient.list(),
-        ContractClient.list(),
-      ]);
-      const expenseCategories = categoryList.filter((category) => category.type === 'EXPENSE' || category.type === 'BOTH');
-      setCategories(expenseCategories);
-      setSuppliers(supplierList.filter((item) => item.status === 'ACTIVE').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
-      setDrivers(driverList.filter((item) => !item.isArchived).sort((a, b) => a.fullName.localeCompare(b.fullName, 'pt-BR')));
-      setVehicles(vehicleList.filter((item) => !item.isArchived).sort((a, b) => a.plate.localeCompare(b.plate, 'pt-BR')));
-      setContracts(contractList.filter((item) => !item.isArchived));
-      setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));
-      setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
-    } catch (err) {
-      if (isAuthenticationExpiredError(err)) return;
-      const message = err instanceof Error ? err.message : 'Erro ao carregar contas a pagar.';
-      alert(message);
-      setPayables([]);
-      setCategories([]);
-      setSuppliers([]);
-      setDrivers([]);
-      setVehicles([]);
-      setContracts([]);
-      setCategoryId('');
-    } finally {
-      setLoading(false);
-    }
-  };
+ const loadPayables = async () => {
+ setLoading(true);
+ try {
+ const [list, categoryList, supplierList, driverList, vehicleList, contractList] = await Promise.all([
+ FinanceObligationClient.listPayables(),
+ TrafficTicketClient.categories(),
+ MaintenanceClient.listSuppliers(),
+ DriverClient.list(),
+ VehicleClient.list(),
+ ContractClient.list(),
+ ]);
+ const expenseCategories = categoryList.filter((category) => category.type === 'EXPENSE' || category.type === 'BOTH');
+ setCategories(expenseCategories);
+ setSuppliers(supplierList.filter((item) => item.status === 'ACTIVE').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+ setDrivers(driverList.filter((item) => !item.isArchived).sort((a, b) => a.fullName.localeCompare(b.fullName, 'pt-BR')));
+ setVehicles(vehicleList.filter((item) => !item.isArchived).sort((a, b) => a.plate.localeCompare(b.plate, 'pt-BR')));
+ setContracts(contractList.filter((item) => !item.isArchived));
+ setCategoryId((current) => expenseCategories.some((category) => category.id === current) ? current : (expenseCategories[0]?.id || ''));
+ setPayables(list.sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime()));
+ } catch (err) {
+ if (isAuthenticationExpiredError(err)) return;
+ const message = err instanceof Error ? err.message : 'Erro ao carregar contas a pagar.';
+ alert(message);
+ setPayables([]);
+ setCategories([]);
+ setSuppliers([]);
+ setDrivers([]);
+ setVehicles([]);
+ setContracts([]);
+ setCategoryId('');
+ } finally {
+ setLoading(false);
+ }
+ };
 
-  const handleCreatePayable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
-      return;
-    }
-    setCreateLoading(true);
-    try {
-      await FinanceObligationClient.createPayable({
-        originType: OriginType.MANUAL,
-        originId: 'manual-' + Date.now(),
-        categoryId,
-        description,
-        totalAmount: parseFloat(totalAmount),
-        dueDate,
-        competenceDate: competenceDate || dueDate,
-        competenceMode,
-        installmentCompetenceDates: competenceMode === 'PER_INSTALLMENT' ? installmentCompetences({ competenceDate: competenceDate || dueDate, competenceMode, ...(installmentCompetenceDates.length ? { installmentCompetenceDates } : {}) }, Array(Number(installmentsCount)).fill(dueDate)) : undefined,
-        installmentsCount: parseInt(installmentsCount) || 1,
-        supplierId: supplierId.trim() || undefined,
-        driverId: driverId.trim() || undefined,
-        vehicleId: vehicleId.trim() || undefined,
-        contractId: contractId.trim() || undefined,
-      });
-      formDraft.clear();
-      setActionMessage('Nova obrigação a pagar criada com sucesso!');
-      setIsCreateOpen(false);
-      // Reset form
-      setDescription('');
-      setTotalAmount('');
-      setDueDate('');
-      setCompetenceDate('');
-      setCompetenceMode('SINGLE_EVENT');
-      setInstallmentCompetenceDates([]);
-      setCategoryId(categories[0]?.id || '');
-      setInstallmentsCount('1');
-      setSupplierId('');
-      setDriverId('');
-      setVehicleId('');
-      setContractId('');
-      // Reload
-      await loadPayables();
-    } catch (err: any) {
-      if (isAuthenticationExpiredError(err)) return;
-      alert(err.message || 'Erro ao criar obrigação a pagar.');
-    } finally {
-      setCreateLoading(false);
-    }
-  };
+ const handleCreatePayable = async (e: React.FormEvent) => {
+ e.preventDefault();
+ if (!description.trim() || !totalAmount || !dueDate || !categoryId) {
+ alert('Por favor, preencha todos os campos obrigatórios.');
+ return;
+ }
+ setCreateLoading(true);
+ try {
+ await FinanceObligationClient.createPayable({
+ originType: OriginType.MANUAL,
+ originId: 'manual-' + Date.now(),
+ categoryId,
+ description,
+ totalAmount: parseFloat(totalAmount),
+ dueDate,
+ competenceDate: competenceDate || dueDate,
+ competenceMode,
+ installmentCompetenceDates: competenceMode === 'PER_INSTALLMENT' ? installmentCompetences({ competenceDate: competenceDate || dueDate, competenceMode, ...(installmentCompetenceDates.length ? { installmentCompetenceDates } : {}) }, Array(Number(installmentsCount)).fill(dueDate)) : undefined,
+ installmentsCount: parseInt(installmentsCount) || 1,
+ supplierId: supplierId.trim() || undefined,
+ driverId: driverId.trim() || undefined,
+ vehicleId: vehicleId.trim() || undefined,
+ contractId: contractId.trim() || undefined,
+ });
+ formDraft.clear();
+ setActionMessage('Nova obrigação a pagar criada com sucesso!');
+ setIsCreateOpen(false);
+ // Reset form
+ setDescription('');
+ setTotalAmount('');
+ setDueDate('');
+ setCompetenceDate('');
+ setCompetenceMode('SINGLE_EVENT');
+ setInstallmentCompetenceDates([]);
+ setCategoryId(categories[0]?.id || '');
+ setInstallmentsCount('1');
+ setSupplierId('');
+ setDriverId('');
+ setVehicleId('');
+ setContractId('');
+ // Reload
+ await loadPayables();
+ } catch (err: any) {
+ if (isAuthenticationExpiredError(err)) return;
+ alert(err.message || 'Erro ao criar obrigação a pagar.');
+ } finally {
+ setCreateLoading(false);
+ }
+ };
 
-  const confirmCancel = async () => {
-    if (!cancelTargetId) return;
-    try {
-      const item = payables.find((p) => p.id === cancelTargetId);
-      if (!item) {
-        alert('Título a pagar não encontrado na lista atual.');
-        setCancelTargetId(null);
-        return;
-      }
-      await FinanceObligationClient.cancelPayable(cancelTargetId, 'Cancelamento manual via interface');
-      setActionMessage('Título a pagar cancelado com sucesso.');
-      setCancelTargetId(null);
-      await loadPayables();
-    } catch (err: any) {
-      if (isAuthenticationExpiredError(err)) return;
-      alert(err.message || 'Erro ao cancelar título');
-      setCancelTargetId(null);
-    }
-  };
+ const confirmCancel = async () => {
+ if (!cancelTargetId) return;
+ try {
+ const item = payables.find((p) => p.id === cancelTargetId);
+ if (!item) {
+ alert('Título a pagar não encontrado na lista atual.');
+ setCancelTargetId(null);
+ return;
+ }
+ await FinanceObligationClient.cancelPayable(cancelTargetId, 'Cancelamento manual via interface');
+ setActionMessage('Título a pagar cancelado com sucesso.');
+ setCancelTargetId(null);
+ await loadPayables();
+ } catch (err: any) {
+ if (isAuthenticationExpiredError(err)) return;
+ alert(err.message || 'Erro ao cancelar título');
+ setCancelTargetId(null);
+ }
+ };
 
-  const today = getCurrentISODate();
-  const filtered = payables.filter((p) => {
-    const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
-    const categoryName = categories.find((category) => category.id === p.categoryId)?.name || '';
-    const supplierName = p.supplierId ? suppliers.find((item) => item.id === p.supplierId)?.name || '' : '';
-    const driverName = p.driverId ? drivers.find((item) => item.id === p.driverId)?.fullName || '' : '';
-    const vehicle = p.vehicleId ? vehicles.find((item) => item.id === p.vehicleId) : undefined;
-    const vehicleLabel = vehicle ? `${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : '';
-    const contractNumber = p.contractId ? contracts.find((item) => item.id === p.contractId)?.contractNumber || '' : '';
-    const matchesSearch =
-      !term ||
-      [p.description, originLabel(String(p.originType)), categoryName, supplierName, driverName, vehicleLabel, contractNumber]
-        .some((value) => value.toLocaleLowerCase('pt-BR').includes(term));
+ const today = getCurrentISODate();
+ const filtered = payables.filter((p) => {
+ const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
+ const categoryName = categories.find((category) => category.id === p.categoryId)?.name || '';
+ const supplierName = p.supplierId ? suppliers.find((item) => item.id === p.supplierId)?.name || '' : '';
+ const driverName = p.driverId ? drivers.find((item) => item.id === p.driverId)?.fullName || '' : '';
+ const vehicle = p.vehicleId ? vehicles.find((item) => item.id === p.vehicleId) : undefined;
+ const vehicleLabel = vehicle ? `${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : '';
+ const contractNumber = p.contractId ? contracts.find((item) => item.id === p.contractId)?.contractNumber || '' : '';
+ const matchesSearch =
+ !term ||
+ [p.description, originLabel(String(p.originType)), categoryName, supplierName, driverName, vehicleLabel, contractNumber]
+ .some((value) => value.toLocaleLowerCase('pt-BR').includes(term));
 
-    const overdue = p.balanceAmount > 0 && p.dueDate < today &&
-      ![ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED, ObligationStatus.WRITTEN_OFF].includes(p.status);
-    const matchesStatus = statusFilter === 'ALL' || (statusFilter === 'OVERDUE_VIEW' ? overdue : p.status === statusFilter);
-    const matchesOrigin = originFilter === 'ALL' || String(p.originType) === originFilter;
-    return matchesSearch && matchesStatus && matchesOrigin;
-  });
+ const overdue = p.balanceAmount > 0 && p.dueDate < today &&
+ ![ObligationStatus.PAID, ObligationStatus.CANCELLED, ObligationStatus.RENEGOTIATED, ObligationStatus.WRITTEN_OFF].includes(p.status);
+ const matchesStatus = statusFilter === 'ALL' || (statusFilter === 'OVERDUE_VIEW' ? overdue : p.status === statusFilter);
+ const matchesOrigin = originFilter === 'ALL' || String(p.originType) === originFilter;
+ return matchesSearch && matchesStatus && matchesOrigin;
+ });
 
-  const originOptions: string[] = Array.from(new Set<string>(payables.map((item) => String(item.originType)))).sort((a: string, b: string) =>
-    originLabel(a).localeCompare(originLabel(b), 'pt-BR')
-  );
+ const originOptions: string[] = Array.from(new Set<string>(payables.map((item) => String(item.originType)))).sort((a: string, b: string) =>
+ originLabel(a).localeCompare(originLabel(b), 'pt-BR')
+ );
 
-  const withInstallmentTotal = (item: AccountPayable) => {
-    const group = item.installmentGroupId ? payables.filter(row => row.installmentGroupId === item.installmentGroupId) : [];
-    return group.length === item.totalInstallments ? { ...item, totalAmount: group.reduce((sum, row) => sum + row.originalAmount, 0) } : item;
-  };
+ const withInstallmentTotal = (item: AccountPayable) => {
+ const group = item.installmentGroupId ? payables.filter(row => row.installmentGroupId === item.installmentGroupId) : [];
+ return group.length === item.totalInstallments ? { ...item, totalAmount: group.reduce((sum, row) => sum + row.originalAmount, 0) } : item;
+ };
 
-  return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-indigo-600" />
-            Contas a Pagar
-          </h2>
-          <p className="text-xs text-graphite-500 mt-0.5">
-            Obrigações da empresa, despesas operacionais e pagamentos.
-          </p>
-        </div>
+ return (
+ <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+ <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+ <div>
+ <h2 className="text-xl font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
+ <CreditCard className="w-6 h-6 text-badge-navy-t1-text" />
+ Contas a Pagar
+ </h2>
+ <p className="text-xs text-graphite-500 mt-0.5">
+ Obrigações da empresa, despesas operacionais e pagamentos.
+ </p>
+ </div>
 
-        <Button
-          onClick={() => setIsCreateOpen(true)}
-          variant="outline"
-          size="sm"
-          icon={<Plus className="w-4 h-4" />}
-          className="font-semibold"
-        >
-          Lançamento manual excepcional
-        </Button>
-      </div>
+ <Button
+ onClick={() => setIsCreateOpen(true)}
+ variant="outline"
+ size="sm"
+ icon={<Plus className="w-4 h-4" />}
+ className="font-semibold"
+ >
+ Lançamento manual excepcional
+ </Button>
+ </div>
 
-      {actionMessage && (
-        <div className="p-3 bg-success-bg  border border-success-border  rounded-lg text-xs text-success-text  flex items-center justify-between">
-          <span>{actionMessage}</span>
-          <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+ {actionMessage && (
+ <div className="p-3 bg-success-bg border border-success-border rounded-lg text-xs text-success-text flex items-center justify-between">
+ <span>{actionMessage}</span>
+ <button onClick={() => setActionMessage(null)} className="p-1 font-bold text-graphite-500 hover:text-graphite-700">
+ <X className="w-4 h-4" />
+ </button>
+ </div>
+ )}
 
-      {/* Filters */}
-      <Card padding="sm">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="w-full sm:w-80">
-            <Input
-              type="text"
-              placeholder="Buscar fornecedor, veículo, descrição..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search className="w-4 h-4 text-graphite-400" />}
-            />
-          </div>
+ {/* Filters */}
+ <Card padding="sm">
+ <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+ <div className="w-full sm:w-80">
+ <Input
+ type="text"
+ placeholder="Buscar fornecedor, veículo, descrição..."
+ value={searchTerm}
+ onChange={(e) => setSearchTerm(e.target.value)}
+ icon={<Search className="w-4 h-4 text-graphite-400" />}
+ />
+ </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-3.5 h-3.5 text-graphite-400 shrink-0" />
-            <select
-              aria-label="Filtrar contas a pagar por origem"
-              value={originFilter}
-              onChange={(event) => setOriginFilter(event.target.value)}
-              className="shrink-0 rounded-lg border border-graphite-200 bg-white px-2.5 py-1.5 text-xs text-graphite-700 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200"
-            >
-              <option value="ALL">Todas as origens</option>
-              {originOptions.map((origin) => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
-            </select>
-            {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, 'OVERDUE_VIEW', ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  statusFilter === st
-                    ? 'bg-action-primary text-on-action-primary font-semibold shadow-2xs'
-                    : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
-                }`}
-              >
-                {st === 'ALL' ? 'Todos' : st === 'OVERDUE_VIEW' ? 'Vencidos' : statusLabel(String(st))}
-              </button>
-            ))}
-          </div>
-        </div>
-      </Card>
+ <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+ <Filter className="w-3.5 h-3.5 text-graphite-400 shrink-0" />
+ <select
+ aria-label="Filtrar contas a pagar por origem"
+ value={originFilter}
+ onChange={(event) => setOriginFilter(event.target.value)}
+ className="shrink-0 rounded-lg border border-graphite-200 bg-white px-2.5 py-1.5 text-xs text-graphite-700 dark:border-graphite-700 dark:bg-graphite-900 dark:text-graphite-200"
+ >
+ <option value="ALL">Todas as origens</option>
+ {originOptions.map((origin) => <option key={origin} value={origin}>{originLabel(origin)}</option>)}
+ </select>
+ {['ALL', ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, 'OVERDUE_VIEW', ObligationStatus.PAID, ObligationStatus.CANCELLED].map((st) => (
+ <button
+ key={st}
+ onClick={() => setStatusFilter(st)}
+ className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0 focus:outline-none focus:ring-2 focus:border-badge-navy-t1-border ${
+ statusFilter === st
+ ? 'bg-action-primary text-on-action-primary font-semibold shadow-2xs'
+ : 'bg-graphite-100 dark:bg-graphite-800 text-graphite-600 dark:text-graphite-400 hover:bg-graphite-200 dark:hover:bg-graphite-700'
+ }`}
+ >
+ {st === 'ALL' ? 'Todos' : st === 'OVERDUE_VIEW' ? 'Vencidos' : statusLabel(String(st))}
+ </button>
+ ))}
+ </div>
+ </div>
+ </Card>
 
-      {/* Table */}
-      <Card padding="none">
-        {loading ? (
-          <div className="p-6 space-y-3">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto md:overflow-x-visible">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-graphite-50 dark:bg-graphite-800/60 text-graphite-500 font-semibold uppercase tracking-wider border-b border-graphite-100 dark:border-graphite-800">
-                <tr>
-                  <th className="p-3.5">Descrição / Origem</th>
-                  <th className="p-3.5">Vencimento</th>
-                  <th className="p-3.5">Despesa Total</th>
-                  <th className="p-3.5">Parcela</th>
-                  <th className="p-3.5">Valor da Parcela</th>
-                  <th className="p-3.5">Saldo Operacional</th>
-                  <th className="p-3.5 text-center">Status</th>
-                  <th className="p-3.5 text-right">Ação Operacional</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800 text-graphite-700 dark:text-graphite-300">
-                {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-graphite-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
-                )}
-                {filtered.map((item) => {
-                  const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
-                  const blockingInstallment = firstUnpaidPreviousInstallment(item, payables);
-                  const isPaid = item.status === ObligationStatus.PAID;
-                  const isCancelled = item.status === ObligationStatus.CANCELLED;
-                  const operationalBalance = isCancelled ? 0 : item.balanceAmount;
-                  const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < today;
-                  const supplierName = item.supplierId ? suppliers.find((entry) => entry.id === item.supplierId)?.name : undefined;
-                  const driverName = item.driverId ? drivers.find((entry) => entry.id === item.driverId)?.fullName : undefined;
-                  const vehicle = item.vehicleId ? vehicles.find((entry) => entry.id === item.vehicleId) : undefined;
-                  const contractNumber = item.contractId ? contracts.find((entry) => entry.id === item.contractId)?.contractNumber : undefined;
-                  const context = [
-                    supplierName && `Fornecedor: ${supplierName}`,
-                    vehicle && `Veículo: ${vehicle.plate}`,
-                    driverName && `Responsável: ${driverName}`,
-                    contractNumber && `Contrato: ${contractNumber}`,
-                  ].filter(Boolean);
-                  const groupedInstallments = item.installmentGroupId
-                    ? payables.filter((entry) => entry.installmentGroupId === item.installmentGroupId)
-                    : [item];
-                  const expenseTotal = groupedInstallments.reduce((sum, entry) => sum + Number(entry.originalAmount), 0);
-                  const installmentLabel = item.installmentNumber && item.totalInstallments
-                    ? `${item.installmentNumber}/${item.totalInstallments}`
-                    : 'Única';
+ {/* Table */}
+ <Card padding="none">
+ {loading ? (
+ <div className="p-6 space-y-3">
+ <Skeleton className="h-10 w-full" />
+ <Skeleton className="h-10 w-full" />
+ <Skeleton className="h-10 w-full" />
+ </div>
+ ) : (
+ <div className="overflow-x-auto md:overflow-x-visible">
+ <table className="w-full text-left text-xs">
+ <thead className="bg-graphite-50 dark:bg-graphite-800/60 text-graphite-500 font-semibold uppercase tracking-wider border-b border-graphite-100 dark:border-graphite-800">
+ <tr>
+ <th className="p-3.5">Descrição / Origem</th>
+ <th className="p-3.5">Vencimento</th>
+ <th className="p-3.5">Despesa Total</th>
+ <th className="p-3.5">Parcela</th>
+ <th className="p-3.5">Valor da Parcela</th>
+ <th className="p-3.5">Saldo Operacional</th>
+ <th className="p-3.5 text-center">Status</th>
+ <th className="p-3.5 text-right">Ação Operacional</th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-graphite-100 dark:divide-graphite-800 text-graphite-700 dark:text-graphite-300">
+ {filtered.length === 0 && (
+ <tr><td colSpan={8} className="p-8 text-center text-graphite-500">Nenhuma conta a pagar encontrada para os filtros atuais.</td></tr>
+ )}
+ {filtered.map((item) => {
+ const isPending = [ObligationStatus.PENDING, ObligationStatus.PARTIALLY_PAID, ObligationStatus.OVERDUE].includes(item.status);
+ const blockingInstallment = firstUnpaidPreviousInstallment(item, payables);
+ const isPaid = item.status === ObligationStatus.PAID;
+ const isCancelled = item.status === ObligationStatus.CANCELLED;
+ const operationalBalance = isCancelled ? 0 : item.balanceAmount;
+ const isOverdue = isPending && item.balanceAmount > 0 && item.dueDate < today;
+ const supplierName = item.supplierId ? suppliers.find((entry) => entry.id === item.supplierId)?.name : undefined;
+ const driverName = item.driverId ? drivers.find((entry) => entry.id === item.driverId)?.fullName : undefined;
+ const vehicle = item.vehicleId ? vehicles.find((entry) => entry.id === item.vehicleId) : undefined;
+ const contractNumber = item.contractId ? contracts.find((entry) => entry.id === item.contractId)?.contractNumber : undefined;
+ const context = [
+ supplierName && `Fornecedor: ${supplierName}`,
+ vehicle && `Veículo: ${vehicle.plate}`,
+ driverName && `Responsável: ${driverName}`,
+ contractNumber && `Contrato: ${contractNumber}`,
+ ].filter(Boolean);
+ const groupedInstallments = item.installmentGroupId
+ ? payables.filter((entry) => entry.installmentGroupId === item.installmentGroupId)
+ : [item];
+ const expenseTotal = groupedInstallments.reduce((sum, entry) => sum + Number(entry.originalAmount), 0);
+ const installmentLabel = item.installmentNumber && item.totalInstallments
+ ? `${item.installmentNumber}/${item.totalInstallments}`
+ : 'Única';
 
-                  return (
-                    <tr key={item.id} className="hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 transition-colors">
-                      <td className="p-3.5">
-                        <div className="font-semibold text-graphite-900 dark:text-graphite-100">
-                          {item.description}
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-graphite-500">
-                          <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
-                          <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || 'Não informada'}</span>
-                        </div>
-                        {context.length > 0 && <div className="mt-0.5 text-[11px] text-graphite-500">{context.join(' • ')}</div>}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums">
-                        {formatDateBR(item.dueDate)}
-                        {isOverdue && (
-                          <span className="block text-[10px] text-error-icon  font-bold">EM ATRASO</span>
-                        )}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-semibold">
-                        R$ {expenseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-semibold">
-                        {installmentLabel}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-semibold">
-                        R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 font-mono tabular-nums font-bold text-indigo-600 dark:text-indigo-400">
-                        <span className="block">R$ {operationalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-graphite-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <Badge
-                          variant={
-                            isPaid
-                              ? 'success'
-                              : isPending
-                              ? isOverdue
-                                ? 'danger'
-                                : 'warning'
-                              : 'neutral'
-                          }
-                        >
-                          {isOverdue ? 'Vencido' : statusLabel(String(item.status))}
-                        </Badge>
-                      </td>
-                      <td className="p-3.5 text-right">
-                        <div className="flex justify-end gap-2">
-                          {isPending && !blockingInstallment && (
-                            <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary font-semibold">
-                              Pagar
-                            </Button>
-                          )}
-                          {isPending && blockingInstallment && (
-                            <span className="text-xs font-semibold text-warning-text" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
-                          )}
-                          <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
-                          {isPending && (
-                            <details className="relative">
-                              <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
-                              <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
-                                <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg  dark:hover:bg-rose-950/30" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
-                              </div>
-                            </details>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+ return (
+ <tr key={item.id} className="hover:bg-graphite-50/80 dark:hover:bg-graphite-800/40 transition-colors">
+ <td className="p-3.5">
+ <div className="font-semibold text-graphite-900 dark:text-graphite-100">
+ {item.description}
+ </div>
+ <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-graphite-500">
+ <span>Origem: <strong>{originLabel(String(item.originType))}</strong></span>
+ <span>Categoria: {categories.find((category) => category.id === item.categoryId)?.name || 'Não informada'}</span>
+ </div>
+ {context.length > 0 && <div className="mt-0.5 text-[11px] text-graphite-500">{context.join(' • ')}</div>}
+ </td>
+ <td className="p-3.5 font-mono tabular-nums">
+ {formatDateBR(item.dueDate)}
+ {isOverdue && (
+ <span className="block text-[10px] text-error-icon font-bold">EM ATRASO</span>
+ )}
+ </td>
+ <td className="p-3.5 font-mono tabular-nums font-semibold">
+ R$ {expenseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+ </td>
+ <td className="p-3.5 font-mono tabular-nums font-semibold">
+ {installmentLabel}
+ </td>
+ <td className="p-3.5 font-mono tabular-nums font-semibold">
+ R$ {item.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+ </td>
+ <td className="p-3.5 font-mono tabular-nums font-bold text-badge-navy-t1-text ">
+ <span className="block">R$ {operationalBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+ {isCancelled && item.balanceAmount > 0 && <span className="block text-[10px] font-normal text-graphite-500">Histórico R$ {item.balanceAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+ </td>
+ <td className="p-3.5 text-center">
+ <Badge
+ variant={
+ isPaid
+ ? 'success'
+ : isPending
+ ? isOverdue
+ ? 'danger'
+ : 'warning'
+ : 'neutral'
+ }
+ >
+ {isOverdue ? 'Vencido' : statusLabel(String(item.status))}
+ </Badge>
+ </td>
+ <td className="p-3.5 text-right">
+ <div className="flex justify-end gap-2">
+ {isPending && !blockingInstallment && (
+ <Button size="sm" variant="primary" onClick={() => onOpenPaymentModal(withInstallmentTotal(item))} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary font-semibold">
+ Pagar
+ </Button>
+ )}
+ {isPending && blockingInstallment && (
+ <span className="text-xs font-semibold text-warning-text" role="status">{payableInstallmentOrderMessage(blockingInstallment)}</span>
+ )}
+ <Button size="sm" variant="outline" onClick={() => setDetailsTarget(withInstallmentTotal(item))}>Detalhes</Button>
+ {isPending && (
+ <details className="relative">
+ <summary aria-label="Mais ações" className="list-none cursor-pointer rounded-lg border border-graphite-200 px-3 py-1.5 text-base font-bold text-graphite-600 dark:border-graphite-700 dark:text-graphite-300">⋮</summary>
+ <div className="absolute right-0 z-20 mt-1 w-40 rounded-xl border border-graphite-200 bg-white p-2 shadow-xl dark:border-graphite-700 dark:bg-graphite-900">
+ <button className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg dark:hover:bg-error-bg" onClick={() => setCancelTargetId(item.id)}>Cancelar título</button>
+ </div>
+ </details>
+ )}
+ </div>
+ </td>
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ )}
+ </Card>
 
-      <ConfirmDialog
-        isOpen={!!cancelTargetId}
-        title="Cancelar Título a Pagar"
-        message="Deseja realmente cancelar esta obrigação a pagar? Esta operação será auditada e processada no servidor."
-        confirmText="Confirmar Cancelamento"
-        confirmVariant="danger"
-        onConfirm={confirmCancel}
-        onCancel={() => setCancelTargetId(null)}
-      />
+ <ConfirmDialog
+ isOpen={!!cancelTargetId}
+ title="Cancelar Título a Pagar"
+ message="Deseja realmente cancelar esta obrigação a pagar? Esta operação será auditada e processada no servidor."
+ confirmText="Confirmar Cancelamento"
+ confirmVariant="danger"
+ onConfirm={confirmCancel}
+ onCancel={() => setCancelTargetId(null)}
+ />
 
-      {/* MODAL DE CRIAÇÃO MANUAL */}
-      {isCreateOpen && (
-        <ModalContainer
-          isOpen={isCreateOpen}
-          onClose={() => setIsCreateOpen(false)}
-          title="Lançamento manual excepcional"
-          maxWidth="max-w-2xl"
-        >
-          {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
-          <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
-            <p className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text   ">
-              Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
-            </p>
-            <Input
-              label="Descrição da despesa *"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ex: Peças para Oficina, Seguro Frota, Aluguel Escritório..."
-              required
-            />
+ {/* MODAL DE CRIAÇÃO MANUAL */}
+ {isCreateOpen && (
+ <ModalContainer
+ isOpen={isCreateOpen}
+ onClose={() => setIsCreateOpen(false)}
+ title="Lançamento manual excepcional"
+ maxWidth="max-w-2xl"
+ >
+ {formDraft.notice && <p role="status" className="text-xs text-graphite-500">{formDraft.notice}</p>}
+ <form data-draft-dirty={formDraft.dirty} onSubmit={handleCreatePayable} className="space-y-4">
+ <p className="rounded-lg border border-warning-border bg-warning-bg p-3 text-xs text-warning-text ">
+ Use este lançamento para despesas excepcionais. Obrigações de manutenção, seguro, rastreador, documentação e multas devem continuar sendo geradas pela origem operacional correspondente.
+ </p>
+ <Input
+ label="Descrição da despesa *"
+ value={description}
+ onChange={(e) => setDescription(e.target.value)}
+ placeholder="Ex: Peças para Oficina, Seguro Frota, Aluguel Escritório..."
+ required
+ />
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Valor Total (R$) *"
-                type="number"
-                step="0.01"
-                value={totalAmount}
-                onChange={(e) => setTotalAmount(e.target.value)}
-                placeholder="0.00"
-                required
-              />
+ <div className="grid grid-cols-2 gap-4">
+ <Input
+ label="Valor Total (R$) *"
+ type="number"
+ step="0.01"
+ value={totalAmount}
+ onChange={(e) => setTotalAmount(e.target.value)}
+ placeholder="0.00"
+ required
+ />
 
-              <Input
-                label="Vencimento *"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                required
-              />
-            </div>
+ <Input
+ label="Vencimento *"
+ type="date"
+ value={dueDate}
+ onChange={(e) => setDueDate(e.target.value)}
+ required
+ />
+ </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="Data de Competência"
-                type="date"
-                value={competenceDate}
-                onChange={(e) => setCompetenceDate(e.target.value)}
-                placeholder="Opcional"
-              />
+ <div className="grid grid-cols-2 gap-4">
+ <Input
+ label="Data de Competência"
+ type="date"
+ value={competenceDate}
+ onChange={(e) => setCompetenceDate(e.target.value)}
+ placeholder="Opcional"
+ />
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-graphite-500 block">Categoria *</label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 text-graphite-800 dark:text-graphite-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-xs"
-                  required
-                >
-                  <option value="">Selecione uma categoria de despesa</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>{category.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+ <div className="space-y-1">
+ <label className="text-xs font-semibold text-graphite-500 block">Categoria *</label>
+ <select
+ value={categoryId}
+ onChange={(e) => setCategoryId(e.target.value)}
+ className="w-full text-xs p-2.5 rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 text-graphite-800 dark:text-graphite-200 focus:outline-none focus:ring-1 focus:border-badge-navy-t1-border text-xs"
+ required
+ >
+ <option value="">Selecione uma categoria de despesa</option>
+ {categories.map((category) => (
+ <option key={category.id} value={category.id}>{category.name}</option>
+ ))}
+ </select>
+ </div>
+ </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-graphite-500 block">Fornecedor / beneficiário</label>
-                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="control w-full">
-                  <option value="">Sem fornecedor cadastrado</option>
-                  {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-                </select>
-              </div>
-              <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
-              <Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(e) => { setInstallmentsCount(e.target.value); setInstallmentCompetenceDates([]); }} />
-            </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <div className="space-y-1">
+ <label className="text-xs font-semibold text-graphite-500 block">Fornecedor / beneficiário</label>
+ <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="control w-full">
+ <option value="">Sem fornecedor cadastrado</option>
+ {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+ </select>
+ </div>
+ <InstallmentCompetenceFields count={Number(installmentsCount)} baseDate={competenceDate || dueDate} mode={competenceMode} dates={installmentCompetenceDates} onMode={setCompetenceMode} onDates={setInstallmentCompetenceDates} />
+ <Input label="Parcelas" type="number" min="1" max="120" value={installmentsCount} onChange={(e) => { setInstallmentsCount(e.target.value); setInstallmentCompetenceDates([]); }} />
+ </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-graphite-500 block">Veículo vinculado</label>
-                <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="control w-full">
-                  <option value="">Sem veículo</option>
-                  {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} • {vehicle.brand} {vehicle.model}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-graphite-500 block">Responsável / motorista</label>
-                <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="control w-full">
-                  <option value="">Move Flex / empresa</option>
-                  {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-graphite-500 block">Contrato vinculado</label>
-              <select value={contractId} onChange={(e) => setContractId(e.target.value)} className="control w-full">
-                <option value="">Sem contrato</option>
-                {contracts.filter((contract) => !driverId || contract.driverId === driverId).map((contract) => <option key={contract.id} value={contract.id}>{contract.contractNumber}</option>)}
-              </select>
-            </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+ <div className="space-y-1">
+ <label className="text-xs font-semibold text-graphite-500 block">Veículo vinculado</label>
+ <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} className="control w-full">
+ <option value="">Sem veículo</option>
+ {vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} • {vehicle.brand} {vehicle.model}</option>)}
+ </select>
+ </div>
+ <div className="space-y-1">
+ <label className="text-xs font-semibold text-graphite-500 block">Responsável / motorista</label>
+ <select value={driverId} onChange={(e) => setDriverId(e.target.value)} className="control w-full">
+ <option value="">Move Flex / empresa</option>
+ {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName}</option>)}
+ </select>
+ </div>
+ </div>
+ <div className="space-y-1">
+ <label className="text-xs font-semibold text-graphite-500 block">Contrato vinculado</label>
+ <select value={contractId} onChange={(e) => setContractId(e.target.value)} className="control w-full">
+ <option value="">Sem contrato</option>
+ {contracts.filter((contract) => !driverId || contract.driverId === driverId).map((contract) => <option key={contract.id} value={contract.id}>{contract.contractNumber}</option>)}
+ </select>
+ </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-graphite-200 dark:border-graphite-800">
-              <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary">
-                Criar despesa
-              </Button>
-            </div>
-          </form>
-        </ModalContainer>
-      )}
+ <div className="flex justify-end gap-2 pt-2 border-t border-graphite-200 dark:border-graphite-800">
+ <Button type="button" variant="outline" onClick={() => formDraft.close(() => setIsCreateOpen(false))}>
+ Cancelar
+ </Button>
+ <Button type="submit" variant="primary" isLoading={createLoading} className="!bg-action-primary hover:!bg-action-primary !text-on-action-primary">
+ Criar despesa
+ </Button>
+ </div>
+ </form>
+ </ModalContainer>
+ )}
 
-      <FinancialObligationDetailsModal
-        obligation={detailsTarget}
-        type="PAYABLE"
-        onClose={() => setDetailsTarget(null)}
-      />
+ <FinancialObligationDetailsModal
+ obligation={detailsTarget}
+ type="PAYABLE"
+ onClose={() => setDetailsTarget(null)}
+ />
 
-      {attachmentEntity && (
-        <AttachmentModal
-          isOpen={!!attachmentEntity}
-          onClose={() => setAttachmentEntity(null)}
-          entityType="FinancialPayable"
-          entityId={attachmentEntity.id}
-          documentType="FINANCIAL_DOCUMENT"
-          title={`Anexos: ${attachmentEntity.description}`}
-        />
-      )}
-    </div>
-  );
+ {attachmentEntity && (
+ <AttachmentModal
+ isOpen={!!attachmentEntity}
+ onClose={() => setAttachmentEntity(null)}
+ entityType="FinancialPayable"
+ entityId={attachmentEntity.id}
+ documentType="FINANCIAL_DOCUMENT"
+ title={`Anexos: ${attachmentEntity.description}`}
+ />
+ )}
+ </div>
+ );
 };
 

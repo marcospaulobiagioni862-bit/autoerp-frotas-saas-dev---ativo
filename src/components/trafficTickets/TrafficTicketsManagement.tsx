@@ -18,84 +18,84 @@ interface TrafficTicketsManagementProps { companyId?: string; }
 type OperationView='TICKETS'|'TOLLS';
 
 export const TrafficTicketsManagement: React.FC<TrafficTicketsManagementProps> = (_props) => {
-  const [operationView,setOperationView]=useState<OperationView>('TICKETS');
-  const [tickets,setTickets]=useState<TrafficTicket[]>([]);
-  const [vehicles,setVehicles]=useState<Vehicle[]>([]);
-  const [drivers,setDrivers]=useState<Driver[]>([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState<string|null>(null);
-  const [searchTerm,setSearchTerm]=useState('');
-  const [statusFilter,setStatusFilter]=useState('ALL');
-  const [responsibilityFilter,setResponsibilityFilter]=useState('ALL');
-  const [isFormOpen,setIsFormOpen]=useState(false);
-  const [isIntakeOpen,setIsIntakeOpen]=useState(false);
-  const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
+ const [operationView,setOperationView]=useState<OperationView>('TICKETS');
+ const [tickets,setTickets]=useState<TrafficTicket[]>([]);
+ const [vehicles,setVehicles]=useState<Vehicle[]>([]);
+ const [drivers,setDrivers]=useState<Driver[]>([]);
+ const [loading,setLoading]=useState(true);
+ const [error,setError]=useState<string|null>(null);
+ const [searchTerm,setSearchTerm]=useState('');
+ const [statusFilter,setStatusFilter]=useState('ALL');
+ const [responsibilityFilter,setResponsibilityFilter]=useState('ALL');
+ const [isFormOpen,setIsFormOpen]=useState(false);
+ const [isIntakeOpen,setIsIntakeOpen]=useState(false);
+ const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
 
-  const loadData=async()=>{setLoading(true);setError(null);try{
-    const [tList,vList,dList]=await Promise.all([TrafficTicketClient.list(),VehicleClient.list(),DriverClient.list()]);
-    setTickets([...tList].sort((a,b)=>b.infractionDate.localeCompare(a.infractionDate)));setVehicles(vList);setDrivers(dList);
-  }catch(err){setError(err instanceof Error?err.message:'Erro ao carregar multas.');}finally{setLoading(false);}};
-  useEffect(()=>{void loadData();},[]);
+ const loadData=async()=>{setLoading(true);setError(null);try{
+ const [tList,vList,dList]=await Promise.all([TrafficTicketClient.list(),VehicleClient.list(),DriverClient.list()]);
+ setTickets([...tList].sort((a,b)=>b.infractionDate.localeCompare(a.infractionDate)));setVehicles(vList);setDrivers(dList);
+ }catch(err){setError(err instanceof Error?err.message:'Erro ao carregar multas.');}finally{setLoading(false);}};
+ useEffect(()=>{void loadData();},[]);
 
-  const vehicleInfo=(id:string,plate?:string)=>{const v=id?vehicles.find(item=>item.id===id):undefined;return v?`${v.plate} (${v.brand} ${v.model})`:plate?`${plate} (fora da frota)`:(id||'Veículo não cadastrado');};
-  const driverInfo=(id?:string)=>{if(!id)return 'Não identificado';const d=drivers.find(item=>item.id===id);return d?d.fullName:id;};
-  const filtered=useMemo(()=>tickets.filter(t=>{
-    const term=searchTerm.toLowerCase();
-    return (!term||t.autoNumber.toLowerCase().includes(term)||t.description.toLowerCase().includes(term)||vehicleInfo(t.vehicleId,t.vehiclePlate).toLowerCase().includes(term)||driverInfo(t.driverId).toLowerCase().includes(term))
-      &&(statusFilter==='ALL'||t.status===statusFilter)&&(responsibilityFilter==='ALL'||t.responsibility===responsibilityFilter);
-  }),[tickets,vehicles,drivers,searchTerm,statusFilter,responsibilityFilter]);
+ const vehicleInfo=(id:string,plate?:string)=>{const v=id?vehicles.find(item=>item.id===id):undefined;return v?`${v.plate} (${v.brand} ${v.model})`:plate?`${plate} (fora da frota)`:(id||'Veículo não cadastrado');};
+ const driverInfo=(id?:string)=>{if(!id)return 'Não identificado';const d=drivers.find(item=>item.id===id);return d?d.fullName:id;};
+ const filtered=useMemo(()=>tickets.filter(t=>{
+ const term=searchTerm.toLowerCase();
+ return (!term||t.autoNumber.toLowerCase().includes(term)||t.description.toLowerCase().includes(term)||vehicleInfo(t.vehicleId,t.vehiclePlate).toLowerCase().includes(term)||driverInfo(t.driverId).toLowerCase().includes(term))
+ &&(statusFilter==='ALL'||t.status===statusFilter)&&(responsibilityFilter==='ALL'||t.responsibility===responsibilityFilter);
+ }),[tickets,vehicles,drivers,searchTerm,statusFilter,responsibilityFilter]);
 
-  const total=tickets.reduce((sum,t)=>sum+t.originalAmount,0);
-  const pending=tickets.filter(t=>t.responsibility===TicketResponsibility.UNIDENTIFIED).length;
-  const driverCharges=tickets.filter(t=>t.responsibility===TicketResponsibility.DRIVER&&Boolean(t.receivableId)).length;
-  const responsibilityLabel=(value:TicketResponsibility)=>value===TicketResponsibility.DRIVER?'Motorista':value===TicketResponsibility.COMPANY?'Empresa':'Não identificado';
-  const ticketStatusLabel=(value:TicketStatus)=>value===TicketStatus.PENDING_IDENTIFICATION?'Aguardando identificação':value===TicketStatus.IDENTIFIED?'Identificada':value===TicketStatus.CHARGED_DRIVER?'Cobrança gerada ao motorista':value===TicketStatus.COMPANY_PAYABLE_CREATED?'Conta a pagar criada':value===TicketStatus.PAID_BY_COMPANY?'Pago pela empresa':value===TicketStatus.APPEALED?'Em recurso':'Cancelada';
-  const ticketModalResetKey=isIntakeOpen?'intake':isFormOpen?'form':selectedTicketId?`details:${selectedTicketId}`:'none';
+ const total=tickets.reduce((sum,t)=>sum+t.originalAmount,0);
+ const pending=tickets.filter(t=>t.responsibility===TicketResponsibility.UNIDENTIFIED).length;
+ const driverCharges=tickets.filter(t=>t.responsibility===TicketResponsibility.DRIVER&&Boolean(t.receivableId)).length;
+ const responsibilityLabel=(value:TicketResponsibility)=>value===TicketResponsibility.DRIVER?'Motorista':value===TicketResponsibility.COMPANY?'Empresa':'Não identificado';
+ const ticketStatusLabel=(value:TicketStatus)=>value===TicketStatus.PENDING_IDENTIFICATION?'Aguardando identificação':value===TicketStatus.IDENTIFIED?'Identificada':value===TicketStatus.CHARGED_DRIVER?'Cobrança gerada ao motorista':value===TicketStatus.COMPANY_PAYABLE_CREATED?'Conta a pagar criada':value===TicketStatus.PAID_BY_COMPANY?'Pago pela empresa':value===TicketStatus.APPEALED?'Em recurso':'Cancelada';
+ const ticketModalResetKey=isIntakeOpen?'intake':isFormOpen?'form':selectedTicketId?`details:${selectedTicketId}`:'none';
 
-  return <div className="space-y-3">
-    <div className="px-4 sm:px-6 pt-4 sm:pt-6 max-w-7xl mx-auto w-full"><div className="inline-flex rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 p-1">
-      <button type="button" onClick={()=>setOperationView('TICKETS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TICKETS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><AlertTriangle className="w-4 h-4"/>Multas</button>
-      <button type="button" onClick={()=>setOperationView('TOLLS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TOLLS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><Route className="w-4 h-4"/>Pedágios / Free Flow</button>
-    </div></div>
-    {operationView==='TOLLS'?<LazyModuleErrorBoundary resetKey="toll-passages" onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-8 text-center text-sm text-graphite-500">Carregando Pedágios / Free Flow...</div>}><TollPassagesManagement/></Suspense></LazyModuleErrorBoundary>:
-    <div className="p-4 sm:p-6 pt-1 space-y-6 max-w-7xl mx-auto">
-      <PageHeader
-        title="Multas de Trânsito"
-        description="Registro vinculado ao financeiro e com histórico de alterações"
-        breadcrumb="Operação • Gestão de Multas"
-        secondaryActions={<Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button>}
-        primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}
-      />
-      {error&&<Card className="p-4 text-sm text-error-text bg-error-bg">{error}</Card>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4"><span className="text-xs text-graphite-500">Multas</span><div className="text-2xl font-bold">{tickets.length}</div><AlertTriangle className="w-5 h-5 text-warning-icon"/></Card>
-        <Card className="p-4"><span className="text-xs text-graphite-500">Não identificadas / NIC</span><div className="text-2xl font-bold">{pending}</div><ShieldAlert className="w-5 h-5 text-warning-icon"/></Card>
-        <Card className="p-4"><span className="text-xs text-graphite-500">Reembolsos de motorista</span><div className="text-2xl font-bold">{driverCharges}</div><User className="w-5 h-5 text-indigo-500"/></Card>
-        <Card className="p-4"><span className="text-xs text-graphite-500">Valor original acumulado</span><div className="text-xl font-bold">{formatCurrencyBRL(total)}</div><DollarSign className="w-5 h-5 text-success-icon"/></Card>
-      </div>
-      <Card className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Auto, descrição, placa ou motorista..."/>
-        <Select value={responsibilityFilter} onChange={e=>setResponsibilityFilter(e.target.value)}>
-          <option value="ALL">Todas as responsabilidades</option>
-          {Object.values(TicketResponsibility).map(value=><option key={value} value={value}>{responsibilityLabel(value)}</option>)}
-        </Select>
-        <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
-          <option value="ALL">Todos os status</option>
-          {Object.values(TicketStatus).map(value=><option key={value} value={value}>{value}</option>)}
-        </Select>
-      </Card>
-      <Card className="overflow-x-auto">
-        {loading?<div className="p-10 text-center text-sm text-graphite-500">Carregando multas...</div>:filtered.length===0?<div className="p-10 text-center text-sm text-graphite-500">Nenhuma multa encontrada.</div>:
-        <table className="w-full text-xs"><thead><tr className="border-b"><th className="p-3 text-left">Auto</th><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Motorista</th><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Valor</th><th className="p-3 text-left">Responsabilidade</th><th className="p-3 text-left">Status</th><th className="p-3"/></tr></thead>
-        <tbody>{filtered.map(t=><tr key={t.id} className="border-b last:border-0"><td className="p-3 font-mono font-semibold">{t.autoNumber}</td><td className="p-3">{vehicleInfo(t.vehicleId,t.vehiclePlate)}</td><td className="p-3">{driverInfo(t.driverId)}</td><td className="p-3">{new Date(`${t.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}</td><td className="p-3">{formatCurrencyBRL(t.originalAmount)}</td><td className="p-3"><Badge variant={t.responsibility===TicketResponsibility.UNIDENTIFIED?'warning':t.responsibility===TicketResponsibility.DRIVER?'indigo':'slate'}>{responsibilityLabel(t.responsibility)}</Badge></td><td className="p-3"><Badge variant={t.status===TicketStatus.CANCELLED?'danger':t.status===TicketStatus.PAID_BY_COMPANY?'success':t.status===TicketStatus.APPEALED?'warning':'secondary'}>{ticketStatusLabel(t.status)}</Badge></td><td className="p-3 text-right"><Button variant="outline" size="sm" onClick={()=>setSelectedTicketId(t.id)}>Detalhes</Button></td></tr>)}</tbody></table>}
-      </Card>
-      <LazyModuleErrorBoundary resetKey={ticketModalResetKey} onRetry={()=>window.location.reload()}>
-        <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-graphite-600 shadow-xl dark:bg-graphite-900 dark:text-graphite-300">Carregando dados da multa...</div></div>}>
-          {isFormOpen&&<TrafficTicketFormModal isOpen onClose={()=>setIsFormOpen(false)} onSuccess={()=>void loadData()}/>}
-          {isIntakeOpen&&<TrafficTicketDocumentIntakeModal isOpen onClose={()=>setIsIntakeOpen(false)} onCreated={()=>void loadData()}/>}
-          {selectedTicketId&&<TrafficTicketDetailsModal isOpen onClose={()=>setSelectedTicketId(null)} ticketId={selectedTicketId} onRefresh={()=>void loadData()}/>}
-        </Suspense>
-      </LazyModuleErrorBoundary>
-    </div>}
-  </div>;
+ return <div className="space-y-3">
+ <div className="px-4 sm:px-6 pt-4 sm:pt-6 max-w-7xl mx-auto w-full"><div className="inline-flex rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 p-1">
+ <button type="button" onClick={()=>setOperationView('TICKETS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TICKETS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><AlertTriangle className="w-4 h-4"/>Multas</button>
+ <button type="button" onClick={()=>setOperationView('TOLLS')} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${operationView==='TOLLS'?'bg-action-primary text-on-action-primary':'text-graphite-600 dark:text-graphite-300'}`}><Route className="w-4 h-4"/>Pedágios / Free Flow</button>
+ </div></div>
+ {operationView==='TOLLS'?<LazyModuleErrorBoundary resetKey="toll-passages" onRetry={()=>window.location.reload()}><Suspense fallback={<div className="p-8 text-center text-sm text-graphite-500">Carregando Pedágios / Free Flow...</div>}><TollPassagesManagement/></Suspense></LazyModuleErrorBoundary>:
+ <div className="p-4 sm:p-6 pt-1 space-y-6 max-w-7xl mx-auto">
+ <PageHeader
+ title="Multas de Trânsito"
+ description="Registro vinculado ao financeiro e com histórico de alterações"
+ breadcrumb="Operação • Gestão de Multas"
+ secondaryActions={<Button variant="outline" onClick={()=>setIsIntakeOpen(true)} className="gap-2"><Sparkles className="w-4 h-4"/>Ler auto com IA</Button>}
+ primaryAction={{label:'Nova Multa',onClick:()=>setIsFormOpen(true),icon:<Plus className="w-4 h-4"/>}}
+ />
+ {error&&<Card className="p-4 text-sm text-error-text bg-error-bg">{error}</Card>}
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+ <Card className="p-4"><span className="text-xs text-graphite-500">Multas</span><div className="text-2xl font-bold">{tickets.length}</div><AlertTriangle className="w-5 h-5 text-warning-icon"/></Card>
+ <Card className="p-4"><span className="text-xs text-graphite-500">Não identificadas / NIC</span><div className="text-2xl font-bold">{pending}</div><ShieldAlert className="w-5 h-5 text-warning-icon"/></Card>
+ <Card className="p-4"><span className="text-xs text-graphite-500">Reembolsos de motorista</span><div className="text-2xl font-bold">{driverCharges}</div><User className="w-5 h-5 text-fg-secondary"/></Card>
+ <Card className="p-4"><span className="text-xs text-graphite-500">Valor original acumulado</span><div className="text-xl font-bold">{formatCurrencyBRL(total)}</div><DollarSign className="w-5 h-5 text-success-icon"/></Card>
+ </div>
+ <Card className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+ <Input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Auto, descrição, placa ou motorista..."/>
+ <Select value={responsibilityFilter} onChange={e=>setResponsibilityFilter(e.target.value)}>
+ <option value="ALL">Todas as responsabilidades</option>
+ {Object.values(TicketResponsibility).map(value=><option key={value} value={value}>{responsibilityLabel(value)}</option>)}
+ </Select>
+ <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+ <option value="ALL">Todos os status</option>
+ {Object.values(TicketStatus).map(value=><option key={value} value={value}>{value}</option>)}
+ </Select>
+ </Card>
+ <Card className="overflow-x-auto">
+ {loading?<div className="p-10 text-center text-sm text-graphite-500">Carregando multas...</div>:filtered.length===0?<div className="p-10 text-center text-sm text-graphite-500">Nenhuma multa encontrada.</div>:
+ <table className="w-full text-xs"><thead><tr className="border-b"><th className="p-3 text-left">Auto</th><th className="p-3 text-left">Veículo</th><th className="p-3 text-left">Motorista</th><th className="p-3 text-left">Vencimento</th><th className="p-3 text-left">Valor</th><th className="p-3 text-left">Responsabilidade</th><th className="p-3 text-left">Status</th><th className="p-3"/></tr></thead>
+ <tbody>{filtered.map(t=><tr key={t.id} className="border-b last:border-0"><td className="p-3 font-mono font-semibold">{t.autoNumber}</td><td className="p-3">{vehicleInfo(t.vehicleId,t.vehiclePlate)}</td><td className="p-3">{driverInfo(t.driverId)}</td><td className="p-3">{new Date(`${t.dueDate}T00:00:00`).toLocaleDateString('pt-BR')}</td><td className="p-3">{formatCurrencyBRL(t.originalAmount)}</td><td className="p-3"><Badge variant={t.responsibility===TicketResponsibility.UNIDENTIFIED?'warning':t.responsibility===TicketResponsibility.DRIVER?'indigo':'slate'}>{responsibilityLabel(t.responsibility)}</Badge></td><td className="p-3"><Badge variant={t.status===TicketStatus.CANCELLED?'danger':t.status===TicketStatus.PAID_BY_COMPANY?'success':t.status===TicketStatus.APPEALED?'warning':'secondary'}>{ticketStatusLabel(t.status)}</Badge></td><td className="p-3 text-right"><Button variant="outline" size="sm" onClick={()=>setSelectedTicketId(t.id)}>Detalhes</Button></td></tr>)}</tbody></table>}
+ </Card>
+ <LazyModuleErrorBoundary resetKey={ticketModalResetKey} onRetry={()=>window.location.reload()}>
+ <Suspense fallback={<div role="status" className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-950/20"><div className="rounded-xl bg-white px-4 py-3 text-sm text-graphite-600 shadow-xl dark:bg-graphite-900 dark:text-graphite-300">Carregando dados da multa...</div></div>}>
+ {isFormOpen&&<TrafficTicketFormModal isOpen onClose={()=>setIsFormOpen(false)} onSuccess={()=>void loadData()}/>}
+ {isIntakeOpen&&<TrafficTicketDocumentIntakeModal isOpen onClose={()=>setIsIntakeOpen(false)} onCreated={()=>void loadData()}/>}
+ {selectedTicketId&&<TrafficTicketDetailsModal isOpen onClose={()=>setSelectedTicketId(null)} ticketId={selectedTicketId} onRefresh={()=>void loadData()}/>}
+ </Suspense>
+ </LazyModuleErrorBoundary>
+ </div>}
+ </div>;
 };

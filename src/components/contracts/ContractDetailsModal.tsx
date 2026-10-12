@@ -21,503 +21,503 @@ import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { formatDateBR } from '../../shared/utils/date';
 
 interface ContractDetailsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  contractId: string | null;
-  companyId: string;
-  onRefresh: () => void;
-  onOpenReceiptModal?: (receivableId: string) => void;
-  initialFocus?: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL';
+ isOpen: boolean;
+ onClose: () => void;
+ contractId: string | null;
+ companyId: string;
+ onRefresh: () => void;
+ onOpenReceiptModal?: (receivableId: string) => void;
+ initialFocus?: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL';
 }
 
 type Tab = 'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT';
 
 const CONTRACT_AUDIT_FIELD_LABELS: Record<string, string> = {
-  contractNumber: 'Número do contrato',
-  vehicleId: 'Veículo',
-  driverId: 'Motorista',
-  startDate: 'Data inicial',
-  endDate: 'Data final',
-  rentalAmount: 'Valor do aluguel',
-  billingPeriodicity: 'Periodicidade',
-  billingDueDayOfWeek: 'Dia semanal de vencimento',
-  billingDueDayOfMonth: 'Dia mensal de vencimento',
-  securityDepositAmount: 'Caução',
-  franchiseKm: 'Franquia de KM',
-  excessKmRate: 'Valor do KM excedente',
-  paymentMethodId: 'Forma de pagamento',
-  templateId: 'Modelo de contrato',
-  signatureRequired: 'Assinatura obrigatória',
-  status: 'Status',
-  notes: 'Observações',
+ contractNumber: 'Número do contrato',
+ vehicleId: 'Veículo',
+ driverId: 'Motorista',
+ startDate: 'Data inicial',
+ endDate: 'Data final',
+ rentalAmount: 'Valor do aluguel',
+ billingPeriodicity: 'Periodicidade',
+ billingDueDayOfWeek: 'Dia semanal de vencimento',
+ billingDueDayOfMonth: 'Dia mensal de vencimento',
+ securityDepositAmount: 'Caução',
+ franchiseKm: 'Franquia de KM',
+ excessKmRate: 'Valor do KM excedente',
+ paymentMethodId: 'Forma de pagamento',
+ templateId: 'Modelo de contrato',
+ signatureRequired: 'Assinatura obrigatória',
+ status: 'Status',
+ notes: 'Observações',
 };
 
 function parseContractAuditState(value?: string): Record<string, unknown> | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
+ if (!value) return null;
+ try {
+ const parsed = JSON.parse(value);
+ return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+ } catch {
+ return null;
+ }
 }
 
 function contractAuditChangeSummary(previousState?: string, newState?: string): { fields: string[]; statusTransition?: string } {
-  const previous = parseContractAuditState(previousState);
-  const next = parseContractAuditState(newState);
-  if (!previous && !next) return { fields: [] };
-  const keys = Array.from(new Set([...Object.keys(previous || {}), ...Object.keys(next || {})]));
-  const changed = keys.filter((key) => JSON.stringify(previous?.[key]) !== JSON.stringify(next?.[key]));
-  const fields = changed.map((key) => CONTRACT_AUDIT_FIELD_LABELS[key] || key);
-  const previousStatus = previous?.status;
-  const nextStatus = next?.status;
-  const statusTransition =
-    changed.includes('status') &&
-    typeof previousStatus === 'string' &&
-    typeof nextStatus === 'string'
-      ? `${previousStatus} → ${nextStatus}`
-      : undefined;
-  return { fields, statusTransition };
+ const previous = parseContractAuditState(previousState);
+ const next = parseContractAuditState(newState);
+ if (!previous && !next) return { fields: [] };
+ const keys = Array.from(new Set([...Object.keys(previous || {}), ...Object.keys(next || {})]));
+ const changed = keys.filter((key) => JSON.stringify(previous?.[key]) !== JSON.stringify(next?.[key]));
+ const fields = changed.map((key) => CONTRACT_AUDIT_FIELD_LABELS[key] || key);
+ const previousStatus = previous?.status;
+ const nextStatus = next?.status;
+ const statusTransition =
+ changed.includes('status') &&
+ typeof previousStatus === 'string' &&
+ typeof nextStatus === 'string'
+ ? `${previousStatus} → ${nextStatus}`
+ : undefined;
+ return { fields, statusTransition };
 }
 
 function contractStatusLabel(status: ContractStatus): string {
-  switch (status) {
-    case ContractStatus.DRAFT: return 'Rascunho';
-    case ContractStatus.AWAITING_SIGNATURE: return 'Aguardando assinatura';
-    case ContractStatus.ACTIVE: return 'Ativo';
-    case ContractStatus.SUSPENDED: return 'Suspenso';
-    case ContractStatus.FINISHED: return 'Finalizado';
-    case ContractStatus.CLOSED: return 'Encerrado';
-    case ContractStatus.CANCELLED: return 'Cancelado';
-    case ContractStatus.ARCHIVED: return 'Arquivado';
-    default: return String(status);
-  }
+ switch (status) {
+ case ContractStatus.DRAFT: return 'Rascunho';
+ case ContractStatus.AWAITING_SIGNATURE: return 'Aguardando assinatura';
+ case ContractStatus.ACTIVE: return 'Ativo';
+ case ContractStatus.SUSPENDED: return 'Suspenso';
+ case ContractStatus.FINISHED: return 'Finalizado';
+ case ContractStatus.CLOSED: return 'Encerrado';
+ case ContractStatus.CANCELLED: return 'Cancelado';
+ case ContractStatus.ARCHIVED: return 'Arquivado';
+ default: return String(status);
+ }
 }
 
 function obligationStatusLabel(status: ObligationStatus): string {
-  switch (status) {
-    case ObligationStatus.PENDING: return 'Em aberto';
-    case ObligationStatus.PARTIALLY_PAID: return 'Pago parcialmente';
-    case ObligationStatus.PAID: return 'Pago';
-    case ObligationStatus.OVERDUE: return 'Vencido';
-    case ObligationStatus.CANCELLED: return 'Cancelado';
-    case ObligationStatus.RENEGOTIATED: return 'Renegociado';
-    case ObligationStatus.WRITTEN_OFF: return 'Baixado';
-    default: return String(status);
-  }
+ switch (status) {
+ case ObligationStatus.PENDING: return 'Em aberto';
+ case ObligationStatus.PARTIALLY_PAID: return 'Pago parcialmente';
+ case ObligationStatus.PAID: return 'Pago';
+ case ObligationStatus.OVERDUE: return 'Vencido';
+ case ObligationStatus.CANCELLED: return 'Cancelado';
+ case ObligationStatus.RENEGOTIATED: return 'Renegociado';
+ case ObligationStatus.WRITTEN_OFF: return 'Baixado';
+ default: return String(status);
+ }
 }
 
 const bridge = new ContractLegacyDetailsBridge();
 const EMPTY_SETTLEMENT_OPTIONS: SettlementOptions = { accounts: [], paymentMethods: [] };
 
 export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal, initialFocus = 'OVERVIEW' }) => {
-  const versionRef = useRef(0);
-  const [tab, setTab] = useState<Tab>('OVERVIEW');
-  const [contract, setContract] = useState<Contract | null>(null);
-  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
-  const [deposit, setDeposit] = useState<SecurityDeposit | null>(null);
-  const [tickets, setTickets] = useState<TrafficTicket[]>([]);
-  const [history, setHistory] = useState<AuditLog[]>([]);
-  const [incomeCategories, setIncomeCategories] = useState<TrafficTicketFinancialCategory[]>([]);
-  const [incomeCategoryId, setIncomeCategoryId] = useState('');
-  const [settlementOptions, setSettlementOptions] = useState<SettlementOptions>(EMPTY_SETTLEMENT_OPTIONS);
-  const [depositAmount, setDepositAmount] = useState('');
-  const [depositAccountId, setDepositAccountId] = useState('');
-  const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');
-  const [depositIdempotencyKey, setDepositIdempotencyKey] = useState(() => createDepositReceiptIdempotencyKey());
-  const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [uploadCount, setUploadCount] = useState(0);
-  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-  const [closeFinalKm, setCloseFinalKm] = useState('');
-  const [closeReason, setCloseReason] = useState('Encerrado manualmente no painel');
+ const versionRef = useRef(0);
+ const [tab, setTab] = useState<Tab>('OVERVIEW');
+ const [contract, setContract] = useState<Contract | null>(null);
+ const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+ const [driver, setDriver] = useState<Driver | null>(null);
+ const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
+ const [deposit, setDeposit] = useState<SecurityDeposit | null>(null);
+ const [tickets, setTickets] = useState<TrafficTicket[]>([]);
+ const [history, setHistory] = useState<AuditLog[]>([]);
+ const [incomeCategories, setIncomeCategories] = useState<TrafficTicketFinancialCategory[]>([]);
+ const [incomeCategoryId, setIncomeCategoryId] = useState('');
+ const [settlementOptions, setSettlementOptions] = useState<SettlementOptions>(EMPTY_SETTLEMENT_OPTIONS);
+ const [depositAmount, setDepositAmount] = useState('');
+ const [depositAccountId, setDepositAccountId] = useState('');
+ const [depositPaymentMethodId, setDepositPaymentMethodId] = useState('');
+ const [depositIdempotencyKey, setDepositIdempotencyKey] = useState(() => createDepositReceiptIdempotencyKey());
+ const [loading, setLoading] = useState(false);
+ const [actionLoading, setActionLoading] = useState(false);
+ const [error, setError] = useState<string | null>(null);
+ const [success, setSuccess] = useState<string | null>(null);
+ const [uploadCount, setUploadCount] = useState(0);
+ const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+ const [closeFinalKm, setCloseFinalKm] = useState('');
+ const [closeReason, setCloseReason] = useState('Encerrado manualmente no painel');
 
-  const load = async () => {
-    if (!isOpen || !contractId) return;
-    const version = ++versionRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const core = await ContractClient.get(contractId);
-      const [v, d, allReceivables, dep, supplemental, categoryList, options] = await Promise.all([
-        VehicleClient.get(core.vehicleId),
-        DriverClient.get(core.driverId),
-        FinanceObligationClient.listReceivables(),
-        FinanceDepositClient.getByContract(core.id),
-        bridge.load(companyId, core.id),
-        TrafficTicketClient.categories(),
-        FinanceSettlementClient.getOptions(),
-      ]);
-      if (version !== versionRef.current) return;
-      const eligible = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
-      const remainingDeposit = Math.max(0, core.securityDepositAmount - (dep?.receivedAmount || 0));
-      setContract(core);
-      setVehicle(v);
-      setDriver(d);
-      setReceivables(allReceivables.filter((item) => item.contractId === core.id).sort((a, b) => b.dueDate.localeCompare(a.dueDate)));
-      setDeposit(dep);
-      setTickets(supplemental.tickets);
-      setHistory(supplemental.history);
-      setIncomeCategories(eligible);
-      setIncomeCategoryId((current) => eligible.some((category) => category.id === current) ? current : (eligible[0]?.id || ''));
-      setSettlementOptions(options);
-      setDepositAccountId((current) => options.accounts.some((item) => item.id === current) ? current : (options.accounts[0]?.id || ''));
-      setDepositPaymentMethodId((current) => options.paymentMethods.some((item) => item.id === current) ? current : (options.paymentMethods[0]?.id || ''));
-      setDepositAmount(remainingDeposit > 0 ? String(remainingDeposit) : '');
-    } catch (caught) {
-      if (version === versionRef.current) setError(caught instanceof Error ? caught.message : 'Erro ao carregar contrato.');
-    } finally {
-      if (version === versionRef.current) setLoading(false);
-    }
-  };
+ const load = async () => {
+ if (!isOpen || !contractId) return;
+ const version = ++versionRef.current;
+ setLoading(true);
+ setError(null);
+ try {
+ const core = await ContractClient.get(contractId);
+ const [v, d, allReceivables, dep, supplemental, categoryList, options] = await Promise.all([
+ VehicleClient.get(core.vehicleId),
+ DriverClient.get(core.driverId),
+ FinanceObligationClient.listReceivables(),
+ FinanceDepositClient.getByContract(core.id),
+ bridge.load(companyId, core.id),
+ TrafficTicketClient.categories(),
+ FinanceSettlementClient.getOptions(),
+ ]);
+ if (version !== versionRef.current) return;
+ const eligible = categoryList.filter((category) => category.type === 'INCOME' || category.type === 'BOTH');
+ const remainingDeposit = Math.max(0, core.securityDepositAmount - (dep?.receivedAmount || 0));
+ setContract(core);
+ setVehicle(v);
+ setDriver(d);
+ setReceivables(allReceivables.filter((item) => item.contractId === core.id).sort((a, b) => b.dueDate.localeCompare(a.dueDate)));
+ setDeposit(dep);
+ setTickets(supplemental.tickets);
+ setHistory(supplemental.history);
+ setIncomeCategories(eligible);
+ setIncomeCategoryId((current) => eligible.some((category) => category.id === current) ? current : (eligible[0]?.id || ''));
+ setSettlementOptions(options);
+ setDepositAccountId((current) => options.accounts.some((item) => item.id === current) ? current : (options.accounts[0]?.id || ''));
+ setDepositPaymentMethodId((current) => options.paymentMethods.some((item) => item.id === current) ? current : (options.paymentMethods[0]?.id || ''));
+ setDepositAmount(remainingDeposit > 0 ? String(remainingDeposit) : '');
+ } catch (caught) {
+ if (version === versionRef.current) setError(caught instanceof Error ? caught.message : 'Erro ao carregar contrato.');
+ } finally {
+ if (version === versionRef.current) setLoading(false);
+ }
+ };
 
-  useEffect(() => {
-    setTab(initialFocus === 'FINANCIAL' ? 'FINANCIAL' : 'OVERVIEW');
-    setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
-    setIncomeCategories([]); setIncomeCategoryId('');
-    setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');
-    setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
-    setError(null); setSuccess(null);
-    if (isOpen && contractId) void load();
-    return () => { versionRef.current += 1; };
-  }, [isOpen, contractId, companyId, initialFocus]);
+ useEffect(() => {
+ setTab(initialFocus === 'FINANCIAL' ? 'FINANCIAL' : 'OVERVIEW');
+ setContract(null); setVehicle(null); setDriver(null); setReceivables([]); setDeposit(null); setTickets([]); setHistory([]);
+ setIncomeCategories([]); setIncomeCategoryId('');
+ setSettlementOptions(EMPTY_SETTLEMENT_OPTIONS); setDepositAmount(''); setDepositAccountId(''); setDepositPaymentMethodId('');
+ setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
+ setError(null); setSuccess(null);
+ if (isOpen && contractId) void load();
+ return () => { versionRef.current += 1; };
+ }, [isOpen, contractId, companyId, initialFocus]);
 
-  const action = async (task: () => Promise<unknown>, message: string) => {
-    setActionLoading(true); setError(null); setSuccess(null);
-    try {
-      await task();
-      setSuccess(message);
-      await load();
-      onRefresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Falha na operação do contrato.');
-      await load();
-      onRefresh();
-    } finally {
-      setActionLoading(false);
-    }
-  };
+ const action = async (task: () => Promise<unknown>, message: string) => {
+ setActionLoading(true); setError(null); setSuccess(null);
+ try {
+ await task();
+ setSuccess(message);
+ await load();
+ onRefresh();
+ } catch (caught) {
+ setError(caught instanceof Error ? caught.message : 'Falha na operação do contrato.');
+ await load();
+ onRefresh();
+ } finally {
+ setActionLoading(false);
+ }
+ };
 
-  const createRentalIncomeCategory = () => { void action(() => FinanceMasterDataClient.createCategory({ name: 'Aluguel de veículos', type: 'INCOME' }), 'Categoria financeira “Aluguel de veículos” criada e selecionada.'); };
+ const createRentalIncomeCategory = () => { void action(() => FinanceMasterDataClient.createCategory({ name: 'Aluguel de veículos', type: 'INCOME' }), 'Categoria financeira “Aluguel de veículos” criada e selecionada.'); };
 
-  const activate = () => {
-    if (!contract) return;
-    if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
-    void action(() => ContractClient.activate(contract.id, incomeCategoryId), 'Contrato ativado com vínculo e cobrança confirmados.');
-  };
-  const closeContract = () => {
-    if (!contract) return;
-    setCloseFinalKm(vehicle ? String(vehicle.currentKm) : '');
-    setCloseReason('Encerrado manualmente no painel');
-    setCloseDialogOpen(true);
-  };
-  const confirmCloseContract = () => {
-    if (!contract) return;
-    const hasKm = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
-    let finalKm: number | undefined = undefined;
-    if (hasKm) {
-      if (!closeFinalKm.trim()) {
-        setError('O encerramento deste contrato exige o odômetro final para apuração do KM excedente.');
-        return;
-      }
-      finalKm = Number(closeFinalKm);
-      if (!Number.isFinite(finalKm) || finalKm < (vehicle?.currentKm ?? 0)) {
-        setError(`Odômetro final inválido. Deve ser um número maior ou igual ao KM atual do veículo (${vehicle?.currentKm ?? 0}).`);
-        return;
-      }
-    }
-    setCloseDialogOpen(false);
-    void action(
-      () => ContractClient.close(contract.id, { reason: closeReason.trim() || 'Encerrado manualmente no painel', finalKm }),
-      'Contrato encerrado e apuração financeira concluída.'
-    );
-  };
-  const cancelContract = () => {
-    if (!contract) return;
-    const reason = prompt('Informe o motivo do cancelamento:');
-    if (!reason?.trim()) return;
-    void action(() => ContractClient.cancel(contract.id, reason), 'Contrato cancelado com histórico preservado.');
-  };
-  const bill = () => {
-    if (!contract) return;
-    if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
-    const today = new Date().toISOString().slice(0, 10);
-    const dueDate = prompt('Data de vencimento da nova competência (AAAA-MM-DD):', today);
-    if (!dueDate) return;
-    void action(() => ContractClient.bill(contract.id, dueDate, dueDate, incomeCategoryId), 'Faturamento processado com idempotência.');
-  };
-  const receiveDeposit = () => {
-    if (!contract) return;
-    const amount = Number(depositAmount);
-    const remaining = Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0));
-    if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) {
-      setError(`Informe um valor de caução entre R$ 0,01 e ${formatCurrencyBRL(remaining)}.`);
-      return;
-    }
-    if (!depositAccountId || !depositPaymentMethodId) {
-      setError('Selecione a conta financeira e a forma de pagamento da caução.');
-      return;
-    }
-    void action(async () => {
-      await FinanceDepositClient.receive({ contractId: contract.id, amount, financialAccountId: depositAccountId, paymentMethodId: depositPaymentMethodId, idempotencyKey: depositIdempotencyKey });
-      setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
-    }, 'Caução recebida com sucesso.');
-  };
+ const activate = () => {
+ if (!contract) return;
+ if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
+ void action(() => ContractClient.activate(contract.id, incomeCategoryId), 'Contrato ativado com vínculo e cobrança confirmados.');
+ };
+ const closeContract = () => {
+ if (!contract) return;
+ setCloseFinalKm(vehicle ? String(vehicle.currentKm) : '');
+ setCloseReason('Encerrado manualmente no painel');
+ setCloseDialogOpen(true);
+ };
+ const confirmCloseContract = () => {
+ if (!contract) return;
+ const hasKm = (contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0;
+ let finalKm: number | undefined = undefined;
+ if (hasKm) {
+ if (!closeFinalKm.trim()) {
+ setError('O encerramento deste contrato exige o odômetro final para apuração do KM excedente.');
+ return;
+ }
+ finalKm = Number(closeFinalKm);
+ if (!Number.isFinite(finalKm) || finalKm < (vehicle?.currentKm ?? 0)) {
+ setError(`Odômetro final inválido. Deve ser um número maior ou igual ao KM atual do veículo (${vehicle?.currentKm ?? 0}).`);
+ return;
+ }
+ }
+ setCloseDialogOpen(false);
+ void action(
+ () => ContractClient.close(contract.id, { reason: closeReason.trim() || 'Encerrado manualmente no painel', finalKm }),
+ 'Contrato encerrado e apuração financeira concluída.'
+ );
+ };
+ const cancelContract = () => {
+ if (!contract) return;
+ const reason = prompt('Informe o motivo do cancelamento:');
+ if (!reason?.trim()) return;
+ void action(() => ContractClient.cancel(contract.id, reason), 'Contrato cancelado com histórico preservado.');
+ };
+ const bill = () => {
+ if (!contract) return;
+ if (!incomeCategoryId) { setError('Selecione a categoria financeira de receita do aluguel.'); return; }
+ const today = new Date().toISOString().slice(0, 10);
+ const dueDate = prompt('Data de vencimento da nova competência (AAAA-MM-DD):', today);
+ if (!dueDate) return;
+ void action(() => ContractClient.bill(contract.id, dueDate, dueDate, incomeCategoryId), 'Faturamento processado com idempotência.');
+ };
+ const receiveDeposit = () => {
+ if (!contract) return;
+ const amount = Number(depositAmount);
+ const remaining = Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0));
+ if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) {
+ setError(`Informe um valor de caução entre R$ 0,01 e ${formatCurrencyBRL(remaining)}.`);
+ return;
+ }
+ if (!depositAccountId || !depositPaymentMethodId) {
+ setError('Selecione a conta financeira e a forma de pagamento da caução.');
+ return;
+ }
+ void action(async () => {
+ await FinanceDepositClient.receive({ contractId: contract.id, amount, financialAccountId: depositAccountId, paymentMethodId: depositPaymentMethodId, idempotencyKey: depositIdempotencyKey });
+ setDepositIdempotencyKey(createDepositReceiptIdempotencyKey());
+ }, 'Caução recebida com sucesso.');
+ };
 
-  const sendWhatsApp = async () => {
-    if (!contract) return;
-    try {
-      const res = await ContractClient.getShareLink(contract.id);
-      if (res.whatsappUrl) {
-        window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
-      } else {
-        alert(`Link do contrato gerado:\n${res.publicPdfUrl}\n\nO motorista não possui telefone válido com DDD cadastrado para abertura direta do WhatsApp.`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
-    }
-  };
+ const sendWhatsApp = async () => {
+ if (!contract) return;
+ try {
+ const res = await ContractClient.getShareLink(contract.id);
+ if (res.whatsappUrl) {
+ window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+ } else {
+ alert(`Link do contrato gerado:\n${res.publicPdfUrl}\n\nO motorista não possui telefone válido com DDD cadastrado para abertura direta do WhatsApp.`);
+ }
+ } catch (err) {
+ setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+ }
+ };
 
-  const requestKmWhatsApp = async () => {
-    if (!contract) return;
-    try {
-      const res = await WhatsappClient.getWaLink('KM_REQUEST', contract.id);
-      window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
-    }
-  };
+ const requestKmWhatsApp = async () => {
+ if (!contract) return;
+ try {
+ const res = await WhatsappClient.getWaLink('KM_REQUEST', contract.id);
+ window.open(res.whatsappUrl, '_blank', 'noopener,noreferrer');
+ } catch (err) {
+ setError(err instanceof Error ? err.message : 'Falha ao gerar link para o WhatsApp.');
+ }
+ };
 
-  if (!contractId) return null;
+ if (!contractId) return null;
 
-  const today = new Date().toISOString().slice(0, 10);
-  const totalBilled = receivables.reduce((sum, item) => sum + item.originalAmount, 0);
-  const totalUpdated = receivables.reduce((sum, item) => sum + item.updatedAmount, 0);
-  const totalPaid = receivables.reduce((sum, item) => sum + item.paidAmount, 0);
-  const pending = receivables.reduce((sum, item) => sum + item.balanceAmount, 0);
-  const overdue = receivables.filter((item) => item.dueDate < today && item.balanceAmount > 0 && item.status !== ObligationStatus.CANCELLED).reduce((sum, item) => sum + item.balanceAmount, 0);
-  const depositRemaining = contract ? Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)) : 0;
+ const today = new Date().toISOString().slice(0, 10);
+ const totalBilled = receivables.reduce((sum, item) => sum + item.originalAmount, 0);
+ const totalUpdated = receivables.reduce((sum, item) => sum + item.updatedAmount, 0);
+ const totalPaid = receivables.reduce((sum, item) => sum + item.paidAmount, 0);
+ const pending = receivables.reduce((sum, item) => sum + item.balanceAmount, 0);
+ const overdue = receivables.filter((item) => item.dueDate < today && item.balanceAmount > 0 && item.status !== ObligationStatus.CANCELLED).reduce((sum, item) => sum + item.balanceAmount, 0);
+ const depositRemaining = contract ? Math.max(0, contract.securityDepositAmount - (deposit?.receivedAmount || 0)) : 0;
 
-  return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="6xl">
-      <div className="flex items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
-        <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-success-icon" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(contract.status)}</Badge>}</div><p className="mt-1 text-xs text-graphite-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
-        <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-graphite-400"><X className="w-5 h-5" /></button>
-      </div>
+ return (
+ <ModalContainer isOpen={isOpen} onClose={onClose} size="6xl">
+ <div className="flex items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
+ <div><div className="flex items-center gap-2"><FileText className="w-5 h-5 text-success-icon" /><h2 className="font-mono text-lg font-bold">{contract?.contractNumber || 'Contrato'}</h2>{contract && <Badge variant={contract.status === ContractStatus.ACTIVE ? 'success' : contract.status === ContractStatus.CANCELLED ? 'danger' : contract.status === ContractStatus.CLOSED ? 'neutral' : 'warning'}>{contractStatusLabel(contract.status)}</Badge>}</div><p className="mt-1 text-xs text-graphite-500">{driver?.fullName || ''}{vehicle ? ` • ${vehicle.plate} ${vehicle.brand} ${vehicle.model}` : ''}</p></div>
+ <button onClick={(event)=>requestGuardedClose(event,onClose)} className="text-graphite-400"><X className="w-5 h-5" /></button>
+ </div>
 
-      {contract && <div className="border-b border-graphite-100 px-5 py-3 dark:border-graphite-800">
-        <div className="mb-3 max-w-md">
-          <label className="block text-xs font-semibold text-graphite-600 dark:text-graphite-300">Categoria financeira da receita de aluguel</label>
-          <select value={incomeCategoryId} onChange={(event) => setIncomeCategoryId(event.target.value)} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700">
-            <option value="">Selecione uma categoria INCOME/BOTH</option>
-            {incomeCategories.map((category) => <option key={category.id} value={category.id}>{category.name} • {category.type}</option>)}
-          </select>
-          {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-error-border bg-error-bg p-2.5  "><p className="text-[11px] text-error-text ">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={sendWhatsApp} className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30">
-            <MessageSquare className="w-4 h-4 mr-1" /> Enviar WhatsApp (wa.me)
-          </Button>
-          <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="text-success-text border-success-border hover:bg-success-bg  dark:hover:bg-emerald-950/30">
-            <Gauge className="w-4 h-4 mr-1" /> Pedir KM (wa.me)
-          </Button>
-          {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
-          {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
-          {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
-        </div>
-      </div>}
+ {contract && <div className="border-b border-graphite-100 px-5 py-3 dark:border-graphite-800">
+ <div className="mb-3 max-w-md">
+ <label className="block text-xs font-semibold text-graphite-600 dark:text-graphite-300">Categoria financeira da receita de aluguel</label>
+ <select value={incomeCategoryId} onChange={(event) => setIncomeCategoryId(event.target.value)} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700">
+ <option value="">Selecione uma categoria INCOME/BOTH</option>
+ {incomeCategories.map((category) => <option key={category.id} value={category.id}>{category.name} • {category.type}</option>)}
+ </select>
+ {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-error-border bg-error-bg p-2.5 "><p className="text-[11px] text-error-text ">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
+ </div>
+ <div className="flex flex-wrap gap-2">
+ <Button size="sm" variant="outline" onClick={sendWhatsApp} className="text-success-text border-success-border hover:bg-success-bg dark:hover:bg-success-bg">
+ <MessageSquare className="w-4 h-4 mr-1" /> Enviar WhatsApp (wa.me)
+ </Button>
+ <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="text-success-text border-success-border hover:bg-success-bg dark:hover:bg-success-bg">
+ <Gauge className="w-4 h-4 mr-1" /> Pedir KM (wa.me)
+ </Button>
+ {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
+ {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
+ {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
+ </div>
+ </div>}
 
-      <div className="px-5 pt-3 space-y-2">
-        {error && (
-          <div className="flex flex-col gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text   ">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-            {(error.toLowerCase().includes('odômetro') || error.toLowerCase().includes('km') || error.toLowerCase().includes('check-in')) && (
-              <div className="mt-1 flex items-center justify-between border-t border-error-border pt-2 ">
-                <span className="font-medium">Precisa da leitura do motorista para apuração?</span>
-                <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="h-7 text-xs bg-white text-success-text border-success-border hover:bg-success-bg dark:bg-graphite-900 ">
-                  <Gauge className="w-3.5 h-3.5 mr-1" /> Pedir KM via WhatsApp
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-        {success && <div className="rounded-xl border border-success-border bg-success-bg p-3 text-xs text-success-text">{success}</div>}
-      </div>
+ <div className="px-5 pt-3 space-y-2">
+ {error && (
+ <div className="flex flex-col gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text ">
+ <div className="flex items-center gap-2">
+ <AlertTriangle className="w-4 h-4 shrink-0" />
+ <span>{error}</span>
+ </div>
+ {(error.toLowerCase().includes('odômetro') || error.toLowerCase().includes('km') || error.toLowerCase().includes('check-in')) && (
+ <div className="mt-1 flex items-center justify-between border-t border-error-border pt-2 ">
+ <span className="font-medium">Precisa da leitura do motorista para apuração?</span>
+ <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="h-7 text-xs bg-white text-success-text border-success-border hover:bg-success-bg dark:bg-graphite-900 ">
+ <Gauge className="w-3.5 h-3.5 mr-1" /> Pedir KM via WhatsApp
+ </Button>
+ </div>
+ )}
+ </div>
+ )}
+ {success && <div className="rounded-xl border border-success-border bg-success-bg p-3 text-xs text-success-text">{success}</div>}
+ </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-2 border-b border-graphite-200 px-5 pb-3 text-xs font-semibold sm:grid-cols-3 lg:grid-cols-5 dark:border-graphite-800">
-        <TabButton active={tab === 'OVERVIEW'} onClick={() => setTab('OVERVIEW')} icon={<FileText className="w-4 h-4" />} label="Visão Geral" />
-        <TabButton active={tab === 'FINANCIAL'} onClick={() => setTab('FINANCIAL')} icon={<DollarSign className="w-4 h-4" />} label={`Cobranças (${receivables.length})`} />
-        <TabButton active={tab === 'DEPOSIT'} onClick={() => setTab('DEPOSIT')} icon={<ShieldCheck className="w-4 h-4" />} label="Caução" />
-        <TabButton active={tab === 'TICKETS'} onClick={() => setTab('TICKETS')} icon={<AlertTriangle className="w-4 h-4" />} label={`Multas (${tickets.length})`} />
-        <TabButton active={tab === 'AUDIT'} onClick={() => setTab('AUDIT')} icon={<History className="w-4 h-4" />} label={`Auditoria (${history.length})`} />
-      </div>
+ <div className="mt-2 grid grid-cols-2 gap-2 border-b border-graphite-200 px-5 pb-3 text-xs font-semibold sm:grid-cols-3 lg:grid-cols-5 dark:border-graphite-800">
+ <TabButton active={tab === 'OVERVIEW'} onClick={() => setTab('OVERVIEW')} icon={<FileText className="w-4 h-4" />} label="Visão Geral" />
+ <TabButton active={tab === 'FINANCIAL'} onClick={() => setTab('FINANCIAL')} icon={<DollarSign className="w-4 h-4" />} label={`Cobranças (${receivables.length})`} />
+ <TabButton active={tab === 'DEPOSIT'} onClick={() => setTab('DEPOSIT')} icon={<ShieldCheck className="w-4 h-4" />} label="Caução" />
+ <TabButton active={tab === 'TICKETS'} onClick={() => setTab('TICKETS')} icon={<AlertTriangle className="w-4 h-4" />} label={`Multas (${tickets.length})`} />
+ <TabButton active={tab === 'AUDIT'} onClick={() => setTab('AUDIT')} icon={<History className="w-4 h-4" />} label={`Auditoria (${history.length})`} />
+ </div>
 
-      <div className="p-3">
-        {loading ? <div className="p-12 text-center text-sm text-graphite-400">Carregando detalhes...</div> : contract && <>
-          {tab === 'OVERVIEW' && <div className="space-y-4">
-            <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} focusOnOpen={initialFocus === 'PDF_SIGNATURE'} onChanged={async () => { await load(); onRefresh(); }} />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado original" value={formatCurrencyBRL(totalBilled)} /><Metric label="Valor atualizado" value={formatCurrencyBRL(totalUpdated)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-success-icon" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-graphite-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status === 'AVAILABLE' ? 'Disponível' : vehicle.status === 'RENTED' ? 'Alugado' : vehicle.status === 'RESERVED' ? 'Reservado' : vehicle.status === 'MAINTENANCE' ? 'Manutenção' : vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-graphite-400">Não localizado.</p>}</Card>
-              <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><User className="w-4 h-4 text-success-icon" />Motorista</h3>{driver ? <div className="space-y-1 text-xs text-graphite-600"><p><b>{driver.fullName}</b></p><p>CPF: {driver.cpf}</p><p>CNH: {driver.cnhNumber} • {formatDateBR(driver.cnhExpiration)}</p><p>Status: {driver.status === 'ACTIVE' ? 'Ativo' : driver.status === 'INACTIVE' ? 'Inativo' : driver.status === 'BLOCKED' ? 'Bloqueado' : driver.status}</p></div> : <p className="text-xs text-graphite-400">Não localizado.</p>}</Card>
-            </div>
-            <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Calendar className="w-4 h-4 text-success-icon" />Condições</h3><div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><Info label="Início" value={formatDateBR(contract.startDate)} /><Info label="Término" value={contract.endDate ? formatDateBR(contract.endDate) : 'Indeterminado'} /><Info label="Franquia" value={`${contract.franchiseKm} km`} /><Info label="KM excedente" value={formatCurrencyBRL(contract.excessKmRate)} /></div>{contract.notes && <p className="mt-3 whitespace-pre-wrap border-t border-graphite-100 pt-2 text-xs text-graphite-500">{contract.notes}</p>}</Card>
-          </div>}
+ <div className="p-3">
+ {loading ? <div className="p-12 text-center text-sm text-graphite-400">Carregando detalhes...</div> : contract && <>
+ {tab === 'OVERVIEW' && <div className="space-y-4">
+ <ContractExecutionPanel contract={contract} incomeCategoryId={incomeCategoryId} focusOnOpen={initialFocus === 'PDF_SIGNATURE'} onChanged={async () => { await load(); onRefresh(); }} />
+ <div className="grid grid-cols-2 gap-3 sm:grid-cols-5"><Metric label="Aluguel" value={formatCurrencyBRL(contract.rentalAmount)} /><Metric label="Faturado original" value={formatCurrencyBRL(totalBilled)} /><Metric label="Valor atualizado" value={formatCurrencyBRL(totalUpdated)} /><Metric label="Pago" value={formatCurrencyBRL(totalPaid)} /><Metric label="Em aberto" value={formatCurrencyBRL(pending)} alert={overdue > 0} /></div>
+ <div className="grid gap-4 md:grid-cols-2">
+ <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Car className="w-4 h-4 text-success-icon" />Veículo</h3>{vehicle ? <div className="space-y-1 text-xs text-graphite-600"><p><b>{vehicle.brand} {vehicle.model}</b></p><p>Placa: {vehicle.plate}</p><p>Status: {vehicle.status === 'AVAILABLE' ? 'Disponível' : vehicle.status === 'RENTED' ? 'Alugado' : vehicle.status === 'RESERVED' ? 'Reservado' : vehicle.status === 'MAINTENANCE' ? 'Manutenção' : vehicle.status}</p><p>KM atual: {vehicle.currentKm}</p></div> : <p className="text-xs text-graphite-400">Não localizado.</p>}</Card>
+ <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><User className="w-4 h-4 text-success-icon" />Motorista</h3>{driver ? <div className="space-y-1 text-xs text-graphite-600"><p><b>{driver.fullName}</b></p><p>CPF: {driver.cpf}</p><p>CNH: {driver.cnhNumber} • {formatDateBR(driver.cnhExpiration)}</p><p>Status: {driver.status === 'ACTIVE' ? 'Ativo' : driver.status === 'INACTIVE' ? 'Inativo' : driver.status === 'BLOCKED' ? 'Bloqueado' : driver.status}</p></div> : <p className="text-xs text-graphite-400">Não localizado.</p>}</Card>
+ </div>
+ <Card padding="sm"><h3 className="mb-2 flex items-center gap-2 font-bold"><Calendar className="w-4 h-4 text-success-icon" />Condições</h3><div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><Info label="Início" value={formatDateBR(contract.startDate)} /><Info label="Término" value={contract.endDate ? formatDateBR(contract.endDate) : 'Indeterminado'} /><Info label="Franquia" value={`${contract.franchiseKm} km`} /><Info label="KM excedente" value={formatCurrencyBRL(contract.excessKmRate)} /></div>{contract.notes && <p className="mt-3 whitespace-pre-wrap border-t border-graphite-100 pt-2 text-xs text-graphite-500">{contract.notes}</p>}</Card>
+ </div>}
 
-          {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3></div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{obligationStatusLabel(item.status)}</Badge></div><p className="mt-1 text-[11px] text-graphite-500">Venc. {formatDateBR(item.dueDate)} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
+ {tab === 'FINANCIAL' && <div className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Cobranças do contrato</h3></div>{receivables.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhuma cobrança.</p></Card> : receivables.map((item) => <Card key={item.id} padding="sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><div className="flex items-center gap-2"><b className="text-xs">{item.description}</b><Badge variant={item.status === ObligationStatus.PAID ? 'success' : item.status === ObligationStatus.CANCELLED ? 'neutral' : 'warning'}>{obligationStatusLabel(item.status)}</Badge></div><p className="mt-1 text-[11px] text-graphite-500">Venc. {formatDateBR(item.dueDate)} • Original {formatCurrencyBRL(item.originalAmount)} • Pago {formatCurrencyBRL(item.paidAmount)} • Saldo {formatCurrencyBRL(item.balanceAmount)}</p></div>{item.status !== ObligationStatus.PAID && item.status !== ObligationStatus.CANCELLED && onOpenReceiptModal && <Button size="sm" variant="primary" onClick={() => onOpenReceiptModal(item.id)}><Receipt className="w-4 h-4" />Dar baixa</Button>}</div></Card>)}</div>}
 
-          {tab === 'DEPOSIT' && <Card padding="md">
-            <div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(depositRemaining)} /></div>
-            {depositRemaining > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="text-xs font-semibold text-graphite-600">Valor a receber<input type="number" min="0.01" max={depositRemaining} step="0.01" value={depositAmount} onChange={(event) => { setDepositAmount(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700" /></label>
-              <label className="text-xs font-semibold text-graphite-600">Conta financeira<select value={depositAccountId} onChange={(event) => { setDepositAccountId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700"><option value="">Selecione...</option>{settlementOptions.accounts.map((item) => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
-              <label className="text-xs font-semibold text-graphite-600">Forma de pagamento<select value={depositPaymentMethodId} onChange={(event) => { setDepositPaymentMethodId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700"><option value="">Selecione...</option>{settlementOptions.paymentMethods.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-              <div className="md:col-span-3 flex items-center justify-between gap-3">
-                {(settlementOptions.accounts.length === 0 || settlementOptions.paymentMethods.length === 0) && <p className="text-[11px] text-error-icon">Cadastre uma conta financeira e uma forma de pagamento ativas antes de receber a caução.</p>}
-                <Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading} disabled={!depositAccountId || !depositPaymentMethodId || !depositAmount}>Registrar recebimento</Button>
-              </div>
-            </div> : <p className="mt-4 text-xs font-semibold text-success-text">Caução prevista integralmente recebida.</p>}
-          </Card>}
+ {tab === 'DEPOSIT' && <Card padding="md">
+ <div className="grid gap-3 sm:grid-cols-3"><Metric label="Previsto" value={formatCurrencyBRL(contract.securityDepositAmount)} /><Metric label="Recebido" value={formatCurrencyBRL(deposit?.receivedAmount || 0)} /><Metric label="Saldo" value={formatCurrencyBRL(depositRemaining)} /></div>
+ {depositRemaining > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-3">
+ <label className="text-xs font-semibold text-graphite-600">Valor a receber<input type="number" min="0.01" max={depositRemaining} step="0.01" value={depositAmount} onChange={(event) => { setDepositAmount(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700" /></label>
+ <label className="text-xs font-semibold text-graphite-600">Conta financeira<select value={depositAccountId} onChange={(event) => { setDepositAccountId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700"><option value="">Selecione...</option>{settlementOptions.accounts.map((item) => <option key={item.id} value={item.id}>{item.name} • {item.type}</option>)}</select></label>
+ <label className="text-xs font-semibold text-graphite-600">Forma de pagamento<select value={depositPaymentMethodId} onChange={(event) => { setDepositPaymentMethodId(event.target.value); setDepositIdempotencyKey(createDepositReceiptIdempotencyKey()); }} className="mt-1 w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700"><option value="">Selecione...</option>{settlementOptions.paymentMethods.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+ <div className="md:col-span-3 flex items-center justify-between gap-3">
+ {(settlementOptions.accounts.length === 0 || settlementOptions.paymentMethods.length === 0) && <p className="text-[11px] text-error-icon">Cadastre uma conta financeira e uma forma de pagamento ativas antes de receber a caução.</p>}
+ <Button size="sm" variant="primary" onClick={receiveDeposit} isLoading={actionLoading} disabled={!depositAccountId || !depositPaymentMethodId || !depositAmount}>Registrar recebimento</Button>
+ </div>
+ </div> : <p className="mt-4 text-xs font-semibold text-success-text">Caução prevista integralmente recebida.</p>}
+ </Card>}
 
-          {tab === 'TICKETS' && <div className="space-y-2">{tickets.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhuma multa vinculada.</p></Card> : tickets.map((item) => <Card key={item.id} padding="sm"><div className="flex justify-between gap-3 text-xs"><div><b>Auto {item.autoNumber}</b><p className="mt-1 text-graphite-500">{item.description}</p></div><span className="font-mono font-bold">{formatCurrencyBRL(item.originalAmount)}</span></div></Card>)}</div>}
+ {tab === 'TICKETS' && <div className="space-y-2">{tickets.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhuma multa vinculada.</p></Card> : tickets.map((item) => <Card key={item.id} padding="sm"><div className="flex justify-between gap-3 text-xs"><div><b>Auto {item.autoNumber}</b><p className="mt-1 text-graphite-500">{item.description}</p></div><span className="font-mono font-bold">{formatCurrencyBRL(item.originalAmount)}</span></div></Card>)}</div>}
 
-          {tab === 'AUDIT' && <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-semibold">Histórico e auditoria do contrato</h3>
-              <p className="text-[11px] text-graphite-500">Os eventos são registrados automaticamente no histórico. Os dados técnicos completos não aparecem nesta tela.</p>
-            </div>
-            {history.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhum evento de auditoria registrado.</p></Card> : history.map((item) => {
-              const change = contractAuditChangeSummary(item.previousState, item.newState);
-              return <Card key={item.id} padding="sm">
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <b className="text-success-icon">{item.action}</b>
-                    <span className="text-graphite-400">{new Date(item.timestamp).toLocaleString('pt-BR')}</span>
-                  </div>
-                  <p className="text-graphite-600 dark:text-graphite-300">Responsável: <strong>{item.userName || 'Usuário não identificado'}</strong></p>
-                  {change.fields.length > 0 && <p className="text-graphite-500">Campos alterados: {change.fields.join(', ')}</p>}
-                  {change.statusTransition && <p className="text-graphite-500">Transição de status: <strong>{change.statusTransition}</strong></p>}
-                </div>
-              </Card>;
-            })}
-          </div>}
+ {tab === 'AUDIT' && <div className="space-y-3">
+ <div>
+ <h3 className="text-sm font-semibold">Histórico e auditoria do contrato</h3>
+ <p className="text-[11px] text-graphite-500">Os eventos são registrados automaticamente no histórico. Os dados técnicos completos não aparecem nesta tela.</p>
+ </div>
+ {history.length === 0 ? <Card padding="md"><p className="text-center text-xs text-graphite-400">Nenhum evento de auditoria registrado.</p></Card> : history.map((item) => {
+ const change = contractAuditChangeSummary(item.previousState, item.newState);
+ return <Card key={item.id} padding="sm">
+ <div className="space-y-1.5 text-xs">
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <b className="text-success-icon">{item.action}</b>
+ <span className="text-graphite-400">{new Date(item.timestamp).toLocaleString('pt-BR')}</span>
+ </div>
+ <p className="text-graphite-600 dark:text-graphite-300">Responsável: <strong>{item.userName || 'Usuário não identificado'}</strong></p>
+ {change.fields.length > 0 && <p className="text-graphite-500">Campos alterados: {change.fields.join(', ')}</p>}
+ {change.statusTransition && <p className="text-graphite-500">Transição de status: <strong>{change.statusTransition}</strong></p>}
+ </div>
+ </Card>;
+ })}
+ </div>}
 
-          <div className="mt-6 rounded-xl border border-graphite-200 bg-graphite-50 p-4 dark:border-graphite-800 dark:bg-graphite-800/30"><h4 className="mb-3 flex items-center gap-2 text-xs font-bold"><ShieldCheck className="w-4 h-4 text-success-icon" />Arquivos e anexos do contrato</h4><FileUpload entityType="Contract" entityId={contract.id} documentType="CONTRACT_DOCUMENT" onUploadComplete={() => setUploadCount((value) => value + 1)} multiple={true} /><div className="mt-4" key={uploadCount}><AttachmentList entityType="Contract" entityId={contract.id} /></div></div>
-        </>}
-      </div>
+ <div className="mt-6 rounded-xl border border-graphite-200 bg-graphite-50 p-4 dark:border-graphite-800 dark:bg-graphite-800/30"><h4 className="mb-3 flex items-center gap-2 text-xs font-bold"><ShieldCheck className="w-4 h-4 text-success-icon" />Arquivos e anexos do contrato</h4><FileUpload entityType="Contract" entityId={contract.id} documentType="CONTRACT_DOCUMENT" onUploadComplete={() => setUploadCount((value) => value + 1)} multiple={true} /><div className="mt-4" key={uploadCount}><AttachmentList entityType="Contract" entityId={contract.id} /></div></div>
+ </>}
+ </div>
 
-      {closeDialogOpen && contract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-graphite-900/60 backdrop-blur-xs" data-unsaved-ignore="true">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-graphite-200 dark:bg-graphite-900 dark:border-graphite-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-graphite-100 pb-3 dark:border-graphite-800">
-              <div className="flex items-center gap-2">
-                <Gauge className="w-5 h-5 text-success-icon" />
-                <h3 className="font-bold text-base text-graphite-900 dark:text-white">Encerrar Contrato &amp; Liberar Veículo</h3>
-              </div>
-              <button type="button" onClick={() => setCloseDialogOpen(false)} className="text-graphite-400 hover:text-graphite-600 dark:hover:text-graphite-200">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+ {closeDialogOpen && contract && (
+ <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-graphite-900/60 backdrop-blur-xs" data-unsaved-ignore="true">
+ <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-graphite-200 dark:bg-graphite-900 dark:border-graphite-800 space-y-4">
+ <div className="flex items-center justify-between border-b border-graphite-100 pb-3 dark:border-graphite-800">
+ <div className="flex items-center gap-2">
+ <Gauge className="w-5 h-5 text-success-icon" />
+ <h3 className="font-bold text-base text-graphite-900 dark:text-white">Encerrar Contrato &amp; Liberar Veículo</h3>
+ </div>
+ <button type="button" onClick={() => setCloseDialogOpen(false)} className="text-graphite-400 hover:text-graphite-600 dark:hover:text-graphite-200">
+ <X className="w-5 h-5" />
+ </button>
+ </div>
 
-            {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (
-              <div className="rounded-xl border border-emerald-100 bg-success-bg p-3.5 text-xs space-y-2 dark:border-emerald-950 ">
-                <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
-                  <span>Veículo / Placa:</span>
-                  <span className="font-semibold text-graphite-900 dark:text-white">{vehicle ? `${vehicle.brand} ${vehicle.model} (${vehicle.plate})` : 'Não localizado'}</span>
-                </div>
-                <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
-                  <span>Odômetro atual / devolução mínima:</span>
-                  <span className="font-mono font-bold text-success-text ">{vehicle?.currentKm ?? 0} km</span>
-                </div>
-                <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
-                  <span>Franquia contratada:</span>
-                  <span className="font-semibold">{contract.franchiseKm} km</span>
-                </div>
-                <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
-                  <span>Taxa por KM excedente:</span>
-                  <span className="font-semibold">{formatCurrencyBRL(contract.excessKmRate)}/km</span>
-                </div>
-              </div>
-            )}
+ {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (
+ <div className="rounded-xl border border-success-border bg-success-bg p-3.5 text-xs space-y-2 ">
+ <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
+ <span>Veículo / Placa:</span>
+ <span className="font-semibold text-graphite-900 dark:text-white">{vehicle ? `${vehicle.brand} ${vehicle.model} (${vehicle.plate})` : 'Não localizado'}</span>
+ </div>
+ <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
+ <span>Odômetro atual / devolução mínima:</span>
+ <span className="font-mono font-bold text-success-text ">{vehicle?.currentKm ?? 0} km</span>
+ </div>
+ <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
+ <span>Franquia contratada:</span>
+ <span className="font-semibold">{contract.franchiseKm} km</span>
+ </div>
+ <div className="flex justify-between text-graphite-600 dark:text-graphite-300">
+ <span>Taxa por KM excedente:</span>
+ <span className="font-semibold">{formatCurrencyBRL(contract.excessKmRate)}/km</span>
+ </div>
+ </div>
+ )}
 
-            <div className="space-y-3">
-              {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) ? (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">
-                      Odômetro final na devolução (km) <span className="text-error-icon">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { void requestKmWhatsApp(); }}
-                      className="text-[11px] font-medium text-success-icon hover:text-success-text  flex items-center gap-1"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" /> Pedir KM via WhatsApp
-                    </button>
-                  </div>
-                  <input
-                    type="number"
-                    min={vehicle?.currentKm ?? 0}
-                    placeholder={`Ex: ${(vehicle?.currentKm ?? 0) + 100}`}
-                    value={closeFinalKm}
-                    onChange={(e) => setCloseFinalKm(e.target.value)}
-                    className="w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm font-mono dark:border-graphite-700 dark:text-white"
-                  />
-                  {closeFinalKm && Number(closeFinalKm) < (vehicle?.currentKm ?? 0) && (
-                    <p className="mt-1 text-[11px] text-error-icon ">
-                      O odômetro final não pode ser menor que o atual ({vehicle?.currentKm ?? 0} km).
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-graphite-600 dark:text-graphite-300">
-                  Este contrato não possui franquia de KM. O veículo será liberado para o status disponível imediatamente.
-                </p>
-              )}
+ <div className="space-y-3">
+ {((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) ? (
+ <div>
+ <div className="flex items-center justify-between mb-1">
+ <label className="text-xs font-semibold text-graphite-700 dark:text-graphite-300">
+ Odômetro final na devolução (km) <span className="text-error-icon">*</span>
+ </label>
+ <button
+ type="button"
+ onClick={() => { void requestKmWhatsApp(); }}
+ className="text-[11px] font-medium text-success-icon hover:text-success-text flex items-center gap-1"
+ >
+ <MessageSquare className="w-3.5 h-3.5" /> Pedir KM via WhatsApp
+ </button>
+ </div>
+ <input
+ type="number"
+ min={vehicle?.currentKm ?? 0}
+ placeholder={`Ex: ${(vehicle?.currentKm ?? 0) + 100}`}
+ value={closeFinalKm}
+ onChange={(e) => setCloseFinalKm(e.target.value)}
+ className="w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm font-mono dark:border-graphite-700 dark:text-white"
+ />
+ {closeFinalKm && Number(closeFinalKm) < (vehicle?.currentKm ?? 0) && (
+ <p className="mt-1 text-[11px] text-error-icon ">
+ O odômetro final não pode ser menor que o atual ({vehicle?.currentKm ?? 0} km).
+ </p>
+ )}
+ </div>
+ ) : (
+ <p className="text-xs text-graphite-600 dark:text-graphite-300">
+ Este contrato não possui franquia de KM. O veículo será liberado para o status disponível imediatamente.
+ </p>
+ )}
 
-              <div>
-                <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
-                  Motivo do encerramento
-                </label>
-                <input
-                  type="text"
-                  value={closeReason}
-                  onChange={(e) => setCloseReason(e.target.value)}
-                  placeholder="Ex: Devolução de rotina, rescisão amigável..."
-                  className="w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700 dark:text-white"
-                />
-              </div>
-            </div>
+ <div>
+ <label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">
+ Motivo do encerramento
+ </label>
+ <input
+ type="text"
+ value={closeReason}
+ onChange={(e) => setCloseReason(e.target.value)}
+ placeholder="Ex: Devolução de rotina, rescisão amigável..."
+ className="w-full rounded-lg border border-graphite-200 bg-transparent px-3 py-2 text-sm dark:border-graphite-700 dark:text-white"
+ />
+ </div>
+ </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
-              <Button type="button" size="sm" variant="ghost" onClick={() => setCloseDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                isLoading={actionLoading}
-                disabled={Boolean(((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (!closeFinalKm || Number(closeFinalKm) < (vehicle?.currentKm ?? 0)))}
-                onClick={confirmCloseContract}
-              >
-                Confirmar Encerramento
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </ModalContainer>
-  );
+ <div className="flex items-center justify-end gap-2 pt-2 border-t border-graphite-100 dark:border-graphite-800">
+ <Button type="button" size="sm" variant="ghost" onClick={() => setCloseDialogOpen(false)}>
+ Cancelar
+ </Button>
+ <Button
+ type="button"
+ size="sm"
+ variant="secondary"
+ isLoading={actionLoading}
+ disabled={Boolean(((contract.franchiseKm || 0) > 0 && (contract.excessKmRate || 0) > 0) && (!closeFinalKm || Number(closeFinalKm) < (vehicle?.currentKm ?? 0)))}
+ onClick={confirmCloseContract}
+ >
+ Confirmar Encerramento
+ </Button>
+ </div>
+ </div>
+ </div>
+ )}
+ </ModalContainer>
+ );
 };
 
-const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => <button onClick={onClick} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 py-2.5 ${active ? 'border-emerald-600 text-success-icon' : 'border-transparent text-graphite-500'}`}>{icon}{label}</button>;
+const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.ReactNode; label: string }> = ({ active, onClick, icon, label }) => <button onClick={onClick} className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 py-2.5 ${active ? 'border-success-border text-success-icon' : 'border-transparent text-graphite-500'}`}>{icon}{label}</button>;
 const Metric: React.FC<{ label: string; value: string; alert?: boolean }> = ({ label, value, alert }) => <Card padding="sm"><span className="text-[10px] font-bold uppercase text-graphite-400">{label}</span><p className={`mt-1 font-mono text-base font-black ${alert ? 'text-error-icon' : ''}`}>{value}</p></Card>;
 const Info: React.FC<{ label: string; value: string }> = ({ label, value }) => <div><span className="text-[10px] text-graphite-400">{label}</span><p className="font-semibold">{value}</p></div>;
