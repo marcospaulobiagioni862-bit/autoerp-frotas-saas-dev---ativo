@@ -41,6 +41,7 @@
     "test:whatsapp-rent-billing": "tsx src/server/__tests__/whatsappRentBillingRegression.ts",
     "verify:whatsapp-rent-billing": "tsx src/server/__tests__/whatsappRentBillingRegression.ts",
     "test:modal-layout-ux": "tsx src/components/ui/__tests__/modalLayoutUxTestRunner.ts",
+    "test:contract-signature-list": "tsx src/server/__tests__/contractSignatureListRegression.ts",
     "test:vehicle-ownership": "tsx src/server/__tests__/vehicleOwnershipRegression.ts",
     "verify:vehicle-ownership": "tsx src/server/__tests__/vehicleOwnershipRegression.ts",
     "verify:user-permissions-real": "tsx src/server/__tests__/verifyUserPermissionsRealMassa.ts",

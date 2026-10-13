@@ -727,6 +727,13 @@ jobs:
       - name: Modal layout and unsaved-changes guard invariants
         run: npm run test:modal-layout-ux
 
+      # AUTOERP-95 (revisao). Este teste usa PGlite em memoria, nao toca banco nenhum do
+      # ERP, e mesmo assim estava orfao desde sempre. Entre 09/10 e 13/10 ele ficou vermelho
+      # em silencio porque o cache do AUTOERP-85 fez a segunda chamada de ContractClient.list()
+      # devolver o resultado anterior, e a validacao de payload que ele cobra nunca rodava.
+      - name: Contract signature list projection and payload validation
+        run: npm run test:contract-signature-list
+
       - name: Lazy module recovery invariants
         shell: bash
         run: |
