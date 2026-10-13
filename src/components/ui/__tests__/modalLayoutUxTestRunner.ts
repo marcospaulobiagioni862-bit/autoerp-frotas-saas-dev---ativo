@@ -148,6 +148,13 @@ assert.match(archivedVehicle, /grid grid-cols-2 gap-2 border-b pb-3/, 'archived 
 console.log('Modal layout UX regression PASS');
 
 const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
+// AUTOERP-95 (revisao). Esta invariante lia ProductionSidebar.tsx, que virou re-export de
+// 11 linhas no AUTOERP-67 e nao tem JSX nenhum: ela passava apenas porque a string exata da
+// classe foi colada num COMENTARIO do stub - apagar so o comentario deixa o teste vermelho,
+// o que prova que ela nao vigiava codigo. Repontada para o Sidebar.tsx canonico, que e onde
+// a barra de rolagem de fato existe hoje. Vale a regra 3.2-d: invariante sobre arquivo que
+// virou stub morre calada.
+const sidebarCanonico = readFileSync(new URL('../../layout/Sidebar.tsx', import.meta.url), 'utf8');
 const productionSidebar = readFileSync(new URL('../../layout/ProductionSidebar.tsx', import.meta.url), 'utf8');
 
 assert.match(
@@ -170,7 +177,15 @@ assert.match(app, /onTabChange=\{requestTabChange\}/, 'sidebar navigation must n
 assert.match(app, /installUnsavedChangesBeforeUnload\(\)/, 'application root must install browser-exit protection');
 assert.doesNotMatch(app, /onTabChange=\{setActiveTab\}/, 'sidebar must not navigate directly around the unsaved-changes authority');
 assert.match(
-  productionSidebar,
+  sidebarCanonico,
   /overflow-y-auto overflow-x-hidden overscroll-contain \[scrollbar-width:none\] \[&::-webkit-scrollbar\]:hidden/,
-  'production sidebar scrollbar must remain functional but visually hidden',
+  'sidebar scrollbar must remain functional but visually hidden',
+);
+// O stub continua vigiado, mas pelo que ele de fato deve ser: um re-export. Se alguem voltar
+// a escrever navegacao propria nele, a paridade entre dev e producao quebra de novo.
+assert.match(
+  productionSidebar,
+  // O \b final importa: sem ele o regex casa por prefixo e um export de "SidebarX" passaria.
+  /export\s*\{\s*Sidebar\b/,
+  'ProductionSidebar must stay a re-export of the canonical Sidebar',
 );
