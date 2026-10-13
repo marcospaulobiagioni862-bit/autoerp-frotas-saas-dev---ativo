@@ -734,6 +734,19 @@ jobs:
       - name: Contract signature list projection and payload validation
         run: npm run test:contract-signature-list
 
+      # AUTOERP-95 (revisao - varredura de orfaos hermeticos).
+      - name: Migration prefix collision and repository guard invariants
+        run: npm run test:migration-prefix-collision
+
+      - name: Browser tab branding and multitenant title invariants
+        run: npm run test:browser-tab-branding
+
+      - name: Contract PDF visual overlays regression
+        run: npm run test:contract-pdf-overlays
+
+      - name: API client contract regression
+        run: npm run test:api-clients
+
       - name: Lazy module recovery invariants
         shell: bash
         run: |
