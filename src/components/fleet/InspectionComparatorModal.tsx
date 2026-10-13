@@ -3,6 +3,7 @@ import type { InspectionComparisonPair, InspectionPhotoSlotKey } from '../../api
 import { InspectionCarDamageDiagram } from './InspectionCarDamageDiagram';
 import { X, ArrowRightLeft, Fuel, Gauge, AlertTriangle, ShieldCheck, Share2, CheckCircle2 } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface InspectionComparatorModalProps {
  comparison: InspectionComparisonPair;
@@ -89,9 +90,13 @@ export function InspectionComparatorModal({
  >
  <Share2 className="w-3.5 h-3.5" /> Compartilhar no WhatsApp
  </button>
+ {/* Comparador e somente leitura: activeSlot/viewTab sao navegacao, nao trabalho
+ do usuario, por isso nao existe data-unsaved-guard nesta shell. O
+ requestGuardedClose fica para nao reabrir o bypass se um campo editavel
+ aparecer aqui um dia - sem fonte suja ele e um no-op que chama onClose. */}
  <button
  type="button"
- onClick={onClose}
+ onClick={(event) => requestGuardedClose(event, onClose)}
  className="rounded-lg p-1.5 text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800"
  >
  <X className="w-5 h-5" />

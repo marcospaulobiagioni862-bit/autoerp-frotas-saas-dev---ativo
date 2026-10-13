@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AdminUserClient, type AdminUserDto } from '../../api/adminUserClient';
 import { Badge, Button, Input, ModalContainer } from '../ui';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 export interface EditUserModalProps {
   isOpen: boolean;
@@ -403,7 +404,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
+              onClick={(event) => requestGuardedClose(event, onClose)}
               disabled={loading}
             >
               Cancelar

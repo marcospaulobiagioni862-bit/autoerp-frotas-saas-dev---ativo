@@ -1,6 +1,6 @@
 import { formatDateBR } from '../../shared/utils/date';
 import { settlementLocalDate } from './SettlementLateInterest';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useId, useState, useEffect, useRef } from 'react';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { roundCurrency, formatCurrencyBRL, normalizeCurrencyCentsDraft, parseCurrencyDraft } from '../../shared/utils/currency';
 import { AccountPayable } from '../../types/entities';
@@ -11,7 +11,7 @@ import {
  SettlementPaymentMethodOption,
  createSettlementIdempotencyKey,
 } from '../../api/financeSettlementClient';
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { markUnsavedChanges, requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface PaymentModalProps {
  isOpen: boolean;
@@ -21,6 +21,23 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, payable, onSuccess }) => {
+ // AUTOERP-92. Este modal monta a propria shell, nao usa ModalContainer, e por isso
+ // nao herda nada da guarda de alteracoes: nem o atributo que ancora o estado sujo
+ // nem o markDirty por evento de input. O requestGuardedClose dos botoes daqui ja
+ // existia, mas rodava com guardId vazio - a guarda nunca disparava e o formulario
+ // meio preenchido era descartado em silencio. As duas linhas abaixo, mais o
+ // data-unsaved-guard e o onInputCapture no painel, e o que faltava.
+ const guardId = useId();
+ const marcarSujo = (alvo: EventTarget | null) => {
+  const elemento = alvo instanceof HTMLElement ? alvo : null;
+  if (!elemento) return;
+  const tag = elemento.tagName.toLowerCase();
+  if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
+  if (elemento instanceof HTMLInputElement && ['button','submit','reset'].includes(elemento.type)) return;
+  if (elemento.hasAttribute('readonly') || elemento.hasAttribute('disabled')) return;
+  markUnsavedChanges(guardId);
+ };
+
  const [accounts, setAccounts] = useState<SettlementAccountOption[]>([]);
  const [methods, setMethods] = useState<SettlementPaymentMethodOption[]>([]);
  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -155,7 +172,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, pay
 
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-2 sm:p-4 overflow-hidden">
- <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col">
+ <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[96vh] overflow-hidden border border-graphite-200 dark:border-graphite-800 flex flex-col"
+  data-unsaved-guard={guardId}
+  onInputCapture={(event) => marcarSujo(event.target)}
+  onChangeCapture={(event) => marcarSujo(event.target)}
+ >
  <div className="flex shrink-0 items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
  <div>
  <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">

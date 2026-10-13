@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { AccountReceivable } from '../../types/entities';
 import { X, RefreshCw, AlertCircle } from 'lucide-react';
 import { FinanceRenegotiationClient } from '../../api/financeRenegotiationClient';
 import type { RenegotiationInstallmentFrequency } from '../../shared/utils/renegotiationSchedule';
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { markUnsavedChanges, requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 interface RenegotiationModalProps {
  isOpen: boolean;
@@ -13,6 +13,23 @@ interface RenegotiationModalProps {
 }
 
 export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, onClose, receivables, onSuccess }) => {
+ // AUTOERP-92. Este modal monta a propria shell, nao usa ModalContainer, e por isso
+ // nao herda nada da guarda de alteracoes: nem o atributo que ancora o estado sujo
+ // nem o markDirty por evento de input. O requestGuardedClose dos botoes daqui ja
+ // existia, mas rodava com guardId vazio - a guarda nunca disparava e o formulario
+ // meio preenchido era descartado em silencio. As duas linhas abaixo, mais o
+ // data-unsaved-guard e o onInputCapture no painel, e o que faltava.
+ const guardId = useId();
+ const marcarSujo = (alvo: EventTarget | null) => {
+  const elemento = alvo instanceof HTMLElement ? alvo : null;
+  if (!elemento) return;
+  const tag = elemento.tagName.toLowerCase();
+  if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
+  if (elemento instanceof HTMLInputElement && ['button','submit','reset'].includes(elemento.type)) return;
+  if (elemento.hasAttribute('readonly') || elemento.hasAttribute('disabled')) return;
+  markUnsavedChanges(guardId);
+ };
+
  const [installments, setInstallments] = useState<number>(2);
  const [newDueDate, setNewDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
  const [installmentFrequency, setInstallmentFrequency] = useState<RenegotiationInstallmentFrequency>('WEEKLY');
@@ -59,7 +76,11 @@ export const RenegotiationModal: React.FC<RenegotiationModalProps> = ({ isOpen, 
 
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/60 backdrop-blur-xs p-4">
- <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-graphite-200 dark:border-graphite-800">
+ <div className="bg-white dark:bg-graphite-900 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden border border-graphite-200 dark:border-graphite-800"
+  data-unsaved-guard={guardId}
+  onInputCapture={(event) => marcarSujo(event.target)}
+  onChangeCapture={(event) => marcarSujo(event.target)}
+ >
  <div className="flex items-center justify-between px-6 py-4 border-b border-graphite-100 dark:border-graphite-800 bg-graphite-50/50 dark:bg-graphite-800/50">
  <div>
  <h3 className="text-lg font-bold text-graphite-900 dark:text-graphite-100 flex items-center gap-2">
