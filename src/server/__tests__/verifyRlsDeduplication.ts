@@ -1,209 +1,111 @@
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { Client } from 'pg';
+/**
+ * AUTOERP-52 — verificacao da deduplicacao de politicas de RLS.
+ *
+ * REESCRITO em 2026-10-13. A versao anterior subia um PGlite e CRIAVA AS PROPRIAS
+ * TABELAS com CREATE TABLE IF NOT EXISTS, criando tenant_isolation_policy ela mesma, sem
+ * AS RESTRICTIVE. Validava a migration contra um schema inventado onde a politica
+ * canonica era permissiva e sempre existia - cenario em que apagar as "legadas" e de
+ * fato inofensivo. Contra o schema real, a mesma migration deixava 18 tabelas sem
+ * nenhuma politica permissiva e a CI acusou "bank statement RLS leaked tenant rows".
+ * E a regra 3.2-g do CLAUDE.md: teste que inventa o proprio schema nunca roda de
+ * verdade contra o que esta em producao.
+ *
+ * Agora o schema vem das migrations reais, aplicadas em ordem, e as asercoes olham o
+ * catalogo do Postgres (pg_policy), nao um SQL escrito a mao.
+ */
 import { PGlite } from '@electric-sql/pglite';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
 
-// 1. Carregar variáveis Neon
-try {
-  const envContent = readFileSync(join(homedir(), '.config/autoerp-neon.env'), 'utf-8');
-  for (const line of envContent.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const match = /^([A-Z0-9_]+)="?([^"]*)"?$/.exec(trimmed);
-    if (match) {
-      process.env[match[1]] = match[2];
+type Politica = {
+  tabela: string;
+  politica: string;
+  permissiva: boolean;
+  cmd: string;
+  usando: string | null;
+  comcheck: string | null;
+};
+
+const DIR = 'drizzle';
+const MIGRATION = '0090_deduplicate_rls_policies.sql';
+
+const lerPoliticas = async (db: PGlite): Promise<Politica[]> => {
+  const r = await db.query<Politica>(`
+    SELECT c.relname AS tabela, p.polname AS politica, p.polpermissive AS permissiva,
+           p.polcmd::text AS cmd,
+           pg_get_expr(p.polqual, p.polrelid) AS usando,
+           pg_get_expr(p.polwithcheck, p.polrelid) AS comcheck
+      FROM pg_policy p JOIN pg_class c ON c.oid = p.polrelid
+     ORDER BY 1, 2`);
+  return r.rows;
+};
+
+const permissivasPorTabela = (ps: Politica[]) => {
+  const m = new Map<string, number>();
+  for (const p of ps) if (p.permissiva) m.set(p.tabela, (m.get(p.tabela) ?? 0) + 1);
+  return m;
+};
+
+const run = async () => {
+  const db = new PGlite();
+  const arquivos = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
+  let aplicadas = 0;
+  for (const f of arquivos) {
+    if (f === MIGRATION) continue;
+    await db.exec(readFileSync(join(DIR, f), 'utf8'));
+    aplicadas += 1;
+  }
+  assert.ok(aplicadas > 80, `esperava aplicar o historico real de migrations, apliquei ${aplicadas}`);
+  console.log(`1. ${aplicadas} migrations reais aplicadas em ordem (nenhuma tabela inventada).`);
+
+  const antes = await lerPoliticas(db);
+  await db.exec(readFileSync(join(DIR, MIGRATION), 'utf8'));
+  const depois = await lerPoliticas(db);
+
+  // 1) A garantia que faltava: nenhuma tabela pode perder a ultima politica permissiva.
+  // Sem permissiva, a tabela deixa de responder - e foi assim que a versao anterior
+  // derrubou o isolamento de bank_statement_entries.
+  const pa = permissivasPorTabela(antes);
+  const pd = permissivasPorTabela(depois);
+  const desprotegidas = [...pa.entries()].filter(([t, n]) => n > 0 && (pd.get(t) ?? 0) === 0).map(([t]) => t);
+  assert.deepEqual(desprotegidas, [], `tabelas que ficaram sem politica permissiva: ${desprotegidas.join(', ')}`);
+  console.log(`2. Nenhuma das ${pa.size} tabelas com RLS perdeu a ultima politica permissiva.`);
+
+  // 2) Nenhuma politica RESTRICTIVE pode sumir: ela e a defesa em profundidade, e some
+  // calada porque sua ausencia nao quebra nenhuma consulta.
+  const chave = (p: Politica) => `${p.tabela}.${p.politica}`;
+  const restritivasAntes = antes.filter((p) => !p.permissiva).map(chave);
+  const restritivasDepois = new Set(depois.filter((p) => !p.permissiva).map(chave));
+  const perdidas = restritivasAntes.filter((k) => !restritivasDepois.has(k));
+  assert.deepEqual(perdidas, [], `politicas RESTRICTIVE removidas: ${perdidas.join(', ')}`);
+  console.log(`3. As ${restritivasAntes.length} politicas RESTRICTIVE continuam todas no lugar.`);
+
+  // 3) A imutabilidade de audit_logs e inegociavel.
+  for (const nome of ['no_update_delete_al', 'no_update_delete_al2']) {
+    assert.ok(depois.some((p) => p.tabela === 'audit_logs' && p.politica === nome),
+      `audit_logs perdeu a politica de imutabilidade ${nome}`);
+  }
+  console.log('4. Imutabilidade de audit_logs preservada.');
+
+  // 4) O que a migration promete entregar: toda tabela que ela toca fica sem permissiva
+  // redundante, isto e, sem duas permissivas com mesmo comando e mesma expressao USING.
+  const porTabela = new Map<string, Politica[]>();
+  for (const p of depois) porTabela.set(p.tabela, [...(porTabela.get(p.tabela) ?? []), p]);
+  const redundantes: string[] = [];
+  for (const [t, ps] of porTabela) {
+    const vistas = new Map<string, string[]>();
+    for (const p of ps.filter((x) => x.permissiva && x.usando)) {
+      const k = `${p.cmd}|${p.usando}`;
+      vistas.set(k, [...(vistas.get(k) ?? []), p.politica]);
     }
+    for (const nomes of vistas.values()) if (nomes.length > 1) redundantes.push(`${t}: ${nomes.join(' == ')}`);
   }
-} catch (e) {
-  console.warn('Could not read ~/.config/autoerp-neon.env:', e);
-}
+  assert.deepEqual(redundantes, [], `ainda ha permissivas redundantes: ${redundantes.join(' ; ')}`);
+  console.log('5. Nenhuma politica permissiva redundante restou.');
 
-const neonUrl = process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL || process.env.DATABASE_URL;
+  await db.close();
+  console.log('\nverifyRlsDeduplication: PASS (schema real, catalogo do Postgres, 5/5)');
+};
 
-async function testDeduplicationWithPGlite(): Promise<void> {
-  console.log('1. Testando aplicacao da migration 0090 contra PostgreSQL in-memory (PGlite)...');
-  const pglite = new PGlite();
-
-  const all27Tables = [
-    'account_payables',
-    'account_receivables',
-    'audit_logs',
-    'bank_statement_entries',
-    'communication_logs',
-    'contracts',
-    'credit_card_profiles',
-    'credit_card_statement_adjustments',
-    'credit_card_statement_credits',
-    'credit_card_statement_items',
-    'credit_card_statement_payments',
-    'credit_card_statements',
-    'driver_health_profiles',
-    'drivers',
-    'financial_accounts',
-    'financial_categories',
-    'financial_periods',
-    'financial_transactions',
-    'payment_methods',
-    'recurring_rules',
-    'security_deposit_commands',
-    'security_deposit_movements',
-    'security_deposits',
-    'trackers',
-    'traffic_tickets',
-    'users',
-    'vehicles',
-  ];
-
-  // Criar todas as 27 tabelas com RLS e tenant_isolation_policy padrao
-  for (const table of all27Tables) {
-    await pglite.exec(`
-      CREATE TABLE IF NOT EXISTS ${table} (id text PRIMARY KEY, company_id text NOT NULL);
-      ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;
-      CREATE POLICY tenant_isolation_policy ON ${table} FOR ALL
-        USING (company_id = current_setting('app.current_tenant', true))
-        WITH CHECK (company_id = current_setting('app.current_tenant', true));
-    `);
-  }
-
-  // Simular todas as politicas duplicadas/legadas mapeadas na migration 0090
-  await pglite.exec(`
-    CREATE POLICY tenant_isolation_ap ON account_payables FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_ar ON account_receivables FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_al ON audit_logs FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY no_update_delete_al ON audit_logs FOR UPDATE USING (false);
-    CREATE POLICY no_update_delete_al2 ON audit_logs FOR DELETE USING (false);
-    CREATE POLICY tenant_access_bank_statement_entries ON bank_statement_entries FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY authority_1_communication_tenant ON communication_logs FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_ct ON contracts FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_profiles ON credit_card_profiles FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_profiles ON credit_card_profiles FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_statement_adjustments ON credit_card_statement_adjustments FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_statement_adjustments ON credit_card_statement_adjustments FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_statement_credits ON credit_card_statement_credits FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_statement_credits ON credit_card_statement_credits FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_statement_items ON credit_card_statement_items FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_statement_items ON credit_card_statement_items FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_statement_payments ON credit_card_statement_payments FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_statement_payments ON credit_card_statement_payments FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_credit_card_statements ON credit_card_statements FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_credit_card_statements ON credit_card_statements FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_driver_health_profiles ON driver_health_profiles FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_driver_health_profiles ON driver_health_profiles FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_dr ON drivers FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_financial_accounts ON financial_accounts FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_fa ON financial_accounts FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_financial_categories ON financial_categories FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_fc ON financial_categories FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_financial_periods ON financial_periods FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_ft ON financial_transactions FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_payment_methods ON payment_methods FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_recurring_rules ON recurring_rules FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_security_deposit_commands ON security_deposit_commands FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_security_deposit_commands ON security_deposit_commands FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_security_deposit_movements ON security_deposit_movements FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_access_security_deposits ON security_deposits FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_trackers ON trackers FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_traffic_tickets ON traffic_tickets FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_us ON users FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-    CREATE POLICY tenant_isolation_ve ON vehicles FOR ALL USING (company_id = current_setting('app.current_tenant', true));
-  `);
-
-  // Aplicar a migration 0090
-  const migrationSql = readFileSync('drizzle/0090_deduplicate_rls_policies.sql', 'utf-8');
-  await pglite.exec(migrationSql);
-
-  // Validar resultado
-  const policiesRes = await pglite.query<{ tablename: string; policyname: string; cmd: string }>(`
-    SELECT tablename, policyname, cmd
-    FROM pg_policies
-    WHERE schemaname = 'public'
-    ORDER BY tablename, policyname;
-  `);
-
-  const policiesByTable = new Map<string, string[]>();
-  for (const row of policiesRes.rows) {
-    const list = policiesByTable.get(row.tablename) || [];
-    list.push(row.policyname);
-    policiesByTable.set(row.tablename, list);
-  }
-
-  // Verificar todas as 27 tabelas
-  for (const table of all27Tables) {
-    const tablePolicies = (policiesByTable.get(table) || []).sort();
-    if (table === 'audit_logs') {
-      // audit_logs deve ter exatamente as duas regras de imutabilidade + tenant_isolation_policy
-      assert.deepEqual(
-        tablePolicies,
-        ['no_update_delete_al', 'no_update_delete_al2', 'tenant_isolation_policy'].sort(),
-        `Tabela ${table} deve conter as políticas de imutabilidade e tenant_isolation_policy`
-      );
-    } else {
-      assert.deepEqual(
-        tablePolicies,
-        ['tenant_isolation_policy'],
-        `Tabela ${table} deve conter unicamente a política canônica tenant_isolation_policy`
-      );
-    }
-  }
-
-  console.log(`PASS: Migration 0090 validada em PostgreSQL in-memory — todas as ${all27Tables.length} tabelas deduplicadas e imutabilidade preservada.`);
-}
-
-async function inspectNeonState(): Promise<void> {
-  if (!neonUrl) {
-    console.log('2. Neon URL nao informada, pulando inspecao remota.');
-    return;
-  }
-
-  console.log('2. Inspecionando estado no cluster Neon...');
-  const client = new Client({ connectionString: neonUrl, ssl: { rejectUnauthorized: false } });
-  await client.connect();
-
-  try {
-    const userRes = await client.query('SELECT current_user, session_user;');
-    const currentUser = String(userRes.rows[0]?.current_user || '');
-    console.log(`Conectado no Neon como role: ${currentUser}`);
-
-    const duplicatesRes = await client.query(`
-      SELECT tablename, COUNT(*) as cnt, string_agg(policyname, ', ') as policies
-      FROM pg_policies
-      WHERE schemaname = 'public'
-      GROUP BY tablename
-      HAVING COUNT(*) > 1
-      ORDER BY tablename;
-    `);
-
-    console.log(`Tabelas com RLS redundante mapeadas no Neon: ${duplicatesRes.rows.length}`);
-    for (const r of duplicatesRes.rows) {
-      console.log(`  - ${r.tablename} (${r.cnt} policies): ${r.policies}`);
-    }
-
-    // Se estiver conectado como neondb_owner (deploy no Render), aplica DDL diretamente
-    if (currentUser === 'neondb_owner') {
-      console.log('Role e neondb_owner: aplicando DDL 0090 no Neon...');
-      const migrationSql = readFileSync('drizzle/0090_deduplicate_rls_policies.sql', 'utf-8');
-      await client.query('BEGIN');
-      await client.query(migrationSql);
-      await client.query('COMMIT');
-      console.log('DDL 0090 aplicada no Neon com sucesso.');
-    } else {
-      console.log(`Role '${currentUser}' e perfil analitico de dev; a aplicacao DDL no Neon ocorre de forma confiavel via 'migrate_db.cjs' no deploy do Render (que roda como neondb_owner).`);
-    }
-  } finally {
-    await client.end();
-  }
-}
-
-async function main() {
-  console.log('=== TESTE E VERIFICAÇÃO DE DEDUPLICAÇÃO DE RLS (AUTOERP-52) ===');
-  await testDeduplicationWithPGlite();
-  await inspectNeonState();
-  console.log('\n✅ AUTOERP-52 validado com sucesso.');
-}
-
-main().catch((err) => {
-  console.error('Falha na verificacao de RLS:', err);
-  process.exit(1);
-});
+run().catch((e) => { console.error('verifyRlsDeduplication: FALHOU\n', e); process.exit(1); });

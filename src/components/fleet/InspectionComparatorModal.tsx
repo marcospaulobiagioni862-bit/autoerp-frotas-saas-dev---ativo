@@ -378,7 +378,7 @@ export function InspectionComparatorModal({
  <CheckCircle2 className="w-5 h-5 text-success-icon flex-shrink-0" />
  <span>Acerto financeiro efetivado com sucesso. Veículo atualizado e títulos gerados no Contas a Receber quando aplicável.</span>
  </div>
- <Button size="sm" variant="outline" onClick={onClose}>
+ <Button size="sm" variant="outline" onClick={(event) => requestGuardedClose(event, onClose)}>
  Fechar
  </Button>
  </div>
