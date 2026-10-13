@@ -13,6 +13,9 @@ const labels: Record<string, string> = {
   INSURANCE_POLICY: 'Apólice de seguro',
   TRAFFIC_TICKET: 'Auto de infração',
   INTERMEDIATION_NOTE: 'Nota de intermediação',
+  INSPECTION_PHOTO: 'Foto da vistoria',
+  INSPECTION_SIGNATURE: 'Assinatura da vistoria',
+  INSPECTION_MEDIA: 'Mídia da vistoria',
   OTHER: 'Outro documento',
 };
 

@@ -235,7 +235,7 @@ export class VehicleInspectionSettlementAuthority {
       JOIN contracts c ON c.id = vi.contract_id
       WHERE fa.company_id = ${companyId}
         AND fa.is_archived = false
-        AND c.status IN ('COMPLETED', 'TERMINATED')
+        AND c.status IN ('FINISHED', 'CLOSED')
         AND c.end_date IS NOT NULL
         AND c.end_date::date < (CURRENT_DATE - (${cutoffDays} || ' days')::interval)
     `);
