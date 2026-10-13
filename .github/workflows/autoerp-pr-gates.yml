@@ -719,6 +719,14 @@ jobs:
       - name: TypeScript gate
         run: npm run lint
 
+      # AUTOERP-92. Este teste existia e estava vermelho ha dias sem ninguem ver, porque
+      # nao tinha step na CI. No intervalo, dois modais novos (AUTOERP-88/89) nasceram com
+      # o mesmo bypass de fechamento, e cinco modais financeiros ficaram com a guarda
+      # ancorada em lugar nenhum - o confirm nunca aparecia. Teste de invariante que nao
+      # roda em CI nao protege nada: ele so registra o defeito para quem rodar na mao.
+      - name: Modal layout and unsaved-changes guard invariants
+        run: npm run test:modal-layout-ux
+
       - name: Lazy module recovery invariants
         shell: bash
         run: |

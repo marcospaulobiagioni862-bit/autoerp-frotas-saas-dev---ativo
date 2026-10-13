@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useId, useMemo, useRef, useState } from 'react';
 import {
  VehicleInspectionClient,
  type VehicleInspectionType,
@@ -13,6 +13,7 @@ import {
  type InspectionWashType,
 } from '../../api/vehicleInspectionClient';
 import { compressImage } from '../../utils/imageCompressor';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import { AttachmentClient } from '../../api/attachmentClient';
 import { InspectionCarDamageDiagram } from './InspectionCarDamageDiagram';
 import { Button } from '../ui/Button';
@@ -141,6 +142,44 @@ export function VehicleInspectionWizardModal({
 
  const canvasRef = useRef<HTMLCanvasElement | null>(null);
  const [isDrawing, setIsDrawing] = useState(false);
+
+ // AUTOERP-92. Este assistente tem shell propria (cabecalho com stepper), nao usa
+ // ModalContainer, e por isso nao herda nem o markDirty por evento de input nem a
+ // guarda de fechamento. Duas pecas resolvem isso aqui:
+ //
+ // 1) guardId + data-unsaved-guard no painel: requestGuardedClose resolve o dono do
+ //    estado sujo por closest('[data-unsaved-guard]') e so age dentro de
+ //    `if (guardId && ...)`. Sem o atributo, guardId sai vazio e a guarda nao dispara
+ //    - a correcao ficaria decorativa, passando no teste sem proteger nada.
+ //
+ // 2) hasPendingWork + a sentinela data-draft-dirty: o markDirty do ModalContainer
+ //    reage a evento de input, e o trabalho caro daqui nao e campo digitado, e FOTO.
+ //    Seis angulos tirados no patio, no celular, com o carro na frente. Por isso o
+ //    sujo e calculado do estado e exposto declarativamente, que e o gancho que a
+ //    autoridade ja le (nestedDirty).
+ const guardId = useId();
+ const hasPendingWork = useMemo(() => {
+ if (Object.values<{ dataUrl: string; file?: File }>(photos).some((photo) => photo.dataUrl !== '')) return true;
+ if (damages.length > 0) return true;
+ if (signatureDataUrl !== '') return true;
+ // Passar do passo 1 e, por si so, trabalho feito: o operador ja respondeu a
+ // identificacao e esta com o carro parado na frente dele.
+ if (step > 1) return true;
+ if (notes.trim() !== '') return true;
+ if (odometer !== String(currentKm)) return true;
+ if (fuelLevel !== 100) return true;
+ if (type !== initialType || isRemoteDropoff) return true;
+ if (washType !== 'NONE' || isInsuranceClaim) return true;
+ if (signatureRefused || signatureRefusalReason.trim() !== '') return true;
+ if (Object.values(checklist).some((marcado) => marcado !== true)) return true;
+ if (Object.values(technicalChecklist).some((status) => status !== 'OK')) return true;
+ if (tireBrand !== 'Pirelli' || tireModelText !== 'Cinturato P1' || tireMeasure !== '185/65 R15') return true;
+ if (batteryBrand !== 'Moura' || batteryModelText !== '60Ah') return true;
+ return false;
+ }, [photos, damages, signatureDataUrl, step, notes, odometer, currentKm, fuelLevel, type,
+ initialType, isRemoteDropoff, washType, isInsuranceClaim, signatureRefused,
+ signatureRefusalReason, checklist, technicalChecklist, tireBrand, tireModelText,
+ tireMeasure, batteryBrand, batteryModelText]);
 
  // Captura e compressão de foto
  const handlePhotoCapture = async (slot: InspectionPhotoSlotKey, file: File) => {
@@ -301,7 +340,12 @@ export function VehicleInspectionWizardModal({
 
  return (
  <div className="fixed inset-0 z-50 flex items-center justify-center bg-graphite-900/80 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto">
- <div className="relative w-full max-w-2xl max-h-[96vh] flex flex-col rounded-2xl bg-white shadow-2xl dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 overflow-hidden">
+ <div className="relative w-full max-w-2xl max-h-[96vh] flex flex-col rounded-2xl bg-white shadow-2xl dark:bg-graphite-900 border border-graphite-200 dark:border-graphite-800 overflow-hidden"
+ data-unsaved-guard={guardId}
+ >
+ {/* Sentinela lida por requestGuardedClose (nestedDirty). Fica vazia de proposito:
+ o valor e que carrega a informacao, nao o conteudo. */}
+ <span className="hidden" data-draft-dirty={hasPendingWork ? 'true' : 'false'} />
  {/* Cabeçalho do Stepper */}
  <div className="flex items-center justify-between border-b border-graphite-100 p-4 dark:border-graphite-800">
  <div>
@@ -324,7 +368,7 @@ export function VehicleInspectionWizardModal({
  </div>
  <button
  type="button"
- onClick={onClose}
+ onClick={(event) => requestGuardedClose(event, onClose)}
  className="rounded-lg p-1.5 text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800"
  >
  <X className="w-5 h-5" />

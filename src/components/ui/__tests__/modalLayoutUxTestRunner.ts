@@ -52,7 +52,7 @@ const scanDirectCloseBypasses = (directory: string) => {
     if (!entry.isFile() || !entry.name.endsWith('.tsx')) continue;
     const source = readFileSync(absolute, 'utf8');
     if (source.includes('onClick={onClose}')) {
-      directCloseBypasses.push(absolute.slice(componentsRoot.length + 1));
+      directCloseBypasses.push(absolute.slice(componentsRoot.length));
     }
   }
 };
@@ -61,6 +61,73 @@ assert.deepEqual(
   directCloseBypasses,
   [],
   `all explicit component close actions must use requestGuardedClose; bypasses: ${directCloseBypasses.join(', ')}`,
+);
+
+// AUTOERP-92. A asercao acima e um grep por onClick={onClose}: ela e satisfeita por
+// qualquer coisa que nao seja esse literal, inclusive por um requestGuardedClose que
+// nunca dispara. E foi o que quase aconteceu no assistente de vistoria: ele tem shell
+// propria, sem ModalContainer, e requestGuardedClose so age dentro de
+// `if (guardId && ...)`, com guardId vindo de closest('[data-unsaved-guard]'). Sem o
+// atributo no painel, o teste ficava verde e o confirm nunca aparecia.
+//
+// Por isso todo modal de shell propria - o que nao importa ModalContainer mas monta o
+// proprio overlay fixed inset-0 - tem de declarar o atributo, ou nao ha onde pendurar
+// o estado sujo. Quem usa ModalContainer ja recebe o atributo dele e fica de fora.
+const ownShellMissingGuard: string[] = [];
+const scanOwnShellModals = (directory: string) => {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const absolute = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      scanOwnShellModals(absolute);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.tsx')) continue;
+    const source = readFileSync(absolute, 'utf8');
+    // Cada filtro olha CODIGO, nunca mencao. Tres vezes nesta sessao uma checagem por
+    // string solta foi derrotada por um comentario que citava o proprio termo - e o
+    // efeito e sempre o mesmo e sempre silencioso: o arquivo e pulado e a invariante
+    // vira enfeite. Por isso: uso em JSX para o componente, chamada para a funcao.
+    if (!source.includes('fixed inset-0')) continue;
+    if (/<ModalContainer[\s>]/.test(source)) continue;
+    if (!/requestGuardedClose\(/.test(source)) continue;
+    // Procura o ATRIBUTO, nao a string: a primeira versao desta checagem usava
+    // includes('data-unsaved-guard') e era derrotada por um comentario que apenas
+    // citava o atributo - descoberto ao mutar o wizard e ver o teste passar, o que
+    // e precisamente o defeito que este card existe para corrigir.
+    if (/data-unsaved-guard=\{/.test(source)) continue;
+    // Shell propria SEM campo editavel nao tem trabalho a perder - o comparador de
+    // vistoria e a previa de documento sao so leitura, e exigir ancora de estado sujo
+    // neles seria cerimonia sem protecao. A exigencia vale onde ha o que digitar, e e
+    // deduzida do proprio arquivo em vez de lista de excecao, que apodrece.
+    if (!/<(Input|input|textarea|Textarea|Select|select)\b/.test(source)) continue;
+    ownShellMissingGuard.push(absolute.slice(componentsRoot.length));
+  }
+};
+scanOwnShellModals(componentsRoot);
+assert.deepEqual(
+  ownShellMissingGuard,
+  [],
+  `own-shell modals calling requestGuardedClose must carry data-unsaved-guard or the guard never fires; missing: ${ownShellMissingGuard.join(', ')}`,
+);
+
+// O custo real do assistente de vistoria e a FOTO, nao o campo digitado: seis angulos
+// tirados no patio. O markDirty do ModalContainer reage a evento de input e nunca veria
+// isso, entao o wizard calcula o sujo do proprio estado e expoe pela sentinela que a
+// autoridade le (nestedDirty). Se esta ligacao cair, fechar no X volta a descartar as
+// seis fotos sem perguntar nada.
+const inspectionWizard = readFileSync(
+  new URL('../../fleet/VehicleInspectionWizardModal.tsx', import.meta.url),
+  'utf8',
+);
+assert.match(
+  inspectionWizard,
+  /data-draft-dirty=\{hasPendingWork \? 'true' : 'false'\}/,
+  'inspection wizard must expose its dirty state through the data-draft-dirty sentinel',
+);
+assert.match(
+  inspectionWizard,
+  /photo\.dataUrl !== ''\)\) return true/,
+  'inspection wizard dirty check must count a captured photo as unsaved work',
 );
 
 

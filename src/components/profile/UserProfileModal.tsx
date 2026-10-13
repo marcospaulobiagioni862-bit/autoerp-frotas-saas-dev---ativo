@@ -18,6 +18,7 @@ import {
 import { UserProfileClient, type UserProfileDto } from '../../api/userProfileClient';
 import { useAuth } from '../../hooks/useAuth';
 import { Badge, Button, Input, ModalContainer } from '../ui';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 
 export interface UserProfileModalProps {
   isOpen: boolean;
@@ -412,7 +413,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </p>
 
             <div className="flex items-center justify-end gap-3 border-t border-graphite-200 pt-4 dark:border-graphite-800">
-              <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              <Button type="button" variant="outline" onClick={(event) => requestGuardedClose(event, onClose)} disabled={saving}>
                 Fechar
               </Button>
               <Button type="submit" disabled={saving || loading} className="gap-2">
@@ -516,7 +517,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
 
             <div className="flex items-center justify-end gap-3 border-t border-graphite-200 pt-4 dark:border-graphite-800">
-              <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              <Button type="button" variant="outline" onClick={(event) => requestGuardedClose(event, onClose)} disabled={saving}>
                 Cancelar
               </Button>
               <Button
