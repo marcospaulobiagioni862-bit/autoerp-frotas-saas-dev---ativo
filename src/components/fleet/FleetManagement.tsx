@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { VehicleClient } from '../../api/vehicleClient';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES, VehicleStatus } from '../../types/enums';
@@ -25,6 +26,12 @@ const VehicleKmBatchModal=lazy(()=>import('./VehicleKmBatchModal').then(module=>
 const VehicleDocumentIntakeModal=lazy(()=>import('./VehicleDocumentIntakeModal').then(module=>({default:module.VehicleDocumentIntakeModal})));
 
 export const FleetManagement: React.FC = () => {
+ const { user } = useAuth();
+ const canDeletePermanently = Boolean(
+   user?.role?.toUpperCase() === 'ADMIN' ||
+   user?.permissions?.includes('*') ||
+   user?.permissions?.includes('DELETE_VEHICLE')
+ );
  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
  const [showArchived, setShowArchived] = useState(false);
  const [searchTerm, setSearchTerm] = useState<string>('');
@@ -187,7 +194,7 @@ export const FleetManagement: React.FC = () => {
 
  {showArchived && (
  <div className="p-3 rounded-xl border border-graphite-200 dark:border-graphite-700 bg-graphite-50 dark:bg-graphite-800/40 text-xs text-graphite-600 dark:text-graphite-300">
- {totalCount} veículo(s) vendido(s) ou arquivado(s). O histórico é preservado; apenas veículos vendidos e ainda não arquivados podem retornar ao estoque.
+ {totalCount} veículo(s) vendido(s) ou arquivado(s). O histórico é preservado; veículos vendidos ou arquivados podem retornar ao estoque por ação explícita e auditável.
  </div>
  )}
 
@@ -248,6 +255,7 @@ export const FleetManagement: React.FC = () => {
  const canArchive = allManualStatusOptions.some((option) => option.value === VehicleStatus.ARCHIVED);
  const canPlaceOutOfUse = vehicle.status !== VehicleStatus.RENTED && vehicle.status !== VehicleStatus.INACTIVE && vehicle.status !== VehicleStatus.SOLD && vehicle.status !== VehicleStatus.ARCHIVED;
  const canMarkSold = [VehicleStatus.AVAILABLE, VehicleStatus.DAMAGED, VehicleStatus.INACTIVE].includes(vehicle.status);
+ const canRestoreVehicle = vehicle.status === VehicleStatus.SOLD || vehicle.status === VehicleStatus.ARCHIVED || Boolean(vehicle.isArchived);
  const isReadOnlyTerminal = showArchived || vehicle.status === VehicleStatus.SOLD || vehicle.status === VehicleStatus.ARCHIVED;
 
  return (
@@ -306,13 +314,15 @@ export const FleetManagement: React.FC = () => {
  <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-info-icon font-semibold border rounded-lg hover:bg-graphite-50 dark:hover:bg-graphite-800">
  <Eye className="w-3.5 h-3.5"/> Abrir histórico somente leitura
  </button>
- {(vehicle.status === VehicleStatus.SOLD) && (
+ {canRestoreVehicle && (
  <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo ao estoque / recompra" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-success-text bg-success-bg hover:bg-success-bg rounded-lg border border-success-border "><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque</button>
  )}
  {!showArchived && vehicle.status === VehicleStatus.SOLD && canArchive && (
  <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-error-text bg-error-bg hover:bg-error-bg rounded-lg border border-error-border "><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>
  )}
+ {canDeletePermanently && (
  <button onClick={() => setVehicleToDelete(vehicle)} title="Excluir definitivamente do sistema" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-error-text bg-error-bg hover:bg-error-bg rounded-lg border border-error-border "><Trash2 className="w-3.5 h-3.5"/>Excluir</button>
+ )}
  </div>
  ) : (
  <div className="flex items-center justify-between gap-2">
@@ -345,7 +355,9 @@ export const FleetManagement: React.FC = () => {
  {canPlaceOutOfUse && <button onClick={() => handleStatusChangeClick(vehicle, VehicleStatus.INACTIVE)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Colocar fora de uso</button>}
  {canMarkSold && <button onClick={() => setVehicleForSale(vehicle)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-graphite-700 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-graphite-800">Marcar como vendido</button>}
  {canArchive && <button onClick={() => setVehicleForArchive(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg dark:hover:bg-error-bg"><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>}
+ {canDeletePermanently && (
  <button onClick={() => setVehicleToDelete(vehicle)} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold text-error-text hover:bg-error-bg dark:hover:bg-error-bg"><Trash2 className="w-3.5 h-3.5"/>Excluir definitivamente</button>
+ )}
  </div>
  </details>
  </div>

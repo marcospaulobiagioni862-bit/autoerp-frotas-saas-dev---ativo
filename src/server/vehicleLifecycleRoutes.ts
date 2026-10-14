@@ -286,8 +286,9 @@ export function registerVehicleLifecycleRoutes(app: Express): void {
         const vehicleRepo = txContext.getVehicleRepo();
         const existing = await vehicleRepo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!existing) throw new VehicleLifecycleNotFoundError();
-        if (existing.status !== VehicleStatus.SOLD || existing.isArchived) {
-          throw new VehicleLifecycleConflictError('Only a sold, non-archived vehicle can return to stock');
+        const isEligibleToReturn = existing.status === VehicleStatus.SOLD || existing.status === VehicleStatus.ARCHIVED || existing.isArchived;
+        if (!isEligibleToReturn) {
+          throw new VehicleLifecycleConflictError('Only a sold or archived vehicle can return to stock');
         }
 
         const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);

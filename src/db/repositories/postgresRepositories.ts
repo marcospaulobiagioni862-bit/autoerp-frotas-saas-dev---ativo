@@ -262,7 +262,7 @@ export class PostgresVehicleRepository {
     return rows[0] ? this.map(rows[0]) : null;
   }
 
-  async deleteForCompany(companyId: string, id: string): Promise<boolean> {
+  async deleteForCompany(id: string, companyId: string): Promise<boolean> {
     const rows = await this.tx.delete(vehicles)
       .where(and(eq(vehicles.companyId, companyId), eq(vehicles.id, id)))
       .returning({ id: vehicles.id });

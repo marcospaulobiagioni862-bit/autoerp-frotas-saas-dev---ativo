@@ -682,21 +682,47 @@ export function registerVehicleRoutes(app: Express): void {
         const existing = await repo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
         if (!existing) throw new VehicleNotFoundError();
 
-        const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);
-        const hasBlockingMaintenance = await txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, '');
-        const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
-        if (hasCurrentBinding || hasBlockingMaintenance) {
-          throw new VehicleConflictError('Não é possível excluir veículo com contrato ativo ou manutenção em andamento. Encerre o contrato ou utilize a opção Arquivar.');
-        }
-
         const raw = txContext.getRawTransaction();
         const { sql } = await import('drizzle-orm');
+
+        // Impede exclusão definitiva se houver qualquer histórico operacional ou financeiro
+        const checkResult = await raw.execute(sql`
+          SELECT 
+            (SELECT COUNT(*) FROM contracts WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS contracts_cnt,
+            (SELECT COUNT(*) FROM account_receivables WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ar_cnt,
+            (SELECT COUNT(*) FROM account_payables WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ap_cnt,
+            (SELECT COUNT(*) FROM traffic_tickets WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tt_cnt,
+            (SELECT COUNT(*) FROM work_orders WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS wo_cnt,
+            (SELECT COUNT(*) FROM financial_transactions WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ft_cnt,
+            (SELECT COUNT(*) FROM insurances WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ins_cnt,
+            (SELECT COUNT(*) FROM toll_passages WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS toll_cnt,
+            (SELECT COUNT(*) FROM security_deposits WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS sd_cnt
+        `);
+        const counts = (checkResult as any).rows?.[0] || (checkResult as any)[0] || {};
+        const totalHistoricalRecords = 
+          Number(counts.contracts_cnt || 0) + 
+          Number(counts.ar_cnt || 0) + 
+          Number(counts.ap_cnt || 0) + 
+          Number(counts.tt_cnt || 0) + 
+          Number(counts.wo_cnt || 0) +
+          Number(counts.ft_cnt || 0) +
+          Number(counts.ins_cnt || 0) +
+          Number(counts.toll_cnt || 0) +
+          Number(counts.sd_cnt || 0);
+
+        if (totalHistoricalRecords > 0 || existing.currentContractId || existing.currentDriverId) {
+          throw new VehicleConflictError('Não é possível excluir definitivamente este veículo pois existem registros históricos vinculados (contratos, financeiro, multas ou manutenções). Para reincorporá-lo à frota ativa, utilize a opção "Retornar ao estoque / Recompra".');
+        }
+
+        // Se for um cadastro novo/equívoco sem histórico, remove os registros operacionais vinculados
         await raw.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_km_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_inspections WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_document_intakes WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_ownership_history WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
 
-        const deleted = await repo.deleteForCompany(principal.companyId, existing.id);
+        const deleted = await repo.deleteForCompany(existing.id, principal.companyId);
         if (!deleted) throw new VehicleNotFoundError();
 
         const now = new Date().toISOString();

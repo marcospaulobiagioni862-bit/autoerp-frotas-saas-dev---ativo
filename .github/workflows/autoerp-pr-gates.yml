@@ -91,6 +91,7 @@ jobs:
           npx tsx src/server/__tests__/attachmentMultiProviderRegression.ts
           npx tsx src/server/__tests__/vehicleInspectionMobileAndComparisonRegression.ts
           npx tsx src/server/__tests__/vehicleDetailsAuthorityTestRunner.ts
+          npx tsx src/server/__tests__/vehicleRestoreAndDeleteIntegration.ts
 
       - name: AUDIT-WAVE-A source-of-truth transversal invariants
         run: npm run test:audit-wave-a

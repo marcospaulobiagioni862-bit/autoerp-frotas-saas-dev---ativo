@@ -51,6 +51,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
  { key: 'CHANGE_VEHICLE_STATUS', label: 'Alterar status', description: 'Mudar status entre disponível, alugado, manutenção ou vendido' },
  { key: 'RECORD_KM', label: 'Registrar odômetro / KM', description: 'Lançar leituras de odômetro individual ou em lote' },
  { key: 'ARCHIVE_VEHICLE', label: 'Arquivar veículos', description: 'Arquivar veículos preservando histórico' },
+ { key: 'DELETE_VEHICLE', label: 'Excluir veículos definitivamente', description: 'Excluir definitivamente veículos cadastrados por engano sem histórico' },
  ],
  },
  {
@@ -152,7 +153,7 @@ export const ROLE_PRESETS: Record<string, { label: string; description: string; 
  MANAGER: {
  label: 'Gestor Operacional',
  description: 'Controle total sobre frota, motoristas, contratos, vistorias e manutenção; financeiro e multas para acompanhamento.',
- permissions: ALL_PERMISSION_KEYS.filter((p) => p !== 'MANAGE_USERS' && p !== 'MANAGE_TENANT'),
+ permissions: ALL_PERMISSION_KEYS.filter((p) => p !== 'MANAGE_USERS' && p !== 'MANAGE_TENANT' && p !== 'DELETE_VEHICLE'),
  },
  OPERATIONAL: {
  label: 'Operador Geral',

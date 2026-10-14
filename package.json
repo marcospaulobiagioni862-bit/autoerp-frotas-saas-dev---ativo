@@ -41,6 +41,7 @@
     "test:modal-layout-ux": "tsx src/components/ui/__tests__/modalLayoutUxTestRunner.ts",
     "test:contract-signature-list": "tsx src/server/__tests__/contractSignatureListRegression.ts",
     "test:vehicle-ownership": "tsx src/server/__tests__/vehicleOwnershipRegression.ts",
+    "test:vehicle-restore-delete": "tsx src/server/__tests__/vehicleRestoreAndDeleteIntegration.ts",
     "verify:user-permissions-real": "tsx src/server/__tests__/verifyUserPermissionsRealMassa.ts",
     "verify:avatar-menu-real": "tsx src/server/__tests__/verifyAvatarMenuRealMassa.ts",
     "verify:marcos-requirements": "tsx src/server/__tests__/verifyMarcosRequirementsRealMassa.ts",
