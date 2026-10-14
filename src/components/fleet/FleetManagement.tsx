@@ -306,8 +306,8 @@ export const FleetManagement: React.FC = () => {
  <button onClick={() => setReadOnlyVehicleIdForHistory(vehicle.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-info-icon font-semibold border rounded-lg hover:bg-graphite-50 dark:hover:bg-graphite-800">
  <Eye className="w-3.5 h-3.5"/> Abrir histórico somente leitura
  </button>
- {(vehicle.status === VehicleStatus.SOLD || vehicle.status === VehicleStatus.ARCHIVED || vehicle.isArchived) && (
- <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo ao estoque / recompra" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-success-text bg-success-bg hover:bg-success-bg rounded-lg border border-success-border "><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque / Recompra</button>
+ {(vehicle.status === VehicleStatus.SOLD) && (
+ <button onClick={() => setVehicleForRestore(vehicle)} title="Retornar veículo ao estoque / recompra" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-success-text bg-success-bg hover:bg-success-bg rounded-lg border border-success-border "><RotateCcw className="w-3.5 h-3.5"/>Retornar ao estoque</button>
  )}
  {!showArchived && vehicle.status === VehicleStatus.SOLD && canArchive && (
  <button onClick={() => setVehicleForArchive(vehicle)} title="Arquivar / remover da frota" className="inline-flex items-center gap-1 px-3 py-2 text-[10px] font-semibold text-error-text bg-error-bg hover:bg-error-bg rounded-lg border border-error-border "><Archive className="w-3.5 h-3.5"/>Arquivar / remover</button>
