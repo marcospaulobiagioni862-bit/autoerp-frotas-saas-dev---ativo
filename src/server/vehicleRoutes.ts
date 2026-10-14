@@ -24,7 +24,7 @@ import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAutho
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 import { getVehicleDetailsSummary, VehicleDetailsNotFoundError } from './vehicleDetailsAuthority';
 
-type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE';
+type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE' | 'DELETE_VEHICLE';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -670,6 +670,50 @@ export function registerVehicleRoutes(app: Express): void {
         return updated;
       });
       res.json({ item });
+    } catch (error) { sendVehicleError(res, error); }
+  });
+
+  app.delete('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'DELETE_VEHICLE');
+    if (!principal) return;
+    try {
+      await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        const existing = await repo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!existing) throw new VehicleNotFoundError();
+
+        const activeContract = await txContext.getContractRepo().findActiveByVehicle(principal.companyId, existing.id);
+        const hasBlockingMaintenance = await txContext.getWorkOrderRepo().hasBlockingWorkOrder(principal.companyId, existing.id, '');
+        const hasCurrentBinding = Boolean(activeContract || existing.currentContractId || existing.currentDriverId);
+        if (hasCurrentBinding || hasBlockingMaintenance) {
+          throw new VehicleConflictError('Não é possível excluir veículo com contrato ativo ou manutenção em andamento. Encerre o contrato ou utilize a opção Arquivar.');
+        }
+
+        const raw = txContext.getRawTransaction();
+        const { sql } = await import('drizzle-orm');
+        await raw.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_km_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_inspections WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_document_intakes WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+
+        const deleted = await repo.deleteForCompany(principal.companyId, existing.id);
+        if (!deleted) throw new VehicleNotFoundError();
+
+        const now = new Date().toISOString();
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityId: existing.id,
+          action: AuditAction.DELETE,
+          previousState: JSON.stringify(existing),
+          newState: JSON.stringify({ deleted: true, plate: existing.plate }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+      });
+      res.json({ success: true, message: 'Veículo excluído com sucesso.' });
     } catch (error) { sendVehicleError(res, error); }
   });
 }

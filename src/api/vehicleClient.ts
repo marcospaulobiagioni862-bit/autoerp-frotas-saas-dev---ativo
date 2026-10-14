@@ -420,4 +420,13 @@ export class VehicleClient {
     if (!payload.summary || typeof payload.summary !== 'object') throw new Error('Invalid vehicle details summary');
     return payload.summary as unknown as VehicleDetailedSummary;
   }
+
+  static async delete(id: string): Promise<void> {
+    invalidateCache('vehicles');
+    const response = await fetch(`/api/fleet/vehicles/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!response.ok) throw await apiError(response);
+  }
 }
