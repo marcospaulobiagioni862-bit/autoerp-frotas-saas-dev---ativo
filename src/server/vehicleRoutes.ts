@@ -730,7 +730,12 @@ export function registerVehicleRoutes(app: Express): void {
         await raw.execute(sql`DELETE FROM maintenance_plans WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_km_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
-        await raw.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        const hasScheduleTable = await raw.execute(sql`
+          SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'vehicle_km_reading_schedules' LIMIT 1
+        `);
+        if ((hasScheduleTable.rows?.length || 0) > 0) {
+          await raw.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        }
         await raw.execute(sql`DELETE FROM vehicle_inspections WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_document_intakes WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_ownership_history WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
