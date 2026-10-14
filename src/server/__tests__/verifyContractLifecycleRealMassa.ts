@@ -23,9 +23,9 @@ try {
   console.warn('Could not read ~/.config/autoerp-neon.env:', e);
 }
 
-const neonUrl = process.env.DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL;
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
 if (!neonUrl) {
-  console.error('FATAL: STAGING_MAIN_DATABASE_URL or DATABASE_URL is required to run real massa verification.');
+  console.error('FATAL: HOMOLOG_DATABASE_URL is required to run real massa verification.');
   process.exit(1);
 }
 
@@ -117,7 +117,7 @@ async function main() {
 
   await db.execute(sql`
     UPDATE vehicles
-    SET status = 'AVAILABLE', current_contract_id = NULL, current_driver_id = NULL, updated_at = NOW()
+    SET status = 'AVAILABLE', is_archived = false, current_contract_id = NULL, current_driver_id = NULL, updated_at = NOW()
     WHERE id = ${vehicleId} AND company_id = ${companyId}
   `);
 
@@ -369,7 +369,7 @@ async function main() {
     // Restaurar veículo para AVAILABLE para manter o ambiente estável
     await db.execute(sql`
       UPDATE vehicles
-      SET status = 'AVAILABLE', current_contract_id = NULL, current_driver_id = NULL, updated_at = NOW()
+      SET status = 'AVAILABLE', is_archived = false, current_contract_id = NULL, current_driver_id = NULL, updated_at = NOW()
       WHERE id = ${vehicleId} AND company_id = ${companyId}
     `);
     await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));

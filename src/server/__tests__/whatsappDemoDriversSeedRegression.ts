@@ -22,11 +22,14 @@ try {
   // Ignora se não existir
 }
 
-const neonUrl = process.env.DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL;
-if (neonUrl && !process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = neonUrl;
-  process.env.USE_PGLITE = 'false';
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
+if (!neonUrl) {
+  console.error('FATAL: HOMOLOG_DATABASE_URL is required to run real massa verification.');
+  process.exit(1);
 }
+
+process.env.DATABASE_URL = neonUrl;
+process.env.USE_PGLITE = 'false';
 
 async function run() {
   const { db } = await import('../../db/index');
