@@ -21,9 +21,9 @@ try {
   console.warn('Could not read ~/.config/autoerp-neon.env:', e);
 }
 
-const neonUrl = process.env.DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL;
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
 if (!neonUrl) {
-  console.error('FATAL: STAGING_MAIN_DATABASE_URL or DATABASE_URL is required to run real massa verification.');
+  console.error('FATAL: HOMOLOG_DATABASE_URL is required to run real massa verification.');
   process.exit(1);
 }
 
