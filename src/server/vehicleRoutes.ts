@@ -696,7 +696,13 @@ export function registerVehicleRoutes(app: Express): void {
             (SELECT COUNT(*) FROM financial_transactions WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ft_cnt,
             (SELECT COUNT(*) FROM insurances WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ins_cnt,
             (SELECT COUNT(*) FROM toll_passages WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS toll_cnt,
-            (SELECT COUNT(*) FROM security_deposits WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS sd_cnt
+            (SELECT COUNT(*) FROM security_deposits WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS sd_cnt,
+            (SELECT COUNT(*) FROM maintenance WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS maint_cnt,
+            (SELECT COUNT(*) FROM tire_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tire_cnt,
+            (SELECT COUNT(*) FROM oil_change_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS oil_cnt,
+            (SELECT COUNT(*) FROM trackers WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tracker_cnt,
+            (SELECT COUNT(*) FROM recurring_rules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS rec_cnt,
+            (SELECT COUNT(*) FROM part_stock_movements WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS part_cnt
         `);
         const counts = (checkResult as any).rows?.[0] || (checkResult as any)[0] || {};
         const totalHistoricalRecords = 
@@ -708,13 +714,20 @@ export function registerVehicleRoutes(app: Express): void {
           Number(counts.ft_cnt || 0) +
           Number(counts.ins_cnt || 0) +
           Number(counts.toll_cnt || 0) +
-          Number(counts.sd_cnt || 0);
+          Number(counts.sd_cnt || 0) +
+          Number(counts.maint_cnt || 0) +
+          Number(counts.tire_cnt || 0) +
+          Number(counts.oil_cnt || 0) +
+          Number(counts.tracker_cnt || 0) +
+          Number(counts.rec_cnt || 0) +
+          Number(counts.part_cnt || 0);
 
         if (totalHistoricalRecords > 0 || existing.currentContractId || existing.currentDriverId) {
           throw new VehicleConflictError('Não é possível excluir definitivamente este veículo pois existem registros históricos vinculados (contratos, financeiro, multas ou manutenções). Para reincorporá-lo à frota ativa, utilize a opção "Retornar ao estoque / Recompra".');
         }
 
         // Se for um cadastro novo/equívoco sem histórico, remove os registros operacionais vinculados
+        await raw.execute(sql`DELETE FROM maintenance_plans WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_km_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
         await raw.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);

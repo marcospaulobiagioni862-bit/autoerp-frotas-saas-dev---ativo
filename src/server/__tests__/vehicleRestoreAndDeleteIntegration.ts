@@ -1,128 +1,78 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import type { Server } from 'node:http';
+import { readFileSync, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { createServer } from 'node:http';
 import express, { type Request, type Response as ExpressResponse, type NextFunction } from 'express';
-import { registerVehicleRoutes } from '../vehicleRoutes';
-import { registerVehicleLifecycleRoutes } from '../vehicleLifecycleRoutes';
-import { UnitOfWork } from '../../db/uow';
+import { sql } from 'drizzle-orm';
 import { VehicleStatus } from '../../types/enums';
-import type { Vehicle } from '../../types/entities';
 import type { AuthenticatedPrincipal } from '../auth';
 
-class InMemoryVehicleRepository {
-  private vehicles: Map<string, Vehicle> = new Map();
-
-  setVehicle(vehicle: Vehicle) {
-    this.vehicles.set(vehicle.id, { ...vehicle });
+// 1. Carregar conexão Postgres autoritativa
+try {
+  const neonEnvPath = join(homedir(), '.config/autoerp-neon.env');
+  if (existsSync(neonEnvPath)) {
+    const envContent = readFileSync(neonEnvPath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const match = /^([A-Z0-9_]+)="?([^"]*)"?$/.exec(trimmed);
+      if (match) {
+        process.env[match[1]] = match[2];
+      }
+    }
   }
-
-  async findByIdForCompany(companyId: string, id: string): Promise<Vehicle | null> {
-    const v = this.vehicles.get(id);
-    return v && v.companyId === companyId ? { ...v } : null;
-  }
-
-  async findByIdForCompanyWithLock(companyId: string, id: string): Promise<Vehicle | null> {
-    return this.findByIdForCompany(companyId, id);
-  }
-
-  async updateForCompany(companyId: string, id: string, patch: Partial<Vehicle>): Promise<Vehicle | null> {
-    const existing = this.vehicles.get(id);
-    if (!existing || existing.companyId !== companyId) return null;
-    const updated = { ...existing, ...patch };
-    this.vehicles.set(id, updated);
-    return { ...updated };
-  }
-
-  async deleteForCompany(id: string, companyId: string): Promise<boolean> {
-    const existing = this.vehicles.get(id);
-    if (!existing || existing.companyId !== companyId) return false;
-    this.vehicles.delete(id);
-    return true;
-  }
+} catch (e) {
+  // Ignora se não existir
 }
 
-class InMemoryContractRepo {
-  async findActiveByVehicle(_companyId: string, _vehicleId: string) {
-    return null;
-  }
+const dbUrl = process.env.DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL;
+if (!dbUrl) {
+  console.error('FATAL: DATABASE_URL ou STAGING_MAIN_DATABASE_URL é obrigatório para executar o teste de integração real.');
+  process.exit(1);
 }
 
-class InMemoryWorkOrderRepo {
-  async hasBlockingWorkOrder(_companyId: string, _vehicleId: string, _id: string) {
-    return false;
-  }
-}
-
-class InMemoryAuditLogRepo {
-  public logs: any[] = [];
-  async create(item: any) {
-    this.logs.push(item);
-    return item;
-  }
-}
+process.env.DATABASE_URL = dbUrl;
+process.env.USE_PGLITE = 'false';
 
 async function runVehicleRestoreAndDeleteIntegration() {
-  console.log('--- Iniciando Teste de Integração: Exclusão Segura e Retorno ao Estoque (PH-029) ---');
-  const companyId = 'company-test-restore-delete';
-  const vehicleRepo = new InMemoryVehicleRepository();
-  const contractRepo = new InMemoryContractRepo();
-  const workOrderRepo = new InMemoryWorkOrderRepo();
-  const auditRepo = new InMemoryAuditLogRepo();
+  console.log('=== TESTE DE INTEGRAÇÃO REAL: EXCLUSÃO SEGURA E RETORNO AO ESTOQUE (PH-029) ===');
+  console.log(`Database: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
 
-  let mockHistoricalCounts: Record<string, number> = {
-    contracts_cnt: 0,
-    ar_cnt: 0,
-    ap_cnt: 0,
-    tt_cnt: 0,
-    wo_cnt: 0,
-    ft_cnt: 0,
-    ins_cnt: 0,
-    toll_cnt: 0,
-    sd_cnt: 0,
-  };
+  // Importar dinamicamente para garantir que db/index use o DATABASE_URL configurado
+  const { db } = await import('../../db/index');
+  const { registerVehicleRoutes } = await import('../vehicleRoutes');
+  const { registerVehicleLifecycleRoutes } = await import('../vehicleLifecycleRoutes');
 
-  const executedRawQueries: string[] = [];
+  // Cria tenant isolado exclusivo para o teste
+  const companyId = `test-res-del-${randomUUID().slice(0, 8)}`;
+  const companyName = `Test Co ${companyId}`;
+  const adminUserId = `user-admin-${randomUUID().slice(0, 8)}`;
+  const opUserId = `user-op-${randomUUID().slice(0, 8)}`;
 
-  // Mock UnitOfWork
-  const origRun = UnitOfWork.run;
-  (UnitOfWork as any).run = async (_cid: string, fn: (ctx: any) => Promise<any>) => {
-    const fakeCtx = {
-      getVehicleRepo: () => vehicleRepo,
-      getContractRepo: () => contractRepo,
-      getWorkOrderRepo: () => workOrderRepo,
-      getAuditLogRepo: () => auditRepo,
-      getRawTransaction: () => ({
-        execute: async (query: any) => {
-          let queryString = '';
-          if (typeof query === 'string') {
-            queryString = query;
-          } else if (query?.queryChunks) {
-            queryString = query.queryChunks.map((c: any) => c?.value ? (Array.isArray(c.value) ? c.value.join(' ') : String(c.value)) : '').join(' ');
-          } else {
-            queryString = JSON.stringify(query);
-          }
-          executedRawQueries.push(queryString);
-          if (queryString.includes('contracts_cnt')) {
-            return { rows: [{ ...mockHistoricalCounts }] };
-          }
-          return { rows: [] };
-        },
-      }),
-    };
-    return fn(fakeCtx);
-  };
+  await db.execute(sql`
+    INSERT INTO companies (id, name, status, created_at, updated_at)
+    VALUES (${companyId}, ${companyName}, 'ACTIVE', now(), now())
+  `);
 
-  const app = express();
-  app.use(express.json());
+  await db.execute(sql`
+    INSERT INTO users (id, company_id, name, email, role, active, created_at, updated_at)
+    VALUES 
+      (${adminUserId}, ${companyId}, 'Admin Test', ${adminUserId + '@example.test'}, 'ADMIN', true, now(), now()),
+      (${opUserId}, ${companyId}, 'Op Test', ${opUserId + '@example.test'}, 'OPERATIONAL', true, now(), now())
+  `);
 
   let currentPrincipal: AuthenticatedPrincipal = {
-    userId: 'user-001',
+    userId: adminUserId,
     companyId,
-    name: 'Admin Frotas',
+    name: 'Admin Test',
     role: 'ADMIN',
     permissions: ['*'],
   };
 
+  const app = express();
+  app.use(express.json());
   app.use((req: Request, _res: ExpressResponse, next: NextFunction) => {
     (req as Request & { principal?: AuthenticatedPrincipal }).principal = { ...currentPrincipal };
     next();
@@ -131,143 +81,184 @@ async function runVehicleRestoreAndDeleteIntegration() {
   registerVehicleRoutes(app);
   registerVehicleLifecycleRoutes(app);
 
-  const server: Server = app.listen(0);
-  const address = server.address();
-  const port = typeof address === 'object' && address ? address.port : 3000;
-  const baseUrl = `http://127.0.0.1:${port}`;
+  const server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address() as { port: number };
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  const cleanupVehicleIds: string[] = [];
 
   try {
-    // 1. Validar 403 Forbidden em DELETE quando usuário não possui permissão
-    console.log('[1/5] Testando 403 Forbidden em DELETE para usuário sem permissão...');
-    const testVeh1: Vehicle = {
-      id: 'veh-del-1',
-      companyId,
-      plate: 'ABC1D23',
-      renavam: '12345678901',
-      chassis: '9BWAG45U6PT063001',
-      brand: 'VW',
-      model: 'Gol',
-      color: 'Branco',
-      fuelType: 'Flex',
-      category: 'Padrão',
-      currentKm: 10000,
-      acquisitionValue: 50000,
-      currentValue: 45000,
-      rentalValueBase: 1500,
-      yearFabrication: 2022,
-      yearModel: 2023,
-      status: VehicleStatus.AVAILABLE,
-      isArchived: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    vehicleRepo.setVehicle(testVeh1);
+    // -------------------------------------------------------------------------
+    // [1/5] Validar 403 Forbidden em DELETE para usuário sem permissão
+    // -------------------------------------------------------------------------
+    console.log('\n[1/5] Testando 403 Forbidden em DELETE para usuário sem DELETE_VEHICLE...');
+    const plate1 = `TST${Math.floor(1000 + Math.random() * 9000)}`;
+    const vehId1 = randomUUID();
+    cleanupVehicleIds.push(vehId1);
+
+    await db.execute(sql`
+      INSERT INTO vehicles (
+        id, company_id, plate, brand, model, color, fuel_type, category,
+        renavam, chassis, current_km, acquisition_value, current_value, rental_value_base,
+        year_fabrication, year_model, status, is_archived, created_at, updated_at
+      ) VALUES (
+        ${vehId1}, ${companyId}, ${plate1}, 'VW', 'Gol', 'Branco', 'Flex', 'Hatch / Sedan Compacto',
+        ${'REN' + Math.floor(100000000 + Math.random() * 900000000)},
+        ${'9BWAG45U6PT' + Math.floor(100000 + Math.random() * 900000)},
+        10000, 50000, 45000, 1500, 2022, 2023, 'AVAILABLE', false, now(), now()
+      )
+    `);
 
     currentPrincipal = {
-      userId: 'user-op',
+      userId: opUserId,
       companyId,
       name: 'Operador Readonly',
       role: 'OPERATIONAL',
       permissions: ['VIEW_VEHICLE'],
     };
 
-    const resForbidden = await fetch(`${baseUrl}/api/fleet/vehicles/${testVeh1.id}`, {
+    const resForbidden = await fetch(`${baseUrl}/api/fleet/vehicles/${vehId1}`, {
       method: 'DELETE',
     });
     assert.equal(resForbidden.status, 403, `Esperado 403 ao deletar sem permissão, obteve ${resForbidden.status}`);
     console.log('✓ 403 Forbidden validado com sucesso para usuário sem DELETE_VEHICLE.');
 
-    // 2. Validar 409 Conflict em DELETE quando veículo tem histórico comercial/financeiro
-    console.log('[2/5] Testando 409 Conflict em DELETE para veículo com histórico (contratos/CRs/multas)...');
+    // -------------------------------------------------------------------------
+    // [2/5] Validar 409 Conflict em DELETE quando veículo tem histórico (multa / recebível)
+    // -------------------------------------------------------------------------
+    console.log('\n[2/5] Testando 409 Conflict em DELETE para veículo com histórico comercial/operacional...');
     currentPrincipal = {
-      userId: 'user-admin',
+      userId: adminUserId,
       companyId,
-      name: 'Admin Frotas',
+      name: 'Admin Test',
       role: 'ADMIN',
       permissions: ['*'],
     };
 
-    mockHistoricalCounts = {
-      contracts_cnt: 1,
-      ar_cnt: 2,
-      ap_cnt: 0,
-      tt_cnt: 1,
-      wo_cnt: 0,
-      ft_cnt: 0,
-      ins_cnt: 0,
-      toll_cnt: 0,
-      sd_cnt: 0,
-    };
+    const ticketId = randomUUID();
+    await db.execute(sql`
+      INSERT INTO traffic_tickets (
+        id, company_id, vehicle_id, auto_number, amount, issue_date, status, canonical_ready, points, responsibility_version, created_at, updated_at
+      ) VALUES (
+        ${ticketId}, ${companyId}, ${vehId1}, ${'AUTO-' + ticketId.slice(0, 8)}, 195.23, now(), 'PENDING_IDENTIFICATION', false, 0, 0, now(), now()
+      )
+    `);
 
-    const resConflict = await fetch(`${baseUrl}/api/fleet/vehicles/${testVeh1.id}`, {
+    const resConflict = await fetch(`${baseUrl}/api/fleet/vehicles/${vehId1}`, {
       method: 'DELETE',
     });
     assert.equal(resConflict.status, 409, `Esperado 409 ao tentar deletar veículo com histórico, obteve ${resConflict.status}`);
-    const conflictBody = await resConflict.json() as any;
+    const conflictBody = (await resConflict.json()) as any;
     assert.match(conflictBody.error, /não é possível excluir definitivamente/i);
+
     // Garantir que veículo continua existindo no banco
-    const stillExists = await vehicleRepo.findByIdForCompany(companyId, testVeh1.id);
-    assert.ok(stillExists, 'Veículo não deve ser removido quando há registros vinculados');
-    console.log('✓ 409 Conflict validado com sucesso: bloqueio rigoroso contra exclusão de veículo com histórico.');
+    const stillVeh = (await db.execute(sql`SELECT count(*)::int as cnt FROM vehicles WHERE id = ${vehId1}`)).rows[0] as any;
+    assert.equal(Number(stillVeh.cnt), 1, 'Veículo não deve ser removido quando há registros vinculados');
+    console.log('✓ 409 Conflict validado: bloqueio rigoroso contra exclusão de veículo com histórico.');
 
-    // 3. Validar 200 OK em DELETE quando veículo foi cadastrado por engano (sem histórico comercial)
-    console.log('[3/5] Testando 200 OK em DELETE para veículo sem histórico (cadastro por engano)...');
-    mockHistoricalCounts = {
-      contracts_cnt: 0,
-      ar_cnt: 0,
-      ap_cnt: 0,
-      tt_cnt: 0,
-      wo_cnt: 0,
-      ft_cnt: 0,
-      ins_cnt: 0,
-      toll_cnt: 0,
-      sd_cnt: 0,
-    };
+    // Limpar o registro de histórico para permitir próximos testes
+    await db.execute(sql`DELETE FROM traffic_tickets WHERE id = ${ticketId}`);
 
-    const resSuccessDelete = await fetch(`${baseUrl}/api/fleet/vehicles/${testVeh1.id}`, {
+    // -------------------------------------------------------------------------
+    // [3/5] Validar 200 OK em DELETE de veículo limpo (cadastro via rota oficial) e AUDITORIA REAL DE TODAS AS 22 TABELAS
+    // -------------------------------------------------------------------------
+    console.log('\n[3/5] Testando 200 OK em DELETE de veículo criado pela rota oficial (cadastro por engano)...');
+    
+    // Inicializar catálogo de manutenção e ativar templates com intervalos válidos (padrão de produção)
+    const { MaintenancePlanTemplateAuthority } = await import('../maintenancePlanTemplateAuthority');
+    await MaintenancePlanTemplateAuthority.list(currentPrincipal);
+    await db.execute(sql`
+      UPDATE maintenance_plan_templates 
+      SET active = true, interval_km = 10000 
+      WHERE company_id = ${companyId}
+    `);
+
+    const plateClean = `CLN${Math.floor(1000 + Math.random() * 9000)}`;
+    const renavamClean = `${Math.floor(10000000000 + Math.random() * 90000000000)}`;
+    const chassisClean = `9BWAG45U6PT${Math.floor(100000 + Math.random() * 900000)}`;
+
+    const resCreate = await fetch(`${baseUrl}/api/fleet/vehicles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plate: plateClean,
+        brand: 'Fiat',
+        model: 'Mobi',
+        yearFabrication: 2023,
+        yearModel: 2024,
+        color: 'Branco',
+        renavam: renavamClean,
+        chassis: chassisClean,
+        currentKm: 5000,
+        fuelType: 'Flex',
+        category: 'Hatch / Sedan Compacto',
+        acquisitionValue: 45000,
+        currentValue: 42000,
+        rentalValueBase: 1300,
+        ownerType: 'COMPANY',
+      }),
+    });
+    assert.equal(resCreate.status, 201, `Falha ao criar veículo via POST: status ${resCreate.status}`);
+    const createdBody = (await resCreate.json()) as any;
+    const cleanVehId = createdBody.item.id;
+    cleanupVehicleIds.push(cleanVehId);
+
+    // Verificar que o próprio cadastro gerou planos de manutenção e histórico de propriedade no banco real
+    const maintPlansBefore = (await db.execute(sql`SELECT count(*)::int as cnt FROM maintenance_plans WHERE vehicle_id = ${cleanVehId}`)).rows[0] as any;
+    assert.ok(Number(maintPlansBefore.cnt) > 0, `O cadastro deveria ter criado planos de manutenção automáticos (criou ${maintPlansBefore.cnt})`);
+    console.log(`  -> Confirmado: POST /api/fleet/vehicles gerou ${maintPlansBefore.cnt} planos de manutenção automáticos.`);
+
+    // Executar DELETE
+    const resDeleteClean = await fetch(`${baseUrl}/api/fleet/vehicles/${cleanVehId}`, {
       method: 'DELETE',
     });
-    assert.equal(resSuccessDelete.status, 200, `Esperado 200 ao deletar veículo sem histórico, obteve ${resSuccessDelete.status}`);
-    const successBody = await resSuccessDelete.json() as any;
-    assert.equal(successBody.success, true);
-    // Garantir que foi removido do repositório
-    const deletedVeh = await vehicleRepo.findByIdForCompany(companyId, testVeh1.id);
-    assert.equal(deletedVeh, null, 'Veículo sem histórico deve ser removido com sucesso');
-    // Garantir que as tabelas operacionais foram limpas para evitar órfãos
-    assert.ok(executedRawQueries.some((q) => q.includes('vehicle_lifecycle_events')), 'Deveria limpar vehicle_lifecycle_events');
-    assert.ok(executedRawQueries.some((q) => q.includes('vehicle_km_records')), 'Deveria limpar vehicle_km_records');
-    assert.ok(executedRawQueries.some((q) => q.includes('vehicle_inspections')), 'Deveria limpar vehicle_inspections');
-    assert.ok(executedRawQueries.some((q) => q.includes('vehicle_document_intakes')), 'Deveria limpar vehicle_document_intakes');
-    assert.ok(executedRawQueries.some((q) => q.includes('vehicle_ownership_history')), 'Deveria limpar vehicle_ownership_history');
-    console.log('✓ 200 OK validado: exclusão segura sem deixar órfãos nas tabelas operacionais.');
+    assert.equal(resDeleteClean.status, 200, `Esperado 200 ao deletar veículo sem histórico, obteve ${resDeleteClean.status}`);
+    const deleteCleanBody = (await resDeleteClean.json()) as any;
+    assert.equal(deleteCleanBody.success, true);
 
-    // 4. Validar 201 OK em restore de veículo SOLD e de veículo ARCHIVED
-    console.log('[4/5] Testando 201 OK ao restaurar veículo SOLD e veículo ARCHIVED (FGL6I36)...');
-    const soldVehicle: Vehicle = {
-      id: 'veh-sold-1',
-      companyId,
-      plate: 'FGL6I36',
-      renavam: '99887766554',
-      chassis: '9BWAG45U6PT099999',
-      brand: 'Fiat',
-      model: 'Mobi',
-      color: 'Preto',
-      fuelType: 'Flex',
-      category: 'Econômico',
-      currentKm: 35000,
-      acquisitionValue: 40000,
-      currentValue: 38000,
-      rentalValueBase: 1200,
-      yearFabrication: 2021,
-      yearModel: 2022,
-      status: VehicleStatus.SOLD,
-      isArchived: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    vehicleRepo.setVehicle(soldVehicle);
+    // Auditoria exaustiva em banco real: consultar todas as tabelas com a coluna vehicle_id
+    console.log('  -> Auditando integridade referencial em 100% das tabelas do banco com a coluna vehicle_id...');
+    const tablesResult = await db.execute(sql`
+      SELECT table_name 
+      FROM information_schema.columns 
+      WHERE column_name = 'vehicle_id' AND table_schema = 'public' 
+      ORDER BY table_name;
+    `);
+    const tablesWithVehicleId = (tablesResult.rows || []).map((r: any) => String(r.table_name));
+    assert.equal(tablesWithVehicleId.length, 22, `Esperado 22 tabelas com vehicle_id, encontrado ${tablesWithVehicleId.length}`);
 
-    const resRestoreSold = await fetch(`${baseUrl}/api/fleet/vehicles/${soldVehicle.id}/restore`, {
+    for (const table of tablesWithVehicleId) {
+      const q = sql.raw(`SELECT count(*)::int as cnt FROM "${table}" WHERE vehicle_id = '${cleanVehId}'`);
+      const row = ((await db.execute(q)).rows?.[0] || {}) as any;
+      const count = Number(row.cnt || 0);
+      assert.equal(count, 0, `Tabela '${table}' contém ${count} registro(s) órfão(s) para o veículo excluído!`);
+    }
+
+    const vehStillInDb = (await db.execute(sql`SELECT count(*)::int as cnt FROM vehicles WHERE id = ${cleanVehId}`)).rows[0] as any;
+    assert.equal(Number(vehStillInDb.cnt), 0, 'Veículo não deve existir na tabela vehicles');
+    console.log(`✓ 200 OK validado no banco real: zero órfãos em todas as 22 tabelas com vehicle_id!`);
+
+    // -------------------------------------------------------------------------
+    // [4/5] Validar 201 OK em restore de veículo SOLD e de veículo ARCHIVED
+    // -------------------------------------------------------------------------
+    console.log('\n[4/5] Testando 201 OK ao restaurar veículo SOLD e veículo ARCHIVED (FGL6I36)...');
+    const soldVehId = randomUUID();
+    cleanupVehicleIds.push(soldVehId);
+    await db.execute(sql`
+      INSERT INTO vehicles (
+        id, company_id, plate, brand, model, color, fuel_type, category,
+        renavam, chassis, current_km, acquisition_value, current_value, rental_value_base,
+        year_fabrication, year_model, status, is_archived, created_at, updated_at
+      ) VALUES (
+        ${soldVehId}, ${companyId}, 'FGL6I36', 'Fiat', 'Mobi', 'Preto', 'Flex', 'Hatch / Sedan Compacto',
+        ${'REN' + Math.floor(100000000 + Math.random() * 900000000)},
+        ${'9BWAG45U6PT' + Math.floor(100000 + Math.random() * 900000)},
+        35000, 40000, 38000, 1200, 2021, 2022, 'SOLD', false, now(), now()
+      )
+    `);
+
+    const resRestoreSold = await fetch(`${baseUrl}/api/fleet/vehicles/${soldVehId}/restore`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -276,36 +267,27 @@ async function runVehicleRestoreAndDeleteIntegration() {
       }),
     });
     assert.equal(resRestoreSold.status, 201, `Esperado 201 ao restaurar veículo SOLD, obteve ${resRestoreSold.status}`);
-    const restoredSold = await vehicleRepo.findByIdForCompany(companyId, soldVehicle.id);
-    assert.equal(restoredSold?.status, VehicleStatus.AVAILABLE, 'Status do veículo após restore deve ser AVAILABLE');
-    assert.equal(restoredSold?.isArchived, false, 'isArchived deve ser false');
+    const restoredSoldDb = (await db.execute(sql`SELECT status, is_archived FROM vehicles WHERE id = ${soldVehId}`)).rows[0] as any;
+    assert.equal(restoredSoldDb.status, 'AVAILABLE', 'Status do veículo após restore deve ser AVAILABLE');
+    assert.equal(restoredSoldDb.is_archived, false, 'is_archived deve ser false');
 
     // Testar com veículo ARCHIVED
-    const archivedVehicle: Vehicle = {
-      id: 'veh-archived-1',
-      companyId,
-      plate: 'ARC1A23',
-      renavam: '11223344556',
-      chassis: '9BWAG45U6PT088888',
-      brand: 'Chevrolet',
-      model: 'Onix',
-      color: 'Prata',
-      fuelType: 'Flex',
-      category: 'Padrão',
-      currentKm: 25000,
-      acquisitionValue: 55000,
-      currentValue: 52000,
-      rentalValueBase: 1600,
-      yearFabrication: 2022,
-      yearModel: 2023,
-      status: VehicleStatus.ARCHIVED,
-      isArchived: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    vehicleRepo.setVehicle(archivedVehicle);
+    const archivedVehId = randomUUID();
+    cleanupVehicleIds.push(archivedVehId);
+    await db.execute(sql`
+      INSERT INTO vehicles (
+        id, company_id, plate, brand, model, color, fuel_type, category,
+        renavam, chassis, current_km, acquisition_value, current_value, rental_value_base,
+        year_fabrication, year_model, status, is_archived, created_at, updated_at
+      ) VALUES (
+        ${archivedVehId}, ${companyId}, 'ARC1A23', 'Chevrolet', 'Onix', 'Prata', 'Flex', 'Hatch / Sedan Compacto',
+        ${'REN' + Math.floor(100000000 + Math.random() * 900000000)},
+        ${'9BWAG45U6PT' + Math.floor(100000 + Math.random() * 900000)},
+        25000, 55000, 52000, 1600, 2022, 2023, 'ARCHIVED', true, now(), now()
+      )
+    `);
 
-    const resRestoreArchived = await fetch(`${baseUrl}/api/fleet/vehicles/${archivedVehicle.id}/restore`, {
+    const resRestoreArchived = await fetch(`${baseUrl}/api/fleet/vehicles/${archivedVehId}/restore`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -314,14 +296,25 @@ async function runVehicleRestoreAndDeleteIntegration() {
       }),
     });
     assert.equal(resRestoreArchived.status, 201, `Esperado 201 ao restaurar veículo ARCHIVED, obteve ${resRestoreArchived.status}`);
-    const restoredArchived = await vehicleRepo.findByIdForCompany(companyId, archivedVehicle.id);
-    assert.equal(restoredArchived?.status, VehicleStatus.AVAILABLE, 'Status do veículo arquivado após restore deve ser AVAILABLE');
-    assert.equal(restoredArchived?.isArchived, false, 'isArchived deve ser false');
-    console.log('✓ 201 OK validado: veículos SOLD e ARCHIVED retornam com sucesso ao estoque como AVAILABLE.');
+    const restoredArchivedDb = (await db.execute(sql`SELECT status, is_archived FROM vehicles WHERE id = ${archivedVehId}`)).rows[0] as any;
+    assert.equal(restoredArchivedDb.status, 'AVAILABLE', 'Status do veículo arquivado após restore deve ser AVAILABLE');
+    assert.equal(restoredArchivedDb.is_archived, false, 'is_archived deve ser false');
 
-    // 5. Validar 409 Conflict ao tentar restaurar veículo que já está AVAILABLE
-    console.log('[5/5] Testando 409 Conflict ao tentar restaurar veículo que já está AVAILABLE...');
-    const resAlreadyAvailable = await fetch(`${baseUrl}/api/fleet/vehicles/${restoredArchived!.id}/restore`, {
+    // Validar evento de ciclo de vida gravado no banco real
+    const eventsRes = await db.execute(sql`
+      SELECT action, reason FROM vehicle_lifecycle_events WHERE vehicle_id IN (${soldVehId}, ${archivedVehId}) ORDER BY created_at ASC
+    `);
+    assert.equal(eventsRes.rows.length, 2, 'Deve ter gravado 2 eventos de ciclo de vida RESTORED');
+    for (const ev of eventsRes.rows as any[]) {
+      assert.equal(ev.action, 'RESTORED');
+    }
+    console.log('✓ 201 OK validado no banco real: veículos SOLD e ARCHIVED retornam com sucesso ao estoque como AVAILABLE.');
+
+    // -------------------------------------------------------------------------
+    // [5/5] Validar 409 Conflict ao tentar restaurar veículo que já está AVAILABLE
+    // -------------------------------------------------------------------------
+    console.log('\n[5/5] Testando 409 Conflict ao tentar restaurar veículo que já está AVAILABLE...');
+    const resAlreadyAvailable = await fetch(`${baseUrl}/api/fleet/vehicles/${archivedVehId}/restore`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -330,19 +323,38 @@ async function runVehicleRestoreAndDeleteIntegration() {
       }),
     });
     assert.equal(resAlreadyAvailable.status, 409, `Esperado 409 para veículo já AVAILABLE, obteve ${resAlreadyAvailable.status}`);
-    const alreadyAvailableBody = await resAlreadyAvailable.json() as any;
+    const alreadyAvailableBody = (await resAlreadyAvailable.json()) as any;
     assert.match(alreadyAvailableBody.error, /only a sold or archived vehicle can return to stock/i);
     console.log('✓ 409 Conflict validado: bloqueia tentativa de retorno de veículo já ativo.');
 
-    console.log('\n--- TODOS OS 5 CASOS DE TESTE PASSARAM COM SUCESSO! ---');
+    console.log('\n================================================================================');
+    console.log('=== TODOS OS 5 CASOS DE TESTE PASSARAM COM SUCESSO CONTRA O POSTGRES REAL! ===');
+    console.log('================================================================================\n');
   } finally {
-    (UnitOfWork as any).run = origRun;
+    // Limpeza de fixtures do teste
+    try {
+      for (const vId of cleanupVehicleIds) {
+        await db.execute(sql`DELETE FROM maintenance_plans WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_km_records WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_inspections WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_document_intakes WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicle_ownership_history WHERE vehicle_id = ${vId}`);
+        await db.execute(sql`DELETE FROM vehicles WHERE id = ${vId}`);
+      }
+      await db.execute(sql`DELETE FROM maintenance_plan_templates WHERE company_id = ${companyId}`);
+      await db.execute(sql`DELETE FROM users WHERE company_id = ${companyId}`);
+      await db.execute(sql`DELETE FROM companies WHERE id = ${companyId}`);
+      console.log('Limpeza de dados de teste concluída com sucesso (zero resíduos).');
+    } catch (cleanupErr) {
+      console.warn('Aviso ao limpar dados de teste:', cleanupErr);
+    }
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    process.exit(0);
   }
 }
 
 runVehicleRestoreAndDeleteIntegration().catch((err) => {
-  console.error('FALHA NO TESTE DE INTEGRAÇÃO:', err);
+  console.error('FALHA NO TESTE DE INTEGRAÇÃO REAL:', err);
   process.exit(1);
 });
