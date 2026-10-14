@@ -63,7 +63,7 @@ assert.match(client, /createdByName\?: string;/, 'lifecycle client must expose t
 assert.match(lifecycleMigration, /'RESTORED'/, 'existing lifecycle schema must already allow RESTORED without a new migration');
 assert.match(routes, /app\.post\('\/api\/fleet\/vehicles\/:id\/restore'/, 'sold vehicle reentry must use a dedicated server route');
 assert.match(routes, /findByIdForCompanyWithLock/, 'reentry must lock the authoritative vehicle row');
-assert.match(routes, /existing\.status !== VehicleStatus\.SOLD \|\| existing\.isArchived/, 'reentry must accept only sold, non-archived vehicles');
+assert.match(routes, /existing\.status === VehicleStatus\.SOLD \|\| existing\.status === VehicleStatus\.ARCHIVED \|\| existing\.isArchived/, 'reentry must accept sold or archived vehicles');
 assert.match(routes, /findActiveByVehicle/, 'reentry must derive active contract state server-side');
 assert.match(routes, /hasBlockingWorkOrder/, 'reentry must derive blocking maintenance server-side');
 assert.match(routes, /status: VehicleStatus\.AVAILABLE,[\s\S]*isArchived: false/, 'reentry must restore the same vehicle row to available inventory');

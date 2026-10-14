@@ -727,6 +727,26 @@ jobs:
       - name: Modal layout and unsaved-changes guard invariants
         run: npm run test:modal-layout-ux
 
+      # AUTOERP-95 (revisao). Este teste usa PGlite em memoria, nao toca banco nenhum do
+      # ERP, e mesmo assim estava orfao desde sempre. Entre 09/10 e 13/10 ele ficou vermelho
+      # em silencio porque o cache do AUTOERP-85 fez a segunda chamada de ContractClient.list()
+      # devolver o resultado anterior, e a validacao de payload que ele cobra nunca rodava.
+      - name: Contract signature list projection and payload validation
+        run: npm run test:contract-signature-list
+
+      # AUTOERP-95 (revisao - varredura de orfaos hermeticos).
+      - name: Migration prefix collision and repository guard invariants
+        run: npm run test:migration-prefix-collision
+
+      - name: Browser tab branding and multitenant title invariants
+        run: npm run test:browser-tab-branding
+
+      - name: Contract PDF visual overlays regression
+        run: npm run test:contract-pdf-overlays
+
+      - name: API client contract regression
+        run: npm run test:api-clients
+
       - name: Lazy module recovery invariants
         shell: bash
         run: |
@@ -937,6 +957,7 @@ jobs:
           npx tsx src/components/fleet/__tests__/vehicleDetailsPresentationTestRunner.ts
           npx tsx src/domain/documents/__tests__/documentPolicyTestRunner.ts
           npx tsx src/server/__tests__/maintenancePreventiveIntegration.ts
+          npx tsx src/server/__tests__/vehicleRestoreAndDeleteIntegration.ts
           npx tsx src/server/__tests__/maintenanceAuthorityIntegration.ts
           npx tsx src/server/__tests__/recurringAuthorityIntegration.ts
           npx tsx src/server/__tests__/trafficTicketAuthorityIntegration.ts

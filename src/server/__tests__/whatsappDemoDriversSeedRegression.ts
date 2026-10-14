@@ -22,7 +22,7 @@ try {
   // Ignora se não existir
 }
 
-const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
+const neonUrl = process.env.DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL;
 if (neonUrl && !process.env.DATABASE_URL) {
   process.env.DATABASE_URL = neonUrl;
   process.env.USE_PGLITE = 'false';

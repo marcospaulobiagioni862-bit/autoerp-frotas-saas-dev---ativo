@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { InspectionComparisonPair, InspectionPhotoSlotKey } from '../../api/vehicleInspectionClient';
+import { VehicleInspectionClient, type InspectionComparisonPair, type InspectionPhotoSlotKey } from '../../api/vehicleInspectionClient';
 import { InspectionCarDamageDiagram } from './InspectionCarDamageDiagram';
 import { X, ArrowRightLeft, Fuel, Gauge, AlertTriangle, ShieldCheck, Share2, CheckCircle2 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -27,6 +27,9 @@ export function InspectionComparatorModal({
 }: InspectionComparatorModalProps) {
  const [activeSlot, setActiveSlot] = useState<InspectionPhotoSlotKey>('FRONT');
  const [viewTab, setViewTab] = useState<'photos' | 'damages' | 'settlement'>('photos');
+ const [settling, setSettling] = useState(false);
+ const [settleError, setSettleError] = useState<string | null>(null);
+ const [settledSuccess, setSettledSuccess] = useState<boolean>(comparison.entryInspection?.settlement?.status === 'SETTLED');
 
  const {
  vehicle,
@@ -62,6 +65,39 @@ export function InspectionComparatorModal({
  `Total de Desvios: R$ ${totalDeviations.toFixed(2)}`
  );
  window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+ };
+
+ const handleExecuteSettle = async () => {
+ if (!entryInspection?.id) {
+ setSettleError('Vistoria de devolução não identificada para acerto.');
+ return;
+ }
+ setSettling(true);
+ setSettleError(null);
+ try {
+ const depositAvail = settlement?.securityDepositAvailable || 0;
+ const settlementPayload = {
+ damagesCost: settlement?.damagesCost || 0,
+ washCost: settlement?.washCost || 0,
+ washType: settlement?.washType,
+ excessKmCost: settlement?.excessKmCost || excessKmCost || 0,
+ fuelDeltaCost: settlement?.fuelDeltaCost || fuelCost || 0,
+ fuelCost: fuelCost || settlement?.fuelDeltaCost || 0,
+ totalDeviations: settlement?.totalDeviations || totalDeviations,
+ securityDepositDeducted: settlement?.securityDepositDeducted || (totalDeviations <= depositAvail ? totalDeviations : depositAvail),
+ remainingDepositRefund: settlement?.remainingDepositRefund || (totalDeviations <= depositAvail ? (depositAvail - totalDeviations) : 0),
+ receivableAmount: settlement?.receivableAmount || (totalDeviations > depositAvail ? (totalDeviations - depositAvail) : 0),
+ };
+ await VehicleInspectionClient.settle(entryInspection.id, settlementPayload);
+ setSettledSuccess(true);
+ if (onSettle) {
+ onSettle();
+ }
+ } catch (err) {
+ setSettleError(err instanceof Error ? err.message : 'Falha ao processar acerto da vistoria.');
+ } finally {
+ setSettling(false);
+ }
  };
 
  return (
@@ -331,10 +367,31 @@ export function InspectionComparatorModal({
  </div>
  </div>
 
- {onSettle && (
+ {settleError && (
+ <div className="rounded-lg border border-error-border bg-error-bg p-3 text-xs text-error-text">
+ {settleError}
+ </div>
+ )}
+ {settledSuccess ? (
+ <div className="rounded-xl border border-success-border bg-success-bg p-4 text-xs text-success-text flex flex-wrap items-center justify-between gap-3">
+ <div className="flex items-center gap-2">
+ <CheckCircle2 className="w-5 h-5 text-success-icon flex-shrink-0" />
+ <span>Acerto financeiro efetivado com sucesso. Veículo atualizado e títulos gerados no Contas a Receber quando aplicável.</span>
+ </div>
+ <Button size="sm" variant="outline" onClick={(event) => requestGuardedClose(event, onClose)}>
+ Fechar
+ </Button>
+ </div>
+ ) : (
  <div className="flex justify-end gap-2">
- <Button variant="primary" onClick={onSettle} className="gap-2">
- <CheckCircle2 className="w-4 h-4" /> Efetivar Acerto e Atualizar Frota
+ <Button
+ variant="primary"
+ onClick={() => void handleExecuteSettle()}
+ disabled={settling}
+ className="gap-2"
+ >
+ <CheckCircle2 className="w-4 h-4" />
+ {settling ? 'Efetivando Acerto...' : 'Efetivar Acerto e Atualizar Frota'}
  </Button>
  </div>
  )}

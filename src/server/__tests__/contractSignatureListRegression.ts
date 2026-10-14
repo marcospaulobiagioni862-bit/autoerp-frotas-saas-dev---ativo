@@ -4,6 +4,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import { PostgresContractRepository } from '../../db/repositories/postgresContractRepository';
 import { ContractClient } from '../../api/contractClient';
+import { invalidateCache } from '../../api/requestCache';
 import { contractStatusLabel } from '../../components/contracts/ContractsManagement';
 import { ContractStatus } from '../../types/enums';
 
@@ -80,6 +81,12 @@ try {
   assert.equal(contracts.find(contract => contract.id === 'signed')!.status, ContractStatus.AWAITING_SIGNATURE);
   assert.deepEqual((await db.query('SELECT * FROM contracts ORDER BY id')).rows, before.rows, 'no contract status or other field may change');
   globalThis.fetch = (async () => new Response(JSON.stringify({ items: [{ ...projected[0], hasSignedEvidence: 'true' }] }))) as typeof fetch;
+  // O AUTOERP-85 pos cache de 10s em ContractClient.list(). Sem invalidar, a segunda
+  // chamada devolve o resultado bom da linha de cima, o fetch malformado nunca acontece
+  // e a validacao de payload nunca roda - o teste passava a cobrar uma rejeicao que nao
+  // tinha como ocorrer. Isto ficou quebrado de 09/10 a 13/10 sem ninguem ver, porque este
+  // arquivo nunca foi registrado em package.json nem na CI (AUTOERP-95).
+  invalidateCache('contracts');
   await assert.rejects(() => ContractClient.list(), /Invalid Contract payload/);
   console.log('contract signature list regression: PASS (canonical projection, tenant isolation, archived/superseded evidence, labels, no activation)');
 } finally {

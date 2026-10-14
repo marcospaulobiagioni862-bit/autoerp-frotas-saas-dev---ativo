@@ -24,7 +24,7 @@ import { MaintenancePlanTemplateAuthority } from './maintenancePlanTemplateAutho
 import { findVehicleIdentityConflict, normalizeVehicleIdentity, vehicleIdentityConflictMessage } from './vehicleIdentityGuard';
 import { getVehicleDetailsSummary, VehicleDetailsNotFoundError } from './vehicleDetailsAuthority';
 
-type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE';
+type VehicleAction = 'VIEW_VEHICLE' | 'CREATE_VEHICLE' | 'EDIT_VEHICLE' | 'CHANGE_VEHICLE_STATUS' | 'RECORD_VEHICLE_KM' | 'RECORD_KM' | 'ARCHIVE_VEHICLE' | 'DELETE_VEHICLE';
 
 const CANONICAL_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'FINANCIAL', 'OPERATIONAL', 'READONLY']);
 const DEFAULT_WRITE_ROLES = new Set(['ADMIN', 'MANAGER', 'OPERATIONAL_MANAGER', 'OPERATIONAL']);
@@ -670,6 +670,89 @@ export function registerVehicleRoutes(app: Express): void {
         return updated;
       });
       res.json({ item });
+    } catch (error) { sendVehicleError(res, error); }
+  });
+
+  app.delete('/api/fleet/vehicles/:id', async (req: Request, res: Response) => {
+    const principal = requireVehiclePrincipal(req, res, 'DELETE_VEHICLE');
+    if (!principal) return;
+    try {
+      await UnitOfWork.run(principal.companyId, async (txContext) => {
+        const repo = txContext.getVehicleRepo();
+        const existing = await repo.findByIdForCompanyWithLock(principal.companyId, req.params.id);
+        if (!existing) throw new VehicleNotFoundError();
+
+        const raw = txContext.getRawTransaction();
+        const { sql } = await import('drizzle-orm');
+
+        // Impede exclusão definitiva se houver qualquer histórico operacional ou financeiro
+        const checkResult = await raw.execute(sql`
+          SELECT 
+            (SELECT COUNT(*) FROM contracts WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS contracts_cnt,
+            (SELECT COUNT(*) FROM account_receivables WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ar_cnt,
+            (SELECT COUNT(*) FROM account_payables WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ap_cnt,
+            (SELECT COUNT(*) FROM traffic_tickets WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tt_cnt,
+            (SELECT COUNT(*) FROM work_orders WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS wo_cnt,
+            (SELECT COUNT(*) FROM financial_transactions WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ft_cnt,
+            (SELECT COUNT(*) FROM insurances WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS ins_cnt,
+            (SELECT COUNT(*) FROM toll_passages WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS toll_cnt,
+            (SELECT COUNT(*) FROM security_deposits WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS sd_cnt,
+            (SELECT COUNT(*) FROM maintenance WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS maint_cnt,
+            (SELECT COUNT(*) FROM tire_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tire_cnt,
+            (SELECT COUNT(*) FROM oil_change_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS oil_cnt,
+            (SELECT COUNT(*) FROM trackers WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS tracker_cnt,
+            (SELECT COUNT(*) FROM recurring_rules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS rec_cnt,
+            (SELECT COUNT(*) FROM part_stock_movements WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}) AS part_cnt
+        `);
+        const counts = (checkResult as any).rows?.[0] || (checkResult as any)[0] || {};
+        const totalHistoricalRecords = 
+          Number(counts.contracts_cnt || 0) + 
+          Number(counts.ar_cnt || 0) + 
+          Number(counts.ap_cnt || 0) + 
+          Number(counts.tt_cnt || 0) + 
+          Number(counts.wo_cnt || 0) +
+          Number(counts.ft_cnt || 0) +
+          Number(counts.ins_cnt || 0) +
+          Number(counts.toll_cnt || 0) +
+          Number(counts.sd_cnt || 0) +
+          Number(counts.maint_cnt || 0) +
+          Number(counts.tire_cnt || 0) +
+          Number(counts.oil_cnt || 0) +
+          Number(counts.tracker_cnt || 0) +
+          Number(counts.rec_cnt || 0) +
+          Number(counts.part_cnt || 0);
+
+        if (totalHistoricalRecords > 0 || existing.currentContractId || existing.currentDriverId) {
+          throw new VehicleConflictError('Não é possível excluir definitivamente este veículo pois existem registros históricos vinculados (contratos, financeiro, multas ou manutenções). Para reincorporá-lo à frota ativa, utilize a opção "Retornar ao estoque / Recompra".');
+        }
+
+        // Se for um cadastro novo/equívoco sem histórico, remove os registros operacionais vinculados
+        await raw.execute(sql`DELETE FROM maintenance_plans WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_lifecycle_events WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_km_records WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_km_reading_schedules WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_inspections WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_document_intakes WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+        await raw.execute(sql`DELETE FROM vehicle_ownership_history WHERE company_id = ${principal.companyId} AND vehicle_id = ${existing.id}`);
+
+        const deleted = await repo.deleteForCompany(existing.id, principal.companyId);
+        if (!deleted) throw new VehicleNotFoundError();
+
+        const now = new Date().toISOString();
+        await txContext.getAuditLogRepo().create({
+          id: randomUUID(),
+          companyId: principal.companyId,
+          entityName: 'Vehicle',
+          entityId: existing.id,
+          action: AuditAction.DELETE,
+          previousState: JSON.stringify(existing),
+          newState: JSON.stringify({ deleted: true, plate: existing.plate }),
+          userId: principal.userId,
+          userName: principal.name,
+          timestamp: now,
+        });
+      });
+      res.json({ success: true, message: 'Veículo excluído com sucesso.' });
     } catch (error) { sendVehicleError(res, error); }
   });
 }

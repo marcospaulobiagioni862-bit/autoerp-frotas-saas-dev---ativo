@@ -138,6 +138,9 @@ export function VehicleInspectionWizardModal({
  const [signatureRefusalReason, setSignatureRefusalReason] = useState('');
  const [signatureDataUrl, setSignatureDataUrl] = useState('');
  const [submitting, setSubmitting] = useState(false);
+ const [uploadStatusText, setUploadStatusText] = useState<string | null>(null);
+ const [createdInspection, setCreatedInspection] = useState<VehicleInspection | null>(null);
+ const [failedSlots, setFailedSlots] = useState<string[]>([]);
  const [error, setError] = useState<string | null>(null);
 
  const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -244,12 +247,16 @@ export function VehicleInspectionWizardModal({
  const handleComplete = async () => {
  setSubmitting(true);
  setError(null);
+ setUploadStatusText(null);
  try {
  const km = Number(odometer);
  if (!Number.isInteger(km) || km < currentKm) {
  throw new Error('A KM informada não pode ser menor que a KM atual do veículo.');
  }
 
+ let targetInspection = createdInspection;
+ if (!targetInspection) {
+ setUploadStatusText('Registrando vistoria no sistema...');
  const photoList: InspectionPhotoSlot[] = (
  Object.entries(photos) as Array<[InspectionPhotoSlotKey, { dataUrl: string; file?: File }]>
  ).map(([key, item]) => ({
@@ -262,7 +269,7 @@ export function VehicleInspectionWizardModal({
  timestamp: new Date().toISOString(),
  }));
 
- const created = await VehicleInspectionClient.create(vehicleId, {
+ targetInspection = await VehicleInspectionClient.create(vehicleId, {
  inspectionType: type,
  odometer: km,
  fuelLevel,
@@ -288,16 +295,24 @@ export function VehicleInspectionWizardModal({
  signatureRefused,
  signatureRefusalReason: signatureRefused ? signatureRefusalReason.trim() : undefined,
  });
+ setCreatedInspection(targetInspection);
+ }
 
  // Fotos e assinatura sobem pelo caminho de anexo do proprio sistema (corpo
  // binario, limite proprio de 10MB), nunca dentro do JSON da vistoria.
  const falhas: string[] = [];
- for (const [slot, item] of Object.entries(photos) as Array<[InspectionPhotoSlotKey, { dataUrl: string; file?: File }]>) {
+ const slotsEntries = Object.entries(photos) as Array<[InspectionPhotoSlotKey, { dataUrl: string; file?: File }]>;
+ const slotsToUpload = slotsEntries.filter(([slot, item]) => item.file && (failedSlots.length === 0 || failedSlots.includes(slot)));
+
+ let photoIndex = 1;
+ for (const [slot, item] of slotsToUpload) {
  if (!item.file) continue;
+ const slotLabel = PHOTO_SLOTS.find((s) => s.key === slot)?.label || slot;
+ setUploadStatusText(`Enviando foto (${photoIndex} de ${slotsToUpload.length}): ${slotLabel}...`);
  try {
  await AttachmentClient.upload({
  entityType: 'VehicleInspection',
- entityId: created.id,
+ entityId: targetInspection.id,
  fileName: `vistoria-${slot.toLowerCase()}.jpg`,
  mimeType: 'image/jpeg',
  documentType: 'INSPECTION_PHOTO',
@@ -305,15 +320,18 @@ export function VehicleInspectionWizardModal({
  content: item.file,
  });
  } catch {
- falhas.push(PHOTO_SLOTS.find((s) => s.key === slot)?.label || slot);
+ falhas.push(slot);
  }
+ photoIndex++;
  }
- if (signatureDataUrl) {
+
+ if (signatureDataUrl && (failedSlots.length === 0 || failedSlots.includes('SIGNATURE'))) {
+ setUploadStatusText('Enviando assinatura do motorista...');
  try {
  const blob = await (await fetch(signatureDataUrl)).blob();
  await AttachmentClient.upload({
  entityType: 'VehicleInspection',
- entityId: created.id,
+ entityId: targetInspection.id,
  fileName: 'assinatura-motorista.png',
  mimeType: 'image/png',
  documentType: 'INSPECTION_SIGNATURE',
@@ -321,20 +339,26 @@ export function VehicleInspectionWizardModal({
  content: blob,
  });
  } catch {
- falhas.push('Assinatura do motorista');
+ falhas.push('SIGNATURE');
  }
  }
+
+ setFailedSlots(falhas);
+
  if (falhas.length > 0) {
- // A vistoria FOI salva; o que falhou foi o envio de imagem. Dizer isso com
- // clareza vale mais do que um erro generico: o operador precisa saber que
- // nao deve refazer tudo, e sim reenviar as imagens que faltaram.
- setError(`Vistoria salva, mas estas imagens nao subiram: ${falhas.join(', ')}. Abra a vistoria e reenvie.`);
+ const nomesFalhas = falhas.map(
+ (k) => (k === 'SIGNATURE' ? 'Assinatura do motorista' : PHOTO_SLOTS.find((s) => s.key === k)?.label || k)
+ );
+ setError(`Vistoria gravada, mas houve instabilidade no upload de: ${nomesFalhas.join(', ')}. Você pode reenviar agora ou concluir e reenviar depois pelo painel.`);
+ return;
  }
- onSuccess(created);
+
+ onSuccess(targetInspection);
  } catch (e) {
  setError(e instanceof Error ? e.message : 'Falha ao salvar vistoria.');
  } finally {
  setSubmitting(false);
+ setUploadStatusText(null);
  }
  };
 
@@ -897,6 +921,28 @@ export function VehicleInspectionWizardModal({
  >
  Avançar <ChevronRight className="w-4 h-4" />
  </Button>
+ ) : failedSlots.length > 0 && createdInspection ? (
+ <div className="flex flex-wrap items-center gap-2">
+ <Button
+ variant="outline"
+ size="sm"
+ onClick={() => onSuccess(createdInspection)}
+ disabled={submitting}
+ className="gap-1 text-xs"
+ >
+ Concluir e fechar
+ </Button>
+ <Button
+ variant="primary"
+ size="sm"
+ onClick={() => void handleComplete()}
+ disabled={submitting}
+ className="gap-1 text-xs bg-action-primary hover:bg-action-primary-hover"
+ >
+ <CheckCircle2 className="w-4 h-4" />
+ {submitting ? (uploadStatusText || 'Reenviando...') : `Reenviar itens pendentes (${failedSlots.length})`}
+ </Button>
+ </div>
  ) : (
  <Button
  variant="primary"
@@ -906,7 +952,7 @@ export function VehicleInspectionWizardModal({
  className="gap-1 text-xs bg-action-primary hover:bg-action-primary-hover"
  >
  <CheckCircle2 className="w-4 h-4" />
- {submitting ? 'Salvando Vistoria...' : 'Concluir e Salvar Vistoria'}
+ {submitting ? (uploadStatusText || 'Salvando Vistoria...') : 'Concluir e Salvar Vistoria'}
  </Button>
  )}
  </div>

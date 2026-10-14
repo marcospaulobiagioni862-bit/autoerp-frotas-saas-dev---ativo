@@ -1,6 +1,6 @@
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
 import React,{useEffect,useMemo,useState} from 'react';
-import { ClipboardCheck,Plus,Smartphone,ArrowRightLeft } from 'lucide-react';
+import { ClipboardCheck,Plus,Smartphone,ArrowRightLeft,Camera,Shield,Eye,AlertTriangle,CheckCircle2,X } from 'lucide-react';
 import { VehicleInspectionClient,type VehicleInspectionChecklist,type VehicleInspectionType,type VehicleInspection,type VehicleInspectionItemStatus,type VehicleInspectionTechnicalChecklist,type VehicleInspectionTechnicalKey,type VehicleInspectionResult,type InspectionComparisonPair } from '../../api/vehicleInspectionClient';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -92,6 +92,7 @@ export function VehicleInspectionPanel({
  const[comparatorOpen,setComparatorOpen]=useState(false);
  const[comparisonData,setComparisonData]=useState<InspectionComparisonPair|null>(null);
  const[comparatorLoading,setComparatorLoading]=useState(false);
+ const[previewImage,setPreviewImage]=useState<{url:string;label:string}|null>(null);
 
  const load=async()=>{try{setItems(await VehicleInspectionClient.list(vehicleId));}catch(e){setError(e instanceof Error?e.message:'Falha ao carregar vistorias.');}};
  useEffect(()=>{void load();},[vehicleId]);
@@ -123,10 +124,10 @@ export function VehicleInspectionPanel({
  finally{setLoading(false);}
  };
 
- const openComparator = async () => {
+ const openComparator = async (targetId?: string) => {
  setComparatorLoading(true);
  try {
- const targetContractId = contractId || (items[0]?.contractId);
+ const targetContractId = targetId || contractId || (items[0]?.contractId);
  if (!targetContractId) throw new Error('Nenhum contrato vinculado identificado para comparação.');
  const data = await VehicleInspectionClient.getComparison(targetContractId);
  setComparisonData(data);
@@ -269,17 +270,138 @@ export function VehicleInspectionPanel({
  </div>
  </button>
  {expanded===item.id&&<div className="space-y-3 border-t pt-3">
+ {item.inspectionType === 'ENTRY' && item.contractId && (
+ <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-badge-plum-t1-border bg-badge-plum-t1-bg/20 p-2.5">
+ <div className="text-xs">
+ <p className="font-bold text-badge-plum-t1-text">Vistoria de devolução vinculada a contrato</p>
+ <p className="text-[11px] text-graphite-500">Compare lado a lado com a vistoria de entrega para apurar desvios de KM, combustível e avarias.</p>
+ </div>
+ <Button
+ size="sm"
+ variant="outline"
+ onClick={() => void openComparator(item.contractId)}
+ isLoading={comparatorLoading}
+ className="text-xs gap-1 font-semibold"
+ >
+ <ArrowRightLeft className="w-3.5 h-3.5" /> Comparar com Entrega
+ </Button>
+ </div>
+ )}
+
+ {Array.isArray(item.photos) && item.photos.length > 0 && (
+ <div className="space-y-2">
+ <p className="text-xs font-semibold text-graphite-700 dark:text-graphite-200 flex items-center gap-1.5">
+ <Camera className="w-4 h-4 text-graphite-500" /> Fotos Registradas por Ângulo ({item.photos.length})
+ </p>
+ <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+ {item.photos.map((photo: any, pIdx: number) => (
+ <div
+ key={pIdx}
+ onClick={() => photo.url && setPreviewImage({ url: photo.url, label: photo.label || photo.slot || 'Foto de vistoria' })}
+ className="group relative aspect-[4/3] rounded-lg border border-graphite-200 dark:border-graphite-700 bg-graphite-100 dark:bg-graphite-800 overflow-hidden cursor-pointer hover:shadow-md transition-all"
+ >
+ {photo.url ? (
+ <img src={photo.url} alt={photo.label || photo.slot} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
+ ) : (
+ <div className="flex items-center justify-center h-full text-[10px] text-graphite-400">Sem imagem</div>
+ )}
+ <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5">
+ <p className="text-[10px] font-bold text-white truncate">{photo.label || photo.slot}</p>
+ </div>
+ </div>
+ ))}
+ </div>
+ </div>
+ )}
+
+ {(item.driverSignatureUrl || item.signatureRefused || item.isRemoteDropoff) && (
+ <div className="rounded-lg border border-graphite-200 dark:border-graphite-800 p-3 space-y-1.5 bg-graphite-50/50 dark:bg-graphite-900/40 text-xs">
+ <p className="font-semibold text-graphite-700 dark:text-graphite-200">Formalização & Assinatura</p>
+ {item.driverSignatureUrl && (
+ <div className="flex flex-wrap items-center gap-3">
+ <img
+ src={item.driverSignatureUrl}
+ alt="Assinatura do condutor"
+ className="h-12 border rounded bg-white p-1 max-w-[160px] object-contain cursor-pointer shadow-sm"
+ onClick={() => setPreviewImage({ url: item.driverSignatureUrl!, label: 'Assinatura do condutor' })}
+ />
+ <span className="text-[11px] text-success-text font-medium flex items-center gap-1">
+ <CheckCircle2 className="w-3.5 h-3.5" /> Assinado pelo condutor
+ </span>
+ </div>
+ )}
+ {item.signatureRefused && (
+ <div className="text-warning-text font-medium text-[11px] flex items-center gap-1">
+ <AlertTriangle className="w-3.5 h-3.5" /> Assinatura recusada: {item.signatureRefusalReason || 'Sem justificativa informada'}
+ </div>
+ )}
+ {item.isRemoteDropoff && (
+ <div className="text-info-text text-[11px]">
+ Devolução remota / via guincho (assinatura presencial dispensada).
+ </div>
+ )}
+ </div>
+ )}
+
+ {Array.isArray(item.damages) && item.damages.length > 0 && (
+ <div className="rounded-lg border border-graphite-200 dark:border-graphite-800 p-3 space-y-1.5 text-xs">
+ <p className="font-semibold text-graphite-700 dark:text-graphite-200 flex items-center gap-1 text-error-text">
+ <AlertTriangle className="w-3.5 h-3.5" /> Avarias registradas ({item.damages.length})
+ </p>
+ <div className="grid gap-1 sm:grid-cols-2">
+ {item.damages.map((d: any, dIdx: number) => (
+ <div key={dIdx} className="flex justify-between rounded bg-graphite-50 dark:bg-graphite-800 px-2 py-1 text-[11px]">
+ <span>{d.partName || d.partKey}: {d.damageType || 'Avaria'}</span>
+ <strong className="text-error-text font-mono">R$ {(Number(d.repairCost) || 0).toFixed(2)}</strong>
+ </div>
+ ))}
+ </div>
+ </div>
+ )}
+
  <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-graphite-50 px-2 py-1 dark:bg-graphite-800"><span>{label}</span><strong>{item.checklist[key]?'OK':'Não'}</strong></div>)}</div>
  {item.equipmentSnapshot&&<div className="rounded-lg border p-3 text-xs"><p className="mb-2 font-semibold">Pneus e bateria registrados</p><div className="grid gap-1 sm:grid-cols-2"><p><strong>Pneus:</strong> {item.equipmentSnapshot.tireBrand} {item.equipmentSnapshot.tireModel} — {item.equipmentSnapshot.tireMeasure}</p><p><strong>Bateria:</strong> {item.equipmentSnapshot.batteryBrand} {item.equipmentSnapshot.batteryModel}</p></div></div>}
  {item.technicalChecklist&&<div className="space-y-2"><p className="text-xs font-semibold">Resultado técnico: {resultLabel(item.result)}</p><div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-xs">{TECHNICAL_ITEMS.map(([key,label])=><div key={key} className="flex justify-between rounded bg-graphite-50 px-2 py-1 dark:bg-graphite-800"><span>{label}</span><strong>{TECHNICAL_OPTIONS.find(option=>option.value===item.technicalChecklist?.[key])?.label||'—'}</strong></div>)}</div></div>}
  {item.notes&&<p className="text-xs text-graphite-600 dark:text-graphite-300">{item.notes}</p>}
+
+ <div className="flex items-center gap-2 rounded-lg bg-graphite-50 dark:bg-graphite-800/60 p-2.5 text-[11px] text-graphite-500">
+ <Shield className="w-4 h-4 text-info-icon flex-shrink-0" />
+ <span>Evidências e fotos protegidas por 90 dias após o encerramento do contrato (resguardo probatório de devolução).</span>
+ </div>
+
  <div className="rounded-lg border p-3 space-y-3">
- <p className="text-xs font-semibold">Fotos e vídeos desta vistoria</p>
+ <p className="text-xs font-semibold">Anexos e documentos complementares</p>
  <FileUpload entityType="VehicleInspection" entityId={item.id} documentType="INSPECTION_MEDIA" multiple allowedTypes={['image/jpeg','image/jpg','image/png','image/webp','video/mp4']} maxSizeMB={20} onUploadComplete={()=>void load()}/>
  <AttachmentList entityType="VehicleInspection" entityId={item.id}/>
  </div>
  </div>}
  </div>)}
  </div>
+
+ {previewImage && (
+ <div
+ className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+ onClick={() => setPreviewImage(null)}
+ >
+ <div
+ className="relative max-w-4xl max-h-[90vh] flex flex-col rounded-2xl bg-white dark:bg-graphite-900 overflow-hidden shadow-2xl"
+ onClick={(e) => e.stopPropagation()}
+ >
+ <div className="flex items-center justify-between border-b p-3">
+ <span className="font-bold text-sm text-graphite-800 dark:text-graphite-200">{previewImage.label}</span>
+ <button
+ type="button"
+ onClick={() => setPreviewImage(null)}
+ className="rounded-lg p-1 text-graphite-400 hover:bg-graphite-100 dark:hover:bg-graphite-800"
+ >
+ <X className="w-5 h-5" />
+ </button>
+ </div>
+ <div className="p-2 overflow-auto flex items-center justify-center max-h-[80vh]">
+ <img src={previewImage.url} alt={previewImage.label} className="max-h-[75vh] w-auto rounded object-contain" />
+ </div>
+ </div>
+ </div>
+ )}
  </div>;
 }

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { calculateInspectionSettlement, VehicleInspectionSettlementAuthority } from '../vehicleInspectionSettlementAuthority';
 import { compressImage } from '../../utils/imageCompressor';
 
@@ -69,35 +71,118 @@ console.log('3. Testando compressão client-side (fallback headless)...');
   assert.equal(result.originalSize, 5000000);
 }
 
-// 4. Testando Consulta de Retenção Jurídica de 90 Dias (AUTOERP-62)
-console.log('4. Testando consulta de retenção estrita de 90 dias após encerramento...');
+// 4. Testando Consulta de Retenção Jurídica de 90 Dias (AUTOERP-62) contra Schema e Dados Reais
+console.log('4. Testando consulta de retenção estrita de 90 dias após encerramento contra PostgreSQL in-memory...');
 {
-  const executedQueries: string[] = [];
-  const fakeTx = {
+  const pglite = new PGlite();
+  await pglite.exec(`
+    CREATE TABLE contracts (
+      id text PRIMARY KEY,
+      company_id text NOT NULL,
+      status text NOT NULL,
+      end_date text
+    );
+    CREATE TABLE vehicle_inspections (
+      id text PRIMARY KEY,
+      company_id text NOT NULL,
+      contract_id text NOT NULL
+    );
+    CREATE TABLE file_attachments (
+      id text PRIMARY KEY,
+      company_id text NOT NULL,
+      entity_type text NOT NULL,
+      entity_id text NOT NULL,
+      file_name text NOT NULL,
+      is_archived boolean NOT NULL DEFAULT false
+    );
+  `);
+
+  // 1) Contrato CLOSED encerrado há 100 dias (deve ser capturado na janela de 90d)
+  await pglite.exec(`
+    INSERT INTO contracts (id, company_id, status, end_date)
+    VALUES ('cnt-closed-100d', 'tenant-test', 'CLOSED', (CURRENT_DATE - INTERVAL '100 days')::date::text);
+
+    INSERT INTO vehicle_inspections (id, company_id, contract_id)
+    VALUES ('insp-1', 'tenant-test', 'cnt-closed-100d');
+
+    INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, is_archived)
+    VALUES ('att-eligible-1', 'tenant-test', 'VehicleInspection', 'insp-1', 'foto-frente.jpg', false);
+  `);
+
+  // 2) Contrato FINISHED encerrado há 110 dias (deve ser capturado)
+  await pglite.exec(`
+    INSERT INTO contracts (id, company_id, status, end_date)
+    VALUES ('cnt-finished-110d', 'tenant-test', 'FINISHED', (CURRENT_DATE - INTERVAL '110 days')::date::text);
+
+    INSERT INTO vehicle_inspections (id, company_id, contract_id)
+    VALUES ('insp-2', 'tenant-test', 'cnt-finished-110d');
+
+    INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, is_archived)
+    VALUES ('att-eligible-2', 'tenant-test', 'VehicleInspection', 'insp-2', 'foto-traseira.jpg', false);
+  `);
+
+  // 3) Contrato CLOSED encerrado há 30 dias (recente -> NÃO deve ser purgado)
+  await pglite.exec(`
+    INSERT INTO contracts (id, company_id, status, end_date)
+    VALUES ('cnt-closed-recent', 'tenant-test', 'CLOSED', (CURRENT_DATE - INTERVAL '30 days')::date::text);
+
+    INSERT INTO vehicle_inspections (id, company_id, contract_id)
+    VALUES ('insp-3', 'tenant-test', 'cnt-closed-recent');
+
+    INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, is_archived)
+    VALUES ('att-recent', 'tenant-test', 'VehicleInspection', 'insp-3', 'foto-recente.jpg', false);
+  `);
+
+  // 4) Contrato ACTIVE (ativo -> NUNCA deve ser purgado)
+  await pglite.exec(`
+    INSERT INTO contracts (id, company_id, status, end_date)
+    VALUES ('cnt-active', 'tenant-test', 'ACTIVE', (CURRENT_DATE - INTERVAL '120 days')::date::text);
+
+    INSERT INTO vehicle_inspections (id, company_id, contract_id)
+    VALUES ('insp-4', 'tenant-test', 'cnt-active');
+
+    INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, is_archived)
+    VALUES ('att-active', 'tenant-test', 'VehicleInspection', 'insp-4', 'foto-ativa.jpg', false);
+  `);
+
+  // 5) Outro tenant (cross-tenant -> NUNCA deve vazar)
+  await pglite.exec(`
+    INSERT INTO contracts (id, company_id, status, end_date)
+    VALUES ('cnt-other-tenant', 'tenant-outro', 'CLOSED', (CURRENT_DATE - INTERVAL '120 days')::date::text);
+
+    INSERT INTO vehicle_inspections (id, company_id, contract_id)
+    VALUES ('insp-5', 'tenant-outro', 'cnt-other-tenant');
+
+    INSERT INTO file_attachments (id, company_id, entity_type, entity_id, file_name, is_archived)
+    VALUES ('att-other-tenant', 'tenant-outro', 'VehicleInspection', 'insp-5', 'foto-outro.jpg', false);
+  `);
+
+  const dialect = new PgDialect();
+  const realTx = {
     execute: async (queryObj: any) => {
-      executedQueries.push(String(queryObj));
-      return {
-        rows: [
-          {
-            id: 'att-old-1',
-            file_name: 'foto-saida.jpg',
-            contract_id: 'contract-finished-100-days-ago',
-            end_date: '2026-06-01',
-          },
-        ],
-      };
+      const compiled = dialect.sqlToQuery(queryObj);
+      const res = await pglite.query(compiled.sql, compiled.params);
+      return res;
     },
   };
 
   const eligible = await VehicleInspectionSettlementAuthority.listEligiblePurgeAttachments(
-    fakeTx,
+    realTx,
     'tenant-test',
     90
   );
 
-  assert.equal(eligible.length, 1);
-  assert.equal(eligible[0].id, 'att-old-1');
-  assert.equal(eligible[0].contractId, 'contract-finished-100-days-ago');
+  assert.equal(eligible.length, 2, 'Deve identificar exatamente os 2 anexos com contratos CLOSED/FINISHED > 90 dias');
+  const ids = eligible.map((e) => e.id).sort();
+  assert.deepEqual(ids, ['att-eligible-1', 'att-eligible-2']);
+
+  // Testar com janela de 150 dias: nenhum deve ser elegível
+  const eligible150 = await VehicleInspectionSettlementAuthority.listEligiblePurgeAttachments(
+    realTx,
+    'tenant-test',
+    150
+  );
+  assert.equal(eligible150.length, 0, 'Com cutoff de 150 dias, nenhum anexo deve ser elegível');
 }
 
 // 5. Testando Acerto Financeiro Integrado com Transição de Frota e Contas a Receber
