@@ -40,6 +40,7 @@ import {
   buildSessionCookie,
   extractSessionTokenFromCookie,
   issueSessionToken,
+  processSlidingSessionRenewal,
   SESSION_TTL_SECONDS,
 } from './src/server/session';
 
@@ -689,6 +690,8 @@ async function startServer() {
         );
       };
 
+      const authenticatedViaCookie = Boolean(sessionToken);
+
       if (sessionToken) {
         req.principal = await authenticateTokenPrincipal(
           sessionToken,
@@ -704,6 +707,19 @@ async function startServer() {
           jwtConfig,
           findCurrentUser
         );
+      }
+
+      if (authenticatedViaCookie && req.principal) {
+        const renewal = await processSlidingSessionRenewal({
+          principal: req.principal,
+          jwtConfig,
+          isCookieTransport: true,
+          reqPath: req.path,
+          secure: isSecureCookieRuntime(),
+        });
+        if (renewal.renewed && renewal.cookie) {
+          res.setHeader('Set-Cookie', renewal.cookie);
+        }
       }
 
       next();

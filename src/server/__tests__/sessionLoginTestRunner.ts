@@ -10,9 +10,12 @@ import { hashPassword } from '../password';
 import {
   buildExpiredSessionCookie,
   buildSessionCookie,
+  evaluateSessionRenewal,
   extractSessionTokenFromCookie,
   issueSessionToken,
+  processSlidingSessionRenewal,
   SESSION_COOKIE_NAME,
+  SESSION_MAX_LIFETIME_SECONDS,
   SESSION_TTL_SECONDS,
 } from '../session';
 
@@ -298,6 +301,247 @@ export class SessionLoginTestRunner {
       }
     });
 
+    await run('SL16', 'Token with >30min left does not renew to prevent cookie pollution', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 2500; // > 1800s remaining
+      const decision = evaluateSessionRenewal(sessionExp, now, now);
+      if (decision.shouldRenew) {
+        throw new Error('Expected session with >30min left NOT to renew');
+      }
+      if (decision.reason !== 'NOT_IN_RENEWAL_WINDOW') {
+        throw new Error(`Unexpected reason: ${decision.reason}`);
+      }
+      const result = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: now,
+      });
+      if (result.renewed || result.cookie) {
+        throw new Error('processSlidingSessionRenewal renewed token outside renewal window');
+      }
+    });
+
+    await run('SL17', 'Token with <30min left renews with extended 1h expiration', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 1200; // 20 min remaining (< 30 min)
+      const decision = evaluateSessionRenewal(sessionExp, now - 1800, now);
+      if (!decision.shouldRenew) {
+        throw new Error('Expected session with <30min left to renew');
+      }
+      const result = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 1800 },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: now,
+      });
+      if (!result.renewed || !result.token || !result.cookie) {
+        throw new Error('processSlidingSessionRenewal failed to produce renewed token and cookie');
+      }
+      const principal = await authenticateTokenPrincipal(
+        result.token,
+        JWT_CONFIG,
+        async () => activeUser
+      );
+      if (!principal.sessionExp || principal.sessionExp <= sessionExp) {
+        throw new Error(`Renewed sessionExp (${principal.sessionExp}) was not extended beyond ${sessionExp}`);
+      }
+      if (Math.abs(principal.sessionExp - (now + SESSION_TTL_SECONDS)) > 2) {
+        throw new Error(`Renewed sessionExp (${principal.sessionExp}) did not advance by 1 hour`);
+      }
+    });
+
+    await run('SL18', 'Renewed token strictly preserves original authenticated userId and companyId', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 600;
+      const originalAuthTime = now - 3000;
+      const result = await processSlidingSessionRenewal({
+        principal: { userId: 'user-xyz', companyId: 'company-abc', sessionExp, authTime: originalAuthTime },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/any',
+        secure: false,
+        nowSeconds: now,
+      });
+      if (!result.renewed || !result.token) {
+        throw new Error('Expected renewal');
+      }
+      const verified = await authenticateTokenPrincipal(
+        result.token,
+        JWT_CONFIG,
+        async (uId, cId) => ({
+          id: uId,
+          companyId: cId,
+          name: 'Target User',
+          role: 'ADMIN',
+          active: true,
+        })
+      );
+      if (verified.userId !== 'user-xyz' || verified.companyId !== 'company-abc') {
+        throw new Error('Renewed token identity diverged from authenticated principal');
+      }
+    });
+
+    await run('SL19', 'Renewed token preserves original authTime across multiple renewals', async () => {
+      const baseNow = Math.floor(Date.now() / 1000);
+      const initialAuthTime = baseNow - 4000;
+      const token1 = await issueSessionToken(
+        { userId: activeUser.id, companyId: activeUser.companyId, authTime: initialAuthTime },
+        JWT_CONFIG,
+        1200
+      );
+      const principal1 = await authenticateTokenPrincipal(token1, JWT_CONFIG, async () => activeUser);
+      if (principal1.authTime !== initialAuthTime) {
+        throw new Error(`Initial token authTime mismatch: got ${principal1.authTime}, expected ${initialAuthTime}`);
+      }
+
+      const renewal1 = await processSlidingSessionRenewal({
+        principal: principal1,
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/test',
+        secure: false,
+        nowSeconds: baseNow,
+      });
+      if (!renewal1.renewed || !renewal1.token) throw new Error('Renewal 1 failed');
+      const principal2 = await authenticateTokenPrincipal(renewal1.token, JWT_CONFIG, async () => activeUser);
+      if (principal2.authTime !== initialAuthTime) {
+        throw new Error(`Renewal 1 did not preserve authTime: got ${principal2.authTime}, expected ${initialAuthTime}`);
+      }
+
+      const now2 = baseNow + 2400;
+      const renewal2 = await processSlidingSessionRenewal({
+        principal: principal2,
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/test',
+        secure: false,
+        nowSeconds: now2,
+      });
+      if (!renewal2.renewed || !renewal2.token) throw new Error('Renewal 2 failed');
+      const principal3 = await authenticateTokenPrincipal(renewal2.token, JWT_CONFIG, async () => activeUser);
+      if (principal3.authTime !== initialAuthTime) {
+        throw new Error(`Renewal 2 did not preserve authTime: got ${principal3.authTime}, expected ${initialAuthTime}`);
+      }
+    });
+
+    await run('SL20', 'Token past 12h absolute ceiling from authTime ceases renewal', async () => {
+      const initialAuthTime = 1700000000;
+      const nowBeyondCeiling = initialAuthTime + SESSION_MAX_LIFETIME_SECONDS + 1; // 12h + 1s
+      const sessionExp = nowBeyondCeiling + 600;
+
+      const decision = evaluateSessionRenewal(sessionExp, initialAuthTime, nowBeyondCeiling);
+      if (decision.shouldRenew) {
+        throw new Error('Expected session past 12h ceiling NOT to renew');
+      }
+      if (decision.reason !== 'MAX_LIFETIME_EXCEEDED') {
+        throw new Error(`Expected MAX_LIFETIME_EXCEEDED, got: ${decision.reason}`);
+      }
+
+      const result = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: initialAuthTime },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: nowBeyondCeiling,
+      });
+      if (result.renewed || result.cookie) {
+        throw new Error('Session past 12h ceiling was unexpectedly renewed');
+      }
+    });
+
+    await run('SL21', 'Bearer requests and logout routes are not eligible for sliding renewal', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 600;
+
+      const bearerResult = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 3000 },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: false,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: now,
+      });
+      if (bearerResult.renewed || bearerResult.cookie || bearerResult.reason !== 'BEARER_NOT_ELIGIBLE') {
+        throw new Error(`Bearer transport unexpectedly renewed or gave wrong reason: ${bearerResult.reason}`);
+      }
+
+      const logoutResult = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 3000 },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/auth/logout',
+        secure: false,
+        nowSeconds: now,
+      });
+      if (logoutResult.renewed || logoutResult.cookie || logoutResult.reason !== 'LOGOUT_ROUTE') {
+        throw new Error(`Logout route unexpectedly renewed or gave wrong reason: ${logoutResult.reason}`);
+      }
+    });
+
+    await run('SL22', 'Inactive user fails authentication and cannot be renewed', async () => {
+      const token = await issueSessionToken(sessionIdentity, JWT_CONFIG, 1200);
+      await expectRejected(() =>
+        authenticateTokenPrincipal(
+          token,
+          JWT_CONFIG,
+          async () => ({ ...activeUser, active: false })
+        )
+      );
+    });
+
+    await run('SL23', 'Renewed cookie maintains HttpOnly, SameSite=Strict, Path=/api and Secure flags', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 600;
+
+      const prodResult = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 3000 },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: true,
+        nowSeconds: now,
+      });
+
+      if (!prodResult.renewed || !prodResult.cookie) {
+        throw new Error('Production renewal failed');
+      }
+
+      for (const requiredPart of [
+        `${SESSION_COOKIE_NAME}=`,
+        'HttpOnly',
+        'SameSite=Strict',
+        'Path=/api',
+        `Max-Age=${SESSION_TTL_SECONDS}`,
+        'Secure',
+      ]) {
+        if (!prodResult.cookie.includes(requiredPart)) {
+          throw new Error(`Renewed production cookie missing required flag: ${requiredPart}`);
+        }
+      }
+
+      const devResult = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 3000 },
+        jwtConfig: JWT_CONFIG,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: now,
+      });
+
+      if (!devResult.renewed || !devResult.cookie) {
+        throw new Error('Dev renewal failed');
+      }
+      if (devResult.cookie.includes('Secure')) {
+        throw new Error('Non-production renewed cookie unexpectedly contains Secure flag');
+      }
+    });
+
     const passed = tests.filter((test) => test.passed).length;
     return {
       total: tests.length,
@@ -306,4 +550,19 @@ export class SessionLoginTestRunner {
       tests,
     };
   }
+}
+
+if (process.argv[1]?.includes('sessionLoginTestRunner')) {
+  SessionLoginTestRunner.runAllTests()
+    .then((result) => {
+      console.log(`SessionLoginTestRunner: ${result.passed}/${result.total} passed`);
+      if (result.failed > 0) {
+        console.error('Failed tests:', result.tests.filter((t) => !t.passed));
+        process.exit(1);
+      }
+    })
+    .catch((err) => {
+      console.error('Unexpected runner error:', err);
+      process.exit(1);
+    });
 }
