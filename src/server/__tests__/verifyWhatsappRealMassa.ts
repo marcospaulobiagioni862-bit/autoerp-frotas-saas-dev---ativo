@@ -36,7 +36,7 @@ async function main() {
   const { db } = await import('../../db/index');
   const { registerWhatsappRoutes } = await import('../whatsappRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
   const driverId = 'v2demo-ngcompany001-driver-01';
   const vehicleId = 'v2demo-ngcompany001-vehicle-01';
   const contractId = 'v2demo-ngcompany001-contract-01';
@@ -70,7 +70,7 @@ async function main() {
     ) VALUES (
       'ind-demo-55-01', ${companyId}, ${ticketId}, '2026-10-30', 'PENDING', NOW(), NOW()
     )
-    ON CONFLICT (id) DO UPDATE SET indication_deadline = '2026-10-30', updated_at = NOW()
+    ON CONFLICT (id) DO UPDATE SET company_id = EXCLUDED.company_id, indication_deadline = '2026-10-30', updated_at = NOW()
   `);
 
   // 2. Subir servidor HTTP com autenticação ADMIN para staging-company-001

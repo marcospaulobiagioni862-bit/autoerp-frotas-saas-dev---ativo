@@ -6,6 +6,8 @@ export interface AuthenticatedPrincipal {
   name: string;
   role: string;
   permissions: string[];
+  authTime?: number;
+  sessionExp?: number;
 }
 
 export interface AuthenticatedUserRecord {
@@ -112,12 +114,21 @@ export async function authenticateTokenPrincipal(
     throw new AuthenticationError('Authenticated user has no current role');
   }
 
+  const authTime = typeof payloadRecord.authTime === 'number' && Number.isFinite(payloadRecord.authTime)
+    ? payloadRecord.authTime
+    : undefined;
+  const sessionExp = typeof payloadRecord.exp === 'number' && Number.isFinite(payloadRecord.exp)
+    ? payloadRecord.exp
+    : undefined;
+
   return {
     userId: user.id,
     companyId: user.companyId,
     name: user.name,
     role: user.role,
     permissions: Array.isArray(user.permissions) ? [...user.permissions] : [],
+    authTime,
+    sessionExp,
   };
 }
 

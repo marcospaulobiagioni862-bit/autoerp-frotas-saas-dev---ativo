@@ -36,7 +36,7 @@ export async function runWhatsappRentBillingRegression(): Promise<void> {
   const { db } = await import('../../db/index');
   const { registerWhatsappRoutes } = await import('../whatsappRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
   const otherCompanyId = 'other-company-security-999';
 
   console.log('=== TESTE DE REGRESSÃO: COBRANÇA DE ALUGUEL VIA WA.ME (AUTOERP-49) ===');

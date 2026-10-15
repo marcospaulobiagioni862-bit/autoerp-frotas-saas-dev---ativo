@@ -38,7 +38,7 @@ export async function runContractCloseAtomicRegression(): Promise<void> {
   const { db } = await import('../../db/index');
   const { registerContractRoutes } = await import('../contractRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
   console.log('=== TESTE DE REGRESSÃO: ENCERRAMENTO ATÔMICO E LEITURA DE KM (AUTOERP-09) ===');
 
   // 1. Criar dados de isolamento para o teste

@@ -47,7 +47,7 @@ async function main() {
   const { registerTenantProfileRoutes } = await import('../tenantProfileRoutes');
   const { registerCompanyProfileRoutes } = await import('../companyProfileRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
 
   console.log('=== AUTOERP-59: VERIFICAÇÃO INTEGRAL DAS 11 PERMISSÕES NA MASSA REAL DO NEON ===');
   console.log('Database:', neonUrl.split('@')[1]?.split('/')[0] || 'neon');
@@ -445,7 +445,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('ERRO FATAL NA EXECUÇÃO:', err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('ERRO FATAL NA EXECUÇÃO:', err);
+    process.exit(1);
+  });

@@ -21,7 +21,7 @@ try {
   console.warn('Could not read ~/.config/autoerp-neon.env:', e);
 }
 
-const neonUrl = process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL || process.env.DATABASE_URL;
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
 if (!neonUrl) {
   console.error('FATAL: Database URL is required to run real massa verification.');
   process.exit(1);
@@ -272,7 +272,7 @@ async function runRegression() {
 
     // Ator com apenas permissão MANAGE_USERS (não-admin)
     currentActor = {
-      companyId: 'staging-company-001',
+      companyId: 'v2demo-ngcompany001',
       userId: 'test-user-manager-only',
       name: 'Operador com MANAGE_USERS',
       role: 'OPERATIONAL',
@@ -334,7 +334,7 @@ async function runRegression() {
 
     // Cenário D: Administrador autêntico consegue provisionar normalmente com 201 Created
     currentActor = {
-      companyId: 'staging-company-001',
+      companyId: 'v2demo-ngcompany001',
       userId: 'test-admin',
       name: 'Admin Legítimo',
       role: 'ADMIN',

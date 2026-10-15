@@ -38,7 +38,7 @@ async function run() {
   console.log('=== AUTOERP-81: REGRESSÃO DA MASSA DEMO DE MOTORISTAS & COBRANÇA WHATSAPP ===');
   console.log('================================================================================');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
 
   // 1. Validar que todos os 10 motoristas demo possuem telefone e whatsapp válidos e distintos
   console.log('\n[1/4] Auditando telefone e whatsapp dos 10 motoristas demo no banco...');

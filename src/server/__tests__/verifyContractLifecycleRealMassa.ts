@@ -44,7 +44,7 @@ async function main() {
   const { registerContractExecutionRoutes } = await import('../contractExecutionRoutes');
   const { registerContractSimpleSignRoutes } = await import('../contractSimpleSignRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
   const vehicleId = 'v2demo-ngcompany001-vehicle-09';
   const driverId = 'v2demo-ngcompany001-driver-09';
   const templateId = 'v2demo-template-real-53';
@@ -89,6 +89,8 @@ async function main() {
       true, true, 1, false, ${adminActor.userId}, NOW(), NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
+      company_id = ${companyId},
+      created_by = ${adminActor.userId},
       template_key = 'custom-locacao-teste-53',
       is_current = true,
       is_active = true,
