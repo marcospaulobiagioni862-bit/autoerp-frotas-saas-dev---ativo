@@ -22,7 +22,7 @@ try {
   console.warn('Could not read ~/.config/autoerp-neon.env:', e);
 }
 
-const neonUrl = process.env.STAGING_MAIN_DATABASE_URL || process.env.HOMOLOG_DATABASE_URL || process.env.DATABASE_URL;
+const neonUrl = process.env.HOMOLOG_DATABASE_URL || process.env.STAGING_MAIN_DATABASE_URL || process.env.DATABASE_URL;
 if (!neonUrl) {
   console.error('FATAL: Database URL is required to run real massa verification.');
   process.exit(1);
@@ -50,7 +50,7 @@ async function verifyMarcosRequirementsRealMassa(): Promise<RequirementAuditResu
   const { registerWhatsappRoutes } = await import('../whatsappRoutes');
   const { registerDocumentRoutes } = await import('../documentRoutes');
 
-  const companyId = 'staging-company-001';
+  const companyId = 'v2demo-ngcompany001';
   const pgClient = new Client({ connectionString: neonUrl });
   await pgClient.connect();
 
