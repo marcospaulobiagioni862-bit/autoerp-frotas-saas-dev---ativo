@@ -184,18 +184,40 @@ export const driverHealthProfiles = pgTable('driver_health_profiles', {
   allergies: text('allergies'),
   relevantConditions: text('relevant_conditions'),
   continuousMedications: text('continuous_medications'),
+  controlledMedications: text('controlled_medications'),
   emergencyContactName: text('emergency_contact_name'),
   emergencyContactRelationship: text('emergency_contact_relationship'),
   emergencyContactPhone: text('emergency_contact_phone'),
   emergencyNotes: text('emergency_notes'),
   lastUpdateDate: timestamp('last_update_date', { mode: 'string' }),
   responsibleUser: text('responsible_user'),
+  lgpdConsentAt: timestamp('lgpd_consent_at', { mode: 'string' }),
+  lgpdConsentVersion: text('lgpd_consent_version'),
   createdAt: timestamp('created_at', { mode: 'string' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
   unq_company_driver: unique('driver_health_profiles_company_driver_unique').on(t.companyId, t.driverId),
   idx_company: index('idx_driver_health_profiles_company').on(t.companyId),
   idx_driver: index('idx_driver_health_profiles_driver').on(t.driverId),
+}));
+
+export const driverFormTokens = pgTable('driver_form_tokens', {
+  id: text('id').primaryKey(),
+  companyId: text('company_id').notNull(),
+  driverId: text('driver_id').notNull(),
+  token: text('token').notNull().unique(),
+  createdBy: text('created_by').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true, mode: 'string' }),
+  openedAt: timestamp('opened_at', { withTimezone: true, mode: 'string' }),
+  openedIp: text('opened_ip'),
+  consumedIp: text('consumed_ip'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow(),
+}, (t) => ({
+  idx_company: index('idx_driver_form_tokens_company').on(t.companyId),
+  idx_driver: index('idx_driver_form_tokens_driver').on(t.driverId),
+  idx_token: index('idx_driver_form_tokens_token').on(t.token),
 }));
 
 // Existing table from 0023; 0075 adds only the nullable fixed daily amount.

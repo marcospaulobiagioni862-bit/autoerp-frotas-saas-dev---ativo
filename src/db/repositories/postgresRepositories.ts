@@ -648,9 +648,12 @@ export class PostgresDriverHealthProfileRepository extends PostgresBaseRepositor
       set: {
         bloodType: item.bloodType ?? null, allergies: item.allergies ?? null,
         relevantConditions: item.relevantConditions ?? null, continuousMedications: item.continuousMedications ?? null,
+        controlledMedications: item.controlledMedications ?? null,
         emergencyContactName: item.emergencyContactName ?? null, emergencyContactRelationship: item.emergencyContactRelationship ?? null,
         emergencyContactPhone: item.emergencyContactPhone ?? null, emergencyNotes: item.emergencyNotes ?? null,
-        lastUpdateDate: item.lastUpdateDate ?? null, responsibleUser: item.responsibleUser ?? null, updatedAt: item.updatedAt,
+        lastUpdateDate: item.lastUpdateDate ?? null, responsibleUser: item.responsibleUser ?? null,
+        lgpdConsentAt: item.lgpdConsentAt ?? null, lgpdConsentVersion: item.lgpdConsentVersion ?? null,
+        updatedAt: item.updatedAt,
       },
     }).returning();
     return rows[0];

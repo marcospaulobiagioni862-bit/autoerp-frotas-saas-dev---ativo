@@ -4,7 +4,9 @@ import {
  AlertTriangle,
  Calendar,
  Car,
+ Check,
  Clock,
+ Copy,
  CreditCard,
  DollarSign,
  ExternalLink,
@@ -41,6 +43,7 @@ import {
  type WhatsappObservabilitySummary,
 } from '../../api/whatsappClient';
 import { DriverHealthClient } from '../../api/driverHealthClient';
+import { DriverFormTokenClient } from '../../api/driverFormTokenClient';
 import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
 import { FileUpload } from '../documents/FileUpload';
@@ -185,10 +188,15 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  const [allergies, setAllergies] = useState('');
  const [relevantConditions, setRelevantConditions] = useState('');
  const [continuousMedications, setContinuousMedications] = useState('');
+ const [controlledMedications, setControlledMedications] = useState('');
  const [emergencyContactName, setEmergencyContactName] = useState('');
  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
  const [emergencyNotes, setEmergencyNotes] = useState('');
+ const [formTokenModalOpen, setFormTokenModalOpen] = useState(false);
+ const [generatedTokenData, setGeneratedTokenData] = useState<{ publicUrl: string; whatsappUrl: string; expiresAt: string } | null>(null);
+ const [generatingToken, setGeneratingToken] = useState(false);
+ const [copiedLink, setCopiedLink] = useState(false);
 
  const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
  const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
@@ -210,10 +218,25 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  setAllergies(health.allergies || '');
  setRelevantConditions(health.relevantConditions || '');
  setContinuousMedications(health.continuousMedications || '');
+ setControlledMedications(health.controlledMedications || '');
  setEmergencyContactName(health.emergencyContactName || '');
  setEmergencyContactRelationship(health.emergencyContactRelationship || '');
  setEmergencyContactPhone(formatPhone(health.emergencyContactPhone || ''));
  setEmergencyNotes(health.emergencyNotes || '');
+ };
+
+ const handleGenerateFormToken = async () => {
+ if (!driver) return;
+ setGeneratingToken(true);
+ try {
+ const tokenResult = await DriverFormTokenClient.generateToken(driver.id);
+ setGeneratedTokenData(tokenResult);
+ setFormTokenModalOpen(true);
+ } catch (err: unknown) {
+ alert(err instanceof Error ? err.message : 'Falha ao gerar link do formulário.');
+ } finally {
+ setGeneratingToken(false);
+ }
  };
 
  const loadData = async () => {
@@ -342,6 +365,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  allergies,
  relevantConditions,
  continuousMedications,
+ controlledMedications,
  emergencyContactName,
  emergencyContactRelationship,
  emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone),
@@ -561,16 +585,34 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  {activeTab === 'overview' && (
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <Card className="p-4 space-y-3">
- <h3 className="text-xs font-bold uppercase text-graphite-400">Contato</h3>
+ <h3 className="text-xs font-bold uppercase text-graphite-400">Contato & Pessoal</h3>
  <p className="text-sm flex items-center gap-2"><Phone className="w-4 h-4" />{formatPhone(driver.phone)}</p>
  <p className="text-sm flex items-center gap-2"><Mail className="w-4 h-4" />{driver.email || 'E-mail não informado'}</p>
  <p className="text-sm flex items-center gap-2"><Calendar className="w-4 h-4" />{driver.birthDate}</p>
+ <p className="text-xs text-graphite-600 dark:text-graphite-300">Profissão: <strong>{driver.profession || 'Não informada'}</strong></p>
+ <p className="text-xs text-graphite-600 dark:text-graphite-300">Mãe: <strong>{driver.motherName || 'Não informada'}</strong></p>
  </Card>
  <Card className="p-4 space-y-3">
- <h3 className="text-xs font-bold uppercase text-graphite-400">Endereço</h3>
+ <div className="flex items-center justify-between">
+ <h3 className="text-xs font-bold uppercase text-graphite-400">Endereço Estruturado</h3>
+ <Button size="sm" variant="outline" onClick={handleGenerateFormToken} disabled={generatingToken}>
+ <MessageSquare className="w-3.5 h-3.5 mr-1" />Pedir dados (wa.me)
+ </Button>
+ </div>
  <div className="text-sm flex items-start gap-2">
- <MapPin className="w-4 h-4 mt-0.5" />
- <span>{driver.address.street}, {driver.address.number} — {driver.address.neighborhood}, {driver.address.city}/{driver.address.state} • CEP {formatCep(driver.address.zipCode)}</span>
+ <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+ <div className="space-y-1">
+ <div>{driver.address.street}, {driver.address.number} {driver.address.complement && `— ${driver.address.complement}`}</div>
+ <div className="text-xs text-graphite-500">{driver.address.neighborhood}, {driver.address.city}/{driver.address.state} • CEP {formatCep(driver.address.zipCode)}</div>
+ {driver.address.condominiumName && (
+ <div className="text-xs font-medium text-graphite-700 dark:text-graphite-300">
+ Condomínio: {driver.address.condominiumName} {driver.address.blockTower && `• ${driver.address.blockTower}`} {driver.address.unit && `• Apto ${driver.address.unit}`} {driver.address.floor && `• ${driver.address.floor}º andar`}
+ </div>
+ )}
+ {driver.address.reference && (
+ <div className="text-xs text-graphite-400">Ref: {driver.address.reference}</div>
+ )}
+ </div>
  </div>
  </Card>
  <Card className="p-4 md:col-span-2 space-y-3">
@@ -872,9 +914,31 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  </div>
  ) : (
  <div className="space-y-4">
- <div className="flex justify-between"><Button size="sm" variant="ghost" onClick={() => setIsHealthUnlocked(false)}><Lock className="w-4 h-4 mr-1" />Bloquear tela</Button><Button size="sm" onClick={() => setIsEditHealthOpen(true)}>Editar Informações</Button></div>
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <div className="flex items-center gap-2">
+ <Button size="sm" variant="ghost" onClick={() => setIsHealthUnlocked(false)}><Lock className="w-4 h-4 mr-1" />Bloquear tela</Button>
+ {healthProfile.lgpdConsentAt ? (
+ <Badge variant="success">Consentimento LGPD Ativo ({healthProfile.lgpdConsentVersion || 'v1.0'})</Badge>
+ ) : (
+ <Badge variant="warning">Consentimento LGPD Pendente</Badge>
+ )}
+ </div>
+ <div className="flex items-center gap-2">
+ <Button size="sm" variant="outline" onClick={handleGenerateFormToken} disabled={generatingToken}>
+ <MessageSquare className="w-3.5 h-3.5 mr-1" />Pedir dados (wa.me)
+ </Button>
+ <Button size="sm" onClick={() => setIsEditHealthOpen(true)}>Editar Informações</Button>
+ </div>
+ </div>
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
- <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Activity className="w-4 h-4 inline mr-1" />Ficha de Saúde</h4><p><strong>Tipo sanguíneo:</strong> {healthProfile.bloodType || 'Não informado'}</p><p><strong>Alergias:</strong> {healthProfile.allergies || 'Não informado'}</p><p><strong>Condições:</strong> {healthProfile.relevantConditions || 'Não informado'}</p><p><strong>Medicamentos:</strong> {healthProfile.continuousMedications || 'Não informado'}</p></Card>
+ <Card className="p-4 space-y-2">
+ <h4 className="text-xs font-bold uppercase"><Activity className="w-4 h-4 inline mr-1" />Ficha de Saúde</h4>
+ <p><strong>Tipo sanguíneo:</strong> {healthProfile.bloodType || 'Não informado'}</p>
+ <p><strong>Alergias:</strong> {healthProfile.allergies || 'Não informado'}</p>
+ <p><strong>Condições:</strong> {healthProfile.relevantConditions || 'Não informado'}</p>
+ <p><strong>Medicamentos contínuos:</strong> {healthProfile.continuousMedications || 'Não informado'}</p>
+ <p><strong>Medicamentos controlados:</strong> {healthProfile.controlledMedications || 'Não informado'}</p>
+ </Card>
  <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Phone className="w-4 h-4 inline mr-1" />Emergência</h4><p><strong>Contato:</strong> {healthProfile.emergencyContactName || 'Não informado'}</p><p><strong>Relação:</strong> {healthProfile.emergencyContactRelationship || 'Não informado'}</p><p><strong>Telefone:</strong> {formatPhone(healthProfile.emergencyContactPhone) || 'Não informado'}</p><p><strong>Notas:</strong> {healthProfile.emergencyNotes || 'Sem observações'}</p></Card>
  </div>
  </div>
@@ -931,6 +995,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Tipo Sanguíneo" value={bloodType} onChange={(event) => setBloodType(event.target.value)} /><Input label="Alergias" value={allergies} onChange={(event) => setAllergies(event.target.value)} /></div>
  <Input label="Condições Médicas" value={relevantConditions} onChange={(event) => setRelevantConditions(event.target.value)} />
  <Input label="Medicamentos Contínuos" value={continuousMedications} onChange={(event) => setContinuousMedications(event.target.value)} />
+ <Input label="Medicamentos Controlados" value={controlledMedications} onChange={(event) => setControlledMedications(event.target.value)} />
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Contato de Emergência *" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} required /><Input label="Relação *" value={emergencyContactRelationship} onChange={(event) => setEmergencyContactRelationship(event.target.value)} required /></div>
  <Input label="Telefone de Emergência *" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(formatPhone(event.target.value))} placeholder="(15) 99742-4411" required />
  <Input label="Observações de Emergência" value={emergencyNotes} onChange={(event) => setEmergencyNotes(event.target.value)} />
@@ -964,6 +1029,61 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  >
  <div className="mt-3"><Input label="Motivo *" value={unblockReason} onChange={(event) => setUnblockReason(event.target.value)} required /></div>
  </ConfirmDialog>
+
+ {formTokenModalOpen && generatedTokenData && (
+ <ModalContainer
+ isOpen={formTokenModalOpen}
+ onClose={() => setFormTokenModalOpen(false)}
+ title="Link Seguro de Coleta de Dados e Consentimento"
+ maxWidth="max-w-md"
+ >
+ <div className="space-y-4">
+ <div className="p-3 rounded-lg border bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800 text-xs text-blue-900 dark:text-blue-200">
+ <p className="font-semibold mb-1">Link com expiração de 24 horas e uso único</p>
+ <p>O motorista receberá o formulário seguro com os dados da CNH protegidos em somente-leitura e poderá complementar endereço, saúde e registrar consentimento LGPD.</p>
+ </div>
+
+ <div className="space-y-1">
+ <label className="text-xs font-medium text-graphite-600 dark:text-graphite-300">Link público</label>
+ <div className="flex gap-2">
+ <input
+ type="text"
+ readOnly
+ value={generatedTokenData.publicUrl}
+ className="flex-1 px-3 py-2 text-xs font-mono rounded-lg border border-graphite-300 dark:border-graphite-700 bg-graphite-50 dark:bg-graphite-900 text-graphite-800 dark:text-graphite-200"
+ />
+ <Button
+ size="sm"
+ variant="outline"
+ onClick={() => {
+ navigator.clipboard.writeText(generatedTokenData.publicUrl);
+ setCopiedLink(true);
+ setTimeout(() => setCopiedLink(false), 2000);
+ }}
+ >
+ {copiedLink ? <Check className="w-4 h-4 text-success-icon" /> : <Copy className="w-4 h-4" />}
+ </Button>
+ </div>
+ </div>
+
+ <div className="text-[11px] text-graphite-500">
+ Expira em: <strong>{new Date(generatedTokenData.expiresAt).toLocaleString('pt-BR')}</strong>
+ </div>
+
+ <div className="flex justify-end gap-2 pt-2 border-t border-graphite-200 dark:border-graphite-800">
+ <Button variant="outline" onClick={() => setFormTokenModalOpen(false)}>Fechar</Button>
+ <Button
+ variant="primary"
+ onClick={() => {
+ window.open(generatedTokenData.whatsappUrl, '_blank', 'noopener,noreferrer');
+ }}
+ >
+ <MessageSquare className="w-4 h-4 mr-1.5" />Enviar via WhatsApp (wa.me)
+ </Button>
+ </div>
+ </div>
+ </ModalContainer>
+ )}
  </ModalContainer>
  );
 };
