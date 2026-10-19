@@ -360,6 +360,14 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
  companyId={companyId}
  onRefresh={() => void loadData()}
  initialFocus={detailsFocus}
+ onEdit={() => {
+ const contract = contracts.find((c) => c.id === selectedContractId);
+ if (contract) {
+ setDetailsOpen(false);
+ setContractToEdit(contract);
+ setFormOpen(true);
+ }
+ }}
  />}
  </Suspense>
  </LazyModuleErrorBoundary>

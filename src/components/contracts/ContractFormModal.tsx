@@ -101,7 +101,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  const validDrivers = driverList.filter((item) =>
  !item.isArchived &&
  !blockedDriverIds.has(item.id) &&
- (item.status === DriverStatus.ACTIVE || item.id === contractToEdit?.driverId)
+ (item.status === DriverStatus.ACTIVE || item.status === DriverStatus.PENDING_DOCS || item.id === contractToEdit?.driverId)
  );
  const savedTemplates = templateList
  .filter((item) => contractTemplateGenerationMode(item) !== null)
@@ -275,7 +275,7 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  <Field label="Motorista *" error={fieldErrors.driverId}>
  <select value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={loadingOptions || noDriversForNewContract} className={`control ${fieldErrors.driverId?'border-error-border':''}`}>
  <option value="">{loadingOptions ? 'Carregando motoristas...' : noDriversForNewContract ? 'Nenhum motorista disponível para novo contrato' : 'Selecione'}</option>
- {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}</option>)}
+ {drivers.map((d) => <option key={d.id} value={d.id}>{d.fullName} • CNH {d.cnhNumber}{d.status === DriverStatus.PENDING_DOCS ? ' (Docs pendentes)' : ''}</option>)}
  </select>
  {noDriversForNewContract && <span role="status" className="block text-[11px] font-normal text-warning-text ">Todos os motoristas ativos possuem vínculo contratual vigente ou estão indisponíveis.</span>}
  </Field>
