@@ -5,6 +5,7 @@ import {
   AttachmentStorageUnavailableError,
   AttachmentStorageValidationError,
   MAX_ATTACHMENT_BYTES,
+  MAX_VIDEO_ATTACHMENT_BYTES,
   ServerAttachmentStorage,
   MultiProviderAttachmentStorage,
   type AttachmentByteStorage,
@@ -148,7 +149,7 @@ export class R2AttachmentStorage implements AttachmentByteStorage {
     if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
       throw new AttachmentStorageValidationError('Attachment content is empty');
     }
-    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    if (bytes.length > MAX_VIDEO_ATTACHMENT_BYTES) {
       throw new AttachmentStorageValidationError('Attachment exceeds maximum size');
     }
     const company = safeSegment(companyId, 'companyId');
@@ -175,11 +176,11 @@ export class R2AttachmentStorage implements AttachmentByteStorage {
     if (response.status === 404) throw new AttachmentStorageNotFoundError('Attachment content not found');
     if (!response.ok) throw responseFailure('read', response);
     const declaredLength = Number(response.headers.get('content-length') || '0');
-    if (declaredLength > MAX_ATTACHMENT_BYTES) {
+    if (declaredLength > MAX_VIDEO_ATTACHMENT_BYTES) {
       throw new AttachmentStorageValidationError('Stored attachment exceeds maximum size');
     }
     const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    if (bytes.length > MAX_VIDEO_ATTACHMENT_BYTES) {
       throw new AttachmentStorageValidationError('Stored attachment exceeds maximum size');
     }
     return bytes;

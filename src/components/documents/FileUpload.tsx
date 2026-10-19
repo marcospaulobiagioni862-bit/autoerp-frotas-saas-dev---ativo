@@ -25,8 +25,23 @@ const SERVER_ENTITY_TYPES = new Set([
  'Tracker',
 ]);
 
-const VEHICLE_DOCUMENT_TYPES = [
- ['CRLV', 'CRLV / Licenciamento'],
+export const CANONICAL_VEHICLE_DOCUMENT_TYPES = [
+ ['CRLV', 'CRLV (Documento de rodagem)'],
+ ['VISTORIA', 'Vistoria (Transferência / Regularização)'],
+ ['VISTORIA_CAUTELAR', 'Vistoria Cautelar'],
+ ['CHECKLIST', 'Checklist / Check-in (Fotos e Vídeos)'],
+ ['NOTA_FISCAL_ENTRADA', 'Nota Fiscal de Entrada (Compra)'],
+ ['NOTA_FISCAL_SAIDA', 'Nota Fiscal de Saída (Venda)'],
+ ['ATPV', 'ATPV (Recibo do carro)'],
+ ['RASTREADOR', 'Rastreador (GPS / Comodato)'],
+ ['APOLICE_SEGURO', 'Apólice de Seguro'],
+ ['NOTA_FISCAL_PECAS', 'Nota Fiscal de Peças'],
+ ['NOTA_FISCAL_SERVICO', 'Nota Fiscal de Serviço'],
+ ['OUTROS', 'Outros documentos do veículo'],
+] as const;
+
+export const VEHICLE_DOCUMENT_TYPES = [
+ ...CANONICAL_VEHICLE_DOCUMENT_TYPES,
  ['CRV', 'CRV'],
  ['ATPV_E', 'ATPV-e'],
  ['IPVA', 'IPVA'],
@@ -54,15 +69,20 @@ export function FileUpload({
  const fileInputRef = useRef<HTMLInputElement>(null);
  const isVehicleDocument = entityType === 'Vehicle' && documentType === 'VEHICLE_DOCUMENT';
  const effectiveDocumentType = isVehicleDocument ? selectedVehicleDocumentType : documentType;
+ const isChecklist = effectiveDocumentType === 'CHECKLIST';
+ const effectiveAllowedTypes = isChecklist
+ ? Array.from(new Set([...allowedTypes, 'video/mp4', 'video/webm', 'video/quicktime']))
+ : allowedTypes;
+ const effectiveMaxSizeMB = isChecklist ? Math.max(maxSizeMB, 50) : maxSizeMB;
 
  const resolvedMimeType = (file: File): string => {
  const browserType = file.type.trim().toLowerCase();
- if (allowedTypes.includes(browserType)) return browserType;
+ if (effectiveAllowedTypes.includes(browserType)) return browserType;
 
  const lowerName = file.name.trim().toLowerCase();
  const browserReportedGenericPdf = browserType === '' || browserType === 'application/octet-stream'
  || browserType === 'application/x-pdf' || browserType === 'application/acrobat';
- if (allowedTypes.includes('application/pdf') && browserReportedGenericPdf && lowerName.endsWith('.pdf')) {
+ if (effectiveAllowedTypes.includes('application/pdf') && browserReportedGenericPdf && lowerName.endsWith('.pdf')) {
  return 'application/pdf';
  }
 
@@ -73,14 +93,14 @@ export function FileUpload({
  if (!SERVER_ENTITY_TYPES.has(entityType)) {
  throw new Error(`Anexos para ${entityType} ainda não foram migrados para o servidor.`);
  }
- if (!allowedTypes.includes(mimeType)) {
- if (allowedTypes.length === 1 && allowedTypes[0] === 'application/pdf') {
+ if (!effectiveAllowedTypes.includes(mimeType)) {
+ if (effectiveAllowedTypes.length === 1 && effectiveAllowedTypes[0] === 'application/pdf') {
  throw new Error(`O arquivo selecionado não foi reconhecido como PDF: ${file.name}`);
  }
  throw new Error(`Tipo não permitido: ${file.name}`);
  }
  if (file.size <= 0) throw new Error(`Arquivo vazio: ${file.name}`);
- if (file.size > maxSizeMB * 1024 * 1024) throw new Error(`Arquivo excede ${maxSizeMB}MB: ${file.name}`);
+ if (file.size > effectiveMaxSizeMB * 1024 * 1024) throw new Error(`Arquivo excede ${effectiveMaxSizeMB}MB: ${file.name}`);
  };
 
  const handleUpload = async (files: FileList | null) => {

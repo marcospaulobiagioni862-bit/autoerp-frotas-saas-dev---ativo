@@ -69,6 +69,7 @@
     "test:vehicle-profitability-view": "tsx src/components/finance/__tests__/vehicleProfitabilityViewTestRunner.ts",
     "test:vehicle-crlv-import-panel": "tsx src/components/fleet/__tests__/vehicleCrlvImportPanelTestRunner.ts",
     "test:tracker-ui": "tsx src/components/fleet/__tests__/simpleTrackerUiRegression.tsx",
+    "test:vehicle-doc-folders": "tsx src/components/fleet/__tests__/vehicleDocumentFoldersRegression.ts",
     "test:browser-tab-branding": "tsx src/components/layout/__tests__/browserTabBrandingRegression.ts",
     "test:navigation-menu-parity": "tsx src/components/layout/__tests__/navigationMenuParityRegression.ts",
     "test:payable-installment-order": "tsx src/domain/finance/__tests__/payableInstallmentOrderTestRunner.ts",

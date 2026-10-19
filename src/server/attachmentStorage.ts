@@ -3,6 +3,27 @@ import { mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+export const MAX_VIDEO_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+
+export class ForbiddenProductionRetentionError extends Error {
+  constructor(prefix: string) {
+    super(`FORBIDDEN_PRODUCTION_PREFIX: Rotinas de limpeza/retenção em staging não podem tocar em prefixos de produção ("${prefix}").`);
+    this.name = 'ForbiddenProductionRetentionError';
+  }
+}
+
+/**
+ * Trava Obrigatória de Retenção e Expurgo (PH-055):
+ * Em staging/desenvolvimento, qualquer operação de limpeza ou expurgo deve ser estritamente escopada
+ * a prefixos de staging (ex: "staging-company-001/").
+ * Bloqueia expressamente qualquer prefixo que pertença ou aponte para produção ("prod-company-001/").
+ */
+export function assertRetentionPrefixScope(prefix: string): void {
+  const normalized = String(prefix || '').trim().toLowerCase();
+  if (normalized.startsWith('prod-') || normalized.includes('/prod-') || normalized.startsWith('prod/')) {
+    throw new ForbiddenProductionRetentionError(prefix);
+  }
+}
 
 export class AttachmentStorageUnavailableError extends Error {}
 export class AttachmentStorageValidationError extends Error {}
@@ -120,7 +141,7 @@ export class ServerAttachmentStorage implements AttachmentByteStorage {
     if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
       throw new AttachmentStorageValidationError('Attachment content is empty');
     }
-    if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    if (bytes.length > MAX_VIDEO_ATTACHMENT_BYTES) {
       throw new AttachmentStorageValidationError('Attachment exceeds maximum size');
     }
 
