@@ -128,26 +128,34 @@ export async function processSlidingSessionRenewal(params: {
     ? params.principal.authTime
     : (params.principal.sessionExp ? params.principal.sessionExp - SESSION_TTL_SECONDS : nowSeconds);
 
-  const renewedToken = await issueSessionToken(
-    {
-      userId: params.principal.userId,
-      companyId: params.principal.companyId,
-      authTime,
-    },
-    params.jwtConfig,
-    SESSION_TTL_SECONDS
-  );
+  try {
+    const renewedToken = await issueSessionToken(
+      {
+        userId: params.principal.userId,
+        companyId: params.principal.companyId,
+        authTime,
+      },
+      params.jwtConfig,
+      SESSION_TTL_SECONDS
+    );
 
-  const cookie = buildSessionCookie(renewedToken, {
-    secure: params.secure,
-    maxAgeSeconds: SESSION_TTL_SECONDS,
-  });
+    const cookie = buildSessionCookie(renewedToken, {
+      secure: params.secure,
+      maxAgeSeconds: SESSION_TTL_SECONDS,
+    });
 
-  return {
-    renewed: true,
-    token: renewedToken,
-    cookie,
-  };
+    return {
+      renewed: true,
+      token: renewedToken,
+      cookie,
+    };
+  } catch (error) {
+    console.warn('[SessionRenewal] Failed to issue sliding session renewal token:', error);
+    return {
+      renewed: false,
+      reason: 'RENEWAL_FAILED',
+    };
+  }
 }
 
 export function extractSessionTokenFromCookie(cookieHeader?: string): string | undefined {
