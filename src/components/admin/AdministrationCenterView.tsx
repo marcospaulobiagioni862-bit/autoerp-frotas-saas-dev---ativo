@@ -34,6 +34,7 @@ import { BackupService } from '../../domain/resilience/BackupService';
 import { AuditLogRepository } from '../../persistence/repositories/localRepositories';
 import { UserRole } from '../../types/enums';
 import { CompanyProfileClient } from '../../api/companyProfileClient';
+import { formatPhone, cleanPhoneDigits, formatCep, cleanCepDigits } from '../../shared/utils/phoneAndZipCode';
 
 type AdminTab = 
  | 'overview' 
@@ -108,15 +109,15 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  setDocumentInput(companyProfile.document);
  setTradeNameInput(companyProfile.tradeName);
  setCompanyEmailInput(companyProfile.email);
- setCompanyPhoneInput(companyProfile.phone);
- setCompanyWhatsappInput(companyProfile.whatsapp);
+ setCompanyPhoneInput(formatPhone(companyProfile.phone));
+ setCompanyWhatsappInput(formatPhone(companyProfile.whatsapp));
  setAddressStreetInput(companyProfile.address.street);
  setAddressNumberInput(companyProfile.address.number);
  setAddressComplementInput(companyProfile.address.complement);
  setAddressNeighborhoodInput(companyProfile.address.neighborhood);
  setAddressCityInput(companyProfile.address.city);
  setAddressStateInput(companyProfile.address.state);
- setAddressZipCodeInput(companyProfile.address.zipCode);
+ setAddressZipCodeInput(formatCep(companyProfile.address.zipCode));
  setLegalRepresentativeNameInput(companyProfile.legalRepresentative.name);
  setLegalRepresentativeCpfInput(companyProfile.legalRepresentative.cpf);
  setTimezoneInput(cfg.timezone);
@@ -140,8 +141,8 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  tradeName: tradeNameInput,
  document: documentInput,
  email: companyEmailInput,
- phone: companyPhoneInput,
- whatsapp: companyWhatsappInput,
+ phone: cleanPhoneDigits(companyPhoneInput),
+ whatsapp: cleanPhoneDigits(companyWhatsappInput),
  address: {
  street: addressStreetInput,
  number: addressNumberInput,
@@ -149,7 +150,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  neighborhood: addressNeighborhoodInput,
  city: addressCityInput,
  state: addressStateInput,
- zipCode: addressZipCodeInput,
+ zipCode: cleanCepDigits(addressZipCodeInput),
  },
  legalRepresentative: {
  name: legalRepresentativeNameInput,
@@ -331,8 +332,8 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Nome Fantasia</label><Input value={tradeNameInput} onChange={(e) => setTradeNameInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CNPJ / Documento Oficial</label><Input value={documentInput} onChange={(e) => setDocumentInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">E-mail</label><Input value={companyEmailInput} onChange={(e) => setCompanyEmailInput(e.target.value)} /></div>
- <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Telefone</label><Input value={companyPhoneInput} onChange={(e) => setCompanyPhoneInput(e.target.value)} /></div>
- <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">WhatsApp</label><Input value={companyWhatsappInput} onChange={(e) => setCompanyWhatsappInput(e.target.value)} /></div>
+ <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Telefone</label><Input value={companyPhoneInput} onChange={(e) => setCompanyPhoneInput(formatPhone(e.target.value))} placeholder="(11) 3221-4411" /></div>
+ <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">WhatsApp</label><Input value={companyWhatsappInput} onChange={(e) => setCompanyWhatsappInput(formatPhone(e.target.value))} placeholder="(11) 99742-4411" /></div>
  </div>
  <div className="grid gap-4 md:grid-cols-3">
  <div className="md:col-span-2"><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Logradouro</label><Input value={addressStreetInput} onChange={(e) => setAddressStreetInput(e.target.value)} /></div>
@@ -341,7 +342,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Bairro</label><Input value={addressNeighborhoodInput} onChange={(e) => setAddressNeighborhoodInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Cidade</label><Input value={addressCityInput} onChange={(e) => setAddressCityInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">UF</label><Input value={addressStateInput} onChange={(e) => setAddressStateInput(e.target.value)} /></div>
- <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CEP</label><Input value={addressZipCodeInput} onChange={(e) => setAddressZipCodeInput(e.target.value)} /></div>
+ <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CEP</label><Input value={addressZipCodeInput} onChange={(e) => setAddressZipCodeInput(formatCep(e.target.value))} placeholder="00000-000" /></div>
  </div>
  <div className="grid gap-4 md:grid-cols-2">
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Representante Legal</label><Input value={legalRepresentativeNameInput} onChange={(e) => setLegalRepresentativeNameInput(e.target.value)} /></div>

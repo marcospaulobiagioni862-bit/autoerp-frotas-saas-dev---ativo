@@ -19,6 +19,7 @@ import { UserProfileClient, type UserProfileDto } from '../../api/userProfileCli
 import { useAuth } from '../../hooks/useAuth';
 import { Badge, Button, Input, ModalContainer } from '../ui';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { formatPhone, cleanPhoneDigits } from '../../shared/utils/phoneAndZipCode';
 
 export interface UserProfileModalProps {
   isOpen: boolean;
@@ -59,7 +60,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'security'>('info');
   const [profile, setProfile] = useState<UserProfileDto | null>(null);
   const [name, setName] = useState(user.name);
-  const [phone, setPhone] = useState(user.phone || '');
+  const [phone, setPhone] = useState(formatPhone(user.phone || ''));
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl || null);
 
   // Senha
@@ -86,7 +87,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         if (cancelled) return;
         setProfile(data);
         setName(data.name);
-        setPhone(data.phone || '');
+        setPhone(formatPhone(data.phone || ''));
         setAvatarUrl(data.avatarUrl || null);
       })
       .catch((err) => {
@@ -161,7 +162,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     try {
       const updated = await UserProfileClient.updateProfile({
         name: cleanName,
-        phone: phone.trim() || undefined,
+        phone: cleanPhoneDigits(phone) || undefined,
       });
 
       updateUserProfile?.({
@@ -367,7 +368,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   type="text"
                   placeholder="(11) 98765-4321"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(formatPhone(e.target.value))}
                   className="pl-9"
                   disabled={saving || loading}
                 />
