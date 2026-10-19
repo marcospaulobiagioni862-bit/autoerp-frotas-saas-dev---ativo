@@ -9,7 +9,7 @@ import {hasDriverHealthPermission} from '../shared/security/driverHealthAuthoriz
 import {
   AttachmentStorageNotFoundError,AttachmentStorageUnavailableError,AttachmentStorageValidationError,
   AttachmentStorageProviderUnconfiguredError,AttachmentStorageLegacyContentError,
-  MAX_ATTACHMENT_BYTES,type AttachmentByteStorage,
+  MAX_ATTACHMENT_BYTES,MAX_VIDEO_ATTACHMENT_BYTES,type AttachmentByteStorage,
 } from './attachmentStorage';
 import {createAttachmentStorageFromEnvironment} from './r2AttachmentStorage';
 import {registerDriverDocumentIntakeRoutes} from './driverDocumentIntakeRoutes';
@@ -257,7 +257,7 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
     }catch(error){sendAttachmentError(res,error);}
   });
   app.get('/api/attachments/:id',async(req,res)=>{const principal=requireAttachmentPrincipal(req,res,'VIEW_ATTACHMENT');if(!principal)return;try{const item=await UnitOfWork.run(principal.companyId,async tx=>{const found=await tx.getAttachmentRepo().findByIdForCompany(principal.companyId,req.params.id);if(!found)throw new AttachmentNotFoundError();await validateEntity(tx,principal,found.entityType,found.entityId,false);return found;});const [projected]=await projectStorageAvailability(storage,principal.companyId,[item]);res.json({item:projected});}catch(error){sendAttachmentError(res,error);}});
-  app.post('/api/attachments',express.raw({type:()=>true,limit:MAX_ATTACHMENT_BYTES}),async(req:Request,res:Response)=>{
+  app.post('/api/attachments',express.raw({type:()=>true,limit:MAX_VIDEO_ATTACHMENT_BYTES}),async(req:Request,res:Response)=>{
     const principal=requireAttachmentPrincipal(req,res,'CREATE_ATTACHMENT');if(!principal)return;let storageKey:string|undefined;
     try{
       const entityType=header(req,'x-autoerp-entity-type',true)!,entityId=header(req,'x-autoerp-entity-id',true)!,documentType=header(req,'x-autoerp-document-type'),fileName=validateFilename(header(req,'x-autoerp-file-name',true)!);
@@ -271,7 +271,10 @@ export function registerAttachmentRoutes(app:Express,storage:AttachmentByteStora
       const mimeType=String(req.get('content-type')||'').split(';',1)[0].trim().toLowerCase();if(!ALLOWED_MIME_TYPES.has(mimeType))throw new AttachmentValidationError('Invalid mime type');
       if(mimeType===DOCX_MIME&&entityType!=='ContractTemplate')throw new AttachmentValidationError('DOCX is only allowed for contract template source');
       if(entityType==='ContractTemplate'&&mimeType!=='application/pdf'&&mimeType!==DOCX_MIME)throw new AttachmentValidationError('Contract template source must be PDF or DOCX');
-      if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');if(req.body.length>MAX_ATTACHMENT_BYTES){res.status(413).json({error:'Attachment too large'});return;}const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
+      if(!Buffer.isBuffer(req.body)||req.body.length===0)throw new AttachmentValidationError('Empty file');
+      const maxAllowedBytes=(canonicalMimeType(mimeType)==='video/mp4')?MAX_VIDEO_ATTACHMENT_BYTES:MAX_ATTACHMENT_BYTES;
+      if(req.body.length>maxAllowedBytes){res.status(413).json({error:'Attachment too large'});return;}
+      const detected=detectedMimeType(req.body);if(!detected||detected!==canonicalMimeType(mimeType))throw new AttachmentValidationError('File signature does not match mime type');
       await UnitOfWork.run(principal.companyId,async tx=>{
         await validateEntity(tx,principal,entityType,entityId,true);
         if(entityType==='ContractTemplate'){
