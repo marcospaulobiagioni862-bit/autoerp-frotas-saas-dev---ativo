@@ -542,6 +542,35 @@ export class SessionLoginTestRunner {
       }
     });
 
+    await run('SL24', 'Renewal failure does not throw or destroy valid session (fails safely without Set-Cookie)', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const sessionExp = now + 600; // dentro da janela de renovacao (< 1800s restantes)
+
+      // processSlidingSessionRenewal com erro de emissao (ex: config invalida / secret vazio)
+      // NAO PODE LANCAR EXCECAO: deve retornar { renewed: false, reason: 'RENEWAL_FAILED' }
+      const invalidJwtConfig = {
+        secret: '', // lanca requireConfiguredValue
+        issuer: 'autoerp-session-test',
+        audience: 'autoerp-users',
+      };
+
+      const result = await processSlidingSessionRenewal({
+        principal: { userId: activeUser.id, companyId: activeUser.companyId, sessionExp, authTime: now - 3000 },
+        jwtConfig: invalidJwtConfig,
+        isCookieTransport: true,
+        reqPath: '/api/fleet/vehicles',
+        secure: false,
+        nowSeconds: now,
+      });
+
+      if (result.renewed !== false || result.reason !== 'RENEWAL_FAILED') {
+        throw new Error(`Expected { renewed: false, reason: 'RENEWAL_FAILED' }, got ${JSON.stringify(result)}`);
+      }
+      if (result.cookie) {
+        throw new Error('Failed renewal should not emit cookie');
+      }
+    });
+
     const passed = tests.filter((test) => test.passed).length;
     return {
       total: tests.length,

@@ -710,15 +710,19 @@ async function startServer() {
       }
 
       if (authenticatedViaCookie && req.principal) {
-        const renewal = await processSlidingSessionRenewal({
-          principal: req.principal,
-          jwtConfig,
-          isCookieTransport: true,
-          reqPath: req.path,
-          secure: isSecureCookieRuntime(),
-        });
-        if (renewal.renewed && renewal.cookie) {
-          res.setHeader('Set-Cookie', renewal.cookie);
+        try {
+          const renewal = await processSlidingSessionRenewal({
+            principal: req.principal,
+            jwtConfig,
+            isCookieTransport: true,
+            reqPath: req.path,
+            secure: isSecureCookieRuntime(),
+          });
+          if (renewal.renewed && renewal.cookie) {
+            res.setHeader('Set-Cookie', renewal.cookie);
+          }
+        } catch (renewalError) {
+          console.warn('[SessionRenewal] Unexpected error during renewal middleware:', renewalError);
         }
       }
 
