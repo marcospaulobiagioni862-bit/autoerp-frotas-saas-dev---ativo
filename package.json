@@ -45,6 +45,7 @@
     "verify:user-permissions-real": "tsx src/server/__tests__/verifyUserPermissionsRealMassa.ts",
     "verify:avatar-menu-real": "tsx src/server/__tests__/verifyAvatarMenuRealMassa.ts",
     "verify:marcos-requirements": "tsx src/server/__tests__/verifyMarcosRequirementsRealMassa.ts",
+    "verify:marcos-contracts-real": "tsx src/server/__tests__/verifyMarcosContractsRealMassa.ts",
     "verify:rls-deduplication": "tsx src/server/__tests__/verifyRlsDeduplication.ts",
     "test:api-clients": "tsx src/api/__tests__/contractClientTestRunner.ts && tsx src/api/__tests__/documentClientTestRunner.ts && tsx src/api/__tests__/driverClientTestRunner.ts && tsx src/api/__tests__/driverDocumentIntakeClientTestRunner.ts && tsx src/api/__tests__/driverHealthClientTestRunner.ts && tsx src/api/__tests__/financeRenegotiationClientTestRunner.ts && tsx src/api/__tests__/telemetryKmDivergenceClientTestRunner.ts && tsx src/api/__tests__/vehicleClientTestRunner.ts && tsx src/api/__tests__/attachmentClientTestRunner.ts",
     "test:client-contract": "tsx src/api/__tests__/contractClientTestRunner.ts",

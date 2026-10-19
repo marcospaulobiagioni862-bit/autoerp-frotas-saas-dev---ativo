@@ -57,4 +57,10 @@ Comandos disponíveis via npm:
   ```
   Executa a passada de auditoria automatizada contra a massa real do Neon (`staging-company-001`), comprovando os vereditos factuais dos 6 requisitos do Marcos para a reunião de Sorocaba com IDs de contratos, rotas e status HTTP.
 
+- **Visualização, Edição e Ciclo de Contratos do Piloto Marcos (PH-052)**:
+  ```bash
+  npm run verify:marcos-contracts-real
+  ```
+  Valida o desbloqueio de rascunho de contratos para motoristas com documentação pendente (`PENDING_DOCS`), criação do contrato piloto de Marcos (`CTR-MARCOS-PILOTO-01`), edição via `PATCH` (aluguel de R$ 650 para R$ 700), log de auditoria (`audit_logs`) com autoria do Marcos (`staging-admin-001`), e arquivamento seguro via soft-archive (`POST /api/contracts/:id/archive` com `is_archived = true` e status `ARCHIVED`, sem deleção física no produto). Requer `STAGING_MAIN_DATABASE_URL` (configurada via `~/.config/autoerp-neon.env`).
+
 
