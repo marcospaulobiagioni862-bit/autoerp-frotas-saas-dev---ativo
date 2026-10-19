@@ -6,9 +6,10 @@ import { DocumentAiFocusedClient } from '../../api/documentAiFocusedClient';
 import { DriverClient } from '../../api/driverClient';
 import type { Driver } from '../../types/entities';
 import {
- DriverDocumentIntakeClient,
- type ApprovedCnhDriverDraft,
+  DriverDocumentIntakeClient,
+  type ApprovedCnhDriverDraft,
 } from '../../api/driverDocumentIntakeClient';
+import { DocumentSideBySidePreview } from '../documents/DocumentSideBySidePreview';
 import { Button, Input, ModalContainer, Select } from '../ui';
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -82,6 +83,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  const [knownDrivers, setKnownDrivers] = useState<Driver[]>([]);
  const [knownDriversLoaded, setKnownDriversLoaded] = useState(false);
  const [additionalChangesConfirmed, setAdditionalChangesConfirmed] = useState(false);
+ const [humanValidated, setHumanValidated] = useState(false);
  const [draft, setDraft] = useState<Record<CnhFieldKey, string>>({
  name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '',
  });
@@ -179,6 +181,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  setApprovedDraft(null);
  setSavedDriverId('');
  setAdditionalChangesConfirmed(false);
+ setHumanValidated(false);
  setDraft({ name: '', cpf: '', rg: '', birthDate: '', registrationNumber: '', category: '', issueDate: '', expirationDate: '' });
  setEarReview('');
  setNotes('');
@@ -338,6 +341,10 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
 
  const review = async (decision: 'APPROVE' | 'REJECT') => {
  if (!extraction || extraction.status !== 'REVIEW_REQUIRED' || busy) return;
+ if (decision === 'APPROVE' && !humanValidated) {
+ setError('É obrigatório conferir os dados com o documento original anexado e marcar o check de validação antes de aprovar e salvar.');
+ return;
+ }
  if (decision === 'APPROVE' && extraction.detectedDocumentType !== 'CNH') {
  setError('O documento analisado não foi reconhecido como CNH e não pode preencher o motorista.');
  return;
@@ -416,7 +423,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  const providerRateLimited = extraction?.failureCode === 'PROVIDER_RATE_LIMITED';
 
  return (
- <ModalContainer isOpen={isOpen} onClose={close} title={isRenewal ? 'Nova CNH / Renovar CNH' : 'Cadastrar motorista pela CNH'} maxWidth="2xl">
+ <ModalContainer isOpen={isOpen} onClose={close} title={isRenewal ? 'Nova CNH / Renovar CNH' : 'Cadastrar motorista pela CNH'} maxWidth={step === 'REVIEW_REQUIRED' ? '6xl' : '2xl'}>
  <div className="space-y-5">
  <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-4 text-sm dark:border-graphite-800 dark:bg-graphite-900">
  <div className="flex items-start gap-3">
@@ -510,6 +517,18 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
 
  {step === 'REVIEW_REQUIRED' && extraction && (
  <div className="space-y-4">
+ <div className="flex flex-col lg:grid lg:grid-cols-12 lg:gap-6 items-start">
+ {/* Coluna da Direita (no mobile em cima via order-1): Documento Anexado com Zoom e Giro */}
+ <div className="order-1 lg:order-2 lg:col-span-6 w-full space-y-2">
+ <DocumentSideBySidePreview
+ file={file}
+ attachmentId={extraction.attachmentId}
+ title="Documento Anexado (CNH)"
+ />
+ </div>
+
+ {/* Coluna da Esquerda (no mobile embaixo via order-2): Campos Extraídos Editáveis */}
+ <div className="order-2 lg:order-1 lg:col-span-6 w-full space-y-4">
  <div>
  <p className="text-sm font-semibold text-graphite-900 dark:text-graphite-100">Revise os dados reconhecidos</p>
  <p className="text-xs text-graphite-500">Documento detectado: {extraction.detectedDocumentType || 'não identificado'}</p>
@@ -583,17 +602,49 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  </div>
  )}
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
- {CNH_FIELDS.map(([key, label]) => (
+ {CNH_FIELDS.map(([key, label]) => {
+ const originalVal = valueText(extraction.proposedFields[key]);
+ const isFieldCorrected = draft[key] !== originalVal;
+ return (
+ <div key={key} className="space-y-1">
+ <div className="flex items-center justify-between">
+ <label className="text-xs font-semibold uppercase tracking-wider text-graphite-700 dark:text-graphite-200">
+ {label}
+ </label>
+ {isFieldCorrected && (
+ <span
+ data-testid={`badge-corrigido-${key}`}
+ className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+ >
+ CORRIGIDO
+ </span>
+ )}
+ </div>
  <Input
- key={key}
- label={label}
  value={draft[key]}
  onChange={(event) => setDraft((current) => ({ ...current, [key]: event.target.value }))}
  />
- ))}
- <div>
+ </div>
+ );
+ })}
+ <div className="space-y-1">
+ <div className="flex items-center justify-between">
+ <label className="text-xs font-semibold uppercase tracking-wider text-graphite-700 dark:text-graphite-200">
+ Exerce atividade remunerada (EAR)
+ </label>
+ {Boolean(
+ earReview &&
+ earReview !== (extraction.proposedFields.ear === true ? 'YES' : '')
+ ) && (
+ <span
+ data-testid="badge-corrigido-ear"
+ className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700"
+ >
+ CORRIGIDO
+ </span>
+ )}
+ </div>
  <Select
- label="Exerce atividade remunerada (EAR)"
  value={earReview}
  onChange={(event) => setEarReview(event.target.value as EarReviewValue)}
  >
@@ -617,7 +668,30 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  className="w-full rounded-lg border border-graphite-200 bg-white px-3 py-2 text-sm dark:border-graphite-800 dark:bg-graphite-900"
  />
  </div>
- <div className="flex flex-wrap justify-end gap-2">
+
+ {/* BOTAO DE CHECK de validacao obrigatoria */}
+ <div className="rounded-xl border border-graphite-200 bg-graphite-50 p-3.5 dark:border-graphite-800 dark:bg-graphite-900">
+ <label className="flex items-start gap-3 cursor-pointer">
+ <input
+ type="checkbox"
+ id="cnh-human-validation-check"
+ data-testid="cnh-human-validation-check"
+ className="mt-1 h-4 w-4 rounded border-graphite-300 text-action-primary focus:ring-action-primary"
+ checked={humanValidated}
+ onChange={(event) => setHumanValidated(event.target.checked)}
+ />
+ <div className="space-y-0.5">
+ <p className="text-sm font-semibold text-graphite-900 dark:text-graphite-100">
+ Conferi os dados com o documento original anexado
+ </p>
+ <p className="text-xs text-graphite-500">
+ A validação confirma a leitura da IA e os dados corrigidos, criando o motorista e arquivando a CNH na Central de Documentos.
+ </p>
+ </div>
+ </label>
+ </div>
+
+ <div className="flex flex-wrap justify-end gap-2 pt-2">
  <Button type="button" variant="outline" onClick={() => review('REJECT')} disabled={busy}>
  <XCircle className="mr-1.5 h-4 w-4" />Rejeitar
  </Button>
@@ -627,6 +701,7 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  onClick={() => review('APPROVE')}
  disabled={
  busy ||
+ !humanValidated ||
  extraction.detectedDocumentType !== 'CNH' ||
  (!isRenewal && (!knownDriversLoaded || Boolean(existingDriverResolution))) ||
  (isRenewal && !renewalDriver) ||
@@ -636,6 +711,8 @@ export const DriverCnhIntakeModal: React.FC<Props> = ({
  >
  <CheckCircle2 className="mr-1.5 h-4 w-4" />Aprovar e salvar CNH
  </Button>
+ </div>
+ </div>
  </div>
  </div>
  )}
