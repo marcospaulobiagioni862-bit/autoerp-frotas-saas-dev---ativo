@@ -19,6 +19,7 @@ interface ContractFormModalProps {
  contractToEdit?: Contract | null;
  companyId: string;
  onSuccess: (result: { contract: Contract; openPdfSignature: boolean; warning?: string }) => void;
+ onOpenTemplateManager?: () => void;
 }
 
 const SAVED_CONTRACT_KEY = /^modelo-contrato-(\d+)$/;
@@ -40,10 +41,11 @@ function contractTemplateOptionLabel(item: ContractTemplate): string {
 const CONTRACT_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_CONTRACT_FILE_BYTES = 10 * 1024 * 1024;
 
-export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess }) => {
+export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, onClose, contractToEdit, companyId, onSuccess, onOpenTemplateManager }) => {
  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
  const [drivers, setDrivers] = useState<Driver[]>([]);
  const [templates, setTemplates] = useState<ContractTemplate[]>([]);
+ const [pendingTemplates, setPendingTemplates] = useState<ContractTemplate[]>([]);
  const [loading, setLoading] = useState(false);
  const [loadingOptions, setLoadingOptions] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -87,8 +89,8 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  setFieldErrors({});
  setContractFile(null);
  setLoadingOptions(true);
- Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
- .then(([vehicleList, driverList, contractList, templateList]) => {
+ Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list(), ContractTemplateClient.list({ activeOnly: false }).catch(() => [])])
+ .then(([vehicleList, driverList, contractList, templateList, allManagementTemplates]) => {
  if (!active) return;
  const blockingContracts = contractList.filter((item) =>
  !item.isArchived &&
@@ -119,6 +121,10 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  setVehicles(validVehicles);
  setDrivers(validDrivers);
  setTemplates(selectableTemplates);
+ const pending = (Array.isArray(allManagementTemplates) ? allManagementTemplates : []).filter((item) =>
+ item.isCurrent && item.isActive && !item.isArchived && contractTemplateGenerationMode(item) === null
+ );
+ setPendingTemplates(pending);
  })
  .catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : 'Erro ao carregar opções.'); })
  .finally(() => { if (active) setLoadingOptions(false); });
@@ -273,7 +279,59 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  {error && <div className="flex gap-2 rounded-xl border border-error-border bg-error-bg p-3 text-xs text-error-text"><AlertCircle className="w-4 h-4" />{error}</div>}
  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
  <Field label="Número do contrato"><Input value={form.contractNumber} disabled placeholder="Gerado automaticamente ao salvar" /></Field>
- <Field label="Modelo de contrato (opcional)"><select value={form.templateId} onChange={(e) => set('templateId', e.target.value)} disabled={loadingOptions} className="control"><option value="">Sem modelo</option>{templates.map((item) => <option key={item.id} value={item.id}>{contractTemplateOptionLabel(item)}</option>)}</select></Field>
+ <Field label="Modelo de contrato (opcional)">
+ <select
+ id="contract-template-select"
+ value={form.templateId}
+ onChange={(e) => set('templateId', e.target.value)}
+ disabled={loadingOptions}
+ className="control"
+ >
+ <option value="">Sem modelo</option>
+ {templates.map((item) => (
+ <option key={item.id} value={item.id}>
+ {contractTemplateOptionLabel(item)}
+ </option>
+ ))}
+ {pendingTemplates.map((item) => (
+ <option key={item.id} value="" disabled>
+ {contractTemplateOptionLabel(item)} (Arquivo pendente)
+ </option>
+ ))}
+ </select>
+ {templates.length === 0 && !loadingOptions && (
+ <div id="contract-template-empty-banner" className="mt-1 space-y-1 rounded-lg border border-warning-border bg-warning-bg/40 p-2 text-xs">
+ <div className="flex flex-wrap items-center justify-between gap-1">
+ <span id="contract-template-empty-reason" className="font-medium text-warning-text">
+ Nenhum modelo com arquivo ou texto
+ </span>
+ <button
+ id="btn-open-template-manager-from-form"
+ type="button"
+ onClick={onOpenTemplateManager}
+ className="font-semibold text-brand-600 hover:underline dark:text-brand-400"
+ >
+ Gerenciar modelos de contrato
+ </button>
+ </div>
+ {pendingTemplates.length > 0 && (
+ <div id="contract-template-pending-list" className="flex flex-wrap gap-1.5 pt-0.5">
+ {pendingTemplates.map((item) => (
+ <span
+ key={item.id}
+ className="inline-flex items-center gap-1 rounded border border-warning-border bg-white px-2 py-0.5 text-[11px] font-medium text-warning-text dark:bg-graphite-900"
+ >
+ {contractTemplateOptionLabel(item)}
+ <span className="inline-flex items-center rounded bg-warning-bg px-1.5 py-0.2 text-[10px] font-semibold text-warning-text border border-warning-border">
+ Arquivo pendente
+ </span>
+ </span>
+ ))}
+ </div>
+ )}
+ </div>
+ )}
+ </Field>
  <Field label="Data inicial *"><Input type="date" value={form.startDate} error={fieldErrors.startDate} onChange={(e) => set('startDate', e.target.value)} /></Field>
  <Field label="Veículo *" error={fieldErrors.vehicleId}>
  <select value={form.vehicleId} onChange={(e) => set('vehicleId', e.target.value)} disabled={loadingOptions || noVehiclesForNewContract} className={`control ${fieldErrors.vehicleId?'border-error-border':''}`}>

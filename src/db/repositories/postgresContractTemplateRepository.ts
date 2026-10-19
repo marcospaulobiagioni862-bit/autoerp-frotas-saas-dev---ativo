@@ -63,7 +63,7 @@ export class PostgresContractTemplateRepository implements ITransactionContractT
     const result = await this.tx.execute(sql`
       SELECT * FROM contract_templates
       WHERE company_id = ${companyId} AND template_key = ${templateKey}
-        AND is_current = true AND is_archived = false
+        AND is_current = true
       FOR UPDATE
     `);
     const row = rowsOf(result)[0];

@@ -62,6 +62,7 @@
     "test:session-login": "tsx src/server/__tests__/sessionLoginTestRunner.ts",
     "test:contracts-approved-master": "tsx src/components/contracts/__tests__/approvedMasterManagementRegression.ts",
     "test:contracts-lifecycle-action": "tsx src/components/contracts/__tests__/contractLifecycleActionTestRunner.ts",
+    "test:contract-template-single-current": "tsx src/components/contracts/__tests__/contractTemplateSingleCurrentRegression.ts",
     "test:driver-details-documents-ux": "tsx src/components/drivers/__tests__/driverDetailsDocumentsUxTestRunner.ts",
     "test:driver-form-unsaved-changes": "tsx src/components/drivers/__tests__/driverFormUnsavedChangesRegression.tsx",
     "test:phone-zip-mask": "tsx src/components/drivers/__tests__/phoneAndZipCodeMaskRegression.ts",

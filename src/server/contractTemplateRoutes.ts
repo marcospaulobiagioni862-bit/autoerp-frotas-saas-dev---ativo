@@ -480,6 +480,17 @@ export function registerContractTemplateRoutes(app: Express): void {
           });
           if (!demoted) throw new TemplateConflictError();
         }
+        const raw = tx.getRawTransaction?.();
+        if (raw && !approvedMaster) {
+          await raw.execute(sql`
+            UPDATE contract_templates
+            SET is_current = false, is_active = false, updated_at = ${now}
+            WHERE company_id = ${principal.companyId}
+              AND template_key = ${candidate.templateKey}
+              AND id != ${candidate.id}
+              AND is_current = true
+          `);
+        }
         const promoted = await tx.getContractTemplateRepo().updateForCompany(principal.companyId, candidate.id, {
           isCurrent: true,
           isActive: shouldActivate,

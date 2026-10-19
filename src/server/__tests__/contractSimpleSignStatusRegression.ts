@@ -75,6 +75,11 @@ async function dateRegression() {
         effects.push(effect);
       }
     },
+    useRef: (initial: any) => {
+      const index = cursor++;
+      if (!(index in state)) state[index] = { current: initial };
+      return state[index];
+    },
   };
   const { ContractFormModal } = loadModule('src/components/contracts/ContractFormModal.tsx', {
     react,
