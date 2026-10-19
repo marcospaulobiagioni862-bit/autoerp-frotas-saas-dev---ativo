@@ -48,6 +48,7 @@ import { VehicleClient } from '../../api/vehicleClient';
 import { DocumentClient } from '../../api/documentClient';
 import { FileUpload } from '../documents/FileUpload';
 import { AttachmentList } from '../documents/AttachmentList';
+import { DocumentCenterModal } from '../documents/DocumentCenterModal';
 import { EntityFileGallery } from '../documents/EntityFileGallery';
 import { DocumentStatus, DriverStatus } from '../../types/enums';
 import type { DriverHealthAndEmergency } from '../../types/entities';
@@ -197,6 +198,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  const [generatedTokenData, setGeneratedTokenData] = useState<{ publicUrl: string; whatsappUrl: string; expiresAt: string } | null>(null);
  const [generatingToken, setGeneratingToken] = useState(false);
  const [copiedLink, setCopiedLink] = useState(false);
+ const [docCenterOpen, setDocCenterOpen] = useState(false);
 
  const [whatsappOutbox, setWhatsappOutbox] = useState<WhatsappOutboxItem[]>([]);
  const [whatsappTaskProposals, setWhatsappTaskProposals] = useState<WhatsappTaskProposal[]>([]);
@@ -630,11 +632,16 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <h3 className="text-sm font-semibold">Documentos essenciais do cadastro</h3>
  <p className="text-[11px] text-graphite-500">A ficha mostra somente o que é vigente e necessário. Versões antigas ficam no arquivo/histórico.</p>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
+ <Button size="sm" variant="outline" id="btn-open-doc-center-driver" onClick={() => setDocCenterOpen(true)}>
+ <FolderOpen className="w-4 h-4 mr-1" />Central de Documentos
+ </Button>
  {onRenewCnh && (
  <Button size="sm" variant="primary" onClick={() => onRenewCnh(driver.id)}>
  <CreditCard className="w-4 h-4 mr-1" />Nova CNH / Renovar CNH
  </Button>
  )}
+ </div>
  </div>
 
  <DriverCnhDocumentCard driverId={driver.id} refreshKey={driverAttachmentRefresh} />
@@ -1083,6 +1090,16 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  </div>
  </div>
  </ModalContainer>
+ )}
+
+ {docCenterOpen && driver && (
+ <DocumentCenterModal
+ isOpen={docCenterOpen}
+ onClose={() => setDocCenterOpen(false)}
+ perspective="DRIVER"
+ entityId={driver.id}
+ entityLabel={`${driver.fullName} (CPF ${driver.cpf})`}
+ />
  )}
  </ModalContainer>
  );

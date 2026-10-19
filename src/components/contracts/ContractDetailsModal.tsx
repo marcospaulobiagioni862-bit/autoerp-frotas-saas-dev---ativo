@@ -1,6 +1,6 @@
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, Edit2, FileText, Gauge, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, Edit2, FileText, FolderOpen, Gauge, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
 import { Badge, Button, Card, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
@@ -13,6 +13,7 @@ import { TrafficTicketClient, type TrafficTicketFinancialCategory } from '../../
 import { FinanceMasterDataClient } from '../../api/financeMasterDataClient';
 import { ContractLegacyDetailsBridge } from './ContractLegacyDetailsBridge';
 import { AttachmentList } from '../documents/AttachmentList';
+import { DocumentCenterModal } from '../documents/DocumentCenterModal';
 import { FileUpload } from '../documents/FileUpload';
 import { ContractExecutionPanel } from './ContractExecutionPanel';
 import type { AccountReceivable, AuditLog, Contract, Driver, SecurityDeposit, TrafficTicket, Vehicle } from '../../types/entities';
@@ -136,6 +137,7 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
  const [closeFinalKm, setCloseFinalKm] = useState('');
  const [closeReason, setCloseReason] = useState('Encerrado manualmente no painel');
+ const [docCenterOpen, setDocCenterOpen] = useState(false);
 
  const load = async () => {
  if (!isOpen || !contractId) return;
@@ -331,6 +333,9 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
  <Button size="sm" variant="outline" onClick={requestKmWhatsApp} className="text-success-text border-success-border hover:bg-success-bg dark:hover:bg-success-bg">
  <Gauge className="w-4 h-4 mr-1" /> Pedir KM (wa.me)
  </Button>
+ <Button size="sm" variant="outline" id="btn-open-doc-center-contract" onClick={() => setDocCenterOpen(true)}>
+ <FolderOpen className="w-4 h-4 mr-1" /> Central de Documentos
+ </Button>
  {contract.status === ContractStatus.ACTIVE && <Button size="sm" variant="secondary" isLoading={actionLoading} onClick={closeContract}>Encerrar</Button>}
  {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE].includes(contract.status) && <Button size="sm" variant="ghost" isLoading={actionLoading} onClick={cancelContract}>Cancelar</Button>}
  {contract.status === ContractStatus.ACTIVE && depositRemaining > 0 && <Button size="sm" variant="ghost" onClick={() => setTab('DEPOSIT')}>Receber caução</Button>}
@@ -519,6 +524,16 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
  </div>
  </div>
  </div>
+ )}
+
+ {docCenterOpen && contract && (
+ <DocumentCenterModal
+ isOpen={docCenterOpen}
+ onClose={() => setDocCenterOpen(false)}
+ perspective="CONTRACT"
+ entityId={contract.id}
+ entityLabel={`#${contract.contractNumber || contract.id.slice(0, 8)}`}
+ />
  )}
  </ModalContainer>
  );
