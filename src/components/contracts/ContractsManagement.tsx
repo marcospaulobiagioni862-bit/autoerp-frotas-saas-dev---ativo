@@ -351,6 +351,7 @@ export const ContractsManagement: React.FC<ContractsManagementProps> = ({ compan
  contractToEdit={contractToEdit}
  companyId={companyId}
  onSuccess={(result) => { void handleContractSaved(result); }}
+ onOpenTemplateManager={() => { setFormOpen(false); setTemplateManagerOpen(true); }}
  />}
  {templateManagerOpen&&<ContractTemplateManagementModal isOpen onClose={() => setTemplateManagerOpen(false)} />}
  {detailsOpen&&selectedContractId&&<ContractDetailsModal

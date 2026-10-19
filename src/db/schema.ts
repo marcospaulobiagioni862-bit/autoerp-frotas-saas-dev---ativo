@@ -300,6 +300,9 @@ export const contractTemplates = pgTable('contract_templates', {
   updatedAt: timestamp('updated_at', { mode: 'string' }).notNull().defaultNow(),
 }, (t) => ({
   unqVersion: uniqueIndex('uq_contract_template_version').on(t.companyId, t.templateKey, t.versionNumber),
+  unqSingleCurrent: uniqueIndex('uq_contract_template_single_current')
+    .on(t.companyId, t.templateKey)
+    .where(sql`is_current = true`),
   idxCurrent: index('idx_contract_template_company_current').on(t.companyId, t.isCurrent, t.isActive, t.isArchived),
 }));
 
