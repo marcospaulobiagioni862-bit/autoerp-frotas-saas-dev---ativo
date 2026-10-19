@@ -194,7 +194,7 @@ function sendError(res:Response,error:unknown):void{
   if(error instanceof TrafficTicketForbiddenError){res.status(403).json({error:'Forbidden'});return;}
   if(error instanceof NotFoundError||error instanceof TrafficTicketDocumentIntakeAiNotFoundError||error instanceof TrafficTicketNotFoundError){res.status(404).json({error:'Not found'});return;}
   if(error instanceof ConflictError||error instanceof TrafficTicketDocumentIntakeAiConflictError||error instanceof TrafficTicketConflictError){res.status(409).json({error:'Traffic ticket document intake conflict'});return;}
-  console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_INTAKE_FAILURE',error);res.status(500).json({error:'Traffic ticket document intake operation failed'});
+  console.error('AUTOERP_TRAFFIC_TICKET_DOCUMENT_INTAKE_FAILURE',error);res.status(500).json({error:'Falha na operação de documento de infração. Tente novamente.'});
 }
 
 export function registerTrafficTicketDocumentIntakeRoutes(app:Express):void{
