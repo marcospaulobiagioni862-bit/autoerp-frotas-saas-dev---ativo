@@ -21,6 +21,8 @@ const adminId = 'test-admin-53-54';
 const driverId = 'test-driver-53-54';
 const vehicleId = 'test-vehicle-53-54';
 const templateId = 'test-tpl-53-54';
+const pendingDocsDriverId = 'test-driver-pending-docs-52';
+const pendingDocsVehicleId = 'test-vehicle-pending-docs-52';
 
 async function setupFixtures(): Promise<void> {
   const client = (db as any).$client;
@@ -49,15 +51,17 @@ async function setupFixtures(): Promise<void> {
   `);
   await db.execute(sql`
     INSERT INTO vehicles (id, company_id, plate, renavam, status, created_at, updated_at) VALUES
-      (${vehicleId}, ${companyId}, 'TST5354', 'RENAVAM5354', 'AVAILABLE', NOW(), NOW())
+      (${vehicleId}, ${companyId}, 'TST5354', 'RENAVAM5354', 'AVAILABLE', NOW(), NOW()),
+      (${pendingDocsVehicleId}, ${companyId}, 'PEN5252', 'RENAVAM5252', 'AVAILABLE', NOW(), NOW())
     ON CONFLICT (id) DO UPDATE SET status='AVAILABLE', current_driver_id='', current_contract_id='', updated_at=NOW()
   `);
   await db.execute(sql`
     INSERT INTO drivers (
       id, company_id, name, phone, cpf, cnh, active, cnh_expiration, status, app_platforms, is_archived, created_at, updated_at
     ) VALUES
-      (${driverId}, ${companyId}, 'Motorista Silva', '11999887766', '52998224725', '12345678900', true, '2035-01-01', 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW())
-    ON CONFLICT (id) DO UPDATE SET phone='11999887766', status='ACTIVE', cnh_expiration='2035-01-01', updated_at=NOW()
+      (${driverId}, ${companyId}, 'Motorista Silva', '11999887766', '52998224725', '12345678900', true, '2035-01-01', 'ACTIVE', ARRAY['Uber'], false, NOW(), NOW()),
+      (${pendingDocsDriverId}, ${companyId}, 'Motorista Pendente Docs', '', '12345678901', '98765432100', false, '2035-01-01', 'PENDING_DOCS', ARRAY[]::text[], false, NOW(), NOW())
+    ON CONFLICT (id) DO UPDATE SET phone='11999887766', status=EXCLUDED.status, cnh_expiration='2035-01-01', updated_at=NOW()
   `);
   await db.execute(sql`
     INSERT INTO insurances (
@@ -280,7 +284,69 @@ export async function runContractLifecycleAndShareRegression(): Promise<void> {
       if (prevSecret !== undefined) process.env.JWT_SECRET = prevSecret;
     }
 
-    console.log('AUTOERP-53 & AUTOERP-54 INTEGRATION REGRESSION: ALL CHECKS PASSED.');
+    // 11. PH-052: Criar contrato em DRAFT com motorista em PENDING_DOCS
+    const pendingDraftRes = await fetch(`${base}/api/contracts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-idempotency-key': 'key-pending-docs-52' },
+      body: JSON.stringify({
+        status: ContractStatus.DRAFT,
+        contractNumber: 'CNT-52-PENDING-01',
+        driverId: pendingDocsDriverId,
+        vehicleId: pendingDocsVehicleId,
+        startDate: '2026-10-01',
+        rentalAmount: 700,
+        billingPeriodicity: RecurringFrequency.WEEKLY,
+        billingDueDayOfWeek: 1,
+        securityDepositAmount: 1200,
+        templateId,
+      }),
+    });
+    assert(pendingDraftRes.status === 201, `Expected 201 on create DRAFT with PENDING_DOCS driver, got ${pendingDraftRes.status}`);
+    const pendingDraftData = (await pendingDraftRes.json()) as any;
+    const pendingContract = pendingDraftData.item;
+    assert(pendingContract.status === ContractStatus.DRAFT, 'Pending docs driver contract must be in DRAFT');
+
+    // 12. PH-052: Tentativa de ativar contrato com motorista ainda em PENDING_DOCS deve falhar com 409
+    const pendingActivateRes = await fetch(`${base}/api/contracts/${pendingContract.id}/activate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert(pendingActivateRes.status === 409, `Expected 409 on activating contract with PENDING_DOCS driver, got ${pendingActivateRes.status}`);
+
+    // 13. PH-052: Arquivamento do contrato preserva histórico no banco e remove da listagem ativa
+    const archiveRes = await fetch(`${base}/api/contracts/${pendingContract.id}/archive`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Teste de arquivamento' }),
+    });
+    assert(archiveRes.status === 200, `Expected 200 on archive contract, got ${archiveRes.status}`);
+    const archiveData = (await archiveRes.json()) as any;
+    assert(archiveData.item.isArchived === true, 'Archived contract must have isArchived = true');
+    assert(archiveData.item.status === ContractStatus.ARCHIVED, 'Archived contract status must be ARCHIVED');
+
+    // Listagem ativa (GET /api/contracts) não deve retornar o contrato arquivado
+    const listRes = await fetch(`${base}/api/contracts`);
+    assert(listRes.status === 200, 'GET /api/contracts must return 200');
+    const listData = (await listRes.json()) as any;
+    assert(!listData.items.some((item: any) => item.id === pendingContract.id), 'Archived contract must not be returned in active list');
+
+    // Banco de dados: linha de contracts permanece intacta (não foi deletada)
+    const dbRowCheck: any = await db.execute(sql`
+      SELECT id, status, is_archived, notes FROM contracts WHERE id = ${pendingContract.id}
+    `);
+    assert(dbRowCheck.rows.length === 1, 'Archived contract row must remain intact in database');
+    assert(dbRowCheck.rows[0].is_archived === true, 'Row in database must have is_archived = true');
+
+    // Audit logs: evento ARCHIVE registrado
+    const archiveAuditCheck: any = await db.execute(sql`
+      SELECT action, entity_type, entity_id FROM audit_logs
+      WHERE company_id=${companyId} AND entity_id=${pendingContract.id} AND action='ARCHIVE'
+      LIMIT 1
+    `);
+    assert(archiveAuditCheck.rows.length === 1, 'Audit log must record ARCHIVE action');
+
+    console.log('AUTOERP-53, AUTOERP-54 & PH-052 INTEGRATION REGRESSION: ALL CHECKS PASSED.');
   } finally {
     if (originalStorageDir === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
     else process.env.ATTACHMENT_STORAGE_DIR = originalStorageDir;

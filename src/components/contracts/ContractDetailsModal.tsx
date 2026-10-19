@@ -1,6 +1,6 @@
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Calendar, Car, DollarSign, FileText, Gauge, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, DollarSign, Edit2, FileText, Gauge, History, MessageSquare, Receipt, ShieldCheck, User, X } from 'lucide-react';
 import { Badge, Button, Card, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
@@ -21,13 +21,14 @@ import { formatCurrencyBRL } from '../../shared/utils/currency';
 import { formatDateBR } from '../../shared/utils/date';
 
 interface ContractDetailsModalProps {
- isOpen: boolean;
- onClose: () => void;
- contractId: string | null;
- companyId: string;
- onRefresh: () => void;
- onOpenReceiptModal?: (receivableId: string) => void;
- initialFocus?: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL';
+  isOpen: boolean;
+  onClose: () => void;
+  contractId: string | null;
+  companyId: string;
+  onRefresh: () => void;
+  onOpenReceiptModal?: (receivableId: string) => void;
+  initialFocus?: 'OVERVIEW' | 'PDF_SIGNATURE' | 'FINANCIAL';
+  onEdit?: () => void;
 }
 
 type Tab = 'OVERVIEW' | 'FINANCIAL' | 'DEPOSIT' | 'TICKETS' | 'AUDIT';
@@ -110,7 +111,7 @@ function obligationStatusLabel(status: ObligationStatus): string {
 const bridge = new ContractLegacyDetailsBridge();
 const EMPTY_SETTLEMENT_OPTIONS: SettlementOptions = { accounts: [], paymentMethods: [] };
 
-export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal, initialFocus = 'OVERVIEW' }) => {
+export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOpen, onClose, contractId, companyId, onRefresh, onOpenReceiptModal, initialFocus = 'OVERVIEW', onEdit }) => {
  const versionRef = useRef(0);
  const [tab, setTab] = useState<Tab>('OVERVIEW');
  const [contract, setContract] = useState<Contract | null>(null);
@@ -319,6 +320,11 @@ export const ContractDetailsModal: React.FC<ContractDetailsModalProps> = ({ isOp
  {incomeCategories.length === 0 && <div className="mt-2 rounded-lg border border-error-border bg-error-bg p-2.5 "><p className="text-[11px] text-error-text ">Nenhuma categoria de receita ativa foi cadastrada. O contrato não pode gerar cobrança sem categoria financeira.</p><Button type="button" size="sm" variant="outline" className="mt-2" isLoading={actionLoading} onClick={createRentalIncomeCategory}>Criar “Aluguel de veículos”</Button></div>}
  </div>
  <div className="flex flex-wrap gap-2">
+ {[ContractStatus.DRAFT, ContractStatus.AWAITING_SIGNATURE, ContractStatus.ACTIVE].includes(contract.status) && onEdit && (
+ <Button size="sm" variant="outline" onClick={onEdit} className="text-graphite-700 border-graphite-300 hover:bg-graphite-100 dark:text-graphite-200 dark:border-graphite-700 dark:hover:bg-graphite-800">
+ <Edit2 className="w-4 h-4 mr-1" /> Editar contrato
+ </Button>
+ )}
  <Button size="sm" variant="outline" onClick={sendWhatsApp} className="text-success-text border-success-border hover:bg-success-bg dark:hover:bg-success-bg">
  <MessageSquare className="w-4 h-4 mr-1" /> Enviar WhatsApp (wa.me)
  </Button>

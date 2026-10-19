@@ -422,7 +422,12 @@ export function registerContractRoutes(app: Express): void {
         if (!vehicle || vehicle.isArchived) throw new ContractNotFoundError();
         if (!driver || driver.isArchived) throw new ContractNotFoundError();
         // Compare civil dates in the operating timezone, without parsing CNH as a timestamp.
-        if (driver.status !== DriverStatus.ACTIVE) throw new ContractConflictError('Driver is not eligible for a V2 contract');
+        if (initialStatus === ContractStatus.ACTIVE && driver.status !== DriverStatus.ACTIVE) {
+          throw new ContractConflictError('Driver is not eligible for a V2 contract');
+        }
+        if (![DriverStatus.ACTIVE, DriverStatus.PENDING_DOCS].includes(driver.status)) {
+          throw new ContractConflictError('Driver is not eligible for a V2 contract');
+        }
         if (vehicle.status !== VehicleStatus.AVAILABLE) throw new ContractConflictError('Vehicle is not eligible for a V2 contract');
         const today = todayCivilDate('America/Sao_Paulo');
         if (driver.cnhExpiration && driver.cnhExpiration < today) throw new ContractConflictError('Driver CNH invalid');
