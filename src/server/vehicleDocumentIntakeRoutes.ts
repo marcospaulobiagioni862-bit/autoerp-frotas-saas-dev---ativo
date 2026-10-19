@@ -171,7 +171,7 @@ function sendError(res: Response, error: unknown): void {
   if (error instanceof ConflictError) { res.status(409).json({ error: error.message || 'O cadastro por documento entrou em conflito. Atualize a análise e tente novamente.' }); return; }
   if (error instanceof VehicleDocumentIntakeAiConflictError) { res.status(409).json({ error: 'A análise do documento mudou enquanto a operação estava em andamento. Atualize a análise e tente novamente; se persistir, inicie uma nova leitura.' }); return; }
   console.error('AUTOERP_VEHICLE_DOCUMENT_INTAKE_FAILURE', error);
-  res.status(500).json({ error: 'Vehicle document intake operation failed' });
+  res.status(500).json({ error: 'Falha na operação de documento do veículo. Tente novamente.' });
 }
 
 export function registerVehicleDocumentIntakeRoutes(app: Express): void {
@@ -351,7 +351,7 @@ export function registerVehicleDocumentIntakeRoutes(app: Express): void {
         const available = await vehicleRepo.updateForCompany(principal.companyId, created.id, { status: VehicleStatus.AVAILABLE, updatedAt: now });
         if (!available) throw new NotFoundError();
         const consumed: any = await tx.execute(sql`
-          UPDATE vehicle_document_intakes SET vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
+          UPDATE vehicle_document_intakes SET status='CONSUMED', vehicle_id=${created.id}, consumed_at=${now}, updated_at=${now}
           WHERE company_id=${principal.companyId} AND id=${intakeId} AND status='APPROVED' AND consumed_at IS NULL AND vehicle_id IS NULL
           RETURNING id
         `);

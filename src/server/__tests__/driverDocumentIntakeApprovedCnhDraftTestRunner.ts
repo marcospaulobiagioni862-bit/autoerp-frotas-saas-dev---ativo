@@ -197,4 +197,17 @@ assert.match(
   'archived identity conflicts must return a structured 409 instead of the generic 500 fallback',
 );
 
-console.log('Driver intake approved CNH draft checks passed.');
+assert.equal(
+  /UPDATE\s+file_attachments[\s\S]*updated_at/i.test(routesSource),
+  false,
+  'file_attachments does not have an updated_at column; promotion updates must not reference it',
+);
+
+const vehicleRoutesSource = readFileSync(new URL('../vehicleDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
+assert.match(
+  vehicleRoutesSource,
+  /UPDATE\s+vehicle_document_intakes\s+SET\s+status='CONSUMED'/i,
+  'vehicle document intake promotion must set status to CONSUMED',
+);
+
+console.log('Driver intake approved CNH draft and vehicle intake promotion checks passed.');

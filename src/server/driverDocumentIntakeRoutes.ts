@@ -270,7 +270,7 @@ function sendError(res: Response, error: unknown): void {
     return;
   }
   console.error('AUTOERP_DRIVER_DOCUMENT_INTAKE_FAILURE', error);
-  res.status(500).json({ error: 'Driver document intake operation failed' });
+  res.status(500).json({ error: 'Falha na operação de documento do motorista. Tente novamente.' });
 }
 
 export function registerDriverDocumentIntakeRoutes(app: Express): void {
@@ -481,8 +481,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
           const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, target.id);
           await tx.execute(sql`
             UPDATE file_attachments
-            SET is_archived = true,
-                updated_at = ${now}
+            SET is_archived = true
             WHERE company_id = ${principal.companyId}
               AND entity_type = 'Driver'
               AND entity_id = ${target.id}
@@ -550,8 +549,7 @@ export function registerDriverDocumentIntakeRoutes(app: Express): void {
         const promotion = await promoteApprovedDriverDocumentIntake(context, principal, intakeId, materialized.id);
         await tx.execute(sql`
           UPDATE file_attachments
-          SET is_archived = true,
-              updated_at = ${now}
+          SET is_archived = true
           WHERE company_id = ${principal.companyId}
             AND entity_type = 'Driver'
             AND entity_id = ${materialized.id}
