@@ -5,12 +5,15 @@ export interface DriverHealthAndEmergency {
   allergies?: string;
   relevantConditions?: string;
   continuousMedications?: string;
+  controlledMedications?: string;
   emergencyContactName?: string;
   emergencyContactRelationship?: string;
   emergencyContactPhone?: string;
   emergencyNotes?: string;
   lastUpdateDate?: string;
   responsibleUser?: string;
+  lgpdConsentAt?: string;
+  lgpdConsentVersion?: string;
 }
 
 export type DriverResidenceType = 'HOUSE' | 'APARTMENT' | 'OTHER';

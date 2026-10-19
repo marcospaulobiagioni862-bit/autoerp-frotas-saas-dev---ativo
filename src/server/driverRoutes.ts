@@ -6,6 +6,7 @@ import type { Driver, DriverHealthAndEmergency } from '../types/entities';
 import { AuditAction, DocumentStatus, DriverStatus } from '../types/enums';
 import { hasDriverHealthPermission } from '../shared/security/driverHealthAuthorization';
 import { evaluateCnhStatus } from './driverCnhStatus';
+import { registerDriverFormTokenRoutes } from './driverFormTokenRoutes';
 
 type DriverAction = 'VIEW_DRIVER' | 'CREATE_DRIVER' | 'EDIT_DRIVER' | 'CHANGE_DRIVER_STATUS' | 'ARCHIVE_DRIVER';
 
@@ -599,7 +600,7 @@ export function registerDriverRoutes(app: Express): void {
       res.status(400).json({ error: 'Invalid driver health request' });
       return;
     }
-    const allowed = ['bloodType','allergies','relevantConditions','continuousMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes'] as const;
+    const allowed = ['bloodType','allergies','relevantConditions','continuousMedications','controlledMedications','emergencyContactName','emergencyContactRelationship','emergencyContactPhone','emergencyNotes','lgpdConsentAt','lgpdConsentVersion'] as const;
     const health: Record<string, string> = {};
     for (const key of allowed) {
       const value = (raw as Record<string, unknown>)[key];
@@ -642,4 +643,6 @@ export function registerDriverRoutes(app: Express): void {
       else res.status(400).json({ error: 'Driver health request failed' });
     }
   });
+
+  registerDriverFormTokenRoutes(app);
 }

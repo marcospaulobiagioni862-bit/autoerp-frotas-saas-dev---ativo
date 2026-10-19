@@ -66,6 +66,7 @@
     "test:driver-form-unsaved-changes": "tsx src/components/drivers/__tests__/driverFormUnsavedChangesRegression.tsx",
     "test:phone-zip-mask": "tsx src/components/drivers/__tests__/phoneAndZipCodeMaskRegression.ts",
     "test:driver-cnh-side-by-side": "tsx src/components/drivers/__tests__/driverCnhSideBySideRegression.ts",
+    "test:driver-complementary-form": "tsx src/components/drivers/__tests__/driverComplementaryFormRegression.ts",
     "test:bank-reconciliation-view": "tsx src/components/finance/__tests__/bankReconciliationViewTestRunner.ts",
     "test:vehicle-profitability-view": "tsx src/components/finance/__tests__/vehicleProfitabilityViewTestRunner.ts",
     "test:vehicle-crlv-import-panel": "tsx src/components/fleet/__tests__/vehicleCrlvImportPanelTestRunner.ts",
