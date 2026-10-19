@@ -1,5 +1,6 @@
 import { requestGuardedClose, UNSAVED_CHANGES_MESSAGE } from '../../app/unsavedChangesAuthority';
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import { formatPhone, formatCep, cleanPhoneDigits, cleanCepDigits } from '../../shared/utils/phoneAndZipCode';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2, CheckCircle2, Plus } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
@@ -139,10 +140,10 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
  if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
  if (driverToEdit) {
- setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(driverToEdit.phone || ''); setWhatsapp(driverToEdit.whatsapp || ''); setEmail(driverToEdit.email || ''); setMaritalStatus(driverToEdit.maritalStatus || ''); setProfession(driverToEdit.profession || ''); setMotherName(driverToEdit.motherName || ''); setPixKey(driverToEdit.pixKey || '');
- setZipCode(driverToEdit.address?.zipCode || ''); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
+ setFullName(driverToEdit.fullName || ''); setCpf(driverToEdit.cpf || ''); setRg(driverToEdit.rg || ''); setBirthDate(driverToEdit.birthDate || ''); setPhone(formatPhone(driverToEdit.phone || '')); setWhatsapp(formatPhone(driverToEdit.whatsapp || '')); setEmail(driverToEdit.email || ''); setMaritalStatus(driverToEdit.maritalStatus || ''); setProfession(driverToEdit.profession || ''); setMotherName(driverToEdit.motherName || ''); setPixKey(driverToEdit.pixKey || '');
+ setZipCode(formatCep(driverToEdit.address?.zipCode || '')); setStreet(driverToEdit.address?.street || ''); setNumber(driverToEdit.address?.number || ''); setComplement(driverToEdit.address?.complement || ''); setNeighborhood(driverToEdit.address?.neighborhood || ''); setCity(driverToEdit.address?.city || ''); setState(driverToEdit.address?.state || '');
  setResidenceType((driverToEdit.address?.residenceType || '') as ResidenceType); setResidenceTypeOther(driverToEdit.address?.residenceTypeOther || ''); setCondominiumName(driverToEdit.address?.condominiumName || ''); setBlockTower(driverToEdit.address?.blockTower || ''); setUnit(driverToEdit.address?.unit || ''); setFloor(driverToEdit.address?.floor || ''); setAddressReference(driverToEdit.address?.reference || '');
- setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(''); setEmergencyNotes(''); setNotes(driverToEdit.notes || '');
+ setCnhNumber(driverToEdit.cnhNumber || ''); setCnhCategory(driverToEdit.cnhCategory || ''); setCnhExpiration(driverToEdit.cnhExpiration || ''); setCnhEar(earValue(driverToEdit.cnhEar)); setAppPlatforms(driverToEdit.appPlatforms || []); setStatus(driverToEdit.status || DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(formatPhone(driverToEdit.emergencyContactPhone || '')); setEmergencyNotes(''); setNotes(driverToEdit.notes || '');
  setShowOtherPlatform((driverToEdit.appPlatforms || []).some((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number])));
  } else {
  setFullName(initialCnhDraft?.fullName || ''); setCpf(initialCnhDraft?.cpf || ''); setRg(initialCnhDraft?.rg || ''); setBirthDate(initialCnhDraft?.birthDate || ''); setPhone(''); setWhatsapp(''); setEmail(''); setMaritalStatus(''); setProfession(''); setMotherName(''); setPixKey('');
@@ -294,7 +295,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  if (Object.keys(errors).length > 0) { const count = Object.keys(errors).length; setErrorMessage(`Corrija ${count} ${count === 1 ? 'campo destacado' : 'campos destacados'} para salvar.`); focusFirstError(errors); return; }
  setLoading(true);
  try {
- const normalizedCpf = digits(cpf); const normalizedCnh = digits(cnhNumber); const normalizedPhone = digits(phone); const normalizedWhatsapp = digits(whatsapp); const normalizedZipCode = digits(zipCode);
+ const normalizedCpf = digits(cpf); const normalizedCnh = digits(cnhNumber); const normalizedPhone = cleanPhoneDigits(phone); const normalizedWhatsapp = cleanPhoneDigits(whatsapp); const normalizedZipCode = cleanCepDigits(zipCode);
  const addressHasData = !!(normalizedZipCode || street.trim() || number.trim() || complement.trim() || neighborhood.trim() || city.trim() || state.trim() || residenceType || residenceTypeOther.trim() || condominiumName.trim() || blockTower.trim() || unit.trim() || floor.trim() || addressReference.trim());
  const input: DriverCreateInput = {
  fullName: fullName.trim(), cpf: normalizedCpf, rg: rg.trim() || undefined, birthDate,
@@ -319,7 +320,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  continuousMedications: continuousMedications.trim() || undefined,
  emergencyContactName: emergencyContactName.trim(),
  emergencyContactRelationship: emergencyContactRelationship.trim(),
- emergencyContactPhone: digits(emergencyContactPhone),
+ emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone),
  emergencyNotes: emergencyNotes.trim() || undefined,
  } : undefined,
  };
@@ -381,8 +382,8 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <Input id="driver-cpf" label="CPF" value={cpf} onChange={(e) => { setCpf(e.target.value); clearFieldError('cpf'); }} placeholder="000.000.000-00" required error={fieldErrors.cpf} helperText="Pode digitar com ou sem pontos e traço." />
  <Input label="RG" value={rg} onChange={(e) => setRg(e.target.value)} />
  <Input id="driver-birthDate" label="Data de Nascimento" type="date" value={birthDate} onChange={(e) => { setBirthDate(e.target.value); clearFieldError('birthDate'); }} required error={fieldErrors.birthDate} />
- <Input id="driver-phone" label="Telefone Principal" value={phone} onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }} placeholder="(11) 90000-0000" required={!isCnhCompletion} error={fieldErrors.phone} helperText={isCnhCompletion ? 'Pode ser completado nesta etapa.' : 'Pode digitar com ou sem pontuação.'} />
- <Input id="driver-whatsapp" label="WhatsApp" value={whatsapp} onChange={(e) => { setWhatsapp(e.target.value); clearFieldError('whatsapp'); }} error={fieldErrors.whatsapp} />
+ <Input id="driver-phone" label="Telefone Principal" value={phone} onChange={(e) => { setPhone(formatPhone(e.target.value)); clearFieldError('phone'); setHasUserChanges(true); }} placeholder="(15) 99742-4411" required={!isCnhCompletion} error={fieldErrors.phone} helperText={isCnhCompletion ? 'Pode ser completado nesta etapa.' : 'Pode digitar com ou sem pontuação.'} />
+ <Input id="driver-whatsapp" label="WhatsApp" value={whatsapp} onChange={(e) => { setWhatsapp(formatPhone(e.target.value)); clearFieldError('whatsapp'); setHasUserChanges(true); }} placeholder="(15) 99742-4411" error={fieldErrors.whatsapp} />
  <div className="lg:col-span-2"><Input id="driver-email" label="E-mail" type="email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }} required={requiresCompleteProfile} error={fieldErrors.email} /></div>
  <Input label="Estado Civil" value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} />
  <Input label="Profissão" value={profession} onChange={(e) => setProfession(e.target.value)} />
@@ -403,7 +404,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <div className="space-y-4"><div className="flex items-center gap-2 pb-2 border-b border-graphite-200 dark:border-graphite-800"><MapPin className="w-4 h-4 text-success-icon " /><h3 className="text-sm font-semibold text-graphite-800 dark:text-graphite-200">3. Endereço {!requiresCompleteProfile && <span className="font-normal text-graphite-400">(opcional)</span>}</h3></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
  <Select id="driver-residenceType" label="Tipo de residência" value={residenceType} onChange={(e) => { setResidenceType(e.target.value as ResidenceType); clearFieldError('residenceType'); }} required={requiresCompleteProfile} error={fieldErrors.residenceType}><option value="">Selecione</option><option value="HOUSE">Casa</option><option value="APARTMENT">Apartamento</option><option value="OTHER">Outro</option></Select>
  {residenceType === 'OTHER' && <Input id="driver-residenceTypeOther" label="Qual tipo?" value={residenceTypeOther} onChange={(e) => { setResidenceTypeOther(e.target.value); clearFieldError('residenceTypeOther'); }} required={requiresCompleteProfile} error={fieldErrors.residenceTypeOther} />}
- <Input id="driver-zipCode" label="CEP" value={zipCode} onChange={(e) => { setZipCode(e.target.value); clearFieldError('zipCode'); setCepMessage(null); }} onBlur={lookupCep} required={requiresCompleteProfile} error={fieldErrors.zipCode} helperText={cepLoading ? 'Consultando CEP...' : cepMessage || 'Ao informar o CEP, rua, bairro, cidade e UF serão preenchidos automaticamente.'} />
+ <Input id="driver-zipCode" label="CEP" value={zipCode} onChange={(e) => { setZipCode(formatCep(e.target.value)); clearFieldError('zipCode'); setCepMessage(null); setHasUserChanges(true); }} onBlur={lookupCep} placeholder="00000-000" required={requiresCompleteProfile} error={fieldErrors.zipCode} helperText={cepLoading ? 'Consultando CEP...' : cepMessage || 'Ao informar o CEP, rua, bairro, cidade e UF serão preenchidos automaticamente.'} />
  <div className="sm:col-span-2"><Input id="driver-street" label="Logradouro / Rua" value={street} onChange={(e) => { setStreet(e.target.value); clearFieldError('street'); }} required={requiresCompleteProfile} error={fieldErrors.street} /></div>
  <Input id="driver-number" label="Número" value={number} onChange={(e) => { setNumber(e.target.value); clearFieldError('number'); }} required={requiresCompleteProfile} error={fieldErrors.number} />
  <Input id="driver-complement" label="Complemento" value={complement} onChange={(e) => { setComplement(e.target.value); clearFieldError('complement'); }} helperText="Opcional." />
@@ -426,7 +427,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <div className="sm:col-span-2"><Input label="Medicamentos contínuos (opcional)" value={continuousMedications} onChange={(e) => setContinuousMedications(e.target.value)} /></div>
  <Input id="driver-emergencyContactName" label="Contato de emergência" value={emergencyContactName} onChange={(e) => { setEmergencyContactName(e.target.value); clearFieldError('emergencyContactName'); }} required error={fieldErrors.emergencyContactName} />
  <Input id="driver-emergencyContactRelationship" label="Parentesco / relação" value={emergencyContactRelationship} onChange={(e) => { setEmergencyContactRelationship(e.target.value); clearFieldError('emergencyContactRelationship'); }} required error={fieldErrors.emergencyContactRelationship} />
- <Input id="driver-emergencyContactPhone" label="Telefone de emergência" value={emergencyContactPhone} onChange={(e) => { setEmergencyContactPhone(e.target.value); clearFieldError('emergencyContactPhone'); }} required error={fieldErrors.emergencyContactPhone} />
+ <Input id="driver-emergencyContactPhone" label="Telefone de emergência" value={emergencyContactPhone} onChange={(e) => { setEmergencyContactPhone(formatPhone(e.target.value)); clearFieldError('emergencyContactPhone'); setHasUserChanges(true); }} placeholder="(15) 99742-4411" required error={fieldErrors.emergencyContactPhone} />
  <div className="sm:col-span-2 lg:col-span-4"><Input label="Observação de emergência (opcional)" value={emergencyNotes} onChange={(e) => setEmergencyNotes(e.target.value)} /></div>
  </div></div>}
 

@@ -33,6 +33,7 @@ import {
  Skeleton,
 } from '../ui';
 import { DriverClient } from '../../api/driverClient';
+import { formatPhone, formatCep, cleanPhoneDigits } from '../../shared/utils/phoneAndZipCode';
 import {
  WhatsappClient,
  type WhatsappOutboxItem,
@@ -211,7 +212,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  setContinuousMedications(health.continuousMedications || '');
  setEmergencyContactName(health.emergencyContactName || '');
  setEmergencyContactRelationship(health.emergencyContactRelationship || '');
- setEmergencyContactPhone(health.emergencyContactPhone || '');
+ setEmergencyContactPhone(formatPhone(health.emergencyContactPhone || ''));
  setEmergencyNotes(health.emergencyNotes || '');
  };
 
@@ -343,7 +344,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  continuousMedications,
  emergencyContactName,
  emergencyContactRelationship,
- emergencyContactPhone,
+ emergencyContactPhone: cleanPhoneDigits(emergencyContactPhone),
  emergencyNotes,
  });
  applyHealthProfile(health);
@@ -561,7 +562,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <Card className="p-4 space-y-3">
  <h3 className="text-xs font-bold uppercase text-graphite-400">Contato</h3>
- <p className="text-sm flex items-center gap-2"><Phone className="w-4 h-4" />{driver.phone}</p>
+ <p className="text-sm flex items-center gap-2"><Phone className="w-4 h-4" />{formatPhone(driver.phone)}</p>
  <p className="text-sm flex items-center gap-2"><Mail className="w-4 h-4" />{driver.email || 'E-mail não informado'}</p>
  <p className="text-sm flex items-center gap-2"><Calendar className="w-4 h-4" />{driver.birthDate}</p>
  </Card>
@@ -569,7 +570,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <h3 className="text-xs font-bold uppercase text-graphite-400">Endereço</h3>
  <div className="text-sm flex items-start gap-2">
  <MapPin className="w-4 h-4 mt-0.5" />
- <span>{driver.address.street}, {driver.address.number} — {driver.address.neighborhood}, {driver.address.city}/{driver.address.state} • CEP {driver.address.zipCode}</span>
+ <span>{driver.address.street}, {driver.address.number} — {driver.address.neighborhood}, {driver.address.city}/{driver.address.state} • CEP {formatCep(driver.address.zipCode)}</span>
  </div>
  </Card>
  <Card className="p-4 md:col-span-2 space-y-3">
@@ -874,7 +875,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <div className="flex justify-between"><Button size="sm" variant="ghost" onClick={() => setIsHealthUnlocked(false)}><Lock className="w-4 h-4 mr-1" />Bloquear tela</Button><Button size="sm" onClick={() => setIsEditHealthOpen(true)}>Editar Informações</Button></div>
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Activity className="w-4 h-4 inline mr-1" />Ficha de Saúde</h4><p><strong>Tipo sanguíneo:</strong> {healthProfile.bloodType || 'Não informado'}</p><p><strong>Alergias:</strong> {healthProfile.allergies || 'Não informado'}</p><p><strong>Condições:</strong> {healthProfile.relevantConditions || 'Não informado'}</p><p><strong>Medicamentos:</strong> {healthProfile.continuousMedications || 'Não informado'}</p></Card>
- <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Phone className="w-4 h-4 inline mr-1" />Emergência</h4><p><strong>Contato:</strong> {healthProfile.emergencyContactName || 'Não informado'}</p><p><strong>Relação:</strong> {healthProfile.emergencyContactRelationship || 'Não informado'}</p><p><strong>Telefone:</strong> {healthProfile.emergencyContactPhone || 'Não informado'}</p><p><strong>Notas:</strong> {healthProfile.emergencyNotes || 'Sem observações'}</p></Card>
+ <Card className="p-4 space-y-2"><h4 className="text-xs font-bold uppercase"><Phone className="w-4 h-4 inline mr-1" />Emergência</h4><p><strong>Contato:</strong> {healthProfile.emergencyContactName || 'Não informado'}</p><p><strong>Relação:</strong> {healthProfile.emergencyContactRelationship || 'Não informado'}</p><p><strong>Telefone:</strong> {formatPhone(healthProfile.emergencyContactPhone) || 'Não informado'}</p><p><strong>Notas:</strong> {healthProfile.emergencyNotes || 'Sem observações'}</p></Card>
  </div>
  </div>
  )
@@ -931,7 +932,7 @@ export const DriverDetailsModal: React.FC<DriverDetailsModalProps> = ({
  <Input label="Condições Médicas" value={relevantConditions} onChange={(event) => setRelevantConditions(event.target.value)} />
  <Input label="Medicamentos Contínuos" value={continuousMedications} onChange={(event) => setContinuousMedications(event.target.value)} />
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><Input label="Contato de Emergência *" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} required /><Input label="Relação *" value={emergencyContactRelationship} onChange={(event) => setEmergencyContactRelationship(event.target.value)} required /></div>
- <Input label="Telefone de Emergência *" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} required />
+ <Input label="Telefone de Emergência *" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(formatPhone(event.target.value))} placeholder="(15) 99742-4411" required />
  <Input label="Observações de Emergência" value={emergencyNotes} onChange={(event) => setEmergencyNotes(event.target.value)} />
  <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setIsEditHealthOpen(false)}>Cancelar</Button><Button type="submit" isLoading={actionLoading}>Salvar Informações</Button></div>
  </form>

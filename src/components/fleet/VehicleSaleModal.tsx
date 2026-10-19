@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ModalContainer } from '../ui/ModalContainer';
 import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
+import { formatPhone, cleanPhoneDigits } from '../../shared/utils/phoneAndZipCode';
 
 interface VehicleSaleModalProps {
  isOpen: boolean;
@@ -58,7 +59,7 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
  notes: notes.trim(),
  buyerName: buyerName.trim(),
  buyerDocument: buyerDocument.trim(),
- buyerPhone: buyerPhone.trim() || undefined,
+ buyerPhone: cleanPhoneDigits(buyerPhone) || undefined,
  buyerEmail: buyerEmail.trim() || undefined,
  });
  await onSuccess();
@@ -94,7 +95,7 @@ export const VehicleSaleModal: React.FC<VehicleSaleModalProps> = ({ isOpen, onCl
  <Input label="Motivo *" required value={reason} onChange={(e) => setReason(e.target.value)} />
  <Input label="Comprador *" required value={buyerName} onChange={(e) => setBuyerName(e.target.value)} />
  <Input label="Documento do comprador *" required value={buyerDocument} onChange={(e) => setBuyerDocument(e.target.value)} />
- <Input label="Telefone do comprador" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} placeholder="(00) 00000-0000" />
+ <Input label="Telefone do comprador" value={buyerPhone} onChange={(e) => setBuyerPhone(formatPhone(e.target.value))} placeholder="(15) 99742-4411" />
  <Input label="E-mail do comprador" type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="comprador@exemplo.com" />
  </div>
 
