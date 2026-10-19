@@ -123,7 +123,7 @@ async function startServer() {
     helmet({
       crossOriginEmbedderPolicy: false,
       contentSecurityPolicy: {
-        reportOnly: true,
+        reportOnly: false,
         useDefaults: false,
         directives: {
           'default-src': ["'self'"],
