@@ -197,10 +197,29 @@ assert.match(
   'archived identity conflicts must return a structured 409 instead of the generic 500 fallback',
 );
 
+const promotionSource = readFileSync(new URL('../driverDocumentIntakePromotion.ts', import.meta.url), 'utf8');
+const trafficTicketRoutesSource = readFileSync(new URL('../trafficTicketDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
+
+function hasUpdatedAtOnAttachment(content: string): boolean {
+  const matches = content.matchAll(/UPDATE\s+file_attachments\s+SET\s+([\s\S]+?)\s+WHERE/gi);
+  for (const match of matches) {
+    if (/\bupdated_at\b/i.test(match[1])) return true;
+  }
+  return false;
+}
+
 assert.equal(
-  /UPDATE\s+file_attachments[\s\S]*updated_at/i.test(routesSource),
+  hasUpdatedAtOnAttachment(routesSource) ||
+  hasUpdatedAtOnAttachment(promotionSource) ||
+  hasUpdatedAtOnAttachment(trafficTicketRoutesSource),
   false,
-  'file_attachments does not have an updated_at column; promotion updates must not reference it',
+  'file_attachments does not have an updated_at column; promotion and intake updates must not reference it',
+);
+
+assert.match(
+  trafficTicketRoutesSource,
+  /res\.status\(500\)\.json\(\{\s*error:\s*'Falha na operação de documento de infração\. Tente novamente\.'\s*\}\)/,
+  'traffic ticket intake 500 error message must be localized in friendly Portuguese',
 );
 
 const vehicleRoutesSource = readFileSync(new URL('../vehicleDocumentIntakeRoutes.ts', import.meta.url), 'utf8');
@@ -210,4 +229,4 @@ assert.match(
   'vehicle document intake promotion must set status to CONSUMED',
 );
 
-console.log('Driver intake approved CNH draft and vehicle intake promotion checks passed.');
+console.log('Driver intake approved CNH draft, promotion and intake error localization checks passed.');
