@@ -1,5 +1,5 @@
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AlertCircle, FileText, Save, X } from 'lucide-react';
 import { Button, Input, ModalContainer } from '../ui';
 import { ContractClient } from '../../api/contractClient';
@@ -75,13 +75,17 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  });
  };
 
+ const initializedContractRef = useRef<string | null>(null);
+
  useEffect(() => {
- if (!isOpen) return;
+ if (!isOpen) {
+ initializedContractRef.current = null;
+ return;
+ }
  let active = true;
  setError(null);
  setFieldErrors({});
  setContractFile(null);
- setHasUnsavedChanges(false);
  setLoadingOptions(true);
  Promise.all([VehicleClient.list(), DriverClient.list(), ContractClient.list(), ContractTemplateClient.list()])
  .then(([vehicleList, driverList, contractList, templateList]) => {
@@ -120,6 +124,12 @@ export const ContractFormModal: React.FC<ContractFormModalProps> = ({ isOpen, on
  .finally(() => { if (active) setLoadingOptions(false); });
  // Initialize once when opening/switching the contract, not when requests
  // finish: date and amount inputs remain editable while options are loading.
+ const currentKey = contractToEdit ? `edit:${contractToEdit.id}` : 'new';
+ if (initializedContractRef.current === currentKey) {
+ return () => { active = false; };
+ }
+ initializedContractRef.current = currentKey;
+ setHasUnsavedChanges(false);
  if (contractToEdit) {
  setForm({
  contractNumber: contractToEdit.contractNumber,

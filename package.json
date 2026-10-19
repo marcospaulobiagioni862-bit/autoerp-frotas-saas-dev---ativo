@@ -63,6 +63,7 @@
     "test:contracts-approved-master": "tsx src/components/contracts/__tests__/approvedMasterManagementRegression.ts",
     "test:contracts-lifecycle-action": "tsx src/components/contracts/__tests__/contractLifecycleActionTestRunner.ts",
     "test:driver-details-documents-ux": "tsx src/components/drivers/__tests__/driverDetailsDocumentsUxTestRunner.ts",
+    "test:driver-form-unsaved-changes": "tsx src/components/drivers/__tests__/driverFormUnsavedChangesRegression.tsx",
     "test:bank-reconciliation-view": "tsx src/components/finance/__tests__/bankReconciliationViewTestRunner.ts",
     "test:vehicle-profitability-view": "tsx src/components/finance/__tests__/vehicleProfitabilityViewTestRunner.ts",
     "test:vehicle-crlv-import-panel": "tsx src/components/fleet/__tests__/vehicleCrlvImportPanelTestRunner.ts",

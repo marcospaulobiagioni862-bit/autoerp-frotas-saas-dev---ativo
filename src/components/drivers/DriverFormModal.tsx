@@ -1,5 +1,6 @@
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
-import React, { useState, useEffect, useRef } from 'react';
+import { requestGuardedClose, UNSAVED_CHANGES_MESSAGE } from '../../app/unsavedChangesAuthority';
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2, CheckCircle2, Plus } from 'lucide-react';
 import { ModalContainer, Input, Select, Button } from '../ui';
 import { DriverClient, type DriverCreateInput, type DriverUpdateInput } from '../../api/driverClient';
@@ -118,7 +119,22 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  const isCnhCompletion = !driverToEdit && !!cnhDriverId;
  const requiresCompleteProfile = !driverToEdit || isCnhCompletion;
 
+ const initializedDriverRef = useRef<string | null>(null);
+ const [hasUserChanges, setHasUserChanges] = useState(false);
+
  useEffect(() => {
+ if (!isOpen) {
+ initializedDriverRef.current = null;
+ setHasUserChanges(false);
+ return;
+ }
+ const currentKey = driverToEdit ? `edit:${driverToEdit.id}` : (cnhDriverId ? `cnh:${cnhDriverId}` : 'new');
+ if (initializedDriverRef.current === currentKey) {
+ return;
+ }
+ initializedDriverRef.current = currentKey;
+ setHasUserChanges(false);
+
  setCreatedDriverId(null); setProfilePhoto(null); setProfilePhotoUploaded(false); setErrorMessage(null); setSuccessMessage(null); setFieldErrors({}); setCepMessage(null); setShowOtherPlatform(false); setOtherPlatform('');
  setProfilePhotoPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return null; });
  if (profilePhotoInputRef.current) profilePhotoInputRef.current.value = '';
@@ -133,7 +149,75 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  setZipCode(''); setStreet(''); setNumber(''); setComplement(''); setNeighborhood(''); setCity(''); setState(''); setResidenceType(''); setResidenceTypeOther(''); setCondominiumName(''); setBlockTower(''); setUnit(''); setFloor(''); setAddressReference('');
  setCnhNumber(initialCnhDraft?.cnhNumber || ''); setCnhCategory(initialCnhDraft?.cnhCategory || ''); setCnhExpiration(initialCnhDraft?.cnhExpiration || ''); setCnhEar(earValue(initialCnhDraft?.cnhEar)); setAppPlatforms([]); setStatus(DriverStatus.ACTIVE); setBloodType(''); setAllergies(''); setRelevantConditions(''); setContinuousMedications(''); setEmergencyContactName(''); setEmergencyContactRelationship(''); setEmergencyContactPhone(''); setEmergencyNotes(''); setNotes('');
  }
- }, [driverToEdit, initialCnhDraft, isOpen]);
+ }, [driverToEdit, initialCnhDraft, isOpen, cnhDriverId]);
+
+ const currentFormData = useMemo(() => ({
+ fullName, cpf, rg, birthDate, phone, whatsapp, email, maritalStatus, profession, motherName, pixKey,
+ zipCode, street, number, complement, neighborhood, city, state, residenceType, residenceTypeOther,
+ condominiumName, blockTower, unit, floor, addressReference, cnhNumber, cnhCategory, cnhExpiration,
+ cnhEar, appPlatforms, status, bloodType, allergies, relevantConditions, continuousMedications,
+ emergencyContactName, emergencyContactRelationship, emergencyContactPhone, emergencyNotes, notes
+ }), [
+ fullName, cpf, rg, birthDate, phone, whatsapp, email, maritalStatus, profession, motherName, pixKey,
+ zipCode, street, number, complement, neighborhood, city, state, residenceType, residenceTypeOther,
+ condominiumName, blockTower, unit, floor, addressReference, cnhNumber, cnhCategory, cnhExpiration,
+ cnhEar, appPlatforms, status, bloodType, allergies, relevantConditions, continuousMedications,
+ emergencyContactName, emergencyContactRelationship, emergencyContactPhone, emergencyNotes, notes
+ ]);
+
+ const draftFormKey = driverToEdit
+ ? `driver:${driverToEdit.id}:${driverToEdit.updatedAt || ''}`
+ : (cnhDriverId ? `driver:cnh:${cnhDriverId}` : 'driver:new');
+
+ const formDraft = useLocalFormDraft(
+ draftFormKey,
+ currentFormData,
+ (restored) => {
+ if (restored.fullName !== undefined) setFullName(restored.fullName);
+ if (restored.cpf !== undefined) setCpf(restored.cpf);
+ if (restored.rg !== undefined) setRg(restored.rg);
+ if (restored.birthDate !== undefined) setBirthDate(restored.birthDate);
+ if (restored.phone !== undefined) setPhone(restored.phone);
+ if (restored.whatsapp !== undefined) setWhatsapp(restored.whatsapp);
+ if (restored.email !== undefined) setEmail(restored.email);
+ if (restored.maritalStatus !== undefined) setMaritalStatus(restored.maritalStatus);
+ if (restored.profession !== undefined) setProfession(restored.profession);
+ if (restored.motherName !== undefined) setMotherName(restored.motherName);
+ if (restored.pixKey !== undefined) setPixKey(restored.pixKey);
+ if (restored.zipCode !== undefined) setZipCode(restored.zipCode);
+ if (restored.street !== undefined) setStreet(restored.street);
+ if (restored.number !== undefined) setNumber(restored.number);
+ if (restored.complement !== undefined) setComplement(restored.complement);
+ if (restored.neighborhood !== undefined) setNeighborhood(restored.neighborhood);
+ if (restored.city !== undefined) setCity(restored.city);
+ if (restored.state !== undefined) setState(restored.state);
+ if (restored.residenceType !== undefined) setResidenceType(restored.residenceType as ResidenceType);
+ if (restored.residenceTypeOther !== undefined) setResidenceTypeOther(restored.residenceTypeOther);
+ if (restored.condominiumName !== undefined) setCondominiumName(restored.condominiumName);
+ if (restored.blockTower !== undefined) setBlockTower(restored.blockTower);
+ if (restored.unit !== undefined) setUnit(restored.unit);
+ if (restored.floor !== undefined) setFloor(restored.floor);
+ if (restored.addressReference !== undefined) setAddressReference(restored.addressReference);
+ if (restored.cnhNumber !== undefined) setCnhNumber(restored.cnhNumber);
+ if (restored.cnhCategory !== undefined) setCnhCategory(restored.cnhCategory);
+ if (restored.cnhExpiration !== undefined) setCnhExpiration(restored.cnhExpiration);
+ if (restored.cnhEar !== undefined) setCnhEar(restored.cnhEar as EarValue);
+ if (restored.appPlatforms !== undefined) setAppPlatforms(restored.appPlatforms);
+ if (restored.status !== undefined) setStatus(restored.status as DriverStatus);
+ if (restored.bloodType !== undefined) setBloodType(restored.bloodType);
+ if (restored.allergies !== undefined) setAllergies(restored.allergies);
+ if (restored.relevantConditions !== undefined) setRelevantConditions(restored.relevantConditions);
+ if (restored.continuousMedications !== undefined) setContinuousMedications(restored.continuousMedications);
+ if (restored.emergencyContactName !== undefined) setEmergencyContactName(restored.emergencyContactName);
+ if (restored.emergencyContactRelationship !== undefined) setEmergencyContactRelationship(restored.emergencyContactRelationship);
+ if (restored.emergencyContactPhone !== undefined) setEmergencyContactPhone(restored.emergencyContactPhone);
+ if (restored.emergencyNotes !== undefined) setEmergencyNotes(restored.emergencyNotes);
+ if (restored.notes !== undefined) setNotes(restored.notes);
+ setHasUserChanges(true);
+ },
+ isOpen,
+ hasUserChanges
+ );
 
  useEffect(() => () => { if (profilePhotoPreviewUrl) URL.revokeObjectURL(profilePhotoPreviewUrl); }, [profilePhotoPreviewUrl]);
  const clearFieldError = (field: FieldName) => setFieldErrors((current) => { if (!current[field]) return current; const next = { ...current }; delete next[field]; return next; });
@@ -270,6 +354,8 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  await AttachmentClient.upload({ entityType: 'Driver', entityId: driverId, documentType: PROFILE_PHOTO_DOCUMENT_TYPE, fileName: profilePhoto.name, mimeType: profilePhoto.type, content: profilePhoto });
  setProfilePhotoUploaded(true);
  }
+ formDraft.clear();
+ setHasUserChanges(false);
  await onSuccess(); setSuccessMessage(isCnhCompletion ? 'Cadastro concluído com sucesso. A CNH permanece salva em CNH & Documentos.' : 'Cadastro salvo com sucesso.'); window.setTimeout(() => onClose(), 1100);
  } catch (err: unknown) { setErrorMessage(err instanceof Error ? err.message : 'Ocorreu um erro ao salvar os dados do motorista.'); }
  finally { setLoading(false); }
@@ -278,8 +364,13 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  const allStandardSelected = STANDARD_PLATFORMS.every((platform) => appPlatforms.includes(platform));
  const customPlatforms = appPlatforms.filter((item) => !STANDARD_PLATFORMS.includes(item as typeof STANDARD_PLATFORMS[number]));
 
+ const requestClose = () => {
+ formDraft.close(onClose);
+ };
+
  return (
- <ModalContainer isOpen={isOpen} onClose={onClose} title={driverToEdit ? 'Editar Cadastro de Motorista' : isCnhCompletion ? 'Completar Cadastro do Motorista' : 'Novo Cadastro de Motorista'} maxWidth="6xl">
+ <ModalContainer isOpen={isOpen} onClose={requestClose} title={driverToEdit ? 'Editar Cadastro de Motorista' : isCnhCompletion ? 'Completar Cadastro do Motorista' : 'Novo Cadastro de Motorista'} maxWidth="6xl">
+ {formDraft.notice && <p role="status" className="text-xs text-graphite-500 mb-2">{formDraft.notice}</p>}
  <form onSubmit={handleSubmit} className="space-y-4" noValidate autoComplete="off">
  {errorMessage && <div className="p-3.5 bg-error-bg border border-error-border rounded-xl text-error-text text-sm flex items-center gap-2.5"><AlertCircle className="w-5 h-5 shrink-0" /><span>{errorMessage}</span></div>}
  {successMessage && <div className="p-3.5 bg-success-bg border border-success-border rounded-xl text-success-text text-sm flex items-center gap-2.5"><CheckCircle2 className="w-5 h-5 shrink-0" /><span>{successMessage}</span></div>}
@@ -347,7 +438,7 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  <div><label className="block text-xs font-semibold text-graphite-700 dark:text-graphite-300 mb-1">Observações Operacionais</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="w-full rounded-lg border border-graphite-200 dark:border-graphite-800 bg-white dark:bg-graphite-900 px-3 py-2 text-sm" /></div>
  </div>
 
- <div className="flex justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800"><Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading}>{driverToEdit ? 'Salvar Alterações' : isCnhCompletion ? 'Concluir cadastro' : 'Cadastrar Motorista'}</Button></div>
+ <div className="flex justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800"><Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,requestClose)} disabled={loading}>Cancelar</Button><Button type="submit" variant="primary" isLoading={loading}>{driverToEdit ? 'Salvar Alterações' : isCnhCompletion ? 'Concluir cadastro' : 'Cadastrar Motorista'}</Button></div>
  </form>
  </ModalContainer>
  );

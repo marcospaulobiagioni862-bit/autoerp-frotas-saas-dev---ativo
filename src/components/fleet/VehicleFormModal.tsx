@@ -1,5 +1,6 @@
-import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
-import React, { useState, useEffect } from 'react';
+import { requestGuardedClose, UNSAVED_CHANGES_MESSAGE } from '../../app/unsavedChangesAuthority';
+import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import React, { useState, useEffect, useRef } from 'react';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
@@ -102,7 +103,22 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  const [loading, setLoading] = useState(false);
  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+ const initializedVehicleRef = useRef<string | null>(null);
+ const [hasUserChanges, setHasUserChanges] = useState(false);
+
  useEffect(() => {
+ if (!isOpen) {
+ initializedVehicleRef.current = null;
+ setHasUserChanges(false);
+ return;
+ }
+ const currentKey = vehicleToEdit ? `edit:${vehicleToEdit.id}` : 'new';
+ if (initializedVehicleRef.current === currentKey) {
+ return;
+ }
+ initializedVehicleRef.current = currentKey;
+ setHasUserChanges(false);
+
  if (vehicleToEdit) {
  setFormData({
  plate: vehicleToEdit.plate,
@@ -140,8 +156,24 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  setErrorMessage(null);
  }, [vehicleToEdit, isOpen]);
 
+ const draftKey = vehicleToEdit
+ ? `vehicle:${vehicleToEdit.id}:${vehicleToEdit.updatedAt || ''}`
+ : 'vehicle:new';
+
+ const formDraft = useLocalFormDraft<VehicleFormData>(
+ draftKey,
+ formData,
+ (restored) => {
+ setFormData(restored);
+ setHasUserChanges(true);
+ },
+ isOpen,
+ hasUserChanges
+ );
+
  const handleChange = (field: keyof VehicleFormData, value: any) => {
  setFormData((prev) => ({ ...prev, [field]: value }));
+ setHasUserChanges(true);
  if (errorMessage) setErrorMessage(null);
  };
 
@@ -229,6 +261,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  notes: cleanText(formData.notes),
  });
  }
+ formDraft.clear();
+ setHasUserChanges(false);
  onSuccess();
  onClose();
  } catch (err: any) {
@@ -238,14 +272,19 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  }
  };
 
+ const requestClose = () => {
+ formDraft.close(onClose);
+ };
+
  return (
  <ModalContainer
  isOpen={isOpen}
- onClose={onClose}
+ onClose={requestClose}
  title={vehicleToEdit ? `Editar Veículo — ${vehicleToEdit.plate}` : 'Cadastrar Novo Veículo'}
  subtitle="Insira os dados cadastrais, operacionais e financeiros do veículo."
  maxWidth="5xl"
  >
+ {formDraft.notice && <p role="status" className="text-xs text-graphite-500 mb-2">{formDraft.notice}</p>}
  <form onSubmit={handleSubmit} className="space-y-3">
  {errorMessage && (
  <div className="p-3 bg-error-bg border border-error-border rounded-lg flex items-center gap-2 text-xs text-error-text ">
@@ -454,7 +493,7 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  </div>
 
  <div className="flex items-center justify-end gap-3 pt-4 border-t border-graphite-200 dark:border-graphite-800">
- <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)} disabled={loading}>Cancelar</Button>
+ <Button type="button" variant="outline" onClick={(event)=>requestGuardedClose(event,requestClose)} disabled={loading}>Cancelar</Button>
  <Button type="submit" variant="primary" isLoading={loading}>{vehicleToEdit ? 'Atualizar Veículo' : 'Cadastrar Veículo'}</Button>
  </div>
  </form>
