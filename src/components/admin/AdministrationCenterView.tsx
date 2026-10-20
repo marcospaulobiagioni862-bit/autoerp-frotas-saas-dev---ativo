@@ -35,6 +35,7 @@ import { AuditLogRepository } from '../../persistence/repositories/localReposito
 import { UserRole } from '../../types/enums';
 import { CompanyProfileClient } from '../../api/companyProfileClient';
 import { formatPhone, cleanPhoneDigits, formatCep, cleanCepDigits } from '../../shared/utils/phoneAndZipCode';
+import { lookupCepAddress, cepDigits } from '../../utils/cepLookup';
 
 type AdminTab = 
  | 'overview' 
@@ -88,6 +89,24 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  const [addressCityInput, setAddressCityInput] = useState<string>('');
  const [addressStateInput, setAddressStateInput] = useState<string>('');
  const [addressZipCodeInput, setAddressZipCodeInput] = useState<string>('');
+ const [cepLoading, setCepLoading] = useState<boolean>(false);
+ const [cepMessage, setCepMessage] = useState<string | null>(null);
+
+ // Mesma busca por CEP do cadastro de motorista, pelo helper compartilhado.
+ const buscarEnderecoPorCep = async (value: string) => {
+ if (cepDigits(value).length !== 8) return;
+ setCepLoading(true); setCepMessage(null);
+ const result = await lookupCepAddress(value);
+ setCepLoading(false);
+ if (result.status === 'OK') {
+ setAddressStreetInput(result.address.street);
+ setAddressNeighborhoodInput(result.address.neighborhood);
+ setAddressCityInput(result.address.city);
+ setAddressStateInput(result.address.state);
+ return;
+ }
+ setCepMessage(result.message);
+ };
  const [legalRepresentativeNameInput, setLegalRepresentativeNameInput] = useState<string>('');
  const [legalRepresentativeCpfInput, setLegalRepresentativeCpfInput] = useState<string>('');
 
@@ -342,7 +361,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Bairro</label><Input value={addressNeighborhoodInput} onChange={(e) => setAddressNeighborhoodInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Cidade</label><Input value={addressCityInput} onChange={(e) => setAddressCityInput(e.target.value)} /></div>
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">UF</label><Input value={addressStateInput} onChange={(e) => setAddressStateInput(e.target.value)} /></div>
- <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CEP</label><Input value={addressZipCodeInput} onChange={(e) => setAddressZipCodeInput(formatCep(e.target.value))} placeholder="00000-000" /></div>
+ <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">CEP</label><Input value={addressZipCodeInput} onChange={(e) => { const next = formatCep(e.target.value); setAddressZipCodeInput(next); if (cepDigits(next).length === 8) void buscarEnderecoPorCep(next); }} onBlur={(e) => { void buscarEnderecoPorCep(e.target.value); }} placeholder="00000-000" />{(cepLoading || cepMessage) && <p className="text-[11px] text-graphite-500 mt-1">{cepLoading ? 'Buscando endereço...' : cepMessage}</p>}</div>
  </div>
  <div className="grid gap-4 md:grid-cols-2">
  <div><label className="text-xs font-semibold text-graphite-600 dark:text-graphite-300 block mb-1">Representante Legal</label><Input value={legalRepresentativeNameInput} onChange={(e) => setLegalRepresentativeNameInput(e.target.value)} /></div>

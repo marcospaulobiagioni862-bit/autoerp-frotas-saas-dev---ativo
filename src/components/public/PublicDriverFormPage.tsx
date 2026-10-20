@@ -20,6 +20,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { formatCep, formatPhone } from '../../shared/utils/phoneAndZipCode';
+import { lookupCepAddress, cepDigits } from '../../utils/cepLookup';
 
 export const PublicDriverFormPage: React.FC<{ token: string }> = ({ token }) => {
   const [loading, setLoading] = useState(true);
@@ -37,6 +38,26 @@ export const PublicDriverFormPage: React.FC<{ token: string }> = ({ token }) => 
   const [neighborhood, setNeighborhood] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  // Busca de endereco por CEP. Este formulario e preenchido pelo proprio motorista,
+  // quase sempre no celular: digitar rua, bairro e cidade na mao e onde ele desiste.
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepMessage, setCepMessage] = useState<string | null>(null);
+
+  const handleCepBlur = async (value: string) => {
+    if (cepDigits(value).length !== 8) return;
+    setCepLoading(true);
+    setCepMessage(null);
+    const result = await lookupCepAddress(value);
+    setCepLoading(false);
+    if (result.status === 'OK') {
+      setStreet(result.address.street);
+      setNeighborhood(result.address.neighborhood);
+      setCity(result.address.city);
+      setState(result.address.state);
+      return;
+    }
+    setCepMessage(result.message);
+  };
   const [residenceType, setResidenceType] = useState('HOUSE');
   const [residenceTypeOther, setResidenceTypeOther] = useState('');
   const [condominiumName, setCondominiumName] = useState('');
@@ -400,10 +421,20 @@ export const PublicDriverFormPage: React.FC<{ token: string }> = ({ token }) => 
               <Input
                 label="CEP"
                 value={zipCode}
-                onChange={(e) => setZipCode(formatCep(e.target.value))}
+                onChange={(e) => {
+                  const next = formatCep(e.target.value);
+                  setZipCode(next);
+                  if (cepDigits(next).length === 8) void handleCepBlur(next);
+                }}
+                onBlur={(e) => { void handleCepBlur(e.target.value); }}
                 placeholder="00000-000"
                 maxLength={9}
               />
+              {(cepLoading || cepMessage) && (
+                <p className="text-[11px] text-graphite-500 sm:col-span-3">
+                  {cepLoading ? 'Buscando endereço...' : cepMessage}
+                </p>
+              )}
               <div className="sm:col-span-2">
                 <Input
                   label="Logradouro (Rua / Av)"

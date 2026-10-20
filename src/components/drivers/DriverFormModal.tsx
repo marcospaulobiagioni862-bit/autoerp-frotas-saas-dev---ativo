@@ -1,5 +1,6 @@
 import { requestGuardedClose, UNSAVED_CHANGES_MESSAGE } from '../../app/unsavedChangesAuthority';
 import { useLocalFormDraft } from '../../hooks/useLocalFormDraft';
+import { lookupCepAddress } from '../../utils/cepLookup';
 import { formatPhone, formatCep, cleanPhoneDigits, cleanCepDigits } from '../../shared/utils/phoneAndZipCode';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, CreditCard, MapPin, FileText, AlertCircle, Camera, Trash2, CheckCircle2, Plus } from 'lucide-react';
@@ -238,17 +239,25 @@ export const DriverFormModal: React.FC<DriverFormModalProps> = ({ isOpen, onClos
  };
  const addOtherPlatform = () => { const clean = otherPlatform.trim(); if (!clean) return; setAppPlatforms((current) => current.some((item) => item.toLowerCase() === clean.toLowerCase()) ? current : [...current, clean]); setOtherPlatform(''); setShowOtherPlatform(true); };
 
+ // Busca de CEP pelo helper compartilhado (src/utils/cepLookup.ts): a mesma regra
+ // serve o cadastro de motorista, o formulario publico e o cadastro da empresa.
  const lookupCep = async () => {
- const cep = digits(zipCode); setCepMessage(null); if (!cep) return;
- if (cep.length !== 8) { setFieldErrors((current) => ({ ...current, zipCode: 'Informe um CEP com 8 números.' })); return; }
+ setCepMessage(null);
+ const cep = digits(zipCode);
+ if (!cep) return;
  setCepLoading(true);
- try {
- const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`); if (!response.ok) throw new Error('CEP_LOOKUP_FAILED');
- const data = await response.json() as { erro?: boolean; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
- if (data.erro) { setCepMessage('CEP não encontrado. Preencha o endereço manualmente.'); return; }
- setZipCode(cep); setStreet(data.logradouro || ''); setNeighborhood(data.bairro || ''); setCity(data.localidade || ''); setState((data.uf || '').toUpperCase()); clearFieldError('zipCode'); setCepMessage('Endereço localizado. Complete tipo de residência e número.');
- } catch { setCepMessage('Não foi possível consultar o CEP agora. Você pode preencher o endereço manualmente.'); }
- finally { setCepLoading(false); }
+ const result = await lookupCepAddress(zipCode);
+ setCepLoading(false);
+ if (result.status === 'INVALID') { setFieldErrors((current) => ({ ...current, zipCode: result.message })); return; }
+ if (result.status === 'OK') {
+ setZipCode(result.address.zipCode);
+ setStreet(result.address.street);
+ setNeighborhood(result.address.neighborhood);
+ setCity(result.address.city);
+ setState(result.address.state);
+ return;
+ }
+ setCepMessage(result.message);
  };
 
  const validateForm = (): FieldErrors => {
