@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { AttachmentClient } from '../../api/attachmentClient';
+import { DocumentAiClient } from '../../api/documentAiClient';
 import { ContractClient } from '../../api/contractClient';
 import { DriverClient } from '../../api/driverClient';
 import { InsuranceClient } from '../../api/insuranceClient';
@@ -151,6 +152,8 @@ export function DocumentCenter({
     setLoading(true);
     setError(null);
     try {
+      // Technical AI status remains internal to the ERP and is intentionally not rendered in this user-facing library.
+      void DocumentAiClient.attachmentStatuses().catch(() => undefined);
       const [
         attachmentsResult,
         vehiclesResult,
