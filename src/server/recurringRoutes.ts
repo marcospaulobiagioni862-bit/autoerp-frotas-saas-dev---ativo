@@ -10,6 +10,7 @@ import {
 import { registerMaintenanceRoutes } from './maintenanceRoutes';
 import { registerTrackerRoutes } from './trackerRoutes';
 import { registerInsuranceRoutes } from './insuranceRoutes';
+import { registerVehicleTaxCalendarRoutes } from './vehicleTaxCalendarRoutes';
 import { registerTrafficTicketRoutes } from './trafficTicketRoutes';
 import { registerOperationalRoutes } from './operationalRoutes';
 import { registerDetailAuthorityRoutes } from './detailAuthorityRoutes';
@@ -63,7 +64,7 @@ function sendError(res: Response, error: unknown): void {
 }
 export function registerRecurringRoutes(app: Express): void {
   startRecurringScheduler();
-  registerMaintenanceRoutes(app); registerTrackerRoutes(app); registerInsuranceRoutes(app); registerTrafficTicketRoutes(app);
+  registerMaintenanceRoutes(app); registerTrackerRoutes(app); registerInsuranceRoutes(app); registerVehicleTaxCalendarRoutes(app); registerTrafficTicketRoutes(app);
   registerOperationalRoutes(app); registerDetailAuthorityRoutes(app); registerFinanceOverdueRoutes(app); registerBankReconciliationRoutes(app);
   registerSecurityDepositLifecycleRoutes(app); registerFinancePayableRenegotiationRoutes(app); registerFinanceMasterDataRoutes(app); registerFinanceCashFlowRoutes(app); registerFinanceObligationHistoryRoutes(app); registerTelemetryRoutes(app); registerCreditCardStatementRoutes(app);
 

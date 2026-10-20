@@ -736,6 +736,11 @@ jobs:
       - name: Vehicle owner autofill, rental clarity and CEP lookup invariants
         run: npm run test:vehicle-owner-cep-autofill
 
+      # PH-074. Calendario de IPVA/licenciamento: a regra do ultimo digito da placa
+      # e a proibicao de data fixa no codigo protegem dinheiro do cliente.
+      - name: Vehicle tax calendar invariants
+        run: npm run test:vehicle-tax-calendar
+
       # AUTOERP-95 (revisao). Este teste usa PGlite em memoria, nao toca banco nenhum do
       # ERP, e mesmo assim estava orfao desde sempre. Entre 09/10 e 13/10 ele ficou vermelho
       # em silencio porque o cache do AUTOERP-85 fez a segunda chamada de ContractClient.list()

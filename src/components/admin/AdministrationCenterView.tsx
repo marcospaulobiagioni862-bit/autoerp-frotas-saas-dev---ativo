@@ -25,7 +25,7 @@ import {
  ShieldAlert, 
  CheckCircle,
  Sliders
-} from 'lucide-react';
+, CalendarClock} from 'lucide-react';
 import { SystemHealthCenterView } from './SystemHealthCenterView';
 import { ProductionAdministrationService } from '../../domain/admin/ProductionAdministrationService';
 import { TenantConfigurationService } from '../../domain/admin/TenantConfigurationService';
@@ -36,11 +36,12 @@ import { UserRole } from '../../types/enums';
 import { CompanyProfileClient } from '../../api/companyProfileClient';
 import { formatPhone, cleanPhoneDigits, formatCep, cleanCepDigits } from '../../shared/utils/phoneAndZipCode';
 import { lookupCepAddress, cepDigits } from '../../utils/cepLookup';
+import { VehicleTaxCalendarAdmin } from './VehicleTaxCalendarAdmin';
 
 type AdminTab = 
  | 'overview' 
  | 'health' 
- | 'tenant' 
+ | 'tenant' | 'taxcalendar' 
  | 'users' 
  | 'rbac' 
  | 'security' 
@@ -225,6 +226,7 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  { id: 'overview', label: 'Visão Geral', icon: Activity },
  { id: 'health', label: 'Saúde do Sistema', icon: ShieldCheck },
  { id: 'tenant', label: 'Empresa', icon: Building2 },
+ { id: 'taxcalendar', label: 'IPVA & Licenciamento', icon: CalendarClock },
  { id: 'users', label: 'Usuários', icon: Users },
  { id: 'rbac', label: 'RBAC', icon: Lock },
  { id: 'security', label: 'Segurança', icon: ShieldAlert },
@@ -339,6 +341,10 @@ export const AdministrationCenterView: React.FC<AdministrationCenterViewProps> =
  )}
 
  {/* TAB CONTENT: 3. TENANT */}
+ {activeTab === 'taxcalendar' && (
+ <div className="rounded-xl border p-4"><VehicleTaxCalendarAdmin /></div>
+ )}
+
  {activeTab === 'tenant' && (
  <div className="space-y-4 max-w-4xl">
  <Card className="p-6 space-y-5">
