@@ -110,6 +110,7 @@
     "test:payable-installment-order-integration": "tsx src/server/__tests__/payableInstallmentOrderIntegration.ts",
     "test:telemetry-km-divergence": "tsx src/server/__tests__/telemetryKmDivergenceIntegration.ts",
     "test:document-ai-intake-sync-resilience": "tsx src/server/__tests__/documentAiIntakeSyncResilienceRegression.ts",
+    "test:vehicle-owner-cep-autofill": "tsx src/components/fleet/__tests__/vehicleOwnerAndCepAutofillRegression.ts",
     "test:traffic-ticket-indication-state": "tsx src/server/__tests__/trafficTicketDriverIndicationStateMachine.ts",
     "test:user-permissions-matrix": "tsx src/server/__tests__/userPermissionsMatrixRegression.ts",
     "start": "node dist/server.mjs",

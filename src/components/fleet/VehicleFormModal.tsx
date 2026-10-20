@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Vehicle } from '../../types/entities';
 import { VEHICLE_CATEGORIES } from '../../types/enums';
 import { VehicleClient, type VehicleUpdateInput } from '../../api/vehicleClient';
+import { CompanyProfileClient, type CompanyProfile } from '../../api/companyProfileClient';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -103,8 +104,21 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  const [loading, setLoading] = useState(false);
  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+ // PH-072. O nome e o documento do proprietario vinham FIXOS no codigo (CNPJ da
+ // Triflex), o que preencheria o titular errado para qualquer outra empresa que
+ // usasse o sistema. Agora saem do cadastro da empresa logada.
+ const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
  const initializedVehicleRef = useRef<string | null>(null);
  const [hasUserChanges, setHasUserChanges] = useState(false);
+
+ useEffect(() => {
+ if (!isOpen) return;
+ let cancelled = false;
+ void CompanyProfileClient.get()
+ .then((profile) => { if (!cancelled) setCompanyProfile(profile); })
+ .catch(() => { if (!cancelled) setCompanyProfile(null); });
+ return () => { cancelled = true; };
+ }, [isOpen]);
 
  useEffect(() => {
  if (!isOpen) {
@@ -172,10 +186,35 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  );
 
  const handleChange = (field: keyof VehicleFormData, value: any) => {
- setFormData((prev) => ({ ...prev, [field]: value }));
+ setFormData((prev) => {
+ const next = { ...prev, [field]: value } as VehicleFormData;
+ // PH-072. Pedido do Marcos: ao marcar "Proprio da Empresa" os dados da empresa
+ // entram sozinhos, sem clique. Trocando para outro titular, limpam — senao o
+ // CNPJ da empresa fica preso num veiculo de terceiro, que e pior que o campo vazio.
+ if (field === 'ownerType') {
+ if (value === 'COMPANY') {
+ next.ownerName = companyProfile?.name || companyProfile?.tradeName || '';
+ next.ownerDocument = companyProfile?.document || '';
+ } else if (prev.ownerType === 'COMPANY') {
+ next.ownerName = '';
+ next.ownerDocument = '';
+ }
+ }
+ return next;
+ });
  setHasUserChanges(true);
  if (errorMessage) setErrorMessage(null);
  };
+
+ // Veiculo novo ja abre com o titular da empresa preenchido, que e o caso comum.
+ useEffect(() => {
+ if (!isOpen || !companyProfile || vehicleToEdit) return;
+ setFormData((prev) => (
+ prev.ownerType === 'COMPANY' && !prev.ownerName && !prev.ownerDocument
+ ? { ...prev, ownerName: companyProfile.name || companyProfile.tradeName || '', ownerDocument: companyProfile.document || '' }
+ : prev
+ ));
+ }, [isOpen, companyProfile, vehicleToEdit]);
 
  const handleNumericChange = (field: keyof VehicleFormData, rawValue: string) => {
  handleChange(field, rawValue === '' ? '' : Number(rawValue));
@@ -359,8 +398,8 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  <button
  type="button"
  onClick={() => {
- handleChange('ownerName', 'TRIFLEX ASSISTENCIA TECNICA DE MAQUINAS');
- handleChange('ownerDocument', '22.791.551/0001-53');
+ handleChange('ownerName', companyProfile?.name || companyProfile?.tradeName || '');
+ handleChange('ownerDocument', companyProfile?.document || '');
  }}
  className="text-[11px] text-info-icon hover:underline font-medium"
  >
@@ -477,8 +516,16 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
  <Input label="Valor de Aquisição (R$) *" type="number" required value={formData.acquisitionValue} onChange={(e) => handleNumericChange('acquisitionValue', e.target.value)} />
  <Input label="Valor Comercial Atual (R$) *" type="number" required value={formData.currentValue} onChange={(e) => handleNumericChange('currentValue', e.target.value)} />
- <Input label="Valor Aluguel Semanal (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleNumericChange('rentalValueBase', e.target.value)} />
+ <Input label="Valor Aluguel Semanal de Referência (R$) *" type="number" required value={formData.rentalValueBase} onChange={(e) => handleNumericChange('rentalValueBase', e.target.value)} />
  </div>
+ {/* PH-073. O Marcos procurou aqui a periodicidade e o dia de vencimento da cobranca.
+ Eles existem, mas no contrato do motorista (billing_periodicity, billing_due_day_of_week
+ e billing_due_day_of_month), que e quem gera o contas a receber. Duplicar os campos aqui
+ criaria duas fontes para a mesma regra, que e o jeito certo de gerar cobranca errada. */}
+ <p className="text-[11px] text-graphite-500 dark:text-graphite-400 mt-2">
+ Valor de referência comercial do veículo. A cobrança de fato — semanal ou mensal, com o dia de
+ vencimento — é definida no <strong>contrato do motorista</strong>, e é de lá que nascem as contas a receber.
+ </p>
  </div>
 
  <div>

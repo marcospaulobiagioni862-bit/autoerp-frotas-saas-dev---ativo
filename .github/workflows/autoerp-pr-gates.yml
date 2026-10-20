@@ -732,6 +732,10 @@ jobs:
       - name: Document AI intake sync resilience
         run: npm run test:document-ai-intake-sync-resilience
 
+      # PH-072/073/075 + busca de CEP compartilhada (pedidos do Marcos, 19-20/10/2026).
+      - name: Vehicle owner autofill, rental clarity and CEP lookup invariants
+        run: npm run test:vehicle-owner-cep-autofill
+
       # AUTOERP-95 (revisao). Este teste usa PGlite em memoria, nao toca banco nenhum do
       # ERP, e mesmo assim estava orfao desde sempre. Entre 09/10 e 13/10 ele ficou vermelho
       # em silencio porque o cache do AUTOERP-85 fez a segunda chamada de ContractClient.list()
