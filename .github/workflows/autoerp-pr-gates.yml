@@ -727,6 +727,11 @@ jobs:
       - name: Modal layout and unsaved-changes guard invariants
         run: npm run test:modal-layout-ux
 
+      # PH-071. Falha de sync de intake nao pode derrubar o estado da extracao: foi
+      # o rollback silencioso que travou a fila de Document AI por 4 dias em 10/2026.
+      - name: Document AI intake sync resilience
+        run: npm run test:document-ai-intake-sync-resilience
+
       # AUTOERP-95 (revisao). Este teste usa PGlite em memoria, nao toca banco nenhum do
       # ERP, e mesmo assim estava orfao desde sempre. Entre 09/10 e 13/10 ele ficou vermelho
       # em silencio porque o cache do AUTOERP-85 fez a segunda chamada de ContractClient.list()

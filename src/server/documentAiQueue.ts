@@ -39,12 +39,33 @@ function rows(result: QueryResult): Record<string, unknown>[] {
   return [];
 }
 
+// PH-071. A sincronizacao do registro de intake NAO pode derrubar a transacao que
+// grava o estado da extracao. Em 16/10/2026 uma unica extracao de multa cujo sync
+// lancava INTAKE_STATE_MISMATCH desfez o proprio claim por rollback: a linha voltava
+// para PENDING com attempt_count = 0, sem failure_code e sem rastro, e como o claim
+// pega a mais antiga primeiro (ORDER BY created_at), essa mesma linha era escolhida
+// de novo a cada ciclo. Resultado: a fila inteira de Document AI parou por 4 dias,
+// para todo tipo de documento e todo tenant, e a tela ficou eternamente em 50%.
+// Agora a falha de sync e registrada e engolida: a extracao chega a um estado
+// terminal visivel (FAILED com failure_code) e a fila anda.
 async function syncDocumentIntakeWorkerResult(
   context: any,
   input: { companyId: string; extractionId: string; attachmentId: string; targetStatus: 'REVIEW_REQUIRED' | 'FAILED'; now: string; failureCode?: string },
 ): Promise<void> {
-  const driverHandled = await syncDriverDocumentIntakeWorkerResult(context, input);
-  if (!driverHandled) await syncVehicleDocumentIntakeWorkerResult(context, input);
+  try {
+    const driverHandled = await syncDriverDocumentIntakeWorkerResult(context, input);
+    if (!driverHandled) await syncVehicleDocumentIntakeWorkerResult(context, input);
+  } catch (error) {
+    console.error(
+      'AUTOERP_DOCUMENT_AI_INTAKE_SYNC_FAILURE',
+      JSON.stringify({
+        extractionId: input.extractionId,
+        attachmentId: input.attachmentId,
+        targetStatus: input.targetStatus,
+        reason: error instanceof Error ? error.message : 'UNKNOWN',
+      }),
+    );
+  }
 }
 
 function requiredString(value: unknown, label: string): string {
