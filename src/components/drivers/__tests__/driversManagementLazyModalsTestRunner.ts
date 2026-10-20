@@ -70,7 +70,9 @@ assert.match(cnhCompletionBlock, /health: input\.health/, 'CNH completion must s
 assert.doesNotMatch(cnhCompletionBlock, /fullName:|cpf:|birthDate:|cnhNumber:|cnhCategory:|cnhExpiration:|cnhEar:/, 'CNH completion must not resend approved identity/document fields');
 
 const vehicleDocumentCatalog = [
-  ['CRLV', 'CRLV / Licenciamento'],
+  // PH-055: rotulo adotou as palavras do Marcos ("o documento de rodagem do carro").
+  // O VALOR 'CRLV' continua guardado, que e o que o dado depende; so o texto de tela mudou.
+  ['CRLV', 'CRLV (Documento de rodagem)'],
   ['CRV', 'CRV'],
   ['ATPV_E', 'ATPV-e'],
   ['IPVA', 'IPVA'],

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { FileAttachment } from '../../types/entities';
 import { AttachmentClient } from '../../api/attachmentClient';
+import { requestGuardedClose } from '../../app/unsavedChangesAuthority';
 import { ModalContainer } from '../ui/ModalContainer';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -318,7 +319,7 @@ export const VehicleDocumentFoldersModal: React.FC<VehicleDocumentFoldersModalPr
         )}
 
         <div className="flex justify-end pt-3 border-t dark:border-graphite-800">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={(event)=>requestGuardedClose(event,onClose)}>
             Fechar
           </Button>
         </div>
